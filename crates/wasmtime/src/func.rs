@@ -1,6 +1,6 @@
 use crate::{sig_registry::SignatureRegistry, trampoline::StoreInstanceHandle};
-use crate::{Config, Extern, ExternRef, FuncType, Store, Trap, Val, ValType};
-use anyhow::{bail, ensure, Context as _, Result};
+use crate::{Config, Extern, FuncType, Store, Trap, Val, ValType};
+use anyhow::{bail, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
 use std::any::Any;
 use std::cmp::max;
@@ -10,12 +10,11 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
-use std::task::{Context, Poll};
 use wasmtime_environ::wasm::{EntityIndex, FuncIndex};
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMFunctionBody, VMFunctionImport,
-    VMSharedSignatureIndex, VMTrampoline,
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// Represents a host function.
@@ -150,8 +149,8 @@ unsafe impl Sync for HostFunc {}
 /// information about [asynchronous configs](Config::async_support), but from the
 /// perspective of `Func` it's important to know that whether or not your
 /// [`Store`] is asynchronous will dictate whether you call functions through
-/// [`Func::call`] or [`Func::call_async`] (or the wrappers such as
-/// [`Func::get0`] vs [`Func::get0_async`]).
+/// [`Func::call`] or [`Func::call_async`] (or the typed wrappers such as
+/// [`TypedFunc::call`] vs [`TypedFunc::call_async`]).
 ///
 /// Note that asynchronous function APIs here are a bit trickier than their
 /// synchronous brethren. For example [`Func::new_async`] and
@@ -166,11 +165,13 @@ unsafe impl Sync for HostFunc {}
 /// etc). Be sure to consult the documentation for [`Func::wrap`] for how the
 /// wasm type signature is inferred from the Rust type signature.
 ///
-/// # To `Func::call` or to `Func::getN`
+/// # To `Func::call` or to `Func::typed().call()`
 ///
-/// There are four ways to call a `Func`. Half are asynchronous and half are
-/// synchronous, corresponding to the type of store you're using. Within each
-/// half you've got two choices:
+/// There's a 2x2 matrix of methods to call `Func`. Invocations can either be
+/// asynchronous or synchronous. They can also be statically typed or not.
+/// Whether or not an invocation is asynchronous is indicated via the method
+/// being `async` and `call_async` being the entry point. Otherwise for
+/// statically typed or not your options are:
 ///
 /// * Dynamically typed - if you don't statically know the signature of the
 ///   function that you're calling you'll be using [`Func::call`] or
@@ -183,18 +184,14 @@ unsafe impl Sync for HostFunc {}
 ///   looking for a speedier alternative you can also use...
 ///
 /// * Statically typed - if you statically know the type signature of the wasm
-///   function you're calling then you can use the [`Func::getN`](Func::get1)
-///   family of functions where `N` is the number of wasm arguments the function
-///   takes. Asynchronous users can use [`Func::getN_async`](Func::get1_async).
-///   These functions will perform type validation up-front and then return a
-///   specialized closure which can be used to invoke the wasm function. This
-///   route involves no dynamic allocation and does not type-checks during
-///   runtime, so it's recommended to use this where possible for maximal speed.
-///
-/// Unfortunately a limitation of the code generation backend right now means
-/// that the statically typed `getN` methods only work with wasm functions that
-/// return 0 or 1 value. If 2 or more values are returned you'll need to use the
-/// dynamic `call` API. We hope to fix this in the future, though!
+///   function you're calling, then you'll want to use the [`Func::typed`]
+///   method to acquire an instance of [`TypedFunc`]. This structure is static proof
+///   that the underlying wasm function has the ascripted type, and type
+///   validation is only done once up-front. The [`TypedFunc::call`] and
+///   [`TypedFunc::call_async`] methods are much more efficient than [`Func::call`]
+///   and [`Func::call_async`] because the type signature is statically known.
+///   This eschews runtime checks as much as possible to get into wasm as fast
+///   as possible.
 ///
 /// # Examples
 ///
@@ -223,8 +220,8 @@ unsafe impl Sync for HostFunc {}
 /// // ... or we can make a static assertion about its signature and call it.
 /// // Our first call here can fail if the signatures don't match, and then the
 /// // second call can fail if the function traps (like the `match` above).
-/// let foo = foo.get0::<()>()?;
-/// foo()?;
+/// let foo = foo.typed::<(), ()>()?;
+/// foo.call(())?;
 /// # Ok(())
 /// # }
 /// ```
@@ -258,10 +255,9 @@ unsafe impl Sync for HostFunc {}
 ///     "#,
 /// )?;
 /// let instance = Instance::new(&store, &module, &[add.into()])?;
-/// let call_add_twice = instance.get_func("call_add_twice").expect("export wasn't a function");
-/// let call_add_twice = call_add_twice.get0::<i32>()?;
+/// let call_add_twice = instance.get_typed_func::<(), i32>("call_add_twice")?;
 ///
-/// assert_eq!(call_add_twice()?, 10);
+/// assert_eq!(call_add_twice.call(())?, 10);
 /// # Ok(())
 /// # }
 /// ```
@@ -332,152 +328,8 @@ macro_rules! for_each_function_signature {
     };
 }
 
-macro_rules! generate_get_methods {
-    ($num:tt $($args:ident)*) => (paste::paste! {
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func`] structure for more documentation. Returns an error
-        /// if the type parameters and return parameter provided don't match the
-        /// actual function's type signature.
-        ///
-        /// # Panics
-        ///
-        /// Panics if this is called on a function in an asynchronous store.
-        #[allow(non_snake_case)]
-        pub fn [<get $num>]<$($args,)* R>(&self)
-            -> Result<impl Fn($($args,)*) -> Result<R, Trap>>
-        where
-            $($args: WasmTy,)*
-            R: WasmTy,
-        {
-            assert!(!self.store().async_support(), concat!("cannot use `get", $num, "` when async support is enabled on the config"));
-            self.[<_get $num>]::<$($args,)* R>()
-        }
-
-        /// Extracts a natively-callable object from this `Func`, if the
-        /// signature matches.
-        ///
-        /// See the [`Func`] structure for more documentation. Returns an error
-        /// if the type parameters and return parameter provided don't match the
-        /// actual function's type signature.
-        ///
-        /// # Panics
-        ///
-        /// Panics if this is called on a function in a synchronous store.
-        #[allow(non_snake_case, warnings)]
-        #[cfg(feature = "async")]
-        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-        pub fn [<get $num _async>]<$($args,)* R>(&self)
-            -> Result<impl Fn($($args,)*) -> WasmCall<R>>
-        where
-            $($args: WasmTy + 'static,)*
-            R: WasmTy + 'static,
-        {
-            assert!(self.store().async_support(), concat!("cannot use `get", $num, "_async` without enabling async support on the config"));
-
-            // TODO: ideally we wouldn't box up the future here but could
-            // instead name the future returned by `on_fiber`.  Unfortunately
-            // that would require a bunch of inter-future borrows which are safe
-            // but gnarly to implement by hand.
-            //
-            // Otherwise the implementation here is pretty similar to
-            // `call_async` where we're just calling the `on_fiber` method to
-            // run the blocking work. Most of the goop here is juggling
-            // lifetimes and making sure everything lives long enough and
-            // closures have the right signatures.
-            //
-            // This is... less readable than ideal.
-            let func = self.[<_get $num>]::<$($args,)* R>()?;
-            let store = self.store().clone();
-            Ok(move |$($args),*| {
-                let func = func.clone();
-                let store = store.clone();
-                WasmCall {
-                    inner: Pin::from(Box::new(async move {
-                        match store.on_fiber(|| func($($args,)*)).await {
-                            Ok(result) => result,
-                            Err(trap) => Err(trap),
-                        }
-                    }))
-                }
-            })
-        }
-
-        // Internal helper to share between `getN` and `getN_async`
-        #[allow(non_snake_case)]
-        fn [<_get $num>]<$($args,)* R>(&self)
-            -> Result<impl Fn($($args,)*) -> Result<R, Trap> + Clone>
-        where
-            $($args: WasmTy,)*
-            R: WasmTy,
-        {
-            // Verify all the paramers match the expected parameters, and that
-            // there are no extra parameters...
-            let ty = self.ty();
-            let mut params = ty.params();
-            let n = 0;
-            $(
-                let n = n + 1;
-                $args::matches(&mut params)
-                    .with_context(|| format!("Type mismatch in argument {}", n))?;
-            )*
-            ensure!(params.next().is_none(), "Type mismatch: too many arguments (expected {})", n);
-
-            // ... then do the same for the results...
-            let mut results = ty.results();
-            R::matches(&mut results)
-                .context("Type mismatch in return type")?;
-            ensure!(results.next().is_none(), "Type mismatch: too many return values (expected 1)");
-
-            // Pass the instance into the closure so that we keep it live for
-            // the lifetime of the closure. Pass the `anyfunc` in so that we can
-            // call it.
-            let instance = self.instance.clone();
-            let anyfunc = self.export.anyfunc;
-
-            // ... and then once we've passed the typechecks we can hand out our
-            // object since our `transmute` below should be safe!
-            Ok(move |$($args: $args),*| -> Result<R, Trap> {
-                unsafe {
-                    let fnptr = mem::transmute::<
-                        *const VMFunctionBody,
-                        unsafe extern "C" fn(
-                            *mut VMContext,
-                            *mut VMContext,
-                            $( $args::Abi, )*
-                        ) -> R::Abi,
-                    >(anyfunc.as_ref().func_ptr.as_ptr());
-
-                    let mut ret = None;
-
-                    $(
-                        // Because this returned closure is not marked `unsafe`,
-                        // we have to check that incoming values are compatible
-                        // with our store.
-                        if !$args.compatible_with_store(&instance.store) {
-                            return Err(Trap::new(
-                                "attempt to pass cross-`Store` value to Wasm as function argument"
-                            ));
-                        }
-
-                        let $args = $args.into_abi_for_arg(&instance.store);
-                    )*
-
-                    invoke_wasm_and_catch_traps(&instance.store, || {
-                        ret = Some(fnptr(
-                            anyfunc.as_ref().vmctx,
-                            ptr::null_mut(),
-                            $( $args, )*
-                        ));
-                    })?;
-
-                    Ok(R::from_abi(ret.unwrap(), &instance.store))
-                }
-            })
-        }
-    })
-}
+mod typed;
+pub use typed::*;
 
 macro_rules! generate_wrap_async_func {
     ($num:tt $($args:ident)*) => (paste::paste!{
@@ -505,8 +357,8 @@ macro_rules! generate_wrap_async_func {
                 let store = caller.store().clone();
                 let mut future = Pin::from(func(caller, &state, $($args),*));
                 match store.block_on(future.as_mut()) {
-                    Ok(ret) => ret.into_result(),
-                    Err(e) => Err(e),
+                    Ok(ret) => ret.into_fallible(),
+                    Err(e) => R::fallible_from_trap(e),
                 }
             })
         }
@@ -751,8 +603,8 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[add.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
-    /// assert_eq!(foo(1, 2)?, 3);
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>("foo")?;
+    /// assert_eq!(foo.call((1, 2))?, 3);
     /// # Ok(())
     /// # }
     /// ```
@@ -782,9 +634,9 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[add.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().get2::<i32, i32, i32>()?;
-    /// assert_eq!(foo(1, 2)?, 3);
-    /// assert!(foo(i32::max_value(), 1).is_err());
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>("foo")?;
+    /// assert_eq!(foo.call((1, 2))?, 3);
+    /// assert!(foo.call((i32::max_value(), 1)).is_err());
     /// # Ok(())
     /// # }
     /// ```
@@ -820,8 +672,8 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[debug.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
-    /// foo()?;
+    /// let foo = instance.get_typed_func::<(), ()>("foo")?;
+    /// foo.call(())?;
     /// # Ok(())
     /// # }
     /// ```
@@ -876,8 +728,8 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[log_str.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().get0::<()>()?;
-    /// foo()?;
+    /// let foo = instance.get_typed_func::<(), ()>("foo")?;
+    /// foo.call(())?;
     /// # Ok(())
     /// # }
     /// ```
@@ -1073,8 +925,6 @@ impl Func {
         }
     }
 
-    for_each_function_signature!(generate_get_methods);
-
     /// Get a reference to this function's store.
     pub fn store(&self) -> &Store {
         &self.instance.store
@@ -1094,7 +944,7 @@ impl Func {
         &self.export
     }
 
-    pub(crate) fn invoke(
+    fn invoke(
         store: &Store,
         ty: &FuncType,
         caller_vmctx: *mut VMContext,
@@ -1148,6 +998,148 @@ impl Func {
 
         Ok(())
     }
+
+    /// Attempts to extract a typed object from this `Func` through which the
+    /// function can be called.
+    ///
+    /// This function serves as an alternative to [`Func::call`] and
+    /// [`Func::call_async`]. This method performs a static type check (using
+    /// the `Params` and `Results` type parameters on the underlying wasm
+    /// function. If the type check passes then a `TypedFunc` object is returned,
+    /// otherwise an error is returned describing the typecheck failure.
+    ///
+    /// The purpose of this relative to [`Func::call`] is that it's much more
+    /// efficient when used to invoke WebAssembly functions. With the types
+    /// statically known far less setup/teardown is required when invoking
+    /// WebAssembly. If speed is desired then this function is recommended to be
+    /// used instead of [`Func::call`] (which is more general, hence its
+    /// slowdown).
+    ///
+    /// The `Params` type parameter is used to describe the parameters of the
+    /// WebAssembly function. This can either be a single type (like `i32`), or
+    /// a tuple of types representing the list of parameters (like `(i32, f32,
+    /// f64)`). Additionally you can use `()` to represent that the function has
+    /// no parameters.
+    ///
+    /// The `Results` type parameter is used to describe the results of the
+    /// function. This behaves the same way as `Params`, but just for the
+    /// results of the function.
+    ///
+    /// Translation between Rust types and WebAssembly types looks like:
+    ///
+    /// | WebAssembly | Rust                |
+    /// |-------------|---------------------|
+    /// | `i32`       | `i32` or `u32`      |
+    /// | `i64`       | `i64` or `u64`      |
+    /// | `f32`       | `f32`               |
+    /// | `f64`       | `f64`               |
+    /// | `externref` | `Option<ExternRef>` |
+    /// | `funcref`   | `Option<Func>`      |
+    /// | `v128`      | not supported       |
+    ///
+    /// (note that this mapping is the same as that of [`Func::wrap`]).
+    ///
+    /// Note that once the [`TypedFunc`] return value is acquired you'll use either
+    /// [`TypedFunc::call`] or [`TypedFunc::call_async`] as necessary to actually invoke
+    /// the function. This method does not invoke any WebAssembly code, it
+    /// simply performs a typecheck before returning the [`TypedFunc`] value.
+    ///
+    /// This method also has a convenience wrapper as
+    /// [`Instance::get_typed_func`](crate::Instance::get_typed_func) to
+    /// directly get a typed function value from an
+    /// [`Instance`](crate::Instance).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if `Params` or `Results` does not
+    /// match the native type of this WebAssembly function.
+    ///
+    /// # Examples
+    ///
+    /// An end-to-end example of calling a function which takes no parameters
+    /// and has no results:
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// let engine = Engine::default();
+    /// let store = Store::new(&engine);
+    /// let module = Module::new(&engine, r#"(module (func (export "foo")))"#)?;
+    /// let instance = Instance::new(&store, &module, &[])?;
+    /// let foo = instance.get_func("foo").expect("export wasn't a function");
+    ///
+    /// // Note that this call can fail due to the typecheck not passing, but
+    /// // in our case we statically know the module so we know this should
+    /// // pass.
+    /// let typed = foo.typed::<(), ()>()?;
+    ///
+    /// // Note that this can fail if the wasm traps at runtime.
+    /// typed.call(())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// You can also pass in multiple parameters and get a result back
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn foo(add: &Func) -> anyhow::Result<()> {
+    /// let typed = add.typed::<(i32, i64), f32>()?;
+    /// assert_eq!(typed.call((1, 2))?, 3.0);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// and similarly if a function has multiple results you can bind that too
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn foo(add_with_overflow: &Func) -> anyhow::Result<()> {
+    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>()?;
+    /// let (result, overflow) = typed.call((u32::max_value(), 2))?;
+    /// assert_eq!(result, 1);
+    /// assert_eq!(overflow, 1);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn typed<Params, Results>(&self) -> Result<&TypedFunc<Params, Results>>
+    where
+        Params: WasmParams,
+        Results: WasmResults,
+    {
+        // First type-check that the params/results are all valid...
+        let ty = self.ty();
+        Params::typecheck(ty.params()).context("type mismatch with parameters")?;
+        Results::typecheck(ty.results()).context("type mismatch with results")?;
+
+        // ... then we can construct the typed version of this function
+        // (unsafely), which should be safe since we just did the type check above.
+        unsafe { Ok(self.typed_unchecked::<Params, Results>()) }
+    }
+
+    /// An unchecked version of [`Func::typed`] which does not perform a
+    /// typecheck and simply assumes that the type declared here matches the
+    /// type of this function.
+    ///
+    /// The semantics of this function are the same as [`Func::typed`] except
+    /// that no error is returned because no typechecking is done.
+    ///
+    /// # Unsafety
+    ///
+    /// This function only safe to call if `typed` would otherwise return `Ok`
+    /// for the same `Params` and `Results` specified. If `typed` would return
+    /// an error then the returned `TypedFunc` is memory unsafe to invoke.
+    pub unsafe fn typed_unchecked<Params, Results>(&self) -> &TypedFunc<Params, Results>
+    where
+        Params: WasmParams,
+        Results: WasmResults,
+    {
+        assert_eq!(
+            mem::size_of::<TypedFunc<Params, Results>>(),
+            mem::size_of_val(self)
+        );
+        &*(self as *const Func as *const TypedFunc<Params, Results>)
+    }
 }
 
 impl fmt::Debug for Func {
@@ -1170,54 +1162,6 @@ pub(crate) fn invoke_wasm_and_catch_traps(
     }
 }
 
-/// A trait implemented for types which can be arguments to closures passed to
-/// [`Func::wrap`] and friends.
-///
-/// This trait should not be implemented by user types. This trait may change at
-/// any time internally. The types which implement this trait, however, are
-/// stable over time.
-///
-/// For more information see [`Func::wrap`]
-pub unsafe trait WasmTy {
-    // The raw ABI representation of this type inside Wasm.
-    #[doc(hidden)]
-    type Abi: Copy;
-
-    // Is this value compatible with the given store?
-    #[doc(hidden)]
-    fn compatible_with_store(&self, store: &Store) -> bool;
-
-    // Convert this value into its ABI representation, when passing a value into
-    // Wasm as an argument.
-    #[doc(hidden)]
-    fn into_abi_for_arg(self, store: &Store) -> Self::Abi;
-
-    // Convert from the raw ABI representation back into `Self`, when receiving
-    // a value from Wasm.
-    //
-    // Safety: The abi value *must* have be valid for this type (e.g. for
-    // `externref`, it must be a valid raw `VMExternRef` pointer, not some
-    // random, dangling pointer).
-    #[doc(hidden)]
-    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self;
-
-    // Add this type to the given vec of expected valtypes.
-    #[doc(hidden)]
-    fn valtype() -> Option<ValType>;
-
-    // Does the next valtype(s) match this type?
-    #[doc(hidden)]
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()>;
-
-    // Load this type's raw ABI representation from an args array.
-    #[doc(hidden)]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi;
-
-    // Store this type's raw ABI representation into an args array.
-    #[doc(hidden)]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128);
-}
-
 /// A trait implemented for types which can be returned from closures passed to
 /// [`Func::wrap`] and friends.
 ///
@@ -1230,11 +1174,6 @@ pub unsafe trait WasmRet {
     // Same as `WasmTy::Abi`.
     #[doc(hidden)]
     type Abi: Copy;
-
-    // The "ok" version of this, meaning that which is returned if there is no
-    // error.
-    #[doc(hidden)]
-    type Ok: WasmTy;
 
     // Same as `WasmTy::compatible_with_store`.
     #[doc(hidden)]
@@ -1249,33 +1188,24 @@ pub unsafe trait WasmRet {
     #[doc(hidden)]
     unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi;
 
-    // Same as `WasmTy::from_abi`.
-    #[doc(hidden)]
-    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self;
-
     // Same as `WasmTy::push`.
     #[doc(hidden)]
     fn valtype() -> Option<ValType>;
 
-    // Same as `WasmTy::matches`.
+    // Utilities used to convert an instance of this type to a `Result`
+    // explicitly, used when wrapping async functions which always bottom-out
+    // in a function that returns a trap because futures can be cancelled.
     #[doc(hidden)]
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()>;
-
-    // Same as `WasmTy::load_from_args`.
+    type Fallible: WasmRet;
     #[doc(hidden)]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi;
-
-    // Same as `WasmTy::store_to_args`.
+    fn into_fallible(self) -> Self::Fallible;
     #[doc(hidden)]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128);
-
-    // Converts this result into an explicit `Result` to match on.
-    #[doc(hidden)]
-    fn into_result(self) -> Result<Self::Ok, Trap>;
+    fn fallible_from_trap(trap: Trap) -> Self::Fallible;
 }
 
-unsafe impl WasmTy for () {
-    type Abi = Self;
+unsafe impl WasmRet for () {
+    type Abi = ();
+    type Fallible = Result<(), Trap>;
 
     #[inline]
     fn compatible_with_store(&self, _store: &Store) -> bool {
@@ -1283,28 +1213,27 @@ unsafe impl WasmTy for () {
     }
 
     #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {}
+    unsafe fn into_abi_for_ret(self, _store: &Store) {}
 
     #[inline]
-    unsafe fn from_abi(_abi: Self::Abi, _store: &Store) -> Self {}
-
     fn valtype() -> Option<ValType> {
         None
     }
 
-    fn matches(_tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
+    #[inline]
+    fn into_fallible(self) -> Result<(), Trap> {
         Ok(())
     }
 
     #[inline]
-    unsafe fn load_from_args(_ptr: &mut *const u128) -> Self::Abi {}
-
-    #[inline]
-    unsafe fn store_to_args(_abi: Self::Abi, _ptr: *mut u128) {}
+    fn fallible_from_trap(trap: Trap) -> Result<(), Trap> {
+        Err(trap)
+    }
 }
 
-unsafe impl WasmTy for i32 {
-    type Abi = Self;
+unsafe impl WasmRet for Result<(), Trap> {
+    type Abi = ();
+    type Fallible = Self;
 
     #[inline]
     fn compatible_with_store(&self, _store: &Store) -> bool {
@@ -1312,358 +1241,26 @@ unsafe impl WasmTy for i32 {
     }
 
     #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {
-        self
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-        abi
-    }
-
-    fn valtype() -> Option<ValType> {
-        Some(ValType::I32)
-    }
-
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::I32),
-            "Type mismatch, expected i32, got {:?}",
-            next
-        );
-        Ok(())
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = *(*ptr).cast::<Self>();
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr.cast::<Self>() = abi;
-    }
-}
-
-unsafe impl WasmTy for u32 {
-    type Abi = <i32 as WasmTy>::Abi;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {
-        self as i32
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-        abi as Self
-    }
-
-    fn valtype() -> Option<ValType> {
-        <i32 as WasmTy>::valtype()
-    }
-
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        <i32 as WasmTy>::matches(tys)
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        <i32 as WasmTy>::load_from_args(ptr)
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        <i32 as WasmTy>::store_to_args(abi, ptr)
-    }
-}
-
-unsafe impl WasmTy for i64 {
-    type Abi = Self;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {
-        self
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-        abi
-    }
-
-    fn valtype() -> Option<ValType> {
-        Some(ValType::I64)
-    }
-
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::I64),
-            "Type mismatch, expected i64, got {:?}",
-            next
-        );
-        Ok(())
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = *(*ptr).cast::<Self>();
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr.cast::<Self>() = abi;
-    }
-}
-
-unsafe impl WasmTy for u64 {
-    type Abi = <i64 as WasmTy>::Abi;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {
-        self as i64
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-        abi as Self
-    }
-
-    fn valtype() -> Option<ValType> {
-        <i64 as WasmTy>::valtype()
-    }
-
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        <i64 as WasmTy>::matches(tys)
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        <i64 as WasmTy>::load_from_args(ptr)
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        <i64 as WasmTy>::store_to_args(abi, ptr)
-    }
-}
-
-unsafe impl WasmTy for f32 {
-    type Abi = Self;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {
-        self
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-        abi
-    }
-
-    fn valtype() -> Option<ValType> {
-        Some(ValType::F32)
-    }
-
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::F32),
-            "Type mismatch, expected f32, got {:?}",
-            next
-        );
-        Ok(())
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = f32::from_bits(*(*ptr).cast::<u32>());
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr.cast::<u32>() = abi.to_bits();
-    }
-}
-
-unsafe impl WasmTy for f64 {
-    type Abi = Self;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {
-        self
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-        abi
-    }
-
-    fn valtype() -> Option<ValType> {
-        Some(ValType::F64)
-    }
-
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::F64),
-            "Type mismatch, expected f64, got {:?}",
-            next
-        );
-        Ok(())
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = f64::from_bits(*(*ptr).cast::<u64>());
-        *ptr = (*ptr).add(1);
-        return ret;
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        *ptr.cast::<u64>() = abi.to_bits();
-    }
-}
-
-unsafe impl WasmTy for Option<ExternRef> {
-    type Abi = *mut u8;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    fn into_abi_for_arg(self, store: &Store) -> Self::Abi {
-        if let Some(x) = self {
-            let abi = x.inner.as_raw();
-            unsafe {
-                store
-                    .externref_activations_table()
-                    .insert_with_gc(x.inner, store.stack_map_registry());
-            }
-            abi
-        } else {
-            ptr::null_mut()
+    unsafe fn into_abi_for_ret(self, _store: &Store) {
+        match self {
+            Ok(()) => {}
+            Err(trap) => raise_user_trap(trap.into()),
         }
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-        if abi.is_null() {
-            None
-        } else {
-            Some(ExternRef {
-                inner: VMExternRef::clone_from_raw(abi),
-            })
-        }
-    }
-
     fn valtype() -> Option<ValType> {
-        Some(ValType::ExternRef)
-    }
-
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::ExternRef),
-            "Type mismatch, expected externref, got {:?}",
-            next
-        );
-        Ok(())
-    }
-
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = *(*ptr).cast::<usize>() as *mut u8;
-        *ptr = (*ptr).add(1);
-        ret
-    }
-
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        ptr::write(ptr.cast::<usize>(), abi as usize);
-    }
-}
-
-unsafe impl WasmTy for Option<Func> {
-    type Abi = *mut VMCallerCheckedAnyfunc;
-
-    #[inline]
-    fn compatible_with_store(&self, store: &Store) -> bool {
-        if let Some(f) = self {
-            Store::same(store, f.store())
-        } else {
-            true
-        }
+        None
     }
 
     #[inline]
-    fn into_abi_for_arg(self, _store: &Store) -> Self::Abi {
-        if let Some(f) = self {
-            f.caller_checked_anyfunc().as_ptr()
-        } else {
-            ptr::null_mut()
-        }
+    fn into_fallible(self) -> Result<(), Trap> {
+        self
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self {
-        Func::from_caller_checked_anyfunc(store, abi)
-    }
-
-    fn valtype() -> Option<ValType> {
-        Some(ValType::FuncRef)
-    }
-
-    fn matches(mut tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        let next = tys.next();
-        ensure!(
-            next == Some(ValType::FuncRef),
-            "Type mismatch, expected funcref, got {:?}",
-            next
-        );
-        Ok(())
-    }
-
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        let ret = *(*ptr).cast::<usize>() as *mut VMCallerCheckedAnyfunc;
-        *ptr = (*ptr).add(1);
-        ret
-    }
-
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        ptr::write(ptr.cast::<usize>(), abi as usize);
+    fn fallible_from_trap(trap: Trap) -> Result<(), Trap> {
+        Err(trap)
     }
 }
 
@@ -1672,45 +1269,26 @@ where
     T: WasmTy,
 {
     type Abi = <T as WasmTy>::Abi;
-    type Ok = T;
+    type Fallible = Result<T, Trap>;
 
-    #[inline]
     fn compatible_with_store(&self, store: &Store) -> bool {
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    #[inline]
     unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi {
-        <Self as WasmTy>::into_abi_for_arg(self, store)
-    }
-
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self {
-        <Self as WasmTy>::from_abi(abi, store)
+        <Self as WasmTy>::into_abi(self, store)
     }
 
     fn valtype() -> Option<ValType> {
-        <Self as WasmTy>::valtype()
+        Some(<Self as WasmTy>::valtype())
     }
 
-    #[inline]
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        <Self as WasmTy>::matches(tys)
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        <Self as WasmTy>::load_from_args(ptr)
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        <Self as WasmTy>::store_to_args(abi, ptr)
-    }
-
-    #[inline]
-    fn into_result(self) -> Result<T, Trap> {
+    fn into_fallible(self) -> Result<T, Trap> {
         Ok(self)
+    }
+
+    fn fallible_from_trap(trap: Trap) -> Result<T, Trap> {
+        Err(trap)
     }
 }
 
@@ -1719,9 +1297,8 @@ where
     T: WasmTy,
 {
     type Abi = <T as WasmTy>::Abi;
-    type Ok = T;
+    type Fallible = Self;
 
-    #[inline]
     fn compatible_with_store(&self, store: &Store) -> bool {
         match self {
             Ok(x) => <T as WasmTy>::compatible_with_store(x, store),
@@ -1729,10 +1306,9 @@ where
         }
     }
 
-    #[inline]
     unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi {
         match self {
-            Ok(val) => return <T as WasmTy>::into_abi_for_arg(val, store),
+            Ok(val) => return <T as WasmTy>::into_abi(val, store),
             Err(trap) => handle_trap(trap),
         }
 
@@ -1741,32 +1317,16 @@ where
         }
     }
 
-    #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self {
-        Ok(<T as WasmTy>::from_abi(abi, store))
-    }
-
     fn valtype() -> Option<ValType> {
-        <T as WasmTy>::valtype()
+        Some(<T as WasmTy>::valtype())
     }
 
-    fn matches(tys: impl Iterator<Item = ValType>) -> anyhow::Result<()> {
-        <T as WasmTy>::matches(tys)
-    }
-
-    #[inline]
-    unsafe fn load_from_args(ptr: &mut *const u128) -> Self::Abi {
-        <T as WasmTy>::load_from_args(ptr)
-    }
-
-    #[inline]
-    unsafe fn store_to_args(abi: Self::Abi, ptr: *mut u128) {
-        <T as WasmTy>::store_to_args(abi, ptr);
-    }
-
-    #[inline]
-    fn into_result(self) -> Result<T, Trap> {
+    fn into_fallible(self) -> Result<T, Trap> {
         self
+    }
+
+    fn fallible_from_trap(trap: Trap) -> Result<T, Trap> {
+        Err(trap)
     }
 }
 
@@ -1999,15 +1559,18 @@ macro_rules! impl_into_func {
                         ) -> R::Abi,
                     >(ptr);
 
-                    let mut _next = args as *const u128;
-                    $( let $args = $args::load_from_args(&mut _next); )*
+                    let mut _n = 0;
+                    $(
+                        let $args = *args.add(_n).cast::<$args::Abi>();
+                        _n += 1;
+                    )*
                     let ret = ptr(callee_vmctx, caller_vmctx, $( $args ),*);
-                    R::store_to_args(ret, args);
+                    *args.cast::<R::Abi>() = ret;
                 }
 
                 let ty = FuncType::new(
                     None::<ValType>.into_iter()
-                        $(.chain($args::valtype()))*
+                        $(.chain(Some($args::valtype())))*
                     ,
                     R::valtype(),
                 );
@@ -2039,20 +1602,6 @@ macro_rules! impl_into_func {
 }
 
 for_each_function_signature!(impl_into_func);
-
-/// Returned future from the [`Func::get1_async`] family of methods, used to
-/// represent an asynchronous call into WebAssembly.
-pub struct WasmCall<R> {
-    inner: Pin<Box<dyn Future<Output = Result<R, Trap>>>>,
-}
-
-impl<R> Future for WasmCall<R> {
-    type Output = Result<R, Trap>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        self.inner.as_mut().poll(cx)
-    }
-}
 
 #[test]
 fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
@@ -2102,10 +1651,7 @@ fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
          "#,
     )?;
     let instance = Instance::new(&store, &module, &[debug.into()])?;
-    let foo = instance
-        .get_func("foo")
-        .unwrap()
-        .get6::<i32, u32, f32, i64, u64, f64, ()>()?;
-    foo(-1, 1, 2.0, -3, 3, 4.0)?;
+    let foo = instance.get_typed_func::<(i32, u32, f32, i64, u64, f64), ()>("foo")?;
+    foo.call((-1, 1, 2.0, -3, 3, 4.0))?;
     Ok(())
 }

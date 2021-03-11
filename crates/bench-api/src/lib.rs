@@ -301,9 +301,8 @@ impl BenchState {
             .as_ref()
             .expect("instantiate the module before executing it");
 
-        let start_func = instance.get_func("_start").expect("a _start function");
-        let runnable_func = start_func.get0::<()>()?;
-        match runnable_func() {
+        let start_func = instance.get_typed_func::<(), ()>("_start")?;
+        match start_func.call(()) {
             Ok(_) => Ok(()),
             Err(trap) => {
                 // Since _start will likely return by using the system `exit` call, we must

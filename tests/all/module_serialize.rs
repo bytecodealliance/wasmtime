@@ -20,11 +20,8 @@ fn test_module_serialize_simple() -> Result<()> {
 
     let store = Store::default();
     let instance = deserialize_and_instantiate(&store, &buffer)?;
-    let run = instance
-        .get_func("run")
-        .ok_or(anyhow::format_err!("failed to find `run` function export"))?
-        .get0::<i32>()?;
-    let result = run()?;
+    let run = instance.get_typed_func::<(), i32>("run")?;
+    let result = run.call(())?;
 
     assert_eq!(42, result);
     Ok(())

@@ -63,13 +63,13 @@ fn memory_limit() -> Result<()> {
     {
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
-        let f = instance.get_func("f").unwrap().get0::<i32>().unwrap();
+        let f = instance.get_typed_func::<(), i32>("f")?;
 
-        assert_eq!(f().expect("function should not trap"), 0);
-        assert_eq!(f().expect("function should not trap"), 1);
-        assert_eq!(f().expect("function should not trap"), 2);
-        assert_eq!(f().expect("function should not trap"), -1);
-        assert_eq!(f().expect("function should not trap"), -1);
+        assert_eq!(f.call(()).expect("function should not trap"), 0);
+        assert_eq!(f.call(()).expect("function should not trap"), 1);
+        assert_eq!(f.call(()).expect("function should not trap"), 2);
+        assert_eq!(f.call(()).expect("function should not trap"), -1);
+        assert_eq!(f.call(()).expect("function should not trap"), -1);
     }
 
     // Instantiate the module and grow the memory via the Wasmtime API
@@ -155,25 +155,25 @@ fn memory_guard_page_trap() -> Result<()> {
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
         let m = instance.get_memory("m").unwrap();
-        let f = instance.get_func("f").unwrap().get1::<i32, ()>().unwrap();
+        let f = instance.get_typed_func::<i32, ()>("f")?;
 
-        let trap = f(0).expect_err("function should trap");
+        let trap = f.call(0).expect_err("function should trap");
         assert!(trap.to_string().contains("out of bounds"));
 
-        let trap = f(1).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
-
-        m.grow(1).expect("memory should grow");
-        f(0).expect("function should not trap");
-
-        let trap = f(65536).expect_err("function should trap");
-        assert!(trap.to_string().contains("out of bounds"));
-
-        let trap = f(65537).expect_err("function should trap");
+        let trap = f.call(1).expect_err("function should trap");
         assert!(trap.to_string().contains("out of bounds"));
 
         m.grow(1).expect("memory should grow");
-        f(65536).expect("function should not trap");
+        f.call(0).expect("function should not trap");
+
+        let trap = f.call(65536).expect_err("function should trap");
+        assert!(trap.to_string().contains("out of bounds"));
+
+        let trap = f.call(65537).expect_err("function should trap");
+        assert!(trap.to_string().contains("out of bounds"));
+
+        m.grow(1).expect("memory should grow");
+        f.call(65536).expect("function should not trap");
 
         m.grow(1).expect_err("memory should be at the limit");
     }
@@ -261,14 +261,14 @@ fn table_limit() -> Result<()> {
     {
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
-        let f = instance.get_func("f").unwrap().get0::<i32>().unwrap();
+        let f = instance.get_typed_func::<(), i32>("f")?;
 
         for i in 0..TABLE_ELEMENTS {
-            assert_eq!(f().expect("function should not trap"), i as i32);
+            assert_eq!(f.call(()).expect("function should not trap"), i as i32);
         }
 
-        assert_eq!(f().expect("function should not trap"), -1);
-        assert_eq!(f().expect("function should not trap"), -1);
+        assert_eq!(f.call(()).expect("function should not trap"), -1);
+        assert_eq!(f.call(()).expect("function should not trap"), -1);
     }
 
     // Instantiate the module and grow the table via the Wasmtime API

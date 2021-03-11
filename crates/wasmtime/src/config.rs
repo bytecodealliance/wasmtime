@@ -350,8 +350,8 @@ macro_rules! generate_wrap_async_host_func {
                     debug_assert!(store.async_support());
                     let mut future = Pin::from(func(caller, $($args),*));
                     match store.block_on(future.as_mut()) {
-                        Ok(ret) => ret.into_result(),
-                        Err(e) => Err(e),
+                        Ok(ret) => ret.into_fallible(),
+                        Err(e) => R::fallible_from_trap(e),
                     }
                 })
             );

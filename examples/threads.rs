@@ -1,6 +1,6 @@
 // You can execute this example with `cargo run --example threads`
 
-use anyhow::{format_err, Result};
+use anyhow::Result;
 use std::thread;
 use std::time;
 use wasmtime::*;
@@ -26,14 +26,12 @@ fn run(engine: &Engine, module: Module, id: i32) -> Result<()> {
 
     // Extract exports.
     println!("Extracting export...");
-    let g = instance
-        .get_func("run")
-        .ok_or(format_err!("failed to find export `run`"))?;
+    let g = instance.get_typed_func::<(), ()>("run")?;
 
     for _ in 0..N_REPS {
         thread::sleep(time::Duration::from_millis(100));
         // Call `$run`.
-        drop(g.call(&[])?);
+        drop(g.call(())?);
     }
 
     Ok(())

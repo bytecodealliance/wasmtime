@@ -355,10 +355,10 @@ impl Linker {
     /// "#;
     /// let module = Module::new(store.engine(), wat)?;
     /// linker.module("commander", &module)?;
-    /// let run = linker.get_default("")?.get0::<()>()?;
-    /// run()?;
-    /// run()?;
-    /// run()?;
+    /// let run = linker.get_default("")?.typed::<(), ()>()?.clone();
+    /// run.call(())?;
+    /// run.call(())?;
+    /// run.call(())?;
     ///
     /// let wat = r#"
     ///     (module
@@ -374,7 +374,8 @@ impl Linker {
     /// "#;
     /// let module = Module::new(store.engine(), wat)?;
     /// linker.module("", &module)?;
-    /// let count = linker.get_one_by_name("", Some("run"))?.into_func().unwrap().get0::<i32>()?()?;
+    /// let run = linker.get_one_by_name("", Some("run"))?.into_func().unwrap();
+    /// let count = run.typed::<(), i32>()?.call(())?;
     /// assert_eq!(count, 0, "a Command should get a fresh instance on each invocation");
     ///
     /// # Ok(())
@@ -388,8 +389,8 @@ impl Linker {
 
                 if let Some(export) = instance.get_export("_initialize") {
                     if let Extern::Func(func) = export {
-                        func.get0::<()>()
-                            .and_then(|f| f().map_err(Into::into))
+                        func.typed::<(), ()>()
+                            .and_then(|f| f.call(()).map_err(Into::into))
                             .context("calling the Reactor initialization function")?;
                     }
                 }

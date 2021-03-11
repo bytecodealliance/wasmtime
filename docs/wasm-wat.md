@@ -48,9 +48,8 @@ let wat = r#"
 "#;
 let module = Module::new(&engine, wat)?;
 let instance = Instance::new(&store, &module, &[])?;
-let add = instance.get_func("add").unwrap();
-let add = add.get2::<i32, i32, i32>()?;
-println!("1 + 2 = {}", add(1, 2)?);
+let add = instance.get_typed_func::<(i32, i32), i32>("add")?;
+println!("1 + 2 = {}", add.call((1, 2))?);
 # Ok(())
 # }
 ```

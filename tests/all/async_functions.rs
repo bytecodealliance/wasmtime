@@ -19,12 +19,12 @@ fn run_smoke_test(func: &Func) {
     run(future1).unwrap();
 }
 
-fn run_smoke_get0_test(func: &Func) {
-    let func = func.get0_async::<()>().unwrap();
-    run(func()).unwrap();
-    run(func()).unwrap();
-    let future1 = func();
-    let future2 = func();
+fn run_smoke_typed_test(func: &Func) {
+    let func = func.typed::<(), ()>().unwrap();
+    run(func.call_async(())).unwrap();
+    run(func.call_async(())).unwrap();
+    let future1 = func.call_async(());
+    let future2 = func.call_async(());
     run(future2).unwrap();
     run(future1).unwrap();
 }
@@ -39,13 +39,13 @@ fn smoke() {
         move |_caller, _state, _params, _results| Box::new(async { Ok(()) }),
     );
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 
     let func = Func::wrap0_async(&store, (), move |_caller: Caller<'_>, _state| {
         Box::new(async { Ok(()) })
     });
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 }
 
 #[test]
@@ -68,13 +68,13 @@ fn smoke_host_func() {
         .get_host_func("", "first")
         .expect("expected host function");
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 
     let func = store
         .get_host_func("", "second")
         .expect("expected host function");
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn smoke_with_suspension() {
         },
     );
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 
     let func = Func::wrap0_async(&store, (), move |_caller: Caller<'_>, _state| {
         Box::new(async {
@@ -101,7 +101,7 @@ fn smoke_with_suspension() {
         })
     });
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 }
 
 #[test]
@@ -132,13 +132,13 @@ fn smoke_host_func_with_suspension() {
         .get_host_func("", "first")
         .expect("expected host function");
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 
     let func = store
         .get_host_func("", "second")
         .expect("expected host function");
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 }
 
 #[test]
@@ -461,7 +461,7 @@ fn async_with_pooling_stacks() {
     );
 
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 }
 
 #[test]
@@ -492,7 +492,7 @@ fn async_host_func_with_pooling_stacks() {
     let func = store.get_host_func("", "").expect("expected host function");
 
     run_smoke_test(&func);
-    run_smoke_get0_test(&func);
+    run_smoke_typed_test(&func);
 }
 
 fn execute_across_threads<F: Future + 'static>(future: F) {

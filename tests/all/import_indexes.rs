@@ -43,12 +43,8 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
     ];
     let instance = Instance::new(&store, &module, &imports)?;
 
-    let func = instance.get_func("foo").unwrap();
-    let results = func.call(&[])?;
-    assert_eq!(results.len(), 1);
-    match results[0] {
-        Val::I32(n) => assert_eq!(n, 3),
-        _ => panic!("unexpected type of return"),
-    }
+    let func = instance.get_typed_func::<(), i32>("foo")?;
+    let result = func.call(())?;
+    assert_eq!(result, 3);
     Ok(())
 }

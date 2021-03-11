@@ -243,41 +243,40 @@ fn trap_import() -> Result<()> {
 fn get_from_wrapper() {
     let store = Store::default();
     let f = Func::wrap(&store, || {});
-    assert!(f.get0::<()>().is_ok());
-    assert!(f.get0::<i32>().is_err());
-    assert!(f.get1::<(), ()>().is_ok());
-    assert!(f.get1::<i32, ()>().is_err());
-    assert!(f.get1::<i32, i32>().is_err());
-    assert!(f.get2::<(), (), ()>().is_ok());
-    assert!(f.get2::<i32, i32, ()>().is_err());
-    assert!(f.get2::<i32, i32, i32>().is_err());
+    assert!(f.typed::<(), ()>().is_ok());
+    assert!(f.typed::<(), i32>().is_err());
+    assert!(f.typed::<(), ()>().is_ok());
+    assert!(f.typed::<i32, ()>().is_err());
+    assert!(f.typed::<i32, i32>().is_err());
+    assert!(f.typed::<(i32, i32), ()>().is_err());
+    assert!(f.typed::<(i32, i32), i32>().is_err());
 
     let f = Func::wrap(&store, || -> i32 { loop {} });
-    assert!(f.get0::<i32>().is_ok());
+    assert!(f.typed::<(), i32>().is_ok());
     let f = Func::wrap(&store, || -> f32 { loop {} });
-    assert!(f.get0::<f32>().is_ok());
+    assert!(f.typed::<(), f32>().is_ok());
     let f = Func::wrap(&store, || -> f64 { loop {} });
-    assert!(f.get0::<f64>().is_ok());
+    assert!(f.typed::<(), f64>().is_ok());
     let f = Func::wrap(&store, || -> Option<ExternRef> { loop {} });
-    assert!(f.get0::<Option<ExternRef>>().is_ok());
+    assert!(f.typed::<(), Option<ExternRef>>().is_ok());
     let f = Func::wrap(&store, || -> Option<Func> { loop {} });
-    assert!(f.get0::<Option<Func>>().is_ok());
+    assert!(f.typed::<(), Option<Func>>().is_ok());
 
     let f = Func::wrap(&store, |_: i32| {});
-    assert!(f.get1::<i32, ()>().is_ok());
-    assert!(f.get1::<i64, ()>().is_err());
-    assert!(f.get1::<f32, ()>().is_err());
-    assert!(f.get1::<f64, ()>().is_err());
+    assert!(f.typed::<i32, ()>().is_ok());
+    assert!(f.typed::<i64, ()>().is_err());
+    assert!(f.typed::<f32, ()>().is_err());
+    assert!(f.typed::<f64, ()>().is_err());
     let f = Func::wrap(&store, |_: i64| {});
-    assert!(f.get1::<i64, ()>().is_ok());
+    assert!(f.typed::<i64, ()>().is_ok());
     let f = Func::wrap(&store, |_: f32| {});
-    assert!(f.get1::<f32, ()>().is_ok());
+    assert!(f.typed::<f32, ()>().is_ok());
     let f = Func::wrap(&store, |_: f64| {});
-    assert!(f.get1::<f64, ()>().is_ok());
+    assert!(f.typed::<f64, ()>().is_ok());
     let f = Func::wrap(&store, |_: Option<ExternRef>| {});
-    assert!(f.get1::<Option<ExternRef>, ()>().is_ok());
+    assert!(f.typed::<Option<ExternRef>, ()>().is_ok());
     let f = Func::wrap(&store, |_: Option<Func>| {});
-    assert!(f.get1::<Option<Func>, ()>().is_ok());
+    assert!(f.typed::<Option<Func>, ()>().is_ok());
 }
 
 #[test]
@@ -285,16 +284,16 @@ fn get_from_signature() {
     let store = Store::default();
     let ty = FuncType::new(None, None);
     let f = Func::new(&store, ty, |_, _, _| panic!());
-    assert!(f.get0::<()>().is_ok());
-    assert!(f.get0::<i32>().is_err());
-    assert!(f.get1::<i32, ()>().is_err());
+    assert!(f.typed::<(), ()>().is_ok());
+    assert!(f.typed::<(), i32>().is_err());
+    assert!(f.typed::<i32, ()>().is_err());
 
     let ty = FuncType::new(Some(ValType::I32), Some(ValType::F64));
     let f = Func::new(&store, ty, |_, _, _| panic!());
-    assert!(f.get0::<()>().is_err());
-    assert!(f.get0::<i32>().is_err());
-    assert!(f.get1::<i32, ()>().is_err());
-    assert!(f.get1::<i32, f64>().is_ok());
+    assert!(f.typed::<(), ()>().is_err());
+    assert!(f.typed::<(), i32>().is_err());
+    assert!(f.typed::<i32, ()>().is_err());
+    assert!(f.typed::<i32, f64>().is_ok());
 }
 
 #[test]
@@ -314,17 +313,17 @@ fn get_from_module() -> anyhow::Result<()> {
     )?;
     let instance = Instance::new(&store, &module, &[])?;
     let f0 = instance.get_func("f0").unwrap();
-    assert!(f0.get0::<()>().is_ok());
-    assert!(f0.get0::<i32>().is_err());
+    assert!(f0.typed::<(), ()>().is_ok());
+    assert!(f0.typed::<(), i32>().is_err());
     let f1 = instance.get_func("f1").unwrap();
-    assert!(f1.get0::<()>().is_err());
-    assert!(f1.get1::<i32, ()>().is_ok());
-    assert!(f1.get1::<i32, f32>().is_err());
+    assert!(f1.typed::<(), ()>().is_err());
+    assert!(f1.typed::<i32, ()>().is_ok());
+    assert!(f1.typed::<i32, f32>().is_err());
     let f2 = instance.get_func("f2").unwrap();
-    assert!(f2.get0::<()>().is_err());
-    assert!(f2.get0::<i32>().is_ok());
-    assert!(f2.get1::<i32, ()>().is_err());
-    assert!(f2.get1::<i32, f32>().is_err());
+    assert!(f2.typed::<(), ()>().is_err());
+    assert!(f2.typed::<(), i32>().is_ok());
+    assert!(f2.typed::<i32, ()>().is_err());
+    assert!(f2.typed::<i32, f32>().is_err());
     Ok(())
 }
 
@@ -338,31 +337,32 @@ fn call_wrapped_func() -> Result<()> {
         assert_eq!(d, 4.0);
     });
     f.call(&[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()])?;
-    f.get4::<i32, i64, f32, f64, ()>()?(1, 2, 3.0, 4.0)?;
+    f.typed::<(i32, i64, f32, f64), ()>()?
+        .call((1, 2, 3.0, 4.0))?;
 
     let f = Func::wrap(&store, || 1i32);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_i32(), 1);
-    assert_eq!(f.get0::<i32>()?()?, 1);
+    assert_eq!(f.typed::<(), i32>()?.call(())?, 1);
 
     let f = Func::wrap(&store, || 2i64);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_i64(), 2);
-    assert_eq!(f.get0::<i64>()?()?, 2);
+    assert_eq!(f.typed::<(), i64>()?.call(())?, 2);
 
     let f = Func::wrap(&store, || 3.0f32);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_f32(), 3.0);
-    assert_eq!(f.get0::<f32>()?()?, 3.0);
+    assert_eq!(f.typed::<(), f32>()?.call(())?, 3.0);
 
     let f = Func::wrap(&store, || 4.0f64);
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_f64(), 4.0);
-    assert_eq!(f.get0::<f64>()?()?, 4.0);
+    assert_eq!(f.typed::<(), f64>()?.call(())?, 4.0);
     Ok(())
 }
 
@@ -500,8 +500,8 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 
     // And using `.get` followed by a function call also fails with cross-Store
     // arguments.
-    let f = store1_func.get1::<Option<Func>, ()>()?;
-    let result = f(Some(store2_func));
+    let f = store1_func.typed::<Option<Func>, ()>()?;
+    let result = f.call(Some(store2_func));
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("cross-`Store`"));
 
@@ -547,5 +547,37 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
 
     // ... and no segfaults! right? right? ...
     func.call(&[])?;
+    Ok(())
+}
+
+#[test]
+fn typed_multiple_results() -> anyhow::Result<()> {
+    let store = Store::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (func (export "f0") (result i32 i64)
+                    i32.const 0
+                    i64.const 1)
+                (func (export "f1") (param i32 i32 i32) (result f32 f64)
+                    f32.const 2
+                    f64.const 3)
+            )
+
+        "#,
+    )?;
+    let instance = Instance::new(&store, &module, &[])?;
+    let f0 = instance.get_func("f0").unwrap();
+    assert!(f0.typed::<(), ()>().is_err());
+    assert!(f0.typed::<(), (i32, f32)>().is_err());
+    assert!(f0.typed::<(), i32>().is_err());
+    assert_eq!(f0.typed::<(), (i32, i64)>()?.call(())?, (0, 1));
+
+    let f1 = instance.get_func("f1").unwrap();
+    assert_eq!(
+        f1.typed::<(i32, i32, i32), (f32, f64)>()?.call((1, 2, 3))?,
+        (2., 3.)
+    );
     Ok(())
 }

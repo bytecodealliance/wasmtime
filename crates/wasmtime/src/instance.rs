@@ -2,8 +2,9 @@ use crate::trampoline::StoreInstanceHandle;
 use crate::types::matching;
 use crate::{
     Engine, Export, Extern, Func, Global, InstanceType, Memory, Module, Store, Table, Trap,
+    TypedFunc,
 };
-use anyhow::{bail, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
 use std::rc::Rc;
 use wasmtime_environ::entity::PrimaryMap;
@@ -214,6 +215,25 @@ impl Instance {
     /// it wasn't a function.
     pub fn get_func(&self, name: &str) -> Option<Func> {
         self.get_export(name)?.into_func()
+    }
+
+    /// Looks up an exported [`Func`] value by name and with its type.
+    ///
+    /// This function is a convenience wrapper over [`Instance::get_func`] and
+    /// [`Func::typed`]. For more information see the linked documentation.
+    ///
+    /// Returns an error if `name` isn't a function export or if the export's
+    /// type did not match `Params` or `Results`
+    pub fn get_typed_func<Params, Results>(&self, name: &str) -> Result<TypedFunc<Params, Results>>
+    where
+        Params: crate::WasmParams,
+        Results: crate::WasmResults,
+    {
+        let f = self
+            .get_export(name)
+            .and_then(|f| f.into_func())
+            .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
+        Ok(f.typed::<Params, Results>()?.clone())
     }
 
     /// Looks up an exported [`Table`] value by name.

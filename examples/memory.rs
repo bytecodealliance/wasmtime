@@ -20,18 +20,9 @@ fn main() -> Result<()> {
     let memory = instance
         .get_memory("memory")
         .ok_or(anyhow::format_err!("failed to find `memory` export"))?;
-    let size = instance
-        .get_func("size")
-        .ok_or(anyhow::format_err!("failed to find `size` export"))?
-        .get0::<i32>()?;
-    let load = instance
-        .get_func("load")
-        .ok_or(anyhow::format_err!("failed to find `load` export"))?
-        .get1::<i32, i32>()?;
-    let store = instance
-        .get_func("store")
-        .ok_or(anyhow::format_err!("failed to find `store` export"))?
-        .get2::<i32, i32, ()>()?;
+    let size = instance.get_typed_func::<(), i32>("size")?;
+    let load = instance.get_typed_func::<i32, i32>("load")?;
+    let store = instance.get_typed_func::<(i32, i32), ()>("store")?;
 
     // Note that these memory reads are *unsafe* due to unknown knowledge about
     // aliasing with wasm memory. For more information about the safety
@@ -46,27 +37,27 @@ fn main() -> Result<()> {
         assert_eq!(memory.data_unchecked_mut()[0x1003], 4);
     }
 
-    assert_eq!(size()?, 2);
-    assert_eq!(load(0)?, 0);
-    assert_eq!(load(0x1000)?, 1);
-    assert_eq!(load(0x1003)?, 4);
-    assert_eq!(load(0x1ffff)?, 0);
-    assert!(load(0x20000).is_err()); // out of bounds trap
+    assert_eq!(size.call(())?, 2);
+    assert_eq!(load.call(0)?, 0);
+    assert_eq!(load.call(0x1000)?, 1);
+    assert_eq!(load.call(0x1003)?, 4);
+    assert_eq!(load.call(0x1ffff)?, 0);
+    assert!(load.call(0x20000).is_err()); // out of bounds trap
 
     println!("Mutating memory...");
     unsafe {
         memory.data_unchecked_mut()[0x1003] = 5;
     }
 
-    store(0x1002, 6)?;
-    assert!(store(0x20000, 0).is_err()); // out of bounds trap
+    store.call((0x1002, 6))?;
+    assert!(store.call((0x20000, 0)).is_err()); // out of bounds trap
 
     unsafe {
         assert_eq!(memory.data_unchecked_mut()[0x1002], 6);
         assert_eq!(memory.data_unchecked_mut()[0x1003], 5);
     }
-    assert_eq!(load(0x1002)?, 6);
-    assert_eq!(load(0x1003)?, 5);
+    assert_eq!(load.call(0x1002)?, 6);
+    assert_eq!(load.call(0x1003)?, 5);
 
     // Grow memory.
     println!("Growing memory...");
@@ -74,10 +65,10 @@ fn main() -> Result<()> {
     assert_eq!(memory.size(), 3);
     assert_eq!(memory.data_size(), 0x30000);
 
-    assert_eq!(load(0x20000)?, 0);
-    store(0x20000, 0)?;
-    assert!(load(0x30000).is_err());
-    assert!(store(0x30000, 0).is_err());
+    assert_eq!(load.call(0x20000)?, 0);
+    store.call((0x20000, 0))?;
+    assert!(load.call(0x30000).is_err());
+    assert!(store.call((0x30000, 0)).is_err());
 
     assert!(memory.grow(1).is_err());
     assert!(memory.grow(0).is_ok());

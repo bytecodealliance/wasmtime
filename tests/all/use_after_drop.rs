@@ -15,7 +15,7 @@ fn use_func_after_drop() -> Result<()> {
         table.set(0, func.into())?;
     }
     let func = table.get(0).unwrap().funcref().unwrap().unwrap().clone();
-    let func = func.get0::<()>()?;
-    func()?;
+    let func = func.typed::<(), ()>()?;
+    func.call(())?;
     Ok(())
 }

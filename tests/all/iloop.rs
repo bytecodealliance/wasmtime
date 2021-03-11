@@ -27,9 +27,9 @@ fn loops_interruptable() -> anyhow::Result<()> {
     let store = interruptable_store();
     let module = Module::new(store.engine(), r#"(func (export "loop") (loop br 0))"#)?;
     let instance = Instance::new(&store, &module, &[])?;
-    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
+    let iloop = instance.get_typed_func::<(), ()>("loop")?;
     store.interrupt_handle()?.interrupt();
-    let trap = iloop().unwrap_err();
+    let trap = iloop.call(()).unwrap_err();
     assert!(trap.to_string().contains("wasm trap: interrupt"));
     Ok(())
 }
@@ -40,9 +40,9 @@ fn functions_interruptable() -> anyhow::Result<()> {
     let module = hugely_recursive_module(&store)?;
     let func = Func::wrap(&store, || {});
     let instance = Instance::new(&store, &module, &[func.into()])?;
-    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
+    let iloop = instance.get_typed_func::<(), ()>("loop")?;
     store.interrupt_handle()?.interrupt();
-    let trap = iloop().unwrap_err();
+    let trap = iloop.call(()).unwrap_err();
     assert!(
         trap.to_string().contains("wasm trap: interrupt"),
         "{}",
@@ -88,8 +88,8 @@ fn loop_interrupt_from_afar() -> anyhow::Result<()> {
 
     // Enter the infinitely looping function and assert that our interrupt
     // handle does indeed actually interrupt the function.
-    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
-    let trap = iloop().unwrap_err();
+    let iloop = instance.get_typed_func::<(), ()>("loop")?;
+    let trap = iloop.call(()).unwrap_err();
     thread.join().unwrap();
     assert!(
         trap.to_string().contains("wasm trap: interrupt"),
@@ -124,8 +124,8 @@ fn function_interrupt_from_afar() -> anyhow::Result<()> {
 
     // Enter the infinitely looping function and assert that our interrupt
     // handle does indeed actually interrupt the function.
-    let iloop = instance.get_func("loop").unwrap().get0::<()>()?;
-    let trap = iloop().unwrap_err();
+    let iloop = instance.get_typed_func::<(), ()>("loop")?;
+    let trap = iloop.call(()).unwrap_err();
     thread.join().unwrap();
     assert!(
         trap.to_string().contains("wasm trap: interrupt"),

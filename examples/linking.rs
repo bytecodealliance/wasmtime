@@ -34,8 +34,7 @@ fn main() -> Result<()> {
 
     // And with that we can perform the final link and the execute the module.
     let linking1 = linker.instantiate(&linking1)?;
-    let run = linking1.get_func("run").unwrap();
-    let run = run.get0::<()>()?;
-    run()?;
+    let run = linking1.get_typed_func::<(), ()>("run")?;
+    run.call(())?;
     Ok(())
 }

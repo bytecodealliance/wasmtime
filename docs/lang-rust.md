@@ -79,13 +79,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         .expect("`answer` was not an exported function");
 
     // There's a few ways we can call the `answer` `Func` value. The easiest
-    // is to statically assert its signature with `get0` (in this case asserting
-    // it takes no arguments and returns one i32) and then call it.
-    let answer = answer.get0::<i32>()?;
+    // is to statically assert its signature with `typed` (in this case
+    // asserting it takes no arguments and returns one i32) and then call it.
+    let answer = answer.typed::<(), i32>()?;
 
     // And finally we can call our function! Note that the error propagation
     // with `?` is done to handle the case where the wasm function traps.
-    let result = answer()?;
+    let result = answer.call(())?;
     println!("Answer: {:?}", result);
     Ok(())
 }
@@ -164,13 +164,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // entry in the slice must line up with the imports in the module.
     let instance = Instance::new(&store, &module, &[log.into(), double.into()])?;
 
-    let run = instance
-        .get_func("run")
-        .expect("`run` was not an exported function");
-
-    let run = run.get0::<()>()?;
-
-    Ok(run()?)
+    let run = instance.get_typed_func::<(), ()>("run")?;
+    Ok(run.call(())?)
 }
 ```
 
