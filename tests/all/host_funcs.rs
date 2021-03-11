@@ -390,15 +390,15 @@ fn new_from_signature() -> Result<()> {
     let store = Store::new(&engine);
 
     let f = store.get_host_func("", "f1").expect("func defined");
-    assert!(f.get0::<()>().is_ok());
-    assert!(f.get0::<i32>().is_err());
-    assert!(f.get1::<i32, ()>().is_err());
+    assert!(f.typed::<(), ()>().is_ok());
+    assert!(f.typed::<(), i32>().is_err());
+    assert!(f.typed::<i32, ()>().is_err());
 
     let f = store.get_host_func("", "f2").expect("func defined");
-    assert!(f.get0::<()>().is_err());
-    assert!(f.get0::<i32>().is_err());
-    assert!(f.get1::<i32, ()>().is_err());
-    assert!(f.get1::<i32, f64>().is_ok());
+    assert!(f.typed::<(), ()>().is_err());
+    assert!(f.typed::<(), i32>().is_err());
+    assert!(f.typed::<i32, ()>().is_err());
+    assert!(f.typed::<i32, f64>().is_ok());
 
     Ok(())
 }
@@ -427,31 +427,32 @@ fn call_wrapped_func() -> Result<()> {
 
     let f = store.get_host_func("", "f1").expect("func defined");
     f.call(&[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()])?;
-    f.get4::<i32, i64, f32, f64, ()>()?(1, 2, 3.0, 4.0)?;
+    f.typed::<(i32, i64, f32, f64), ()>()?
+        .call((1, 2, 3.0, 4.0))?;
 
     let f = store.get_host_func("", "f2").expect("func defined");
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_i32(), 1);
-    assert_eq!(f.get0::<i32>()?()?, 1);
+    assert_eq!(f.typed::<(), i32>()?.call(())?, 1);
 
     let f = store.get_host_func("", "f3").expect("func defined");
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_i64(), 2);
-    assert_eq!(f.get0::<i64>()?()?, 2);
+    assert_eq!(f.typed::<(), i64>()?.call(())?, 2);
 
     let f = store.get_host_func("", "f4").expect("func defined");
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_f32(), 3.0);
-    assert_eq!(f.get0::<f32>()?()?, 3.0);
+    assert_eq!(f.typed::<(), f32>()?.call(())?, 3.0);
 
     let f = store.get_host_func("", "f5").expect("func defined");
     let results = f.call(&[])?;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].unwrap_f64(), 4.0);
-    assert_eq!(f.get0::<f64>()?()?, 4.0);
+    assert_eq!(f.typed::<(), f64>()?.call(())?, 4.0);
 
     Ok(())
 }
@@ -597,9 +598,9 @@ fn wasi_imports_missing_context() -> Result<()> {
     let linker = Linker::new(&store);
     let instance = linker.instantiate(&module)?;
 
-    let start = instance.get_func("_start").unwrap().get0::<()>()?;
+    let start = instance.get_typed_func::<(), ()>("_start")?;
 
-    let trap = start().unwrap_err();
+    let trap = start.call(()).unwrap_err();
 
     assert!(trap.to_string().contains("context is missing in the store"));
     assert!(trap.i32_exit_status().is_none());
@@ -629,9 +630,8 @@ fn wasi_imports() -> Result<()> {
     let linker = Linker::new(&store);
     let instance = linker.instantiate(&module)?;
 
-    let start = instance.get_func("_start").unwrap().get0::<()>()?;
-
-    let trap = start().unwrap_err();
+    let start = instance.get_typed_func::<(), ()>("_start")?;
+    let trap = start.call(()).unwrap_err();
     assert_eq!(trap.i32_exit_status(), Some(123));
 
     Ok(())

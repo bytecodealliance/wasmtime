@@ -164,12 +164,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // entry in the slice must line up with the imports in the module.
     let instance = Instance::new(&store, &module, &[log.into(), double.into()])?;
 
-    let run = instance
-        .get_func("run")
-        .expect("`run` was not an exported function");
-
-    let run = run.typed::<(), ()>()?;
-
+    let run = instance.get_typed_func::<(), ()>("run")?;
     Ok(run.call(())?)
 }
 ```

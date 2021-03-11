@@ -120,6 +120,16 @@ fn cross_store() -> anyhow::Result<()> {
     assert!(s2_f.call(&[Val::FuncRef(Some(s1_f.clone()))]).is_err());
     assert!(s2_f.call(&[Val::FuncRef(Some(s2_f.clone()))]).is_ok());
 
+    let s1_f_t = s1_f.typed::<Option<Func>, ()>()?;
+    let s2_f_t = s2_f.typed::<Option<Func>, ()>()?;
+
+    assert!(s1_f_t.call(None).is_ok());
+    assert!(s2_f_t.call(None).is_ok());
+    assert!(s1_f_t.call(Some(s1_f.clone())).is_ok());
+    assert!(s1_f_t.call(Some(s2_f.clone())).is_err());
+    assert!(s2_f_t.call(Some(s1_f.clone())).is_err());
+    assert!(s2_f_t.call(Some(s2_f.clone())).is_ok());
+
     Ok(())
 }
 

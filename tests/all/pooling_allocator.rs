@@ -63,12 +63,7 @@ fn memory_limit() -> Result<()> {
     {
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
-        let f = instance
-            .get_func("f")
-            .unwrap()
-            .typed::<(), i32>()
-            .unwrap()
-            .clone();
+        let f = instance.get_typed_func::<(), i32>("f")?;
 
         assert_eq!(f.call(()).expect("function should not trap"), 0);
         assert_eq!(f.call(()).expect("function should not trap"), 1);
@@ -160,12 +155,7 @@ fn memory_guard_page_trap() -> Result<()> {
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
         let m = instance.get_memory("m").unwrap();
-        let f = instance
-            .get_func("f")
-            .unwrap()
-            .typed::<i32, ()>()
-            .unwrap()
-            .clone();
+        let f = instance.get_typed_func::<i32, ()>("f")?;
 
         let trap = f.call(0).expect_err("function should trap");
         assert!(trap.to_string().contains("out of bounds"));
@@ -271,12 +261,7 @@ fn table_limit() -> Result<()> {
     {
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
-        let f = instance
-            .get_func("f")
-            .unwrap()
-            .typed::<(), i32>()
-            .unwrap()
-            .clone();
+        let f = instance.get_typed_func::<(), i32>("f")?;
 
         for i in 0..TABLE_ELEMENTS {
             assert_eq!(f.call(()).expect("function should not trap"), i as i32);

@@ -255,8 +255,7 @@ unsafe impl Sync for HostFunc {}
 ///     "#,
 /// )?;
 /// let instance = Instance::new(&store, &module, &[add.into()])?;
-/// let call_add_twice = instance.get_func("call_add_twice").expect("export wasn't a function");
-/// let call_add_twice = call_add_twice.typed::<(), i32>()?;
+/// let call_add_twice = instance.get_typed_func::<(), i32>("call_add_twice")?;
 ///
 /// assert_eq!(call_add_twice.call(())?, 10);
 /// # Ok(())
@@ -604,7 +603,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[add.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().typed::<(i32, i32), i32>()?.clone();
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>("foo")?;
     /// assert_eq!(foo.call((1, 2))?, 3);
     /// # Ok(())
     /// # }
@@ -635,7 +634,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[add.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().typed::<(i32, i32), i32>()?.clone();
+    /// let foo = instance.get_typed_func::<(i32, i32), i32>("foo")?;
     /// assert_eq!(foo.call((1, 2))?, 3);
     /// assert!(foo.call((i32::max_value(), 1)).is_err());
     /// # Ok(())
@@ -673,7 +672,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[debug.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().typed::<(), ()>()?.clone();
+    /// let foo = instance.get_typed_func::<(), ()>("foo")?;
     /// foo.call(())?;
     /// # Ok(())
     /// # }
@@ -729,7 +728,7 @@ impl Func {
     ///     "#,
     /// )?;
     /// let instance = Instance::new(&store, &module, &[log_str.into()])?;
-    /// let foo = instance.get_func("foo").unwrap().typed::<(), ()>()?.clone();
+    /// let foo = instance.get_typed_func::<(), ()>("foo")?;
     /// foo.call(())?;
     /// # Ok(())
     /// # }
@@ -1648,11 +1647,7 @@ fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
          "#,
     )?;
     let instance = Instance::new(&store, &module, &[debug.into()])?;
-    let foo = instance
-        .get_func("foo")
-        .unwrap()
-        .typed::<(i32, u32, f32, i64, u64, f64), ()>()?
-        .clone();
+    let foo = instance.get_typed_func::<(i32, u32, f32, i64, u64, f64), ()>("foo")?;
     foo.call((-1, 1, 2.0, -3, 3, 4.0))?;
     Ok(())
 }

@@ -202,6 +202,7 @@ unsafe impl WasmTy for Option<ExternRef> {
         true
     }
 
+    #[inline]
     fn into_abi(self, store: &Store) -> Self::Abi {
         if let Some(x) = self {
             let abi = x.inner.as_raw();

@@ -41,8 +41,8 @@ mod tests {
 )
 "#;
 
-    fn invoke_export(instance: &Instance, func_name: &str) -> Result<Box<[Val]>> {
-        let ret = instance.get_func(func_name).unwrap().call(&[])?;
+    fn invoke_export(instance: &Instance, func_name: &str) -> Result<i32> {
+        let ret = instance.get_typed_func::<(), i32>(func_name)?.call(())?;
         Ok(ret)
     }
 
@@ -126,7 +126,7 @@ mod tests {
         }
         println!("calling hostcall_read...");
         let result = invoke_export(&instance, "hostcall_read").unwrap();
-        assert_eq!(123, result[0].unwrap_i32());
+        assert_eq!(123, result);
         Ok(())
     }
 
@@ -149,7 +149,7 @@ mod tests {
         {
             println!("calling read...");
             let result = invoke_export(&instance, "read").expect("read succeeded");
-            assert_eq!(123, result[0].unwrap_i32());
+            assert_eq!(123, result);
         }
 
         {
@@ -167,23 +167,17 @@ mod tests {
 
         // these invoke wasmtime_call_trampoline from callable.rs
         {
-            let read_func = instance
-                .get_func("read")
-                .expect("expected a 'read' func in the module");
+            let read_func = instance.get_typed_func::<(), i32>("read")?;
             println!("calling read...");
-            let result = read_func.call(&[]).expect("expected function not to trap");
-            assert_eq!(123i32, result[0].clone().unwrap_i32());
+            let result = read_func.call(()).expect("expected function not to trap");
+            assert_eq!(123i32, result);
         }
 
         {
-            let read_out_of_bounds_func = instance
-                .get_func("read_out_of_bounds")
-                .expect("expected a 'read_out_of_bounds' func in the module");
+            let read_out_of_bounds_func =
+                instance.get_typed_func::<(), i32>("read_out_of_bounds")?;
             println!("calling read_out_of_bounds...");
-            let trap = read_out_of_bounds_func
-                .call(&[])
-                .unwrap_err()
-                .downcast::<Trap>()?;
+            let trap = read_out_of_bounds_func.call(()).unwrap_err();
             assert!(trap
                 .to_string()
                 .contains("wasm trap: out of bounds memory access"));
@@ -233,7 +227,7 @@ mod tests {
 
             println!("calling instance1.read...");
             let result = invoke_export(&instance1, "read").expect("read succeeded");
-            assert_eq!(123, result[0].unwrap_i32());
+            assert_eq!(123, result);
             assert_eq!(
                 instance1_handler_triggered.load(Ordering::SeqCst),
                 true,
@@ -274,7 +268,7 @@ mod tests {
 
             println!("calling instance2.read...");
             let result = invoke_export(&instance2, "read").expect("read succeeded");
-            assert_eq!(123, result[0].unwrap_i32());
+            assert_eq!(123, result);
             assert_eq!(
                 instance2_handler_triggered.load(Ordering::SeqCst),
                 true,
@@ -316,7 +310,7 @@ mod tests {
 
         println!("calling instance2.run");
         let result = invoke_export(&instance2, "run")?;
-        assert_eq!(123, result[0].unwrap_i32());
+        assert_eq!(123, result);
         Ok(())
     }
 }
