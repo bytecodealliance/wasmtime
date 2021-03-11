@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -492,4 +493,145 @@ fn async_host_func_with_pooling_stacks() {
 
     run_smoke_test(&func);
     run_smoke_get0_test(&func);
+}
+
+fn execute_across_threads<F: Future + 'static>(future: F) {
+    struct UnsafeSend<T>(T);
+    unsafe impl<T> Send for UnsafeSend<T> {}
+
+    impl<T: Future> Future for UnsafeSend<T> {
+        type Output = T::Output;
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T::Output> {
+            unsafe { self.map_unchecked_mut(|p| &mut p.0).poll(cx) }
+        }
+    }
+
+    let mut future = Pin::from(Box::new(UnsafeSend(future)));
+    let poll = future
+        .as_mut()
+        .poll(&mut Context::from_waker(&dummy_waker()));
+    assert!(poll.is_pending());
+
+    std::thread::spawn(move || {
+        let poll = future
+            .as_mut()
+            .poll(&mut Context::from_waker(&dummy_waker()));
+        assert!(!poll.is_pending());
+    })
+    .join()
+    .unwrap();
+}
+
+#[test]
+fn resume_separate_thread() {
+    // This test will poll the following future on two threads. Simulating a
+    // trap requires accessing TLS info, so that should be preserved correctly.
+    execute_across_threads(async {
+        let store = async_store();
+        let module = Module::new(
+            store.engine(),
+            "
+            (module
+                (import \"\" \"\" (func))
+                (start 0)
+            )
+            ",
+        )
+        .unwrap();
+        let func = Func::wrap0_async(&store, (), |_, _| {
+            Box::new(async {
+                PendingOnce::default().await;
+                Err::<(), _>(wasmtime::Trap::new("test"))
+            })
+        });
+        let result = Instance::new_async(&store, &module, &[func.into()]).await;
+        assert!(result.is_err());
+    });
+}
+
+#[test]
+fn resume_separate_thread2() {
+    // This test will poll the following future on two threads. Catching a
+    // signal requires looking up TLS information to determine whether it's a
+    // trap to handle or not, so that must be preserved correctly across threads.
+    execute_across_threads(async {
+        let store = async_store();
+        let module = Module::new(
+            store.engine(),
+            "
+            (module
+                (import \"\" \"\" (func))
+                (func $start
+                    call 0
+                    unreachable)
+                (start $start)
+            )
+            ",
+        )
+        .unwrap();
+        let func = Func::wrap0_async(&store, (), |_, _| {
+            Box::new(async { PendingOnce::default().await })
+        });
+        let result = Instance::new_async(&store, &module, &[func.into()]).await;
+        assert!(result.is_err());
+    });
+}
+
+#[test]
+fn resume_separate_thread3() {
+    // This test doesn't actually do anything with cross-thread polls, but
+    // instead it deals with scheduling futures at "odd" times.
+    //
+    // First we'll set up a *synchronous* call which will initialize TLS info.
+    // This call is simply to a host-defined function, but it still has the same
+    // "enter into wasm" semantics since it's just calling a trampoline. In this
+    // situation we'll set up the TLS info so it's in place while the body of
+    // the function executes...
+    let store = Store::default();
+    let storage = Rc::new(RefCell::new(None));
+    let storage2 = storage.clone();
+    let f = Func::wrap(&store, move || {
+        // ... and the execution of this host-defined function (while the TLS
+        // info is initialized), will set up a recursive call into wasm. This
+        // recursive call will be done asynchronously so we can suspend it
+        // halfway through.
+        let f = async {
+            let store = async_store();
+            let module = Module::new(
+                store.engine(),
+                "
+            (module
+                (import \"\" \"\" (func))
+                (start 0)
+            )
+            ",
+            )
+            .unwrap();
+            let func = Func::wrap0_async(&store, (), |_, _| {
+                Box::new(async { PendingOnce::default().await })
+            });
+            drop(Instance::new_async(&store, &module, &[func.into()]).await);
+            unreachable!()
+        };
+        let mut future = Pin::from(Box::new(f));
+        let poll = future
+            .as_mut()
+            .poll(&mut Context::from_waker(&dummy_waker()));
+        assert!(poll.is_pending());
+
+        // ... so at this point our call into wasm is suspended. The call into
+        // wasm will have overwritten TLS info, and we sure hope that the
+        // information is restored at this point. Note that we squirrel away the
+        // future somewhere else to get dropped later. If we were to drop it
+        // here then we would reenter the future's suspended stack to clean it
+        // up, which would do more alterations of TLS information we're not
+        // testing here.
+        *storage2.borrow_mut() = Some(future);
+
+        // ... all in all this function will need access to the original TLS
+        // information to raise the trap. This TLS information should be
+        // restored even though the asynchronous execution is suspended.
+        Err::<(), _>(wasmtime::Trap::new(""))
+    });
+    assert!(f.call(&[]).is_err());
 }
