@@ -944,7 +944,7 @@ impl Func {
         &self.export
     }
 
-    pub(crate) fn invoke(
+    fn invoke(
         store: &Store,
         ty: &FuncType,
         caller_vmctx: *mut VMContext,
