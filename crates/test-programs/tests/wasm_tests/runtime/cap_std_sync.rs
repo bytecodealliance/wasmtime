@@ -58,8 +58,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
         let instance = linker.instantiate(&module)?;
         let start = instance.get_typed_func::<(), ()>("_start")?;
-        start.call(())?;
-        Ok(())
+        start.call(()).map_err(anyhow::Error::from)
     };
 
     match r {
@@ -113,8 +112,7 @@ pub fn instantiate_inherit_stdio(
         let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
         let instance = linker.instantiate(&module)?;
         let start = instance.get_typed_func::<(), ()>("_start")?;
-        start.call(())?;
-        Ok(())
+        start.call(()).map_err(anyhow::Error::from)
     };
 
     match r {
