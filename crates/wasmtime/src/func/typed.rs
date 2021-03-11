@@ -1,4 +1,4 @@
-use super::{invoke_wasm_and_catch_traps, WeakStore};
+use super::invoke_wasm_and_catch_traps;
 use crate::{ExternRef, Func, Store, Trap, ValType};
 use anyhow::{bail, Result};
 use std::marker;
@@ -53,7 +53,7 @@ where
     /// connected to an asynchronous store.
     pub fn call(&self, params: Params) -> Result<Results, Trap> {
         assert!(
-            !self.func.store().is_async(),
+            !self.func.store().async_support(),
             "must use `call_async` with async stores"
         );
         unsafe { self._call(params) }
@@ -74,7 +74,7 @@ where
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn call_async(&self, params: Params) -> Result<Results, Trap> {
         assert!(
-            self.func.store().is_async(),
+            self.func.store().async_support(),
             "must use `call` with non-async stores"
         );
         self.func
@@ -84,13 +84,10 @@ where
     }
 
     unsafe fn _call(&self, params: Params) -> Result<Results, Trap> {
-        let weak_store = self.func.instance.store.weak();
-        let weak_store = WeakStore(&weak_store);
-
         // Validate that all runtime values flowing into this store indeed
         // belong within this store, otherwise it would be unsafe for store
         // values to cross each other.
-        if !params.compatible_with_store(weak_store) {
+        if !params.compatible_with_store(&self.func.instance.store) {
             return Err(Trap::new(
                 "attempt to pass cross-`Store` value to Wasm as function argument",
             ));
@@ -102,11 +99,11 @@ where
         let mut ret = MaybeUninit::uninit();
         let mut called = false;
         let mut returned = false;
-        let result = invoke_wasm_and_catch_traps(anyfunc.vmctx, &self.func.instance.store, || {
+        let result = invoke_wasm_and_catch_traps(&self.func.instance.store, || {
             called = true;
             let params = ptr::read(params.as_ptr());
             let result = params.invoke::<Results>(
-                weak_store,
+                &self.func.instance.store,
                 trampoline,
                 anyfunc.func_ptr.as_ptr(),
                 anyfunc.vmctx,
@@ -152,11 +149,11 @@ pub unsafe trait WasmTy {
     #[doc(hidden)]
     fn valtype() -> ValType;
     #[doc(hidden)]
-    fn compatible_with_store(&self, store: WeakStore<'_>) -> bool;
+    fn compatible_with_store(&self, store: &Store) -> bool;
     #[doc(hidden)]
-    fn into_abi(self, store: WeakStore<'_>) -> Self::Abi;
+    fn into_abi(self, store: &Store) -> Self::Abi;
     #[doc(hidden)]
-    unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self;
+    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self;
 }
 
 macro_rules! primitives {
@@ -168,15 +165,15 @@ macro_rules! primitives {
                 ValType::$ty
             }
             #[inline]
-            fn compatible_with_store(&self, _: WeakStore<'_>) -> bool {
+            fn compatible_with_store(&self, _: &Store) -> bool {
                 true
             }
             #[inline]
-            fn into_abi(self, _store: WeakStore<'_>) -> Self::Abi {
+            fn into_abi(self, _store: &Store) -> Self::Abi {
                 self
             }
             #[inline]
-            unsafe fn from_abi(abi: Self::Abi, _store: WeakStore<'_>) -> Self {
+            unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
                 abi
             }
         }
@@ -201,13 +198,12 @@ unsafe impl WasmTy for Option<ExternRef> {
     }
 
     #[inline]
-    fn compatible_with_store<'a>(&self, _store: WeakStore<'a>) -> bool {
+    fn compatible_with_store(&self, _store: &Store) -> bool {
         true
     }
 
-    fn into_abi(self, store: WeakStore<'_>) -> Self::Abi {
+    fn into_abi(self, store: &Store) -> Self::Abi {
         if let Some(x) = self {
-            let store = Store::upgrade(store.0).unwrap();
             let abi = x.inner.as_raw();
             unsafe {
                 store
@@ -221,7 +217,7 @@ unsafe impl WasmTy for Option<ExternRef> {
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: WeakStore<'_>) -> Self {
+    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
         if abi.is_null() {
             None
         } else {
@@ -241,9 +237,8 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
-    fn compatible_with_store<'a>(&self, store: WeakStore<'a>) -> bool {
+    fn compatible_with_store<'a>(&self, store: &Store) -> bool {
         if let Some(f) = self {
-            let store = Store::upgrade(store.0).unwrap();
             Store::same(&store, f.store())
         } else {
             true
@@ -251,7 +246,7 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
-    fn into_abi(self, _store: WeakStore<'_>) -> Self::Abi {
+    fn into_abi(self, _store: &Store) -> Self::Abi {
         if let Some(f) = self {
             f.caller_checked_anyfunc().as_ptr()
         } else {
@@ -260,8 +255,7 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self {
-        let store = Store::upgrade(store.0).unwrap();
+    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self {
         Func::from_caller_checked_anyfunc(&store, abi)
     }
 }
@@ -275,11 +269,11 @@ pub unsafe trait WasmParams {
     #[doc(hidden)]
     fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()>;
     #[doc(hidden)]
-    fn compatible_with_store(&self, store: WeakStore<'_>) -> bool;
+    fn compatible_with_store(&self, store: &Store) -> bool;
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
         self,
-        store: WeakStore<'_>,
+        store: &Store,
         trampoline: VMTrampoline,
         func: *const VMFunctionBody,
         vmctx1: *mut VMContext,
@@ -296,12 +290,12 @@ where
     fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()> {
         <(T,)>::typecheck(params)
     }
-    fn compatible_with_store(&self, store: WeakStore<'_>) -> bool {
+    fn compatible_with_store(&self, store: &Store) -> bool {
         <T as WasmTy>::compatible_with_store(self, store)
     }
     unsafe fn invoke<R: WasmResults>(
         self,
-        store: WeakStore<'_>,
+        store: &Store,
         trampoline: VMTrampoline,
         func: *const VMFunctionBody,
         vmctx1: *mut VMContext,
@@ -331,14 +325,14 @@ macro_rules! impl_wasm_params {
                 }
             }
 
-            fn compatible_with_store(&self, _store: WeakStore<'_>) -> bool {
+            fn compatible_with_store(&self, _store: &Store) -> bool {
                 let ($($t,)*) = self;
                 $($t.compatible_with_store(_store)&&)* true
             }
 
             unsafe fn invoke<R: WasmResults>(
                 self,
-                store: WeakStore<'_>,
+                store: &Store,
                 trampoline: VMTrampoline,
                 func: *const VMFunctionBody,
                 vmctx1: *mut VMContext,
@@ -416,7 +410,7 @@ pub unsafe trait WasmResults: WasmParams {
     #[doc(hidden)]
     type Abi;
     #[doc(hidden)]
-    unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self;
+    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self;
     #[doc(hidden)]
     fn uses_trampoline() -> bool;
     // Provides a stack-allocated array with enough space to store all these
@@ -429,12 +423,12 @@ pub unsafe trait WasmResults: WasmParams {
     #[doc(hidden)]
     fn with_space<R>(_: impl FnOnce(&mut [u128]) -> R) -> R;
     #[doc(hidden)]
-    unsafe fn from_storage(ptr: *const u128, store: WeakStore<'_>) -> Self;
+    unsafe fn from_storage(ptr: *const u128, store: &Store) -> Self;
 }
 
 unsafe impl<T: WasmTy> WasmResults for T {
     type Abi = <(T,) as WasmResults>::Abi;
-    unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self {
+    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self {
         <(T,) as WasmResults>::from_abi(abi, store).0
     }
     fn uses_trampoline() -> bool {
@@ -443,7 +437,7 @@ unsafe impl<T: WasmTy> WasmResults for T {
     fn with_space<R>(f: impl FnOnce(&mut [u128]) -> R) -> R {
         <(T,) as WasmResults>::with_space(f)
     }
-    unsafe fn from_storage(ptr: *const u128, store: WeakStore<'_>) -> Self {
+    unsafe fn from_storage(ptr: *const u128, store: &Store) -> Self {
         <(T,) as WasmResults>::from_storage(ptr, store).0
     }
 }
@@ -456,7 +450,7 @@ macro_rules! impl_wasm_results {
         #[allow(non_snake_case, unused_variables)]
         unsafe impl<$($t: WasmTy,)*> WasmResults for ($($t,)*) {
             type Abi = impl_wasm_results!(@abi $n $($t)*);
-            unsafe fn from_abi(abi: Self::Abi, store: WeakStore<'_>) -> Self {
+            unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self {
                 impl_wasm_results!(@from_abi abi store $n $($t)*)
             }
             fn uses_trampoline() -> bool {
@@ -465,7 +459,7 @@ macro_rules! impl_wasm_results {
             fn with_space<R>(f: impl FnOnce(&mut [u128]) -> R) -> R {
                 f(&mut [0; $n])
             }
-            unsafe fn from_storage(ptr: *const u128, store: WeakStore<'_>) -> Self {
+            unsafe fn from_storage(ptr: *const u128, store: &Store) -> Self {
                 let mut _n = 0;
                 $(
                     let $t = $t::from_abi(*ptr.add(_n).cast::<$t::Abi>(), store);

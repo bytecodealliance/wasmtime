@@ -20,21 +20,9 @@ fn main() -> Result<()> {
     let memory = instance
         .get_memory("memory")
         .ok_or(anyhow::format_err!("failed to find `memory` export"))?;
-    let size = instance
-        .get_func("size")
-        .ok_or(anyhow::format_err!("failed to find `size` export"))?
-        .typed::<(), i32>()?
-        .clone();
-    let load = instance
-        .get_func("load")
-        .ok_or(anyhow::format_err!("failed to find `load` export"))?
-        .typed::<i32, i32>()?
-        .clone();
-    let store = instance
-        .get_func("store")
-        .ok_or(anyhow::format_err!("failed to find `store` export"))?
-        .typed::<(i32, i32), ()>()?
-        .clone();
+    let size = instance.get_typed_func::<(), i32>("size")?;
+    let load = instance.get_typed_func::<i32, i32>("load")?;
+    let store = instance.get_typed_func::<(i32, i32), ()>("store")?;
 
     // Note that these memory reads are *unsafe* due to unknown knowledge about
     // aliasing with wasm memory. For more information about the safety

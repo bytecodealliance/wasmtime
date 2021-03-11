@@ -1,9 +1,5 @@
-use crate::store::StoreInner;
-use crate::trampoline::StoreInstanceHandle;
 use crate::{sig_registry::SignatureRegistry, trampoline::StoreInstanceHandle};
-use crate::{Config, Extern, ExternRef, FuncType, Store, Trap, Val, ValType};
-use crate::{Extern, FuncType, Store, Trap, Val, ValType};
-use anyhow::{bail, ensure, Context as _, Result};
+use crate::{Config, Extern, FuncType, Store, Trap, Val, ValType};
 use anyhow::{bail, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
 use std::any::Any;
@@ -14,13 +10,11 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
-use std::rc::Weak;
-use std::task::{Context, Poll};
 use wasmtime_environ::wasm::{EntityIndex, FuncIndex};
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
-    VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMFunctionBody, VMFunctionImport,
-    VMSharedSignatureIndex, VMTrampoline,
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// Represents a host function.
@@ -1244,7 +1238,7 @@ unsafe impl WasmRet for Result<(), Trap> {
     }
 
     #[inline]
-    unsafe fn into_abi_for_ret<'a>(self, _store: WeakStore<'a>) {
+    unsafe fn into_abi_for_ret(self, _store: &Store) {
         match self {
             Ok(()) => {}
             Err(trap) => raise_user_trap(trap.into()),
@@ -1274,11 +1268,11 @@ where
     type Abi = <T as WasmTy>::Abi;
     type Fallible = Result<T, Trap>;
 
-    fn compatible_with_store(&self, store: WeakStore<'_>) -> bool {
+    fn compatible_with_store(&self, store: &Store) -> bool {
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret(self, store: WeakStore<'_>) -> Self::Abi {
+    unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi {
         <Self as WasmTy>::into_abi(self, store)
     }
 
@@ -1302,14 +1296,14 @@ where
     type Abi = <T as WasmTy>::Abi;
     type Fallible = Self;
 
-    fn compatible_with_store(&self, store: WeakStore<'_>) -> bool {
+    fn compatible_with_store(&self, store: &Store) -> bool {
         match self {
             Ok(x) => <T as WasmTy>::compatible_with_store(x, store),
             Err(_) => true,
         }
     }
 
-    unsafe fn into_abi_for_ret(self, store: WeakStore<'_>) -> Self::Abi {
+    unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi {
         match self {
             Ok(val) => return <T as WasmTy>::into_abi(val, store),
             Err(trap) => handle_trap(trap),

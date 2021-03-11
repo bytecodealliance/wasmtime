@@ -50,11 +50,7 @@ fn deserialize(buffer: &[u8]) -> Result<()> {
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
-    let run = instance
-        .get_func("run")
-        .ok_or(anyhow::format_err!("failed to find `run` function export"))?
-        .typed::<(), ()>()?
-        .clone();
+    let run = instance.get_typed_func::<(), ()>("run")?;
 
     // And last but not least we can call it!
     println!("Calling export...");

@@ -16,11 +16,7 @@ fn main() -> Result<()> {
     // Compile and instantiate a small example with an infinite loop.
     let module = Module::from_file(&engine, "examples/interrupt.wat")?;
     let instance = Instance::new(&store, &module, &[])?;
-    let run = instance
-        .get_func("run")
-        .ok_or(anyhow::format_err!("failed to find `run` function export"))?
-        .typed::<(), ()>()?
-        .clone();
+    let run = instance.get_typed_func::<(), ()>("run")?;
 
     // Spin up a thread to send us an interrupt in a second
     std::thread::spawn(move || {

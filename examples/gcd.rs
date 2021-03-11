@@ -15,11 +15,7 @@ fn main() -> Result<()> {
     let instance = Instance::new(&store, &module, &[])?;
 
     // Invoke `gcd` export
-    let gcd = instance
-        .get_func("gcd")
-        .ok_or(anyhow::format_err!("failed to find `gcd` function export"))?
-        .typed::<(i32, i32), i32>()?
-        .clone();
+    let gcd = instance.get_typed_func::<(i32, i32), i32>("gcd")?;
 
     println!("gcd(6, 27) = {}", gcd.call((6, 27))?);
     Ok(())
