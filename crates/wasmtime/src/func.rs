@@ -1012,7 +1012,7 @@ impl Func {
     /// efficient when used to invoke WebAssembly functions. With the types
     /// statically known far less setup/teardown is required when invoking
     /// WebAssembly. If speed is desired then this function is recommended to be
-    /// used instead of [`Func::call`] (which is more general, hence it's
+    /// used instead of [`Func::call`] (which is more general, hence its
     /// slowdown).
     ///
     /// The `Params` type parameter is used to describe the parameters of the
