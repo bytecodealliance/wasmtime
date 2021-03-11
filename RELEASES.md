@@ -32,6 +32,11 @@ Not yet released
   well as more flexible in how it can be used.
   [#2719](https://github.com/bytecodealliance/wasmtime/pull/2719)
 
+* `Engine::new` has been changed from returning `Engine` to returning
+  `anyhow::Result<Engine>`. Callers of `Engine::new` will need to be updated to
+  use the `?` operator on the return value or otherwise unwrap the result to get
+  the `Engine`.
+
 ### Fixed
 
 * Interepretation of timestamps in `poll_oneoff` for WASI have been fixed to
