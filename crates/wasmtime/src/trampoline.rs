@@ -1,6 +1,5 @@
 //! Utility module to create trampolines in/out WebAssembly module.
 
-mod create_handle;
 mod func;
 mod global;
 mod memory;
@@ -8,16 +7,21 @@ mod table;
 
 pub(crate) use memory::MemoryCreatorProxy;
 
-use self::func::create_handle_with_function;
+pub use self::func::{create_function, create_raw_function};
 use self::global::create_global;
-use self::memory::create_handle_with_memory;
-use self::table::create_handle_with_table;
-use crate::{FuncType, GlobalType, MemoryType, Store, TableType, Trap, Val};
+use self::memory::create_memory;
+use self::table::create_table;
+use crate::{GlobalType, MemoryType, Store, TableType, Val};
 use anyhow::Result;
 use std::any::Any;
 use std::ops::Deref;
-use wasmtime_environ::wasm;
-use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
+use std::sync::Arc;
+use wasmtime_environ::{entity::PrimaryMap, wasm, Module};
+use wasmtime_runtime::{
+    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody,
+    VMFunctionImport, VMSharedSignatureIndex,
+};
 
 /// A wrapper around `wasmtime_runtime::InstanceHandle` which pairs it with the
 /// `Store` that it's rooted within. The instance is deallocated when `Store` is
@@ -46,38 +50,36 @@ impl Deref for StoreInstanceHandle {
     }
 }
 
-pub fn generate_func_export(
-    ft: &FuncType,
-    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
+fn create_handle(
+    module: Module,
     store: &Store,
-) -> Result<(
-    StoreInstanceHandle,
-    wasmtime_runtime::ExportFunction,
-    VMTrampoline,
-)> {
-    let (instance, trampoline) = create_handle_with_function(ft, func, store)?;
-    let idx = wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0));
-    match instance.lookup_by_declaration(&idx) {
-        wasmtime_runtime::Export::Function(f) => Ok((instance, f, trampoline)),
-        _ => unreachable!(),
-    }
-}
+    finished_functions: PrimaryMap<wasm::DefinedFuncIndex, *mut [VMFunctionBody]>,
+    host_state: Box<dyn Any>,
+    func_imports: &[VMFunctionImport],
+    shared_signature_id: Option<VMSharedSignatureIndex>,
+) -> Result<StoreInstanceHandle> {
+    let mut imports = Imports::default();
+    imports.functions = func_imports;
 
-/// Note that this is `unsafe` since `func` must be a valid function pointer and
-/// have a signature which matches `ft`, otherwise the returned
-/// instance/export/etc may exhibit undefined behavior.
-pub unsafe fn generate_raw_func_export(
-    ft: &FuncType,
-    func: *mut [VMFunctionBody],
-    trampoline: VMTrampoline,
-    store: &Store,
-    state: Box<dyn Any>,
-) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportFunction)> {
-    let instance = func::create_handle_with_raw_function(ft, func, trampoline, store, state)?;
-    let idx = wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0));
-    match instance.lookup_by_declaration(&idx) {
-        wasmtime_runtime::Export::Function(f) => Ok((instance, f)),
-        _ => unreachable!(),
+    unsafe {
+        // Use the on-demand allocator when creating handles associated with host objects
+        // The configured instance allocator should only be used when creating module instances
+        // as we don't want host objects to count towards instance limits.
+        let handle = OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone())
+            .allocate(InstanceAllocationRequest {
+                module: Arc::new(module),
+                finished_functions: &finished_functions,
+                imports,
+                lookup_shared_signature: &|_| shared_signature_id.unwrap(),
+                host_state,
+                interrupts: store.interrupts(),
+                externref_activations_table: store.externref_activations_table()
+                    as *const VMExternRefActivationsTable
+                    as *mut _,
+                stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
+            })?;
+
+        Ok(store.add_instance(handle, true))
     }
 }
 
@@ -98,7 +100,7 @@ pub fn generate_memory_export(
     store: &Store,
     m: &MemoryType,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportMemory)> {
-    let instance = create_handle_with_memory(store, m)?;
+    let instance = create_memory(store, m)?;
     let idx = wasm::EntityIndex::Memory(wasm::MemoryIndex::from_u32(0));
     match instance.lookup_by_declaration(&idx) {
         wasmtime_runtime::Export::Memory(m) => Ok((instance, m)),
@@ -110,7 +112,7 @@ pub fn generate_table_export(
     store: &Store,
     t: &TableType,
 ) -> Result<(StoreInstanceHandle, wasmtime_runtime::ExportTable)> {
-    let instance = create_handle_with_table(store, t)?;
+    let instance = create_table(store, t)?;
     let idx = wasm::EntityIndex::Table(wasm::TableIndex::from_u32(0));
     match instance.lookup_by_declaration(&idx) {
         wasmtime_runtime::Export::Table(t) => Ok((instance, t)),

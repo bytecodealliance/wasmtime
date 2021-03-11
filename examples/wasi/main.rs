@@ -14,20 +14,25 @@ fn main() -> Result<()> {
         .with_ansi(true)
         .init();
 
-    let store = Store::default();
-    let mut linker = Linker::new(&store);
+    // Define the WASI functions globally on the `Config`.
+    let mut config = Config::default();
+    Wasi::add_to_config(&mut config);
 
-    // Create an instance of `Wasi` which contains a `WasiCtx`. Note that
-    // `WasiCtx` provides a number of ways to configure what the target program
+    let store = Store::new(&Engine::new(&config)?);
+
+    // Set the WASI context in the store; all instances in the store share this context.
+    // `WasiCtxBuilder` provides a number of ways to configure what the target program
     // will have access to.
-    let wasi = Wasi::new(
+    assert!(Wasi::set_context(
         &store,
         WasiCtxBuilder::new()
             .inherit_stdio()
             .inherit_args()?
-            .build()?,
-    );
-    wasi.add_to_linker(&mut linker)?;
+            .build()?
+    )
+    .is_ok());
+
+    let mut linker = Linker::new(&store);
 
     // Instantiate our module with the imports we've created, and run it.
     let module = Module::from_file(store.engine(), "target/wasm32-wasi/debug/wasi.wasm")?;

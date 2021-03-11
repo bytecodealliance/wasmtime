@@ -52,7 +52,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         // However, these limits may become insufficient in the future as the wast tests change.
         // If a wast test fails because of a limit being "exceeded" or if memory/table
         // fails to grow, the values here will need to be adjusted.
-        cfg.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+        cfg.allocation_strategy(InstanceAllocationStrategy::Pooling {
             strategy: PoolingAllocationStrategy::NextAvailable,
             module_limits: ModuleLimits {
                 imported_memories: 2,
@@ -68,10 +68,10 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
                 count: 450,
                 ..Default::default()
             },
-        })?;
+        });
     }
 
-    let store = Store::new(&Engine::new(&cfg));
+    let store = Store::new(&Engine::new(&cfg)?);
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;
     wast_context.run_file(wast)?;

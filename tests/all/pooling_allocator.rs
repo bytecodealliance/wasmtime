@@ -4,7 +4,7 @@ use wasmtime::*;
 #[test]
 fn successful_instantiation() -> Result<()> {
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 1,
@@ -15,9 +15,9 @@ fn successful_instantiation() -> Result<()> {
             count: 1,
             memory_reservation_size: 1,
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module (memory 1) (table 10 funcref))"#)?;
 
     // Module should instantiate
@@ -30,7 +30,7 @@ fn successful_instantiation() -> Result<()> {
 #[test]
 fn memory_limit() -> Result<()> {
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 3,
@@ -41,9 +41,9 @@ fn memory_limit() -> Result<()> {
             count: 1,
             memory_reservation_size: 196608,
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     // Module should fail to validate because the minimum is greater than the configured limit
     match Module::new(&engine, r#"(module (memory 4))"#) {
@@ -92,7 +92,7 @@ fn memory_limit() -> Result<()> {
 #[test]
 fn memory_init() -> Result<()> {
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 2,
@@ -103,9 +103,9 @@ fn memory_init() -> Result<()> {
             count: 1,
             ..Default::default()
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -130,7 +130,7 @@ fn memory_init() -> Result<()> {
 #[test]
 fn memory_guard_page_trap() -> Result<()> {
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 2,
@@ -141,9 +141,9 @@ fn memory_guard_page_trap() -> Result<()> {
             count: 1,
             ..Default::default()
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -185,7 +185,7 @@ fn memory_guard_page_trap() -> Result<()> {
 #[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
 fn memory_zeroed() -> Result<()> {
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 1,
@@ -196,9 +196,9 @@ fn memory_zeroed() -> Result<()> {
             count: 1,
             memory_reservation_size: 1,
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(&engine, r#"(module (memory (export "m") 1))"#)?;
 
@@ -228,7 +228,7 @@ fn memory_zeroed() -> Result<()> {
 fn table_limit() -> Result<()> {
     const TABLE_ELEMENTS: u32 = 10;
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 1,
@@ -239,9 +239,9 @@ fn table_limit() -> Result<()> {
             count: 1,
             memory_reservation_size: 1,
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     // Module should fail to validate because the minimum is greater than the configured limit
     match Module::new(&engine, r#"(module (table 31 funcref))"#) {
@@ -296,7 +296,7 @@ fn table_limit() -> Result<()> {
 #[test]
 fn table_init() -> Result<()> {
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 0,
@@ -307,9 +307,9 @@ fn table_init() -> Result<()> {
             count: 1,
             ..Default::default()
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(
         &engine,
@@ -346,7 +346,7 @@ fn table_init() -> Result<()> {
 #[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
 fn table_zeroed() -> Result<()> {
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 1,
@@ -357,9 +357,9 @@ fn table_zeroed() -> Result<()> {
             count: 1,
             memory_reservation_size: 1,
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
 
     let module = Module::new(&engine, r#"(module (table (export "t") 10 funcref))"#)?;
 
@@ -388,7 +388,7 @@ fn table_zeroed() -> Result<()> {
 fn instantiation_limit() -> Result<()> {
     const INSTANCE_LIMIT: u32 = 10;
     let mut config = Config::new();
-    config.with_allocation_strategy(InstanceAllocationStrategy::Pooling {
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 1,
@@ -399,9 +399,9 @@ fn instantiation_limit() -> Result<()> {
             count: INSTANCE_LIMIT,
             memory_reservation_size: 1,
         },
-    })?;
+    });
 
-    let engine = Engine::new(&config);
+    let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module)"#)?;
 
     // Instantiate to the limit

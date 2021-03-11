@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::parse_macro_input;
 use wiggle_generate::Names;
 
@@ -102,14 +102,23 @@ fn generate_module(
     let module_id = names.module(&module.name);
     let target_module = quote! { #target_path::#module_id };
 
-    let ctor_externs = module.funcs().map(|f| {
+    let mut fns = Vec::new();
+    let mut ctor_externs = Vec::new();
+    let mut host_funcs = Vec::new();
+
+    for f in module.funcs() {
         generate_func(
+            &module_id,
             &f,
             names,
             &target_module,
+            ctx_type,
             async_conf.is_async(module.name.as_str(), f.name.as_str()),
-        )
-    });
+            &mut fns,
+            &mut ctor_externs,
+            &mut host_funcs,
+        );
+    }
 
     let type_name = module_conf.name.clone();
     let type_docs = module_conf
@@ -121,7 +130,7 @@ fn generate_module(
         "Creates a new [`{}`] instance.
 
 External values are allocated into the `store` provided and
-configuration of the wasi instance itself should be all
+configuration of the instance itself should be all
 contained in the `cx` parameter.",
         module_conf.name.to_string()
     );
@@ -134,7 +143,7 @@ contained in the `cx` parameter.",
 
         impl #type_name {
             #[doc = #constructor_docs]
-            pub fn new(store: &wasmtime::Store, cx: std::rc::Rc<std::cell::RefCell<#ctx_type>>) -> Self {
+            pub fn new(store: &wasmtime::Store, ctx: std::rc::Rc<std::cell::RefCell<#ctx_type>>) -> Self {
                 #(#ctor_externs)*
 
                 Self {
@@ -159,16 +168,47 @@ contained in the `cx` parameter.",
                 #(#linker_add)*
                 Ok(())
             }
+
+            /// Adds the host functions to the given [`wasmtime::Config`].
+            ///
+            /// Host functions added to the config expect [`set_context`] to be called.
+            ///
+            /// Host functions will trap if the context is not set in the calling [`wasmtime::Store`].
+            pub fn add_to_config(config: &mut wasmtime::Config) {
+                #(#host_funcs)*
+            }
+
+            /// Sets the context in the given store.
+            ///
+            /// Context must be set in the store when using [`add_to_config`] and prior to any
+            /// host function being called.
+            ///
+            /// If the context is already set in the store, the given context is returned as an error.
+            pub fn set_context(store: &wasmtime::Store, ctx: #ctx_type) -> Result<(), #ctx_type> {
+                store.set(std::rc::Rc::new(std::cell::RefCell::new(ctx))).map_err(|ctx| {
+                    match std::rc::Rc::try_unwrap(ctx) {
+                        Ok(ctx) => ctx.into_inner(),
+                        Err(_) => unreachable!(),
+                    }
+                })
+            }
+
+            #(#fns)*
         }
     }
 }
 
 fn generate_func(
+    module_ident: &Ident,
     func: &witx::InterfaceFunc,
     names: &Names,
     target_module: &TokenStream2,
+    ctx_type: &syn::Type,
     is_async: bool,
-) -> TokenStream2 {
+    fns: &mut Vec<TokenStream2>,
+    ctors: &mut Vec<TokenStream2>,
+    host_funcs: &mut Vec<TokenStream2>,
+) {
     let name_ident = names.func(&func.name);
 
     let (params, results) = func.wasm_signature();
@@ -176,11 +216,15 @@ fn generate_func(
     let arg_names = (0..params.len())
         .map(|i| Ident::new(&format!("arg{}", i), Span::call_site()))
         .collect::<Vec<_>>();
-    let arg_decls = params.iter().enumerate().map(|(i, ty)| {
-        let name = &arg_names[i];
-        let wasm = names.wasm_type(*ty);
-        quote! { #name: #wasm }
-    });
+    let arg_decls = params
+        .iter()
+        .enumerate()
+        .map(|(i, ty)| {
+            let name = &arg_names[i];
+            let wasm = names.wasm_type(*ty);
+            quote! { #name: #wasm }
+        })
+        .collect::<Vec<_>>();
 
     let ret_ty = match results.len() {
         0 => quote!(()),
@@ -188,54 +232,87 @@ fn generate_func(
         _ => unimplemented!(),
     };
 
-    let runtime = names.runtime_mod();
-
+    let async_ = if is_async { quote!(async) } else { quote!() };
     let await_ = if is_async { quote!(.await) } else { quote!() };
 
-    let closure_body = quote! {
-        unsafe {
-            let mem = match caller.get_export("memory") {
-                Some(wasmtime::Extern::Memory(m)) => m,
-                _ => {
-                    return Err(wasmtime::Trap::new("missing required memory export"));
-                }
-            };
-            let mem = #runtime::WasmtimeGuestMemory::new(mem);
-            let result = #target_module::#name_ident(
-                &mut *my_cx.borrow_mut(),
-                &mem,
-                #(#arg_names),*
-            ) #await_;
-            match result {
-                Ok(r) => Ok(r.into()),
-                Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
-                Err(wasmtime_wiggle::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
-            }
-        }
+    let runtime = names.runtime_mod();
+    let fn_ident = format_ident!("{}_{}", module_ident, name_ident);
 
-    };
-    if is_async {
-        let wrapper = quote::format_ident!("wrap{}_async", params.len());
-        quote! {
-        let #name_ident = wasmtime::Func::#wrapper(
-            store,
-            cx.clone(),
-            move |caller: wasmtime::Caller<'_>, my_cx: &Rc<RefCell<_>> #(,#arg_decls)*|
-              -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>>
-            {
-                Box::new(async move { #closure_body })
+    fns.push(quote! {
+        #async_ fn #fn_ident(caller: &wasmtime::Caller<'_>, ctx: &mut #ctx_type #(, #arg_decls)*) -> Result<#ret_ty, wasmtime::Trap> {
+            unsafe {
+                let mem = match caller.get_export("memory") {
+                    Some(wasmtime::Extern::Memory(m)) => m,
+                    _ => {
+                        return Err(wasmtime::Trap::new("missing required memory export"));
+                    }
+                };
+                let mem = #runtime::WasmtimeGuestMemory::new(mem);
+                match #target_module::#name_ident(ctx, &mem #(, #arg_names)*) #await_ {
+                    Ok(r) => Ok(r.into()),
+                    Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
+                    Err(wasmtime_wiggle::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
+                }
             }
-        );
         }
-    } else {
-        quote! {
-            let my_cx = cx.clone();
-            let #name_ident = wasmtime::Func::wrap(
+    });
+
+    if is_async {
+        let wrapper = format_ident!("wrap{}_async", params.len());
+        ctors.push(quote! {
+            let #name_ident = wasmtime::Func::#wrapper(
                 store,
-                move |caller: wasmtime::Caller<'_> #(,#arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
-                    #closure_body
+                ctx.clone(),
+                move |caller: wasmtime::Caller<'_>, my_ctx: &Rc<RefCell<_>> #(,#arg_decls)*|
+                    -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
+                    Box::new(async move { Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*).await })
                 }
             );
-        }
+        });
+    } else {
+        ctors.push(quote! {
+            let my_ctx = ctx.clone();
+            let #name_ident = wasmtime::Func::wrap(
+                store,
+                move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                    Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*)
+                }
+            );
+        });
+    }
+
+    if is_async {
+        let wrapper = format_ident!("wrap{}_host_func_async", params.len());
+        host_funcs.push(quote! {
+            config.#wrapper(
+                stringify!(#module_ident),
+                stringify!(#name_ident),
+                move |caller #(,#arg_decls)*|
+                    -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
+                    Box::new(async move {
+                        let ctx = caller.store()
+                            .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
+                            .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
+                        let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut() #(, #arg_names)*).await;
+                        result
+                    })
+                }
+            );
+        });
+    } else {
+        host_funcs.push(quote! {
+            config.wrap_host_func(
+                stringify!(#module_ident),
+                stringify!(#name_ident),
+                move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                    let ctx = caller
+                        .store()
+                        .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
+                        .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
+                    let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*);
+                    result
+                },
+            );
+        });
     }
 }

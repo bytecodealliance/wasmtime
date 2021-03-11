@@ -39,7 +39,7 @@ fn test_module_serialize_fail() -> Result<()> {
 
     let mut config = Config::new();
     config.cranelift_opt_level(OptLevel::None);
-    let store = Store::new(&Engine::new(&config));
+    let store = Store::new(&Engine::new(&config)?);
     match deserialize_and_instantiate(&store, &buffer) {
         Ok(_) => bail!("expected failure at deserialization"),
         Err(_) => (),

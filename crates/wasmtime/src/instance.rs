@@ -92,16 +92,16 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// This function will panic if called within an asynchronous store
-    /// (created with [`Store::new_async`]).
+    /// This function will panic if called with a store associated with a
+    /// [`asynchronous config`](crate::Config::async_support).
     ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
     /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
     pub fn new(store: &Store, module: &Module, imports: &[Extern]) -> Result<Instance, Error> {
         assert!(
-            !store.is_async(),
-            "cannot instantiate synchronously within an asynchronous store"
+            !store.async_support(),
+            "cannot use `new` when async support is enabled on the config"
         );
 
         // NB: this is the same code as `Instance::new_async`. It's intentionally
@@ -127,11 +127,9 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// This function will panic if called within a non-asynchronous store
-    /// (created with [`Store::new`]). This is only compatible with asynchronous
-    /// stores created with [`Store::new_async`].
-    ///
-    /// [asynchronous stores]: Store::new_async
+    /// This function will panic if called with a store associated with a [`synchronous
+    /// config`](crate::Config::new). This is only compatible with stores associated with
+    /// an [`asynchronous config`](crate::Config::async_support).
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn new_async(
@@ -140,8 +138,8 @@ impl Instance {
         imports: &[Extern],
     ) -> Result<Instance, Error> {
         assert!(
-            store.is_async(),
-            "cannot instantiate asynchronously within a synchronous store"
+            store.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
         );
 
         // NB: this is the same code as `Instance::new`. It's intentionally
@@ -493,9 +491,8 @@ impl<'a> Instantiator<'a> {
         self.store.register_module(&self.cur.module);
 
         unsafe {
-            let config = self.store.engine().config();
-
-            let allocator = config.instance_allocator();
+            let engine = self.store.engine();
+            let allocator = engine.allocator();
 
             let instance = allocator.allocate(InstanceAllocationRequest {
                 module: compiled_module.module().clone(),
@@ -522,7 +519,7 @@ impl<'a> Instantiator<'a> {
             // initialization is successful, we need to keep the instance alive.
             let instance = self.store.add_instance(instance, false);
             allocator
-                .initialize(&instance.handle, config.features.bulk_memory)
+                .initialize(&instance.handle, engine.config().features.bulk_memory)
                 .map_err(|e| -> Error {
                     match e {
                         InstantiationError::Trap(trap) => {
@@ -551,7 +548,7 @@ impl<'a> Instantiator<'a> {
             };
             let vmctx_ptr = instance.handle.vmctx_ptr();
             unsafe {
-                super::func::invoke_wasm_and_catch_traps(vmctx_ptr, &instance.store, || {
+                super::func::invoke_wasm_and_catch_traps(&instance.store, || {
                     mem::transmute::<
                         *const VMFunctionBody,
                         unsafe extern "C" fn(*mut VMContext, *mut VMContext),

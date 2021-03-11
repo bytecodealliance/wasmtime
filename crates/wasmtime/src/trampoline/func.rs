@@ -1,16 +1,15 @@
 //! Support for a calling of an imported function.
 
-use super::create_handle::create_handle;
-use crate::trampoline::StoreInstanceHandle;
-use crate::{FuncType, Store, Trap};
+use crate::{sig_registry::SignatureRegistry, Config, FuncType, Trap};
 use anyhow::Result;
 use std::any::Any;
 use std::cmp;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
+use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::wasm::SignatureIndex;
+use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
 use wasmtime_environ::{ir, wasm, CompiledFunction, Module, ModuleType};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
@@ -19,7 +18,10 @@ use wasmtime_jit::trampoline::{
     self, binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
 };
 use wasmtime_jit::CodeMemory;
-use wasmtime_runtime::{InstanceHandle, VMContext, VMFunctionBody, VMTrampoline};
+use wasmtime_runtime::{
+    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    OnDemandInstanceAllocator, VMContext, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+};
 
 struct TrampolineState {
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
@@ -203,19 +205,23 @@ fn make_trampoline(
         .expect("allocate_for_function")
 }
 
-pub fn create_handle_with_function(
+fn create_function_trampoline(
+    config: &Config,
     ft: &FuncType,
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
-    store: &Store,
-) -> Result<(StoreInstanceHandle, VMTrampoline)> {
+) -> Result<(
+    Module,
+    PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    VMTrampoline,
+    TrampolineState,
+)> {
     // Note that we specifically enable reference types here in our ISA because
     // `Func::new` is intended to be infallible, but our signature may use
     // reference types which requires safepoints.
-    let isa = store.engine().config().target_isa_with_reference_types();
+    let isa = config.target_isa_with_reference_types();
 
     let pointer_type = isa.pointer_type();
     let sig = ft.get_wasmtime_signature(pointer_type);
-    let wft = ft.as_wasm_func_type();
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
@@ -226,10 +232,12 @@ pub fn create_handle_with_function(
     // and calls into `stub_fn`...
     let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
     module.types.push(ModuleType::Function(sig_id));
+
     let func_id = module.functions.push(sig_id);
     module
         .exports
         .insert(String::new(), wasm::EntityIndex::Function(func_id));
+
     let trampoline = make_trampoline(isa.as_ref(), &mut code_memory, &mut fn_builder_ctx, &sig);
     finished_functions.push(trampoline);
 
@@ -243,33 +251,51 @@ pub fn create_handle_with_function(
         &sig,
         mem::size_of::<u128>(),
     )?;
-    let shared_signature_id = store.signatures().borrow_mut().register(wft, trampoline);
 
-    // Next up we wrap everything up into an `InstanceHandle` by publishing our
-    // code memory (makes it executable) and ensuring all our various bits of
-    // state make it into the instance constructors.
     code_memory.publish(isa.as_ref());
+
     let trampoline_state = TrampolineState { func, code_memory };
-    create_handle(
-        module,
-        store,
-        finished_functions,
-        Box::new(trampoline_state),
-        &[],
-        Some(shared_signature_id),
-    )
-    .map(|instance| (instance, trampoline))
+
+    Ok((module, finished_functions, trampoline, trampoline_state))
 }
 
-pub unsafe fn create_handle_with_raw_function(
+pub fn create_function(
     ft: &FuncType,
-    func: *mut [VMFunctionBody],
-    trampoline: VMTrampoline,
-    store: &Store,
-    state: Box<dyn Any>,
-) -> Result<StoreInstanceHandle> {
-    let wft = ft.as_wasm_func_type();
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
+    config: &Config,
+    registry: Option<&mut SignatureRegistry>,
+) -> Result<(InstanceHandle, VMTrampoline)> {
+    let (module, finished_functions, trampoline, trampoline_state) =
+        create_function_trampoline(config, ft, func)?;
 
+    // If there is no signature registry, use the default signature index which is
+    // guaranteed to trap if there is ever an indirect call on the function (should not happen)
+    let shared_signature_id = registry
+        .map(|r| r.register(ft.as_wasm_func_type(), trampoline))
+        .unwrap_or(VMSharedSignatureIndex::default());
+
+    unsafe {
+        Ok((
+            OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+                module: Arc::new(module),
+                finished_functions: &finished_functions,
+                imports: Imports::default(),
+                lookup_shared_signature: &|_| shared_signature_id,
+                host_state: Box::new(trampoline_state),
+                interrupts: std::ptr::null(),
+                externref_activations_table: std::ptr::null_mut(),
+                stack_map_registry: std::ptr::null_mut(),
+            })?,
+            trampoline,
+        ))
+    }
+}
+
+pub unsafe fn create_raw_function(
+    func: *mut [VMFunctionBody],
+    host_state: Box<dyn Any>,
+    shared_signature_id: VMSharedSignatureIndex,
+) -> Result<InstanceHandle> {
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
 
@@ -280,14 +306,17 @@ pub unsafe fn create_handle_with_raw_function(
         .exports
         .insert(String::new(), wasm::EntityIndex::Function(func_id));
     finished_functions.push(func);
-    let shared_signature_id = store.signatures().borrow_mut().register(wft, trampoline);
 
-    create_handle(
-        module,
-        store,
-        finished_functions,
-        state,
-        &[],
-        Some(shared_signature_id),
+    Ok(
+        OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+            module: Arc::new(module),
+            finished_functions: &finished_functions,
+            imports: Imports::default(),
+            lookup_shared_signature: &|_| shared_signature_id,
+            host_state,
+            interrupts: std::ptr::null(),
+            externref_activations_table: std::ptr::null_mut(),
+            stack_map_registry: std::ptr::null_mut(),
+        })?,
     )
 }

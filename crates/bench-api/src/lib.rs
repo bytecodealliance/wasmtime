@@ -203,7 +203,7 @@ impl BenchState {
         config.wasm_simd(true);
         // NB: do not configure a code cache.
 
-        let engine = Engine::new(&config);
+        let engine = Engine::new(&config)?;
         let store = Store::new(&engine);
 
         let mut linker = Linker::new(&store);

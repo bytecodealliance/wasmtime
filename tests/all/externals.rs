@@ -57,7 +57,7 @@ fn bad_tables() {
 fn cross_store() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store1 = Store::new(&engine);
     let store2 = Store::new(&engine);
 
@@ -127,7 +127,7 @@ fn cross_store() -> anyhow::Result<()> {
 fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     // Initialize with a null externref.
@@ -162,7 +162,7 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
 fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     let f = Func::wrap(&store, || {});
@@ -197,7 +197,7 @@ fn get_set_funcref_globals_via_api() -> anyhow::Result<()> {
 fn create_get_set_funcref_tables_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     let table_ty = TableType::new(ValType::FuncRef, Limits::at_least(10));
@@ -218,7 +218,7 @@ fn create_get_set_funcref_tables_via_api() -> anyhow::Result<()> {
 fn fill_funcref_tables_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     let table_ty = TableType::new(ValType::FuncRef, Limits::at_least(10));
@@ -244,7 +244,7 @@ fn fill_funcref_tables_via_api() -> anyhow::Result<()> {
 fn grow_funcref_tables_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     let table_ty = TableType::new(ValType::FuncRef, Limits::at_least(10));
@@ -261,7 +261,7 @@ fn grow_funcref_tables_via_api() -> anyhow::Result<()> {
 fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     let table_ty = TableType::new(ValType::ExternRef, Limits::at_least(10));
@@ -292,7 +292,7 @@ fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
 fn fill_externref_tables_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     let table_ty = TableType::new(ValType::ExternRef, Limits::at_least(10));
@@ -328,7 +328,7 @@ fn fill_externref_tables_via_api() -> anyhow::Result<()> {
 fn grow_externref_tables_via_api() -> anyhow::Result<()> {
     let mut cfg = Config::new();
     cfg.wasm_reference_types(true);
-    let engine = Engine::new(&cfg);
+    let engine = Engine::new(&cfg)?;
     let store = Store::new(&engine);
 
     let table_ty = TableType::new(ValType::ExternRef, Limits::at_least(10));
@@ -344,7 +344,7 @@ fn grow_externref_tables_via_api() -> anyhow::Result<()> {
 #[test]
 fn read_write_memory_via_api() {
     let cfg = Config::new();
-    let store = Store::new(&Engine::new(&cfg));
+    let store = Store::new(&Engine::new(&cfg).unwrap());
     let ty = MemoryType::new(Limits::new(1, None));
     let mem = Memory::new(&store, ty);
     mem.grow(1).unwrap();

@@ -1,7 +1,7 @@
 //! WebAssembly trap handling, which is built on top of the lower-level
 //! signalhandling mechanisms.
 
-use crate::VMContext;
+use crate::VMInterrupts;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::Cell;
@@ -445,11 +445,7 @@ impl Trap {
 /// returning them as a `Result`.
 ///
 /// Highly unsafe since `closure` won't have any dtors run.
-pub unsafe fn catch_traps<F>(
-    vmctx: *mut VMContext,
-    trap_info: &impl TrapInfo,
-    mut closure: F,
-) -> Result<(), Trap>
+pub unsafe fn catch_traps<F>(trap_info: &impl TrapInfo, mut closure: F) -> Result<(), Trap>
 where
     F: FnMut(),
 {
@@ -457,7 +453,7 @@ where
     #[cfg(unix)]
     setup_unix_sigaltstack()?;
 
-    return CallThreadState::new(vmctx, trap_info).with(|cx| {
+    return CallThreadState::new(trap_info).with(|cx| {
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -493,7 +489,6 @@ pub fn out_of_gas() {
 pub struct CallThreadState<'a> {
     unwind: Cell<UnwindReason>,
     jmp_buf: Cell<*const u8>,
-    vmctx: *mut VMContext,
     handling_trap: Cell<bool>,
     trap_info: &'a (dyn TrapInfo + 'a),
 }
@@ -526,6 +521,9 @@ pub unsafe trait TrapInfo {
     ///
     /// This function may return, and it may also `raise_lib_trap`.
     fn out_of_gas(&self);
+
+    /// Returns the VM interrupts to use for interrupting Wasm code.
+    fn interrupts(&self) -> &VMInterrupts;
 }
 
 enum UnwindReason {
@@ -537,10 +535,9 @@ enum UnwindReason {
 }
 
 impl<'a> CallThreadState<'a> {
-    fn new(vmctx: *mut VMContext, trap_info: &'a (dyn TrapInfo + 'a)) -> CallThreadState<'a> {
+    fn new(trap_info: &'a (dyn TrapInfo + 'a)) -> CallThreadState<'a> {
         CallThreadState {
             unwind: Cell::new(UnwindReason::None),
-            vmctx,
             jmp_buf: Cell::new(ptr::null()),
             handling_trap: Cell::new(false),
             trap_info,
@@ -562,10 +559,9 @@ impl<'a> CallThreadState<'a> {
             UnwindReason::LibTrap(trap) => Err(trap),
             UnwindReason::JitTrap { backtrace, pc } => {
                 debug_assert_eq!(ret, 0);
-                let maybe_interrupted = unsafe {
-                    let interrupts = (*self.vmctx).instance().interrupts();
-                    (**interrupts).stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED
-                };
+                let interrupts = self.trap_info.interrupts();
+                let maybe_interrupted =
+                    interrupts.stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED;
                 Err(Trap::Jit {
                     pc,
                     backtrace,
@@ -622,7 +618,7 @@ impl<'a> CallThreadState<'a> {
         // (a million bytes) the slop shouldn't matter too much.
         let wasm_stack_limit = psm::stack_pointer() as usize - self.trap_info.max_wasm_stack();
 
-        let interrupts = unsafe { &**(&*self.vmctx).instance().interrupts() };
+        let interrupts = self.trap_info.interrupts();
         let reset_stack_limit = match interrupts.stack_limit.compare_exchange(
             usize::max_value(),
             wasm_stack_limit,

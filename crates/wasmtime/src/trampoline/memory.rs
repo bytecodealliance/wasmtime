@@ -1,6 +1,5 @@
-use super::create_handle::create_handle;
 use crate::memory::{LinearMemory, MemoryCreator};
-use crate::trampoline::StoreInstanceHandle;
+use crate::trampoline::{create_handle, StoreInstanceHandle};
 use crate::Store;
 use crate::{Limits, MemoryType};
 use anyhow::{anyhow, Result};
@@ -10,10 +9,7 @@ use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefini
 
 use std::sync::Arc;
 
-pub fn create_handle_with_memory(
-    store: &Store,
-    memory: &MemoryType,
-) -> Result<StoreInstanceHandle> {
+pub fn create_memory(store: &Store, memory: &MemoryType) -> Result<StoreInstanceHandle> {
     let mut module = Module::new();
 
     let memory = wasm::Memory {

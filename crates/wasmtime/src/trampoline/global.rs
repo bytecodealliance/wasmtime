@@ -1,5 +1,4 @@
-use super::create_handle::create_handle;
-use crate::trampoline::StoreInstanceHandle;
+use crate::trampoline::{create_handle, StoreInstanceHandle};
 use crate::{GlobalType, Mutability, Store, Val};
 use anyhow::Result;
 use wasmtime_environ::entity::PrimaryMap;

@@ -112,7 +112,7 @@ mod tests {
     // hostcall can be handled.
     #[test]
     fn test_custom_signal_handler_single_instance_hostcall() -> Result<()> {
-        let engine = Engine::new(&Config::default());
+        let engine = Engine::new(&Config::default())?;
         let store = Store::new(&engine);
         let module = Module::new(&engine, WAT1)?;
 
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_custom_signal_handler_single_instance() -> Result<()> {
-        let engine = Engine::new(&Config::default());
+        let engine = Engine::new(&Config::default())?;
         let store = Store::new(&engine);
         let module = Module::new(&engine, WAT1)?;
 
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_custom_signal_handler_multiple_instances() -> Result<()> {
-        let engine = Engine::new(&Config::default());
+        let engine = Engine::new(&Config::default())?;
         let store = Store::new(&engine);
         let module = Module::new(&engine, WAT1)?;
 
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_custom_signal_handler_instance_calling_another_instance() -> Result<()> {
-        let engine = Engine::new(&Config::default());
+        let engine = Engine::new(&Config::default())?;
         let store = Store::new(&engine);
 
         // instance1 which defines 'read'

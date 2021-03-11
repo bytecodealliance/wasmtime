@@ -223,3 +223,40 @@ fn no_leak_with_imports() -> Result<()> {
     assert!(flag.get(), "store was leaked");
     Ok(())
 }
+
+#[test]
+fn get_host_function() -> Result<()> {
+    let mut config = Config::default();
+    config.wrap_host_func("mod", "f1", || {});
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, r#"(module (import "mod" "f1" (func)))"#)?;
+    let store = Store::new(&engine);
+
+    let linker = Linker::new(&store);
+    assert!(linker.get(&module.imports().nth(0).unwrap()).is_some());
+
+    Ok(())
+}
+
+#[test]
+fn shadowing_host_function() -> Result<()> {
+    let mut config = Config::default();
+    config.wrap_host_func("mod", "f1", || {});
+
+    let engine = Engine::new(&config)?;
+    let store = Store::new(&engine);
+
+    let mut linker = Linker::new(&store);
+    assert!(linker
+        .define("mod", "f1", Func::wrap(&store, || {}))
+        .is_err());
+    linker.define("mod", "f2", Func::wrap(&store, || {}))?;
+
+    let mut linker = Linker::new(&store);
+    linker.allow_shadowing(true);
+    linker.define("mod", "f1", Func::wrap(&store, || {}))?;
+    linker.define("mod", "f2", Func::wrap(&store, || {}))?;
+
+    Ok(())
+}

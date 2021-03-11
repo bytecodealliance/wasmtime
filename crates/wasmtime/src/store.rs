@@ -1,34 +1,36 @@
 use crate::frame_info::StoreFrameInfo;
 use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::StoreInstanceHandle;
-use crate::{Engine, Module, Trap};
+use crate::{Engine, Func, FuncType, Module, Trap};
 use anyhow::{bail, Result};
-use std::any::Any;
+use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::ptr;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
 use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    InstanceAllocator, InstanceHandle, SignalHandler, StackMapRegistry, TrapInfo, VMContext,
-    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    Export, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler,
+    StackMapRegistry, TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef,
+    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
 };
 
 /// Used to associate instances with the store.
 ///
-/// This is needed to track if the instance was allocated expliclty with the default
+/// This is needed to track if the instance was allocated explicitly with the on-demand
 /// instance allocator.
 struct StoreInstance {
     handle: InstanceHandle,
-    use_default_allocator: bool,
+    // Stores whether or not to use the on-demand allocator to deallocate the instance
+    ondemand: bool,
 }
 
 /// A `Store` is a collection of WebAssembly instances and host-defined items.
@@ -68,8 +70,9 @@ pub struct Store {
 }
 
 pub(crate) struct StoreInner {
-    is_async: bool,
     engine: Engine,
+    /// The map of all host functions registered with this store's signature registry
+    host_funcs: RefCell<HashMap<InstanceHandle, Box<VMCallerCheckedAnyfunc>>>,
     interrupts: Arc<VMInterrupts>,
     signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<StoreInstance>>,
@@ -82,21 +85,19 @@ pub(crate) struct StoreInner {
     /// Set of all compiled modules that we're holding a strong reference to
     /// the module's code for. This includes JIT functions, trampolines, etc.
     modules: RefCell<HashSet<ArcModuleCode>>,
-
     // Numbers of resources instantiated in this store.
     instance_count: Cell<usize>,
     memory_count: Cell<usize>,
     table_count: Cell<usize>,
-
     /// An adjustment to add to the fuel consumed value in `interrupts` above
     /// to get the true amount of fuel consumed.
     fuel_adj: Cell<i64>,
-
     #[cfg(feature = "async")]
     current_suspend: Cell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
     #[cfg(feature = "async")]
     current_poll_cx: Cell<*mut Context<'static>>,
     out_of_gas_behavior: Cell<OutOfGas>,
+    context_values: RefCell<HashMap<TypeId, Box<dyn Any>>>,
 }
 
 #[derive(Copy, Clone)]
@@ -129,99 +130,7 @@ impl Hash for HostInfoKey {
 
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
-    ///
-    /// Note that this `Store` cannot be used with asynchronous host calls nor
-    /// can it be used to call functions asynchronously. For that you'll want to
-    /// use [`Store::new_async`].
     pub fn new(engine: &Engine) -> Store {
-        Store::_new(engine, false)
-    }
-
-    /// Creates a new async store to be associated with the given [`Engine`].
-    ///
-    /// The returned store can optionally define host functions with `async`.
-    /// Instances created and functions called within the returned `Store`
-    /// *must* be called through their asynchronous APIs, however. For example
-    /// using [`Func::call`](crate::Func::call) will panic in the returned
-    /// store.
-    ///
-    /// # Asynchronous Wasm
-    ///
-    /// WebAssembly does not currently have a way to specify at the bytecode
-    /// level what is and isn't async. Host-defined functions, however, may be
-    /// defined as `async`. WebAssembly imports always appear synchronous, which
-    /// gives rise to a bit of an impedence mismatch here. To solve this
-    /// Wasmtime supports "asynchronous stores" which enables calling these
-    /// asynchronous functions in a way that looks synchronous to the executing
-    /// WebAssembly code.
-    ///
-    /// An asynchronous store must always invoke wasm code asynchronously,
-    /// meaning we'll always represent its computation as a
-    /// [`Future`](std::future::Future). The `poll` method of the futures
-    /// returned by Wasmtime will perform the actual work of calling the
-    /// WebAssembly. Wasmtime won't manage its own thread pools or similar,
-    /// that's left up to the embedder.
-    ///
-    /// To implement futures in a way that WebAssembly sees asynchronous host
-    /// functions as synchronous, all async Wasmtime futures will execute on a
-    /// separately allocated native stack from the thread otherwise executing
-    /// Wasmtime. This separate native stack can then be switched to and from.
-    /// Using this whenever an `async` host function returns a future that
-    /// resolves to `Pending` we switch away from the temporary stack back to
-    /// the main stack and propagate the `Pending` status.
-    ///
-    /// In general it's encouraged that the integration with `async` and
-    /// wasmtime is designed early on in your embedding of Wasmtime to ensure
-    /// that it's planned that WebAssembly executes in the right context of your
-    /// application.
-    ///
-    /// # Execution in `poll`
-    ///
-    /// The [`Future::poll`](std::future::Future::poll) method is the main
-    /// driving force behind Rust's futures. That method's own documentation
-    /// states "an implementation of `poll` should strive to return quickly, and
-    /// should not block". This, however, can be at odds with executing
-    /// WebAssembly code as part of the `poll` method itself. If your
-    /// WebAssembly is untrusted then this could allow the `poll` method to take
-    /// arbitrarily long in the worst case, likely blocking all other
-    /// asynchronous tasks.
-    ///
-    /// To remedy this situation you have a two possible ways to solve this:
-    ///
-    /// * First you can spawn futures into a thread pool. Care must be taken for
-    ///   this because Wasmtime futures are not `Send` or `Sync`. If you ensure
-    ///   that the entire state of a `Store` is wrapped up in a single future,
-    ///   though, you can send the whole future at once to a separate thread. By
-    ///   doing this in a thread pool you are relaxing the requirement that
-    ///   `Future::poll` must be fast because your future is executing on a
-    ///   separate thread. This strategy, however, would likely still require
-    ///   some form of cancellation via [`Store::interrupt_handle`] to ensure
-    ///   wasm doesn't take *too* long to execute.
-    ///
-    /// * Alternatively you can enable the
-    ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
-    ///   as [`Store::out_of_fuel_async_yield`] When doing so this will
-    ///   configure Wasmtime futures to yield periodically while they're
-    ///   executing WebAssembly code. After consuming the specified amount of
-    ///   fuel wasm futures will return `Poll::Pending` from their `poll`
-    ///   method, and will get automatically re-polled later. This enables the
-    ///   `Future::poll` method to take roughly a fixed amount of time since
-    ///   fuel is guaranteed to get consumed while wasm is executing. Note that
-    ///   to prevent infinite execution of wasm you'll still need to use
-    ///   [`Store::interrupt_handle`].
-    ///
-    /// In either case special care needs to be taken when integrating
-    /// asynchronous wasm into your application. You should carefully plan where
-    /// WebAssembly will execute and what compute resources will be allotted to
-    /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
-    /// feel free to open an issue!
-    #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn new_async(engine: &Engine) -> Store {
-        Store::_new(engine, true)
-    }
-
-    fn _new(engine: &Engine, is_async: bool) -> Store {
         // Ensure that wasmtime_runtime's signal handlers are configured. Note
         // that at the `Store` level it means we should perform this
         // once-per-thread. Platforms like Unix, however, only require this
@@ -231,8 +140,8 @@ impl Store {
 
         Store {
             inner: Rc::new(StoreInner {
-                is_async,
                 engine: engine.clone(),
+                host_funcs: RefCell::new(HashMap::new()),
                 interrupts: Arc::new(Default::default()),
                 signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
@@ -250,17 +159,86 @@ impl Store {
                 #[cfg(feature = "async")]
                 current_poll_cx: Cell::new(ptr::null_mut()),
                 out_of_gas_behavior: Cell::new(OutOfGas::Trap),
+                context_values: RefCell::new(HashMap::new()),
             }),
         }
     }
 
-    pub(crate) fn from_inner(inner: Rc<StoreInner>) -> Store {
-        Store { inner }
+    /// Gets a host function from the [`Config`](crate::Config) associated with this [`Store`].
+    ///
+    /// Returns `None` if the given host function is not defined.
+    pub fn get_host_func(&self, module: &str, name: &str) -> Option<Func> {
+        self.inner
+            .engine
+            .config()
+            .get_host_func(module, name)
+            .map(|f| {
+                // This call is safe because we know the function is coming from the
+                // config associated with this store
+                unsafe { f.to_func(self) }
+            })
+    }
+
+    pub(crate) fn get_host_anyfunc(
+        &self,
+        instance: &InstanceHandle,
+        ty: &FuncType,
+        trampoline: VMTrampoline,
+    ) -> *mut VMCallerCheckedAnyfunc {
+        let mut funcs = self.inner.host_funcs.borrow_mut();
+
+        let anyfunc = funcs.entry(unsafe { instance.clone() }).or_insert_with(|| {
+            let mut anyfunc = match instance
+                .lookup_by_declaration(&wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0)))
+            {
+                Export::Function(f) => unsafe { f.anyfunc.as_ref() }.clone(),
+                _ => unreachable!(),
+            };
+
+            // Register the function with this store's signature registry
+            anyfunc.type_index = self
+                .inner
+                .signatures
+                .borrow_mut()
+                .register(ty.as_wasm_func_type(), trampoline);
+
+            Box::new(anyfunc)
+        });
+
+        &mut **anyfunc
     }
 
     /// Returns the [`Engine`] that this store is associated with.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+
+    /// Gets a context value from the store.
+    ///
+    /// Returns a reference to the context value if present.
+    pub fn get<T: Any>(&self) -> Option<&T> {
+        let values = self.inner.context_values.borrow();
+
+        // Safety: a context value cannot be removed once added and therefore the addres is
+        // stable for the life of the store
+        values
+            .get(&TypeId::of::<T>())
+            .map(|v| unsafe { &*(v.downcast_ref::<T>().unwrap() as *const T) })
+    }
+
+    /// Sets a context value into the store.
+    ///
+    /// Returns the given value as an error if an existing value is already set.
+    pub fn set<T: Any>(&self, value: T) -> Result<(), T> {
+        let mut values = self.inner.context_values.borrow_mut();
+
+        match values.entry(value.type_id()) {
+            Entry::Occupied(_) => Err(value),
+            Entry::Vacant(v) => {
+                v.insert(Box::new(value));
+                Ok(())
+            }
+        }
     }
 
     pub(crate) fn signatures(&self) -> &RefCell<SignatureRegistry> {
@@ -386,11 +364,11 @@ impl Store {
     pub(crate) unsafe fn add_instance(
         &self,
         handle: InstanceHandle,
-        use_default_allocator: bool,
+        ondemand: bool,
     ) -> StoreInstanceHandle {
         self.inner.instances.borrow_mut().push(StoreInstance {
             handle: handle.clone(),
-            use_default_allocator,
+            ondemand,
         });
         StoreInstanceHandle {
             store: self.clone(),
@@ -399,12 +377,14 @@ impl Store {
     }
 
     pub(crate) fn existing_instance_handle(&self, handle: InstanceHandle) -> StoreInstanceHandle {
-        debug_assert!(self
-            .inner
-            .instances
-            .borrow()
-            .iter()
-            .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr()));
+        debug_assert!(
+            self.inner
+                .instances
+                .borrow()
+                .iter()
+                .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr())
+                || self.inner.host_funcs.borrow().get(&handle).is_some()
+        );
         StoreInstanceHandle {
             store: self.clone(),
             handle,
@@ -413,15 +393,6 @@ impl Store {
 
     pub(crate) unsafe fn existing_vmctx(&self, cx: *mut VMContext) -> StoreInstanceHandle {
         self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
-    }
-
-    pub(crate) fn weak(&self) -> Weak<StoreInner> {
-        Rc::downgrade(&self.inner)
-    }
-
-    pub(crate) fn upgrade(weak: &Weak<StoreInner>) -> Option<Self> {
-        let inner = weak.upgrade()?;
-        Some(Self { inner })
     }
 
     pub(crate) fn set_signal_handler(&self, handler: Option<Box<SignalHandler<'static>>>) {
@@ -499,7 +470,7 @@ impl Store {
     /// # fn main() -> Result<()> {
     /// // Enable interruptable code via `Config` and then create an interrupt
     /// // handle which we'll use later to interrupt running code.
-    /// let engine = Engine::new(Config::new().interruptable(true));
+    /// let engine = Engine::new(Config::new().interruptable(true))?;
     /// let store = Store::new(&engine);
     /// let interrupt_handle = store.interrupt_handle()?;
     ///
@@ -648,8 +619,8 @@ impl Store {
     /// [`Config::consume_fuel`](crate::Config::consume_fuel) this method will
     /// configure what happens when fuel runs out. Specifically executing
     /// WebAssembly will be suspended and control will be yielded back to the
-    /// caller. This is only suitable with use of [async
-    /// stores](Store::new_async) because only then are futures used and yields
+    /// caller. This is only suitable with use of a store associated with an [async
+    /// config](crate::Config::async_support) because only then are futures used and yields
     /// are possible.
     ///
     /// The purpose of this behavior is to ensure that futures which represent
@@ -673,18 +644,21 @@ impl Store {
     ///
     /// # Panics
     ///
-    /// This method will panic if it is not called on an [async
-    /// store](Store::new_async).
+    /// This method will panic if it is not called on a store associated with an [async
+    /// config](crate::Config::async_support).
     pub fn out_of_fuel_async_yield(&self, injection_count: u32, fuel_to_inject: u64) {
-        assert!(self.is_async());
+        assert!(
+            self.async_support(),
+            "cannot use `out_of_fuel_async_yield` without enabling async support in the config"
+        );
         self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
             injection_count,
             fuel_to_inject,
         });
     }
 
-    pub(crate) fn is_async(&self) -> bool {
-        self.inner.is_async
+    pub(crate) fn async_support(&self) -> bool {
+        self.inner.engine.config().async_support
     }
 
     /// Blocks on the asynchronous computation represented by `future` and
@@ -712,7 +686,7 @@ impl Store {
         &self,
         mut future: Pin<&mut dyn Future<Output = T>>,
     ) -> Result<T, Trap> {
-        debug_assert!(self.is_async());
+        debug_assert!(self.async_support());
 
         // Take our current `Suspend` context which was configured as soon as
         // our fiber started. Note that we must load it at the front here and
@@ -761,7 +735,7 @@ impl Store {
     pub(crate) async fn on_fiber<R>(&self, func: impl FnOnce() -> R) -> Result<R, Trap> {
         let config = self.inner.engine.config();
 
-        debug_assert!(self.is_async());
+        debug_assert!(self.async_support());
         debug_assert!(config.async_stack_size > 0);
 
         type SuspendType = wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>;
@@ -786,7 +760,7 @@ impl Store {
             Ok(())
         };
 
-        let (fiber, stack) = match config.instance_allocator().allocate_fiber_stack() {
+        let (fiber, stack) = match self.inner.engine.allocator().allocate_fiber_stack() {
             Ok(stack) => {
                 // Use the returned stack and deallocate it when finished
                 (
@@ -892,8 +866,7 @@ impl Store {
                     unsafe {
                         self.store
                             .engine()
-                            .config()
-                            .instance_allocator()
+                            .allocator()
                             .deallocate_fiber_stack(self.stack)
                     };
                 }
@@ -1002,6 +975,10 @@ unsafe impl TrapInfo for Store {
             OutOfGas::InjectFuel { .. } => unreachable!(),
         }
     }
+
+    fn interrupts(&self) -> &VMInterrupts {
+        &self.inner.interrupts
+    }
 }
 
 impl Default for Store {
@@ -1019,14 +996,12 @@ impl fmt::Debug for Store {
 
 impl Drop for StoreInner {
     fn drop(&mut self) {
-        let allocator = self.engine.config().instance_allocator();
+        let allocator = self.engine.allocator();
+        let ondemand = OnDemandInstanceAllocator::new(self.engine.config().mem_creator.clone());
         for instance in self.instances.borrow().iter() {
             unsafe {
-                if instance.use_default_allocator {
-                    self.engine
-                        .config()
-                        .default_instance_allocator
-                        .deallocate(&instance.handle);
+                if instance.ondemand {
+                    ondemand.deallocate(&instance.handle);
                 } else {
                     allocator.deallocate(&instance.handle);
                 }

@@ -1,9 +1,10 @@
 use crate::Config;
+use anyhow::Result;
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_jit::Compiler;
-use wasmtime_runtime::debug_builtins;
+use wasmtime_runtime::{debug_builtins, InstanceAllocator};
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -35,19 +36,23 @@ pub struct Engine {
 struct EngineInner {
     config: Config,
     compiler: Compiler,
+    allocator: Box<dyn InstanceAllocator>,
 }
 
 impl Engine {
     /// Creates a new [`Engine`] with the specified compilation and
     /// configuration settings.
-    pub fn new(config: &Config) -> Engine {
+    pub fn new(config: &Config) -> Result<Engine> {
         debug_builtins::ensure_exported();
-        Engine {
+        config.validate()?;
+        let allocator = config.build_allocator()?;
+        Ok(Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
-                compiler: config.build_compiler(),
+                compiler: config.build_compiler(allocator.as_ref()),
+                allocator,
             }),
-        }
+        })
     }
 
     /// Returns the configuration settings that this engine is using.
@@ -57,6 +62,10 @@ impl Engine {
 
     pub(crate) fn compiler(&self) -> &Compiler {
         &self.inner.compiler
+    }
+
+    pub(crate) fn allocator(&self) -> &dyn InstanceAllocator {
+        self.inner.allocator.as_ref()
     }
 
     #[cfg(feature = "cache")]
@@ -72,7 +81,7 @@ impl Engine {
 
 impl Default for Engine {
     fn default() -> Engine {
-        Engine::new(&Config::default())
+        Engine::new(&Config::default()).unwrap()
     }
 }
 
@@ -100,7 +109,7 @@ mod tests {
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::None)
             .cache_config_load(&config_path)?;
-        let engine = Engine::new(&cfg);
+        let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
@@ -111,7 +120,7 @@ mod tests {
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::Speed)
             .cache_config_load(&config_path)?;
-        let engine = Engine::new(&cfg);
+        let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
@@ -122,7 +131,7 @@ mod tests {
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
             .cache_config_load(&config_path)?;
-        let engine = Engine::new(&cfg);
+        let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
@@ -134,7 +143,7 @@ mod tests {
         if !cfg!(target_arch = "aarch64") {
             let mut cfg = Config::new();
             cfg.debug_info(true).cache_config_load(&config_path)?;
-            let engine = Engine::new(&cfg);
+            let engine = Engine::new(&cfg)?;
             Module::new(&engine, "(module (func))")?;
             assert_eq!(engine.config().cache_config.cache_hits(), 0);
             assert_eq!(engine.config().cache_config.cache_misses(), 1);
