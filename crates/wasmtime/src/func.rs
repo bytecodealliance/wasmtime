@@ -1027,7 +1027,6 @@ impl Func {
     ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
-    ///
     /// | WebAssembly | Rust                |
     /// |-------------|---------------------|
     /// | `i32`       | `i32` or `u32`      |
@@ -1044,6 +1043,11 @@ impl Func {
     /// [`TypedFunc::call`] or [`TypedFunc::call_async`] as necessary to actually invoke
     /// the function. This method does not invoke any WebAssembly code, it
     /// simply performs a typecheck before returning the [`TypedFunc`] value.
+    ///
+    /// This method also has a convenience wrapper as
+    /// [`Instance::get_typed_func`](crate::Instance::get_typed_func) to
+    /// directly get a typed function value from an
+    /// [`Instance`](crate::Instance).
     ///
     /// # Errors
     ///
