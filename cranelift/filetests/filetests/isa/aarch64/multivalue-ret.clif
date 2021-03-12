@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 ;; Test default (non-SpiderMonkey) ABI.
@@ -13,6 +14,5 @@ block1:
 ; nextln:  mov fp, sp
 ; nextln:  movz x0, #1
 ; nextln:  movz x1, #2
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

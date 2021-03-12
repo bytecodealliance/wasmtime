@@ -1,8 +1,6 @@
 //! Unwind information for System V ABI (x86-64).
 
-use crate::isa::unwind::input;
-use crate::isa::unwind::systemv::{RegisterMappingError, UnwindInfo};
-use crate::result::CodegenResult;
+use crate::isa::unwind::systemv::RegisterMappingError;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
 use regalloc::{Reg, RegClass};
 
@@ -82,21 +80,18 @@ pub fn map_reg(reg: Reg) -> Result<Register, RegisterMappingError> {
     }
 }
 
-pub(crate) fn create_unwind_info(
-    unwind: input::UnwindInfo<Reg>,
-) -> CodegenResult<Option<UnwindInfo>> {
-    struct RegisterMapper;
-    impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
-        fn map(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
-            Ok(map_reg(reg)?.0)
-        }
-        fn sp(&self) -> u16 {
-            X86_64::RSP.0
-        }
-    }
-    let map = RegisterMapper;
+pub(crate) struct RegisterMapper;
 
-    Ok(Some(UnwindInfo::build(unwind, &map)?))
+impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
+    fn map(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
+        Ok(map_reg(reg)?.0)
+    }
+    fn sp(&self) -> u16 {
+        X86_64::RSP.0
+    }
+    fn fp(&self) -> u16 {
+        X86_64::RBP.0
+    }
 }
 
 #[cfg(test)]
@@ -136,7 +131,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 13, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6)))] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 17, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6)))] }");
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
@@ -175,7 +170,7 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 22, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6))), (15, RememberState), (17, RestoreState)] }");
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 22, lsda: None, instructions: [(1, CfaOffset(16)), (1, Offset(Register(6), -16)), (4, CfaRegister(Register(6)))] }");
     }
 
     fn create_multi_return_function(call_conv: CallConv) -> Function {

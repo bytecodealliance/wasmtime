@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 set enable_heap_access_spectre_mitigation=true
 target aarch64
 
@@ -24,7 +25,6 @@ block0(v0: i64, v1: i32):
 ; nextln: subs wzr, w1, w2
 ; nextln: movz x1, #0
 ; nextln: csel x0, x1, x0, hi
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 ; check: Block 2:
@@ -49,7 +49,6 @@ block0(v0: i64, v1: i32):
 ; nextln: subs wzr, w1, #65536
 ; nextln: movz x1, #0
 ; nextln: csel x0, x1, x0, hi
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 ; check: Block 2:

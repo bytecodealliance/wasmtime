@@ -21,12 +21,12 @@ pub(crate) fn create_unwind_info(
         }
     };
 
-    Ok(Some(UnwindInfo::build::<RegisterMapper>(unwind)?))
+    Ok(Some(UnwindInfo::build::<RegUnit, RegisterMapper>(unwind)?))
 }
 
 struct RegisterMapper;
 
-impl crate::isa::unwind::winx64::RegisterMapper for RegisterMapper {
+impl crate::isa::unwind::winx64::RegisterMapper<RegUnit> for RegisterMapper {
     fn map(reg: RegUnit) -> crate::isa::unwind::winx64::MappedRegister {
         use crate::isa::unwind::winx64::MappedRegister;
         if GPR.contains(reg) {
@@ -94,11 +94,11 @@ mod tests {
                 frame_register_offset: 0,
                 unwind_codes: vec![
                     UnwindCode::PushRegister {
-                        offset: 2,
+                        instruction_offset: 2,
                         reg: GPR.index_of(RU::rbp.into()) as u8
                     },
                     UnwindCode::StackAlloc {
-                        offset: 9,
+                        instruction_offset: 9,
                         size: 64
                     }
                 ]
@@ -151,11 +151,11 @@ mod tests {
                 frame_register_offset: 0,
                 unwind_codes: vec![
                     UnwindCode::PushRegister {
-                        offset: 2,
+                        instruction_offset: 2,
                         reg: GPR.index_of(RU::rbp.into()) as u8
                     },
                     UnwindCode::StackAlloc {
-                        offset: 27,
+                        instruction_offset: 27,
                         size: 10000
                     }
                 ]
@@ -212,11 +212,11 @@ mod tests {
                 frame_register_offset: 0,
                 unwind_codes: vec![
                     UnwindCode::PushRegister {
-                        offset: 2,
+                        instruction_offset: 2,
                         reg: GPR.index_of(RU::rbp.into()) as u8
                     },
                     UnwindCode::StackAlloc {
-                        offset: 27,
+                        instruction_offset: 27,
                         size: 1000000
                     }
                 ]

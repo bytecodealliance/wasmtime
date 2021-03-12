@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %uaddsat64(i64, i64) -> i64 {
@@ -13,7 +14,6 @@ block0(v0: i64, v1: i64):
 ; nextln: fmov d1, x1
 ; nextln: uqadd d0, d0, d1
 ; nextln: mov x0, v0.d[0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -31,6 +31,5 @@ block0(v0: i8, v1: i8):
 ; nextln: fmov d1, x1
 ; nextln: uqadd d0, d0, d1
 ; nextln: mov x0, v0.d[0]
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %f(f64) -> f64 {
@@ -76,24 +77,22 @@ block0(v0: f64):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: sub sp, sp, #128
-; nextln: str q8, [sp]
-; nextln: str q9, [sp, #16]
-; nextln: str q10, [sp, #32]
-; nextln: str q11, [sp, #48]
-; nextln: str q12, [sp, #64]
-; nextln: str q13, [sp, #80]
-; nextln: str q14, [sp, #96]
-; nextln: str q15, [sp, #112]
+; nextln: str q8, [sp, #-16]!
+; nextln: str q9, [sp, #-16]!
+; nextln: str q10, [sp, #-16]!
+; nextln: str q11, [sp, #-16]!
+; nextln: str q12, [sp, #-16]!
+; nextln: str q13, [sp, #-16]!
+; nextln: str q14, [sp, #-16]!
+; nextln: str q15, [sp, #-16]!
 
-; check: ldr q8, [sp]
-; nextln: ldr q9, [sp, #16]
-; nextln: ldr q10, [sp, #32]
-; nextln: ldr q11, [sp, #48]
-; nextln: ldr q12, [sp, #64]
-; nextln: ldr q13, [sp, #80]
-; nextln: ldr q14, [sp, #96]
-; nextln: ldr q15, [sp, #112]
-; nextln: mov sp, fp
+; check: ldr q15, [sp], #16
+; nextln: ldr q14, [sp], #16
+; nextln: ldr q13, [sp], #16
+; nextln: ldr q12, [sp], #16
+; nextln: ldr q11, [sp], #16
+; nextln: ldr q10, [sp], #16
+; nextln: ldr q9, [sp], #16
+; nextln: ldr q8, [sp], #16
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

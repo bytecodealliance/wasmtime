@@ -1,5 +1,6 @@
 test compile
 set enable_llvm_abi_extensions=true
+set unwind_info=true
 target x86_64
 feature "experimental_x64"
 
@@ -9,7 +10,9 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; check:   pushq   %rbp
+; nextln:  unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln:  movq    %rsp, %rbp
+; nextln:  unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; nextln:  movq    %rcx, %rax
 ; nextln:  movq    %rbp, %rsp
 ; nextln:  popq    %rbp
@@ -21,7 +24,9 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; check:   pushq   %rbp
+; nextln:  unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln:  movq    %rsp, %rbp
+; nextln:  unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; nextln:  movq    %rdx, %rax
 ; nextln:  movq    %rbp, %rsp
 ; nextln:  popq    %rbp
@@ -33,7 +38,9 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; check:   pushq   %rbp
+; nextln:  unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln:  movq    %rsp, %rbp
+; nextln:  unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; nextln:  movq    %r8, %rax
 ; nextln:  movq    %rbp, %rsp
 ; nextln:  popq    %rbp
@@ -45,7 +52,9 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; check:   pushq   %rbp
+; nextln:  unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln:  movq    %rsp, %rbp
+; nextln:  unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; nextln:  movq    %r9, %rax
 ; nextln:  movq    %rbp, %rsp
 ; nextln:  popq    %rbp
@@ -57,7 +66,9 @@ block0(v0: i64, v1: i64, v2: f64, v3: i64):
 }
 
 ; check:   pushq   %rbp
+; nextln:  unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln:  movq    %rsp, %rbp
+; nextln:  unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; nextln:  movaps  %xmm2, %xmm0
 ; nextln:  movq    %rbp, %rsp
 ; nextln:  popq    %rbp
@@ -69,7 +80,9 @@ block0(v0: i64, v1: i64, v2: f64, v3: i64):
 }
 
 ; check:   pushq   %rbp
+; nextln:  unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln:  movq    %rsp, %rbp
+; nextln:  unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; nextln:  movq    %r9, %rax
 ; nextln:  movq    %rbp, %rsp
 ; nextln:  popq    %rbp
@@ -91,10 +104,12 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
 ;; TODO(#2704): fix regalloc's register priority ordering!
 
 ; check:  pushq   %rbp
+; nextln: unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln: movq    %rsp, %rbp
+; nextln: unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
 ; nextln: subq    $$16, %rsp
 ; nextln: movq    %rsi, 0(%rsp)
-; nextln: virtual_sp_offset_adjust 16
+; nextln: unwind SaveReg { clobber_offset: 0, reg: r16J }
 ; nextln: movq    48(%rbp), %rsi
 ; nextln: movq    56(%rbp), %rsi
 ; nextln: movq    %rsi, %rax
@@ -114,11 +129,14 @@ block0(v0: i128, v1: i64, v2: i128, v3: i128):
 ;; stack slot.
 
 ; check:  pushq   %rbp
+; nextln: unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln: movq    %rsp, %rbp
+; nextln: unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
 ; nextln: subq    $$16, %rsp
 ; nextln: movq    %rsi, 0(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 0, reg: r16J }
 ; nextln: movq    %rdi, 8(%rsp)
-; nextln: virtual_sp_offset_adjust 16
+; nextln: unwind SaveReg { clobber_offset: 8, reg: r17J }
 ; nextln: movq    48(%rbp), %rsi
 ; nextln: movq    56(%rbp), %rsi
 ; nextln: movq    64(%rbp), %rdi
@@ -142,10 +160,12 @@ block0(v0: i64):
 }
 
 ; check:  pushq   %rbp
+; nextln: unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln: movq    %rsp, %rbp
+; nextln: unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 16 }
 ; nextln: subq    $$16, %rsp
 ; nextln: movq    %rsi, 0(%rsp)
-; nextln: virtual_sp_offset_adjust 16
+; nextln: unwind SaveReg { clobber_offset: 0, reg: r16J }
 ; nextln: movq    %rcx, %rsi
 ; nextln: cvtsi2sd %rsi, %xmm3
 ; nextln: subq    $$48, %rsp
@@ -216,19 +236,30 @@ block0(v0: i64):
 }
 
 ; check:  pushq   %rbp
+; nextln: unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln: movq    %rsp, %rbp
+; nextln: unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 160 }
 ; nextln: subq    $$208, %rsp
-; nextln: movdqu  %xmm6, 0(%rsp)
-; nextln: movdqu  %xmm7, 16(%rsp)
-; nextln: movdqu  %xmm8, 32(%rsp)
-; nextln: movdqu  %xmm9, 48(%rsp)
-; nextln: movdqu  %xmm10, 64(%rsp)
-; nextln: movdqu  %xmm11, 80(%rsp)
-; nextln: movdqu  %xmm12, 96(%rsp)
-; nextln: movdqu  %xmm13, 112(%rsp)
-; nextln: movdqu  %xmm14, 128(%rsp)
-; nextln: movdqu  %xmm15, 144(%rsp)
-; nextln: virtual_sp_offset_adjust 160
+; nextln: movdqu  %xmm6, 48(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 0, reg: r6V }
+; nextln: movdqu  %xmm7, 64(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 16, reg: r7V }
+; nextln: movdqu  %xmm8, 80(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 32, reg: r8V }
+; nextln: movdqu  %xmm9, 96(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 48, reg: r9V }
+; nextln: movdqu  %xmm10, 112(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 64, reg: r10V }
+; nextln: movdqu  %xmm11, 128(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 80, reg: r11V }
+; nextln: movdqu  %xmm12, 144(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 96, reg: r12V }
+; nextln: movdqu  %xmm13, 160(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 112, reg: r13V }
+; nextln: movdqu  %xmm14, 176(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 128, reg: r14V }
+; nextln: movdqu  %xmm15, 192(%rsp)
+; nextln: unwind SaveReg { clobber_offset: 144, reg: r15V }
 ; nextln: movsd   0(%rcx), %xmm0
 ; nextln: movsd   %xmm0, rsp(16 + virtual offset)
 ; nextln: movsd   8(%rcx), %xmm1
@@ -282,17 +313,17 @@ block0(v0: i64):
 ; nextln: addsd   %xmm8, %xmm2
 ; nextln: addsd   %xmm3, %xmm2
 ; nextln: movaps  %xmm2, %xmm0
-; nextln: movdqu  0(%rsp), %xmm6
-; nextln: movdqu  16(%rsp), %xmm7
-; nextln: movdqu  32(%rsp), %xmm8
-; nextln: movdqu  48(%rsp), %xmm9
-; nextln: movdqu  64(%rsp), %xmm10
-; nextln: movdqu  80(%rsp), %xmm11
-; nextln: movdqu  96(%rsp), %xmm12
-; nextln: movdqu  112(%rsp), %xmm13
-; nextln: movdqu  128(%rsp), %xmm14
-; nextln: movdqu  144(%rsp), %xmm15
-; nextln: addq    $$160, %rsp
+; nextln: movdqu  48(%rsp), %xmm6
+; nextln: movdqu  64(%rsp), %xmm7
+; nextln: movdqu  80(%rsp), %xmm8
+; nextln: movdqu  96(%rsp), %xmm9
+; nextln: movdqu  112(%rsp), %xmm10
+; nextln: movdqu  128(%rsp), %xmm11
+; nextln: movdqu  144(%rsp), %xmm12
+; nextln: movdqu  160(%rsp), %xmm13
+; nextln: movdqu  176(%rsp), %xmm14
+; nextln: movdqu  192(%rsp), %xmm15
+; nextln: addq    $$208, %rsp
 ; nextln: movq    %rbp, %rsp
 ; nextln: popq    %rbp
 ; nextln: ret

@@ -2,6 +2,7 @@
 
 use crate::binemit::{CodeOffset, StackMap};
 use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
+use crate::isa::unwind::UnwindInst;
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
@@ -488,6 +489,10 @@ pub enum Inst {
 
     /// A definition of a value label.
     ValueLabelMarker { reg: Reg, label: ValueLabel },
+
+    /// An unwind pseudoinstruction describing the state of the
+    /// machine at this program point.
+    Unwind { inst: UnwindInst },
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -548,7 +553,8 @@ impl Inst {
             | Inst::XmmUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
-            | Inst::ValueLabelMarker { .. } => None,
+            | Inst::ValueLabelMarker { .. }
+            | Inst::Unwind { .. } => None,
 
             Inst::UnaryRmR { op, .. } => op.available_from(),
 
@@ -1787,6 +1793,10 @@ impl PrettyPrint for Inst {
             Inst::ValueLabelMarker { label, reg } => {
                 format!("value_label {:?}, {}", label, reg.show_rru(mb_rru))
             }
+
+            Inst::Unwind { inst } => {
+                format!("unwind {:?}", inst)
+            }
         }
     }
 }
@@ -2065,6 +2075,8 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         Inst::ValueLabelMarker { reg, .. } => {
             collector.add_use(*reg);
         }
+
+        Inst::Unwind { .. } => {}
     }
 }
 
@@ -2459,7 +2471,8 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         | Inst::AtomicRmwSeq { .. }
         | Inst::ElfTlsGetAddr { .. }
         | Inst::MachOTlsGetAddr { .. }
-        | Inst::Fence { .. } => {
+        | Inst::Fence { .. }
+        | Inst::Unwind { .. } => {
             // Instruction doesn't explicitly mention any regs, so it can't have any virtual
             // regs that we'd need to remap.  Hence no action required.
         }
@@ -2776,7 +2789,6 @@ impl MachInstEmitInfo for EmitInfo {
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
-    type UnwindInfo = unwind::X64UnwindInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, info: &Self::Info, state: &mut Self::State) {
         emit::emit(self, sink, info, state);

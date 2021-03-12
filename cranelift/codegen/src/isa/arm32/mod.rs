@@ -75,7 +75,6 @@ impl MachBackend for Arm32Backend {
             buffer,
             frame_size,
             disasm,
-            unwind_info: None,
             value_labels_ranges: Default::default(),
             stackslot_offsets,
         })

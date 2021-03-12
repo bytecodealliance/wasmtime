@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 set enable_probestack=false
 target aarch64
 
@@ -14,7 +15,6 @@ block0(v0: i64):
 ; nextln:  mov fp, sp
 ; nextln:  ldr x1, 8 ; b 12 ; data
 ; nextln:  blr x1
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -31,8 +31,7 @@ block0(v0: i32):
 ; check:  mov w0, w0
 ; nextln:  ldr x1, 8 ; b 12 ; data
 ; nextln:  blr x1
-; check:  mov sp, fp
-; nextln:  ldp fp, lr, [sp], #16
+; check:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
 function %f3(i32) -> i32 uext baldrdash_system_v {
@@ -55,8 +54,7 @@ block0(v0: i32):
 ; check:  sxtw x0, w0
 ; nextln:  ldr x1, 8 ; b 12 ; data
 ; nextln:  blr x1
-; check:  mov sp, fp
-; nextln:  ldp fp, lr, [sp], #16
+; check:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
 function %f5(i32) -> i32 sext baldrdash_system_v {
@@ -93,7 +91,6 @@ block0(v0: i8):
 ; nextln:  blr x8
 ; nextln:  add sp, sp, #16
 ; nextln:  virtual_sp_offset_adjust -16
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -116,7 +113,6 @@ block0(v0: i8):
 ; nextln:  movz x6, #42
 ; nextln:  movz x7, #42
 ; nextln:  sturb w9, [x8]
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -161,7 +157,7 @@ block0:
 ; nextln:  ldr d0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov sp, fp
+; nextln:  add sp, sp, #32
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -204,7 +200,7 @@ block0:
 ; nextln:  ldr q0, [sp, #32]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov sp, fp
+; nextln:  add sp, sp, #48
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -251,6 +247,6 @@ block0:
 ; nextln:  ldr q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  mov sp, fp
+; nextln:  add sp, sp, #32
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %f0(r64) -> r64 {
@@ -8,7 +9,6 @@ block0(v0: r64):
 
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -22,7 +22,6 @@ block0(v0: r64):
 ; nextln: mov fp, sp
 ; nextln: subs xzr, x0, #0
 ; nextln: cset x0, eq
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -36,7 +35,6 @@ block0(v0: r64):
 ; nextln: mov fp, sp
 ; nextln: adds xzr, x0, #1
 ; nextln: cset x0, eq
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -49,7 +47,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #0
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -77,21 +74,20 @@ block3(v7: r64, v8: r64):
 ; check: Block 0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: sub sp, sp, #48
-; nextln: stp x19, x20, [sp]
-; nextln: virtual_sp_offset_adjust 16
+; nextln: stp x19, x20, [sp, #-16]!
+; nextln: sub sp, sp, #32
 ; nextln: mov x19, x0
 ; nextln: mov x20, x1
 ; nextln: mov x0, x19
 ; nextln: ldr x1, 8 ; b 12 ; data
-; nextln: stur x0, [sp, #24]
-; nextln: stur x19, [sp, #32]
-; nextln: stur x20, [sp, #40]
+; nextln: stur x0, [sp, #8]
+; nextln: stur x19, [sp, #16]
+; nextln: stur x20, [sp, #24]
 ; nextln: (safepoint: slots [S0, S1, S2]
 ; nextln: blr x1
-; nextln: ldur x19, [sp, #32]
-; nextln: ldur x20, [sp, #40]
-; nextln: add x1, sp, #16
+; nextln: ldur x19, [sp, #16]
+; nextln: ldur x20, [sp, #24]
+; nextln: mov x1, sp
 ; nextln: str x19, [x1]
 ; nextln: and w0, w0, #1
 ; nextln: cbz x0, label1 ; b label3
@@ -107,11 +103,11 @@ block3(v7: r64, v8: r64):
 ; nextln: mov x19, x20
 ; nextln: b label5
 ; check: Block 5:
-; check: add x1, sp, #16
+; check: mov x1, sp
 ; nextln: ldr x1, [x1]
 ; nextln: mov x2, x1
 ; nextln: mov x1, x19
-; nextln: ldp x19, x20, [sp]
-; nextln: mov sp, fp
+; nextln: add sp, sp, #32
+; nextln: ldp x19, x20, [sp], #16
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

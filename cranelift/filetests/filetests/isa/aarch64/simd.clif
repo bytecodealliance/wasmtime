@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %f1() -> i64x2 {
@@ -13,7 +14,6 @@ block0:
 ; nextln:  movz x0, #1
 ; nextln:  movk x0, #1, LSL #48
 ; nextln:  dup v0.2d, x0
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -29,7 +29,6 @@ block0:
 ; nextln:  mov fp, sp
 ; nextln:  movz x0, #42679
 ; nextln:  dup v0.8h, w0
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -44,7 +43,6 @@ block0:
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  movi v0.16b, #255
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -58,7 +56,6 @@ block0(v0: i32, v1: i8x16, v2: i8x16):
 ; nextln:  mov fp, sp
 ; nextln:  subs wzr, w0, wzr
 ; nextln:  vcsel v0.16b, v0.16b, v1.16b, ne (if-then-else diamond)
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -72,7 +69,6 @@ block0(v0: i64):
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  ld1r { v0.16b }, [x0]
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -89,7 +85,6 @@ block0(v0: i64, v1: i64):
 ; nextln:  mov fp, sp
 ; nextln:  ld1r { v0.16b }, [x0]
 ; nextln:  ld1r { v1.16b }, [x1]
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -107,7 +102,6 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldrb w0, [x0]
 ; nextln:  ld1r { v0.16b }, [x1]
 ; nextln:  dup v1.16b, w0
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -124,7 +118,6 @@ block0(v0: i64, v1: i64):
 ; nextln:  ldrb w0, [x0]
 ; nextln:  dup v0.16b, w0
 ; nextln:  dup v1.16b, w0
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -139,7 +132,6 @@ block0:
 ; nextln:  mov fp, sp
 ; nextln:  movi v0.2d, #18374687579166474495
 ; nextln:  fmov d0, d0
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -153,7 +145,6 @@ block0:
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  mvni v0.4s, #15, MSL #16
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -167,6 +158,5 @@ block0:
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
 ; nextln:  fmov v0.4s, #1.3125
-; nextln:  mov sp, fp
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret

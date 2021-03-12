@@ -1,4 +1,5 @@
 test compile
+set unwind_info=false
 target aarch64
 
 function %f() -> b8 {
@@ -10,7 +11,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #255
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -23,7 +23,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #0
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -36,7 +35,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #0
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -49,7 +47,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #65535
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -62,7 +59,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #65535, LSL #16
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -75,7 +71,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #65535, LSL #32
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -88,7 +83,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movz x0, #65535, LSL #48
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -101,7 +95,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn x0, #0
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -114,7 +107,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn x0, #65535
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -127,7 +119,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn x0, #65535, LSL #16
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -140,7 +131,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn x0, #65535, LSL #32
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -153,7 +143,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn x0, #65535, LSL #48
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -169,7 +158,6 @@ block0:
 ; nextln: movk x0, #4626, LSL #16
 ; nextln: movk x0, #61603, LSL #32
 ; nextln: movk x0, #62283, LSL #48
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -183,7 +171,6 @@ block0:
 ; nextln: mov fp, sp
 ; nextln: movz x0, #7924, LSL #16
 ; nextln: movk x0, #4841, LSL #48
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -197,7 +184,6 @@ block0:
 ; nextln: mov fp, sp
 ; nextln: movn x0, #57611, LSL #16
 ; nextln: movk x0, #4841, LSL #48
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -210,7 +196,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: orr x0, xzr, #4294967295
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -223,7 +208,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn w0, #8
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -236,7 +220,6 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn w0, #8
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -249,6 +232,5 @@ block0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: movn x0, #8
-; nextln: mov sp, fp
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

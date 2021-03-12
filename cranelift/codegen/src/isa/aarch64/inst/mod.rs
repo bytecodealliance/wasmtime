@@ -8,6 +8,7 @@ use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
 };
 use crate::ir::{ExternalName, MemFlags, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
+use crate::isa::unwind::UnwindInst;
 use crate::isa::CallConv;
 use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
@@ -1216,6 +1217,11 @@ pub enum Inst {
         reg: Reg,
         label: ValueLabel,
     },
+
+    /// An unwind pseudo-instruction.
+    Unwind {
+        inst: UnwindInst,
+    },
 }
 
 fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
@@ -2026,6 +2032,7 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::ValueLabelMarker { reg, .. } => {
             collector.add_use(reg);
         }
+        &Inst::Unwind { .. } => {}
         &Inst::EmitIsland { .. } => {}
     }
 }
@@ -2779,6 +2786,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         &mut Inst::ValueLabelMarker { ref mut reg, .. } => {
             map_use(mapper, reg);
         }
+        &mut Inst::Unwind { .. } => {}
     }
 }
 
@@ -4096,6 +4104,10 @@ impl Inst {
 
             &Inst::ValueLabelMarker { label, reg } => {
                 format!("value_label {:?}, {}", label, reg.show_rru(mb_rru))
+            }
+
+            &Inst::Unwind { ref inst } => {
+                format!("unwind {:?}", inst)
             }
         }
     }
