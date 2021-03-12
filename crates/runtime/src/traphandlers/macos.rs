@@ -13,6 +13,8 @@
 //! here may not be super well documented. This file is 100% lifted from
 //! SpiderMonkey and then adapted for Wasmtime's purposes. Credit for almost
 //! all of this file goes to SpiderMonkey for figuring out all the fiddly bits.
+//! See also https://searchfox.org/mozilla-central/source/js/src/wasm/WasmSignalHandlers.cpp for
+//! the original code.
 //!
 //! The high-level overview is that when using mach ports a thread is blocked
 //! when it generates an exception and then a message can be read from the
@@ -36,11 +38,9 @@ use mach::exception_types::*;
 use mach::kern_return::*;
 use mach::mach_init::*;
 use mach::mach_port::*;
-use mach::mach_types::*;
 use mach::message::*;
 use mach::port::*;
 use mach::thread_act::*;
-use mach::thread_status::*;
 use mach::traps::*;
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -48,6 +48,105 @@ use std::mem;
 use std::ptr;
 use std::sync::Mutex;
 use std::thread;
+
+/// Other `mach` declarations awaiting https://github.com/fitzgen/mach/pull/64 to be merged.
+mod mach_addons {
+    #![allow(non_camel_case_types)]
+    #![allow(non_upper_case_globals)]
+    #![allow(dead_code)]
+
+    use mach::{
+        exception_types::*, kern_return::*, mach_types::*, message::*, port::*, thread_status::*,
+    };
+    use std::mem;
+
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug)]
+    #[allow(dead_code)]
+    pub struct NDR_record_t {
+        mig_vers: libc::c_uchar,
+        if_vers: libc::c_uchar,
+        reserved1: libc::c_uchar,
+        mig_encoding: libc::c_uchar,
+        int_rep: libc::c_uchar,
+        char_rep: libc::c_uchar,
+        float_rep: libc::c_uchar,
+        reserved32: libc::c_uchar,
+    }
+
+    extern "C" {
+        pub static NDR_record: NDR_record_t;
+    }
+
+    #[repr(C)]
+    #[allow(dead_code)]
+    #[derive(Copy, Clone, Debug)]
+    pub struct __Request__exception_raise_t {
+        pub Head: mach_msg_header_t,
+        /* start of the kernel processed data */
+        pub msgh_body: mach_msg_body_t,
+        pub thread: mach_msg_port_descriptor_t,
+        pub task: mach_msg_port_descriptor_t,
+        /* end of the kernel processed data */
+        pub NDR: NDR_record_t,
+        pub exception: exception_type_t,
+        pub codeCnt: mach_msg_type_number_t,
+        pub code: [i64; 2],
+    }
+
+    #[repr(C)]
+    #[allow(dead_code)]
+    #[derive(Copy, Clone, Debug)]
+    pub struct __Reply__exception_raise_t {
+        pub Head: mach_msg_header_t,
+        pub NDR: NDR_record_t,
+        pub RetCode: kern_return_t,
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, Default, Hash, PartialOrd, PartialEq, Eq, Ord)]
+    pub struct arm_thread_state64_t {
+        pub __x: [u64; 29],
+        pub __fp: u64, // frame pointer x29
+        pub __lr: u64, // link register x30
+        pub __sp: u64, // stack pointer x31
+        pub __pc: u64,
+        pub __cpsr: u32,
+        pub __pad: u32,
+    }
+
+    impl arm_thread_state64_t {
+        pub fn count() -> mach_msg_type_number_t {
+            (mem::size_of::<Self>() / mem::size_of::<u32>()) as mach_msg_type_number_t
+        }
+    }
+
+    pub static ARM_THREAD_STATE64: thread_state_flavor_t = 6;
+
+    #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+    pub static THREAD_STATE_NONE: thread_state_flavor_t = 13;
+    #[cfg(target_arch = "aarch64")]
+    pub static THREAD_STATE_NONE: thread_state_flavor_t = 5;
+
+    extern "C" {
+        pub fn thread_set_state(
+            target_act: thread_port_t,
+            flavor: thread_state_flavor_t,
+            new_state: thread_state_t,
+            new_stateCnt: mach_msg_type_number_t,
+        ) -> kern_return_t;
+
+        pub fn thread_set_exception_ports(
+            thread: thread_port_t,
+            exception_mask: exception_mask_t,
+            new_port: mach_port_t,
+            behavior: libc::c_uint,
+            new_flavor: thread_state_flavor_t,
+        ) -> kern_return_t;
+    }
+}
+
+use mach_addons::*;
 
 /// Just used below
 pub enum Void {}
@@ -64,27 +163,6 @@ static mut MAP: *mut Mutex<HashMap<mach_port_name_t, *const CallThreadState<'sta
 
 /// Process-global port that we use to route thread-level exceptions to.
 static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;
-
-// TODO: these should presumably get upstreamed to the `mach` crate at some
-// point?
-extern "C" {
-    static NDR_record: NDR_record_t;
-
-    fn thread_set_exception_ports(
-        thread: thread_port_t,
-        exception_mask: exception_mask_t,
-        new_port: mach_port_t,
-        behavior: libc::c_uint,
-        new_flavor: thread_state_flavor_t,
-    ) -> kern_return_t;
-
-    fn thread_set_state(
-        target_act: thread_port_t,
-        flavor: thread_state_flavor_t,
-        new_state: thread_state_t,
-        new_stateCnt: mach_msg_type_number_t,
-    ) -> kern_return_t;
-}
 
 pub unsafe fn platform_init() {
     // Initialize the process global map
@@ -104,62 +182,12 @@ pub unsafe fn platform_init() {
     thread::spawn(|| handler_thread());
 }
 
-// This is largely just copied from SpiderMonkey
+// This is largely just copied from SpiderMonkey.
 #[repr(C)]
 #[allow(dead_code)]
 struct ExceptionRequest {
     body: __Request__exception_raise_t,
     trailer: mach_msg_trailer_t,
-}
-
-// generated by `mig -v mach/exc.defs`
-//
-// Note that the raw definition has a pack pragma, but that doesn't have a
-// direct correlation in Rust (or not yet at least). It was verified on x86_64,
-// however, that all the fields are all in the same place as they are in C so
-// the pragma is ignored for this definition.
-#[repr(C)]
-#[allow(dead_code)]
-struct __Request__exception_raise_t {
-    Head: mach_msg_header_t,
-    /* start of the kernel processed data */
-    msgh_body: mach_msg_body_t,
-    thread: mach_msg_port_descriptor_t,
-    task: mach_msg_port_descriptor_t,
-    /* end of the kernel processed data */
-    NDR: NDR_record_t,
-    exception: exception_type_t,
-    codeCnt: mach_msg_type_number_t,
-    code: [i64; 2], // mig generates this as integer_t, but it's wrong?
-}
-
-// generated by `mig -v mach/exc.defs`
-//
-// Note that this generated structure has a pack pragma like the request above,
-// but it's also ignored for the same reason as above.
-#[repr(C)]
-#[allow(dead_code)]
-struct __Reply__exception_raise_t {
-    Head: mach_msg_header_t,
-    NDR: NDR_record_t,
-    RetCode: kern_return_t,
-}
-
-// Copied from `mach/ndr.h`
-//
-// TODO: maybe upstream this to the `mach` crate?
-#[repr(C)]
-#[derive(Copy, Clone)]
-#[allow(dead_code)]
-struct NDR_record_t {
-    mig_vers: libc::c_uchar,
-    if_vers: libc::c_uchar,
-    reserved1: libc::c_uchar,
-    mig_encoding: libc::c_uchar,
-    int_rep: libc::c_uchar,
-    char_rep: libc::c_uchar,
-    float_rep: libc::c_uchar,
-    reserved32: libc::c_uchar,
 }
 
 unsafe fn handler_thread() {
@@ -252,7 +280,8 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // * `thread_state_count` - the size to pass to `mach_msg`.
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "x86_64")] {
-            use mach::structs::*;
+            use mach::structs::x86_thread_state64_t;
+            use mach::thread_status::x86_THREAD_STATE64;
 
             type ThreadState = x86_thread_state64_t;
 
@@ -260,7 +289,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 
             let get_pc = |state: &ThreadState| state.__rip as *const u8;
 
-            let resume = |state: &mut ThreadState, arg0: usize, arg1: usize| {
+            let resume = |state: &mut ThreadState, pc: usize, jmp_buf: usize| {
                 // The x86_64 ABI requires a 16-byte stack alignment for
                 // functions, so typically we'll be 16-byte aligned. In this
                 // case we simulate a `call` instruction by decrementing the
@@ -285,41 +314,29 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                     *(state.__rsp as *mut u64) = state.__rip;
                 }
                 state.__rip = unwind as u64;
-                state.__rdi = arg0 as u64;
-                state.__rsi = arg1 as u64;
+                state.__rdi = pc as u64;
+                state.__rsi = jmp_buf as u64;
             };
             let mut thread_state = ThreadState::new();
         } else if #[cfg(target_arch = "aarch64")] {
-            // TODO: upstream this to the `mach` crate?
-            #[repr(C)]
-            struct arm_thread_state64_t {
-                __x: [u64; 29],
-                __fp: u64,
-                __lr: u64,
-                __sp: u64,
-                __pc: u64,
-                __cpsr: u64,
-                __pad: u64,
-            }
-
-            // TODO: upstream this to the `mach` crate?
-            const ARM_THREAD_STATE64: i32 = 6;
-
             type ThreadState = arm_thread_state64_t;
 
             let thread_state_flavor = ARM_THREAD_STATE64;
 
             let get_pc = |state: &ThreadState| state.__pc as *const u8;
 
-            let resume = |state: &mut ThreadState, arg0: usize, arg1: usize| {
-                // TODO: what to do with the previous `__pc`? We could put that
-                // into `__lr` but then we'd clobber `__lr` and would need to
-                // figure out what to do with that. This is likely only needed
-                // for the native unwinder, and probably needs testing one way
-                // or another.
+            let resume = |state: &mut ThreadState, pc: usize, jmp_buf: usize| {
+                // Clobber LR with the faulting PC, so unwinding resumes at the
+                // faulting instruction. The previous value of LR has been saved
+                // by the callee (in Cranelift generated code), so no need to
+                // stash it.
+                state.__lr = pc as u64;
+
+                // Fill in the 2 arguments to unwind here, and set PC to it, so
+                // it looks like a call to unwind.
                 state.__pc = unwind as u64;
-                state.__x[0] = arg0 as u64;
-                state.__x[1] = arg1 as u64;
+                state.__x[0] = pc as u64;
+                state.__x[1] = jmp_buf as u64;
             };
             let mut thread_state = mem::zeroed::<ThreadState>();
         } else {
@@ -329,8 +346,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 
     // First up read our origin thread's state into the area defined above.
     let origin_thread = request.body.thread.name;
-    let mut thread_state_count =
-        (mem::size_of_val(&thread_state) / mem::size_of::<libc::c_int>()) as u32;
+    let mut thread_state_count = ThreadState::count();
     let kret = thread_get_state(
         origin_thread,
         thread_state_flavor,
@@ -451,7 +467,7 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
                 EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
                 WASMTIME_PORT,
                 EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
-                THREAD_STATE_NONE,
+                mach_addons::THREAD_STATE_NONE,
             );
             assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
         }
