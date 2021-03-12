@@ -107,9 +107,9 @@ FUNCTION(wasmtime_fiber_start):
     // ... and then we call the function! Note that this is a function call so
     // our frame stays on the stack to backtrace through.
     blr x20
-    // .. technically we shouldn't get here, and I would like to write in an
-    // instruction which just aborts, but I don't know such an instruction in
-    // aarch64 land.
+    // Unreachable, here for safety. This should help catch unexpected behaviors.
+    // Use a noticeable payload so one can grep for it in the codebase.
+    brk 0xf1b3
     .cfi_endproc
 SIZE(wasmtime_fiber_start)
 
