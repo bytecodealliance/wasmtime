@@ -481,6 +481,10 @@ mod tls {
 
         #[inline(never)] // see module docs for why this is here
         pub fn replace(val: Ptr) -> Ptr {
+            // Mark the current thread as handling interrupts for this specific
+            // CallThreadState: may clobber the previous entry.
+            super::super::sys::register_tls(val);
+
             PTR.with(|p| p.replace(val))
         }
 
@@ -517,13 +521,19 @@ mod tls {
         ///
         /// This is unsafe because it's intended to only be used within the
         /// context of stack switching within wasmtime.
-        pub unsafe fn replace(self) {
+        pub unsafe fn replace(self) -> Result<(), super::Trap> {
+            // When replacing to the previous value of TLS, we might have
+            // crossed a thread: make sure the trap-handling lazy initializer
+            // runs.
+            super::sys::lazy_per_thread_init()?;
+
             // We need to configure our previous TLS pointer to whatever is in
             // TLS at this time, and then we set the current state to ourselves.
             let prev = raw::get();
             assert!((*self.0).prev.get().is_null());
             (*self.0).prev.set(prev);
             raw::replace(self.0);
+            Ok(())
         }
     }
 
