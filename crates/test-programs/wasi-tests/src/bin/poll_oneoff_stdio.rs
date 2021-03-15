@@ -46,22 +46,23 @@ unsafe fn test_stdin_read() {
     let out = poll_oneoff_impl(&r#in).unwrap();
     // The result should be either a timeout, or that stdin is ready for reading.
     // Both are valid behaviors that depend on the test environment.
-    assert_eq!(out.len(), 1, "should return 1 event");
-    let event = &out[0];
-    if event.r#type == wasi::EVENTTYPE_CLOCK {
-        assert_errno!(event.error, wasi::ERRNO_SUCCESS);
-        assert_eq!(
-            event.userdata, CLOCK_ID,
-            "the event.userdata should contain CLOCK_ID",
-        );
-    } else if event.r#type == wasi::EVENTTYPE_FD_READ {
-        assert_errno!(event.error, wasi::ERRNO_SUCCESS);
-        assert_eq!(
-            event.userdata, STDIN_ID,
-            "the event.userdata should contain STDIN_ID",
-        );
-    } else {
-        panic!("unexpected event type {}", event.r#type);
+    assert!(out.len() >= 1, "should return at least 1 event");
+    for event in out {
+        if event.r#type == wasi::EVENTTYPE_CLOCK {
+            assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+            assert_eq!(
+                event.userdata, CLOCK_ID,
+                "the event.userdata should contain CLOCK_ID",
+            );
+        } else if event.r#type == wasi::EVENTTYPE_FD_READ {
+            assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+            assert_eq!(
+                event.userdata, STDIN_ID,
+                "the event.userdata should contain STDIN_ID",
+            );
+        } else {
+            panic!("unexpected event type {}", event.r#type);
+        }
     }
 }
 
