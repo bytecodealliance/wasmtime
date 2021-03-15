@@ -5235,9 +5235,48 @@ fn test_aarch64_binemit() {
         "BF3B03D53B7F5F88FC031AAA3C7F1888B8FFFFB5BF3B03D5",
         "atomically { 32_bits_at_[x25]) Xchg= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }",
     ));
-
     insns.push((
         Inst::AtomicCAS {
+            rs: writable_xreg(28),
+            rt: xreg(20),
+            rn: xreg(10),
+            ty: I8,
+        },
+        "54FDFC08",
+        "casalb w28, w20, [x10]",
+    ));
+    insns.push((
+        Inst::AtomicCAS {
+            rs: writable_xreg(2),
+            rt: xreg(19),
+            rn: xreg(23),
+            ty: I16,
+        },
+        "F3FEE248",
+        "casalh w2, w19, [x23]",
+    ));
+    insns.push((
+        Inst::AtomicCAS {
+            rs: writable_xreg(0),
+            rt: zero_reg(),
+            rn: stack_reg(),
+            ty: I32,
+        },
+        "FFFFE088",
+        "casal w0, wzr, [sp]",
+    ));
+    insns.push((
+        Inst::AtomicCAS {
+            rs: writable_xreg(7),
+            rt: xreg(15),
+            rn: xreg(27),
+            ty: I64,
+        },
+        "6FFFE7C8",
+        "casal x7, x15, [x27]",
+    ));
+    insns.push((
+        Inst::AtomicCASLoop {
             ty: I8,
         },
         "BF3B03D53B7F5F08581F40927F0318EB610000543C7F180878FFFFB5BF3B03D5",
@@ -5245,7 +5284,7 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::AtomicCAS {
+        Inst::AtomicCASLoop {
             ty: I64,
         },
         "BF3B03D53B7F5FC8F8031AAA7F0318EB610000543C7F18C878FFFFB5BF3B03D5",
