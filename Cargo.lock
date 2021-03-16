@@ -635,7 +635,6 @@ dependencies = [
  "cranelift-entity",
  "hashbrown",
  "log",
- "thiserror",
 ]
 
 [[package]]

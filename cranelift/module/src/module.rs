@@ -12,7 +12,6 @@ use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
 use std::borrow::ToOwned;
 use std::string::String;
-use thiserror::Error;
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -168,30 +167,83 @@ impl FunctionDeclaration {
 }
 
 /// Error messages for all `Module` methods
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
-    #[error("Undeclared identifier: {0}")]
     Undeclared(String),
+
     /// Indicates an identifier was used as data/function first, but then used as the other
-    #[error("Incompatible declaration of identifier: {0}")]
     IncompatibleDeclaration(String),
+
     /// Indicates a function identifier was declared with a
     /// different signature than declared previously
-    #[error("Function {0} signature {2:?} is incompatible with previous declaration {1:?}")]
     IncompatibleSignature(String, ir::Signature, ir::Signature),
+
     /// Indicates an identifier was defined more than once
-    #[error("Duplicate definition of identifier: {0}")]
     DuplicateDefinition(String),
+
     /// Indicates an identifier was defined, but was declared as an import
-    #[error("Invalid to define identifier declared as an import: {0}")]
     InvalidImportDefinition(String),
+
     /// Wraps a `cranelift-codegen` error
-    #[error("Compilation error: {0}")]
-    Compilation(#[from] CodegenError),
+    Compilation(CodegenError),
+
     /// Wraps a generic error from a backend
-    #[error("Backend error: {0}")]
-    Backend(#[source] anyhow::Error),
+    Backend(anyhow::Error),
+}
+
+impl std::error::Error for ModuleError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Undeclared { .. }
+            | Self::IncompatibleDeclaration { .. }
+            | Self::IncompatibleSignature { .. }
+            | Self::DuplicateDefinition { .. }
+            | Self::InvalidImportDefinition { .. } => None,
+            Self::Compilation(source) => Some(source),
+            Self::Backend(source) => Some(&**source),
+        }
+    }
+}
+
+impl std::fmt::Display for ModuleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Undeclared(name) => {
+                write!(f, "Undeclared identifier: {}", name)
+            }
+            Self::IncompatibleDeclaration(name) => {
+                write!(f, "Incompatible declaration of identifier: {}", name,)
+            }
+            Self::IncompatibleSignature(name, prev_sig, new_sig) => {
+                write!(
+                    f,
+                    "Function {} signature {:?} is incompatible with previous declaration {:?}",
+                    name, new_sig, prev_sig,
+                )
+            }
+            Self::DuplicateDefinition(name) => {
+                write!(f, "Duplicate definition of identifier: {}", name)
+            }
+            Self::InvalidImportDefinition(name) => {
+                write!(
+                    f,
+                    "Invalid to define identifier declared as an import: {}",
+                    name,
+                )
+            }
+            Self::Compilation(err) => {
+                write!(f, "Compilation error: {}", err)
+            }
+            Self::Backend(err) => write!(f, "Backend error: {}", err),
+        }
+    }
+}
+
+impl std::convert::From<CodegenError> for ModuleError {
+    fn from(source: CodegenError) -> Self {
+        Self::Compilation { 0: source }
+    }
 }
 
 /// A convenient alias for a `Result` that uses `ModuleError` as the error type.
