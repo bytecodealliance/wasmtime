@@ -6,7 +6,6 @@ use crate::isa::unwind::UnwindInst;
 use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use gimli::write::{Address, FrameDescriptionEntry};
-use thiserror::Error;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -15,14 +14,28 @@ type Register = u16;
 
 /// Enumerate the errors possible in mapping Cranelift registers to their DWARF equivalent.
 #[allow(missing_docs)]
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RegisterMappingError {
-    #[error("unable to find bank for register info")]
     MissingBank,
-    #[error("register mapping is currently only implemented for x86_64")]
     UnsupportedArchitecture,
-    #[error("unsupported register bank: {0}")]
     UnsupportedRegisterBank(&'static str),
+}
+
+impl std::error::Error for RegisterMappingError {}
+
+impl std::fmt::Display for RegisterMappingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            RegisterMappingError::MissingBank => write!(f, "unable to find bank for register info"),
+            RegisterMappingError::UnsupportedArchitecture => write!(
+                f,
+                "register mapping is currently only implemented for x86_64"
+            ),
+            RegisterMappingError::UnsupportedRegisterBank(bank) => {
+                write!(f, "unsupported register bank: {}", bank)
+            }
+        }
+    }
 }
 
 // This mirrors gimli's CallFrameInstruction, but is serializable

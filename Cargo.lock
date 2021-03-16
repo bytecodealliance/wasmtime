@@ -535,7 +535,6 @@ dependencies = [
  "smallvec",
  "souper-ir",
  "target-lexicon",
- "thiserror",
  "wast 35.0.2",
 ]
 
