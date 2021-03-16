@@ -13,7 +13,6 @@ edition = "2018"
 cranelift-codegen = { path = "../codegen", version = "0.73.0" }
 smallvec = "1.6.1"
 target-lexicon = "0.12"
-thiserror = "1.0.15"
 
 [badges]
 maintenance = { status = "experimental" }
