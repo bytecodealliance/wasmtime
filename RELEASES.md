@@ -4,7 +4,7 @@
 
 ## 0.25.0
 
-Released 2020-03015.
+Released 2020-03-15.
 
 ### Added
 
