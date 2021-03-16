@@ -1,6 +1,6 @@
 [package]
 name = "wasi-cap-std-sync"
-version = "0.24.0"
+version = "0.25.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,7 +12,7 @@ edition = "2018"
 include = ["src/**/*", "LICENSE" ]
 
 [dependencies]
-wasi-common = { path = "../", version = "0.24.0" }
+wasi-common = { path = "../", version = "0.25.0" }
 anyhow = "1.0"
 cap-std = "0.13.7"
 cap-fs-ext = "0.13.7"

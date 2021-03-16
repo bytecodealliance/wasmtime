@@ -1,6 +1,6 @@
 [package]
 name = "wiggle-generate"
-version = "0.24.0"
+version = "0.25.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkon@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition = "2018"
@@ -14,7 +14,7 @@ include = ["src/**/*", "LICENSE"]
 [lib]
 
 [dependencies]
-witx = { version = "0.9", path = "../../wasi-common/WASI/tools/witx" }
+witx = { version = "0.9.0", path = "../../wasi-common/WASI/tools/witx" }
 quote = "1.0"
 proc-macro2 = "1.0"
 heck = "0.3"
