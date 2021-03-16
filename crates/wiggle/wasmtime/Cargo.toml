@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wiggle"
-version = "0.24.0"
+version = "0.25.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,11 +11,11 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "LICENSE"]
 
 [dependencies]
-wasmtime = { path = "../../wasmtime", version = "0.24.0", default-features = false }
-wasmtime-wiggle-macro = { path = "./macro", version = "0.24.0" }
-witx = { version = "0.9", path = "../../wasi-common/WASI/tools/witx", optional = true }
-wiggle = { path = "..", version = "0.24.0" }
-wiggle-borrow = { path = "../borrow", version = "0.24.0" }
+wasmtime = { path = "../../wasmtime", version = "0.25.0", default-features = false }
+wasmtime-wiggle-macro = { path = "./macro", version = "0.25.0" }
+witx = { version = "0.9.0", path = "../../wasi-common/WASI/tools/witx", optional = true }
+wiggle = { path = "..", version = "0.25.0" }
+wiggle-borrow = { path = "../borrow", version = "0.25.0" }
 
 [dev-dependencies]
 anyhow = "1"
