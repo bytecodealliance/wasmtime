@@ -3314,6 +3314,9 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let x = &Operand::new("x", Int);
+    let a = &Operand::new("a", Int);
+
     ig.push(
         Inst::new(
             "popcnt",
