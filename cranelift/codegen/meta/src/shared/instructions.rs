@@ -2432,6 +2432,20 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
+            "vpopcnt",
+            r#"
+            Vector Population count
+
+            Count the number of one bits in ``x``.
+            "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
             "imul",
             r#"
         Wrapping integer multiplication: `a := x y \pmod{2^B}`.

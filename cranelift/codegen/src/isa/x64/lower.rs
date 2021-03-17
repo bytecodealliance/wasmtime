@@ -5292,7 +5292,91 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 types::I64,
             ));
         }
+        Opcode::Vpopcnt => {
+            // For SIMD 4.4 we use Mula's algroithm (https://arxiv.org/pdf/1611.07612.pdf)
+            //
+            //__m128i count_bytes ( __m128i v) {
+            //    __m128i lookup = _mm_setr_epi8(0 ,1 ,1 ,2 ,1 ,2 ,2 ,3 ,1 ,2 ,2 ,3 ,2 ,3 ,3 ,4) ;
+            //    __m128i low_mask = _mm_set1_epi8 (0 x0f ) ;
+            //    __m128i lo = _mm_and_si128 (v, low_mask ) ;
+            //    __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4) , low_mask ) ;
+            //    __m128i cnt1 = _mm_shuffle_epi8 (lookup , lo) ;
+            //    __m128i cnt2 = _mm_shuffle_epi8 (lookup , hi) ;
+            //    return _mm_add_epi8 (cnt1 , cnt2 ) ;
+            //}
+            //
+            // Details can be found in the reference but the basic technique is to create a table that
+            // contains the corresponding poulation count for each possible byte value and then to
+            // lookup and sum the count for each byte.
 
+            // Get input vector and destination
+            let ty = ty.unwrap();
+            let lhs = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+            // __m128i lookup = _mm_setr_epi8(0 ,1 ,1 ,2 ,1 ,2 ,2 ,3 ,1 ,2 ,2 ,3 ,2 ,3 ,3 ,4);
+            static POPCOUNT_4BIT: [u8; 16] = [
+                0x00, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x01, 0x02, 0x02, 0x03, 0x02, 0x03,
+                0x03, 0x04,
+            ];
+            let lookup = ctx.use_constant(VCodeConstantData::WellKnown(&POPCOUNT_4BIT));
+
+            // Create a mask for lower 4bits of each subword. Ideally vbroadcast would be used
+            // here but it is not available for min support of SSE4.4. There is also no 8-bit shift
+            // left so that rules out setting all bits to 0x1 and using an 8x16 shift left by 4. However
+            // we can set all bits to 0x1 and use 16x8 bit shifts, left by 4, right by 4, and
+            // then left by 4 to manipulate bits into the mask we are looking for.
+            //__m128i low_mask = _mm_set1_epi8 (0 x0f );
+
+            static LOW_MASK: [u8; 16] = [
+                0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F,
+                0x0F, 0x0F,
+            ];
+            let low_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&LOW_MASK));
+            let low_mask = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+            ctx.emit(Inst::xmm_load_const(low_mask_const, low_mask, ty));
+
+            // __m128i lo = _mm_and_si128 (v, low_mask );
+            let lo = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+            ctx.emit(Inst::gen_move(lo, low_mask.to_reg(), types::I8X16));
+            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pand, RegMem::reg(lhs), lo));
+
+            // __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4) , low_mask ) ;
+            ctx.emit(Inst::gen_move(dst, lhs, ty));
+            ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrlw, RegMemImm::imm(4), dst));
+            let tmp = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+            ctx.emit(Inst::gen_move(tmp, low_mask.to_reg(), types::I8X16));
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Pand,
+                RegMem::reg(dst.to_reg()),
+                tmp,
+            ));
+
+            //    __m128i cnt1 = _mm_shuffle_epi8 (lookup , lo) ;
+            let tmp2 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+            ctx.emit(Inst::xmm_load_const(lookup, tmp2, ty));
+            ctx.emit(Inst::gen_move(dst, tmp2.to_reg(), types::I8X16));
+
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Pshufb,
+                RegMem::reg(lo.to_reg()),
+                dst,
+            ));
+
+            //    __m128i cnt2 = _mm_shuffle_epi8 (lookup , hi) ;
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Pshufb,
+                RegMem::reg(tmp.to_reg()),
+                tmp2,
+            ));
+
+            //    return _mm_add_epi8 (cnt1 , cnt2 ) ;
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Paddb,
+                RegMem::reg(tmp2.to_reg()),
+                dst,
+            ));
+        }
         Opcode::Vconst => {
             let used_constant = if let &InstructionData::UnaryConst {
                 constant_handle, ..

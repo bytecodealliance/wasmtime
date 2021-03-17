@@ -440,6 +440,7 @@ where
         Opcode::Cls => unimplemented!("Cls"),
         Opcode::Ctz => unimplemented!("Ctz"),
         Opcode::Popcnt => unimplemented!("Popcnt"),
+        Opcode::Vpopcnt => unimplemented!("Vpopcnt"),
         Opcode::Fcmp => assign(Value::bool(
             fcmp(inst.fp_cond_code().unwrap(), &arg(0)?, &arg(1)?)?,
             ctrl_ty.as_bool(),

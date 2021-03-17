@@ -3000,6 +3000,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::TlsValue => unimplemented!("tls_value"),
+        Opcode::Vpopcnt => unimplemented!("vpopcnt"),
     }
 
     Ok(())
