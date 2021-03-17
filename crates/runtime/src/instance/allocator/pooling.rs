@@ -263,7 +263,7 @@ impl PoolingAllocationStrategy {
 
         match self {
             Self::NextAvailable => free_count - 1,
-            Self::Random => rand::thread_rng().gen_range(0, free_count),
+            Self::Random => rand::thread_rng().gen_range(0..free_count),
         }
     }
 }

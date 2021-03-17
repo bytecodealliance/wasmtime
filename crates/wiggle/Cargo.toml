@@ -23,7 +23,7 @@ maintenance = { status = "actively-developed" }
 
 [dev-dependencies]
 wiggle-test = { path = "test-helpers" }
-proptest = "0.10"
+proptest = "1.0.0"
 
 [features]
 # The wiggle proc-macro emits some code (inside `pub mod metadata`) guarded
