@@ -395,6 +395,7 @@ impl Store {
         self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
     }
 
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
     pub(crate) fn set_signal_handler(&self, handler: Option<Box<SignalHandler<'static>>>) {
         *self.inner.signal_handler.borrow_mut() = handler;
     }
@@ -713,10 +714,11 @@ impl Store {
                 Poll::Ready(t) => break Ok(t),
                 Poll::Pending => {}
             }
+
             unsafe {
                 let before = wasmtime_runtime::TlsRestore::take();
                 let res = (*suspend).suspend(());
-                before.replace();
+                before.replace().map_err(|e| Trap::from_runtime(self, e))?;
                 res?;
             }
         }
@@ -822,7 +824,7 @@ impl Store {
                 let cx =
                     unsafe { std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx) };
                 let prev = self.store.inner.current_poll_cx.replace(cx);
-                let _reste = Reset(&self.store.inner.current_poll_cx, prev);
+                let _reset = Reset(&self.store.inner.current_poll_cx, prev);
 
                 // After that's set up we resume execution of the fiber, which
                 // may also start the fiber for the first time. This either

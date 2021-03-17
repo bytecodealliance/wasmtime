@@ -1,9 +1,9 @@
 //! Unix-specific extension for the `wasmtime` crate.
 //!
-//! This module is only available on Unix targets, for example Linux and macOS.
-//! It is not available on Windows, for example. Note that the import path for
-//! this module is `wasmtime::unix::...`, which is intended to emphasize that it
-//! is platform-specific.
+//! This module is only available on Unix targets, for example Linux. Note that
+//! this module is notably not available on macOS or Windows.  Note that the
+//! import path for this module is `wasmtime::unix::...`, which is intended to
+//! emphasize that it is platform-specific.
 //!
 //! The traits contained in this module are intended to extend various types
 //! throughout the `wasmtime` crate with extra functionality that's only

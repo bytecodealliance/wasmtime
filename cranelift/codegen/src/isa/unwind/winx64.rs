@@ -379,6 +379,9 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<regalloc::Reg>>(
                     });
                 }
             },
+            &UnwindInst::Aarch64SetPointerAuth { .. } => {
+                unreachable!("no aarch64 on x64");
+            }
         }
         max_unwind_offset = instruction_offset;
     }
