@@ -19,7 +19,7 @@ wiggle-borrow = { path = "../borrow", version = "0.25.0" }
 
 [dev-dependencies]
 anyhow = "1"
-proptest = "0.10"
+proptest = "1.0.0"
 
 [[test]]
 name = "atoms_async"
