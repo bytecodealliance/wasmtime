@@ -2708,372 +2708,451 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Popcnt => {
-            let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
-                types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
-                a if a == types::I32 || a == types::I64 || a == types::I128 => (None, a),
-                _ => unreachable!(),
-            };
+            let ty_tmp = ty.unwrap();
+            if !ty_tmp.is_vector() {
+                let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
+                    types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
+                    a if a == types::I32 || a == types::I64 || a == types::I128 => (None, a),
+                    _ => unreachable!(),
+                };
 
-            if isa_flags.use_popcnt() {
-                match ty {
-                    types::I32 | types::I64 => {
-                        let src = input_to_reg_mem(ctx, inputs[0]);
-                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                        ctx.emit(Inst::unary_rm_r(
-                            OperandSize::from_ty(ty),
-                            UnaryRmROpcode::Popcnt,
-                            src,
-                            dst,
-                        ));
-                        return Ok(());
+                if isa_flags.use_popcnt() {
+                    match ty {
+                        types::I32 | types::I64 => {
+                            let src = input_to_reg_mem(ctx, inputs[0]);
+                            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                            ctx.emit(Inst::unary_rm_r(
+                                OperandSize::from_ty(ty),
+                                UnaryRmROpcode::Popcnt,
+                                src,
+                                dst,
+                            ));
+                            return Ok(());
+                        }
+
+                        types::I128 => {
+                            // The number of ones in a 128-bits value is the plain sum of the number of
+                            // ones in its low and high parts. No risk of overflow here.
+                            let dsts = get_output_reg(ctx, outputs[0]);
+                            let dst = dsts.regs()[0];
+                            let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                            let srcs = put_input_in_regs(ctx, inputs[0]);
+                            let src_lo = srcs.regs()[0];
+                            let src_hi = srcs.regs()[1];
+
+                            ctx.emit(Inst::unary_rm_r(
+                                OperandSize::Size64,
+                                UnaryRmROpcode::Popcnt,
+                                RegMem::reg(src_lo),
+                                dst,
+                            ));
+                            ctx.emit(Inst::unary_rm_r(
+                                OperandSize::Size64,
+                                UnaryRmROpcode::Popcnt,
+                                RegMem::reg(src_hi),
+                                tmp,
+                            ));
+                            ctx.emit(Inst::alu_rmi_r(
+                                OperandSize::Size64,
+                                AluRmiROpcode::Add,
+                                RegMemImm::reg(tmp.to_reg()),
+                                dst,
+                            ));
+
+                            // Zero the result's high component.
+                            ctx.emit(Inst::alu_rmi_r(
+                                OperandSize::Size64,
+                                AluRmiROpcode::Xor,
+                                RegMemImm::reg(dsts.regs()[1].to_reg()),
+                                dsts.regs()[1],
+                            ));
+
+                            return Ok(());
+                        }
+                        _ => {}
                     }
+                }
 
-                    types::I128 => {
-                        // The number of ones in a 128-bits value is the plain sum of the number of
-                        // ones in its low and high parts. No risk of overflow here.
-                        let dsts = get_output_reg(ctx, outputs[0]);
-                        let dst = dsts.regs()[0];
-                        let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        let srcs = put_input_in_regs(ctx, inputs[0]);
-                        let src_lo = srcs.regs()[0];
-                        let src_hi = srcs.regs()[1];
+                let (srcs, ty): (SmallVec<[RegMem; 2]>, Type) = if let Some(ext_spec) = ext_spec {
+                    (
+                        smallvec![RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))],
+                        ty,
+                    )
+                } else if ty == types::I128 {
+                    let regs = put_input_in_regs(ctx, inputs[0]);
+                    (
+                        smallvec![RegMem::reg(regs.regs()[0]), RegMem::reg(regs.regs()[1])],
+                        types::I64,
+                    )
+                } else {
+                    // N.B.: explicitly put input in a reg here because the width of the instruction
+                    // into which this RM op goes may not match the width of the input type (in fact,
+                    // it won't for i32.popcnt), and we don't want a larger than necessary load.
+                    (smallvec![RegMem::reg(put_input_in_reg(ctx, inputs[0]))], ty)
+                };
 
-                        ctx.emit(Inst::unary_rm_r(
+                let mut dsts: SmallVec<[Reg; 2]> = smallvec![];
+                for src in srcs {
+                    let dst = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                    dsts.push(dst.to_reg());
+                    if ty == types::I64 {
+                        let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let cst = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+                        // mov src, tmp1
+                        ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
+
+                        // shr $1, tmp1
+                        ctx.emit(Inst::shift_r(
                             OperandSize::Size64,
-                            UnaryRmROpcode::Popcnt,
-                            RegMem::reg(src_lo),
+                            ShiftKind::ShiftRightLogical,
+                            Some(1),
+                            tmp1,
+                        ));
+
+                        // mov 0x7777_7777_7777_7777, cst
+                        ctx.emit(Inst::imm(OperandSize::Size64, 0x7777777777777777, cst));
+
+                        // andq cst, tmp1
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size64,
+                            AluRmiROpcode::And,
+                            RegMemImm::reg(cst.to_reg()),
+                            tmp1,
+                        ));
+
+                        // mov src, tmp2
+                        ctx.emit(Inst::mov64_rm_r(src, tmp2));
+
+                        // sub tmp1, tmp2
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size64,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(tmp1.to_reg()),
+                            tmp2,
+                        ));
+
+                        // shr $1, tmp1
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size64,
+                            ShiftKind::ShiftRightLogical,
+                            Some(1),
+                            tmp1,
+                        ));
+
+                        // and cst, tmp1
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size64,
+                            AluRmiROpcode::And,
+                            RegMemImm::reg(cst.to_reg()),
+                            tmp1,
+                        ));
+
+                        // sub tmp1, tmp2
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size64,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(tmp1.to_reg()),
+                            tmp2,
+                        ));
+
+                        // shr $1, tmp1
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size64,
+                            ShiftKind::ShiftRightLogical,
+                            Some(1),
+                            tmp1,
+                        ));
+
+                        // and cst, tmp1
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size64,
+                            AluRmiROpcode::And,
+                            RegMemImm::reg(cst.to_reg()),
+                            tmp1,
+                        ));
+
+                        // sub tmp1, tmp2
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size64,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(tmp1.to_reg()),
+                            tmp2,
+                        ));
+
+                        // mov tmp2, dst
+                        ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
+
+                        // shr $4, dst
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size64,
+                            ShiftKind::ShiftRightLogical,
+                            Some(4),
                             dst,
                         ));
-                        ctx.emit(Inst::unary_rm_r(
-                            OperandSize::Size64,
-                            UnaryRmROpcode::Popcnt,
-                            RegMem::reg(src_hi),
-                            tmp,
-                        ));
+
+                        // add tmp2, dst
                         ctx.emit(Inst::alu_rmi_r(
                             OperandSize::Size64,
                             AluRmiROpcode::Add,
-                            RegMemImm::reg(tmp.to_reg()),
+                            RegMemImm::reg(tmp2.to_reg()),
                             dst,
                         ));
 
-                        // Zero the result's high component.
+                        // mov $0x0F0F_0F0F_0F0F_0F0F, cst
+                        ctx.emit(Inst::imm(OperandSize::Size64, 0x0F0F0F0F0F0F0F0F, cst));
+
+                        // and cst, dst
                         ctx.emit(Inst::alu_rmi_r(
                             OperandSize::Size64,
-                            AluRmiROpcode::Xor,
-                            RegMemImm::reg(dsts.regs()[1].to_reg()),
-                            dsts.regs()[1],
+                            AluRmiROpcode::And,
+                            RegMemImm::reg(cst.to_reg()),
+                            dst,
                         ));
 
-                        return Ok(());
+                        // mov $0x0101_0101_0101_0101, cst
+                        ctx.emit(Inst::imm(OperandSize::Size64, 0x0101010101010101, cst));
+
+                        // mul cst, dst
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size64,
+                            AluRmiROpcode::Mul,
+                            RegMemImm::reg(cst.to_reg()),
+                            dst,
+                        ));
+
+                        // shr $56, dst
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size64,
+                            ShiftKind::ShiftRightLogical,
+                            Some(56),
+                            dst,
+                        ));
+                    } else {
+                        assert_eq!(ty, types::I32);
+
+                        let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                        let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+
+                        // mov src, tmp1
+                        ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
+
+                        // shr $1, tmp1
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size32,
+                            ShiftKind::ShiftRightLogical,
+                            Some(1),
+                            tmp1,
+                        ));
+
+                        // andq $0x7777_7777, tmp1
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::And,
+                            RegMemImm::imm(0x77777777),
+                            tmp1,
+                        ));
+
+                        // mov src, tmp2
+                        ctx.emit(Inst::mov64_rm_r(src, tmp2));
+
+                        // sub tmp1, tmp2
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(tmp1.to_reg()),
+                            tmp2,
+                        ));
+
+                        // shr $1, tmp1
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size32,
+                            ShiftKind::ShiftRightLogical,
+                            Some(1),
+                            tmp1,
+                        ));
+
+                        // and 0x7777_7777, tmp1
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::And,
+                            RegMemImm::imm(0x77777777),
+                            tmp1,
+                        ));
+
+                        // sub tmp1, tmp2
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(tmp1.to_reg()),
+                            tmp2,
+                        ));
+
+                        // shr $1, tmp1
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size32,
+                            ShiftKind::ShiftRightLogical,
+                            Some(1),
+                            tmp1,
+                        ));
+
+                        // and $0x7777_7777, tmp1
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::And,
+                            RegMemImm::imm(0x77777777),
+                            tmp1,
+                        ));
+
+                        // sub tmp1, tmp2
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::Sub,
+                            RegMemImm::reg(tmp1.to_reg()),
+                            tmp2,
+                        ));
+
+                        // mov tmp2, dst
+                        ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
+
+                        // shr $4, dst
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size32,
+                            ShiftKind::ShiftRightLogical,
+                            Some(4),
+                            dst,
+                        ));
+
+                        // add tmp2, dst
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::Add,
+                            RegMemImm::reg(tmp2.to_reg()),
+                            dst,
+                        ));
+
+                        // and $0x0F0F_0F0F, dst
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::And,
+                            RegMemImm::imm(0x0F0F0F0F),
+                            dst,
+                        ));
+
+                        // mul $0x0101_0101, dst
+                        ctx.emit(Inst::alu_rmi_r(
+                            OperandSize::Size32,
+                            AluRmiROpcode::Mul,
+                            RegMemImm::imm(0x01010101),
+                            dst,
+                        ));
+
+                        // shr $24, dst
+                        ctx.emit(Inst::shift_r(
+                            OperandSize::Size32,
+                            ShiftKind::ShiftRightLogical,
+                            Some(24),
+                            dst,
+                        ));
                     }
-                    _ => {}
                 }
-            }
 
-            let (srcs, ty): (SmallVec<[RegMem; 2]>, Type) = if let Some(ext_spec) = ext_spec {
-                (
-                    smallvec![RegMem::reg(extend_input_to_reg(ctx, inputs[0], ext_spec))],
-                    ty,
-                )
-            } else if ty == types::I128 {
-                let regs = put_input_in_regs(ctx, inputs[0]);
-                (
-                    smallvec![RegMem::reg(regs.regs()[0]), RegMem::reg(regs.regs()[1])],
-                    types::I64,
-                )
-            } else {
-                // N.B.: explicitly put input in a reg here because the width of the instruction
-                // into which this RM op goes may not match the width of the input type (in fact,
-                // it won't for i32.popcnt), and we don't want a larger than necessary load.
-                (smallvec![RegMem::reg(put_input_in_reg(ctx, inputs[0]))], ty)
-            };
-
-            let mut dsts: SmallVec<[Reg; 2]> = smallvec![];
-            for src in srcs {
-                let dst = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                dsts.push(dst.to_reg());
-                if ty == types::I64 {
-                    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                    let cst = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-                    // mov src, tmp1
-                    ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
-
-                    // shr $1, tmp1
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(1),
-                        tmp1,
-                    ));
-
-                    // mov 0x7777_7777_7777_7777, cst
-                    ctx.emit(Inst::imm(OperandSize::Size64, 0x7777777777777777, cst));
-
-                    // andq cst, tmp1
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::And,
-                        RegMemImm::reg(cst.to_reg()),
-                        tmp1,
-                    ));
-
-                    // mov src, tmp2
-                    ctx.emit(Inst::mov64_rm_r(src, tmp2));
-
-                    // sub tmp1, tmp2
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::reg(tmp1.to_reg()),
-                        tmp2,
-                    ));
-
-                    // shr $1, tmp1
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(1),
-                        tmp1,
-                    ));
-
-                    // and cst, tmp1
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::And,
-                        RegMemImm::reg(cst.to_reg()),
-                        tmp1,
-                    ));
-
-                    // sub tmp1, tmp2
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::reg(tmp1.to_reg()),
-                        tmp2,
-                    ));
-
-                    // shr $1, tmp1
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(1),
-                        tmp1,
-                    ));
-
-                    // and cst, tmp1
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::And,
-                        RegMemImm::reg(cst.to_reg()),
-                        tmp1,
-                    ));
-
-                    // sub tmp1, tmp2
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::reg(tmp1.to_reg()),
-                        tmp2,
-                    ));
-
-                    // mov tmp2, dst
-                    ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
-
-                    // shr $4, dst
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(4),
-                        dst,
-                    ));
-
-                    // add tmp2, dst
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Add,
-                        RegMemImm::reg(tmp2.to_reg()),
-                        dst,
-                    ));
-
-                    // mov $0x0F0F_0F0F_0F0F_0F0F, cst
-                    ctx.emit(Inst::imm(OperandSize::Size64, 0x0F0F0F0F0F0F0F0F, cst));
-
-                    // and cst, dst
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::And,
-                        RegMemImm::reg(cst.to_reg()),
-                        dst,
-                    ));
-
-                    // mov $0x0101_0101_0101_0101, cst
-                    ctx.emit(Inst::imm(OperandSize::Size64, 0x0101010101010101, cst));
-
-                    // mul cst, dst
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Mul,
-                        RegMemImm::reg(cst.to_reg()),
-                        dst,
-                    ));
-
-                    // shr $56, dst
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size64,
-                        ShiftKind::ShiftRightLogical,
-                        Some(56),
-                        dst,
-                    ));
+                if dsts.len() == 1 {
+                    let final_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                    ctx.emit(Inst::gen_move(final_dst, dsts[0], types::I64));
                 } else {
-                    assert_eq!(ty, types::I32);
-
-                    let tmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                    let tmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-
-                    // mov src, tmp1
-                    ctx.emit(Inst::mov64_rm_r(src.clone(), tmp1));
-
-                    // shr $1, tmp1
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size32,
-                        ShiftKind::ShiftRightLogical,
-                        Some(1),
-                        tmp1,
-                    ));
-
-                    // andq $0x7777_7777, tmp1
+                    assert!(dsts.len() == 2);
+                    let final_dst = get_output_reg(ctx, outputs[0]);
+                    ctx.emit(Inst::gen_move(final_dst.regs()[0], dsts[0], types::I64));
                     ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::And,
-                        RegMemImm::imm(0x77777777),
-                        tmp1,
-                    ));
-
-                    // mov src, tmp2
-                    ctx.emit(Inst::mov64_rm_r(src, tmp2));
-
-                    // sub tmp1, tmp2
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::reg(tmp1.to_reg()),
-                        tmp2,
-                    ));
-
-                    // shr $1, tmp1
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size32,
-                        ShiftKind::ShiftRightLogical,
-                        Some(1),
-                        tmp1,
-                    ));
-
-                    // and 0x7777_7777, tmp1
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::And,
-                        RegMemImm::imm(0x77777777),
-                        tmp1,
-                    ));
-
-                    // sub tmp1, tmp2
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::reg(tmp1.to_reg()),
-                        tmp2,
-                    ));
-
-                    // shr $1, tmp1
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size32,
-                        ShiftKind::ShiftRightLogical,
-                        Some(1),
-                        tmp1,
-                    ));
-
-                    // and $0x7777_7777, tmp1
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::And,
-                        RegMemImm::imm(0x77777777),
-                        tmp1,
-                    ));
-
-                    // sub tmp1, tmp2
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::Sub,
-                        RegMemImm::reg(tmp1.to_reg()),
-                        tmp2,
-                    ));
-
-                    // mov tmp2, dst
-                    ctx.emit(Inst::mov64_rm_r(RegMem::reg(tmp2.to_reg()), dst));
-
-                    // shr $4, dst
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size32,
-                        ShiftKind::ShiftRightLogical,
-                        Some(4),
-                        dst,
-                    ));
-
-                    // add tmp2, dst
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
+                        OperandSize::Size64,
                         AluRmiROpcode::Add,
-                        RegMemImm::reg(tmp2.to_reg()),
-                        dst,
+                        RegMemImm::reg(dsts[1]),
+                        final_dst.regs()[0],
                     ));
-
-                    // and $0x0F0F_0F0F, dst
                     ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::And,
-                        RegMemImm::imm(0x0F0F0F0F),
-                        dst,
-                    ));
-
-                    // mul $0x0101_0101, dst
-                    ctx.emit(Inst::alu_rmi_r(
-                        OperandSize::Size32,
-                        AluRmiROpcode::Mul,
-                        RegMemImm::imm(0x01010101),
-                        dst,
-                    ));
-
-                    // shr $24, dst
-                    ctx.emit(Inst::shift_r(
-                        OperandSize::Size32,
-                        ShiftKind::ShiftRightLogical,
-                        Some(24),
-                        dst,
+                        OperandSize::Size64,
+                        AluRmiROpcode::Xor,
+                        RegMemImm::reg(final_dst.regs()[1].to_reg()),
+                        final_dst.regs()[1],
                     ));
                 }
-            }
-
-            if dsts.len() == 1 {
-                let final_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(final_dst, dsts[0], types::I64));
             } else {
-                assert!(dsts.len() == 2);
-                let final_dst = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::gen_move(final_dst.regs()[0], dsts[0], types::I64));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Add,
-                    RegMemImm::reg(dsts[1]),
-                    final_dst.regs()[0],
+                // For SIMD 4.4 we use Mula's algroithm (https://arxiv.org/pdf/1611.07612.pdf)
+                //
+                //__m128i count_bytes ( __m128i v) {
+                //    __m128i lookup = _mm_setr_epi8(0 ,1 ,1 ,2 ,1 ,2 ,2 ,3 ,1 ,2 ,2 ,3 ,2 ,3 ,3 ,4) ;
+                //    __m128i low_mask = _mm_set1_epi8 (0 x0f ) ;
+                //    __m128i lo = _mm_and_si128 (v, low_mask ) ;
+                //    __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4) , low_mask ) ;
+                //    __m128i cnt1 = _mm_shuffle_epi8 (lookup , lo) ;
+                //    __m128i cnt2 = _mm_shuffle_epi8 (lookup , hi) ;
+                //    return _mm_add_epi8 (cnt1 , cnt2 ) ;
+                //}
+                //
+                // Details of the above algorithm can be found in the reference noted above, but the basics
+                // are to create a lookup table that pre populates the popcnt values for each number [0,15].
+                // The algorithm uses shifts to isolate 4 bit sections of the vector, pshufb as part of the
+                // lookup process, and adds together the results.
+
+                // Get input vector and destination
+                let ty = ty.unwrap();
+                let lhs = put_input_in_reg(ctx, inputs[0]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+                // __m128i lookup = _mm_setr_epi8(0 ,1 ,1 ,2 ,1 ,2 ,2 ,3 ,1 ,2 ,2 ,3 ,2 ,3 ,3 ,4);
+                static POPCOUNT_4BIT: [u8; 16] = [
+                    0x00, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x01, 0x02, 0x02, 0x03, 0x02,
+                    0x03, 0x03, 0x04,
+                ];
+                let lookup = ctx.use_constant(VCodeConstantData::WellKnown(&POPCOUNT_4BIT));
+
+                // Create a mask for lower 4bits of each subword.
+                static LOW_MASK: [u8; 16] = [0x0F; 16];
+                let low_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&LOW_MASK));
+                let low_mask = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                ctx.emit(Inst::xmm_load_const(low_mask_const, low_mask, ty));
+
+                // __m128i lo = _mm_and_si128 (v, low_mask );
+                let lo = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                ctx.emit(Inst::gen_move(lo, low_mask.to_reg(), types::I8X16));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pand, RegMem::reg(lhs), lo));
+
+                // __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4) , low_mask ) ;
+                ctx.emit(Inst::gen_move(dst, lhs, ty));
+                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrlw, RegMemImm::imm(4), dst));
+                let tmp = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                ctx.emit(Inst::gen_move(tmp, low_mask.to_reg(), types::I8X16));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Pand,
+                    RegMem::reg(dst.to_reg()),
+                    tmp,
                 ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Xor,
-                    RegMemImm::reg(final_dst.regs()[1].to_reg()),
-                    final_dst.regs()[1],
+
+                // __m128i cnt1 = _mm_shuffle_epi8 (lookup , lo) ;
+                let tmp2 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                ctx.emit(Inst::xmm_load_const(lookup, tmp2, ty));
+                ctx.emit(Inst::gen_move(dst, tmp2.to_reg(), types::I8X16));
+
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Pshufb,
+                    RegMem::reg(lo.to_reg()),
+                    dst,
+                ));
+
+                // __m128i cnt2 = _mm_shuffle_epi8 (lookup , hi) ;
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Pshufb,
+                    RegMem::reg(tmp.to_reg()),
+                    tmp2,
+                ));
+
+                // return _mm_add_epi8 (cnt1 , cnt2 ) ;
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Paddb,
+                    RegMem::reg(tmp2.to_reg()),
+                    dst,
                 ));
             }
         }

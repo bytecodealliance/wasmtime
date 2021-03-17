@@ -1859,6 +1859,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
         }
+        Operator::I8x16Popcnt => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().popcnt(arg));
+        }
         Operator::I64x2ExtendLowI32x4S
         | Operator::I64x2ExtendHighI32x4S
         | Operator::I64x2ExtendLowI32x4U
@@ -1884,8 +1888,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::F64x2PromoteLowF32x4
         | Operator::F64x2ConvertLowI32x4U
         | Operator::I32x4TruncSatF64x2SZero
-        | Operator::I32x4TruncSatF64x2UZero
-        | Operator::I8x16Popcnt => {
+        | Operator::I32x4TruncSatF64x2UZero => {
             return Err(wasm_unsupported!("proposed simd operator {:?}", op));
         }
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
@@ -2590,7 +2593,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I8x16MaxS
         | Operator::I8x16MaxU
         | Operator::I8x16RoundingAverageU
-        | Operator::I8x16Bitmask => I8X16,
+        | Operator::I8x16Bitmask
+        | Operator::I8x16Popcnt => I8X16,
 
         Operator::I16x8Splat
         | Operator::V128Load16Splat { .. }
