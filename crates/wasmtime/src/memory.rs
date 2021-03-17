@@ -454,7 +454,7 @@ impl Memory {
             .memory_index(unsafe { &*self.wasmtime_export.definition });
         self.instance
             .memory_grow(index, delta)
-            .ok_or_else(|| anyhow!("failed to grow memory"))
+            .ok_or_else(|| anyhow!("failed to grow memory by `{}`", delta))
     }
 
     pub(crate) unsafe fn from_wasmtime_memory(
@@ -499,6 +499,10 @@ impl Memory {
 pub unsafe trait LinearMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
+
+    /// Returns the maximum number of pages the memory can grow to.
+    /// Returns `None` if the memory is unbounded.
+    fn maximum(&self) -> Option<u32>;
 
     /// Grow memory by the specified amount of wasm pages.
     ///

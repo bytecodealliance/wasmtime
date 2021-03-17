@@ -33,6 +33,10 @@ pub trait RuntimeLinearMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
 
+    /// Returns the maximum number of pages the memory can grow to.
+    /// Returns `None` if the memory is unbounded.
+    fn maximum(&self) -> Option<u32>;
+
     /// Grow memory by the specified amount of wasm pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
@@ -103,6 +107,12 @@ impl RuntimeLinearMemory for MmapMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32 {
         self.mmap.borrow().size
+    }
+
+    /// Returns the maximum number of pages the memory can grow to.
+    /// Returns `None` if the memory is unbounded.
+    fn maximum(&self) -> Option<u32> {
+        self.maximum
     }
 
     /// Grow memory by the specified amount of wasm pages.
@@ -226,6 +236,15 @@ impl Memory {
         }
     }
 
+    /// Returns the maximum number of pages the memory can grow to.
+    /// Returns `None` if the memory is unbounded.
+    pub fn maximum(&self) -> Option<u32> {
+        match &self.0 {
+            MemoryStorage::Static { maximum, .. } => Some(*maximum),
+            MemoryStorage::Dynamic(mem) => mem.maximum(),
+        }
+    }
+
     /// Returns whether or not the underlying storage of the memory is "static".
     pub(crate) fn is_static(&self) -> bool {
         if let MemoryStorage::Static { .. } = &self.0 {
@@ -239,7 +258,16 @@ impl Memory {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    pub fn grow(&self, delta: u32) -> Option<u32> {
+    ///
+    /// # Safety
+    ///
+    /// Resizing the memory can reallocate the memory buffer for dynamic memories.
+    /// An instance's `VMContext` may have pointers to the memory's base and will
+    /// need to be fixed up after growing the memory.
+    ///
+    /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
+    /// this unsafety.
+    pub unsafe fn grow(&self, delta: u32) -> Option<u32> {
         match &self.0 {
             MemoryStorage::Static {
                 base,
@@ -266,7 +294,7 @@ impl Memory {
                 let start = usize::try_from(old_size).unwrap() * WASM_PAGE_SIZE as usize;
                 let len = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
 
-                make_accessible(unsafe { base.add(start) }, len).ok()?;
+                make_accessible(base.add(start), len).ok()?;
 
                 size.set(new_size);
 

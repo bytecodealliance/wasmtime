@@ -1,6 +1,6 @@
 use crate::{
     module::ModuleRegistry, signatures::SignatureCollection, trampoline::StoreInstanceHandle,
-    Engine, Func, Module, Trap,
+    Engine, Func, Module, ResourceLimiter, ResourceLimiterProxy, Trap,
 };
 use anyhow::{bail, Result};
 use std::any::{Any, TypeId};
@@ -12,7 +12,7 @@ use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::ptr;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
@@ -89,6 +89,7 @@ pub(crate) struct StoreInner {
     current_poll_cx: Cell<*mut Context<'static>>,
     out_of_gas_behavior: Cell<OutOfGas>,
     context_values: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    limiter: RefCell<Option<Arc<dyn wasmtime_runtime::ResourceLimiter>>>,
 }
 
 #[derive(Copy, Clone)]
@@ -121,7 +122,7 @@ impl Hash for HostInfoKey {
 
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
-    pub fn new(engine: &Engine) -> Store {
+    pub fn new(engine: &Engine) -> Self {
         // Ensure that wasmtime_runtime's signal handlers are configured. Note
         // that at the `Store` level it means we should perform this
         // once-per-thread. Platforms like Unix, however, only require this
@@ -130,7 +131,7 @@ impl Store {
         wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc)
             .expect("failed to initialize trap handling");
 
-        Store {
+        Self {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
                 interrupts: Arc::new(Default::default()),
@@ -149,8 +150,22 @@ impl Store {
                 current_poll_cx: Cell::new(ptr::null_mut()),
                 out_of_gas_behavior: Cell::new(OutOfGas::Trap),
                 context_values: RefCell::new(HashMap::new()),
+                limiter: RefCell::new(None),
             }),
         }
+    }
+
+    /// Creates a new store to be associated with the given [`Engine`] and using the given
+    /// resource limiter for any instances created in the store.
+    pub fn new_with_limiter(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
+        let store = Store::new(engine);
+
+        {
+            let mut l = store.inner.limiter.borrow_mut();
+            *l = Some(Arc::new(ResourceLimiterProxy::new(&store, limiter)));
+        }
+
+        store
     }
 
     /// Gets a host function from the [`Config`](crate::Config) associated with this [`Store`].
@@ -200,6 +215,10 @@ impl Store {
                 Ok(())
             }
         }
+    }
+
+    pub(crate) fn limiter(&self) -> Option<Arc<dyn wasmtime_runtime::ResourceLimiter>> {
+        self.inner.limiter.borrow().clone()
     }
 
     pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
@@ -299,6 +318,15 @@ impl Store {
 
     pub(crate) unsafe fn existing_vmctx(&self, cx: *mut VMContext) -> StoreInstanceHandle {
         self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
+    }
+
+    pub(crate) fn weak(&self) -> Weak<StoreInner> {
+        Rc::downgrade(&self.inner)
+    }
+
+    pub(crate) fn upgrade(weak: &Weak<StoreInner>) -> Option<Self> {
+        let inner = weak.upgrade()?;
+        Some(Self { inner })
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms

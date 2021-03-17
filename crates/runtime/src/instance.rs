@@ -37,6 +37,37 @@ mod allocator;
 
 pub use allocator::*;
 
+/// Used by hosts to limit resource consumption of instances.
+///
+/// An instance can be created with a resource limiter so that hosts can take into account
+/// non-WebAssembly resource usage to determine if a linear memory or table should grow.
+pub trait ResourceLimiter {
+    /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
+    ///
+    /// * `current` is the current size of the linear memory in WebAssembly page units.
+    /// * `desired` is the desired size of the linear memory in WebAssembly page units.
+    /// * `maximum` is either the linear memory's maximum or a maximum from an instance allocator,
+    ///   also in WebAssembly page units. A value of `None` indicates that the linear memory is
+    ///   unbounded.
+    ///
+    /// This function should return `true` to indicate that the growing operation is permitted or
+    /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
+    /// effect as the linear memory will not grow.
+    fn memory_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+
+    /// Notifies the resource limiter that an instance's table has been requested to grow.
+    ///
+    /// * `current` is the current number of elements in the table.
+    /// * `desired` is the desired number of elements in the table.
+    /// * `maximum` is either the table's maximum or a maximum from an instance allocator.
+    ///   A value of `None` indicates that the table is unbounded.
+    ///
+    /// This function should return `true` to indicate that the growing operation is permitted or
+    /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
+    /// effect as the table will not grow.
+    fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+}
+
 /// Runtime representation of an instance value, which erases all `Instance`
 /// information since instances are just a collection of values.
 pub type RuntimeInstance = Rc<IndexMap<String, Export>>;
@@ -68,6 +99,9 @@ pub(crate) struct Instance {
 
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
+
+    /// The limiter to use for the instance, if there is one.
+    limiter: Option<Arc<dyn ResourceLimiter>>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -378,11 +412,21 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
     pub(crate) fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
-        let result = self
+        let memory = self
             .memories
             .get(memory_index)
-            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
-            .grow(delta);
+            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()));
+
+        if let Some(limiter) = &self.limiter {
+            let current = memory.size();
+            let desired = current.checked_add(delta)?;
+
+            if !limiter.memory_growing(current, desired, memory.maximum()) {
+                return None;
+            }
+        }
+
+        let result = unsafe { memory.grow(delta) };
 
         // Keep current the VMContext pointers used by compiled wasm code.
         self.set_memory(memory_index, self.memories[memory_index].vmmemory());
@@ -460,19 +504,27 @@ impl Instance {
         delta: u32,
         init_value: TableElement,
     ) -> Option<u32> {
-        unsafe {
-            let orig_size = self
-                .tables
-                .get(table_index)
-                .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-                .grow(delta, init_value)?;
+        let table = self
+            .tables
+            .get(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()));
 
-            // Keep the `VMContext` pointers used by compiled Wasm code up to
-            // date.
-            self.set_table(table_index, self.tables[table_index].vmtable());
+        if let Some(limiter) = &self.limiter {
+            let current = table.size();
+            let desired = current.checked_add(delta)?;
 
-            Some(orig_size)
+            if !limiter.table_growing(current, desired, table.maximum()) {
+                return None;
+            }
         }
+
+        let result = unsafe { table.grow(delta, init_value) };
+
+        // Keep the `VMContext` pointers used by compiled Wasm code up to
+        // date.
+        self.set_table(table_index, self.tables[table_index].vmtable());
+
+        result
     }
 
     pub(crate) fn defined_table_fill(
@@ -818,10 +870,6 @@ pub struct InstanceHandle {
 }
 
 impl InstanceHandle {
-    pub(crate) unsafe fn new(instance: *mut Instance) -> Self {
-        Self { instance }
-    }
-
     /// Create a new `InstanceHandle` pointing at the instance
     /// pointed to by the given `VMContext` pointer.
     ///

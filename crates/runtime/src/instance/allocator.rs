@@ -1,6 +1,6 @@
 use crate::externref::{ModuleInfoLookup, VMExternRefActivationsTable, EMPTY_MODULE_LOOKUP};
 use crate::imports::Imports;
-use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
+use crate::instance::{Instance, InstanceHandle, ResourceLimiter, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
@@ -59,6 +59,9 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// The pointer to the module info lookup to use for the instance.
     pub module_info_lookup: Option<*const dyn ModuleInfoLookup>,
+
+    /// The resource limiter to use for the instance.
+    pub limiter: Option<Arc<dyn ResourceLimiter>>,
 }
 
 /// An link error while instantiating a module.
@@ -637,6 +640,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let tables = Self::create_tables(&req.module);
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+        let limiter = std::mem::take(&mut req.limiter);
 
         let handle = {
             let instance = Instance {
@@ -649,6 +653,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 )),
                 dropped_data: RefCell::new(EntitySet::with_capacity(req.module.passive_data.len())),
                 host_state,
+                limiter,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();
@@ -657,7 +662,9 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 alloc::handle_alloc_error(layout);
             }
             ptr::write(instance_ptr, instance);
-            InstanceHandle::new(instance_ptr)
+            InstanceHandle {
+                instance: instance_ptr,
+            }
         };
 
         initialize_vmcontext(handle.instance(), req);
