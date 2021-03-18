@@ -18,7 +18,7 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     config.wasm_multi_memory(true);
     config.wasm_multi_value(true);
 
-    let engine = wasmtime::Engine::new(&config);
+    let engine = wasmtime::Engine::new(&config)?;
     let store = wasmtime::Store::new(&engine);
     let module = wasmtime::Module::new(store.engine(), wasm)?;
 

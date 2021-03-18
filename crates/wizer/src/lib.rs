@@ -238,7 +238,7 @@ impl Wizer {
         );
 
         let config = self.wasmtime_config()?;
-        let engine = wasmtime::Engine::new(&config);
+        let engine = wasmtime::Engine::new(&config)?;
         let store = wasmtime::Store::new(&engine);
         let module = wasmtime::Module::new(store.engine(), &wasm)?;
         self.validate_init_func(&module)?;
@@ -571,11 +571,11 @@ impl Wizer {
         let instance = linker.instantiate(module)?;
 
         let init_func = instance
-            .get_func(&self.init_func)
-            .expect("checked by `validate_init_func`")
-            .get0::<()>()
+            .get_typed_func::<(), ()>(&self.init_func)
             .expect("checked by `validate_init_func`");
-        init_func().with_context(|| format!("the `{}` function trapped", self.init_func))?;
+        init_func
+            .call(())
+            .with_context(|| format!("the `{}` function trapped", self.init_func))?;
 
         Ok(instance)
     }
