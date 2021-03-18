@@ -15,6 +15,9 @@ use structopt::StructOpt;
 const WASM_PAGE_SIZE: u32 = 65_536;
 const NATIVE_PAGE_SIZE: u32 = 4_096;
 
+const DEFAULT_INHERIT_STDIO: bool = true;
+const DEFAULT_INHERIT_ENV: bool = false;
+
 const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 
@@ -86,6 +89,26 @@ pub struct Wizer {
     /// rather than per-instance.
     #[cfg_attr(feature = "structopt", structopt(long = "allow-wasi"))]
     allow_wasi: bool,
+
+    /// When using WASI during initialization, should `stdin`, `stderr`, and
+    /// `stdout` be inherited?
+    ///
+    /// This is true by default.
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(long = "inherit-stdio", value_name = "true|false")
+    )]
+    inherit_stdio: Option<bool>,
+
+    /// When using WASI during initialization, should environment variables be
+    /// inherited?
+    ///
+    /// This is false by default.
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(long = "inherit-env", value_name = "true|false")
+    )]
+    inherit_env: Option<bool>,
 
     /// Enable or disable Wasm multi-memory proposal.
     ///
@@ -168,6 +191,8 @@ impl Wizer {
             init_func: "wizer.initialize".into(),
             func_renames: vec![],
             allow_wasi: false,
+            inherit_stdio: None,
+            inherit_env: None,
             wasm_multi_memory: None,
             wasm_multi_value: None,
         }
@@ -203,6 +228,24 @@ impl Wizer {
     /// Defaults to `false`.
     pub fn allow_wasi(&mut self, allow: bool) -> &mut Self {
         self.allow_wasi = allow;
+        self
+    }
+
+    /// When using WASI during initialization, should `stdin`, `stdout`, and
+    /// `stderr` be inherited?
+    ///
+    /// Defaults to `true`.
+    pub fn inherit_stdio(&mut self, inherit: bool) -> &mut Self {
+        self.inherit_stdio = Some(inherit);
+        self
+    }
+
+    /// When using WASI during initialization, should the environment variables
+    /// be inherited?
+    ///
+    /// Defaults to `false`.
+    pub fn inherit_env(&mut self, inherit: bool) -> &mut Self {
+        self.inherit_env = Some(inherit);
         self
     }
 
@@ -564,7 +607,14 @@ impl Wizer {
 
         let mut linker = wasmtime::Linker::new(store);
         if self.allow_wasi {
-            let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build()?;
+            let mut ctx = wasi_cap_std_sync::WasiCtxBuilder::new();
+            if self.inherit_stdio.unwrap_or(DEFAULT_INHERIT_STDIO) {
+                ctx = ctx.inherit_stdio();
+            }
+            if self.inherit_env.unwrap_or(DEFAULT_INHERIT_ENV) {
+                ctx = ctx.inherit_env()?;
+            }
+            let ctx = ctx.build()?;
             wasmtime_wasi::Wasi::new(store, ctx).add_to_linker(&mut linker)?;
         }
         self.dummy_imports(&store, &module, &mut linker)?;
