@@ -192,6 +192,7 @@ pub(crate) fn define() -> SettingGroup {
             "cold",
             "system_v",
             "windows_fastcall",
+            "apple_aarch64",
             "baldrdash_system_v",
             "baldrdash_windows",
             "baldrdash_2020",

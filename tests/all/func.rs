@@ -121,9 +121,6 @@ fn signatures_match() {
 }
 
 #[test]
-// Note: Cranelift only supports refrerence types (used in the wasm in this
-// test) on x64.
-#[cfg(target_arch = "x86_64")]
 fn import_works() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 

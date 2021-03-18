@@ -646,7 +646,8 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
                 || call_conv == isa::CallConv::Fast
                 || call_conv == isa::CallConv::Cold
                 || call_conv.extends_baldrdash()
-                || call_conv.extends_windows_fastcall(),
+                || call_conv.extends_windows_fastcall()
+                || call_conv == isa::CallConv::AppleAarch64,
             "Unsupported calling convention: {:?}",
             call_conv
         );

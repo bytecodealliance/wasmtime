@@ -171,6 +171,21 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let has_baldrdash_tls = call_conv == isa::CallConv::Baldrdash2020;
 
         // See AArch64 ABI (https://c9x.me/compile/bib/abi-arm64.pdf), sections 5.4.
+        //
+        // MacOS aarch64 is slightly different, see also
+        // https://developer.apple.com/documentation/xcode/writing_arm64_code_for_apple_platforms.
+        // We are diverging from the MacOS aarch64 implementation in the
+        // following ways:
+        // - sign- and zero- extensions of data types less than 32 bits are not
+        // implemented yet.
+        // - i128 arguments passing isn't implemented yet in the standard (non
+        // MacOS) aarch64 ABI.
+        // - we align the arguments stack space to a 16-bytes boundary, while
+        // the MacOS allows aligning only on 8 bytes. In practice it means we're
+        // slightly overallocating when calling, which is fine, and doesn't
+        // break our other invariants that the stack is always allocated in
+        // 16-bytes chunks.
+
         let mut next_xreg = 0;
         let mut next_vreg = 0;
         let mut next_stack: u64 = 0;
@@ -264,13 +279,24 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 *next_reg += 1;
                 remaining_reg_vals -= 1;
             } else {
-                // Compute size. Every arg takes a minimum slot of 8 bytes. (16-byte
-                // stack alignment happens separately after all args.)
+                // Compute the stack slot's size.
                 let size = (ty_bits(param.value_type) / 8) as u64;
-                let size = std::cmp::max(size, 8);
-                // Align.
+
+                let size = if call_conv != isa::CallConv::AppleAarch64 {
+                    // Every arg takes a minimum slot of 8 bytes. (16-byte stack
+                    // alignment happens separately after all args.)
+                    std::cmp::max(size, 8)
+                } else {
+                    // MacOS aarch64 allows stack slots with sizes less than 8
+                    // bytes. They still need to be properly aligned on their
+                    // natural data alignment, though.
+                    size
+                };
+
+                // Align the stack slot.
                 debug_assert!(size.is_power_of_two());
                 next_stack = align_to(next_stack, size);
+
                 ret.push(ABIArg::stack(
                     next_stack as i64,
                     param.value_type,

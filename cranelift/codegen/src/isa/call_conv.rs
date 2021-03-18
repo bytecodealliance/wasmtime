@@ -10,22 +10,24 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub enum CallConv {
-    /// Best performance, not ABI-stable
+    /// Best performance, not ABI-stable.
     Fast,
-    /// Smallest caller code size, not ABI-stable
+    /// Smallest caller code size, not ABI-stable.
     Cold,
-    /// System V-style convention used on many platforms
+    /// System V-style convention used on many platforms.
     SystemV,
-    /// Windows "fastcall" convention, also used for x64 and ARM
+    /// Windows "fastcall" convention, also used for x64 and ARM.
     WindowsFastcall,
-    /// SpiderMonkey WebAssembly convention on systems using natively SystemV
+    /// Mac aarch64 calling convention, which is a tweak aarch64 ABI.
+    AppleAarch64,
+    /// SpiderMonkey WebAssembly convention on systems using natively SystemV.
     BaldrdashSystemV,
-    /// SpiderMonkey WebAssembly convention on Windows
+    /// SpiderMonkey WebAssembly convention on Windows.
     BaldrdashWindows,
     /// SpiderMonkey WebAssembly convention for "ABI-2020", with extra TLS
     /// register slots in the frame.
     Baldrdash2020,
-    /// Specialized convention for the probestack function
+    /// Specialized convention for the probestack function.
     Probestack,
 }
 
@@ -36,6 +38,7 @@ impl CallConv {
             // Default to System V for unknown targets because most everything
             // uses System V.
             Ok(CallingConvention::SystemV) | Err(()) => Self::SystemV,
+            Ok(CallingConvention::AppleAarch64) => Self::AppleAarch64,
             Ok(CallingConvention::WindowsFastcall) => Self::WindowsFastcall,
             Ok(unimp) => unimplemented!("calling convention: {:?}", unimp),
         }
@@ -49,6 +52,7 @@ impl CallConv {
             LibcallCallConv::Cold => Self::Cold,
             LibcallCallConv::SystemV => Self::SystemV,
             LibcallCallConv::WindowsFastcall => Self::WindowsFastcall,
+            LibcallCallConv::AppleAarch64 => Self::AppleAarch64,
             LibcallCallConv::BaldrdashSystemV => Self::BaldrdashSystemV,
             LibcallCallConv::BaldrdashWindows => Self::BaldrdashWindows,
             LibcallCallConv::Baldrdash2020 => Self::Baldrdash2020,
@@ -80,6 +84,7 @@ impl fmt::Display for CallConv {
             Self::Cold => "cold",
             Self::SystemV => "system_v",
             Self::WindowsFastcall => "windows_fastcall",
+            Self::AppleAarch64 => "apple_aarch64",
             Self::BaldrdashSystemV => "baldrdash_system_v",
             Self::BaldrdashWindows => "baldrdash_windows",
             Self::Baldrdash2020 => "baldrdash_2020",
@@ -96,6 +101,7 @@ impl str::FromStr for CallConv {
             "cold" => Ok(Self::Cold),
             "system_v" => Ok(Self::SystemV),
             "windows_fastcall" => Ok(Self::WindowsFastcall),
+            "apple_aarch64" => Ok(Self::AppleAarch64),
             "baldrdash_system_v" => Ok(Self::BaldrdashSystemV),
             "baldrdash_windows" => Ok(Self::BaldrdashWindows),
             "baldrdash_2020" => Ok(Self::Baldrdash2020),
