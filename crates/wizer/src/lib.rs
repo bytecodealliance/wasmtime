@@ -237,7 +237,7 @@ impl Wizer {
             "if the Wasm was originally valid, then our preparation step shouldn't invalidate it"
         );
 
-        let config = self.wasmtime_config();
+        let config = self.wasmtime_config()?;
         let engine = wasmtime::Engine::new(&config);
         let store = wasmtime::Store::new(&engine);
         let module = wasmtime::Module::new(store.engine(), &wasm)?;
@@ -251,8 +251,13 @@ impl Wizer {
     }
 
     // NB: keep this in sync with the wasmparser features.
-    fn wasmtime_config(&self) -> wasmtime::Config {
+    fn wasmtime_config(&self) -> anyhow::Result<wasmtime::Config> {
         let mut config = wasmtime::Config::new();
+
+        // Enable Wasmtime's code cache. This makes it so that repeated
+        // wizenings of the same Wasm module (e.g. with different WASI inputs)
+        // doesn't require re-compiling the Wasm to native code every time.
+        config.cache_config_load_default()?;
 
         // Proposals we support.
         config.wasm_multi_memory(self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY));
@@ -265,7 +270,7 @@ impl Wizer {
         config.wasm_threads(false);
         config.wasm_bulk_memory(false);
 
-        config
+        Ok(config)
     }
 
     // NB: keep this in sync with the Wasmtime config.
