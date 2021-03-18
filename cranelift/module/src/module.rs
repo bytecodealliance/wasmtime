@@ -469,6 +469,7 @@ pub trait Module {
         func: FuncId,
         ctx: &mut Context,
         trap_sink: &mut dyn binemit::TrapSink,
+        stack_map_sink: &mut dyn binemit::StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a function, taking the function body from the given `bytes`.
@@ -562,8 +563,9 @@ impl<M: Module> Module for &mut M {
         func: FuncId,
         ctx: &mut Context,
         trap_sink: &mut dyn binemit::TrapSink,
+        stack_map_sink: &mut dyn binemit::StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
-        (**self).define_function(func, ctx, trap_sink)
+        (**self).define_function(func, ctx, trap_sink, stack_map_sink)
     }
 
     fn define_function_bytes(

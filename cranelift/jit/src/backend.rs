@@ -5,7 +5,7 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
 use cranelift_codegen::{self, ir, settings};
 use cranelift_codegen::{
-    binemit::{self, Addend, CodeInfo, CodeOffset, Reloc, RelocSink, TrapSink},
+    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMapSink, TrapSink},
     CodegenError,
 };
 use cranelift_entity::SecondaryMap;
@@ -601,6 +601,7 @@ impl Module for JITModule {
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
         trap_sink: &mut dyn TrapSink,
+        stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display(self.isa()));
         let CodeInfo {
@@ -625,16 +626,7 @@ impl Module for JITModule {
             .expect("TODO: handle OOM etc.");
 
         let mut reloc_sink = JITRelocSink::default();
-        let mut stack_map_sink = binemit::NullStackMapSink {};
-        unsafe {
-            ctx.emit_to_memory(
-                &*self.isa,
-                ptr,
-                &mut reloc_sink,
-                trap_sink,
-                &mut stack_map_sink,
-            )
-        };
+        unsafe { ctx.emit_to_memory(&*self.isa, ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob {
