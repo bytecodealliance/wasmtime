@@ -287,19 +287,21 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb
+        sudo apt-get update && sudo apt-get install -y gdb lldb
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
+        LLDB: /usr/bin/lldb
 
     # Test debug (DWARF) related functionality on new backend.
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb
+        sudo apt-get update && sudo apt-get install -y gdb lldb
         cargo test --features experimental_x64 test_debug_dwarf -- --ignored --test-threads 1 --test debug::
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
+        LLDB: /usr/bin/lldb
 
     # Test uffd functionality on Linux
     - run: |
