@@ -6,7 +6,7 @@ compilers like [Clang](https://clang.llvm.org), and it is deservedly very
 popular.
 [Chris Lattner's chapter about LLVM](https://www.aosabook.org/en/llvm.html)
 in the 
-[Architecture of Open Source Applications](https://aosabook.org/en/index.html>)
+[Architecture of Open Source Applications](https://aosabook.org/en/index.html)
 book gives an excellent overview of the architecture and design of LLVM.
 
 Cranelift and LLVM are superficially similar projects, so it is worth
