@@ -102,6 +102,8 @@ pub struct VerifierError {
     pub message: String,
 }
 
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
 impl std::error::Error for VerifierError {}
 
 impl Display for VerifierError {
@@ -179,6 +181,8 @@ pub type VerifierResult<T> = Result<T, VerifierErrors>;
 #[derive(Debug, Default, PartialEq, Eq, Clone)]
 pub struct VerifierErrors(pub Vec<VerifierError>);
 
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
 impl std::error::Error for VerifierErrors {}
 
 impl VerifierErrors {

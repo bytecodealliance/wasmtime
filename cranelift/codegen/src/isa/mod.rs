@@ -186,6 +186,8 @@ pub enum LookupError {
     Unsupported,
 }
 
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
 impl std::error::Error for LookupError {}
 
 impl fmt::Display for LookupError {

@@ -192,6 +192,8 @@ pub enum ModuleError {
     Backend(anyhow::Error),
 }
 
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
 impl std::error::Error for ModuleError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {

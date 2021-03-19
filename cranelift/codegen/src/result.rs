@@ -41,6 +41,8 @@ pub enum CodegenError {
 /// A convenient alias for a `Result` that uses `CodegenError` as the error type.
 pub type CodegenResult<T> = Result<T, CodegenError>;
 
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
 impl std::error::Error for CodegenError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {

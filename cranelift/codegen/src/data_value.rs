@@ -103,6 +103,8 @@ pub enum DataValueCastFailure {
     FromInteger(i64, Type),
 }
 
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
 impl std::error::Error for DataValueCastFailure {}
 
 impl Display for DataValueCastFailure {
