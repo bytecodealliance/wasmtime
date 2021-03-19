@@ -1,6 +1,9 @@
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
-use cranelift_codegen::{binemit::NullTrapSink, settings};
+use cranelift_codegen::{
+    binemit::{NullStackMapSink, NullTrapSink},
+    settings,
+};
 use cranelift_codegen::{ir::types::I16, Context};
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
@@ -51,8 +54,9 @@ fn define_simple_function(module: &mut ObjectModule) -> FuncId {
     }
 
     let mut trap_sink = NullTrapSink {};
+    let mut stack_map_sink = NullStackMapSink {};
     module
-        .define_function(func_id, &mut ctx, &mut trap_sink)
+        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
         .unwrap();
 
     func_id
@@ -191,8 +195,9 @@ fn libcall_function() {
     }
 
     let mut trap_sink = NullTrapSink {};
+    let mut stack_map_sink = NullStackMapSink {};
     module
-        .define_function(func_id, &mut ctx, &mut trap_sink)
+        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
         .unwrap();
 
     module.finish();

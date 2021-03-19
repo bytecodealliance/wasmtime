@@ -5,7 +5,7 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir};
 use cranelift_codegen::{
-    binemit::{Addend, CodeInfo, CodeOffset, NullStackMapSink, Reloc, RelocSink, TrapSink},
+    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMapSink, TrapSink},
     CodegenError,
 };
 use cranelift_module::{
@@ -248,6 +248,7 @@ impl Module for ObjectModule {
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
         trap_sink: &mut dyn TrapSink,
+        stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!(
             "defining function {}: {}",
@@ -260,7 +261,6 @@ impl Module for ObjectModule {
         } = ctx.compile(self.isa())?;
         let mut code: Vec<u8> = vec![0; code_size as usize];
         let mut reloc_sink = ObjectRelocSink::default();
-        let mut stack_map_sink = NullStackMapSink {};
 
         unsafe {
             ctx.emit_to_memory(
@@ -268,7 +268,7 @@ impl Module for ObjectModule {
                 code.as_mut_ptr(),
                 &mut reloc_sink,
                 trap_sink,
-                &mut stack_map_sink,
+                stack_map_sink,
             )
         };
 
