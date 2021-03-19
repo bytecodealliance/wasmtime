@@ -1332,25 +1332,20 @@ impl Config {
         match self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => Ok(Box::new(OnDemandInstanceAllocator::new(
                 self.mem_creator.clone(),
+                #[cfg(feature = "async")]
+                self.async_stack_size,
             ))),
             InstanceAllocationStrategy::Pooling {
                 strategy,
                 module_limits,
                 instance_limits,
-            } => {
+            } => Ok(Box::new(PoolingInstanceAllocator::new(
+                strategy.into(),
+                module_limits.into(),
+                instance_limits.into(),
                 #[cfg(feature = "async")]
-                let stack_size = self.async_stack_size;
-
-                #[cfg(not(feature = "async"))]
-                let stack_size = 0;
-
-                Ok(Box::new(PoolingInstanceAllocator::new(
-                    strategy.into(),
-                    module_limits.into(),
-                    instance_limits.into(),
-                    stack_size,
-                )?))
-            }
+                self.async_stack_size,
+            )?)),
         }
     }
 }

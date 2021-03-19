@@ -62,22 +62,27 @@ fn create_handle(
     imports.functions = func_imports;
 
     unsafe {
+        let config = store.engine().config();
         // Use the on-demand allocator when creating handles associated with host objects
         // The configured instance allocator should only be used when creating module instances
         // as we don't want host objects to count towards instance limits.
-        let handle = OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone())
-            .allocate(InstanceAllocationRequest {
-                module: Arc::new(module),
-                finished_functions: &finished_functions,
-                imports,
-                lookup_shared_signature: &|_| shared_signature_id.unwrap(),
-                host_state,
-                interrupts: store.interrupts(),
-                externref_activations_table: store.externref_activations_table()
-                    as *const VMExternRefActivationsTable
-                    as *mut _,
-                stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
-            })?;
+        let handle = OnDemandInstanceAllocator::new(
+            config.mem_creator.clone(),
+            #[cfg(feature = "async")]
+            config.async_stack_size,
+        )
+        .allocate(InstanceAllocationRequest {
+            module: Arc::new(module),
+            finished_functions: &finished_functions,
+            imports,
+            lookup_shared_signature: &|_| shared_signature_id.unwrap(),
+            host_state,
+            interrupts: store.interrupts(),
+            externref_activations_table: store.externref_activations_table()
+                as *const VMExternRefActivationsTable
+                as *mut _,
+            stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
+        })?;
 
         Ok(store.add_instance(handle, true))
     }

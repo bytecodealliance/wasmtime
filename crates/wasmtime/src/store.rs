@@ -219,7 +219,7 @@ impl Store {
     pub fn get<T: Any>(&self) -> Option<&T> {
         let values = self.inner.context_values.borrow();
 
-        // Safety: a context value cannot be removed once added and therefore the addres is
+        // Safety: a context value cannot be removed once added and therefore the address is
         // stable for the life of the store
         values
             .get(&TypeId::of::<T>())
@@ -740,9 +740,15 @@ impl Store {
         debug_assert!(self.async_support());
         debug_assert!(config.async_stack_size > 0);
 
-        type SuspendType = wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>;
+        let stack = self
+            .inner
+            .engine
+            .allocator()
+            .allocate_fiber_stack()
+            .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
+
         let mut slot = None;
-        let func = |keep_going, suspend: &SuspendType| {
+        let fiber = wasmtime_fiber::Fiber::new(stack, |keep_going, suspend| {
             // First check and see if we were interrupted/dropped, and only
             // continue if we haven't been.
             keep_going?;
@@ -760,46 +766,19 @@ impl Store {
 
             slot = Some(func());
             Ok(())
-        };
-
-        let (fiber, stack) = match self.inner.engine.allocator().allocate_fiber_stack() {
-            Ok(stack) => {
-                // Use the returned stack and deallocate it when finished
-                (
-                    unsafe {
-                        wasmtime_fiber::Fiber::new_with_stack(stack, func)
-                            .map_err(|e| Trap::from(anyhow::Error::from(e)))?
-                    },
-                    stack,
-                )
-            }
-            Err(wasmtime_runtime::FiberStackError::NotSupported) => {
-                // The allocator doesn't support custom fiber stacks for the current platform
-                // Request that the fiber itself allocate the stack
-                (
-                    wasmtime_fiber::Fiber::new(config.async_stack_size, func)
-                        .map_err(|e| Trap::from(anyhow::Error::from(e)))?,
-                    std::ptr::null_mut(),
-                )
-            }
-            Err(e) => return Err(Trap::from(anyhow::Error::from(e))),
-        };
+        })
+        .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
 
         // Once we have the fiber representing our synchronous computation, we
         // wrap that in a custom future implementation which does the
         // translation from the future protocol to our fiber API.
-        FiberFuture {
-            fiber,
-            store: self,
-            stack,
-        }
-        .await?;
+        FiberFuture { fiber, store: self }.await?;
+
         return Ok(slot.unwrap());
 
         struct FiberFuture<'a> {
             fiber: wasmtime_fiber::Fiber<'a, Result<(), Trap>, (), Result<(), Trap>>,
             store: &'a Store,
-            stack: *mut u8,
         }
 
         impl Future for FiberFuture<'_> {
@@ -807,7 +786,7 @@ impl Store {
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
                 // We need to carry over this `cx` into our fiber's runtime
-                // for when it trys to poll sub-futures that are created. Doing
+                // for when it tries to poll sub-futures that are created. Doing
                 // this must be done unsafely, however, since `cx` is only alive
                 // for this one singular function call. Here we do a `transmute`
                 // to extend the lifetime of `Context` so it can be stored in
@@ -864,13 +843,12 @@ impl Store {
                     // callers that they shouldn't be doing that.
                     debug_assert!(result.is_ok());
                 }
-                if !self.stack.is_null() {
-                    unsafe {
-                        self.store
-                            .engine()
-                            .allocator()
-                            .deallocate_fiber_stack(self.stack)
-                    };
+
+                unsafe {
+                    self.store
+                        .engine()
+                        .allocator()
+                        .deallocate_fiber_stack(self.fiber.stack());
                 }
             }
         }
@@ -999,7 +977,7 @@ impl fmt::Debug for Store {
 impl Drop for StoreInner {
     fn drop(&mut self) {
         let allocator = self.engine.allocator();
-        let ondemand = OnDemandInstanceAllocator::new(self.engine.config().mem_creator.clone());
+        let ondemand = OnDemandInstanceAllocator::default();
         for instance in self.instances.borrow().iter() {
             unsafe {
                 if instance.ondemand {

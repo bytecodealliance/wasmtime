@@ -87,13 +87,14 @@ pub enum InstantiationError {
 }
 
 /// An error while creating a fiber stack.
+#[cfg(feature = "async")]
 #[derive(Error, Debug)]
 pub enum FiberStackError {
     /// Insufficient resources available for the request.
     #[error("Insufficient resources: {0}")]
     Resource(anyhow::Error),
-    /// An error for when the allocator doesn't support custom fiber stacks.
-    #[error("Custom fiber stacks are not supported by the allocator")]
+    /// An error for when the allocator doesn't support fiber stacks.
+    #[error("fiber stacks are not supported by the allocator")]
     NotSupported,
     /// A limit on how many fibers are supported has been reached.
     #[error("Limit of {0} concurrent fibers has been reached")]
@@ -152,20 +153,16 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     unsafe fn deallocate(&self, handle: &InstanceHandle);
 
     /// Allocates a fiber stack for calling async functions on.
-    ///
-    /// Returns the top of the fiber stack if successfully allocated.
-    fn allocate_fiber_stack(&self) -> Result<*mut u8, FiberStackError>;
+    #[cfg(feature = "async")]
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError>;
 
-    /// Deallocates a fiber stack that was previously allocated.
+    /// Deallocates a fiber stack that was previously allocated with `allocate_fiber_stack`.
     ///
     /// # Safety
     ///
-    /// This function is unsafe because there are no guarantees that the given stack
-    /// is no longer in use.
-    ///
-    /// Additionally, passing a stack pointer that was not returned from `allocate_fiber_stack`
-    /// will lead to undefined behavior.
-    unsafe fn deallocate_fiber_stack(&self, stack: *mut u8);
+    /// The provided stack is required to have been allocated with `allocate_fiber_stack`.
+    #[cfg(feature = "async")]
+    unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
 }
 
 fn get_table_init_start(
@@ -539,12 +536,21 @@ unsafe fn initialize_vmcontext_globals(instance: &Instance) {
 #[derive(Clone)]
 pub struct OnDemandInstanceAllocator {
     mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+    #[cfg(feature = "async")]
+    stack_size: usize,
 }
 
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
-    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>) -> Self {
-        Self { mem_creator }
+    pub fn new(
+        mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+        #[cfg(feature = "async")] stack_size: usize,
+    ) -> Self {
+        Self {
+            mem_creator,
+            #[cfg(feature = "async")]
+            stack_size,
+        }
     }
 
     fn create_tables(module: &Module) -> PrimaryMap<DefinedTableIndex, Table> {
@@ -573,6 +579,16 @@ impl OnDemandInstanceAllocator {
                 .push(Memory::new_dynamic(plan, creator).map_err(InstantiationError::Resource)?);
         }
         Ok(memories)
+    }
+}
+
+impl Default for OnDemandInstanceAllocator {
+    fn default() -> Self {
+        Self {
+            mem_creator: None,
+            #[cfg(feature = "async")]
+            stack_size: 0,
+        }
     }
 }
 
@@ -627,13 +643,18 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         alloc::dealloc(handle.instance.cast(), layout);
     }
 
-    fn allocate_fiber_stack(&self) -> Result<*mut u8, FiberStackError> {
-        // The on-demand allocator does not support allocating fiber stacks
-        Err(FiberStackError::NotSupported)
+    #[cfg(feature = "async")]
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
+        if self.stack_size == 0 {
+            return Err(FiberStackError::NotSupported);
+        }
+
+        wasmtime_fiber::FiberStack::new(self.stack_size)
+            .map_err(|e| FiberStackError::Resource(e.into()))
     }
 
-    unsafe fn deallocate_fiber_stack(&self, _stack: *mut u8) {
-        // This should never be called as `allocate_fiber_stack` never returns success
-        unreachable!()
+    #[cfg(feature = "async")]
+    unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
+        // The on-demand allocator has no further bookkeeping for fiber stacks
     }
 }

@@ -3484,6 +3484,7 @@ dependencies = [
  "thiserror",
  "userfaultfd",
  "wasmtime-environ",
+ "wasmtime-fiber",
  "winapi",
 ]
 

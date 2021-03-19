@@ -45,11 +45,3 @@ pub fn commit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
 pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
-
-pub fn commit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
-    commit(addr, len)
-}
-
-pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
-    decommit(addr, len)
-}

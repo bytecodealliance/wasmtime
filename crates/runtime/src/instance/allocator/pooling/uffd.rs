@@ -79,11 +79,13 @@ pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
 
+#[cfg(feature = "async")]
 pub fn commit_stack_pages(_addr: *mut u8, _len: usize) -> Result<()> {
     // A no-op as stack pages remain READ|WRITE
     Ok(())
 }
 
+#[cfg(feature = "async")]
 pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
