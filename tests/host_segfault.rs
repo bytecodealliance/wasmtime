@@ -10,15 +10,20 @@
 // happened or anything like that.
 
 use std::env;
+use std::future::Future;
+use std::io::{self, Write};
+use std::pin::Pin;
 use std::process::{Command, ExitStatus};
+use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
 
 const VAR_NAME: &str = "__TEST_TO_RUN";
-const CONFIRM: &str = "well at least we ran up to the segfault\n";
+const CONFIRM: &str = "well at least we ran up to the crash";
 
 fn segfault() -> ! {
     unsafe {
-        print!("{}", CONFIRM);
+        println!("{}", CONFIRM);
+        io::stdout().flush().unwrap();
         *(0x4 as *mut i32) = 3;
         unreachable!()
     }
@@ -30,6 +35,40 @@ fn overrun_the_stack() -> usize {
         return 1;
     } else {
         return a.as_mut_ptr() as usize + overrun_the_stack();
+    }
+}
+
+fn run_future<F: Future>(future: F) -> F::Output {
+    let mut f = Pin::from(Box::new(future));
+    let waker = dummy_waker();
+    let mut cx = Context::from_waker(&waker);
+    loop {
+        match f.as_mut().poll(&mut cx) {
+            Poll::Ready(val) => break val,
+            Poll::Pending => {}
+        }
+    }
+}
+
+fn dummy_waker() -> Waker {
+    return unsafe { Waker::from_raw(clone(5 as *const _)) };
+
+    unsafe fn clone(ptr: *const ()) -> RawWaker {
+        assert_eq!(ptr as usize, 5);
+        const VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
+        RawWaker::new(ptr, &VTABLE)
+    }
+
+    unsafe fn wake(ptr: *const ()) {
+        assert_eq!(ptr as usize, 5);
+    }
+
+    unsafe fn wake_by_ref(ptr: *const ()) {
+        assert_eq!(ptr as usize, 5);
+    }
+
+    unsafe fn drop(ptr: *const ()) {
+        assert_eq!(ptr as usize, 5);
     }
 }
 
@@ -45,29 +84,82 @@ fn main() {
         return;
     }
 
-    let tests: &[(&str, fn())] = &[
-        ("normal segfault", || segfault()),
-        ("make instance then segfault", || {
-            let engine = Engine::default();
-            let store = Store::new(&engine);
-            let module = Module::new(&engine, "(module)").unwrap();
-            let _instance = Instance::new(&store, &module, &[]).unwrap();
-            segfault();
-        }),
-        ("make instance then overrun the stack", || {
-            let engine = Engine::default();
-            let store = Store::new(&engine);
-            let module = Module::new(&engine, "(module)").unwrap();
-            let _instance = Instance::new(&store, &module, &[]).unwrap();
-            println!("stack overrun: {}", overrun_the_stack());
-        }),
-        ("segfault in a host function", || {
-            let engine = Engine::default();
-            let store = Store::new(&engine);
-            let module = Module::new(&engine, r#"(import "" "" (func)) (start 0)"#).unwrap();
-            let segfault = Func::wrap(&store, || segfault());
-            Instance::new(&store, &module, &[segfault.into()]).unwrap();
-        }),
+    let tests: &[(&str, fn(), bool)] = &[
+        ("normal segfault", || segfault(), false),
+        (
+            "make instance then segfault",
+            || {
+                let engine = Engine::default();
+                let store = Store::new(&engine);
+                let module = Module::new(&engine, "(module)").unwrap();
+                let _instance = Instance::new(&store, &module, &[]).unwrap();
+                segfault();
+            },
+            false,
+        ),
+        (
+            "make instance then overrun the stack",
+            || {
+                let engine = Engine::default();
+                let store = Store::new(&engine);
+                let module = Module::new(&engine, "(module)").unwrap();
+                let _instance = Instance::new(&store, &module, &[]).unwrap();
+                println!("{}", CONFIRM);
+                io::stdout().flush().unwrap();
+                overrun_the_stack();
+            },
+            true,
+        ),
+        (
+            "segfault in a host function",
+            || {
+                let engine = Engine::default();
+                let store = Store::new(&engine);
+                let module = Module::new(&engine, r#"(import "" "" (func)) (start 0)"#).unwrap();
+                let segfault = Func::wrap(&store, || segfault());
+                Instance::new(&store, &module, &[segfault.into()]).unwrap();
+            },
+            false,
+        ),
+        (
+            "hit async stack guard page",
+            || {
+                let mut config = Config::default();
+                config.async_support(true);
+                let engine = Engine::new(&config).unwrap();
+                let store = Store::new(&engine);
+                let f = Func::wrap0_async(&store, (), |_, _| {
+                    Box::new(async {
+                        print!("{}", CONFIRM);
+                        io::stdout().flush().unwrap();
+                        overrun_the_stack();
+                    })
+                });
+                run_future(f.call_async(&[])).unwrap();
+                unreachable!();
+            },
+            true,
+        ),
+        (
+            "hit async stack guard page with pooling allocator",
+            || {
+                let mut config = Config::default();
+                config.async_support(true);
+                config.allocation_strategy(InstanceAllocationStrategy::pooling());
+                let engine = Engine::new(&config).unwrap();
+                let store = Store::new(&engine);
+                let f = Func::wrap0_async(&store, (), |_, _| {
+                    Box::new(async {
+                        println!("{}", CONFIRM);
+                        io::stdout().flush().unwrap();
+                        overrun_the_stack();
+                    })
+                });
+                run_future(f.call_async(&[])).unwrap();
+                unreachable!();
+            },
+            true,
+        ),
     ];
     match env::var(VAR_NAME) {
         Ok(s) => {
@@ -79,14 +171,14 @@ fn main() {
             test();
         }
         Err(_) => {
-            for (name, _test) in tests {
-                runtest(name);
+            for (name, _test, stack_overflow) in tests {
+                run_test(name, *stack_overflow);
             }
         }
     }
 }
 
-fn runtest(name: &str) {
+fn run_test(name: &str, stack_overflow: bool) {
     let me = env::current_exe().unwrap();
     let mut cmd = Command::new(me);
     cmd.env(VAR_NAME, name);
@@ -94,31 +186,41 @@ fn runtest(name: &str) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let mut desc = format!("got status: {}", output.status);
+
     if !stdout.trim().is_empty() {
         desc.push_str("\nstdout: ----\n");
         desc.push_str("    ");
         desc.push_str(&stdout.replace("\n", "\n    "));
     }
+
     if !stderr.trim().is_empty() {
         desc.push_str("\nstderr: ----\n");
         desc.push_str("    ");
         desc.push_str(&stderr.replace("\n", "\n    "));
     }
-    if is_segfault(&output.status) {
-        assert!(
-            stdout.ends_with(CONFIRM) && stderr.is_empty(),
-            "failed to find confirmation in test `{}`\n{}",
-            name,
-            desc
-        );
-    } else if name.contains("overrun the stack") {
-        assert!(
-            stderr.contains("thread 'main' has overflowed its stack"),
-            "bad stderr: {}",
-            stderr
-        );
+
+    if stack_overflow {
+        if is_stack_overflow(&output.status, &stderr) {
+            assert!(
+                stdout.trim().ends_with(CONFIRM),
+                "failed to find confirmation in test `{}`\n{}",
+                name,
+                desc
+            );
+        } else {
+            panic!("\n\nexpected a stack overflow on `{}`\n{}\n\n", name, desc);
+        }
     } else {
-        panic!("\n\nexpected a segfault on `{}`\n{}\n\n", name, desc);
+        if is_segfault(&output.status) {
+            assert!(
+                stdout.trim().ends_with(CONFIRM) && stderr.is_empty(),
+                "failed to find confirmation in test `{}`\n{}",
+                name,
+                desc
+            );
+        } else {
+            panic!("\n\nexpected a segfault on `{}`\n{}\n\n", name, desc);
+        }
     }
 }
 
@@ -127,15 +229,35 @@ fn is_segfault(status: &ExitStatus) -> bool {
     use std::os::unix::prelude::*;
 
     match status.signal() {
-        Some(libc::SIGSEGV) | Some(libc::SIGBUS) => true,
+        Some(libc::SIGSEGV) => true,
         _ => false,
     }
+}
+
+#[cfg(unix)]
+fn is_stack_overflow(status: &ExitStatus, stderr: &str) -> bool {
+    use std::os::unix::prelude::*;
+
+    // The main thread might overflow or it might be from a fiber stack (SIGSEGV/SIGBUS)
+    stderr.contains("thread 'main' has overflowed its stack")
+        || match status.signal() {
+            Some(libc::SIGSEGV) | Some(libc::SIGBUS) => true,
+            _ => false,
+        }
 }
 
 #[cfg(windows)]
 fn is_segfault(status: &ExitStatus) -> bool {
     match status.code().map(|s| s as u32) {
         Some(0xc0000005) => true,
+        _ => false,
+    }
+}
+
+#[cfg(windows)]
+fn is_stack_overflow(status: &ExitStatus, _stderr: &str) -> bool {
+    match status.code().map(|s| s as u32) {
+        Some(0xc00000fd) => true,
         _ => false,
     }
 }
