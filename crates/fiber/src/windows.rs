@@ -5,6 +5,7 @@ use std::ptr;
 use winapi::shared::minwindef::*;
 use winapi::shared::winerror::ERROR_NOT_SUPPORTED;
 use winapi::um::fibersapi::*;
+use winapi::um::processthreadsapi::SetThreadStackGuarantee;
 use winapi::um::winbase::*;
 
 #[derive(Debug)]
@@ -49,6 +50,13 @@ unsafe extern "system" fn fiber_start<F, A, B, C>(data: LPVOID)
 where
     F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
 {
+    // Set the stack guarantee to be consistent with what Rust expects for threads
+    // This value is taken from:
+    // https://github.com/rust-lang/rust/blob/0d97f7a96877a96015d70ece41ad08bb7af12377/library/std/src/sys/windows/stack_overflow.rs
+    if SetThreadStackGuarantee(&mut 0x5000) == 0 {
+        panic!("failed to set fiber stack guarantee");
+    }
+
     let state = data.cast::<StartState>();
     let func = Box::from_raw((*state).initial_closure.get().cast::<F>());
     (*state).initial_closure.set(ptr::null_mut());

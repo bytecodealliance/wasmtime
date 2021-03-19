@@ -29,13 +29,20 @@ fn segfault() -> ! {
     }
 }
 
-fn overrun_the_stack() -> usize {
-    let mut a = [0u8; 1024];
-    if a.as_mut_ptr() as usize == 1 {
-        return 1;
-    } else {
-        return a.as_mut_ptr() as usize + overrun_the_stack();
+fn allocate_stack_space() -> ! {
+    let _a = [0u8; 1024];
+
+    for _ in 0..100000 {
+        allocate_stack_space();
     }
+
+    unreachable!()
+}
+
+fn overrun_the_stack() -> ! {
+    println!("{}", CONFIRM);
+    io::stdout().flush().unwrap();
+    allocate_stack_space();
 }
 
 fn run_future<F: Future>(future: F) -> F::Output {
@@ -104,8 +111,6 @@ fn main() {
                 let store = Store::new(&engine);
                 let module = Module::new(&engine, "(module)").unwrap();
                 let _instance = Instance::new(&store, &module, &[]).unwrap();
-                println!("{}", CONFIRM);
-                io::stdout().flush().unwrap();
                 overrun_the_stack();
             },
             true,
@@ -118,6 +123,7 @@ fn main() {
                 let module = Module::new(&engine, r#"(import "" "" (func)) (start 0)"#).unwrap();
                 let segfault = Func::wrap(&store, || segfault());
                 Instance::new(&store, &module, &[segfault.into()]).unwrap();
+                unreachable!();
             },
             false,
         ),
@@ -130,8 +136,6 @@ fn main() {
                 let store = Store::new(&engine);
                 let f = Func::wrap0_async(&store, (), |_, _| {
                     Box::new(async {
-                        print!("{}", CONFIRM);
-                        io::stdout().flush().unwrap();
                         overrun_the_stack();
                     })
                 });
@@ -150,8 +154,6 @@ fn main() {
                 let store = Store::new(&engine);
                 let f = Func::wrap0_async(&store, (), |_, _| {
                     Box::new(async {
-                        println!("{}", CONFIRM);
-                        io::stdout().flush().unwrap();
                         overrun_the_stack();
                     })
                 });
