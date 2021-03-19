@@ -136,7 +136,7 @@ impl Store {
         // once-per-thread. Platforms like Unix, however, only require this
         // once-per-program. In any case this is safe to call many times and
         // each one that's not relevant just won't do anything.
-        wasmtime_runtime::init_traps();
+        wasmtime_runtime::init_traps().expect("failed to initialize trap handling");
 
         Store {
             inner: Rc::new(StoreInner {
@@ -209,6 +209,7 @@ impl Store {
     }
 
     /// Returns the [`Engine`] that this store is associated with.
+    #[inline]
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
     }
@@ -503,10 +504,12 @@ impl Store {
         }
     }
 
+    #[inline]
     pub(crate) fn externref_activations_table(&self) -> &VMExternRefActivationsTable {
         &self.inner.externref_activations_table
     }
 
+    #[inline]
     pub(crate) fn stack_map_registry(&self) -> &StackMapRegistry {
         &self.inner.stack_map_registry
     }
@@ -655,6 +658,7 @@ impl Store {
         });
     }
 
+    #[inline]
     pub(crate) fn async_support(&self) -> bool {
         self.inner.engine.config().async_support
     }
@@ -915,6 +919,7 @@ impl Store {
 }
 
 unsafe impl TrapInfo for Store {
+    #[inline]
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -930,6 +935,7 @@ unsafe impl TrapInfo for Store {
         false
     }
 
+    #[inline]
     fn max_wasm_stack(&self) -> usize {
         self.engine().config().max_wasm_stack
     }
@@ -956,6 +962,7 @@ unsafe impl TrapInfo for Store {
         }
     }
 
+    #[inline]
     fn interrupts(&self) -> &VMInterrupts {
         &self.inner.interrupts
     }

@@ -752,6 +752,7 @@ impl VMExternRefActivationsTable {
     /// // call has returned.
     /// drop(auto_reset_canary);
     /// ```
+    #[inline]
     pub fn set_stack_canary<'a>(&'a self, canary: &u8) -> impl Drop + 'a {
         let should_reset = if self.stack_canary.get().is_none() {
             let canary = canary as *const u8 as *mut u8;
@@ -775,6 +776,7 @@ impl VMExternRefActivationsTable {
         }
 
         impl Drop for AutoResetCanary<'_> {
+            #[inline]
             fn drop(&mut self) {
                 if self.should_reset {
                     debug_assert!(self.table.stack_canary.get().is_some());

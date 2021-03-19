@@ -4,8 +4,9 @@
 use crate::VMInterrupts;
 use backtrace::Backtrace;
 use std::any::Any;
-use std::cell::Cell;
+use std::cell::{Cell, UnsafeCell};
 use std::error::Error;
+use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Once;
@@ -47,9 +48,10 @@ pub use sys::SignalHandler;
 /// function needs to be called at the end of the startup process, after other
 /// handlers have been installed. This function can thus be called multiple
 /// times, having no effect after the first call.
-pub fn init_traps() {
+pub fn init_traps() -> Result<(), Trap> {
     static INIT: Once = Once::new();
     INIT.call_once(|| unsafe { sys::platform_init() });
+    sys::lazy_per_thread_init()
 }
 
 /// Raises a user-defined trap immediately.
@@ -155,8 +157,6 @@ pub unsafe fn catch_traps<F>(trap_info: &impl TrapInfo, mut closure: F) -> Resul
 where
     F: FnMut(),
 {
-    sys::lazy_per_thread_init()?;
-
     return CallThreadState::new(trap_info).with(|cx| {
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
@@ -191,7 +191,7 @@ pub fn out_of_gas() {
 /// Temporary state stored on the stack which is registered in the `tls` module
 /// below for calls into wasm.
 pub struct CallThreadState<'a> {
-    unwind: Cell<UnwindReason>,
+    unwind: UnsafeCell<MaybeUninit<UnwindReason>>,
     jmp_buf: Cell<*const u8>,
     handling_trap: Cell<bool>,
     trap_info: &'a (dyn TrapInfo + 'a),
@@ -232,7 +232,6 @@ pub unsafe trait TrapInfo {
 }
 
 enum UnwindReason {
-    None,
     Panic(Box<dyn Any + Send>),
     UserTrap(Box<dyn Error + Send + Sync>),
     LibTrap(Trap),
@@ -240,9 +239,10 @@ enum UnwindReason {
 }
 
 impl<'a> CallThreadState<'a> {
+    #[inline]
     fn new(trap_info: &'a (dyn TrapInfo + 'a)) -> CallThreadState<'a> {
         CallThreadState {
-            unwind: Cell::new(UnwindReason::None),
+            unwind: UnsafeCell::new(MaybeUninit::uninit()),
             jmp_buf: Cell::new(ptr::null()),
             handling_trap: Cell::new(false),
             trap_info,
@@ -253,18 +253,13 @@ impl<'a> CallThreadState<'a> {
     fn with(self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Trap> {
         let _reset = self.update_stack_limit()?;
         let ret = tls::set(&self, || closure(&self));
-        match self.unwind.replace(UnwindReason::None) {
-            UnwindReason::None => {
-                debug_assert_eq!(ret, 1);
-                Ok(())
-            }
-            UnwindReason::UserTrap(data) => {
-                debug_assert_eq!(ret, 0);
-                Err(Trap::User(data))
-            }
+        if ret != 0 {
+            return Ok(());
+        }
+        match unsafe { (*self.unwind.get()).as_ptr().read() } {
+            UnwindReason::UserTrap(data) => Err(Trap::User(data)),
             UnwindReason::LibTrap(trap) => Err(trap),
             UnwindReason::JitTrap { backtrace, pc } => {
-                debug_assert_eq!(ret, 0);
                 let interrupts = self.trap_info.interrupts();
                 let maybe_interrupted =
                     interrupts.stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED;
@@ -274,10 +269,7 @@ impl<'a> CallThreadState<'a> {
                     maybe_interrupted,
                 })
             }
-            UnwindReason::Panic(panic) => {
-                debug_assert_eq!(ret, 0);
-                std::panic::resume_unwind(panic)
-            }
+            UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
         }
     }
 
@@ -310,6 +302,7 @@ impl<'a> CallThreadState<'a> {
     ///
     /// Note that this function must be called with `self` on the stack, not the
     /// heap/etc.
+    #[inline]
     fn update_stack_limit(&self) -> Result<impl Drop + '_, Trap> {
         // Determine the stack pointer where, after which, any wasm code will
         // immediately trap. This is checked on the entry to all wasm functions.
@@ -361,6 +354,7 @@ impl<'a> CallThreadState<'a> {
         struct Reset<'a>(bool, &'a AtomicUsize);
 
         impl Drop for Reset<'_> {
+            #[inline]
             fn drop(&mut self) {
                 if self.0 {
                     self.1.store(usize::max_value(), SeqCst);
@@ -372,8 +366,8 @@ impl<'a> CallThreadState<'a> {
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
-        self.unwind.replace(reason);
         unsafe {
+            (*self.unwind.get()).as_mut_ptr().write(reason);
             Unwind(self.jmp_buf.get());
         }
     }
@@ -432,16 +426,21 @@ impl<'a> CallThreadState<'a> {
 
     fn capture_backtrace(&self, pc: *const u8) {
         let backtrace = Backtrace::new_unresolved();
-        self.unwind.replace(UnwindReason::JitTrap {
-            backtrace,
-            pc: pc as usize,
-        });
+        unsafe {
+            (*self.unwind.get())
+                .as_mut_ptr()
+                .write(UnwindReason::JitTrap {
+                    backtrace,
+                    pc: pc as usize,
+                });
+        }
     }
 }
 
 struct ResetCell<'a, T: Copy>(&'a Cell<T>, T);
 
 impl<T: Copy> Drop for ResetCell<'_, T> {
+    #[inline]
     fn drop(&mut self) {
         self.0.set(self.1);
     }
@@ -544,6 +543,7 @@ mod tls {
         struct Reset<'a, 'b>(&'a CallThreadState<'b>);
 
         impl Drop for Reset<'_, '_> {
+            #[inline]
             fn drop(&mut self) {
                 raw::replace(self.0.prev.replace(ptr::null()));
             }
