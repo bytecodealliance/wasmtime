@@ -40,6 +40,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle-generate",
     "wiggle-macro",
     // wasmtime
+    "wasmtime-jit-debug",
     "wasmtime-fiber",
     "wasmtime-environ",
     "wasmtime-runtime",
