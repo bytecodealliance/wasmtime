@@ -167,7 +167,7 @@ impl JITModule {
     /// corresponding module, it should only be used when none of the functions
     /// from that module are currently executing and none of the `fn` pointers
     /// are called afterwards.
-    pub unsafe fn free_memory(&mut self) {
+    pub unsafe fn free_memory(mut self) {
         self.memory.code.free_memory();
         self.memory.readonly.free_memory();
         self.memory.writable.free_memory();
@@ -289,6 +289,9 @@ impl JITModule {
     }
 
     /// Returns the address of a finalized function.
+    ///
+    /// The pointer remains valid until either [`JITModule::free_memory`] is called or in the future
+    /// some way of deallocating this individual function is used.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
         let info = &self.compiled_functions[func_id];
         assert!(
@@ -301,6 +304,9 @@ impl JITModule {
     }
 
     /// Returns the address and size of a finalized data object.
+    ///
+    /// The pointer remains valid until either [`JITModule::free_memory`] is called or in the future
+    /// some way of deallocating this individual data object is used.
     pub fn get_finalized_data(&self, data_id: DataId) -> (*const u8, usize) {
         let info = &self.compiled_data_objects[data_id];
         assert!(
