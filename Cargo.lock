@@ -3628,6 +3628,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasmtime-environ",
+ "wasmtime-jit-debug",
  "wasmtime-runtime",
  "winapi",
 ]
@@ -3637,6 +3638,8 @@ name = "wasmtime-jit-debug"
 version = "0.34.0"
 dependencies = [
  "lazy_static",
+ "object",
+ "rustix",
 ]
 
 [[package]]
