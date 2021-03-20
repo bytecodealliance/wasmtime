@@ -723,7 +723,6 @@ impl StackPool {
     fn new(instance_limits: &InstanceLimits, stack_size: usize) -> Result<Self> {
         let page_size = region::page::size();
 
-        // On Windows, don't allocate any fiber stacks as native fibers are always used
         // Add a page to the stack size for the guard page when using fiber stacks
         let stack_size = if stack_size == 0 {
             0
@@ -800,20 +799,28 @@ impl StackPool {
     }
 
     fn deallocate(&self, stack: &wasmtime_fiber::FiberStack) {
-        // Remove the guard page from the size
-        let stack_size = self.stack_size - self.page_size;
-        let bottom_of_stack = unsafe { stack.top().unwrap().sub(stack_size) };
+        let top = stack
+            .top()
+            .expect("fiber stack not allocated from the pool") as usize;
 
         let base = self.mapping.as_ptr() as usize;
-        let start_of_stack = (bottom_of_stack as usize) - self.page_size;
+        let len = self.mapping.len();
+        assert!(
+            top > base && top <= (base + len),
+            "fiber stack top pointer not in range"
+        );
 
-        debug_assert!(start_of_stack >= base && start_of_stack < (base + self.mapping.len()));
+        // Remove the guard page from the size
+        let stack_size = self.stack_size - self.page_size;
+        let bottom_of_stack = top - stack_size;
+        let start_of_stack = bottom_of_stack - self.page_size;
+        debug_assert!(start_of_stack >= base && start_of_stack < (base + len));
         debug_assert!((start_of_stack - base) % self.stack_size == 0);
 
         let index = (start_of_stack - base) / self.stack_size;
         debug_assert!(index < self.max_instances);
 
-        decommit_stack_pages(bottom_of_stack, stack_size).unwrap();
+        decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
 
         self.free_list.lock().unwrap().push(index);
     }
@@ -833,7 +840,6 @@ pub struct PoolingInstanceAllocator {
     instances: mem::ManuallyDrop<InstancePool>,
     #[cfg(all(feature = "async", unix))]
     stacks: StackPool,
-    #[cfg(all(feature = "async", windows))]
     stack_size: usize,
     #[cfg(all(feature = "uffd", target_os = "linux"))]
     _fault_handler: imp::PageFaultHandler,
@@ -845,7 +851,7 @@ impl PoolingInstanceAllocator {
         strategy: PoolingAllocationStrategy,
         module_limits: ModuleLimits,
         mut instance_limits: InstanceLimits,
-        #[cfg(feature = "async")] stack_size: usize,
+        stack_size: usize,
     ) -> Result<Self> {
         if instance_limits.count == 0 {
             bail!("the instance count limit cannot be zero");
@@ -874,7 +880,6 @@ impl PoolingInstanceAllocator {
             instances: mem::ManuallyDrop::new(instances),
             #[cfg(all(feature = "async", unix))]
             stacks: StackPool::new(&instance_limits, stack_size)?,
-            #[cfg(all(feature = "async", windows))]
             stack_size,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             _fault_handler,

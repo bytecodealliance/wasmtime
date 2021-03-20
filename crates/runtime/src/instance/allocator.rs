@@ -536,19 +536,14 @@ unsafe fn initialize_vmcontext_globals(instance: &Instance) {
 #[derive(Clone)]
 pub struct OnDemandInstanceAllocator {
     mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
-    #[cfg(feature = "async")]
     stack_size: usize,
 }
 
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
-    pub fn new(
-        mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
-        #[cfg(feature = "async")] stack_size: usize,
-    ) -> Self {
+    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
         Self {
             mem_creator,
-            #[cfg(feature = "async")]
             stack_size,
         }
     }
@@ -586,7 +581,6 @@ impl Default for OnDemandInstanceAllocator {
     fn default() -> Self {
         Self {
             mem_creator: None,
-            #[cfg(feature = "async")]
             stack_size: 0,
         }
     }
