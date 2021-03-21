@@ -268,7 +268,7 @@ impl ModuleDeclarations {
         name: &str,
         linkage: Linkage,
         signature: &ir::Signature,
-    ) -> ModuleResult<(FuncId, &FunctionDeclaration)> {
+    ) -> ModuleResult<(FuncId, Linkage)> {
         // TODO: Can we avoid allocating names so often?
         use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -276,7 +276,7 @@ impl ModuleDeclarations {
                 FuncOrDataId::Func(id) => {
                     let existing = &mut self.functions[id];
                     existing.merge(linkage, signature)?;
-                    Ok((id, existing))
+                    Ok((id, existing.linkage))
                 }
                 FuncOrDataId::Data(..) => {
                     Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
@@ -289,9 +289,23 @@ impl ModuleDeclarations {
                     signature: signature.clone(),
                 });
                 entry.insert(FuncOrDataId::Func(id));
-                Ok((id, &self.functions[id]))
+                Ok((id, self.functions[id].linkage))
             }
         }
+    }
+
+    /// Declare an anonymous function in this module.
+    pub fn declare_anonymous_function(
+        &mut self,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId> {
+        let id = self.functions.push(FunctionDeclaration {
+            name: String::new(),
+            linkage: Linkage::Local,
+            signature: signature.clone(),
+        });
+        self.functions[id].name = format!(".L{:?}", id);
+        Ok(id)
     }
 
     /// Declare a data object in this module.
@@ -301,7 +315,7 @@ impl ModuleDeclarations {
         linkage: Linkage,
         writable: bool,
         tls: bool,
-    ) -> ModuleResult<(DataId, &DataDeclaration)> {
+    ) -> ModuleResult<(DataId, Linkage)> {
         // TODO: Can we avoid allocating names so often?
         use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -309,7 +323,7 @@ impl ModuleDeclarations {
                 FuncOrDataId::Data(id) => {
                     let existing = &mut self.data_objects[id];
                     existing.merge(linkage, writable, tls);
-                    Ok((id, existing))
+                    Ok((id, existing.linkage))
                 }
 
                 FuncOrDataId::Func(..) => {
@@ -324,9 +338,21 @@ impl ModuleDeclarations {
                     tls,
                 });
                 entry.insert(FuncOrDataId::Data(id));
-                Ok((id, &self.data_objects[id]))
+                Ok((id, self.data_objects[id].linkage))
             }
         }
+    }
+
+    /// Declare an anonymous data object in this module.
+    pub fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
+        let id = self.data_objects.push(DataDeclaration {
+            name: String::new(),
+            linkage: Linkage::Local,
+            writable,
+            tls,
+        });
+        self.data_objects[id].name = format!(".L{:?}", id);
+        Ok(id)
     }
 }
 
@@ -411,6 +437,9 @@ pub trait Module {
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId>;
 
+    /// Declare an anonymous function in this module.
+    fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId>;
+
     /// Declare a data object in this module.
     fn declare_data(
         &mut self,
@@ -419,6 +448,9 @@ pub trait Module {
         writable: bool,
         tls: bool,
     ) -> ModuleResult<DataId>;
+
+    /// Declare an anonymous data object in this module.
+    fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId>;
 
     /// Use this when you're building the IR of a function to reference a function.
     ///
@@ -532,6 +564,10 @@ impl<M: Module> Module for &mut M {
         (**self).declare_function(name, linkage, signature)
     }
 
+    fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId> {
+        (**self).declare_anonymous_function(signature)
+    }
+
     fn declare_data(
         &mut self,
         name: &str,
@@ -540,6 +576,10 @@ impl<M: Module> Module for &mut M {
         tls: bool,
     ) -> ModuleResult<DataId> {
         (**self).declare_data(name, linkage, writable, tls)
+    }
+
+    fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
+        (**self).declare_anonymous_data(writable, tls)
     }
 
     fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {
