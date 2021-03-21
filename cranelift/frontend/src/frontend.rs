@@ -768,9 +768,9 @@ impl<'a> FunctionBuilder<'a> {
 
             let ch = u64::from(ch);
             let raw_value = if int_type == types::I64 {
-                (ch << 32) | (ch << 16) | (ch << 8) | ch
+                ch * 0x0101010101010101_u64
             } else if int_type == types::I32 {
-                (ch << 16) | (ch << 8) | ch
+                ch * 0x01010101_u64
             } else if int_type == types::I16 {
                 (ch << 8) | ch
             } else {
@@ -1192,7 +1192,7 @@ block0:
 block0:
     v2 = iconst.i64 0
     v0 -> v2
-    v1 = iconst.i64 0x0001_0001_0101
+    v1 = iconst.i64 0x0101_0101_0101_0101
     store aligned v1, v0
     return v0
 }
