@@ -1775,6 +1775,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().fcvt_from_uint(F32X4, a))
         }
+        Operator::F64x2ConvertLowI32x4S => {
+            let a = pop1_with_bitcast(state, I32X4, builder);
+            state.push1(builder.ins().fcvt_low_from_sint(F64X2, a));
+        }
         Operator::I32x4TruncSatF32x4S => {
             let a = pop1_with_bitcast(state, F32X4, builder);
             state.push1(builder.ins().fcvt_to_sint_sat(I32X4, a))
@@ -1851,12 +1855,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let arg = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().nearest(arg));
         }
-
         Operator::I32x4DotI16x8S => {
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
         }
-
         Operator::I64x2ExtendLowI32x4S
         | Operator::I64x2ExtendHighI32x4S
         | Operator::I64x2ExtendLowI32x4U
@@ -1880,7 +1882,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I32x4ExtAddPairwiseI16x8U
         | Operator::F32x4DemoteF64x2Zero
         | Operator::F64x2PromoteLowF32x4
-        | Operator::F64x2ConvertLowI32x4S
         | Operator::F64x2ConvertLowI32x4U
         | Operator::I32x4TruncSatF64x2SZero
         | Operator::I32x4TruncSatF64x2UZero

@@ -563,6 +563,7 @@ where
         Opcode::FcvtToSintSat => unimplemented!("FcvtToSintSat"),
         Opcode::FcvtFromUint => unimplemented!("FcvtFromUint"),
         Opcode::FcvtFromSint => unimplemented!("FcvtFromSint"),
+        Opcode::FcvtLowFromSint => unimplemented!("FcvtLowFromSint"),
         Opcode::Isplit => unimplemented!("Isplit"),
         Opcode::Iconcat => unimplemented!("Iconcat"),
         Opcode::AtomicRmw => unimplemented!("AtomicRmw"),

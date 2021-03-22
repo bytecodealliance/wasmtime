@@ -4325,6 +4325,21 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "fcvt_low_from_sint",
+            r#"
+        Convert signed integer to floating point.
+
+        Each lane in `x` is interpreted as a signed integer and converted to
+        floating point.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let WideInt = &TypeVar::new(
         "WideInt",
         "An integer type with lanes from `i16` upwards",
