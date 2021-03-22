@@ -195,6 +195,7 @@ unsafe fn test_fd_readwrite_invalid_fd() {
 
 unsafe fn test_poll_oneoff(dir_fd: wasi::Fd) {
     test_timeout();
+    test_sleep();
     test_empty_poll();
     test_fd_readwrite_valid_fd(dir_fd);
     test_fd_readwrite_invalid_fd();
