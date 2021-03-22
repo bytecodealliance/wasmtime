@@ -738,6 +738,30 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
             return Err(Error::invalid_argument().context("nsubscriptions must be nonzero"));
         }
 
+        // Special-case a `poll_oneoff` which is just sleeping on a single
+        // relative timer event, such as what WASI libc uses to implement sleep
+        // functions. This supports all clock IDs, because POSIX says that
+        // `clock_settime` doesn't effect relative sleeps.
+        if nsubscriptions == 1 {
+            let sub = subs.read()?;
+            if let types::SubscriptionU::Clock(clocksub) = sub.u {
+                if !clocksub
+                    .flags
+                    .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
+                {
+                    self.sched.sleep(Duration::from_nanos(clocksub.timeout));
+
+                    events.write(types::Event {
+                        userdata: sub.userdata,
+                        error: types::Errno::Success,
+                        type_: types::Eventtype::Clock,
+                        fd_readwrite: fd_readwrite_empty(),
+                    })?;
+                    return Ok(1);
+                }
+            }
+        }
+
         let table = self.table();
         let mut poll = Poll::new();
 

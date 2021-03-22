@@ -16,7 +16,6 @@ use std::cell::{Ref, RefMut};
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::{Deref, DerefMut};
-use std::thread;
 use tracing::debug;
 use wiggle::GuestPtr;
 
@@ -921,7 +920,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                     .flags
                     .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
                 {
-                    thread::sleep(Duration::from_nanos(clocksub.timeout));
+                    self.sched.sleep(Duration::from_nanos(clocksub.timeout));
 
                     events.write(types::Event {
                         userdata: sub.userdata,

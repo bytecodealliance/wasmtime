@@ -128,6 +128,9 @@ impl WasiSched for SyncSched {
         thread::yield_now();
         Ok(())
     }
+    fn sleep(&self, duration: Duration) {
+        std::thread::sleep(duration)
+    }
 }
 
 fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
