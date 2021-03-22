@@ -26,9 +26,10 @@ unsafe fn test_empty_poll() {
 }
 
 unsafe fn test_timeout() {
+    let timeout = 5_000_000u64; // 5 milliseconds
     let clock = wasi::SubscriptionClock {
         id: wasi::CLOCKID_MONOTONIC,
-        timeout: 5_000_000u64, // 5 milliseconds
+        timeout,
         precision: 0,
         flags: 0,
     };
@@ -39,7 +40,9 @@ unsafe fn test_timeout() {
             u: wasi::SubscriptionUU { clock },
         },
     }];
+    let before = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
     let out = poll_oneoff_impl(&r#in).unwrap();
+    let after = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
     assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
     assert_errno!(event.error, wasi::ERRNO_SUCCESS);
@@ -52,6 +55,42 @@ unsafe fn test_timeout() {
         event.userdata, CLOCK_ID,
         "the event.userdata should contain clock_id specified by the user"
     );
+    assert!(after - before >= timeout, "poll_oneoff should sleep for the specified interval");
+}
+
+// Like test_timeout, but uses `CLOCKID_REALTIME`, as WASI libc's sleep
+// functions do.
+unsafe fn test_sleep() {
+    let timeout = 5_000_000u64; // 5 milliseconds
+    let clock = wasi::SubscriptionClock {
+        id: wasi::CLOCKID_REALTIME,
+        timeout,
+        precision: 0,
+        flags: 0,
+    };
+    let r#in = [wasi::Subscription {
+        userdata: CLOCK_ID,
+        u: wasi::SubscriptionU {
+            tag: wasi::EVENTTYPE_CLOCK,
+            u: wasi::SubscriptionUU { clock },
+        },
+    }];
+    let before = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
+    let out = poll_oneoff_impl(&r#in).unwrap();
+    let after = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
+    assert_eq!(out.len(), 1, "should return 1 event");
+    let event = &out[0];
+    assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+    assert_eq!(
+        event.r#type,
+        wasi::EVENTTYPE_CLOCK,
+        "the event.type should equal clock"
+    );
+    assert_eq!(
+        event.userdata, CLOCK_ID,
+        "the event.userdata should contain clock_id specified by the user"
+    );
+    assert!(after - before >= timeout, "poll_oneoff should sleep for the specified interval");
 }
 
 unsafe fn test_fd_readwrite(fd: wasi::Fd, error_code: wasi::Errno) {
