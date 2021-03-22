@@ -5,7 +5,25 @@ use std::ptr;
 use winapi::shared::minwindef::*;
 use winapi::shared::winerror::ERROR_NOT_SUPPORTED;
 use winapi::um::fibersapi::*;
+use winapi::um::processthreadsapi::SetThreadStackGuarantee;
 use winapi::um::winbase::*;
+
+#[derive(Debug)]
+pub struct FiberStack(usize);
+
+impl FiberStack {
+    pub fn new(size: usize) -> io::Result<Self> {
+        Ok(Self(size))
+    }
+
+    pub unsafe fn from_top_ptr(_top: *mut u8) -> io::Result<Self> {
+        Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
+    }
+
+    pub fn top(&self) -> Option<*mut u8> {
+        None
+    }
+}
 
 pub struct Fiber {
     fiber: LPVOID,
@@ -32,6 +50,13 @@ unsafe extern "system" fn fiber_start<F, A, B, C>(data: LPVOID)
 where
     F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
 {
+    // Set the stack guarantee to be consistent with what Rust expects for threads
+    // This value is taken from:
+    // https://github.com/rust-lang/rust/blob/0d97f7a96877a96015d70ece41ad08bb7af12377/library/std/src/sys/windows/stack_overflow.rs
+    if SetThreadStackGuarantee(&mut 0x5000) == 0 {
+        panic!("failed to set fiber stack guarantee");
+    }
+
     let state = data.cast::<StartState>();
     let func = Box::from_raw((*state).initial_closure.get().cast::<F>());
     (*state).initial_closure.set(ptr::null_mut());
@@ -41,7 +66,7 @@ where
 }
 
 impl Fiber {
-    pub fn new<F, A, B, C>(stack_size: usize, func: F) -> io::Result<Self>
+    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> io::Result<Self>
     where
         F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
     {
@@ -51,30 +76,25 @@ impl Fiber {
                 parent: Cell::new(ptr::null_mut()),
                 result_location: Cell::new(ptr::null()),
             });
+
             let fiber = CreateFiberEx(
                 0,
-                stack_size,
+                stack.0,
                 FIBER_FLAG_FLOAT_SWITCH,
                 Some(fiber_start::<F, A, B, C>),
                 &*state as *const StartState as *mut _,
             );
+
             if fiber.is_null() {
                 drop(Box::from_raw(state.initial_closure.get().cast::<F>()));
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(Self { fiber, state })
+                return Err(io::Error::last_os_error());
             }
+
+            Ok(Self { fiber, state })
         }
     }
 
-    pub fn new_with_stack<F, A, B, C>(_top_of_stack: *mut u8, _func: F) -> io::Result<Self>
-    where
-        F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
-    {
-        Err(io::Error::from_raw_os_error(ERROR_NOT_SUPPORTED as i32))
-    }
-
-    pub(crate) fn resume<A, B, C>(&self, result: &Cell<RunResult<A, B, C>>) {
+    pub(crate) fn resume<A, B, C>(&self, _stack: &FiberStack, result: &Cell<RunResult<A, B, C>>) {
         unsafe {
             let is_fiber = IsThreadAFiber() != 0;
             let parent_fiber = if is_fiber {

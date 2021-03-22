@@ -276,7 +276,7 @@ pub fn create_function(
 
     unsafe {
         Ok((
-            OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+            OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
                 module: Arc::new(module),
                 finished_functions: &finished_functions,
                 imports: Imports::default(),
@@ -308,7 +308,7 @@ pub unsafe fn create_raw_function(
     finished_functions.push(func);
 
     Ok(
-        OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+        OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
             module: Arc::new(module),
             finished_functions: &finished_functions,
             imports: Imports::default(),

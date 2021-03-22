@@ -106,7 +106,7 @@ impl HostFunc {
 impl Drop for HostFunc {
     fn drop(&mut self) {
         // Host functions are always allocated with the default (on-demand) allocator
-        unsafe { OnDemandInstanceAllocator::new(None).deallocate(&self.instance) }
+        unsafe { OnDemandInstanceAllocator::default().deallocate(&self.instance) }
     }
 }
 

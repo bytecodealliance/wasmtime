@@ -62,11 +62,12 @@ fn create_handle(
     imports.functions = func_imports;
 
     unsafe {
+        let config = store.engine().config();
         // Use the on-demand allocator when creating handles associated with host objects
         // The configured instance allocator should only be used when creating module instances
         // as we don't want host objects to count towards instance limits.
-        let handle = OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone())
-            .allocate(InstanceAllocationRequest {
+        let handle = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0).allocate(
+            InstanceAllocationRequest {
                 module: Arc::new(module),
                 finished_functions: &finished_functions,
                 imports,
@@ -77,7 +78,8 @@ fn create_handle(
                     as *const VMExternRefActivationsTable
                     as *mut _,
                 stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
-            })?;
+            },
+        )?;
 
         Ok(store.add_instance(handle, true))
     }

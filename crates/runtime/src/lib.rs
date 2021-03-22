@@ -38,7 +38,7 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    FiberStackError, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
+    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
     InstantiationError, LinkError, ModuleLimits, OnDemandInstanceAllocator,
     PoolingAllocationStrategy, PoolingInstanceAllocator, RuntimeInstance,
 };

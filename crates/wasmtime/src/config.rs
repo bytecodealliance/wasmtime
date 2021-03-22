@@ -1329,28 +1329,27 @@ impl Config {
     }
 
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
+        #[cfg(feature = "async")]
+        let stack_size = self.async_stack_size;
+
+        #[cfg(not(feature = "async"))]
+        let stack_size = 0;
+
         match self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => Ok(Box::new(OnDemandInstanceAllocator::new(
                 self.mem_creator.clone(),
+                stack_size,
             ))),
             InstanceAllocationStrategy::Pooling {
                 strategy,
                 module_limits,
                 instance_limits,
-            } => {
-                #[cfg(feature = "async")]
-                let stack_size = self.async_stack_size;
-
-                #[cfg(not(feature = "async"))]
-                let stack_size = 0;
-
-                Ok(Box::new(PoolingInstanceAllocator::new(
-                    strategy.into(),
-                    module_limits.into(),
-                    instance_limits.into(),
-                    stack_size,
-                )?))
-            }
+            } => Ok(Box::new(PoolingInstanceAllocator::new(
+                strategy.into(),
+                module_limits.into(),
+                instance_limits.into(),
+                stack_size,
+            )?)),
         }
     }
 }

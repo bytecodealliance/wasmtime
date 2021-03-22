@@ -68,7 +68,7 @@ FUNCTION(wasmtime_fiber_init):
 
     // And then we specify the stack pointer resumption should begin at. Our
     // `wasmtime_fiber_switch` function consumes 6 registers plus a return
-    // pointer, and the top 16 bytes aree resereved, so that's:
+    // pointer, and the top 16 bytes are reserved, so that's:
     //
     //	(6 + 1) * 16 + 16 = 0x48
     lea -0x48(%rdi), %rax

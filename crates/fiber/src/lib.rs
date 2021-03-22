@@ -14,7 +14,38 @@ mod unix;
 #[cfg(unix)]
 use unix as imp;
 
+/// Represents an execution stack to use for a fiber.
+#[derive(Debug)]
+pub struct FiberStack(imp::FiberStack);
+
+impl FiberStack {
+    /// Creates a new fiber stack of the given size.
+    pub fn new(size: usize) -> io::Result<Self> {
+        Ok(Self(imp::FiberStack::new(size)?))
+    }
+
+    /// Creates a new fiber stack with the given pointer to the top of the stack.
+    ///
+    /// # Safety
+    ///
+    /// This is unsafe because there is no validation of the given stack pointer.
+    ///
+    /// The caller must properly allocate the stack space with a guard page and
+    /// make the pages accessible for correct behavior.
+    pub unsafe fn from_top_ptr(top: *mut u8) -> io::Result<Self> {
+        Ok(Self(imp::FiberStack::from_top_ptr(top)?))
+    }
+
+    /// Gets the top of the stack.
+    ///
+    /// Returns `None` if the platform does not support getting the top of the stack.
+    pub fn top(&self) -> Option<*mut u8> {
+        self.0.top()
+    }
+}
+
 pub struct Fiber<'a, Resume, Yield, Return> {
+    stack: FiberStack,
     inner: imp::Fiber,
     done: Cell<bool>,
     _phantom: PhantomData<&'a (Resume, Yield, Return)>,
@@ -34,39 +65,20 @@ enum RunResult<Resume, Yield, Return> {
 }
 
 impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
-    /// Creates a new fiber which will execute `func` on a new native stack of
-    /// size `stack_size`.
+    /// Creates a new fiber which will execute `func` on the given stack.
     ///
     /// This function returns a `Fiber` which, when resumed, will execute `func`
     /// to completion. When desired the `func` can suspend itself via
     /// `Fiber::suspend`.
     pub fn new(
-        stack_size: usize,
+        stack: FiberStack,
         func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return + 'a,
-    ) -> io::Result<Fiber<'a, Resume, Yield, Return>> {
-        Ok(Fiber {
-            inner: imp::Fiber::new(stack_size, func)?,
-            done: Cell::new(false),
-            _phantom: PhantomData,
-        })
-    }
+    ) -> io::Result<Self> {
+        let inner = imp::Fiber::new(&stack.0, func)?;
 
-    /// Creates a new fiber with existing stack space that will execute `func`.
-    ///
-    /// This function returns a `Fiber` which, when resumed, will execute `func`
-    /// to completion. When desired the `func` can suspend itself via
-    /// `Fiber::suspend`.
-    ///
-    /// # Safety
-    ///
-    /// The caller must properly allocate the stack space with a guard page and
-    /// make the pages accessible for correct behavior.
-    pub unsafe fn new_with_stack(
-        top_of_stack: *mut u8,
-        func: impl FnOnce(Resume, &Suspend<Resume, Yield, Return>) -> Return + 'a,
-    ) -> io::Result<Fiber<'a, Resume, Yield, Return>> {
-        Ok(Fiber {
-            inner: imp::Fiber::new_with_stack(top_of_stack, func)?,
+        Ok(Self {
+            stack,
+            inner,
             done: Cell::new(false),
             _phantom: PhantomData,
         })
@@ -90,7 +102,7 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
     pub fn resume(&self, val: Resume) -> Result<Return, Yield> {
         assert!(!self.done.replace(true), "cannot resume a finished fiber");
         let result = Cell::new(RunResult::Resuming(val));
-        self.inner.resume(&result);
+        self.inner.resume(&self.stack.0, &result);
         match result.into_inner() {
             RunResult::Resuming(_) | RunResult::Executing => unreachable!(),
             RunResult::Yield(y) => {
@@ -105,6 +117,11 @@ impl<'a, Resume, Yield, Return> Fiber<'a, Resume, Yield, Return> {
     /// Returns whether this fiber has finished executing.
     pub fn done(&self) -> bool {
         self.done.get()
+    }
+
+    /// Gets the stack associated with this fiber.
+    pub fn stack(&self) -> &FiberStack {
+        &self.stack
     }
 }
 
@@ -148,18 +165,18 @@ impl<A, B, C> Drop for Fiber<'_, A, B, C> {
 
 #[cfg(test)]
 mod tests {
-    use super::Fiber;
+    use super::{Fiber, FiberStack};
     use std::cell::Cell;
     use std::panic::{self, AssertUnwindSafe};
     use std::rc::Rc;
 
     #[test]
     fn small_stacks() {
-        Fiber::<(), (), ()>::new(0, |_, _| {})
+        Fiber::<(), (), ()>::new(FiberStack::new(0).unwrap(), |_, _| {})
             .unwrap()
             .resume(())
             .unwrap();
-        Fiber::<(), (), ()>::new(1, |_, _| {})
+        Fiber::<(), (), ()>::new(FiberStack::new(1).unwrap(), |_, _| {})
             .unwrap()
             .resume(())
             .unwrap();
@@ -169,7 +186,7 @@ mod tests {
     fn smoke() {
         let hit = Rc::new(Cell::new(false));
         let hit2 = hit.clone();
-        let fiber = Fiber::<(), (), ()>::new(1024 * 1024, move |_, _| {
+        let fiber = Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |_, _| {
             hit2.set(true);
         })
         .unwrap();
@@ -182,7 +199,7 @@ mod tests {
     fn suspend_and_resume() {
         let hit = Rc::new(Cell::new(false));
         let hit2 = hit.clone();
-        let fiber = Fiber::<(), (), ()>::new(1024 * 1024, move |_, s| {
+        let fiber = Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |_, s| {
             s.suspend(());
             hit2.set(true);
             s.suspend(());
@@ -219,14 +236,15 @@ mod tests {
         }
 
         fn run_test() {
-            let fiber = Fiber::<(), (), ()>::new(1024 * 1024, move |(), s| {
-                assert_contains_host();
-                s.suspend(());
-                assert_contains_host();
-                s.suspend(());
-                assert_contains_host();
-            })
-            .unwrap();
+            let fiber =
+                Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |(), s| {
+                    assert_contains_host();
+                    s.suspend(());
+                    assert_contains_host();
+                    s.suspend(());
+                    assert_contains_host();
+                })
+                .unwrap();
             assert!(fiber.resume(()).is_err());
             assert!(fiber.resume(()).is_err());
             assert!(fiber.resume(()).is_ok());
@@ -239,11 +257,12 @@ mod tests {
     fn panics_propagated() {
         let a = Rc::new(Cell::new(false));
         let b = SetOnDrop(a.clone());
-        let fiber = Fiber::<(), (), ()>::new(1024 * 1024, move |(), _s| {
-            drop(&b);
-            panic!();
-        })
-        .unwrap();
+        let fiber =
+            Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |(), _s| {
+                drop(&b);
+                panic!();
+            })
+            .unwrap();
         assert!(panic::catch_unwind(AssertUnwindSafe(|| fiber.resume(()))).is_err());
         assert!(a.get());
 
@@ -258,7 +277,7 @@ mod tests {
 
     #[test]
     fn suspend_and_resume_values() {
-        let fiber = Fiber::new(1024 * 1024, move |first, s| {
+        let fiber = Fiber::new(FiberStack::new(1024 * 1024).unwrap(), move |first, s| {
             assert_eq!(first, 2.0);
             assert_eq!(s.suspend(4), 3.0);
             "hello".to_string()
