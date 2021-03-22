@@ -67,16 +67,13 @@ impl<'a> Poll<'a> {
         self.subs.is_empty()
     }
     pub fn earliest_clock_deadline(&'a self) -> Option<&MonotonicClockSubscription<'a>> {
-        let mut subs = self
-            .subs
+        self.subs
             .iter()
             .filter_map(|(s, _ud)| match s {
                 Subscription::MonotonicClock(t) => Some(t),
                 _ => None,
             })
-            .collect::<Vec<&MonotonicClockSubscription<'a>>>();
-        subs.sort_by(|a, b| a.deadline.cmp(&b.deadline));
-        subs.into_iter().next() // First element is earliest
+            .min_by(|a, b| a.deadline.cmp(&b.deadline))
     }
     pub fn rw_subscriptions(&'a self) -> impl Iterator<Item = &Subscription<'a>> {
         self.subs.iter().filter_map(|(s, _ud)| match s {
