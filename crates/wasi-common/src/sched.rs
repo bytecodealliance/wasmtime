@@ -10,6 +10,7 @@ use subscription::{MonotonicClockSubscription, RwSubscription, Subscription, Sub
 pub trait WasiSched {
     fn poll_oneoff(&self, poll: &Poll) -> Result<(), Error>;
     fn sched_yield(&self) -> Result<(), Error>;
+    fn sleep(&self, duration: Duration);
 }
 
 pub struct Userdata(u64);

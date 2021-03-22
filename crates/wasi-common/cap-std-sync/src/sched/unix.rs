@@ -108,6 +108,9 @@ impl WasiSched for SyncSched {
         std::thread::yield_now();
         Ok(())
     }
+    fn sleep(&self, duration: Duration) {
+        std::thread::sleep(duration)
+    }
 }
 
 fn wasi_file_raw_fd(f: &dyn WasiFile) -> Option<RawFd> {
