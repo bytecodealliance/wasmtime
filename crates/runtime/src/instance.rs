@@ -66,6 +66,21 @@ pub trait ResourceLimiter {
     /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
     /// effect as the table will not grow.
     fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+
+    /// The maximum number of instances that can be created for a `Store`.
+    ///
+    /// Module instantiation will fail if this limit is exceeded.
+    fn instances(&self) -> usize;
+
+    /// The maximum number of tables that can be created for a `Store`.
+    ///
+    /// Module instantiation will fail if this limit is exceeded.
+    fn tables(&self) -> usize;
+
+    /// The maximum number of tables that can be created for a `Store`.
+    ///
+    /// Module instantiation will fail if this limit is exceeded.
+    fn memories(&self) -> usize;
 }
 
 /// Runtime representation of an instance value, which erases all `Instance`
@@ -99,9 +114,6 @@ pub(crate) struct Instance {
 
     /// Hosts can store arbitrary per-instance information here.
     host_state: Box<dyn Any>,
-
-    /// The limiter to use for the instance, if there is one.
-    limiter: Option<Arc<dyn ResourceLimiter>>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -417,15 +429,6 @@ impl Instance {
             .get(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()));
 
-        if let Some(limiter) = &self.limiter {
-            let current = memory.size();
-            let desired = current.checked_add(delta)?;
-
-            if !limiter.memory_growing(current, desired, memory.maximum()) {
-                return None;
-            }
-        }
-
         let result = unsafe { memory.grow(delta) };
 
         // Keep current the VMContext pointers used by compiled wasm code.
@@ -508,15 +511,6 @@ impl Instance {
             .tables
             .get(table_index)
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()));
-
-        if let Some(limiter) = &self.limiter {
-            let current = table.size();
-            let desired = current.checked_add(delta)?;
-
-            if !limiter.table_growing(current, desired, table.maximum()) {
-                return None;
-            }
-        }
 
         let result = unsafe { table.grow(delta, init_value) };
 

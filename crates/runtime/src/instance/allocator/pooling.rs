@@ -9,7 +9,7 @@
 
 use super::{
     initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, InstantiationError,
+    InstanceHandle, InstantiationError, ResourceLimiter,
 };
 use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
@@ -370,7 +370,6 @@ impl InstancePool {
                     dropped_elements: RefCell::new(EntitySet::new()),
                     dropped_data: RefCell::new(EntitySet::new()),
                     host_state: Box::new(()),
-                    limiter: None,
                     vmctx: VMContext {},
                 },
             );
@@ -392,7 +391,6 @@ impl InstancePool {
         };
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
-        let limiter = std::mem::take(&mut req.limiter);
 
         unsafe {
             let instance = self.instance(index);
@@ -403,14 +401,20 @@ impl InstancePool {
                 instance.module.as_ref(),
             );
             instance.host_state = host_state;
-            instance.limiter = limiter;
 
             Self::set_instance_memories(
                 instance,
                 self.memories.get(index),
                 self.memories.max_wasm_pages,
+                &req.limiter,
             )?;
-            Self::set_instance_tables(instance, self.tables.get(index), self.tables.max_elements)?;
+
+            Self::set_instance_tables(
+                instance,
+                self.tables.get(index),
+                self.tables.max_elements,
+                &req.limiter,
+            )?;
 
             initialize_vmcontext(instance, req);
 
@@ -468,9 +472,8 @@ impl InstancePool {
         instance.tables.clear();
         instance.dropped_elements.borrow_mut().clear();
 
-        // Drop any host state and limiter
+        // Drop any host state
         instance.host_state = Box::new(());
-        instance.limiter = None;
 
         self.free_list.lock().unwrap().push(index);
     }
@@ -479,6 +482,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
         max_pages: u32,
+        limiter: &Option<&Arc<dyn ResourceLimiter>>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -493,6 +497,7 @@ impl InstancePool {
                     memories.next().unwrap(),
                     max_pages,
                     commit_memory_pages,
+                    limiter,
                 )
                 .map_err(InstantiationError::Resource)?,
             );
@@ -509,6 +514,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut tables: impl Iterator<Item = *mut u8>,
         max_elements: u32,
+        limiter: &Option<&Arc<dyn ResourceLimiter>>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -522,7 +528,7 @@ impl InstancePool {
 
             instance
                 .tables
-                .push(Table::new_static(plan, base as _, max_elements));
+                .push(Table::new_static(plan, base as _, max_elements, limiter));
         }
 
         let mut dropped_elements = instance.dropped_elements.borrow_mut();

@@ -61,7 +61,7 @@ pub struct InstanceAllocationRequest<'a> {
     pub module_info_lookup: Option<*const dyn ModuleInfoLookup>,
 
     /// The resource limiter to use for the instance.
-    pub limiter: Option<Arc<dyn ResourceLimiter>>,
+    pub limiter: Option<&'a Arc<dyn ResourceLimiter>>,
 }
 
 /// An link error while instantiating a module.
@@ -593,12 +593,15 @@ impl OnDemandInstanceAllocator {
         }
     }
 
-    fn create_tables(module: &Module) -> PrimaryMap<DefinedTableIndex, Table> {
+    fn create_tables(
+        module: &Module,
+        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+    ) -> PrimaryMap<DefinedTableIndex, Table> {
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
-            tables.push(Table::new_dynamic(table));
+            tables.push(Table::new_dynamic(table, limiter));
         }
         tables
     }
@@ -606,6 +609,7 @@ impl OnDemandInstanceAllocator {
     fn create_memories(
         &self,
         module: &Module,
+        limiter: &Option<&Arc<dyn ResourceLimiter>>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -615,8 +619,10 @@ impl OnDemandInstanceAllocator {
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
-            memories
-                .push(Memory::new_dynamic(plan, creator).map_err(InstantiationError::Resource)?);
+            memories.push(
+                Memory::new_dynamic(plan, creator, limiter)
+                    .map_err(InstantiationError::Resource)?,
+            );
         }
         Ok(memories)
     }
@@ -636,11 +642,10 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module)?;
-        let tables = Self::create_tables(&req.module);
+        let memories = self.create_memories(&req.module, &req.limiter)?;
+        let tables = Self::create_tables(&req.module, &req.limiter);
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
-        let limiter = std::mem::take(&mut req.limiter);
 
         let handle = {
             let instance = Instance {
@@ -653,7 +658,6 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 )),
                 dropped_data: RefCell::new(EntitySet::with_capacity(req.module.passive_data.len())),
                 host_state,
-                limiter,
                 vmctx: VMContext {},
             };
             let layout = instance.alloc_layout();

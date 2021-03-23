@@ -383,9 +383,6 @@ pub struct Config {
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
-    pub(crate) max_instances: usize,
-    pub(crate) max_tables: usize,
-    pub(crate) max_memories: usize,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     host_funcs: HostFuncMap,
@@ -422,9 +419,6 @@ impl Config {
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
             features: WasmFeatures::default(),
-            max_instances: 10_000,
-            max_tables: 10_000,
-            max_memories: 10_000,
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             host_funcs: HostFuncMap::new(),
@@ -1193,39 +1187,6 @@ impl Config {
         self.tunables.dynamic_memory_offset_guard_size = guard_size;
         self.tunables.static_memory_offset_guard_size =
             cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
-        self
-    }
-
-    /// Configures the maximum number of instances which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_instances(&mut self, instances: usize) -> &mut Self {
-        self.max_instances = instances;
-        self
-    }
-
-    /// Configures the maximum number of tables which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_tables(&mut self, tables: usize) -> &mut Self {
-        self.max_tables = tables;
-        self
-    }
-
-    /// Configures the maximum number of memories which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_memories(&mut self, memories: usize) -> &mut Self {
-        self.max_memories = memories;
         self
     }
 

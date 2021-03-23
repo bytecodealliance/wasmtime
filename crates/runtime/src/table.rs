@@ -3,19 +3,20 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
-use crate::{Trap, VMExternRef};
+use crate::{ResourceLimiter, Trap, VMExternRef};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
 use std::convert::TryInto;
 use std::ops::Range;
 use std::ptr;
+use std::sync::Arc;
 use wasmtime_environ::wasm::TableElementType;
 use wasmtime_environ::{ir, TablePlan};
 
 /// An element going into or coming out of a table.
 ///
 /// Table elements are stored as pointers and are default-initialized with `ptr::null_mut`.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum TableElement {
     /// A `funcref`.
     FuncRef(*mut VMCallerCheckedAnyfunc),
@@ -92,7 +93,6 @@ impl From<VMExternRef> for TableElement {
     }
 }
 
-#[derive(Debug)]
 enum TableStorage {
     Static {
         data: *mut *mut u8,
@@ -108,38 +108,51 @@ enum TableStorage {
 }
 
 /// Represents an instance's table.
-#[derive(Debug)]
-pub struct Table(TableStorage);
+pub struct Table {
+    storage: TableStorage,
+    limiter: Option<Arc<dyn ResourceLimiter>>,
+}
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(plan: &TablePlan) -> Self {
+    pub fn new_dynamic(plan: &TablePlan, limiter: &Option<&Arc<dyn ResourceLimiter>>) -> Self {
         let elements = RefCell::new(vec![ptr::null_mut(); plan.table.minimum as usize]);
         let ty = plan.table.ty.clone();
         let maximum = plan.table.maximum;
-        Self(TableStorage::Dynamic {
-            elements,
-            ty,
-            maximum,
-        })
+        Self {
+            storage: TableStorage::Dynamic {
+                elements,
+                ty,
+                maximum,
+            },
+            limiter: limiter.cloned(),
+        }
     }
 
     /// Create a new static (immovable) table instance for the specified table plan.
-    pub fn new_static(plan: &TablePlan, data: *mut *mut u8, maximum: u32) -> Self {
+    pub fn new_static(
+        plan: &TablePlan,
+        data: *mut *mut u8,
+        maximum: u32,
+        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+    ) -> Self {
         let size = Cell::new(plan.table.minimum);
         let ty = plan.table.ty.clone();
         let maximum = min(plan.table.maximum.unwrap_or(maximum), maximum);
-        Self(TableStorage::Static {
-            data,
-            size,
-            ty,
-            maximum,
-        })
+        Self {
+            storage: TableStorage::Static {
+                data,
+                size,
+                ty,
+                maximum,
+            },
+            limiter: limiter.cloned(),
+        }
     }
 
     /// Returns the type of the elements in this table.
     pub fn element_type(&self) -> TableElementType {
-        match &self.0 {
+        match &self.storage {
             TableStorage::Static { ty, .. } => *ty,
             TableStorage::Dynamic { ty, .. } => *ty,
         }
@@ -147,7 +160,7 @@ impl Table {
 
     /// Returns whether or not the underlying storage of the table is "static".
     pub(crate) fn is_static(&self) -> bool {
-        if let TableStorage::Static { .. } = &self.0 {
+        if let TableStorage::Static { .. } = &self.storage {
             true
         } else {
             false
@@ -156,15 +169,20 @@ impl Table {
 
     /// Returns the number of allocated elements.
     pub fn size(&self) -> u32 {
-        match &self.0 {
+        match &self.storage {
             TableStorage::Static { size, .. } => size.get(),
             TableStorage::Dynamic { elements, .. } => elements.borrow().len().try_into().unwrap(),
         }
     }
 
-    /// Returns the maximum number of elements.
+    /// Returns the maximum number of elements at runtime.
+    ///
+    /// Returns `None` if the table is unbounded.
+    ///
+    /// The runtime maximum may not be equal to the maximum from the table's Wasm type
+    /// when it is being constrained by an instance allocator.
     pub fn maximum(&self) -> Option<u32> {
-        match &self.0 {
+        match &self.storage {
             TableStorage::Static { maximum, .. } => Some(*maximum),
             TableStorage::Dynamic { maximum, .. } => maximum.clone(),
         }
@@ -217,6 +235,15 @@ impl Table {
     /// Generally, prefer using `InstanceHandle::table_grow`, which encapsulates
     /// this unsafety.
     pub unsafe fn grow(&self, delta: u32, init_value: TableElement) -> Option<u32> {
+        if let Some(limiter) = &self.limiter {
+            let current = self.size();
+            let desired = current.checked_add(delta)?;
+
+            if !limiter.table_growing(current, desired, self.maximum()) {
+                return None;
+            }
+        }
+
         let old_size = self.size();
 
         let new_size = old_size.checked_add(delta)?;
@@ -229,7 +256,7 @@ impl Table {
         debug_assert!(self.type_matches(&init_value));
 
         // First resize the storage and then fill with the init value
-        match &self.0 {
+        match &self.storage {
             TableStorage::Static { size, .. } => {
                 size.set(new_size);
             }
@@ -319,7 +346,7 @@ impl Table {
 
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
     pub fn vmtable(&self) -> VMTableDefinition {
-        match &self.0 {
+        match &self.storage {
             TableStorage::Static { data, size, .. } => VMTableDefinition {
                 base: *data as _,
                 current_elements: size.get(),
@@ -346,7 +373,7 @@ impl Table {
     where
         F: FnOnce(&[*mut u8]) -> R,
     {
-        match &self.0 {
+        match &self.storage {
             TableStorage::Static { data, size, .. } => unsafe {
                 f(std::slice::from_raw_parts(*data, size.get() as usize))
             },
@@ -361,7 +388,7 @@ impl Table {
     where
         F: FnOnce(&mut [*mut u8]) -> R,
     {
-        match &self.0 {
+        match &self.storage {
             TableStorage::Static { data, size, .. } => unsafe {
                 f(std::slice::from_raw_parts_mut(*data, size.get() as usize))
             },
@@ -463,11 +490,14 @@ impl Drop for Table {
 // The default table representation is an empty funcref table that cannot grow.
 impl Default for Table {
     fn default() -> Self {
-        Self(TableStorage::Static {
-            data: std::ptr::null_mut(),
-            size: Cell::new(0),
-            ty: TableElementType::Func,
-            maximum: 0,
-        })
+        Self {
+            storage: TableStorage::Static {
+                data: std::ptr::null_mut(),
+                size: Cell::new(0),
+                ty: TableElementType::Func,
+                maximum: 0,
+            },
+            limiter: None,
+        }
     }
 }

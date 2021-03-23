@@ -1,9 +1,9 @@
 use crate::{
     module::ModuleRegistry, signatures::SignatureCollection, trampoline::StoreInstanceHandle,
-    Engine, Func, Module, ResourceLimiter, ResourceLimiterProxy, Trap,
+    Engine, Func, Module, ResourceLimiter, ResourceLimiterProxy, Trap, DEFAULT_INSTANCE_LIMIT,
+    DEFAULT_MEMORY_LIMIT, DEFAULT_TABLE_LIMIT,
 };
 use anyhow::{bail, Result};
-use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
@@ -15,6 +15,10 @@ use std::ptr;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::{
+    any::{Any, TypeId},
+    cell::Ref,
+};
 use wasmtime_runtime::{
     InstanceAllocator, InstanceHandle, ModuleInfo, OnDemandInstanceAllocator, SignalHandler,
     TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable,
@@ -155,9 +159,17 @@ impl Store {
         }
     }
 
-    /// Creates a new store to be associated with the given [`Engine`] and using the given
-    /// resource limiter for any instances created in the store.
-    pub fn new_with_limiter(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
+    /// Creates a new store to be associated with the given [`Engine`] and using the supplied
+    /// resource limiter.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use wasmtime::{Engine, Store, StoreLimitsBuilder};
+    /// let engine = Engine::default();
+    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().instances(10).build());
+    /// ```
+    pub fn new_with_limits(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
         let store = Store::new(engine);
 
         {
@@ -217,8 +229,8 @@ impl Store {
         }
     }
 
-    pub(crate) fn limiter(&self) -> Option<Arc<dyn wasmtime_runtime::ResourceLimiter>> {
-        self.inner.limiter.borrow().clone()
+    pub(crate) fn limiter(&self) -> Ref<Option<Arc<dyn wasmtime_runtime::ResourceLimiter>>> {
+        self.inner.limiter.borrow()
     }
 
     pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
@@ -250,8 +262,6 @@ impl Store {
     }
 
     pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
-        let config = self.engine().config();
-
         fn bump(slot: &Cell<usize>, max: usize, amt: usize, desc: &str) -> Result<()> {
             let new = slot.get().saturating_add(amt);
             if new > max {
@@ -269,19 +279,11 @@ impl Store {
         let memories = module.memory_plans.len() - module.num_imported_memories;
         let tables = module.table_plans.len() - module.num_imported_tables;
 
-        bump(
-            &self.inner.instance_count,
-            config.max_instances,
-            1,
-            "instance",
-        )?;
-        bump(
-            &self.inner.memory_count,
-            config.max_memories,
-            memories,
-            "memory",
-        )?;
-        bump(&self.inner.table_count, config.max_tables, tables, "table")?;
+        let (max_instances, max_memories, max_tables) = self.limits();
+
+        bump(&self.inner.instance_count, max_instances, 1, "instance")?;
+        bump(&self.inner.memory_count, max_memories, memories, "memory")?;
+        bump(&self.inner.table_count, max_tables, tables, "table")?;
 
         Ok(())
     }
@@ -865,6 +867,19 @@ impl Store {
             // wasm and get caught on the other side to clean things up.
             Err(trap) => unsafe { wasmtime_runtime::raise_user_trap(trap.into()) },
         }
+    }
+
+    fn limits(&self) -> (usize, usize, usize) {
+        let limiter = self.inner.limiter.borrow();
+
+        limiter
+            .as_ref()
+            .map(|l| (l.instances(), l.memories(), l.tables()))
+            .unwrap_or((
+                DEFAULT_INSTANCE_LIMIT,
+                DEFAULT_MEMORY_LIMIT,
+                DEFAULT_TABLE_LIMIT,
+            ))
     }
 }
 

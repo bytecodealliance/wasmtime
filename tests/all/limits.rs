@@ -4,14 +4,20 @@ use std::rc::Rc;
 use wasmtime::*;
 
 #[test]
-fn test_static_limiter() -> Result<()> {
+fn test_limits() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
         r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
     )?;
 
-    let store = Store::new_with_limiter(&engine, StaticResourceLimiter::new(Some(10), Some(5)));
+    let store = Store::new_with_limits(
+        &engine,
+        StoreLimitsBuilder::new()
+            .memory_pages(10)
+            .table_elements(5)
+            .build(),
+    );
 
     let instance = Instance::new(&store, &module, &[])?;
 
@@ -44,14 +50,14 @@ fn test_static_limiter() -> Result<()> {
 }
 
 #[test]
-fn test_static_limiter_memory_only() -> Result<()> {
+fn test_limits_memory_only() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
         r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
     )?;
 
-    let store = Store::new_with_limiter(&engine, StaticResourceLimiter::new(Some(10), None));
+    let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().memory_pages(10).build());
 
     let instance = Instance::new(&store, &module, &[])?;
 
@@ -77,14 +83,15 @@ fn test_static_limiter_memory_only() -> Result<()> {
 }
 
 #[test]
-fn test_static_limiter_table_only() -> Result<()> {
+fn test_limits_table_only() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
         r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
     )?;
 
-    let store = Store::new_with_limiter(&engine, StaticResourceLimiter::new(None, Some(5)));
+    let store =
+        Store::new_with_limits(&engine, StoreLimitsBuilder::new().table_elements(5).build());
 
     let instance = Instance::new(&store, &module, &[])?;
 
@@ -198,7 +205,7 @@ fn test_custom_limiter() -> Result<()> {
     )?;
 
     let dropped = Rc::new(Cell::new(false));
-    let store = Store::new_with_limiter(&engine, HostMemoryLimiter(dropped.clone()));
+    let store = Store::new_with_limits(&engine, HostMemoryLimiter(dropped.clone()));
 
     assert!(store
         .set(Rc::new(RefCell::new(MemoryContext {

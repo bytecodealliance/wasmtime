@@ -4,12 +4,14 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
+use crate::ResourceLimiter;
 use anyhow::Result;
 use more_asserts::{assert_ge, assert_le};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
 use std::convert::TryFrom;
 use std::ptr;
+use std::sync::Arc;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A memory allocator
@@ -199,12 +201,22 @@ enum MemoryStorage {
 }
 
 /// Represents an instantiation of a WebAssembly memory.
-pub struct Memory(MemoryStorage);
+pub struct Memory {
+    storage: MemoryStorage,
+    limiter: Option<Arc<dyn ResourceLimiter>>,
+}
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
-    pub fn new_dynamic(plan: &MemoryPlan, creator: &dyn RuntimeMemoryCreator) -> Result<Self> {
-        Ok(Self(MemoryStorage::Dynamic(creator.new_memory(plan)?)))
+    pub fn new_dynamic(
+        plan: &MemoryPlan,
+        creator: &dyn RuntimeMemoryCreator,
+        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+    ) -> Result<Self> {
+        Ok(Self {
+            storage: MemoryStorage::Dynamic(creator.new_memory(plan)?),
+            limiter: limiter.cloned(),
+        })
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
@@ -213,33 +225,41 @@ impl Memory {
         base: *mut u8,
         maximum: u32,
         make_accessible: fn(*mut u8, usize) -> Result<()>,
+        limiter: &Option<&Arc<dyn ResourceLimiter>>,
     ) -> Result<Self> {
         if plan.memory.minimum > 0 {
             make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize)?;
         }
 
-        Ok(Self(MemoryStorage::Static {
-            base,
-            size: Cell::new(plan.memory.minimum),
-            maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
-            make_accessible,
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            guard_page_faults: RefCell::new(Vec::new()),
-        }))
+        Ok(Self {
+            storage: MemoryStorage::Static {
+                base,
+                size: Cell::new(plan.memory.minimum),
+                maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
+                make_accessible,
+                #[cfg(all(feature = "uffd", target_os = "linux"))]
+                guard_page_faults: RefCell::new(Vec::new()),
+            },
+            limiter: limiter.cloned(),
+        })
     }
 
     /// Returns the number of allocated wasm pages.
     pub fn size(&self) -> u32 {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static { size, .. } => size.get(),
             MemoryStorage::Dynamic(mem) => mem.size(),
         }
     }
 
-    /// Returns the maximum number of pages the memory can grow to.
+    /// Returns the maximum number of pages the memory can grow to at runtime.
+    ///
     /// Returns `None` if the memory is unbounded.
+    ///
+    /// The runtime maximum may not be equal to the maximum from the linear memory's
+    /// Wasm type when it is being constrained by an instance allocator.
     pub fn maximum(&self) -> Option<u32> {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static { maximum, .. } => Some(*maximum),
             MemoryStorage::Dynamic(mem) => mem.maximum(),
         }
@@ -247,7 +267,7 @@ impl Memory {
 
     /// Returns whether or not the underlying storage of the memory is "static".
     pub(crate) fn is_static(&self) -> bool {
-        if let MemoryStorage::Static { .. } = &self.0 {
+        if let MemoryStorage::Static { .. } = &self.storage {
             true
         } else {
             false
@@ -268,7 +288,16 @@ impl Memory {
     /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
     /// this unsafety.
     pub unsafe fn grow(&self, delta: u32) -> Option<u32> {
-        match &self.0 {
+        if let Some(limiter) = &self.limiter {
+            let current = self.size();
+            let desired = current.checked_add(delta)?;
+
+            if !limiter.memory_growing(current, desired, self.maximum()) {
+                return None;
+            }
+        }
+
+        match &self.storage {
             MemoryStorage::Static {
                 base,
                 size,
@@ -306,7 +335,7 @@ impl Memory {
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static { base, size, .. } => VMMemoryDefinition {
                 base: *base,
                 current_length: size.get() as usize * WASM_PAGE_SIZE as usize,
@@ -327,7 +356,7 @@ impl Memory {
         size: usize,
         reset: fn(*mut u8, usize) -> Result<()>,
     ) {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static {
                 guard_page_faults, ..
             } => {
@@ -348,7 +377,7 @@ impl Memory {
     /// This function will panic if called on a dynamic memory.
     #[cfg(all(feature = "uffd", target_os = "linux"))]
     pub(crate) fn reset_guard_pages(&self) -> Result<()> {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static {
                 guard_page_faults, ..
             } => {
@@ -373,13 +402,16 @@ impl Default for Memory {
             unreachable!()
         }
 
-        Self(MemoryStorage::Static {
-            base: ptr::null_mut(),
-            size: Cell::new(0),
-            maximum: 0,
-            make_accessible,
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            guard_page_faults: RefCell::new(Vec::new()),
-        })
+        Self {
+            storage: MemoryStorage::Static {
+                base: ptr::null_mut(),
+                size: Cell::new(0),
+                maximum: 0,
+                make_accessible,
+                #[cfg(all(feature = "uffd", target_os = "linux"))]
+                guard_page_faults: RefCell::new(Vec::new()),
+            },
+            limiter: None,
+        }
     }
 }
