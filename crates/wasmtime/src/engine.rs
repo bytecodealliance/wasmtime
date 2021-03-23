@@ -56,6 +56,7 @@ impl Engine {
     }
 
     /// Returns the configuration settings that this engine is using.
+    #[inline]
     pub fn config(&self) -> &Config {
         &self.inner.config
     }

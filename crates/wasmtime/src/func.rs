@@ -804,7 +804,7 @@ impl Func {
     /// initiates a panic.
     pub fn call(&self, params: &[Val]) -> Result<Box<[Val]>> {
         assert!(
-            !self.store().async_support(),
+            !cfg!(feature = "async") || !self.store().async_support(),
             "must use `call_async` when async support is enabled on the config",
         );
         self._call(params)
@@ -926,6 +926,7 @@ impl Func {
     }
 
     /// Get a reference to this function's store.
+    #[inline]
     pub fn store(&self) -> &Store {
         &self.instance.store
     }
@@ -1414,6 +1415,7 @@ impl Caller<'_> {
     }
 
     /// Get a reference to the caller's store.
+    #[inline]
     pub fn store(&self) -> &Store {
         self.store
     }

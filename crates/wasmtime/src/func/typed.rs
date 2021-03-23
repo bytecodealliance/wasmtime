@@ -53,7 +53,7 @@ where
     /// connected to an asynchronous store.
     pub fn call(&self, params: Params) -> Result<Results, Trap> {
         assert!(
-            !self.func.store().async_support(),
+            !cfg!(feature = "async") || !self.func.store().async_support(),
             "must use `call_async` with async stores"
         );
         unsafe { self._call(params) }
