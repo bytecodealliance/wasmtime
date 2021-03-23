@@ -30,7 +30,7 @@ where
     };
 
     // Creating the vcode string representation may be costly for large functions, so don't do it
-    // if the Debug level hasn't been statically (through features) or dyanmically (through
+    // if the Debug level hasn't been statically (through features) or dynamically (through
     // RUST_LOG) enabled.
     if log_enabled!(Level::Debug) {
         debug!(
