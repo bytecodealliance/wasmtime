@@ -401,6 +401,7 @@ impl Store {
         *self.inner.signal_handler.borrow_mut() = handler;
     }
 
+    #[inline]
     pub(crate) fn interrupts(&self) -> &VMInterrupts {
         &self.inner.interrupts
     }
@@ -933,11 +934,6 @@ unsafe impl TrapInfo for Store {
             return call(handler);
         }
         false
-    }
-
-    #[inline]
-    fn max_wasm_stack(&self) -> usize {
-        self.engine().config().max_wasm_stack
     }
 
     fn out_of_gas(&self) {

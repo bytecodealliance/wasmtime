@@ -182,7 +182,7 @@ impl Trap {
         }
     }
 
-    fn new_wasm(
+    pub(crate) fn new_wasm(
         store: Option<&Store>,
         trap_pc: Option<usize>,
         code: ir::TrapCode,

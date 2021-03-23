@@ -10,6 +10,7 @@ use std::mem;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
+use std::sync::atomic::Ordering::Relaxed;
 use wasmtime_environ::wasm::{EntityIndex, FuncIndex};
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
@@ -1149,17 +1150,106 @@ impl fmt::Debug for Func {
     }
 }
 
+#[inline]
 pub(crate) fn invoke_wasm_and_catch_traps(
     store: &Store,
     closure: impl FnMut(),
 ) -> Result<(), Trap> {
     unsafe {
-        let canary = 0;
-        let _auto_reset_canary = store
-            .externref_activations_table()
-            .set_stack_canary(&canary);
+        let _reset = if store.externref_activations_table().stack_canary().is_some() {
+            None
+        } else {
+            Some(enter_wasm_init(store)?)
+        };
 
         wasmtime_runtime::catch_traps(store, closure).map_err(|e| Trap::from_runtime(store, e))
+    }
+}
+
+/// This function is called to register state within `Store` whenever
+/// WebAssembly is entered for the first time within the `Store`. This isn't
+/// called when wasm is called recursively within the `Store`.
+///
+/// This function sets up various limits such as:
+///
+/// * The stack limit. This is what ensures that we limit the stack space
+///   allocated by WebAssembly code and it's relative to the initial stack
+///   pointer that called into wasm.
+///
+/// * Stack canaries for externref gc tracing. Currently the implementation
+///   relies on walking frames but the stack walker isn't always 100% reliable,
+///   so a canary is used to ensure that if the canary is seen then it's
+///   guaranteed all wasm frames have been walked.
+///
+/// This function may fail if the the stack limit can't be set because an
+/// interrupt already happened. Otherwise it returns a value that resets the
+/// various limits on `Drop`.
+#[inline]
+fn enter_wasm_init<'a>(store: &'a Store) -> Result<impl Drop + 'a, Trap> {
+    let stack_pointer = psm::stack_pointer() as usize;
+
+    // Determine the stack pointer where, after which, any wasm code will
+    // immediately trap. This is checked on the entry to all wasm functions.
+    //
+    // Note that this isn't 100% precise. We are requested to give wasm
+    // `max_wasm_stack` bytes, but what we're actually doing is giving wasm
+    // probably a little less than `max_wasm_stack` because we're
+    // calculating the limit relative to this function's approximate stack
+    // pointer. Wasm will be executed on a frame beneath this one (or next
+    // to it). In any case it's expected to be at most a few hundred bytes
+    // of slop one way or another. When wasm is typically given a MB or so
+    // (a million bytes) the slop shouldn't matter too much.
+    //
+    // After we've got the stack limit then we store it into the `stack_limit`
+    // variable. Note that the store is an atomic swap to ensure that we can
+    // consume any previously-sent interrupt requests. If we found that wasm was
+    // previously interrupted then we immediately return a trap (after resetting
+    // the stack limit). Otherwise we're good to keep on going.
+    //
+    // Note the usage of `Relaxed` memory orderings here. This is specifically
+    // an optimization in the `Drop` below where a `Relaxed` store is speedier
+    // than a `SeqCst` store. The rationale for `Relaxed` here is that the
+    // atomic orderings here aren't actually protecting any memory, we're just
+    // trying to be atomic with respect to this one location in memory (for when
+    // `InterruptHandle` sends us a signal). Due to the lack of needing to
+    // synchronize with any other memory it's hoped that the choice of `Relaxed`
+    // here should be correct for our use case.
+    let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
+    let interrupts = store.interrupts();
+    match interrupts.stack_limit.swap(wasm_stack_limit, Relaxed) {
+        wasmtime_environ::INTERRUPTED => {
+            // This means that an interrupt happened before we actually
+            // called this function, which means that we're now
+            // considered interrupted.
+            interrupts.stack_limit.store(usize::max_value(), Relaxed);
+            return Err(Trap::new_wasm(
+                Some(store),
+                None,
+                wasmtime_environ::ir::TrapCode::Interrupt,
+                backtrace::Backtrace::new_unresolved(),
+            ));
+        }
+        n => debug_assert_eq!(usize::max_value(), n),
+    }
+    store
+        .externref_activations_table()
+        .set_stack_canary(Some(stack_pointer));
+
+    return Ok(Reset(store));
+
+    struct Reset<'a>(&'a Store);
+
+    impl Drop for Reset<'_> {
+        #[inline]
+        fn drop(&mut self) {
+            self.0.externref_activations_table().set_stack_canary(None);
+
+            // see docs above for why this uses `Relaxed`
+            self.0
+                .interrupts()
+                .stack_limit
+                .store(usize::max_value(), Relaxed);
+        }
     }
 }
 
