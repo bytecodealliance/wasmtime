@@ -77,7 +77,3 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
     // Unused on Windows
     Ok(())
 }
-
-pub fn register_tls(_: *const CallThreadState<'static>) {
-    // Unused on Windows
-}

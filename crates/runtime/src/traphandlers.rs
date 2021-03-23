@@ -38,19 +38,32 @@ cfg_if::cfg_if! {
 
 pub use sys::SignalHandler;
 
-/// This function performs the low-overhead platform-specific initialization
-/// that we want to do eagerly to ensure a more-deterministic global process
-/// state.
+/// Globally-set callback to determine whether a program counter is actually a
+/// wasm trap.
 ///
-/// This is especially relevant for signal handlers since handler ordering
-/// depends on installation order: the wasm signal handler must run *before*
-/// the other crash handlers and since POSIX signal handlers work LIFO, this
-/// function needs to be called at the end of the startup process, after other
-/// handlers have been installed. This function can thus be called multiple
-/// times, having no effect after the first call.
-pub fn init_traps() -> Result<(), Trap> {
+/// This is initialized during `init_traps` below. The definition lives within
+/// `wasmtime` currently.
+static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
+
+/// This function is required to be called before any WebAssembly is entered.
+/// This will configure global state such as signal handlers to prepare the
+/// process to receive wasm traps.
+///
+/// This function must not only be called globally once before entering
+/// WebAssembly but it must also be called once-per-thread that enters
+/// WebAssembly. Currently in wasmtime's integration this function is called on
+/// creation of a `Store`.
+///
+/// The `is_wasm_pc` argument is used when a trap happens to determine if a
+/// program counter is the pc of an actual wasm trap or not. This is then used
+/// to disambiguate faults that happen due to wasm and faults that happen due to
+/// bugs in Rust or elsewhere.
+pub fn init_traps(is_wasm_pc: fn(usize) -> bool) -> Result<(), Trap> {
     static INIT: Once = Once::new();
-    INIT.call_once(|| unsafe { sys::platform_init() });
+    INIT.call_once(|| unsafe {
+        IS_WASM_PC = is_wasm_pc;
+        sys::platform_init();
+    });
     sys::lazy_per_thread_init()
 }
 
@@ -208,10 +221,6 @@ pub unsafe trait TrapInfo {
     /// Converts this object into an `Any` to dynamically check its type.
     fn as_any(&self) -> &dyn Any;
 
-    /// Returns whether the given program counter lies within wasm code,
-    /// indicating whether we should handle a trap or not.
-    fn is_wasm_trap(&self, pc: usize) -> bool;
-
     /// Uses `call` to call a custom signal handler, if one is specified.
     ///
     /// Returns `true` if `call` returns true, otherwise returns `false`.
@@ -290,6 +299,7 @@ impl<'a> CallThreadState<'a> {
     ///   instance, and the trap handler should quickly return.
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
+    #[cfg_attr(target_os = "macos", allow(dead_code))] // macOS is more raw and doesn't use this
     fn jmp_buf_if_trap(
         &self,
         pc: *const u8,
@@ -318,7 +328,7 @@ impl<'a> CallThreadState<'a> {
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if !self.trap_info.is_wasm_trap(pc as usize) {
+        if unsafe { !IS_WASM_PC(pc as usize) } {
             return ptr::null();
         }
 
@@ -383,10 +393,6 @@ mod tls {
 
         #[inline(never)] // see module docs for why this is here
         pub fn replace(val: Ptr) -> Ptr {
-            // Mark the current thread as handling interrupts for this specific
-            // CallThreadState: may clobber the previous entry.
-            super::super::sys::register_tls(val);
-
             PTR.with(|p| p.replace(val))
         }
 

@@ -250,7 +250,3 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
         }
     }
 }
-
-pub fn register_tls(_: *const CallThreadState<'static>) {
-    // Unused on unix
-}
