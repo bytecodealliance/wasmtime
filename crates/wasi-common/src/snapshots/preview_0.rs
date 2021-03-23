@@ -749,8 +749,7 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
                     .flags
                     .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
                 {
-                    self.sched.sleep(Duration::from_nanos(clocksub.timeout));
-
+                    self.sched.sleep(Duration::from_nanos(clocksub.timeout))?;
                     events.write(types::Event {
                         userdata: sub.userdata,
                         error: types::Errno::Success,

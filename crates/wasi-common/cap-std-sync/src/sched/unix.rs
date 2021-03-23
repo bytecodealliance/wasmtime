@@ -108,8 +108,9 @@ impl WasiSched for SyncSched {
         std::thread::yield_now();
         Ok(())
     }
-    fn sleep(&self, duration: Duration) {
-        std::thread::sleep(duration)
+    fn sleep(&self, duration: Duration) -> Result<(), Error> {
+        std::thread::sleep(duration);
+        Ok(())
     }
 }
 
