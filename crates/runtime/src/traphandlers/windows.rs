@@ -1,4 +1,4 @@
-use crate::traphandlers::{tls, CallThreadState, Trap, Unwind};
+use crate::traphandlers::{tls, Trap, Unwind};
 use std::io;
 use winapi::um::errhandlingapi::*;
 use winapi::um::minwinbase::*;
