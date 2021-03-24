@@ -6,7 +6,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/pointers.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> pointers::Pointers for WasiCtx<'a> {
     fn pointers_and_enums<'b>(

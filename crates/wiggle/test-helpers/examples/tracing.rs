@@ -27,10 +27,6 @@ witx_literal: "
     errors: { errno => RichError },
 });
 
-// The impl of GuestErrorConversion works just like in every other test where
-// we have a single error type with witx `$errno` with the success called `$ok`
-impl_errno!(types::Errno, types::GuestErrorConversion);
-
 /// When the `errors` mapping in witx is non-empty, we need to impl the
 /// types::UserErrorConversion trait that wiggle generates from that mapping.
 impl<'a> types::UserErrorConversion for WasiCtx<'a> {

@@ -6,7 +6,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/lists.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> lists::Lists for WasiCtx<'a> {
     fn reduce_excuses(

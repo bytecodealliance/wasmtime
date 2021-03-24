@@ -12,7 +12,7 @@ wiggle::from_witx!({
     }
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 #[wiggle::async_trait(?Send)]
 impl<'a> atoms::Atoms for WasiCtx<'a> {

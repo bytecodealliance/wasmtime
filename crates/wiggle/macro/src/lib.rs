@@ -113,17 +113,6 @@ use syn::parse_macro_input;
 ///     }
 /// }
 ///
-/// /// The `types::GuestErrorConversion` trait is also generated with a method for
-/// /// each type used in the `error` position. This trait allows wiggle-generated
-/// /// code to convert a `wiggle::GuestError` into the right error type. The trait
-/// /// must be implemented for the user's ctx type.
-///
-/// impl types::GuestErrorConversion for YourCtxType {
-///     fn into_errno(&self, _e: wiggle::GuestError) -> types::Errno {
-///         unimplemented!()
-///     }
-/// }
-///
 /// /// If you specify a `error` mapping to the macro, you must implement the
 /// /// `types::UserErrorConversion` for your ctx type as well. This trait gives
 /// /// you an opportunity to store or log your rich error type, while returning

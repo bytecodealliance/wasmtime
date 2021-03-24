@@ -6,7 +6,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/records.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> records::Records for WasiCtx<'a> {
     fn sum_of_pair(&self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {
