@@ -96,7 +96,6 @@ impl From<wiggle::GuestError> for types::Errno {
             InvalidUtf8 { .. } => Self::Ilseq,
             TryFromIntError { .. } => Self::Overflow,
             InFunc { err, .. } => types::Errno::from(*err),
-            InDataField { err, .. } => types::Errno::from(*err),
             SliceLengthsDiffer { .. } => Self::Fault,
             BorrowCheckerOutOfHandles { .. } => Self::Fault,
         }
