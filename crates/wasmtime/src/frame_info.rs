@@ -285,9 +285,6 @@ impl GlobalFrameInfo {
         end: usize,
         functions: &Arc<BTreeMap<usize, FunctionInfo>>,
     ) {
-        // Note that ideally we'd debug_assert that the information previously
-        // stored, if any, matches the `functions` we were given, but for now
-        // we just assume it's the same.
         let info = self
             .ranges
             .entry(end)
@@ -296,10 +293,15 @@ impl GlobalFrameInfo {
                 functions: functions.clone(),
                 references: 0,
             });
+        // Note that ideally we'd debug_assert that the information previously
+        // stored, if any, matches the `functions` we were given, but for now we
+        // just do some simple checks to hope it's the same.
+        assert_eq!(info.start, start);
+        assert_eq!(info.functions.len(), functions.len());
         info.references += 1;
     }
 
-    /// Unregisteres a region of code (keyed by the `end` address) from this
+    /// Unregisters a region of code (keyed by the `end` address) from this
     /// global information.
     fn unregister(&mut self, end: usize) {
         let val = self.ranges.get_mut(&end).unwrap();

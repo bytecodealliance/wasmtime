@@ -717,13 +717,26 @@ impl VMExternRefActivationsTable {
         }
     }
 
-    /// todo
+    /// Fetches the current value of this table's stack canary.
+    ///
+    /// This should only be used in conjunction with setting the stack canary
+    /// below if the return value is `None` typically. This is called from RAII
+    /// guards in `wasmtime::func::invoke_wasm_and_catch_traps`.
+    ///
+    /// For more information on canaries see the gc functions below.
     #[inline]
     pub fn stack_canary(&self) -> Option<usize> {
         self.stack_canary.get()
     }
 
-    /// todo
+    /// Sets the current value of the stack canary.
+    ///
+    /// This is called from RAII guards in
+    /// `wasmtime::func::invoke_wasm_and_catch_traps`. This is used to update
+    /// the stack canary to a concrete value and then reset it back to `None`
+    /// when wasm is finished.
+    ///
+    /// For more information on canaries see the gc functions below.
     #[inline]
     pub fn set_stack_canary(&self, canary: Option<usize>) {
         self.stack_canary.set(canary);
