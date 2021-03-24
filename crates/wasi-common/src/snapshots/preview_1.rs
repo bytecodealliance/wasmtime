@@ -30,13 +30,6 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-impl types::GuestErrorConversion for WasiCtx {
-    fn into_errno(&self, e: wiggle::GuestError) -> types::Errno {
-        debug!("Guest error: {:?}", e);
-        e.into()
-    }
-}
-
 impl types::UserErrorConversion for WasiCtx {
     fn errno_from_error(&self, e: Error) -> Result<types::Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
@@ -103,7 +96,6 @@ impl From<wiggle::GuestError> for types::Errno {
             InvalidUtf8 { .. } => Self::Ilseq,
             TryFromIntError { .. } => Self::Overflow,
             InFunc { err, .. } => types::Errno::from(*err),
-            InDataField { err, .. } => types::Errno::from(*err),
             SliceLengthsDiffer { .. } => Self::Fault,
             BorrowCheckerOutOfHandles { .. } => Self::Fault,
         }

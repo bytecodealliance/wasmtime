@@ -10,16 +10,6 @@ wiggle::from_witx!({
 
 use types::NnErrno;
 
-/// Wiggle generates code that performs some input validation on the arguments passed in by users of
-/// wasi-nn. Here we convert the validation error into one (or more, eventually) of the error
-/// variants defined in the witx.
-impl types::GuestErrorConversion for WasiNnCtx {
-    fn into_nn_errno(&self, e: wiggle::GuestError) -> NnErrno {
-        eprintln!("Guest error: {:?}", e);
-        NnErrno::InvalidArgument
-    }
-}
-
 impl<'a> types::UserErrorConversion for WasiNnCtx {
     fn nn_errno_from_wasi_nn_error(&self, e: WasiNnError) -> Result<NnErrno, wiggle::Trap> {
         eprintln!("Host error: {:?}", e);

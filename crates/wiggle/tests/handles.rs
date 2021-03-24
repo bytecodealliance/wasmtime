@@ -8,7 +8,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/handles.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> handle_examples::HandleExamples for WasiCtx<'a> {
     fn fd_create(&self) -> Result<types::Fd, types::Errno> {

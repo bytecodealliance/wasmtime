@@ -1,4 +1,4 @@
-use wiggle::{GuestError, GuestErrorType, GuestPtr, GuestSlice};
+use wiggle::{GuestErrorType, GuestPtr, GuestSlice};
 use wiggle_test::WasiCtx;
 
 // This test file exists to make sure that the entire `wasi.witx` file can be
@@ -28,13 +28,6 @@ type Result<T> = std::result::Result<T, types::Errno>;
 impl GuestErrorType for types::Errno {
     fn success() -> types::Errno {
         types::Errno::Success
-    }
-}
-
-impl<'a> types::GuestErrorConversion for WasiCtx<'a> {
-    fn into_errno(&self, e: GuestError) -> types::Errno {
-        eprintln!("GuestError {:?}", e);
-        types::Errno::Badf
     }
 }
 

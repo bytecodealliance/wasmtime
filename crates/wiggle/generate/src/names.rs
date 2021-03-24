@@ -196,11 +196,6 @@ impl Names {
         }
     }
 
-    pub fn guest_error_conversion_method(&self, tref: &TypeRef) -> Ident {
-        let suffix = Self::snake_typename(tref);
-        format_ident!("into_{}", suffix)
-    }
-
     pub fn user_error_conversion_method(&self, user_type: &UserErrorType) -> Ident {
         let abi_type = Self::snake_typename(&user_type.abi_type());
         format_ident!(
