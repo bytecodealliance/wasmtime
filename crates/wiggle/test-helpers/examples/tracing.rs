@@ -27,6 +27,8 @@ witx_literal: "
     errors: { errno => RichError },
 });
 
+impl_errno!(types::Errno);
+
 /// When the `errors` mapping in witx is non-empty, we need to impl the
 /// types::UserErrorConversion trait that wiggle generates from that mapping.
 impl<'a> types::UserErrorConversion for WasiCtx<'a> {
