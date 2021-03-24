@@ -522,13 +522,13 @@ pub struct VMExternRefActivationsTable {
     /// than create a new hash set every GC.
     precise_stack_roots: RefCell<HashSet<VMExternRefWithTraits>>,
 
-    /// A pointer to a `u8` on the youngest host stack frame before we called
+    /// A pointer to the youngest host stack frame before we called
     /// into Wasm for the first time. When walking the stack in garbage
     /// collection, if we don't find this frame, then we failed to walk every
     /// Wasm stack frame, which means we failed to find all on-stack,
     /// inside-a-Wasm-frame roots, and doing a GC could lead to freeing one of
     /// those missed roots, and use after free.
-    stack_canary: Cell<Option<NonNull<u8>>>,
+    stack_canary: Cell<Option<usize>>,
 }
 
 impl VMExternRefActivationsTable {
@@ -717,73 +717,29 @@ impl VMExternRefActivationsTable {
         }
     }
 
-    /// Set the stack canary around a call into Wasm.
+    /// Fetches the current value of this table's stack canary.
     ///
-    /// The return value should not be dropped until after the Wasm call has
-    /// returned.
+    /// This should only be used in conjunction with setting the stack canary
+    /// below if the return value is `None` typically. This is called from RAII
+    /// guards in `wasmtime::func::invoke_wasm_and_catch_traps`.
     ///
-    /// While this method is always safe to call (or not call), it is unsafe to
-    /// call the `wasmtime_runtime::gc` function unless this method is called at
-    /// the proper times and its return value properly outlives its Wasm call.
-    ///
-    /// For `gc` to be safe, this is only *strictly required* to surround the
-    /// oldest host-->Wasm stack frame transition on this thread, but repeatedly
-    /// calling it is idempotent and cheap, so it is recommended to call this
-    /// for every host-->Wasm call.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use wasmtime_runtime::*;
-    ///
-    /// # let get_table_from_somewhere = || unimplemented!();
-    /// let table: &VMExternRefActivationsTable = get_table_from_somewhere();
-    ///
-    /// // Set the canary before a Wasm call. The canary should always be a
-    /// // local on the stack.
-    /// let canary = 0;
-    /// let auto_reset_canary = table.set_stack_canary(&canary);
-    ///
-    /// // Do the call into Wasm.
-    /// # let call_into_wasm = || unimplemented!();
-    /// call_into_wasm();
-    ///
-    /// // Only drop the value returned by `set_stack_canary` after the Wasm
-    /// // call has returned.
-    /// drop(auto_reset_canary);
-    /// ```
+    /// For more information on canaries see the gc functions below.
     #[inline]
-    pub fn set_stack_canary<'a>(&'a self, canary: &u8) -> impl Drop + 'a {
-        let should_reset = if self.stack_canary.get().is_none() {
-            let canary = canary as *const u8 as *mut u8;
-            self.stack_canary.set(Some(unsafe {
-                debug_assert!(!canary.is_null());
-                NonNull::new_unchecked(canary)
-            }));
-            true
-        } else {
-            false
-        };
+    pub fn stack_canary(&self) -> Option<usize> {
+        self.stack_canary.get()
+    }
 
-        return AutoResetCanary {
-            table: self,
-            should_reset,
-        };
-
-        struct AutoResetCanary<'a> {
-            table: &'a VMExternRefActivationsTable,
-            should_reset: bool,
-        }
-
-        impl Drop for AutoResetCanary<'_> {
-            #[inline]
-            fn drop(&mut self) {
-                if self.should_reset {
-                    debug_assert!(self.table.stack_canary.get().is_some());
-                    self.table.stack_canary.set(None);
-                }
-            }
-        }
+    /// Sets the current value of the stack canary.
+    ///
+    /// This is called from RAII guards in
+    /// `wasmtime::func::invoke_wasm_and_catch_traps`. This is used to update
+    /// the stack canary to a concrete value and then reset it back to `None`
+    /// when wasm is finished.
+    ///
+    /// For more information on canaries see the gc functions below.
+    #[inline]
+    pub fn set_stack_canary(&self, canary: Option<usize>) {
+        self.stack_canary.set(canary);
     }
 }
 
@@ -1066,7 +1022,7 @@ pub unsafe fn gc(
             log::debug!("end GC");
             return;
         }
-        Some(canary) => canary.as_ptr() as usize,
+        Some(canary) => canary,
     };
 
     // There is a stack canary, so there must be Wasm frames on the stack. The

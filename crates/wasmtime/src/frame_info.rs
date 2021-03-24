@@ -1,12 +1,22 @@
 use std::cmp;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::sync::Mutex;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir;
 use wasmtime_environ::wasm::FuncIndex;
 use wasmtime_environ::{FunctionAddressMap, Module, TrapInformation};
 use wasmtime_jit::{CompiledModule, SymbolizeContext};
 
+/// This is a structure that lives within a `Store` and retains information
+/// about all wasm code registered with the `Store` (e.g. modules that have
+/// been instantiated into a store).
+///
+/// "frame information" here refers to things like determining whether a
+/// program counter is a wasm program counter, and additionally mapping program
+/// counters to wasm filenames, modules, line numbers, etc. This store of
+/// information lives as long as a `Store` lives since modules are never
+/// unloaded today.
 #[derive(Default)]
 pub struct StoreFrameInfo {
     /// An internal map that keeps track of backtrace frame information for
@@ -21,14 +31,18 @@ pub struct StoreFrameInfo {
     ranges: BTreeMap<usize, ModuleFrameInfo>,
 }
 
+/// This is a listing of information for each module registered with a store
+/// which lives in `StoreFrameInfo`.
 struct ModuleFrameInfo {
     start: usize,
-    functions: BTreeMap<usize, FunctionInfo>,
+    functions: Arc<BTreeMap<usize, FunctionInfo>>,
     module: Arc<Module>,
     symbolize: Option<SymbolizeContext>,
     has_unparsed_debuginfo: bool,
 }
 
+/// Information about a function, specifically information about individual
+/// traps and such.
 struct FunctionInfo {
     start: usize,
     index: FuncIndex,
@@ -45,26 +59,7 @@ impl StoreFrameInfo {
     /// information due to the compiler's configuration.
     pub fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool)> {
         let (module, func) = self.func(pc)?;
-
-        // Use our relative position from the start of the function to find the
-        // machine instruction that corresponds to `pc`, which then allows us to
-        // map that to a wasm original source location.
-        let rel_pos = (pc - func.start) as u32;
-        let pos = match func
-            .instr_map
-            .instructions
-            .binary_search_by_key(&rel_pos, |map| map.code_offset)
-        {
-            // Exact hit!
-            Ok(pos) => Some(pos),
-
-            // This *would* be at the first slot in the array, so no
-            // instructions cover `pc`.
-            Err(0) => None,
-
-            // This would be at the `nth` slot, so we're at the `n-1`th slot.
-            Err(n) => Some(n - 1),
-        };
+        let pos = func.instr_pos(pc);
 
         // In debug mode for now assert that we found a mapping for `pc` within
         // the function, because otherwise something is buggy along the way and
@@ -138,15 +133,7 @@ impl StoreFrameInfo {
     }
 
     fn func(&self, pc: usize) -> Option<(&ModuleFrameInfo, &FunctionInfo)> {
-        let (end, info) = self.ranges.range(pc..).next()?;
-        if pc < info.start || *end < pc {
-            return None;
-        }
-        let (end, func) = info.functions.range(pc..).next()?;
-        if pc < func.start || *end < pc {
-            return None;
-        }
-        Some((info, func))
+        func(pc, &self.ranges, |t| (t.start, &t.functions))
     }
 
     /// Registers a new compiled module's frame information.
@@ -183,6 +170,7 @@ impl StoreFrameInfo {
         if functions.len() == 0 {
             return;
         }
+        let functions = Arc::new(functions);
 
         // First up assert that our chunk of jit functions doesn't collide with
         // any other known chunks of jit functions...
@@ -194,6 +182,7 @@ impl StoreFrameInfo {
         }
 
         // ... then insert our range and assert nothing was there previously
+        GLOBAL_INFO.lock().unwrap().register(min, max, &functions);
         let prev = self.ranges.insert(
             max,
             ModuleFrameInfo {
@@ -206,6 +195,138 @@ impl StoreFrameInfo {
         );
         assert!(prev.is_none());
     }
+}
+
+impl FunctionInfo {
+    fn instr_pos(&self, pc: usize) -> Option<usize> {
+        // Use our relative position from the start of the function to find the
+        // machine instruction that corresponds to `pc`, which then allows us to
+        // map that to a wasm original source location.
+        let rel_pos = (pc - self.start) as u32;
+        match self
+            .instr_map
+            .instructions
+            .binary_search_by_key(&rel_pos, |map| map.code_offset)
+        {
+            // Exact hit!
+            Ok(pos) => Some(pos),
+
+            // This *would* be at the first slot in the array, so no
+            // instructions cover `pc`.
+            Err(0) => None,
+
+            // This would be at the `nth` slot, so we're at the `n-1`th slot.
+            Err(n) => Some(n - 1),
+        }
+    }
+}
+
+impl Drop for StoreFrameInfo {
+    fn drop(&mut self) {
+        let mut info = GLOBAL_INFO.lock().unwrap();
+        for end in self.ranges.keys() {
+            info.unregister(*end);
+        }
+    }
+}
+
+/// This is the dual of `StoreFrameInfo` and is stored globally (as the name
+/// implies) rather than simply in one `Store`.
+///
+/// The purpose of this map is to be called from signal handlers to determine
+/// whether a program counter is a wasm trap or not. Specifically macOS has
+/// no contextual information about the thread available, hence the necessity
+/// for global state rather than using thread local state.
+///
+/// This is similar to `StoreFrameInfo` except that it has less information and
+/// supports removal. Any time anything is registered with a `StoreFrameInfo`
+/// it is also automatically registered with the singleton global frame
+/// information. When a `StoreFrameInfo` is destroyed then all of its entries
+/// are removed from the global frame information.
+#[derive(Default)]
+pub(crate) struct GlobalFrameInfo {
+    // The map here behaves the same way as `StoreFrameInfo`.
+    ranges: BTreeMap<usize, GlobalModuleFrameInfo>,
+}
+
+/// This is the equivalent of `ModuleFrameInfo` except has less code and is
+/// stored within `GlobalFrameInfo`.
+struct GlobalModuleFrameInfo {
+    start: usize,
+    functions: Arc<BTreeMap<usize, FunctionInfo>>,
+
+    /// Note that modules can be instantiated in many stores, so the purpose of
+    /// this field is to keep track of how many stores have registered a
+    /// module. Information is only removed from the global store when this
+    /// reference count reaches 0.
+    references: usize,
+}
+
+lazy_static::lazy_static! {
+    static ref GLOBAL_INFO: Mutex<GlobalFrameInfo> = Default::default();
+}
+
+impl GlobalFrameInfo {
+    /// Returns whether the `pc`, according to globally registered information,
+    /// is a wasm trap or not.
+    pub(crate) fn is_wasm_pc(pc: usize) -> bool {
+        let info = GLOBAL_INFO.lock().unwrap();
+        match func(pc, &info.ranges, |i| (i.start, &i.functions)) {
+            Some((_, info)) => info.instr_pos(pc).is_some(),
+            None => false,
+        }
+    }
+
+    /// Registers a new region of code, described by `(start, end)` and with
+    /// the given function information, with the global information.
+    fn register(
+        &mut self,
+        start: usize,
+        end: usize,
+        functions: &Arc<BTreeMap<usize, FunctionInfo>>,
+    ) {
+        let info = self
+            .ranges
+            .entry(end)
+            .or_insert_with(|| GlobalModuleFrameInfo {
+                start,
+                functions: functions.clone(),
+                references: 0,
+            });
+        // Note that ideally we'd debug_assert that the information previously
+        // stored, if any, matches the `functions` we were given, but for now we
+        // just do some simple checks to hope it's the same.
+        assert_eq!(info.start, start);
+        assert_eq!(info.functions.len(), functions.len());
+        info.references += 1;
+    }
+
+    /// Unregisters a region of code (keyed by the `end` address) from this
+    /// global information.
+    fn unregister(&mut self, end: usize) {
+        let val = self.ranges.get_mut(&end).unwrap();
+        val.references -= 1;
+        if val.references == 0 {
+            self.ranges.remove(&end);
+        }
+    }
+}
+
+fn func<T>(
+    pc: usize,
+    ranges: &BTreeMap<usize, T>,
+    get_start_and_functions: impl FnOnce(&T) -> (usize, &BTreeMap<usize, FunctionInfo>),
+) -> Option<(&T, &FunctionInfo)> {
+    let (end, info) = ranges.range(pc..).next()?;
+    let (start, functions) = get_start_and_functions(info);
+    if pc < start || *end < pc {
+        return None;
+    }
+    let (end, func) = functions.range(pc..).next()?;
+    if pc < func.start || *end < pc {
+        return None;
+    }
+    Some((info, func))
 }
 
 /// Description of a frame in a backtrace for a [`Trap`].

@@ -93,8 +93,6 @@ where
             ));
         }
 
-        let anyfunc = self.func.export.anyfunc.as_ref();
-        let trampoline = self.func.trampoline;
         let params = MaybeUninit::new(params);
         let mut ret = MaybeUninit::uninit();
         let mut called = false;
@@ -102,9 +100,10 @@ where
         let result = invoke_wasm_and_catch_traps(&self.func.instance.store, || {
             called = true;
             let params = ptr::read(params.as_ptr());
+            let anyfunc = self.func.export.anyfunc.as_ref();
             let result = params.invoke::<Results>(
                 &self.func.instance.store,
-                trampoline,
+                self.func.trampoline,
                 anyfunc.func_ptr.as_ptr(),
                 anyfunc.vmctx,
                 ptr::null_mut(),

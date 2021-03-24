@@ -1,3 +1,4 @@
+use crate::frame_info;
 use crate::frame_info::StoreFrameInfo;
 use crate::sig_registry::SignatureRegistry;
 use crate::trampoline::StoreInstanceHandle;
@@ -136,7 +137,8 @@ impl Store {
         // once-per-thread. Platforms like Unix, however, only require this
         // once-per-program. In any case this is safe to call many times and
         // each one that's not relevant just won't do anything.
-        wasmtime_runtime::init_traps().expect("failed to initialize trap handling");
+        wasmtime_runtime::init_traps(frame_info::GlobalFrameInfo::is_wasm_pc)
+            .expect("failed to initialize trap handling");
 
         Store {
             inner: Rc::new(StoreInner {
@@ -401,6 +403,7 @@ impl Store {
         *self.inner.signal_handler.borrow_mut() = handler;
     }
 
+    #[inline]
     pub(crate) fn interrupts(&self) -> &VMInterrupts {
         &self.inner.interrupts
     }
@@ -924,20 +927,11 @@ unsafe impl TrapInfo for Store {
         self
     }
 
-    fn is_wasm_trap(&self, addr: usize) -> bool {
-        self.frame_info().borrow().lookup_trap_info(addr).is_some()
-    }
-
     fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool {
         if let Some(handler) = &*self.inner.signal_handler.borrow() {
             return call(handler);
         }
         false
-    }
-
-    #[inline]
-    fn max_wasm_stack(&self) -> usize {
-        self.engine().config().max_wasm_stack
     }
 
     fn out_of_gas(&self) {
