@@ -52,13 +52,6 @@ impl<'a> wiggle::GuestErrorType for guest_types::CryptoErrno {
     }
 }
 
-impl guest_types::GuestErrorConversion for WasiCryptoCtx {
-    fn into_crypto_errno(&self, e: wiggle::GuestError) -> guest_types::CryptoErrno {
-        eprintln!("GuestError (witx) {:?}", e);
-        guest_types::CryptoErrno::GuestError
-    }
-}
-
 impl From<wiggle::GuestError> for guest_types::CryptoErrno {
     fn from(e: wiggle::GuestError) -> Self {
         eprintln!("GuestError (impl) {:?}", e);

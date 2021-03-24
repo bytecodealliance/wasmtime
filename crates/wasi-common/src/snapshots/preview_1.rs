@@ -30,13 +30,6 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-impl types::GuestErrorConversion for WasiCtx {
-    fn into_errno(&self, e: wiggle::GuestError) -> types::Errno {
-        debug!("Guest error: {:?}", e);
-        e.into()
-    }
-}
-
 impl types::UserErrorConversion for WasiCtx {
     fn errno_from_error(&self, e: Error) -> Result<types::Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
