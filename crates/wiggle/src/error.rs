@@ -27,13 +27,6 @@ pub enum GuestError {
         #[source]
         err: Box<GuestError>,
     },
-    #[error("In data {typename}.{field}: {err}")]
-    InDataField {
-        typename: String,
-        field: String,
-        #[source]
-        err: Box<GuestError>,
-    },
     #[error("Invalid UTF-8 encountered: {0:?}")]
     InvalidUtf8(#[from] ::std::str::Utf8Error),
     #[error("Int conversion error: {0:?}")]
