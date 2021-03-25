@@ -41,6 +41,8 @@ pub struct ModuleEnvironment<'data> {
     /// Intern'd types for this entire translation, shared by all modules.
     types: TypeTables,
 
+    interned_func_types: HashMap<WasmFuncType, SignatureIndex>,
+
     // Various bits and pieces of configuration
     features: WasmFeatures,
     target_config: TargetFrontendConfig,
@@ -147,6 +149,7 @@ impl<'data> ModuleEnvironment<'data> {
             tunables: tunables.clone(),
             features: *features,
             first_module: true,
+            interned_func_types: Default::default(),
         }
     }
 
@@ -378,16 +381,19 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_type_func(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
-        let sig = translate_signature(sig, self.pointer_type());
-
-        // FIXME(#2469): Signatures should be deduplicated in these two tables
-        // since `SignatureIndex` is already a index space separate from the
-        // module's index space. Note that this may get more urgent with
-        // module-linking modules where types are more likely to get repeated
-        // (across modules).
-        let sig_index = self.types.native_signatures.push(sig);
-        let sig_index2 = self.types.wasm_signatures.push(wasm);
-        debug_assert_eq!(sig_index, sig_index2);
+        // Deduplicate wasm function signatures through `interned_func_types`,
+        // which also deduplicates across wasm modules with module linking.
+        let sig_index = match self.interned_func_types.get(&wasm) {
+            Some(idx) => *idx,
+            None => {
+                let sig = translate_signature(sig, self.pointer_type());
+                let sig_index = self.types.native_signatures.push(sig);
+                let sig_index2 = self.types.wasm_signatures.push(wasm.clone());
+                debug_assert_eq!(sig_index, sig_index2);
+                self.interned_func_types.insert(wasm, sig_index);
+                sig_index
+            }
+        };
         self.result
             .module
             .types
