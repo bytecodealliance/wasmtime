@@ -205,7 +205,7 @@ pub struct CompiledModule {
     artifacts: CompilationArtifacts,
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
-    trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
+    trampolines: Vec<(SignatureIndex, VMTrampoline)>,
 }
 
 impl CompiledModule {
@@ -292,7 +292,7 @@ impl CompiledModule {
     }
 
     /// Returns the per-signature trampolines for this module.
-    pub fn trampolines(&self) -> &PrimaryMap<SignatureIndex, VMTrampoline> {
+    pub fn trampolines(&self) -> &[(SignatureIndex, VMTrampoline)] {
         &self.trampolines
     }
 
@@ -444,7 +444,7 @@ fn build_code_memory(
         CodeMemory,
         (*const u8, usize),
         PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        PrimaryMap<SignatureIndex, VMTrampoline>,
+        Vec<(SignatureIndex, VMTrampoline)>,
     ),
     String,
 > {
@@ -464,12 +464,15 @@ fn build_code_memory(
         );
     }
 
-    let mut trampolines = PrimaryMap::new();
-    for (i, fat_ptr) in allocation.trampolines() {
-        let fat_ptr =
-            unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr()) };
-        assert_eq!(trampolines.push(fat_ptr), i);
-    }
+    let trampolines = allocation
+        .trampolines()
+        .map(|(i, fat_ptr)| {
+            let fnptr = unsafe {
+                std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr())
+            };
+            (i, fnptr)
+        })
+        .collect();
 
     let code_range = allocation.code_range();
 

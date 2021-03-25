@@ -4,11 +4,11 @@ use super::trampoline::build_trampoline;
 use cranelift_frontend::FunctionBuilderContext;
 use object::write::Object;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use wasmtime_debug::DwarfSection;
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use wasmtime_environ::wasm::{FuncIndex, SignatureIndex};
-use wasmtime_environ::{CompiledFunctions, ModuleTranslation, TypeTables};
+use wasmtime_environ::{CompiledFunctions, ModuleTranslation, ModuleType, TypeTables};
 use wasmtime_obj::{ObjectBuilder, ObjectBuilderTarget};
 
 pub use wasmtime_obj::utils;
@@ -39,22 +39,26 @@ pub(crate) fn build_object(
             .map(|info| ObjectUnwindInfo::Func(translation.module.func_index(index), info.clone()))
     }));
 
-    let mut trampolines = PrimaryMap::with_capacity(types.native_signatures.len());
+    // Build trampolines for every signature that can be used by this module.
+    let signatures = translation
+        .module
+        .types
+        .values()
+        .filter_map(|t| match t {
+            ModuleType::Function(f) => Some(*f),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut trampolines = Vec::with_capacity(signatures.len());
     let mut cx = FunctionBuilderContext::new();
-    // Build trampolines for every signature.
-    //
-    // TODO: for the module linking proposal this builds too many native
-    // signatures. This builds trampolines for all signatures for all modules
-    // for each module. That's a lot of trampolines! We should instead figure
-    // out a way to share trampolines amongst all modules when compiling
-    // module-linking modules.
-    for (i, native_sig) in types.native_signatures.iter() {
+    for i in signatures {
+        let native_sig = &types.native_signatures[i];
         let func = build_trampoline(isa, &mut cx, native_sig, std::mem::size_of::<u128>())?;
         // Preserve trampoline function unwind info.
         if let Some(info) = &func.unwind_info {
             unwind_info.push(ObjectUnwindInfo::Trampoline(i, info.clone()))
         }
-        trampolines.push(func);
+        trampolines.push((i, func));
     }
 
     let target = ObjectBuilderTarget::new(isa.triple().architecture)?;

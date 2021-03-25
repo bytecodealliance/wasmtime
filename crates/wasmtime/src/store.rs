@@ -320,10 +320,11 @@ impl Store {
     }
 
     fn register_signatures(&self, module: &Module) {
-        let trampolines = module.compiled_module().trampolines();
         let mut signatures = self.signatures().borrow_mut();
-        for (index, wasm) in module.types().wasm_signatures.iter() {
-            signatures.register(wasm, trampolines[index]);
+        let types = module.types();
+        for (index, trampoline) in module.compiled_module().trampolines() {
+            let wasm = &types.wasm_signatures[*index];
+            signatures.register(wasm, *trampoline);
         }
     }
 
