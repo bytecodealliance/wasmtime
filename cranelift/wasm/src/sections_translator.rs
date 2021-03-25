@@ -110,8 +110,7 @@ pub fn parse_type_section<'a>(
     for entry in types {
         match entry? {
             TypeDef::Func(wasm_func_ty) => {
-                let mut sig =
-                    Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
+                let mut sig = Signature::new(environ.target_config().default_call_conv);
                 sig.params.extend(wasm_func_ty.params.iter().map(|ty| {
                     let cret_arg: ir::Type = type_to_type(*ty, environ)
                         .expect("only numeric types are supported in function signatures");

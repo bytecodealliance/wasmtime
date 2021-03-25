@@ -3582,7 +3582,7 @@ pub(crate) fn define(
             "fmin_pseudo",
             r#"
         Floating point pseudo-minimum, propagating NaNs.  This behaves differently from ``fmin``.
-        See https://github.com/WebAssembly/simd/pull/122 for background.
+        See <https://github.com/WebAssembly/simd/pull/122> for background.
 
         The behaviour is defined as ``fmin_pseudo(a, b) = (b < a) ? b : a``, and the behaviour
         for zero or NaN inputs follows from the behaviour of ``<`` with such inputs.
@@ -3614,7 +3614,7 @@ pub(crate) fn define(
             "fmax_pseudo",
             r#"
         Floating point pseudo-maximum, propagating NaNs.  This behaves differently from ``fmax``.
-        See https://github.com/WebAssembly/simd/pull/122 for background.
+        See <https://github.com/WebAssembly/simd/pull/122> for background.
 
         The behaviour is defined as ``fmax_pseudo(a, b) = (a < b) ? b : a``, and the behaviour
         for zero or NaN inputs follows from the behaviour of ``<`` with such inputs.
@@ -4102,7 +4102,7 @@ pub(crate) fn define(
         This will double the lane width and halve the number of lanes.  So the resulting
         vector has the same number of bits as `x` and `y` do (individually).
 
-        See https://github.com/WebAssembly/simd/pull/127 for background info.
+        See <https://github.com/WebAssembly/simd/pull/127> for background info.
             "#,
             &formats.binary,
         )

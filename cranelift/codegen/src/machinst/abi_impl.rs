@@ -102,7 +102,7 @@
 //! support the SpiderMonkey Wasm ABI.  For details of the multi-value return
 //! ABI, see:
 //!
-//! https://searchfox.org/mozilla-central/rev/bc3600def806859c31b2c7ac06e3d69271052a89/js/src/wasm/WasmStubs.h#134
+//! <https://searchfox.org/mozilla-central/rev/bc3600def806859c31b2c7ac06e3d69271052a89/js/src/wasm/WasmStubs.h#134>
 //!
 //! In brief:
 //! - Return values are processed in *reverse* order.

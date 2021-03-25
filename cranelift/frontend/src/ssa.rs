@@ -5,7 +5,7 @@
 //! In: Jhala R., De Bosschere K. (eds) Compiler Construction. CC 2013.
 //! Lecture Notes in Computer Science, vol 7791. Springer, Berlin, Heidelberg
 //!
-//! https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf
+//! <https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf>
 
 use crate::Variable;
 use alloc::vec::Vec;

@@ -64,11 +64,11 @@
 //! 32X4 and 64X2 types from CLIF and instead have a single V128 type.
 //!
 //! For further background see also:
-//!   https://github.com/bytecodealliance/wasmtime/issues/1147
+//!   <https://github.com/bytecodealliance/wasmtime/issues/1147>
 //!     ("Too many raw_bitcasts in SIMD code")
-//!   https://github.com/bytecodealliance/cranelift/pull/1251
+//!   <https://github.com/bytecodealliance/cranelift/pull/1251>
 //!     ("Add X128 type to represent WebAssembly's V128 type")
-//!   https://github.com/bytecodealliance/cranelift/pull/1236
+//!   <https://github.com/bytecodealliance/cranelift/pull/1236>
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
 use super::{hash_map, HashMap};
