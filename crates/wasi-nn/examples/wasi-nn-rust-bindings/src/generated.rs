@@ -152,6 +152,7 @@ pub unsafe fn compute(context: GraphExecutionContext) -> Result<()> {
     }
 }
 
+#[allow(improper_ctypes)]
 pub mod wasi_ephemeral_nn {
     use super::*;
     #[link(wasm_import_module = "wasi_ephemeral_nn")]
