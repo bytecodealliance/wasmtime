@@ -1,7 +1,6 @@
 //! The WASI embedding API definitions for Wasmtime.
 use crate::{wasm_extern_t, wasm_importtype_t, wasm_store_t, wasm_trap_t};
 use anyhow::Result;
-use cap_std::fs::Dir;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CStr;
@@ -13,8 +12,10 @@ use std::slice;
 use std::str;
 use wasmtime::{Extern, Linker, Trap};
 use wasmtime_wasi::{
-    snapshots::preview_0::Wasi as WasiSnapshot0, snapshots::preview_1::Wasi as WasiPreview1,
-    sync::WasiCtxBuilder, WasiCtx,
+    snapshots::preview_0::Wasi as WasiSnapshot0,
+    snapshots::preview_1::Wasi as WasiPreview1,
+    sync::{Dir, WasiCtxBuilder},
+    WasiCtx,
 };
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {

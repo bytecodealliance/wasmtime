@@ -44,7 +44,6 @@ log = "0.4.8"
 rayon = "1.2.1"
 humantime = "2.0.0"
 wasmparser = "0.77.0"
-cap-std = "0.13"
 
 [dev-dependencies]
 env_logger = "0.8.1"
