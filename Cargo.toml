@@ -66,6 +66,7 @@ anyhow = "1.0.19"
 opt-level = 0
 
 [workspace]
+resolver = '2'
 members = [
   "cranelift",
   "crates/bench-api",
