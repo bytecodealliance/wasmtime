@@ -13,8 +13,9 @@
 //! here may not be super well documented. This file is 100% lifted from
 //! SpiderMonkey and then adapted for Wasmtime's purposes. Credit for almost
 //! all of this file goes to SpiderMonkey for figuring out all the fiddly bits.
-//! See also https://searchfox.org/mozilla-central/source/js/src/wasm/WasmSignalHandlers.cpp for
-//! the original code.
+//! See also
+//! <https://searchfox.org/mozilla-central/source/js/src/wasm/WasmSignalHandlers.cpp>
+//! for the original code.
 //!
 //! The high-level overview is that when using mach ports a thread is blocked
 //! when it generates an exception and then a message can be read from the
@@ -45,7 +46,8 @@ use std::cell::Cell;
 use std::mem;
 use std::thread;
 
-/// Other `mach` declarations awaiting https://github.com/fitzgen/mach/pull/64 to be merged.
+/// Other `mach` declarations awaiting <https://github.com/fitzgen/mach/pull/64>
+/// to be merged.
 mod mach_addons {
     #![allow(non_camel_case_types)]
     #![allow(non_upper_case_globals)]

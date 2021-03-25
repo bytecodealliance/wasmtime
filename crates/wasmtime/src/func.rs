@@ -2,7 +2,6 @@ use crate::{sig_registry::SignatureRegistry, trampoline::StoreInstanceHandle};
 use crate::{Config, Extern, FuncType, Store, Trap, Val, ValType};
 use anyhow::{bail, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
-use std::any::Any;
 use std::cmp::max;
 use std::fmt;
 use std::future::Future;
@@ -43,7 +42,7 @@ impl HostFunc {
         let func = Box::new(move |caller_vmctx, values_vec: *mut u128| {
             // Lookup the last registered store as host functions have no associated store
             let store = wasmtime_runtime::with_last_info(|last| {
-                last.and_then(Any::downcast_ref::<Store>)
+                last.and_then(|s| s.downcast_ref::<Store>())
                     .cloned()
                     .expect("Host function called without thread state")
             });
@@ -401,7 +400,7 @@ impl Func {
         let func = Box::new(move |caller_vmctx, values_vec: *mut u128| {
             // Lookup the last registered store as host functions have no associated store
             let store = wasmtime_runtime::with_last_info(|last| {
-                last.and_then(Any::downcast_ref::<Store>)
+                last.and_then(|s| s.downcast_ref::<Store>())
                     .cloned()
                     .expect("function called without thread state")
             });
@@ -1586,7 +1585,7 @@ macro_rules! impl_into_func {
                     let func = &*(state as *const _ as *const F);
 
                     let store = wasmtime_runtime::with_last_info(|last| {
-                        last.and_then(Any::downcast_ref::<Store>)
+                        last.and_then(|s| s.downcast_ref::<Store>())
                             .cloned()
                             .expect("function called without thread state")
                     });
