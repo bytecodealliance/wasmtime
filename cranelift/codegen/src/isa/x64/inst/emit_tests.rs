@@ -3859,6 +3859,12 @@ fn test_x64_emit() {
         "pabsd   %xmm10, %xmm11",
     ));
 
+    insns.push((
+        Inst::xmm_unary_rm_r(SseOpcode::Cvtdq2pd, RegMem::reg(xmm2), w_xmm8),
+        "F3440FE6C2",
+        "cvtdq2pd %xmm2, %xmm8",
+    ));
+
     // Xmm to int conversions, and conversely.
 
     insns.push((
