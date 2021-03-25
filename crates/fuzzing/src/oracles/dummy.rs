@@ -6,6 +6,7 @@ use wasmtime::*;
 /// Create a set of dummy functions/globals/etc for the given imports.
 pub fn dummy_linker<'module>(store: &Store, module: &Module) -> Linker {
     let mut linker = Linker::new(store);
+    linker.allow_shadowing(true);
     for import in module.imports() {
         match import.name() {
             Some(name) => {

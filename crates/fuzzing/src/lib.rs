@@ -39,9 +39,13 @@ pub fn fuzz_default_config(strategy: wasmtime::Strategy) -> anyhow::Result<wasmt
         .wasm_bulk_memory(true)
         .wasm_reference_types(true)
         .wasm_module_linking(true)
-        .max_instances(100)
-        .max_tables(100)
-        .max_memories(100)
+        // The limits here are chosen based on the default "maximum type size"
+        // configured in wasm-smith, which is 1000. This means that instances
+        // are allowed to, for example, export up to 1000 memories. We bump that
+        // a little bit here to give us some slop.
+        .max_instances(1100)
+        .max_tables(1100)
+        .max_memories(1100)
         .strategy(strategy)?;
     Ok(config)
 }
