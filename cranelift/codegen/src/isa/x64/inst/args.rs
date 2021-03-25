@@ -462,6 +462,7 @@ pub(crate) enum InstructionSet {
 
 /// Some SSE operations requiring 2 operands r/m and r.
 #[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)] // some variants here aren't used just yet
 pub enum SseOpcode {
     Addps,
     Addpd,

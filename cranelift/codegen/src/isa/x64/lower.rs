@@ -204,6 +204,7 @@ enum ExtSpec {
     ZeroExtendTo32,
     ZeroExtendTo64,
     SignExtendTo32,
+    #[allow(dead_code)] // not used just yet but may be used in the future!
     SignExtendTo64,
 }
 
