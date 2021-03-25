@@ -135,6 +135,28 @@ contained in the `cx` parameter.",
         module_conf.name.to_string()
     );
 
+    let config_adder_definitions = host_funcs.iter().map(|(func_name, body)| {
+        let adder_func = format_ident!("add_{}_to_config", names.func(&func_name));
+        let docs = format!(
+            "Add the host function for `{}` to a config under a given module and field name.",
+            func_name.as_str()
+        );
+        quote! {
+            #[doc = #docs]
+            pub fn #adder_func(config: &mut wasmtime::Config, module: &str, field: &str) {
+                #body
+            }
+        }
+    });
+    let config_adder_invocations = host_funcs.iter().map(|(func_name, _body)| {
+        let adder_func = format_ident!("add_{}_to_config", names.func(&func_name));
+        let module = module.name.as_str();
+        let field = func_name.as_str();
+        quote! {
+            Self::#adder_func(config, #module, #field);
+        }
+    });
+
     quote! {
         #type_docs
         pub struct #type_name {
@@ -150,6 +172,7 @@ contained in the `cx` parameter.",
                     #(#ctor_fields,)*
                 }
             }
+
 
             /// Looks up a field called `name` in this structure, returning it
             /// if found.
@@ -175,8 +198,10 @@ contained in the `cx` parameter.",
             ///
             /// Host functions will trap if the context is not set in the calling [`wasmtime::Store`].
             pub fn add_to_config(config: &mut wasmtime::Config) {
-                #(#host_funcs)*
+                #(#config_adder_invocations)*
             }
+
+            #(#config_adder_definitions)*
 
             /// Sets the context in the given store.
             ///
@@ -207,7 +232,7 @@ fn generate_func(
     is_async: bool,
     fns: &mut Vec<TokenStream2>,
     ctors: &mut Vec<TokenStream2>,
-    host_funcs: &mut Vec<TokenStream2>,
+    host_funcs: &mut Vec<(witx::Id, TokenStream2)>,
 ) {
     let name_ident = names.func(&func.name);
 
@@ -281,12 +306,12 @@ fn generate_func(
         });
     }
 
-    if is_async {
+    let host_wrapper = if is_async {
         let wrapper = format_ident!("wrap{}_host_func_async", params.len());
-        host_funcs.push(quote! {
+        quote! {
             config.#wrapper(
-                stringify!(#module_ident),
-                stringify!(#name_ident),
+                module,
+                field,
                 move |caller #(,#arg_decls)*|
                     -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
                     Box::new(async move {
@@ -298,12 +323,12 @@ fn generate_func(
                     })
                 }
             );
-        });
+        }
     } else {
-        host_funcs.push(quote! {
+        quote! {
             config.wrap_host_func(
-                stringify!(#module_ident),
-                stringify!(#name_ident),
+                module,
+                field,
                 move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
                     let ctx = caller
                         .store()
@@ -313,6 +338,7 @@ fn generate_func(
                     result
                 },
             );
-        });
-    }
+        }
+    };
+    host_funcs.push((func.name.clone(), host_wrapper));
 }
