@@ -721,7 +721,7 @@ WASM_API_EXTERN const wasm_name_t *wasmtime_frame_module_name(const wasm_frame_t
  * * Errors are returned if `args` have the wrong types, if the args/results
  *   arrays have the wrong lengths, or if values come from the wrong store.
  *
- * The are three possible return states from this function:
+ * There are three possible return states from this function:
  *
  * 1. The returned error is non-null. This means `results`
  *    wasn't written to and `trap` will have `NULL` written to it. This state
