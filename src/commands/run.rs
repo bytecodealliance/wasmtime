@@ -28,9 +28,8 @@ use wasmtime_wasi_crypto::{
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
-        Some("help") | Some("config") | Some("run") | Some("wasm2obj") | Some("wast") => {
-            Err("module name cannot be the same as a subcommand".into())
-        }
+        Some("help") | Some("config") | Some("run") | Some("wasm2obj") | Some("wast")
+        | Some("compile") => Err("module name cannot be the same as a subcommand".into()),
         _ => Ok(s.into()),
     }
 }
@@ -96,7 +95,7 @@ pub struct RunCommand {
     #[structopt(
         index = 1,
         required = true,
-        value_name = "WASM_MODULE",
+        value_name = "MODULE",
         parse(try_from_os_str = parse_module),
     )]
     module: PathBuf,
@@ -127,14 +126,16 @@ pub struct RunCommand {
 impl RunCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        if self.common.log_to_files {
-            let prefix = "wasmtime.dbg.";
-            init_file_per_thread_logger(prefix);
-        } else {
-            pretty_env_logger::init();
+        if !self.common.disable_logging {
+            if self.common.log_to_files {
+                let prefix = "wasmtime.dbg.";
+                init_file_per_thread_logger(prefix);
+            } else {
+                pretty_env_logger::init();
+            }
         }
 
-        let mut config = self.common.config()?;
+        let mut config = self.common.config(None)?;
         if self.wasm_timeout.is_some() {
             config.interruptable(true);
         }

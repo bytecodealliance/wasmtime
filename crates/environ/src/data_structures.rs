@@ -10,7 +10,9 @@ pub mod ir {
 }
 
 pub mod settings {
-    pub use cranelift_codegen::settings::{builder, Builder, Configurable, Flags, SetError};
+    pub use cranelift_codegen::settings::{
+        builder, Builder, Configurable, Flags, OptLevel, SetError,
+    };
 }
 
 pub mod isa {

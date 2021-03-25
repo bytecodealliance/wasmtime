@@ -90,6 +90,7 @@ vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
+all-arch = ["wasmtime/all-arch"]
 
 # Try the experimental, work-in-progress new x86_64 backend. This is not stable
 # as of June 2020.

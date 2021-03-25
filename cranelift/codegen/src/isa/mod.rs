@@ -63,8 +63,7 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use crate::timing;
-use alloc::borrow::Cow;
-use alloc::boxed::Box;
+use alloc::{borrow::Cow, boxed::Box, string::String, vec::Vec};
 use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
@@ -265,8 +264,13 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
-    /// Hashes all flags, both ISA-independent and ISA-specific, into the
-    /// specified hasher.
+    /// Get the enabled ISA-dependent flags that were used to make this trait object.
+    fn enabled_isa_flags(&self) -> Vec<String>;
+
+    /// Determines if the given ISA-dependent flag is enabled.
+    fn is_flag_enabled(&self, flag: &str) -> bool;
+
+    /// Hashes all flags, both ISA-independent and ISA-dependent, into the specified hasher.
     fn hash_all_flags(&self, hasher: &mut dyn Hasher);
 
     /// Get the default calling convention of this target.

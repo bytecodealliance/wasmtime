@@ -8,6 +8,9 @@ use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 use crate::shared::Definitions as SharedDefinitions;
 
 fn define_settings(_shared: &SettingGroup) -> SettingGroup {
+    // Note: Wasmtime's `compile` command exposes these settings as CLI options
+    // If the settings change, please update src/commands/compile.rs to match.
+
     let mut setting = SettingGroupBuilder::new("arm64");
     let has_lse = setting.add_bool("has_lse", "Large System Extensions", false);
 

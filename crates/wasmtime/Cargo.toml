@@ -79,3 +79,6 @@ async = ["wasmtime-fiber", "wasmtime-runtime/async"]
 
 # Enables userfaultfd support in the runtime's pooling allocator when building on Linux
 uffd = ["wasmtime-runtime/uffd"]
+
+# Enables support for all architectures in JIT and the `wasmtime compile` CLI command.
+all-arch = ["wasmtime-jit/all-arch"]

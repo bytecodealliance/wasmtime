@@ -25,15 +25,17 @@ pub struct WastCommand {
 
 impl WastCommand {
     /// Executes the command.
-    pub fn execute(&self) -> Result<()> {
-        if self.common.log_to_files {
-            let prefix = "wast.dbg.";
-            init_file_per_thread_logger(prefix);
-        } else {
-            pretty_env_logger::init();
+    pub fn execute(self) -> Result<()> {
+        if !self.common.disable_logging {
+            if self.common.log_to_files {
+                let prefix = "wast.dbg.";
+                init_file_per_thread_logger(prefix);
+            } else {
+                pretty_env_logger::init();
+            }
         }
 
-        let config = self.common.config()?;
+        let config = self.common.config(None)?;
         let store = Store::new(&Engine::new(&config)?);
         let mut wast_context = WastContext::new(store);
 

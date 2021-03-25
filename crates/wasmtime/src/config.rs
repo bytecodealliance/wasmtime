@@ -2,6 +2,7 @@ use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use crate::{func::HostFunc, Caller, FuncType, IntoFunc, Trap, Val, WasmRet, WasmTy};
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -391,6 +392,20 @@ impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Self {
+        Self::new_with_isa_flags(native::builder())
+    }
+
+    /// Creates a [`Config`] for the given target triple.
+    ///
+    /// No CPU flags will be enabled for the config.
+    pub fn for_target(target: &str) -> Result<Self> {
+        use std::str::FromStr;
+        Ok(Self::new_with_isa_flags(native::lookup(
+            target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?,
+        )?))
+    }
+
+    fn new_with_isa_flags(isa_flags: isa::Builder) -> Self {
         let mut flags = settings::builder();
 
         // There are two possible traps for division, and this way
@@ -414,10 +429,15 @@ impl Config {
             .set("enable_probestack", "false")
             .expect("should be valid flag");
 
+        // Reference types are enabled by default, so enable safepoints
+        flags
+            .set("enable_safepoints", "true")
+            .expect("should be valid flag");
+
         let mut ret = Self {
             tunables: Tunables::default(),
             flags,
-            isa_flags: native::builder(),
+            isa_flags,
             strategy: CompilationStrategy::Auto,
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
@@ -896,6 +916,33 @@ impl Config {
     pub fn cranelift_clear_cpu_flags(&mut self) -> &mut Self {
         self.isa_flags = native::builder_without_flags();
         self
+    }
+
+    /// Allows setting a Cranelift boolean flag or preset. This allows
+    /// fine-tuning of Cranelift settings.
+    ///
+    /// Since Cranelift flags may be unstable, this method should not be considered to be stable
+    /// either; other `Config` functions should be preferred for stability.
+    ///
+    /// # Safety
+    ///
+    /// This is marked as unsafe, because setting the wrong flag might break invariants,
+    /// resulting in execution hazards.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail if the flag's name does not exist.
+    pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> Result<&mut Self> {
+        if let Err(err) = self.flags.enable(flag) {
+            match err {
+                SetError::BadName(_) => {
+                    // Try the target-specific flags.
+                    self.isa_flags.enable(flag)?;
+                }
+                _ => bail!(err),
+            }
+        }
+        Ok(self)
     }
 
     /// Allows settings another Cranelift flag defined by a flag name and value. This allows
@@ -1419,7 +1466,7 @@ pub enum Strategy {
 
 /// Possible optimization levels for the Cranelift codegen backend.
 #[non_exhaustive]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum OptLevel {
     /// No optimizations performed, minimizes compilation time by disabling most
     /// optimizations.

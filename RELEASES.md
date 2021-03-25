@@ -2,6 +2,35 @@
 
 --------------------------------------------------------------------------------
 
+## Unreleased
+
+### Added
+
+* The `wasmtime compile` command was added to support AOT compilation of Wasm
+  modules.
+
+* The `Module::compile` method was added to support AOT compilation of a module.
+
+* Added the `Config::cranelift_flag_enable` to enable setting Cranelift boolean
+  flags or presets in a config.
+
+### Changed
+
+* Breaking: the CLI option `--cranelift-flags` was changed to `--cranelift-flag`.
+
+* Breaking: the CLI option `--enable-reference-types=false` has been changed to
+  `--disable-reference-types` as it is enabled by default.
+
+* Breaking: the CLI option `--enable-multi-value=false` has been changed to
+  `--disable-multi-value` as it is enabled by default.
+
+* Breaking: the CLI option `--enable-bulk-memory=false` has been changed to
+  `--disable-bulk-memory` as it is enabled by default.
+
+* Modules serialized with `Module::serialize` can now be deserialized with
+  `Module::deserialize` on a compatible host that does not have to match the
+  original environment exactly.
+
 ## 0.25.0
 
 Released 2021-03-16.
@@ -39,7 +68,7 @@ Released 2021-03-16.
 
 ### Fixed
 
-* Interepretation of timestamps in `poll_oneoff` for WASI have been fixed to
+* Interpretation of timestamps in `poll_oneoff` for WASI have been fixed to
   correctly use nanoseconds instead of microseconds.
   [#2717](https://github.com/bytecodealliance/wasmtime/pull/2717)
 

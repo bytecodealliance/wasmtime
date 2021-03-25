@@ -17,7 +17,7 @@ pub enum ConfigCommand {
 
 impl ConfigCommand {
     /// Executes the command.
-    pub fn execute(&self) -> Result<()> {
+    pub fn execute(self) -> Result<()> {
         match self {
             Self::New(c) => c.execute(),
         }
@@ -35,7 +35,7 @@ pub struct ConfigNewCommand {
 
 impl ConfigNewCommand {
     /// Executes the command.
-    pub fn execute(&self) -> Result<()> {
+    pub fn execute(self) -> Result<()> {
         let path = wasmtime_cache::create_new_config(self.path.as_ref())?;
 
         println!(

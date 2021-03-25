@@ -9,7 +9,7 @@ use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
-use alloc::boxed::Box;
+use alloc::{borrow::ToOwned, boxed::Box, string::String, vec::Vec};
 use core::hash::{Hash, Hasher};
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::Triple;
@@ -83,6 +83,17 @@ impl MachBackend for X64Backend {
 
     fn flags(&self) -> &Flags {
         &self.flags
+    }
+
+    fn enabled_isa_flags(&self) -> Vec<String> {
+        self.x64_flags
+            .iter_enabled()
+            .map(ToOwned::to_owned)
+            .collect()
+    }
+
+    fn is_flag_enabled(&self, flag: &str) -> bool {
+        self.x64_flags.is_enabled(flag)
     }
 
     fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {

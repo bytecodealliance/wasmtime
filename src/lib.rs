@@ -29,6 +29,7 @@ mod obj;
 use anyhow::{bail, Result};
 use std::path::PathBuf;
 use structopt::StructOpt;
+use target_lexicon::Triple;
 use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub use obj::compile_to_obj;
@@ -91,6 +92,10 @@ struct CommonOptions {
     #[structopt(long, conflicts_with = "lightbeam")]
     cranelift: bool,
 
+    /// Disable logging.
+    #[structopt(long, conflicts_with = "log_to_files")]
+    disable_logging: bool,
+
     /// Log to per-thread log files instead of stderr.
     #[structopt(long)]
     log_to_files: bool,
@@ -107,21 +112,21 @@ struct CommonOptions {
     #[structopt(long)]
     enable_simd: bool,
 
-    /// Enable support for reference types
+    /// Disable support for reference types
     #[structopt(long)]
-    enable_reference_types: Option<bool>,
+    disable_reference_types: bool,
 
-    /// Enable support for multi-value functions
+    /// Disable support for multi-value functions
     #[structopt(long)]
-    enable_multi_value: Option<bool>,
+    disable_multi_value: bool,
 
     /// Enable support for Wasm threads
     #[structopt(long)]
     enable_threads: bool,
 
-    /// Enable support for bulk memory instructions
+    /// Disable support for bulk memory instructions
     #[structopt(long)]
-    enable_bulk_memory: Option<bool>,
+    disable_bulk_memory: bool,
 
     /// Enable support for the multi-memory proposal
     #[structopt(long)]
@@ -151,30 +156,34 @@ struct CommonOptions {
     #[structopt(short = "O", long)]
     optimize: bool,
 
-    /// Optimization level for generated functions (0 (none), 1, 2 (most), or s
-    /// (size))
+    /// Optimization level for generated functions: 0 (none), 1, 2 (most), or s
+    /// (size); defaults to "most"
     #[structopt(
         long,
+        value_name = "LEVEL",
         parse(try_from_str = parse_opt_level),
-        default_value = "2",
     )]
-    opt_level: wasmtime::OptLevel,
+    opt_level: Option<wasmtime::OptLevel>,
 
-    /// Other Cranelift flags to be passed down to Cranelift.
-    #[structopt(long, parse(try_from_str = parse_cranelift_flag))]
+    /// Cranelift common flags to set.
+    #[structopt(long = "cranelift-flag", value_name = "NAME=VALUE", parse(try_from_str = parse_cranelift_flag))]
     cranelift_flags: Vec<CraneliftFlag>,
+
+    /// The Cranelift ISA preset to use.
+    #[structopt(long, value_name = "PRESET")]
+    cranelift_preset: Option<String>,
 
     /// Maximum size in bytes of wasm memory before it becomes dynamically
     /// relocatable instead of up-front-reserved.
-    #[structopt(long)]
+    #[structopt(long, value_name = "MAXIMUM")]
     static_memory_maximum_size: Option<u64>,
 
     /// Byte size of the guard region after static memories are allocated.
-    #[structopt(long)]
+    #[structopt(long, value_name = "SIZE")]
     static_memory_guard_size: Option<u64>,
 
     /// Byte size of the guard region after dynamic memories are allocated.
-    #[structopt(long)]
+    #[structopt(long, value_name = "SIZE")]
     dynamic_memory_guard_size: Option<u64>,
 
     /// Enable Cranelift's internal debug verifier (expensive)
@@ -187,19 +196,22 @@ struct CommonOptions {
 }
 
 impl CommonOptions {
-    fn config(&self) -> Result<Config> {
-        let mut config = Config::new();
+    fn config(&self, target: Option<&str>) -> Result<Config> {
+        let mut config = if let Some(target) = target {
+            Config::for_target(target)?
+        } else {
+            Config::new()
+        };
+
         config
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .wasm_simd(self.enable_simd || self.enable_all)
-            .wasm_bulk_memory(self.enable_bulk_memory.unwrap_or(true) || self.enable_all)
+            .wasm_bulk_memory(!self.disable_bulk_memory || self.enable_all)
             .wasm_reference_types(
-                self.enable_reference_types
-                    .unwrap_or(cfg!(target_arch = "x86_64"))
-                    || self.enable_all,
+                (!self.disable_reference_types || cfg!(target_arch = "x86_64")) || self.enable_all,
             )
-            .wasm_multi_value(self.enable_multi_value.unwrap_or(true) || self.enable_all)
+            .wasm_multi_value(!self.disable_multi_value || self.enable_all)
             .wasm_threads(self.enable_threads || self.enable_all)
             .wasm_multi_memory(self.enable_multi_memory || self.enable_all)
             .wasm_module_linking(self.enable_module_linking || self.enable_all)
@@ -207,11 +219,19 @@ impl CommonOptions {
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
+
+        if let Some(preset) = &self.cranelift_preset {
+            unsafe {
+                config.cranelift_flag_enable(preset)?;
+            }
+        }
+
         for CraneliftFlag { name, value } in &self.cranelift_flags {
             unsafe {
                 config.cranelift_other_flag(name, value)?;
             }
         }
+
         if !self.disable_cache {
             match &self.config {
                 Some(path) => {
@@ -237,7 +257,7 @@ impl CommonOptions {
     fn opt_level(&self) -> wasmtime::OptLevel {
         match (self.optimize, self.opt_level.clone()) {
             (true, _) => wasmtime::OptLevel::Speed,
-            (false, other) => other,
+            (false, other) => other.unwrap_or(wasmtime::OptLevel::Speed),
         }
     }
 }
@@ -273,4 +293,10 @@ fn parse_cranelift_flag(name_and_value: &str) -> Result<CraneliftFlag> {
         bail!("missing value in cranelift flag");
     };
     Ok(CraneliftFlag { name, value })
+}
+
+fn parse_target(s: &str) -> Result<Triple> {
+    use std::str::FromStr;
+
+    Triple::from_str(&s).map_err(|e| anyhow::anyhow!(e))
 }

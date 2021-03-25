@@ -14,7 +14,6 @@ use crate::regalloc::RegDiversions;
 use crate::isa::unwind::systemv::RegisterMappingError;
 
 use core::any::Any;
-use core::hash::Hasher;
 use std::borrow::Cow;
 use std::fmt;
 use target_lexicon::Triple;
@@ -59,8 +58,16 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.flags()
     }
 
+    fn enabled_isa_flags(&self) -> Vec<String> {
+        self.backend.enabled_isa_flags()
+    }
+
+    fn is_flag_enabled(&self, flag: &str) -> bool {
+        self.backend.is_flag_enabled(flag)
+    }
+
     fn hash_all_flags(&self, hasher: &mut dyn Hasher) {
-        self.backend.hash_all_flags(hasher)
+        self.backend.hash_all_flags(hasher);
     }
 
     fn register_info(&self) -> RegInfo {
