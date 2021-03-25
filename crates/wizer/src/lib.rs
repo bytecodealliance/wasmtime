@@ -39,9 +39,9 @@ const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 ///
 /// * Reference types are not supported yet. This is tricky because it would
 ///   allow the Wasm module to mutate tables, and we would need to be able to
-///   diff the initial table state with the new table state, but funcrefs and
-///   externrefs aren't comparable in the Wasm spec, which makes diffing
-///   problematic.
+///   snapshot the new table state, but funcrefs and externrefs don't have
+///   identity and aren't comparable in the Wasm spec, which makes snapshotting
+///   difficult.
 #[cfg_attr(feature = "structopt", derive(StructOpt))]
 #[derive(Clone, Debug)]
 pub struct Wizer {
@@ -287,8 +287,8 @@ impl Wizer {
         self.validate_init_func(&module)?;
 
         let instance = self.initialize(&store, &module)?;
-        let diff = self.diff(&instance);
-        let initialized_wasm = self.rewrite(&wasm, &diff, &renames);
+        let snapshot = self.snapshot(&instance);
+        let initialized_wasm = self.rewrite(&wasm, &snapshot, &renames);
 
         Ok(initialized_wasm)
     }
@@ -347,8 +347,8 @@ impl Wizer {
     }
 
     /// Rewrite the input Wasm with our own custom exports for all globals, and
-    /// memories. This way we can reflect on their values later on in the diff
-    /// phase.
+    /// memories. This way we can reflect on their values later on in the
+    /// snapshot phase.
     ///
     /// TODO: will have to also export tables once we support reference types.
     fn prepare_input_wasm(&self, full_wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -630,13 +630,12 @@ impl Wizer {
         Ok(instance)
     }
 
-    /// Diff the given instance's globals, memories, and tables from the Wasm
-    /// defaults.
+    /// Snapshot the given instance's globals, memories, and tables.
     ///
-    /// TODO: when we support reference types, we will have to diff tables.
-    fn diff<'a>(&self, instance: &'a wasmtime::Instance) -> Diff<'a> {
+    /// TODO: when we support reference types, we will have to snapshot tables.
+    fn snapshot<'a>(&self, instance: &'a wasmtime::Instance) -> Snapshot<'a> {
         // Get the initialized values of all globals.
-        log::debug!("Diffing global values");
+        log::debug!("Snapshotting global values");
         let mut globals = vec![];
         let mut global_index = 0;
         loop {
@@ -654,9 +653,9 @@ impl Wizer {
         //
         // TODO: This could be really slow for large memories. Instead, we
         // should bring our own memories, protect the pages, and keep a table
-        // with a dirty bit for each page, so we can just diff the pages that
-        // actually got changed to non-zero values.
-        log::debug!("Diffing memories");
+        // with a dirty bit for each page, so we can just snapshot the pages
+        // that actually got changed to non-zero values.
+        log::debug!("Snapshotting memories");
         let mut memory_mins = vec![];
         let mut data_segments = vec![];
         let mut memory_index = 0;
@@ -745,25 +744,25 @@ impl Wizer {
             data_segments.remove(i);
         }
 
-        Diff {
+        Snapshot {
             globals,
             memory_mins,
             data_segments,
         }
     }
 
-    fn rewrite(&self, full_wasm: &[u8], diff: &Diff, renames: &FuncRenames) -> Vec<u8> {
+    fn rewrite(&self, full_wasm: &[u8], snapshot: &Snapshot, renames: &FuncRenames) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
         let mut wasm = full_wasm;
         let mut parser = wasmparser::Parser::new(0);
         let mut module = wasm_encoder::Module::new();
 
-        // Encode the initialized data segments from the diff rather
-        // than the original, uninitialized data segments.
+        // Encode the initialized data segments from the snapshot rather than
+        // the original, uninitialized data segments.
         let mut added_data = false;
         let mut add_data_section = |module: &mut wasm_encoder::Module| {
-            if added_data || diff.data_segments.is_empty() {
+            if added_data || snapshot.data_segments.is_empty() {
                 return;
             }
             let mut data_section = wasm_encoder::DataSection::new();
@@ -771,7 +770,7 @@ impl Wizer {
                 memory_index,
                 offset,
                 data,
-            } in &diff.data_segments
+            } in &snapshot.data_segments
             {
                 data_section.active(
                     *memory_index,
@@ -820,7 +819,7 @@ impl Wizer {
                     });
                 }
                 MemorySection(mut mems) => {
-                    // Set the minimum size of each memory to the diff's
+                    // Set the minimum size of each memory to the snapshot's
                     // initialized size for that memory.
                     let mut memory_encoder = wasm_encoder::MemorySection::new();
                     for i in 0..mems.get_count() {
@@ -829,7 +828,7 @@ impl Wizer {
                             wasmparser::MemoryType::M32 { limits, shared: _ } => {
                                 memory_encoder.memory(wasm_encoder::MemoryType {
                                     limits: wasm_encoder::Limits {
-                                        min: diff.memory_mins[i as usize],
+                                        min: snapshot.memory_mins[i as usize],
                                         max: limits.maximum,
                                     },
                                 });
@@ -840,14 +839,14 @@ impl Wizer {
                     module.section(&memory_encoder);
                 }
                 GlobalSection(mut globals) => {
-                    // Encode the initialized values from the diff, rather than
-                    // the original values.
+                    // Encode the initialized values from the snapshot, rather
+                    // than the original values.
                     let mut globals_encoder = wasm_encoder::GlobalSection::new();
                     for i in 0..globals.get_count() {
                         let global = globals.read().unwrap();
                         globals_encoder.global(
                             translate_global_type(global.ty),
-                            match diff.globals[i as usize] {
+                            match snapshot.globals[i as usize] {
                                 wasmtime::Val::I32(x) => wasm_encoder::Instruction::I32Const(x),
                                 wasmtime::Val::I64(x) => wasm_encoder::Instruction::I64Const(x),
                                 wasmtime::Val::F32(x) => {
@@ -970,8 +969,9 @@ impl Wizer {
     }
 }
 
-/// A "diff" of Wasm state from its default value after having been initialized.
-struct Diff<'a> {
+/// A "snapshot" of non-default Wasm state after an instance has been
+/// initialized.
+struct Snapshot<'a> {
     /// Maps global index to its initialized value.
     globals: Vec<wasmtime::Val>,
 
