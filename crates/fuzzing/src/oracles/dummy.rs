@@ -4,22 +4,44 @@ use std::fmt::Write;
 use wasmtime::*;
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_imports<'module>(
-    store: &Store,
-    import_tys: impl Iterator<Item = ImportType<'module>>,
-) -> Vec<Extern> {
-    import_tys
-        .map(|imp| match imp.ty() {
-            ExternType::Func(func_ty) => Extern::Func(dummy_func(&store, func_ty)),
-            ExternType::Global(global_ty) => Extern::Global(dummy_global(&store, global_ty)),
-            ExternType::Table(table_ty) => Extern::Table(dummy_table(&store, table_ty)),
-            ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(&store, mem_ty)),
-            ExternType::Instance(instance_ty) => {
-                Extern::Instance(dummy_instance(&store, instance_ty))
+pub fn dummy_linker<'module>(store: &Store, module: &Module) -> Linker {
+    let mut linker = Linker::new(store);
+    for import in module.imports() {
+        match import.name() {
+            Some(name) => {
+                linker
+                    .define(import.module(), name, dummy_extern(store, import.ty()))
+                    .unwrap();
             }
-            ExternType::Module(module_ty) => Extern::Module(dummy_module(&store, module_ty)),
-        })
-        .collect()
+            None => match import.ty() {
+                ExternType::Instance(ty) => {
+                    for ty in ty.exports() {
+                        linker
+                            .define(import.module(), ty.name(), dummy_extern(store, ty.ty()))
+                            .unwrap();
+                    }
+                }
+                other => {
+                    linker
+                        .define_name(import.module(), dummy_extern(store, other))
+                        .unwrap();
+                }
+            },
+        }
+    }
+    linker
+}
+
+/// Construct a dummy `Extern` from its type signature
+pub fn dummy_extern(store: &Store, ty: ExternType) -> Extern {
+    match ty {
+        ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
+        ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
+        ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)),
+        ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)),
+        ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)),
+        ExternType::Module(module_ty) => Extern::Module(dummy_module(store, module_ty)),
+    }
 }
 
 /// Construct a dummy function for the given function type

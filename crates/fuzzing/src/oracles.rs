@@ -13,7 +13,7 @@
 pub mod dummy;
 
 use arbitrary::Arbitrary;
-use dummy::dummy_imports;
+use dummy::dummy_linker;
 use log::debug;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -118,9 +118,9 @@ pub fn instantiate_with_config(
         Err(_) if !known_valid => return,
         Err(e) => panic!("failed to compile module: {:?}", e),
     };
-    let imports = dummy_imports(&store, module.imports());
+    let linker = dummy_linker(&store, &module);
 
-    match Instance::new(&store, &module, &imports) {
+    match linker.instantiate(&module) {
         Ok(_) => {}
         // Allow traps which can happen normally with `unreachable` or a timeout
         Err(e) if e.downcast_ref::<Trap>().is_some() => {}
@@ -190,13 +190,13 @@ pub fn differential_execution(
         // in and with what values. Like the results of exported functions,
         // calls to imports should also yield the same values for each
         // configuration, and we should assert that.
-        let imports = dummy_imports(&store, module.imports());
+        let linker = dummy_linker(&store, &module);
 
         // Don't unwrap this: there can be instantiation-/link-time errors that
         // aren't caught during validation or compilation. For example, an imported
         // table might not have room for an element segment that we want to
         // initialize into it.
-        let instance = match Instance::new(&store, &module, &imports) {
+        let instance = match linker.instantiate(&module) {
             Ok(instance) => instance,
             Err(e) => {
                 eprintln!(
@@ -354,13 +354,13 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 };
 
                 let store = store.as_ref().unwrap();
-                let imports = dummy_imports(store, module.imports());
+                let linker = dummy_linker(store, module);
 
                 // Don't unwrap this: there can be instantiation-/link-time errors that
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = Instance::new(store, &module, &imports) {
+                if let Ok(instance) = linker.instantiate(&module) {
                     instances.insert(id, instance);
                 }
             }

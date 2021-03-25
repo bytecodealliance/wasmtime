@@ -164,10 +164,20 @@ impl Linker {
         name: &str,
         item: impl Into<Extern>,
     ) -> Result<&mut Self> {
-        self._define(module, name, item.into())
+        self._define(module, Some(name), item.into())
     }
 
-    fn _define(&mut self, module: &str, name: &str, item: Extern) -> Result<&mut Self> {
+    /// Same as [`Linker::define`], except only the name of the import is
+    /// provided, not a module name as well.
+    ///
+    /// This is only relevant when working with the module linking proposal
+    /// where one-level names are allowed (in addition to two-level names).
+    /// Otherwise this method need not be used.
+    pub fn define_name(&mut self, name: &str, item: impl Into<Extern>) -> Result<&mut Self> {
+        self._define(name, None, item.into())
+    }
+
+    fn _define(&mut self, module: &str, name: Option<&str>, item: Extern) -> Result<&mut Self> {
         if !item.comes_from_same_store(&self.store) {
             bail!("all linker items must be from the same store");
         }
@@ -217,7 +227,7 @@ impl Linker {
         name: &str,
         func: impl IntoFunc<Params, Args>,
     ) -> Result<&mut Self> {
-        self._define(module, name, Func::wrap(&self.store, func).into())
+        self._define(module, Some(name), Func::wrap(&self.store, func).into())
     }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.
@@ -270,7 +280,7 @@ impl Linker {
             bail!("all linker items must be from the same store");
         }
         for export in instance.exports() {
-            self.insert(module_name, export.name(), export.into_extern())?;
+            self.insert(module_name, Some(export.name()), export.into_extern())?;
         }
         Ok(self)
     }
@@ -450,7 +460,7 @@ impl Linker {
                         Ok(())
                     },
                 );
-                self.insert(module_name, export.name(), func.into())?;
+                self.insert(module_name, Some(export.name()), func.into())?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
             } else if export.name() == "__indirect_function_table" && export.ty().table().is_some()
@@ -506,13 +516,16 @@ impl Linker {
         Ok(())
     }
 
-    fn insert(&mut self, module: &str, name: &str, item: Extern) -> Result<()> {
+    fn insert(&mut self, module: &str, name: Option<&str>, item: Extern) -> Result<()> {
         let key = self.import_key(module, name, item.ty());
+        let desc = || match name {
+            Some(name) => format!("{}::{}", module, name),
+            None => module.to_string(),
+        };
         match self.map.entry(key) {
             Entry::Occupied(o) if !self.allow_shadowing => bail!(
-                "import of `{}::{}` with kind {:?} defined twice",
-                module,
-                name,
+                "import of `{}` with kind {:?} defined twice",
+                desc(),
                 o.key().kind,
             ),
             Entry::Occupied(mut o) => {
@@ -522,13 +535,14 @@ impl Linker {
                 // If shadowing is not allowed, check for an existing host function
                 if !self.allow_shadowing {
                     if let Extern::Func(_) = &item {
-                        if self.store.get_host_func(module, name).is_some() {
-                            bail!(
-                                "import of `{}::{}` with kind {:?} defined twice",
-                                module,
-                                name,
-                                v.key().kind,
-                            )
+                        if let Some(name) = name {
+                            if self.store.get_host_func(module, name).is_some() {
+                                bail!(
+                                    "import of `{}` with kind {:?} defined twice",
+                                    desc(),
+                                    v.key().kind,
+                                )
+                            }
                         }
                     }
                 }
@@ -538,10 +552,12 @@ impl Linker {
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: &str, ty: ExternType) -> ImportKey {
+    fn import_key(&mut self, module: &str, name: Option<&str>, ty: ExternType) -> ImportKey {
         ImportKey {
             module: self.intern_str(module),
-            name: self.intern_str(name),
+            name: name
+                .map(|name| self.intern_str(name))
+                .unwrap_or(usize::max_value()),
             kind: self.import_kind(ty),
         }
     }
