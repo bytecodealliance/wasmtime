@@ -34,9 +34,13 @@ fn log_wasm(wasm: &[u8]) {
     let name = format!("testcase{}.wasm", i);
     std::fs::write(&name, wasm).expect("failed to write wasm file");
     log::debug!("wrote wasm file to `{}`", name);
-    if let Ok(s) = wasmprinter::print_bytes(wasm) {
-        let name = format!("testcase{}.wat", i);
-        std::fs::write(&name, s).expect("failed to write wat file");
+    let wat = format!("testcase{}.wat", i);
+    match wasmprinter::print_bytes(wasm) {
+        Ok(s) => std::fs::write(&wat, s).expect("failed to write wat file"),
+        // If wasmprinter failed remove a `*.wat` file, if any, to avoid
+        // confusing a preexisting one with this wasm which failed to get
+        // printed.
+        Err(_) => drop(std::fs::remove_file(&wat)),
     }
 }
 
