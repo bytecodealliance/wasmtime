@@ -5181,7 +5181,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 input_ty,
             ));
 
-            if flags.avoid_div_traps() {
+            // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
+            if flags.avoid_div_traps() || op == Opcode::Srem {
                 // A vcode meta-instruction is used to lower the inline checks, since they embed
                 // pc-relative offsets that must not change, thus requiring regalloc to not
                 // interfere by introducing spills and reloads.

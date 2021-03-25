@@ -887,7 +887,6 @@ pub(crate) fn emit(
             // idiv %divisor
             //
             // $done:
-            debug_assert!(info.flags().avoid_div_traps());
 
             // Check if the divisor is zero, first.
             let inst = Inst::cmp_rmi_r(*size, RegMemImm::imm(0), divisor.to_reg());
