@@ -3915,7 +3915,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::xmm_rm_r(opcode, RegMem::from(dst), dst));
             }
         }
-
+        Opcode::FcvtLowFromSint => {
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            ctx.emit(Inst::xmm_unary_rm_r(
+                SseOpcode::Cvtdq2pd,
+                RegMem::from(src),
+                dst,
+            ));
+        }
         Opcode::FcvtFromUint => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
