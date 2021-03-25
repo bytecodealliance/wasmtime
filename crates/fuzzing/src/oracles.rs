@@ -179,8 +179,14 @@ pub fn differential_execution(
     let wasm = module.to_bytes();
     log_wasm(&wasm);
 
-    for config in &configs {
-        let engine = Engine::new(config).unwrap();
+    for mut config in configs {
+        // Disable module linking since it isn't enabled by default for
+        // `wasm_smith::Module` but is enabled by default for our fuzz config.
+        // Since module linking is currently a breaking change this is required
+        // to accept modules that would otherwise be broken by module linking.
+        config.wasm_module_linking(false);
+
+        let engine = Engine::new(&config).unwrap();
         let store = Store::new(&engine);
 
         let module = Module::new(&engine, &wasm).unwrap();
