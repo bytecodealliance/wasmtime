@@ -177,6 +177,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+    - run: rustup update stable && rustup default stable
     - name: Test `peepmatic`
       run: |
         cargo test \
