@@ -11,11 +11,10 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::slice;
 use std::str;
-use wasi_cap_std_sync::WasiCtxBuilder;
-use wasi_common::WasiCtx;
 use wasmtime::{Extern, Linker, Trap};
 use wasmtime_wasi::{
     snapshots::preview_0::Wasi as WasiSnapshot0, snapshots::preview_1::Wasi as WasiPreview1,
+    sync::WasiCtxBuilder, WasiCtx,
 };
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
@@ -186,7 +185,7 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     };
 
     let dir = match cstr_to_path(path) {
-        Some(p) => match cap_std::fs::Dir::open_ambient_dir(p) {
+        Some(p) => match Dir::open_ambient_dir(p) {
             Ok(d) => d,
             Err(_) => return false,
         },

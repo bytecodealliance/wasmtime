@@ -11,9 +11,8 @@ use std::{
     process,
 };
 use structopt::{clap::AppSettings, StructOpt};
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::{sync::WasiCtxBuilder, Wasi};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};

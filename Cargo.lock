@@ -3285,8 +3285,6 @@ dependencies = [
  "tempfile",
  "test-programs",
  "tracing-subscriber",
- "wasi-cap-std-sync",
- "wasi-common",
  "wasmparser",
  "wasmtime",
  "wasmtime-cache",
