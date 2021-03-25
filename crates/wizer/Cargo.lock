@@ -2121,6 +2121,7 @@ name = "wizer"
 version = "1.2.0"
 dependencies = [
  "anyhow",
+ "cap-std",
  "criterion",
  "env_logger 0.8.3",
  "log",

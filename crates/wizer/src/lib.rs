@@ -9,6 +9,7 @@ use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::path::PathBuf;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
 
@@ -110,6 +111,16 @@ pub struct Wizer {
     )]
     inherit_env: Option<bool>,
 
+    /// When using WASI during initialization, which file system directories
+    /// should be made available?
+    ///
+    /// None are available by default.
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(long = "dir", parse(from_os_str), value_name = "directory")
+    )]
+    dirs: Vec<PathBuf>,
+
     /// Enable or disable Wasm multi-memory proposal.
     ///
     /// Enabled by default.
@@ -193,6 +204,7 @@ impl Wizer {
             allow_wasi: false,
             inherit_stdio: None,
             inherit_env: None,
+            dirs: vec![],
             wasm_multi_memory: None,
             wasm_multi_value: None,
         }
@@ -246,6 +258,15 @@ impl Wizer {
     /// Defaults to `false`.
     pub fn inherit_env(&mut self, inherit: bool) -> &mut Self {
         self.inherit_env = Some(inherit);
+        self
+    }
+
+    /// When using WASI during initialization, which file system directories
+    /// should be made available?
+    ///
+    /// None are available by default.
+    pub fn dir(&mut self, directory: impl Into<PathBuf>) -> &mut Self {
+        self.dirs.push(directory.into());
         self
     }
 
@@ -613,6 +634,14 @@ impl Wizer {
             }
             if self.inherit_env.unwrap_or(DEFAULT_INHERIT_ENV) {
                 ctx = ctx.inherit_env()?;
+            }
+            for dir in &self.dirs {
+                log::debug!("Preopening directory: {}", dir.display());
+                let preopened = unsafe {
+                    cap_std::fs::Dir::open_ambient_dir(dir)
+                        .with_context(|| format!("failed to open directory: {}", dir.display()))?
+                };
+                ctx = ctx.preopened_dir(preopened, dir)?;
             }
             let ctx = ctx.build()?;
             wasmtime_wasi::Wasi::new(store, ctx).add_to_linker(&mut linker)?;
