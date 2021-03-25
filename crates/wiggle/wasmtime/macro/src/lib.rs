@@ -309,7 +309,6 @@ fn generate_func(
     let host_wrapper = if is_async {
         let wrapper = format_ident!("wrap{}_host_func_async", params.len());
         quote! {
-            println!("Adding {}::{} to config as {}::{}", stringify!(#module_ident), stringify!(#name_ident), module, field);
             config.#wrapper(
                 module,
                 field,
@@ -327,7 +326,6 @@ fn generate_func(
         }
     } else {
         quote! {
-            println!("Adding {}::{} to config as {}::{}", stringify!(#module_ident), stringify!(#name_ident), module, field);
             config.wrap_host_func(
                 module,
                 field,
