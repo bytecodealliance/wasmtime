@@ -8,8 +8,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 
-[package.metadata.docs.rs]
-rustdoc-args = [ "--document-private-items" ]
+# FIXME(rust-lang/cargo#9300): uncomment once that lands
+# [package.metadata.docs.rs]
+# rustdoc-args = [ "--document-private-items" ]
 
 [dependencies]
 cranelift-codegen-shared = { path = "../shared", version = "0.72.0" }

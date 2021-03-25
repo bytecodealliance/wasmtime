@@ -6,8 +6,9 @@ edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 description = "Finite-state transducer automata"
 
-[package.metadata.docs.rs]
-all-features = true
+# FIXME(rust-lang/cargo#9300): uncomment once that lands
+# [package.metadata.docs.rs]
+# all-features = true
 
 [dependencies]
 serde = { version = "1.0.106", optional = true }
