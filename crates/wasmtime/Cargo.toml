@@ -9,8 +9,9 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 
-[package.metadata.docs.rs]
-rustdoc-args = ["--cfg", "nightlydoc"]
+# FIXME(rust-lang/cargo#9300): uncomment once that lands
+# [package.metadata.docs.rs]
+# rustdoc-args = ["--cfg", "nightlydoc"]
 
 [dependencies]
 wasmtime-runtime = { path = "../runtime", version = "0.25.0" }

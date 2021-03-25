@@ -1618,7 +1618,7 @@ mod test {
     }
 
     #[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
-    #[cfg(all(unix, target_pointer_width = "64"))]
+    #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
         let allocator = PoolingInstanceAllocator::new(

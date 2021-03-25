@@ -49,7 +49,8 @@ pub fn main() {
             0,
             &mut output_buffer[..] as *mut [f32] as *mut u8,
             (output_buffer.len() * 4).try_into().unwrap(),
-        );
+        )
+        .unwrap();
     }
     println!(
         "Found results, sorted top 5: {:?}",
