@@ -4348,6 +4348,26 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let x = &Operand::new("x", Float);
+    let a = &Operand::new("a", FloatTo);
+
+    ig.push(
+        Inst::new(
+            "fpromote_low",
+            r#"
+        Converts packed single precision floating point to packed double precision floating point.
+
+        Considering only the low half of the register, each lane in `x` is interpreted as a
+        single precision float that is then converted to a double precision float.
+
+        The result type will have half the number of vector lanes as the input.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let WideInt = &TypeVar::new(
         "WideInt",
         "An integer type with lanes from `i16` upwards",
