@@ -257,7 +257,7 @@ pub struct ObjectBuilder<'a> {
     module: &'a Module,
     code_alignment: u64,
     compilation: &'a CompiledFunctions,
-    trampolines: PrimaryMap<SignatureIndex, CompiledFunction>,
+    trampolines: Vec<(SignatureIndex, CompiledFunction)>,
     dwarf_sections: Vec<DwarfSection>,
 }
 
@@ -271,7 +271,7 @@ impl<'a> ObjectBuilder<'a> {
             target,
             module,
             code_alignment: 1,
-            trampolines: PrimaryMap::new(),
+            trampolines: Vec::new(),
             dwarf_sections: vec![],
             compilation,
         }
@@ -284,7 +284,7 @@ impl<'a> ObjectBuilder<'a> {
 
     pub fn set_trampolines(
         &mut self,
-        trampolines: PrimaryMap<SignatureIndex, CompiledFunction>,
+        trampolines: Vec<(SignatureIndex, CompiledFunction)>,
     ) -> &mut Self {
         self.trampolines = trampolines;
         self
@@ -359,7 +359,7 @@ impl<'a> ObjectBuilder<'a> {
         }
         let mut trampolines = Vec::new();
         for (i, func) in self.trampolines.iter() {
-            let name = utils::trampoline_symbol_name(i).as_bytes().to_vec();
+            let name = utils::trampoline_symbol_name(*i).as_bytes().to_vec();
             trampolines.push(append_func(name, func));
         }
 
@@ -399,7 +399,7 @@ impl<'a> ObjectBuilder<'a> {
             }
         }
 
-        for (func, symbol) in self.trampolines.values().zip(trampolines) {
+        for ((_, func), symbol) in self.trampolines.iter().zip(trampolines) {
             let (_, off) = obj.symbol_section_and_offset(symbol).unwrap();
             for r in to_object_relocations(
                 func.relocations.iter(),
