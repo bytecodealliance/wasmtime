@@ -3,9 +3,8 @@
 // You can execute this example with `cargo run --example linking`
 
 use anyhow::Result;
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::*;
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::{sync::WasiCtxBuilder, Wasi};
 
 fn main() -> Result<()> {
     let engine = Engine::default();
