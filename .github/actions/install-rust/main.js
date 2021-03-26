@@ -30,3 +30,8 @@ set_env("CARGO_INCREMENTAL", "0");
 // Turn down debuginfo from 2 to 1 to help save disk space
 set_env("CARGO_PROFILE_DEV_DEBUG", "1");
 set_env("CARGO_PROFILE_TEST_DEBUG", "1");
+
+if (process.platform === 'darwin') {
+  set_env("CARGO_PROFILE_DEV_SPLIT_DEBUGINFO", "unpacked");
+  set_env("CARGO_PROFILE_TEST_SPLIT_DEBUGINFO", "unpacked");
+}
