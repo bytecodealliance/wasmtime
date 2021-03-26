@@ -126,15 +126,27 @@ pub fn instantiate_with_config(
 
     match linker.instantiate(&module) {
         Ok(_) => {}
-        // Allow traps which can happen normally with `unreachable` or a timeout
-        Err(e) if e.downcast_ref::<Trap>().is_some() => {}
-        // Allow resource exhaustion since this is something that our wasm-smith
-        // generator doesn't guarantee is forbidden.
-        Err(e) if e.to_string().contains("resource limit exceeded") => {}
-        // Also allow errors related to fuel consumption
-        Err(e) if e.to_string().contains("all fuel consumed") => {}
-        // Everything else should be a bug in the fuzzer
-        Err(e) => panic!("failed to instantiate {}", e),
+        Err(e) => {
+            let string = e.to_string();
+            // Allow traps which can happen normally with `unreachable` or a
+            // timeout
+            if e.downcast_ref::<Trap>().is_some()
+                // Allow resource exhaustion since this is something that
+                // our wasm-smith generator doesn't guarantee is forbidden.
+                || string.contains("resource limit exceeded")
+                // Also allow errors related to fuel consumption
+                || string.contains("all fuel consumed")
+                // Currently we instantiate with a `Linker` which can't instantiate
+                // every single module under the sun due to using name-based resolution
+                // rather than positional-based resolution
+                || string.contains("incompatible import type")
+            {
+                return;
+            }
+
+            // Everything else should be a bug in the fuzzer
+            panic!("failed to instantiate {:?}", e);
+        }
     }
 }
 
