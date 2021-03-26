@@ -46,7 +46,8 @@ run on CI looks like this:
   corpus](https://github.com/bytecodealliance/wasmtime-libfuzzer-corpus) and run
   it through the fuzzers. This is mostly intended to be a pretty quick
   regression test and testing the fuzzers still build, most of our fuzzing
-  happens on [oss-fuzz](https://oss-fuzz.com).
+  happens on [oss-fuzz](https://oss-fuzz.com). Found issues are recorded in
+  the [oss-fuzz bug tracker](https://bugs.chromium.org/p/oss-fuzz/issues/list?q=-status%3AWontFix%2CDuplicate%20-component%3AInfra%20proj%3Awasmtime&can=1)
 
 While we do run more tests here and there, this is the general shape of what you
 can be expected to get tested on CI for all commits and all PRs. You can of
