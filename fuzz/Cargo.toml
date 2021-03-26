@@ -16,11 +16,8 @@ libfuzzer-sys = "0.4.0"
 target-lexicon = "0.12"
 peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
 wasmtime = { path = "../crates/wasmtime" }
-wasmtime-fuzzing = { path = "../crates/fuzzing" }
+wasmtime-fuzzing = { path = "../crates/fuzzing", features = ["experimental_x64"] }
 wasm-smith = "0.4.0"
-
-[features]
-experimental_x64 = ["wasmtime-fuzzing/experimental_x64"]
 
 [[bin]]
 name = "compile"
