@@ -2,7 +2,6 @@
 
 use crate::{init_file_per_thread_logger, CommonOptions};
 use anyhow::{bail, Context as _, Result};
-use cap_std::fs::Dir;
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -11,9 +10,11 @@ use std::{
     process,
 };
 use structopt::{clap::AppSettings, StructOpt};
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::{
+    sync::{Dir, WasiCtxBuilder},
+    Wasi,
+};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};

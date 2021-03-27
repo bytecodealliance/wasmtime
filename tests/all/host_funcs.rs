@@ -1,8 +1,7 @@
 use anyhow::Result;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::*;
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::{sync::WasiCtxBuilder, Wasi};
 
 #[test]
 fn async_required() {

@@ -12,6 +12,14 @@ use std::rc::Rc;
 pub use wasi_common::{Error, WasiCtx, WasiCtxBuilder, WasiDir, WasiFile};
 use wasmtime::{Config, Linker, Store};
 
+/// Re-export the commonly used wasi-cap-std-sync crate here. This saves
+/// consumers of this library from having to keep additional dependencies
+/// in sync.
+#[cfg(feature = "sync")]
+pub mod sync {
+    pub use wasi_cap_std_sync::*;
+}
+
 /// An instantiated instance of all available wasi exports. Presently includes
 /// both the "preview1" snapshot and the "unstable" (preview0) snapshot.
 pub struct Wasi {
