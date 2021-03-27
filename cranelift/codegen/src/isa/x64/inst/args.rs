@@ -489,6 +489,7 @@ pub enum SseOpcode {
     Cmpsd,
     Cvtdq2ps,
     Cvtdq2pd,
+    Cvtpd2ps,
     Cvtps2pd,
     Cvtsd2ss,
     Cvtsd2si,
@@ -685,6 +686,7 @@ impl SseOpcode {
             | SseOpcode::Comisd
             | SseOpcode::Cvtdq2ps
             | SseOpcode::Cvtdq2pd
+            | SseOpcode::Cvtpd2ps
             | SseOpcode::Cvtps2pd
             | SseOpcode::Cvtsd2ss
             | SseOpcode::Cvtsd2si
@@ -845,6 +847,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Comisd => "comisd",
             SseOpcode::Cvtdq2ps => "cvtdq2ps",
             SseOpcode::Cvtdq2pd => "cvtdq2pd",
+            SseOpcode::Cvtpd2ps => "cvtpd2ps",
             SseOpcode::Cvtps2pd => "cvtps2pd",
             SseOpcode::Cvtsd2ss => "cvtsd2ss",
             SseOpcode::Cvtsd2si => "cvtsd2si",

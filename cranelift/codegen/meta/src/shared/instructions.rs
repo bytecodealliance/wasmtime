@@ -4223,6 +4223,28 @@ pub(crate) fn define(
         .constraints(vec![WiderOrEq(Float.clone(), FloatTo.clone())]),
     );
 
+    ig.push(
+        Inst::new(
+            "fvdemote",
+            r#"
+                Convert `x` to a smaller floating point format.
+
+                Each lane in `x` is converted to the destination floating point format
+                by rounding to nearest, ties to even.
+
+                Cranelift currently only supports two floating point formats
+                - `f32` and `f64`. This may change in the future.
+
+                Fvdemote differs from fdemote in that with fvdemote it targets vectors.
+                With Fvdemote there is no contraint on having the result type have the same
+                number of vector lanes as the input type.
+                "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let x = &Operand::new("x", Float);
     let a = &Operand::new("a", IntTo);
 
