@@ -288,7 +288,7 @@ fn generate_func(
             let #name_ident = wasmtime::Func::#wrapper(
                 store,
                 ctx.clone(),
-                move |caller: wasmtime::Caller<'_>, my_ctx: &Rc<RefCell<_>> #(,#arg_decls)*|
+                move |caller: wasmtime::Caller<'_>, my_ctx: &std::rc::Rc<std::cell::RefCell<_>> #(,#arg_decls)*|
                     -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
                     Box::new(async move { Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*).await })
                 }
