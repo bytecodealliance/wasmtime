@@ -23,6 +23,7 @@ use std::ffi::CString;
 use std::io::Write;
 use std::ptr;
 use std::ptr::NonNull;
+use std::sync::atomic::{AtomicPtr, Ordering};
 use target_lexicon::PointerWidth;
 #[cfg(windows)]
 use winapi;
@@ -140,10 +141,10 @@ pub struct JITModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    function_got_entries: SecondaryMap<FuncId, Option<NonNull<*const u8>>>,
+    function_got_entries: SecondaryMap<FuncId, Option<NonNull<AtomicPtr<u8>>>>,
     function_plt_entries: SecondaryMap<FuncId, Option<NonNull<[u8; 16]>>>,
-    data_object_got_entries: SecondaryMap<DataId, Option<NonNull<*const u8>>>,
-    libcall_got_entries: HashMap<ir::LibCall, NonNull<*const u8>>,
+    data_object_got_entries: SecondaryMap<DataId, Option<NonNull<AtomicPtr<u8>>>>,
+    libcall_got_entries: HashMap<ir::LibCall, NonNull<AtomicPtr<u8>>>,
     libcall_plt_entries: HashMap<ir::LibCall, NonNull<[u8; 16]>>,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
@@ -180,23 +181,23 @@ impl JITModule {
             .or_else(|| lookup_with_dlsym(name))
     }
 
-    fn new_got_entry(&mut self, val: *const u8) -> NonNull<*const u8> {
+    fn new_got_entry(&mut self, val: *const u8) -> NonNull<AtomicPtr<u8>> {
         let got_entry = self
             .memory
             .writable
             .allocate(
-                std::mem::size_of::<*const u8>(),
-                std::mem::align_of::<*const u8>().try_into().unwrap(),
+                std::mem::size_of::<AtomicPtr<u8>>(),
+                std::mem::align_of::<AtomicPtr<u8>>().try_into().unwrap(),
             )
             .unwrap()
-            .cast::<*const u8>();
+            .cast::<AtomicPtr<u8>>();
         unsafe {
-            std::ptr::write(got_entry, val);
+            std::ptr::write(got_entry, AtomicPtr::new(val as *mut _));
         }
         NonNull::new(got_entry).unwrap()
     }
 
-    fn new_plt_entry(&mut self, got_entry: NonNull<*const u8>) -> NonNull<[u8; 16]> {
+    fn new_plt_entry(&mut self, got_entry: NonNull<AtomicPtr<u8>>) -> NonNull<[u8; 16]> {
         let plt_entry = self
             .memory
             .code
@@ -226,7 +227,7 @@ impl JITModule {
         self.data_object_got_entries[id] = Some(got_entry);
     }
 
-    unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: NonNull<*const u8>) {
+    unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: NonNull<AtomicPtr<u8>>) {
         assert!(
             cfg!(target_arch = "x86_64"),
             "PLT is currently only supported on x86_64"
@@ -288,10 +289,11 @@ impl JITModule {
     ///
     /// Panics if there's no entry in the table for the given function.
     pub fn read_got_entry(&self, func_id: FuncId) -> *const u8 {
-        unsafe { *self.function_got_entries[func_id].unwrap().as_ptr() }
+        let got_entry = self.function_got_entries[func_id].unwrap();
+        unsafe { got_entry.as_ref() }.load(Ordering::SeqCst)
     }
 
-    fn get_got_address(&self, name: &ir::ExternalName) -> NonNull<*const u8> {
+    fn get_got_address(&self, name: &ir::ExternalName) -> NonNull<AtomicPtr<u8>> {
         match *name {
             ir::ExternalName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
@@ -654,7 +656,7 @@ impl Module for JITModule {
 
         if self.isa.flags().is_pic() {
             unsafe {
-                std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+                (*self.function_got_entries[id].unwrap().as_ptr()).store(ptr, Ordering::SeqCst);
             }
         }
 
@@ -726,7 +728,7 @@ impl Module for JITModule {
 
         if self.isa.flags().is_pic() {
             unsafe {
-                std::ptr::write(self.function_got_entries[id].unwrap().as_ptr(), ptr);
+                (*self.function_got_entries[id].unwrap().as_ptr()).store(ptr, Ordering::SeqCst);
             }
         }
 
@@ -808,7 +810,7 @@ impl Module for JITModule {
         self.data_objects_to_finalize.push(id);
         if self.isa.flags().is_pic() {
             unsafe {
-                std::ptr::write(self.data_object_got_entries[id].unwrap().as_ptr(), ptr);
+                (*self.data_object_got_entries[id].unwrap().as_ptr()).store(ptr, Ordering::SeqCst);
             }
         }
 
