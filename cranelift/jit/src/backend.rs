@@ -180,7 +180,7 @@ impl JITModule {
             .or_else(|| lookup_with_dlsym(name))
     }
 
-    fn new_func_plt_entry(&mut self, id: FuncId, val: *const u8) {
+    fn new_got_entry(&mut self, val: *const u8) -> NonNull<*const u8> {
         let got_entry = self
             .memory
             .writable
@@ -190,44 +190,43 @@ impl JITModule {
             )
             .unwrap()
             .cast::<*const u8>();
-        self.function_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
         unsafe {
             std::ptr::write(got_entry, val);
         }
+        NonNull::new(got_entry).unwrap()
+    }
+
+    fn new_plt_entry(&mut self, got_entry: NonNull<*const u8>) -> NonNull<[u8; 16]> {
         let plt_entry = self
             .memory
             .code
             .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
             .unwrap()
             .cast::<[u8; 16]>();
-        self.record_function_for_perf(
-            plt_entry as *mut _,
-            std::mem::size_of::<[u8; 16]>(),
-            &format!("{}@plt", self.declarations.get_function_decl(id).name),
-        );
-        self.function_plt_entries[id] = Some(NonNull::new(plt_entry).unwrap());
         unsafe {
             Self::write_plt_entry_bytes(plt_entry, got_entry);
         }
+        NonNull::new(plt_entry).unwrap()
+    }
+
+    fn new_func_plt_entry(&mut self, id: FuncId, val: *const u8) {
+        let got_entry = self.new_got_entry(val);
+        self.function_got_entries[id] = Some(got_entry);
+        let plt_entry = self.new_plt_entry(got_entry);
+        self.record_function_for_perf(
+            plt_entry.as_ptr().cast(),
+            std::mem::size_of::<[u8; 16]>(),
+            &format!("{}@plt", self.declarations.get_function_decl(id).name),
+        );
+        self.function_plt_entries[id] = Some(plt_entry);
     }
 
     fn new_data_got_entry(&mut self, id: DataId, val: *const u8) {
-        let got_entry = self
-            .memory
-            .writable
-            .allocate(
-                std::mem::size_of::<*const u8>(),
-                std::mem::align_of::<*const u8>().try_into().unwrap(),
-            )
-            .unwrap()
-            .cast::<*const u8>();
-        self.data_object_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
-        unsafe {
-            std::ptr::write(got_entry, val);
-        }
+        let got_entry = self.new_got_entry(val);
+        self.data_object_got_entries[id] = Some(got_entry);
     }
 
-    unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: *mut *const u8) {
+    unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: NonNull<*const u8>) {
         assert!(
             cfg!(target_arch = "x86_64"),
             "PLT is currently only supported on x86_64"
@@ -236,7 +235,7 @@ impl JITModule {
         let mut plt_val = [
             0xff, 0x25, 0, 0, 0, 0, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b,
         ];
-        let what = got_ptr as isize - 4;
+        let what = got_ptr.as_ptr() as isize - 4;
         let at = plt_ptr as isize + 2;
         plt_val[2..6].copy_from_slice(&i32::to_ne_bytes(i32::try_from(what - at).unwrap()));
         std::ptr::write(plt_ptr, plt_val);
@@ -438,33 +437,37 @@ impl JITModule {
             );
         }
 
-        let mut memory = MemoryHandle {
-            code: Memory::new(),
-            readonly: Memory::new(),
-            writable: Memory::new(),
+        let mut module = Self {
+            isa: builder.isa,
+            hotswap_enabled: builder.hotswap_enabled,
+            symbols: builder.symbols,
+            libcall_names: builder.libcall_names,
+            memory: MemoryHandle {
+                code: Memory::new(),
+                readonly: Memory::new(),
+                writable: Memory::new(),
+            },
+            declarations: ModuleDeclarations::default(),
+            function_got_entries: SecondaryMap::new(),
+            function_plt_entries: SecondaryMap::new(),
+            data_object_got_entries: SecondaryMap::new(),
+            libcall_got_entries: HashMap::new(),
+            libcall_plt_entries: HashMap::new(),
+            compiled_functions: SecondaryMap::new(),
+            compiled_data_objects: SecondaryMap::new(),
+            functions_to_finalize: Vec::new(),
+            data_objects_to_finalize: Vec::new(),
         };
 
-        let mut libcall_got_entries = HashMap::new();
-        let mut libcall_plt_entries = HashMap::new();
-
         // Pre-create a GOT and PLT entry for each libcall.
-        let all_libcalls = if builder.isa.flags().is_pic() {
+        let all_libcalls = if module.isa.flags().is_pic() {
             ir::LibCall::all_libcalls()
         } else {
             &[] // Not PIC, so no GOT and PLT entries necessary
         };
         for &libcall in all_libcalls {
-            let got_entry = memory
-                .writable
-                .allocate(
-                    std::mem::size_of::<*const u8>(),
-                    std::mem::align_of::<*const u8>().try_into().unwrap(),
-                )
-                .unwrap()
-                .cast::<*const u8>();
-            libcall_got_entries.insert(libcall, NonNull::new(got_entry).unwrap());
-            let sym = (builder.libcall_names)(libcall);
-            let addr = if let Some(addr) = builder
+            let sym = (module.libcall_names)(libcall);
+            let addr = if let Some(addr) = module
                 .symbols
                 .get(&sym)
                 .copied()
@@ -474,37 +477,13 @@ impl JITModule {
             } else {
                 continue;
             };
-            unsafe {
-                std::ptr::write(got_entry, addr);
-            }
-            let plt_entry = memory
-                .code
-                .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
-                .unwrap()
-                .cast::<[u8; 16]>();
-            libcall_plt_entries.insert(libcall, NonNull::new(plt_entry).unwrap());
-            unsafe {
-                Self::write_plt_entry_bytes(plt_entry, got_entry);
-            }
+            let got_entry = module.new_got_entry(addr);
+            module.libcall_got_entries.insert(libcall, got_entry);
+            let plt_entry = module.new_plt_entry(got_entry);
+            module.libcall_plt_entries.insert(libcall, plt_entry);
         }
 
-        Self {
-            isa: builder.isa,
-            hotswap_enabled: builder.hotswap_enabled,
-            symbols: builder.symbols,
-            libcall_names: builder.libcall_names,
-            memory,
-            declarations: ModuleDeclarations::default(),
-            function_got_entries: SecondaryMap::new(),
-            function_plt_entries: SecondaryMap::new(),
-            data_object_got_entries: SecondaryMap::new(),
-            libcall_got_entries,
-            libcall_plt_entries,
-            compiled_functions: SecondaryMap::new(),
-            compiled_data_objects: SecondaryMap::new(),
-            functions_to_finalize: Vec::new(),
-            data_objects_to_finalize: Vec::new(),
-        }
+        module
     }
 
     /// Allow a single future `define_function` on a previously defined function. This allows for
