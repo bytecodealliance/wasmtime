@@ -89,8 +89,7 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
     });
 
     quote! {
-        use #rt::async_trait;
-        #[async_trait(?Send)]
+        #[#rt::async_trait]
         pub trait #traitname {
             #(#traitmethods)*
         }

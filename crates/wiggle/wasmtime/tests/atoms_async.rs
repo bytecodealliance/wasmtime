@@ -28,7 +28,7 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
-#[wasmtime_wiggle::async_trait(?Send)]
+#[wasmtime_wiggle::async_trait]
 impl atoms::Atoms for Ctx {
     fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);

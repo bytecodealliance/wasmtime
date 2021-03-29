@@ -6,9 +6,8 @@ use std::slice;
 use std::str;
 use std::sync::Arc;
 
-pub use wiggle_macro::from_witx;
-// re-exports so users of wiggle don't need to track the dependency:
-pub use async_trait::async_trait;
+pub use wiggle_macro::{async_trait, from_witx};
+
 pub use bitflags;
 
 #[cfg(feature = "wiggle_metadata")]
@@ -23,6 +22,10 @@ pub extern crate tracing;
 pub use error::GuestError;
 pub use guest_type::{GuestErrorType, GuestType, GuestTypeTransparent};
 pub use region::Region;
+
+pub mod async_trait_crate {
+    pub use async_trait::*;
+}
 
 /// A trait which abstracts how to get at the region of host memory taht
 /// contains guest memory.

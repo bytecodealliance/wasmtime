@@ -3651,6 +3651,7 @@ dependencies = [
 name = "wiggle-macro"
 version = "0.25.0"
 dependencies = [
+ "proc-macro2",
  "quote",
  "syn",
  "wiggle",
