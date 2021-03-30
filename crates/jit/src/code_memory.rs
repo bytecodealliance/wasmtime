@@ -312,7 +312,7 @@ impl CodeMemory {
             }
         }
 
-        // Register all unwind entires for functions and trampolines.
+        // Register all unwind entries for functions and trampolines.
         // TODO will `u32` type for start/len be enough for large code base.
         for i in unwind_info {
             match i {
