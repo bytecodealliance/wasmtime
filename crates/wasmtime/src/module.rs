@@ -17,7 +17,7 @@ mod serialization;
 
 use serialization::SerializedModule;
 
-const COMPILED_MODULE_HEADER: &[u8] = b"\0aot";
+const COMPILED_MODULE_HEADER: &[u8] = b"\0wasmtimeaot";
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
