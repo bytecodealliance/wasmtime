@@ -438,6 +438,7 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     let mut config = fuzz_config.to_wasmtime();
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
+    config.wasm_module_linking(false);
     let store = Store::new(&Engine::new(&config).unwrap());
     if fuzz_config.consume_fuel {
         store.add_fuel(u64::max_value()).unwrap();
