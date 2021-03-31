@@ -32,18 +32,32 @@ struct WasmFeatures {
 
 impl From<&wasmparser::WasmFeatures> for WasmFeatures {
     fn from(other: &wasmparser::WasmFeatures) -> Self {
+        let wasmparser::WasmFeatures {
+            reference_types,
+            multi_value,
+            bulk_memory,
+            module_linking,
+            simd,
+            threads,
+            tail_call,
+            deterministic_only,
+            multi_memory,
+            exceptions,
+            memory64,
+        } = other;
+
         Self {
-            reference_types: other.reference_types,
-            multi_value: other.multi_value,
-            bulk_memory: other.bulk_memory,
-            module_linking: other.module_linking,
-            simd: other.simd,
-            threads: other.threads,
-            tail_call: other.tail_call,
-            deterministic_only: other.deterministic_only,
-            multi_memory: other.multi_memory,
-            exceptions: other.exceptions,
-            memory64: other.memory64,
+            reference_types: *reference_types,
+            multi_value: *multi_value,
+            bulk_memory: *bulk_memory,
+            module_linking: *module_linking,
+            simd: *simd,
+            threads: *threads,
+            tail_call: *tail_call,
+            deterministic_only: *deterministic_only,
+            multi_memory: *multi_memory,
+            exceptions: *exceptions,
+            memory64: *memory64,
         }
     }
 }
@@ -149,7 +163,6 @@ impl<'a> SerializedModuleData<'a> {
 
 #[derive(Serialize, Deserialize)]
 pub struct SerializedModule<'a> {
-    version: String,
     target: String,
     flags_hash: u64,
     // Record the opt level as it is the most common Cranelift flag users might change
@@ -192,7 +205,6 @@ impl<'a> SerializedModule<'a> {
         let isa = compiler.isa();
 
         Self {
-            version: env!("CARGO_PKG_VERSION").to_string(),
             target: isa.triple().to_string(),
             opt_level: isa.flags().opt_level().into(),
             flags_hash: Self::simple_hash(isa.flags()),
@@ -209,7 +221,6 @@ impl<'a> SerializedModule<'a> {
         let compiler = engine.compiler();
         let isa = compiler.isa();
 
-        self.check_version()?;
         self.check_triple(isa)?;
         self.check_isa_flags(isa)?;
         self.check_strategy(compiler)?;
@@ -260,17 +271,6 @@ impl<'a> SerializedModule<'a> {
                 inner: Arc::new(inner),
             })
         }
-    }
-
-    fn check_version(&self) -> Result<()> {
-        if self.version != env!("CARGO_PKG_VERSION") {
-            bail!(
-                "Module was compiled with Wasmtime version '{}'",
-                self.version
-            );
-        }
-
-        Ok(())
     }
 
     fn check_triple(&self, isa: &dyn TargetIsa) -> Result<()> {
@@ -368,119 +368,114 @@ impl<'a> SerializedModule<'a> {
     }
 
     fn check_tunables(&self, compiler: &Compiler) -> Result<()> {
+        let Tunables {
+            static_memory_bound,
+            static_memory_offset_guard_size,
+            dynamic_memory_offset_guard_size,
+            generate_native_debuginfo,
+            parse_wasm_debuginfo,
+            interruptable,
+            consume_fuel,
+            static_memory_bound_is_maximum,
+        } = self.tunables;
+
         let other = compiler.tunables();
 
         Self::check_int(
-            self.tunables.static_memory_bound,
+            static_memory_bound,
             other.static_memory_bound,
             "static memory bound",
         )?;
         Self::check_int(
-            self.tunables.static_memory_offset_guard_size,
+            static_memory_offset_guard_size,
             other.static_memory_offset_guard_size,
             "static memory guard size",
         )?;
         Self::check_int(
-            self.tunables.dynamic_memory_offset_guard_size,
+            dynamic_memory_offset_guard_size,
             other.dynamic_memory_offset_guard_size,
             "dynamic memory guard size",
         )?;
         Self::check_bool(
-            self.tunables.generate_native_debuginfo,
+            generate_native_debuginfo,
             other.generate_native_debuginfo,
             "debug information support",
         )?;
         Self::check_bool(
-            self.tunables.parse_wasm_debuginfo,
+            parse_wasm_debuginfo,
             other.parse_wasm_debuginfo,
             "WebAssembly backtrace support",
         )?;
+        Self::check_bool(interruptable, other.interruptable, "interruption support")?;
+        Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
         Self::check_bool(
-            self.tunables.interruptable,
-            other.interruptable,
-            "interruption support",
-        )?;
-        Self::check_bool(
-            self.tunables.consume_fuel,
-            other.consume_fuel,
-            "fuel support",
-        )?;
-        Self::check_bool(
-            self.tunables.static_memory_bound_is_maximum,
+            static_memory_bound_is_maximum,
             other.static_memory_bound_is_maximum,
             "pooling allocation support",
         )?;
-
-        // At this point, the hashes should match (if not we're missing a check)
-        assert_eq!(
-            Self::simple_hash(&self.tunables),
-            Self::simple_hash(other),
-            "unexpected hash difference"
-        );
 
         Ok(())
     }
 
     fn check_features(&self, compiler: &Compiler) -> Result<()> {
+        let WasmFeatures {
+            reference_types,
+            multi_value,
+            bulk_memory,
+            module_linking,
+            simd,
+            threads,
+            tail_call,
+            deterministic_only,
+            multi_memory,
+            exceptions,
+            memory64,
+        } = self.features;
+
         let other = compiler.features();
         Self::check_bool(
-            self.features.reference_types,
+            reference_types,
             other.reference_types,
             "WebAssembly reference types support",
         )?;
         Self::check_bool(
-            self.features.multi_value,
+            multi_value,
             other.multi_value,
             "WebAssembly multi-value support",
         )?;
         Self::check_bool(
-            self.features.bulk_memory,
+            bulk_memory,
             other.bulk_memory,
             "WebAssembly bulk memory support",
         )?;
         Self::check_bool(
-            self.features.module_linking,
+            module_linking,
             other.module_linking,
             "WebAssembly module linking support",
         )?;
-        Self::check_bool(self.features.simd, other.simd, "WebAssembly SIMD support")?;
+        Self::check_bool(simd, other.simd, "WebAssembly SIMD support")?;
+        Self::check_bool(threads, other.threads, "WebAssembly threads support")?;
+        Self::check_bool(tail_call, other.tail_call, "WebAssembly tail-call support")?;
         Self::check_bool(
-            self.features.threads,
-            other.threads,
-            "WebAssembly threads support",
-        )?;
-        Self::check_bool(
-            self.features.tail_call,
-            other.tail_call,
-            "WebAssembly tail-call support",
-        )?;
-        Self::check_bool(
-            self.features.deterministic_only,
+            deterministic_only,
             other.deterministic_only,
             "WebAssembly deterministic-only support",
         )?;
         Self::check_bool(
-            self.features.multi_memory,
+            multi_memory,
             other.multi_memory,
             "WebAssembly multi-memory support",
         )?;
         Self::check_bool(
-            self.features.exceptions,
+            exceptions,
             other.exceptions,
             "WebAssembly exceptions support",
         )?;
         Self::check_bool(
-            self.features.memory64,
+            memory64,
             other.memory64,
             "WebAssembly 64-bit memory support",
         )?;
-
-        // At this point, the hashes should match (if not we're missing a check)
-        assert_eq!(
-            Self::simple_hash(&self.features),
-            Self::simple_hash(other),
-            "unexpected hash difference"
-        );
 
         Ok(())
     }
@@ -490,25 +485,6 @@ impl<'a> SerializedModule<'a> {
 mod test {
     use super::*;
     use crate::Config;
-
-    #[test]
-    fn test_version_mismatch() -> Result<()> {
-        let engine = Engine::default();
-        let module = Module::new(&engine, "(module)")?;
-
-        let mut serialized = SerializedModule::new(&module);
-        serialized.version = "0.0.1".to_string();
-
-        match serialized.into_module(&engine) {
-            Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                "Module was compiled with Wasmtime version '0.0.1'"
-            ),
-        }
-
-        Ok(())
-    }
 
     #[test]
     fn test_architecture_mismatch() -> Result<()> {

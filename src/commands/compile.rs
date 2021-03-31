@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime wast` command.
 
-use crate::{init_file_per_thread_logger, CommonOptions};
+use crate::CommonOptions;
 use anyhow::{anyhow, bail, Context, Result};
 use std::fs::{self, File};
 use std::io::BufWriter;
@@ -148,14 +148,7 @@ pub struct CompileCommand {
 impl CompileCommand {
     /// Executes the command.
     pub fn execute(mut self) -> Result<()> {
-        if !self.common.disable_logging {
-            if self.common.log_to_files {
-                let prefix = "wasmtime.dbg.";
-                init_file_per_thread_logger(prefix);
-            } else {
-                pretty_env_logger::init();
-            }
-        }
+        self.common.init_logging();
 
         let target = self
             .target

@@ -392,20 +392,6 @@ impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Self {
-        Self::new_with_isa_flags(native::builder())
-    }
-
-    /// Creates a [`Config`] for the given target triple.
-    ///
-    /// No CPU flags will be enabled for the config.
-    pub fn for_target(target: &str) -> Result<Self> {
-        use std::str::FromStr;
-        Ok(Self::new_with_isa_flags(native::lookup(
-            target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?,
-        )?))
-    }
-
-    fn new_with_isa_flags(isa_flags: isa::Builder) -> Self {
         let mut flags = settings::builder();
 
         // There are two possible traps for division, and this way
@@ -414,30 +400,15 @@ impl Config {
             .enable("avoid_div_traps")
             .expect("should be valid flag");
 
-        // Invert cranelift's default-on verification to instead default off.
-        flags
-            .set("enable_verifier", "false")
-            .expect("should be valid flag");
-
-        // Turn on cranelift speed optimizations by default
-        flags
-            .set("opt_level", "speed")
-            .expect("should be valid flag");
-
         // We don't use probestack as a stack limit mechanism
         flags
             .set("enable_probestack", "false")
             .expect("should be valid flag");
 
-        // Reference types are enabled by default, so enable safepoints
-        flags
-            .set("enable_safepoints", "true")
-            .expect("should be valid flag");
-
         let mut ret = Self {
             tunables: Tunables::default(),
             flags,
-            isa_flags,
+            isa_flags: native::builder(),
             strategy: CompilationStrategy::Auto,
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
@@ -446,12 +417,7 @@ impl Config {
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
-            features: WasmFeatures {
-                reference_types: true,
-                bulk_memory: true,
-                multi_value: true,
-                ..WasmFeatures::default()
-            },
+            features: WasmFeatures::default(),
             max_instances: 10_000,
             max_tables: 10_000,
             max_memories: 10_000,
@@ -460,8 +426,36 @@ impl Config {
             host_funcs: HostFuncMap::new(),
             async_support: false,
         };
+        ret.cranelift_debug_verifier(false);
+        ret.cranelift_opt_level(OptLevel::Speed);
+        ret.wasm_reference_types(true);
+        ret.wasm_multi_value(true);
+        ret.wasm_bulk_memory(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         ret
+    }
+
+    /// Sets the target triple for the [`Config`].
+    ///
+    /// By default, the host target triple is used for the [`Config`].
+    ///
+    /// This method can be used to change the target triple.
+    ///
+    /// Note that any no Cranelift flags will be inferred for the given target.
+    ///
+    /// [`Config::cranelift_clear_cpu_flags`] will reset the target triple back to
+    /// the host's target.
+    ///
+    /// # Errors
+    ///
+    /// This method will error if the given target triple is not supported.
+    pub fn target(&mut self, target: &str) -> Result<&mut Self> {
+        use std::str::FromStr;
+        self.isa_flags = native::lookup(
+            target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?,
+        )?;
+
+        Ok(self)
     }
 
     /// Whether or not to enable support for asynchronous functions in Wasmtime.
@@ -905,6 +899,8 @@ impl Config {
     }
 
     /// Clears native CPU flags inferred from the host.
+    ///
+    /// Note: this method will change the target to that of the host.
     ///
     /// By default Wasmtime will tune generated code for the host that Wasmtime
     /// itself is running on. If you're compiling on one host, however, and

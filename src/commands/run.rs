@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime run` command.
 
-use crate::{init_file_per_thread_logger, CommonOptions};
+use crate::CommonOptions;
 use anyhow::{bail, Context as _, Result};
 use std::thread;
 use std::time::Duration;
@@ -126,14 +126,7 @@ pub struct RunCommand {
 impl RunCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        if !self.common.disable_logging {
-            if self.common.log_to_files {
-                let prefix = "wasmtime.dbg.";
-                init_file_per_thread_logger(prefix);
-            } else {
-                pretty_env_logger::init();
-            }
-        }
+        self.common.init_logging();
 
         let mut config = self.common.config(None)?;
         if self.wasm_timeout.is_some() {

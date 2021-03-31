@@ -12,6 +12,23 @@ fn deserialize_and_instantiate(store: &Store, buffer: &[u8]) -> Result<Instance>
 }
 
 #[test]
+fn test_version_mismatch() -> Result<()> {
+    let engine = Engine::default();
+    let mut buffer = serialize(&engine, "(module)")?;
+    buffer[1] = 'x' as u8;
+
+    match Module::deserialize(&engine, &buffer) {
+        Ok(_) => bail!("expected deserialization to fail"),
+        Err(e) => assert_eq!(
+            e.to_string(),
+            "Module was compiled with incompatible Wasmtime version 'x.25.0'"
+        ),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_module_serialize_simple() -> Result<()> {
     let buffer = serialize(
         &Engine::default(),

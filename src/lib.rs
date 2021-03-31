@@ -196,12 +196,24 @@ struct CommonOptions {
 }
 
 impl CommonOptions {
-    fn config(&self, target: Option<&str>) -> Result<Config> {
-        let mut config = if let Some(target) = target {
-            Config::for_target(target)?
+    fn init_logging(&self) {
+        if self.disable_logging {
+            return;
+        }
+        if self.log_to_files {
+            let prefix = "wasmtime.dbg.";
+            init_file_per_thread_logger(prefix);
         } else {
-            Config::new()
-        };
+            pretty_env_logger::init();
+        }
+    }
+    fn config(&self, target: Option<&str>) -> Result<Config> {
+        let mut config = Config::new();
+
+        // Set the target before setting any cranelift options
+        if let Some(target) = target {
+            config.target(target)?;
+        }
 
         config
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)

@@ -17,7 +17,7 @@ mod serialization;
 
 use serialization::SerializedModule;
 
-const COMPILED_MODULE_HEADER: &[u8] = b"\0wasmtimeaot";
+const COMPILED_MODULE_HEADER: &[u8] = b"\0wasmtime-aot";
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -364,12 +364,10 @@ impl Module {
 
         // Write a header that marks this as a compiled module
         output.write_all(COMPILED_MODULE_HEADER)?;
-        bincode_options().serialize_into(
-            output,
+        Self::serialize_module(
             &SerializedModule::from_artifacts(engine.compiler(), &artifacts, &types),
-        )?;
-
-        Ok(())
+            output,
+        )
     }
 
     /// Returns the type signature of this module.
@@ -392,8 +390,22 @@ impl Module {
     /// Serialize compilation artifacts to the buffer. See also `deserialize`.
     pub fn serialize(&self) -> Result<Vec<u8>> {
         let mut buffer = Vec::new();
-        bincode_options().serialize_into(&mut buffer, &SerializedModule::new(self))?;
+        Self::serialize_module(&SerializedModule::new(self), &mut buffer)?;
         Ok(buffer)
+    }
+
+    fn serialize_module(module: &SerializedModule, mut output: impl Write) -> Result<()> {
+        // Preface the data with a version so we can do a version check independent
+        // of the serialized data.
+        let version = env!("CARGO_PKG_VERSION");
+        assert!(
+            version.len() < 256,
+            "package version must be less than 256 bytes"
+        );
+        output.write(&[version.len() as u8])?;
+        output.write_all(version.as_bytes())?;
+        bincode_options().serialize_into(output, module)?;
+        Ok(())
     }
 
     /// Deserializes and creates a module from the compilation artifacts.
@@ -406,8 +418,25 @@ impl Module {
     /// for modifications or corruptions. All responsibly of signing and its
     /// verification falls on the embedder.
     pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
+        if serialized.is_empty() {
+            bail!("serialized data data is empty");
+        }
+
+        let version_len = serialized[0] as usize;
+        if serialized.len() < version_len + 1 {
+            bail!("serialized data is malformed");
+        }
+
+        let version = std::str::from_utf8(&serialized[1..1 + version_len])?;
+        if version != env!("CARGO_PKG_VERSION") {
+            bail!(
+                "Module was compiled with incompatible Wasmtime version '{}'",
+                version
+            );
+        }
+
         bincode_options()
-            .deserialize::<SerializedModule<'_>>(serialized)
+            .deserialize::<SerializedModule<'_>>(&serialized[1 + version_len..])
             .context("Deserialize compilation artifacts")?
             .into_module(engine)
     }
