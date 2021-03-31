@@ -68,9 +68,15 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
+lazy_static::lazy_static! {
+    static ref AFTER_HELP: String = {
+        crate::WASM_FEATURES.to_string()
+    };
+}
+
 /// Runs a WebAssembly module
 #[derive(StructOpt)]
-#[structopt(name = "run", setting = AppSettings::TrailingVarArg)]
+#[structopt(name = "run", setting = AppSettings::TrailingVarArg, after_help = AFTER_HELP.as_str())]
 pub struct RunCommand {
     #[structopt(flatten)]
     common: CommonOptions,

@@ -7,12 +7,19 @@ use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Store};
 use wasmtime_wast::WastContext;
 
+lazy_static::lazy_static! {
+    static ref AFTER_HELP: String = {
+        crate::WASM_FEATURES.to_string()
+    };
+}
+
 /// Runs a WebAssembly test script file
 #[derive(StructOpt)]
 #[structopt(
     name = "wast",
     version = env!("CARGO_PKG_VERSION"),
     setting = AppSettings::ColoredHelp,
+    after_help = AFTER_HELP.as_str(),
 )]
 pub struct WastCommand {
     #[structopt(flatten)]

@@ -11,9 +11,17 @@ use std::{
 use structopt::{clap::AppSettings, StructOpt};
 use target_lexicon::Triple;
 
-/// The after help text for the `wasm2obj` command.
-pub const WASM2OBJ_AFTER_HELP: &str = "The translation is dependent on the environment chosen.\n\
-     The default is a dummy environment that produces placeholder values.";
+lazy_static::lazy_static! {
+    static ref AFTER_HELP: String = {
+        format!(
+            "The translation is dependent on the environment chosen.\n\
+            The default is a dummy environment that produces placeholder values.\n\
+            \n\
+            {}",
+            crate::WASM_FEATURES.as_str()
+        )
+    };
+}
 
 /// Translates a WebAssembly module to native object file
 #[derive(StructOpt)]
@@ -21,7 +29,7 @@ pub const WASM2OBJ_AFTER_HELP: &str = "The translation is dependent on the envir
     name = "wasm2obj",
     version = env!("CARGO_PKG_VERSION"),
     setting = AppSettings::ColoredHelp,
-    after_help = WASM2OBJ_AFTER_HELP,
+    after_help = AFTER_HELP.as_str(),
 )]
 pub struct WasmToObjCommand {
     #[structopt(flatten)]

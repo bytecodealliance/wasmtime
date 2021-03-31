@@ -12,6 +12,31 @@ use structopt::{
 use target_lexicon::Triple;
 use wasmtime::{Config, Engine, Module};
 
+lazy_static::lazy_static! {
+    static ref AFTER_HELP: String = {
+        format!(
+            "By default, no CPU features or presets will be enabled for the compilation.\n\
+            \n\
+            {}\
+            \n\
+            Usage examples:\n\
+            \n\
+            Compiling a WebAssembly module for the current platform:\n\
+            \n  \
+            wasmtime compile example.wasm
+            \n\
+            Specifying the output file:\n\
+            \n  \
+            wasmtime compile -o output.cwasm input.wasm\n\
+            \n\
+            Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
+            \n  \
+            wasmtime compile --target x86_64-unknown-linux --skylake foo.wasm\n",
+            crate::WASM_FEATURES.as_str()
+        )
+    };
+}
+
 /// Compiles a WebAssembly module.
 #[derive(StructOpt)]
 #[structopt(
@@ -22,23 +47,7 @@ use wasmtime::{Config, Engine, Module};
     group = ArgGroup::with_name("preset-x64"),
     group = ArgGroup::with_name("aarch64").multiple(true).conflicts_with_all(&["x64", "preset-x64"]),
     group = ArgGroup::with_name("preset-aarch64").conflicts_with_all(&["x64", "preset-x64"]),
-    after_help = "By default, no CPU flags will be enabled for the compilation.\n\
-                  \n\
-                  Use the various preset and CPU flag options for the environment being targeted.\n\
-                  \n\
-                  Usage examples:\n\
-                  \n\
-                  Compiling a WebAssembly module for the current platform:\n\
-                  \n  \
-                  wasmtime compile example.wasm
-                  \n\
-                  Specifying the output file:\n\
-                  \n  \
-                  wasmtime compile -o output.cwasm input.wasm\n\
-                  \n\
-                  Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
-                  \n  \
-                  wasmtime compile --target x86_64-unknown-linux --skylake foo.wasm\n"
+    after_help = AFTER_HELP.as_str()
 )]
 pub struct CompileCommand {
     #[structopt(flatten)]

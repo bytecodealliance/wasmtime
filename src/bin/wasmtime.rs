@@ -6,7 +6,7 @@
 use anyhow::Result;
 use structopt::{clap::AppSettings, clap::ErrorKind, StructOpt};
 use wasmtime_cli::commands::{
-    CompileCommand, ConfigCommand, RunCommand, WasmToObjCommand, WastCommand, WASM2OBJ_AFTER_HELP,
+    CompileCommand, ConfigCommand, RunCommand, WasmToObjCommand, WastCommand,
 };
 
 /// Wasmtime WebAssembly Runtime
@@ -43,7 +43,7 @@ enum WasmtimeApp {
     /// Runs a WebAssembly module
     Run(RunCommand),
     /// Translates a WebAssembly module to native object file
-    #[structopt(name = "wasm2obj", after_help = WASM2OBJ_AFTER_HELP)]
+    #[structopt(name = "wasm2obj")]
     WasmToObj(WasmToObjCommand),
     /// Runs a WebAssembly test script file
     Wast(WastCommand),

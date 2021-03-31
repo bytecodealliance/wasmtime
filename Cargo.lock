@@ -3273,6 +3273,7 @@ dependencies = [
  "file-per-thread-logger",
  "filecheck",
  "humantime 2.1.0",
+ "lazy_static",
  "libc",
  "log",
  "more-asserts",

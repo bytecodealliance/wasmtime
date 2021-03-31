@@ -16,16 +16,20 @@
 
 ### Changed
 
+* Wasmtime CLI options to enable WebAssembly features have been replaced with a
+  singular `--wasm-features` option. The previous options are still supported, but
+  are not displayed in help text.
+
 * Breaking: the CLI option `--cranelift-flags` was changed to `--cranelift-flag`.
 
 * Breaking: the CLI option `--enable-reference-types=false` has been changed to
-  `--disable-reference-types` as it is enabled by default.
+  `--wasm-features=-reference-types`.
 
 * Breaking: the CLI option `--enable-multi-value=false` has been changed to
-  `--disable-multi-value` as it is enabled by default.
+  `--wasm-features=-multi-value`.
 
 * Breaking: the CLI option `--enable-bulk-memory=false` has been changed to
-  `--disable-bulk-memory` as it is enabled by default.
+  `--wasm-features=-bulk-memory`.
 
 * Modules serialized with `Module::serialize` can now be deserialized with
   `Module::deserialize` on a compatible host that does not have to match the
