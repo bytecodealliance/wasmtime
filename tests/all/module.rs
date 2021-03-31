@@ -16,14 +16,14 @@ fn caches_across_engines() {
 
     // differ in shared cranelift flags
     let res = Module::deserialize(
-        &Engine::new(&Config::new().cranelift_nan_canonicalization(true)).unwrap(),
+        &Engine::new(Config::new().cranelift_nan_canonicalization(true)).unwrap(),
         &bytes,
     );
     assert!(res.is_err());
 
     // differ in cranelift settings
     let res = Module::deserialize(
-        &Engine::new(&Config::new().cranelift_opt_level(OptLevel::None)).unwrap(),
+        &Engine::new(Config::new().cranelift_opt_level(OptLevel::None)).unwrap(),
         &bytes,
     );
     assert!(res.is_err());
@@ -31,7 +31,12 @@ fn caches_across_engines() {
     // Missing required cpu flags
     if cfg!(target_arch = "x86_64") {
         let res = Module::deserialize(
-            &Engine::new(&Config::new().cranelift_clear_cpu_flags()).unwrap(),
+            &Engine::new(
+                Config::new()
+                    .target(&target_lexicon::Triple::host().to_string())
+                    .unwrap(),
+            )
+            .unwrap(),
             &bytes,
         );
         assert!(res.is_err());

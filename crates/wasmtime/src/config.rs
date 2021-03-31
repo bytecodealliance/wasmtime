@@ -441,10 +441,8 @@ impl Config {
     ///
     /// This method can be used to change the target triple.
     ///
-    /// Note that any no Cranelift flags will be inferred for the given target.
-    ///
-    /// [`Config::cranelift_clear_cpu_flags`] will reset the target triple back to
-    /// the host's target.
+    /// Cranelift flags will not be inferred for the given target and any
+    /// existing target-specific Cranelift flags will be cleared.
     ///
     /// # Errors
     ///
@@ -898,22 +896,6 @@ impl Config {
         self
     }
 
-    /// Clears native CPU flags inferred from the host.
-    ///
-    /// Note: this method will change the target to that of the host.
-    ///
-    /// By default Wasmtime will tune generated code for the host that Wasmtime
-    /// itself is running on. If you're compiling on one host, however, and
-    /// shipping artifacts to another host then this behavior may not be
-    /// desired. This function will clear all inferred native CPU features.
-    ///
-    /// To enable CPU features afterwards it's recommended to use the
-    /// [`Config::cranelift_other_flag`] method.
-    pub fn cranelift_clear_cpu_flags(&mut self) -> &mut Self {
-        self.isa_flags = native::builder_without_flags();
-        self
-    }
-
     /// Allows setting a Cranelift boolean flag or preset. This allows
     /// fine-tuning of Cranelift settings.
     ///
@@ -954,7 +936,7 @@ impl Config {
     ///
     /// This method can fail if the flag's name does not exist, or the value is not appropriate for
     /// the flag type.
-    pub unsafe fn cranelift_other_flag(&mut self, name: &str, value: &str) -> Result<&mut Self> {
+    pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> Result<&mut Self> {
         if let Err(err) = self.flags.set(name, value) {
             match err {
                 SetError::BadName(_) => {

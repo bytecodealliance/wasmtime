@@ -11,8 +11,14 @@
 
 * The `Module::compile` method was added to support AOT compilation of a module.
 
-* Added the `Config::cranelift_flag_enable` to enable setting Cranelift boolean
-  flags or presets in a config.
+* Added the `Config::target` method to change the compilation target of the
+  configuration. This can be used in conjunction with `Module::compile` to target
+  a different host triple than the current one.
+
+* Added the `Config::cranelift_flag_enable` method to enable setting Cranelift
+  boolean flags or presets in a config.
+
+* Added CLI option `--cranelift-enable` to enable boolean settings and ISA presets.
 
 ### Changed
 
@@ -20,7 +26,12 @@
   singular `--wasm-features` option. The previous options are still supported, but
   are not displayed in help text.
 
-* Breaking: the CLI option `--cranelift-flags` was changed to `--cranelift-flag`.
+* Breaking: `Config::cranelift_clear_cpu_flags` was removed. Use `Config::target`
+  to clear the CPU flags for the host's target.
+
+* Breaking: `Config::cranelift_other_flag` was renamed to `Config::cranelift_flag_set`.
+
+* Breaking: the CLI option `--cranelift-flags` was changed to `--cranelift-set`.
 
 * Breaking: the CLI option `--enable-reference-types=false` has been changed to
   `--wasm-features=-reference-types`.

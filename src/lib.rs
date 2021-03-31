@@ -213,12 +213,12 @@ struct CommonOptions {
     opt_level: Option<wasmtime::OptLevel>,
 
     /// Cranelift common flags to set.
-    #[structopt(long = "cranelift-flag", value_name = "NAME=VALUE", parse(try_from_str = parse_cranelift_flag))]
-    cranelift_flags: Vec<CraneliftFlag>,
+    #[structopt(long = "cranelift-set", value_name = "NAME=VALUE", parse(try_from_str = parse_cranelift_flag))]
+    cranelift_set: Vec<(String, String)>,
 
-    /// The Cranelift ISA preset to use.
-    #[structopt(long, value_name = "PRESET")]
-    cranelift_preset: Option<String>,
+    /// The Cranelift boolean setting or preset to enable.
+    #[structopt(long, value_name = "SETTING")]
+    cranelift_enable: Vec<String>,
 
     /// Maximum size in bytes of wasm memory before it becomes dynamically
     /// relocatable instead of up-front-reserved.
@@ -273,15 +273,15 @@ impl CommonOptions {
 
         self.enable_wasm_features(&mut config);
 
-        if let Some(preset) = &self.cranelift_preset {
+        for name in &self.cranelift_enable {
             unsafe {
-                config.cranelift_flag_enable(preset)?;
+                config.cranelift_flag_enable(name)?;
             }
         }
 
-        for CraneliftFlag { name, value } in &self.cranelift_flags {
+        for (name, value) in &self.cranelift_set {
             unsafe {
-                config.cranelift_other_flag(name, value)?;
+                config.cranelift_flag_set(name, value)?;
             }
         }
 
@@ -401,13 +401,7 @@ fn parse_wasm_features(features: &str) -> Result<wasmparser::WasmFeatures> {
         memory64: false,
     })
 }
-
-struct CraneliftFlag {
-    name: String,
-    value: String,
-}
-
-fn parse_cranelift_flag(name_and_value: &str) -> Result<CraneliftFlag> {
+fn parse_cranelift_flag(name_and_value: &str) -> Result<(String, String)> {
     let mut split = name_and_value.splitn(2, '=');
     let name = if let Some(name) = split.next() {
         name.to_string()
@@ -419,7 +413,7 @@ fn parse_cranelift_flag(name_and_value: &str) -> Result<CraneliftFlag> {
     } else {
         bail!("missing value in cranelift flag");
     };
-    Ok(CraneliftFlag { name, value })
+    Ok((name, value))
 }
 
 fn parse_target(s: &str) -> Result<Triple> {
