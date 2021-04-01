@@ -77,7 +77,12 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly
-    - run: cargo doc --no-deps --all --exclude wasmtime-cli --exclude test-programs --exclude cranelift-codegen-meta
+    - run: |
+        cargo doc --no-deps --workspace \
+          --exclude wasmtime-cli \
+          --exclude test-programs \
+          --exclude cranelift-codegen-meta \
+          --exclude 'peepmatic*'
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
     - uses: actions/upload-artifact@v1
       with:
@@ -179,15 +184,7 @@ jobs:
         submodules: true
     - run: rustup update stable && rustup default stable
     - name: Test `peepmatic`
-      run: |
-        cargo test \
-          --package peepmatic \
-          --package peepmatic-automata \
-          --package peepmatic-fuzzing \
-          --package peepmatic-macro \
-          --package peepmatic-runtime \
-          --package peepmatic-test \
-          --package peepmatic-souper
+      run: cargo test --package 'peepmatic*'
     - name: Rebuild Peepmatic-based peephole optimizers
       run: |
         cargo test \
@@ -270,18 +267,10 @@ jobs:
     - run: |
         cargo test \
             --features test-programs/test_programs \
-            --all \
-            --exclude lightbeam \
-            --exclude wasmtime-lightbeam \
-            --exclude wasmtime-wasi-nn \
-            --exclude wasmtime-wasi-crypto \
-            --exclude peepmatic \
-            --exclude peepmatic-automata \
-            --exclude peepmatic-fuzzing \
-            --exclude peepmatic-macro \
-            --exclude peepmatic-runtime \
-            --exclude peepmatic-test \
-            --exclude peepmatic-souper
+            --workspace \
+            --exclude '*lightbeam*' \
+            --exclude 'wasmtime-wasi-*' \
+            --exclude 'peepmatic*'
       env:
         RUST_BACKTRACE: 1
 
@@ -508,18 +497,10 @@ jobs:
         $CENTOS cargo test \
             --features test-programs/test_programs \
             --release \
-            --all \
-            --exclude lightbeam \
-            --exclude wasmtime-lightbeam \
-            --exclude wasmtime-wasi-nn \
-            --exclude wasmtime-wasi-crypto \
-            --exclude peepmatic \
-            --exclude peepmatic-automata \
-            --exclude peepmatic-fuzzing \
-            --exclude peepmatic-macro \
-            --exclude peepmatic-runtime \
-            --exclude peepmatic-test \
-            --exclude peepmatic-souper \
+            --workspace \
+            --exclude '*lightbeam*' \
+            --exclude 'wasmtime-wasi-*' \
+            --exclude 'peepmatic*' \
             --exclude wasmtime-fuzz
       env:
         RUST_BACKTRACE: 1
