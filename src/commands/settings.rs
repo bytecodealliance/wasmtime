@@ -25,13 +25,13 @@ impl SettingsCommand {
             None => native::builder(),
         };
 
-        let mut enums = (Vec::new(), 0);
-        let mut nums = (Vec::new(), 0);
-        let mut bools = (Vec::new(), 0);
-        let mut presets = (Vec::new(), 0);
+        let mut enums = (Vec::new(), 0, "Enum settings:");
+        let mut nums = (Vec::new(), 0, "Numerical settings:");
+        let mut bools = (Vec::new(), 0, "Boolean settings:");
+        let mut presets = (Vec::new(), 0, "Presets:");
 
         for setting in settings.iter() {
-            let (collection, max) = match setting.kind {
+            let (collection, max, _) = match setting.kind {
                 SettingKind::Enum => &mut enums,
                 SettingKind::Num => &mut nums,
                 SettingKind::Bool => &mut bools,
@@ -52,40 +52,33 @@ impl SettingsCommand {
 
         println!("Cranelift settings for target '{}':", settings.triple());
 
-        if !enums.0.is_empty() {
-            println!();
-            Self::print_settings("Enum settings:", enums.0, enums.1);
-        }
+        for (collection, max, header) in &mut [enums, nums, bools, presets] {
+            if collection.is_empty() {
+                continue;
+            }
 
-        if !nums.0.is_empty() {
+            collection.sort_by_key(|k| k.name);
             println!();
-            Self::print_settings("Numerical settings:", nums.0, nums.1);
-        }
-
-        if !bools.0.is_empty() {
-            println!();
-            Self::print_settings("Boolean settings:", bools.0, bools.1);
-        }
-
-        if !presets.0.is_empty() {
-            println!();
-            Self::print_settings("Presets:", presets.0, presets.1);
+            Self::print_settings(header, collection, *max);
         }
 
         if self.target.is_none() {
             let isa = settings.finish(settings::Flags::new(settings::builder()));
             println!();
-            println!("Settings enabled for this host:");
+            println!("Settings inferred for the current host:");
 
-            for flag in isa.enabled_isa_flags() {
-                println!("  - {}", flag);
+            let mut enabled = isa.enabled_isa_flags();
+            enabled.sort();
+
+            for flag in enabled {
+                println!("  {}", flag);
             }
         }
 
         Ok(())
     }
 
-    fn print_settings(header: &str, settings: impl IntoIterator<Item = Setting>, width: usize) {
+    fn print_settings(header: &str, settings: &[Setting], width: usize) {
         println!("{}", header);
         for setting in settings {
             println!(

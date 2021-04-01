@@ -95,3 +95,14 @@ $ wasmtime foo.cwasm
 
 AOT-compiled modules can be run from hosts that are compatible with the target
 environment of the AOT-completed module.
+
+## `settings`
+
+This subcommand is used to print the available Cranelift settings for a given target.
+
+When run without options, it will print the settings for the host target and also
+display what Cranelift settings are inferred for the host:
+
+```sh
+$ wasmtime settings
+```
