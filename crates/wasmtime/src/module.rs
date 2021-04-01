@@ -279,6 +279,10 @@ impl Module {
             );
         }
 
+        // FIXME: we may want to validate that the ISA flags in the config match those that
+        // would be inferred for the host, otherwise the JIT might produce unrunnable code
+        // for the features the host's CPU actually has.
+
         const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
 
         cfg_if::cfg_if! {

@@ -89,6 +89,15 @@ impl Engine {
     ///   If this is supplied then the text format will be parsed before validation.
     ///   Note that the `wat` feature is enabled by default.
     ///
+    /// This method may be used to compile a module for use with a different target
+    /// host. The output of this method may be used with [`Module::new`](crate::Module::new)
+    /// on hosts compatible with the [`Config`] associated with this [`Engine`].
+    ///
+    /// The output of this method is safe to send to another host machine for later
+    /// execution. As the output is already a compiled module, translation and code
+    /// generation will be skipped and this will improve the performance of constructing
+    /// a [`Module`](crate::Module) from the output of this method.
+    ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {

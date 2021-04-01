@@ -4,10 +4,7 @@ use crate::CommonOptions;
 use anyhow::{bail, Context, Result};
 use std::fs;
 use std::path::PathBuf;
-use structopt::{
-    clap::{AppSettings, ArgGroup},
-    StructOpt,
-};
+use structopt::{clap::AppSettings, StructOpt};
 use target_lexicon::Triple;
 use wasmtime::Engine;
 
@@ -42,10 +39,6 @@ lazy_static::lazy_static! {
     name = "compile",
     version = env!("CARGO_PKG_VERSION"),
     setting = AppSettings::ColoredHelp,
-    group = ArgGroup::with_name("x64").multiple(true),
-    group = ArgGroup::with_name("preset-x64"),
-    group = ArgGroup::with_name("aarch64").multiple(true).conflicts_with_all(&["x64", "preset-x64"]),
-    group = ArgGroup::with_name("preset-aarch64").conflicts_with_all(&["x64", "preset-x64"]),
     after_help = AFTER_HELP.as_str()
 )]
 pub struct CompileCommand {
