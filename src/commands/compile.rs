@@ -2,15 +2,14 @@
 
 use crate::CommonOptions;
 use anyhow::{bail, Context, Result};
-use std::fs::{self, File};
-use std::io::BufWriter;
+use std::fs;
 use std::path::PathBuf;
 use structopt::{
     clap::{AppSettings, ArgGroup},
     StructOpt,
 };
 use target_lexicon::Triple;
-use wasmtime::{Engine, Module};
+use wasmtime::Engine;
 
 lazy_static::lazy_static! {
     static ref AFTER_HELP: String = {
@@ -100,8 +99,7 @@ impl CompileCommand {
             output
         });
 
-        let mut writer = BufWriter::new(File::create(&output)?);
-        Module::compile(&engine, &input, &mut writer)?;
+        fs::write(output, engine.precompile_module(&input)?)?;
 
         Ok(())
     }
@@ -112,7 +110,7 @@ mod test {
     use super::*;
     use std::io::Write;
     use tempfile::NamedTempFile;
-    use wasmtime::{Instance, Store};
+    use wasmtime::{Instance, Module, Store};
 
     #[test]
     fn test_successful_compile() -> Result<()> {

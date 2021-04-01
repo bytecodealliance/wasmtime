@@ -7,7 +7,7 @@ fn serialize(engine: &Engine, wat: &'static str) -> Result<Vec<u8>> {
 }
 
 fn deserialize_and_instantiate(store: &Store, buffer: &[u8]) -> Result<Instance> {
-    let module = Module::deserialize(store.engine(), buffer)?;
+    let module = Module::new(store.engine(), buffer)?;
     Ok(Instance::new(&store, &module, &[])?)
 }
 
@@ -15,9 +15,9 @@ fn deserialize_and_instantiate(store: &Store, buffer: &[u8]) -> Result<Instance>
 fn test_version_mismatch() -> Result<()> {
     let engine = Engine::default();
     let mut buffer = serialize(&engine, "(module)")?;
-    buffer[1] = 'x' as u8;
+    buffer[13 /* header length */ + 1 /* version length */] = 'x' as u8;
 
-    match Module::deserialize(&engine, &buffer) {
+    match Module::new(&engine, &buffer) {
         Ok(_) => bail!("expected deserialization to fail"),
         Err(e) => assert_eq!(
             e.to_string(),

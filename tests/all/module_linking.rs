@@ -39,7 +39,7 @@ fn compile() -> Result<()> {
     assert_eq!(m.imports().len(), 0);
     assert_eq!(m.exports().len(), 0);
     let bytes = m.serialize()?;
-    Module::deserialize(&engine, &bytes)?;
+    Module::new(&engine, &bytes)?;
     assert_eq!(m.imports().len(), 0);
     assert_eq!(m.exports().len(), 0);
     Ok(())

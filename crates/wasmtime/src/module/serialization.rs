@@ -2,7 +2,8 @@
 
 use super::ModuleInner;
 use crate::{Engine, Module, OptLevel};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
+use bincode::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -13,6 +14,19 @@ use wasmtime_environ::{isa::TargetIsa, settings};
 use wasmtime_jit::{
     CompilationArtifacts, CompilationStrategy, CompiledModule, Compiler, TypeTables,
 };
+
+const HEADER: &[u8] = b"\0wasmtime-aot";
+
+fn bincode_options() -> impl Options {
+    // Use a variable-length integer encoding instead of fixed length. The
+    // module shown on #2318 gets compressed from ~160MB to ~110MB simply using
+    // this, presumably because there's a lot of 8-byte integers which generally
+    // have small values. Local testing shows that the deserialization
+    // performance, while higher, is in the few-percent range. For huge size
+    // savings this seems worthwhile to lose a small percentage of
+    // deserialization performance.
+    bincode::DefaultOptions::new().with_varint_encoding()
+}
 
 // This exists because `wasmparser::WasmFeatures` isn't serializable
 #[derive(Hash, Debug, Copy, Clone, Serialize, Deserialize)]
@@ -271,6 +285,60 @@ impl<'a> SerializedModule<'a> {
                 inner: Arc::new(inner),
             })
         }
+    }
+
+    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+        use std::io::Write;
+
+        let mut bytes = Vec::new();
+
+        bytes.write_all(HEADER)?;
+
+        // Preface the data with a version so we can do a version check independent
+        // of the serialized data.
+        let version = env!("CARGO_PKG_VERSION");
+        assert!(
+            version.len() < 256,
+            "package version must be less than 256 bytes"
+        );
+        bytes.write(&[version.len() as u8])?;
+
+        bytes.write_all(version.as_bytes())?;
+
+        bincode_options().serialize_into(&mut bytes, self)?;
+
+        Ok(bytes)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Option<Self>> {
+        if !bytes.starts_with(HEADER) {
+            return Ok(None);
+        }
+
+        let bytes = &bytes[HEADER.len()..];
+
+        if bytes.is_empty() {
+            bail!("serialized data data is empty");
+        }
+
+        let version_len = bytes[0] as usize;
+        if bytes.len() < version_len + 1 {
+            bail!("serialized data is malformed");
+        }
+
+        let version = std::str::from_utf8(&bytes[1..1 + version_len])?;
+        if version != env!("CARGO_PKG_VERSION") {
+            bail!(
+                "Module was compiled with incompatible Wasmtime version '{}'",
+                version
+            );
+        }
+
+        Ok(Some(
+            bincode_options()
+                .deserialize::<SerializedModule<'_>>(&bytes[1 + version_len..])
+                .context("deserialize compilation artifacts")?,
+        ))
     }
 
     fn check_triple(&self, isa: &dyn TargetIsa) -> Result<()> {

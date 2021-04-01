@@ -6,14 +6,13 @@
 
 ### Added
 
-* The `wasmtime compile` command was added to support AOT compilation of Wasm
-  modules.
+* Added the `wasmtime compile` command to support AOT compilation of Wasm modules.
 
-* The `Module::compile` method was added to support AOT compilation of a module.
+* Added the `Engine::precompile_module` method to support AOT module compilation.
 
 * Added the `Config::target` method to change the compilation target of the
-  configuration. This can be used in conjunction with `Module::compile` to target
-  a different host triple than the current one.
+  configuration. This can be used in conjunction with `Engine::precompile_module`
+  to target a different host triple than the current one.
 
 * Added the `Config::cranelift_flag_enable` method to enable setting Cranelift
   boolean flags or presets in a config.
@@ -25,6 +24,8 @@
 * Wasmtime CLI options to enable WebAssembly features have been replaced with a
   singular `--wasm-features` option. The previous options are still supported, but
   are not displayed in help text.
+
+* Breaking: `Module::deserialize` has been removed in favor of `Module::new`.
 
 * Breaking: `Config::cranelift_clear_cpu_flags` was removed. Use `Config::target`
   to clear the CPU flags for the host's target.
@@ -41,10 +42,6 @@
 
 * Breaking: the CLI option `--enable-bulk-memory=false` has been changed to
   `--wasm-features=-bulk-memory`.
-
-* Modules serialized with `Module::serialize` can now be deserialized with
-  `Module::deserialize` on a compatible host that does not have to match the
-  original environment exactly.
 
 ## 0.25.0
 

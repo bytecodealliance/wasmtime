@@ -31,7 +31,7 @@ fn deserialize(buffer: &[u8]) -> Result<()> {
 
     // Compile the wasm binary into an in-memory instance of a `Module`.
     println!("Deserialize module...");
-    let module = Module::deserialize(store.engine(), buffer)?;
+    let module = Module::new(store.engine(), buffer)?;
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.

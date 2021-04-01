@@ -1,5 +1,4 @@
 use anyhow::Result;
-use std::io::BufWriter;
 use wasmtime::*;
 
 #[test]
@@ -28,18 +27,18 @@ fn caches_across_engines() {
         .serialize()
         .unwrap();
 
-    let res = Module::deserialize(&Engine::new(&Config::new()).unwrap(), &bytes);
+    let res = Module::new(&Engine::new(&Config::new()).unwrap(), &bytes);
     assert!(res.is_ok());
 
     // differ in shared cranelift flags
-    let res = Module::deserialize(
+    let res = Module::new(
         &Engine::new(Config::new().cranelift_nan_canonicalization(true)).unwrap(),
         &bytes,
     );
     assert!(res.is_err());
 
     // differ in cranelift settings
-    let res = Module::deserialize(
+    let res = Module::new(
         &Engine::new(Config::new().cranelift_opt_level(OptLevel::None)).unwrap(),
         &bytes,
     );
@@ -47,7 +46,7 @@ fn caches_across_engines() {
 
     // Missing required cpu flags
     if cfg!(target_arch = "x86_64") {
-        let res = Module::deserialize(
+        let res = Module::new(
             &Engine::new(
                 Config::new()
                     .target(&target_lexicon::Triple::host().to_string())
@@ -63,14 +62,10 @@ fn caches_across_engines() {
 #[test]
 fn aot_compiles() -> Result<()> {
     let engine = Engine::default();
-    let mut writer = BufWriter::new(Vec::new());
-    Module::compile(
-        &engine,
+    let bytes = engine.precompile_module(
         "(module (func (export \"f\") (param i32) (result i32) local.get 0))".as_bytes(),
-        &mut writer,
     )?;
 
-    let bytes = writer.into_inner()?;
     let module = Module::from_binary(&engine, &bytes)?;
 
     let store = Store::new(&engine);

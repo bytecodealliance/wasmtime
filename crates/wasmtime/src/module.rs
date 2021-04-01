@@ -1,9 +1,7 @@
 use crate::types::{ExportType, ExternType, ImportType};
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
-use bincode::Options;
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::Validator;
@@ -15,9 +13,7 @@ use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 
 mod serialization;
 
-use serialization::SerializedModule;
-
-const COMPILED_MODULE_HEADER: &[u8] = b"\0wasmtime-aot";
+pub use serialization::SerializedModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -111,14 +107,16 @@ struct ModuleInner {
 impl Module {
     /// Creates a new WebAssembly `Module` from the given in-memory `bytes`.
     ///
-    /// The `bytes` provided must be in one of three formats:
+    /// The `bytes` provided must be in one of the following formats:
     ///
     /// * A [binary-encoded][binary] WebAssembly module. This is always supported.
     /// * A [text-encoded][text] instance of the WebAssembly text format.
     ///   This is only supported when the `wat` feature of this crate is enabled.
     ///   If this is supplied then the text format will be parsed before validation.
     ///   Note that the `wat` feature is enabled by default.
-    /// * A module compiled with [`Module::compile`] or the `wasmtime compile` command.
+    /// * A module serialized with [`Module::serialize`].
+    /// * A module compiled with [`Engine::precompile_module`] or the
+    ///   `wasmtime compile` command.
     ///
     /// The data for the wasm module must be loaded in-memory if it's present
     /// elsewhere, for example on disk. This requires that the entire binary is
@@ -177,8 +175,9 @@ impl Module {
     /// ```
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let bytes = bytes.as_ref();
-        if bytes.starts_with(COMPILED_MODULE_HEADER) {
-            return Self::deserialize(engine, &bytes[COMPILED_MODULE_HEADER.len()..]);
+
+        if let Some(module) = SerializedModule::from_bytes(bytes)? {
+            return module.into_module(engine);
         }
 
         #[cfg(feature = "wat")]
@@ -267,8 +266,8 @@ impl Module {
     /// # }
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        if binary.starts_with(COMPILED_MODULE_HEADER) {
-            return Self::deserialize(engine, &binary[COMPILED_MODULE_HEADER.len()..]);
+        if let Some(module) = SerializedModule::from_bytes(binary)? {
+            return module.into_module(engine);
         }
 
         // Check to see that the config's target matches the host
@@ -344,41 +343,6 @@ impl Module {
         Ok(())
     }
 
-    /// Ahead-of-time (AOT) compiles a WebAssembly module.
-    ///
-    /// The `bytes` provided must be in one of two formats:
-    ///
-    /// * A [binary-encoded][binary] WebAssembly module. This is always supported.
-    /// * A [text-encoded][text] instance of the WebAssembly text format.
-    ///   This is only supported when the `wat` feature of this crate is enabled.
-    ///   If this is supplied then the text format will be parsed before validation.
-    ///   Note that the `wat` feature is enabled by default.
-    ///
-    /// See [`Module::new`] for errors that may be returned by this function.
-    ///
-    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
-    /// [text]: https://webassembly.github.io/spec/core/text/index.html
-    pub fn compile(engine: &Engine, bytes: &[u8], mut output: impl Write) -> Result<()> {
-        const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
-
-        if bytes.starts_with(COMPILED_MODULE_HEADER) {
-            bail!("input is already a compiled module");
-        }
-
-        #[cfg(feature = "wat")]
-        let bytes = wat::parse_bytes(&bytes)?;
-
-        let (_, artifacts, types) =
-            CompilationArtifacts::build(engine.compiler(), &bytes, USE_PAGED_MEM_INIT)?;
-
-        // Write a header that marks this as a compiled module
-        output.write_all(COMPILED_MODULE_HEADER)?;
-        Self::serialize_module(
-            &SerializedModule::from_artifacts(engine.compiler(), &artifacts, &types),
-            output,
-        )
-    }
-
     /// Returns the type signature of this module.
     pub fn ty(&self) -> ModuleType {
         let mut sig = ModuleType::new();
@@ -396,58 +360,12 @@ impl Module {
         sig
     }
 
-    /// Serialize compilation artifacts to the buffer. See also `deserialize`.
-    pub fn serialize(&self) -> Result<Vec<u8>> {
-        let mut buffer = Vec::new();
-        Self::serialize_module(&SerializedModule::new(self), &mut buffer)?;
-        Ok(buffer)
-    }
-
-    fn serialize_module(module: &SerializedModule, mut output: impl Write) -> Result<()> {
-        // Preface the data with a version so we can do a version check independent
-        // of the serialized data.
-        let version = env!("CARGO_PKG_VERSION");
-        assert!(
-            version.len() < 256,
-            "package version must be less than 256 bytes"
-        );
-        output.write(&[version.len() as u8])?;
-        output.write_all(version.as_bytes())?;
-        bincode_options().serialize_into(output, module)?;
-        Ok(())
-    }
-
-    /// Deserializes and creates a module from the compilation artifacts.
-    /// The `serialize` saves the compilation artifacts along with the host
-    /// fingerprint, which consists of target, compiler flags, and wasmtime
-    /// package version.
+    /// Serialize the module to a vector of bytes.
     ///
-    /// The method will fail if fingerprints of current host and serialized
-    /// one are different. The method does not verify the serialized artifacts
-    /// for modifications or corruptions. All responsibly of signing and its
-    /// verification falls on the embedder.
-    pub fn deserialize(engine: &Engine, serialized: &[u8]) -> Result<Module> {
-        if serialized.is_empty() {
-            bail!("serialized data data is empty");
-        }
-
-        let version_len = serialized[0] as usize;
-        if serialized.len() < version_len + 1 {
-            bail!("serialized data is malformed");
-        }
-
-        let version = std::str::from_utf8(&serialized[1..1 + version_len])?;
-        if version != env!("CARGO_PKG_VERSION") {
-            bail!(
-                "Module was compiled with incompatible Wasmtime version '{}'",
-                version
-            );
-        }
-
-        bincode_options()
-            .deserialize::<SerializedModule<'_>>(&serialized[1 + version_len..])
-            .context("Deserialize compilation artifacts")?
-            .into_module(engine)
+    /// Use `Module::new` or `Module::from_binary` to create the module
+    /// from the bytes.
+    pub fn serialize(&self) -> Result<Vec<u8>> {
+        SerializedModule::new(self).to_bytes()
     }
 
     /// Creates a submodule `Module` value from the specified parameters.
@@ -730,17 +648,6 @@ impl Module {
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
     }
-}
-
-fn bincode_options() -> impl Options {
-    // Use a variable-length integer encoding instead of fixed length. The
-    // module shown on #2318 gets compressed from ~160MB to ~110MB simply using
-    // this, presumably because there's a lot of 8-byte integers which generally
-    // have small values. Local testing shows that the deserialization
-    // performance, while higher, is in the few-percent range. For huge size
-    // savings this seems worthwhile to lose a small percentage of
-    // deserialization performance.
-    bincode::DefaultOptions::new().with_varint_encoding()
 }
 
 fn _assert_send_sync() {
