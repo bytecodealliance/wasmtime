@@ -333,10 +333,10 @@ impl RunCommand {
             match result {
                 Val::I32(i) => println!("{}", i),
                 Val::I64(i) => println!("{}", i),
-                Val::F32(f) => println!("{}", f),
-                Val::F64(f) => println!("{}", f),
+                Val::F32(f) => println!("{}", f32::from_bits(f)),
+                Val::F64(f) => println!("{}", f64::from_bits(f)),
                 Val::ExternRef(_) => println!("<externref>"),
-                Val::FuncRef(_) => println!("<externref>"),
+                Val::FuncRef(_) => println!("<funcref>"),
                 Val::V128(i) => println!("{}", i),
             }
         }

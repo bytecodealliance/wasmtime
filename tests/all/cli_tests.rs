@@ -97,6 +97,26 @@ fn run_wasmtime_simple_wat() -> Result<()> {
         "--disable-cache",
         "4",
     ])?;
+    assert_eq!(
+        run_wasmtime(&[
+            "run",
+            wasm.path().to_str().unwrap(),
+            "--invoke",
+            "get_f32",
+            "--disable-cache",
+        ])?,
+        "100\n"
+    );
+    assert_eq!(
+        run_wasmtime(&[
+            "run",
+            wasm.path().to_str().unwrap(),
+            "--invoke",
+            "get_f64",
+            "--disable-cache",
+        ])?,
+        "100\n"
+    );
     Ok(())
 }
 
