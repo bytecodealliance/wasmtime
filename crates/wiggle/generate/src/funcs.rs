@@ -69,9 +69,8 @@ pub fn define_func(
         ) -> Result<#abi_ret, #rt::Trap> {
             use std::convert::TryFrom as _;
 
-            // This span is present at all levels (ERROR and below)
             let _span = #rt::tracing::span!(
-                #rt::tracing::Level::ERROR,
+                #rt::tracing::Level::TRACE,
                 "wiggle abi",
                 module = #mod_name,
                 function = #func_name
