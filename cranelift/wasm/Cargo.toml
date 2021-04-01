@@ -24,7 +24,7 @@ smallvec = "1.6.1"
 thiserror = "1.0.4"
 
 [dev-dependencies]
-wat = "1.0.36"
+wat = "1.0.37"
 target-lexicon = "0.12"
 # Enable the riscv feature for cranelift-codegen, as some tests require it
 cranelift-codegen = { path = "../codegen", version = "0.72.0", default-features = false, features = ["riscv"] }

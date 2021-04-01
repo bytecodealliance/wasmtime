@@ -22,7 +22,7 @@ wasm-smith = "0.4.4"
 wasmi = "0.7.0"
 
 [dev-dependencies]
-wat = "1.0.36"
+wat = "1.0.37"
 
 [features]
 experimental_x64 = ["wasmtime/experimental_x64"]

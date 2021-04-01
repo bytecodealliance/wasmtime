@@ -228,10 +228,23 @@ impl Module {
     /// # }
     /// ```
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
-        Self::new(
+        match Self::new(
             engine,
-            &fs::read(file).with_context(|| "failed to read input file")?,
-        )
+            &fs::read(&file).with_context(|| "failed to read input file")?,
+        ) {
+            Ok(m) => Ok(m),
+            Err(e) => {
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "wat")] {
+                        let mut e = e.downcast::<wat::Error>()?;
+                        e.set_path(file);
+                        bail!(e)
+                    } else {
+                        Err(e)
+                    }
+                }
+            }
+        }
     }
 
     /// Creates a new WebAssembly `Module` from the given in-memory `binary`

@@ -28,7 +28,7 @@ wasmparser = "0.77"
 
 [dev-dependencies]
 lazy_static = "1.2"
-wat = "1.0.36"
+wat = "1.0.37"
 quickcheck = "1.0.0"
 anyhow = "1.0"
 
