@@ -271,6 +271,15 @@ impl Module {
             return Self::deserialize(engine, &binary[COMPILED_MODULE_HEADER.len()..]);
         }
 
+        // Check to see that the config's target matches the host
+        let target = engine.config().isa_flags.triple();
+        if *target != target_lexicon::Triple::host() {
+            bail!(
+                "target '{}' specified in the configuration does not match the host",
+                target
+            );
+        }
+
         const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
 
         cfg_if::cfg_if! {

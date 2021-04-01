@@ -202,7 +202,7 @@ fn gen_enum_types(group: &SettingGroup, fmt: &mut Formatter) {
 
 /// Emit a getter function for `setting`.
 fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
-    fmt.doc_comment(setting.comment);
+    fmt.doc_comment(format!("{}\n{}", setting.description, setting.comment));
     match setting.specific {
         SpecificSetting::Bool(BoolSetting {
             predicate_number, ..
@@ -320,6 +320,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmtln!(fmt, "detail::Descriptor {");
             fmt.indent(|fmt| {
                 fmtln!(fmt, "name: \"{}\",", setting.name);
+                fmtln!(fmt, "description: \"{}\",", setting.description);
                 fmtln!(fmt, "offset: {},", setting.byte_offset);
                 match setting.specific {
                     SpecificSetting::Bool(BoolSetting { bit_offset, .. }) => {
@@ -352,6 +353,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmtln!(fmt, "detail::Descriptor {");
             fmt.indent(|fmt| {
                 fmtln!(fmt, "name: \"{}\",", preset.name);
+                fmtln!(fmt, "description: \"{}\",", preset.description);
                 fmtln!(fmt, "offset: {},", (idx as u8) * group.settings_size);
                 fmtln!(fmt, "detail: detail::Detail::Preset,");
             });

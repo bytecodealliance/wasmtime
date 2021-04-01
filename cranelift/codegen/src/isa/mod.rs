@@ -200,6 +200,16 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Gets the triple for the builder.
+    pub fn triple(&self) -> &Triple {
+        &self.triple
+    }
+
+    /// Iterates the available settings in the builder.
+    pub fn iter(&self) -> impl Iterator<Item = settings::Setting> {
+        self.setup.iter()
+    }
+
     /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
     /// fully configured `TargetIsa` trait object.
     pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa> {

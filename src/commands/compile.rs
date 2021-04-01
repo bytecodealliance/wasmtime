@@ -1,7 +1,7 @@
-//! The module that implements the `wasmtime wast` command.
+//! The module that implements the `wasmtime compile` command.
 
 use crate::CommonOptions;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use std::fs::{self, File};
 use std::io::BufWriter;
 use std::path::PathBuf;
@@ -10,7 +10,7 @@ use structopt::{
     StructOpt,
 };
 use target_lexicon::Triple;
-use wasmtime::{Config, Engine, Module};
+use wasmtime::{Engine, Module};
 
 lazy_static::lazy_static! {
     static ref AFTER_HELP: String = {
@@ -31,7 +31,7 @@ lazy_static::lazy_static! {
             \n\
             Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
             \n  \
-            wasmtime compile --target x86_64-unknown-linux --skylake foo.wasm\n",
+            wasmtime compile --target x86_64-unknown-linux --cranelift-enable skylake foo.wasm\n",
             crate::WASM_FEATURES.as_str()
         )
     };
@@ -56,90 +56,6 @@ pub struct CompileCommand {
     /// Enable support for interrupting WebAssembly code.
     #[structopt(long)]
     interruptable: bool,
-
-    /// Enable SSE3 support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    sse3: bool,
-
-    /// Enable SSSE3 support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    ssse3: bool,
-
-    /// Enable SSE41 support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    sse41: bool,
-
-    /// Enable SSE42 support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    sse42: bool,
-
-    /// Enable AVX support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    avx: bool,
-
-    /// Enable AVX2 support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    avx2: bool,
-
-    /// Enable AVX512DQ support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    avx512dq: bool,
-
-    /// Enable AVX512VL support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    avx512vl: bool,
-
-    /// Enable AVX512F support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    avx512f: bool,
-
-    /// Enable POPCNT support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    popcnt: bool,
-
-    /// Enable BMI1 support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    bmi1: bool,
-
-    /// Enable BMI2 support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    bmi2: bool,
-
-    /// Enable LZCNT support (for x86-64 targets).
-    #[structopt(long, group = "x64")]
-    lzcnt: bool,
-
-    /// Enable LSE support (for aarch64 targets).
-    #[structopt(long, group = "aarch64")]
-    lse: bool,
-
-    /// Enable Nehalem preset (for x86-64 targets).
-    #[structopt(long, group = "x64", group = "preset-x64")]
-    nehalem: bool,
-
-    /// Enable Haswell preset (for x86-64 targets).
-    #[structopt(long, group = "x64", group = "preset-x64")]
-    haswell: bool,
-
-    /// Enable Broadwell preset (for x86-64 targets).
-    #[structopt(long, group = "x64", group = "preset-x64")]
-    broadwell: bool,
-
-    /// Enable Skylake preset (for x86-64 targets).
-    #[structopt(long, group = "x64", group = "preset-x64")]
-    skylake: bool,
-
-    /// Enable Cannonlake preset (for x86-64 targets).
-    #[structopt(long, group = "x64", group = "preset-x64")]
-    cannonlake: bool,
-
-    /// Enable Icelake preset (for x86-64 targets).
-    #[structopt(long, group = "x64", group = "preset-x64")]
-    icelake: bool,
-
-    /// Enable Zen preset (for x86-64 targets).
-    #[structopt(long, group = "x64", group = "preset-x64")]
-    znver1: bool,
 
     /// The target triple; default is the host triple
     #[structopt(long, value_name = "TARGET")]
@@ -167,8 +83,6 @@ impl CompileCommand {
         let mut config = self.common.config(Some(&target))?;
         config.interruptable(self.interruptable);
 
-        self.set_flags(&mut config, &target)?;
-
         let engine = Engine::new(&config)?;
 
         if self.module.file_name().is_none() {
@@ -188,48 +102,6 @@ impl CompileCommand {
 
         let mut writer = BufWriter::new(File::create(&output)?);
         Module::compile(&engine, &input, &mut writer)?;
-
-        Ok(())
-    }
-
-    fn set_flags(&self, c: &mut Config, target: &str) -> Result<()> {
-        use std::str::FromStr;
-
-        macro_rules! set_flag {
-            ($config:expr, $arch:expr, $flag:expr, $name:literal, $display:literal) => {
-                if $flag {
-                    unsafe {
-                        $config.cranelift_flag_enable($name).map_err(|_| {
-                            anyhow!("{} is not supported for architecture '{}'", $display, $arch)
-                        })?;
-                    }
-                }
-            };
-        }
-
-        let arch = Triple::from_str(target).unwrap().architecture;
-
-        set_flag!(c, arch, self.sse3, "has_sse3", "SSE3");
-        set_flag!(c, arch, self.ssse3, "has_ssse3", "SSSE3");
-        set_flag!(c, arch, self.sse41, "has_sse41", "SSE41");
-        set_flag!(c, arch, self.sse42, "has_sse42", "SSE42");
-        set_flag!(c, arch, self.avx, "has_avx", "AVX");
-        set_flag!(c, arch, self.avx2, "has_avx2", "AVX2");
-        set_flag!(c, arch, self.avx512dq, "has_avx512dq", "AVX512DQ");
-        set_flag!(c, arch, self.avx512vl, "has_avx512vl", "AVX512VL");
-        set_flag!(c, arch, self.avx512f, "has_avx512f", "AVX512F");
-        set_flag!(c, arch, self.popcnt, "has_popcnt", "POPCNT");
-        set_flag!(c, arch, self.bmi1, "has_bmi1", "BMI1");
-        set_flag!(c, arch, self.bmi2, "has_bmi2", "BMI2");
-        set_flag!(c, arch, self.lzcnt, "has_lzcnt", "LZCNT");
-        set_flag!(c, arch, self.lse, "has_lse", "LSE");
-        set_flag!(c, arch, self.nehalem, "nehalem", "Nehalem preset");
-        set_flag!(c, arch, self.haswell, "haswell", "Haswell preset");
-        set_flag!(c, arch, self.broadwell, "broadwell", "Broadwell preset");
-        set_flag!(c, arch, self.skylake, "skylake", "Skylake preset");
-        set_flag!(c, arch, self.cannonlake, "cannonlake", "Cannonlake preset");
-        set_flag!(c, arch, self.icelake, "icelake", "Icelake preset");
-        set_flag!(c, arch, self.znver1, "znver1", "Zen preset");
 
         Ok(())
     }
@@ -285,19 +157,32 @@ mod test {
         let command = CompileCommand::from_iter_safe(vec![
             "compile",
             "--disable-logging",
-            "--sse3",
-            "--ssse3",
-            "--sse41",
-            "--sse42",
-            "--avx",
-            "--avx2",
-            "--avx512dq",
-            "--avx512vl",
-            "--avx512f",
-            "--popcnt",
-            "--bmi1",
-            "--bmi2",
-            "--lzcnt",
+            "--cranelift-enable",
+            "has_sse3",
+            "--cranelift-enable",
+            "has_ssse3",
+            "--cranelift-enable",
+            "has_sse41",
+            "--cranelift-enable",
+            "has_sse42",
+            "--cranelift-enable",
+            "has_avx",
+            "--cranelift-enable",
+            "has_avx2",
+            "--cranelift-enable",
+            "has_avx512dq",
+            "--cranelift-enable",
+            "has_avx512vl",
+            "--cranelift-enable",
+            "has_avx512f",
+            "--cranelift-enable",
+            "has_popcnt",
+            "--cranelift-enable",
+            "has_bmi1",
+            "--cranelift-enable",
+            "has_bmi2",
+            "--cranelift-enable",
+            "has_lzcnt",
             "-o",
             output_path.to_str().unwrap(),
             input_path.to_str().unwrap(),
@@ -321,7 +206,8 @@ mod test {
         let command = CompileCommand::from_iter_safe(vec![
             "compile",
             "--disable-logging",
-            "--lse",
+            "--cranelift-enable",
+            "has_lse",
             "-o",
             output_path.to_str().unwrap(),
             input_path.to_str().unwrap(),
@@ -334,30 +220,28 @@ mod test {
 
     #[cfg(target_arch = "x86_64")]
     #[test]
-    fn test_incompatible_flags_compile() -> Result<()> {
+    fn test_unsupported_flags_compile() -> Result<()> {
         let (mut input, input_path) = NamedTempFile::new()?.into_parts();
         input.write_all("(module)".as_bytes())?;
         drop(input);
 
         let output_path = NamedTempFile::new()?.into_temp_path();
 
-        // x64 and aarch64 flags should conflict
-        match CompileCommand::from_iter_safe(vec![
+        // aarch64 flags should not be supported
+        let command = CompileCommand::from_iter_safe(vec![
             "compile",
             "--disable-logging",
-            "--sse3",
-            "--lse",
+            "--cranelift-enable",
+            "has_lse",
             "-o",
             output_path.to_str().unwrap(),
             input_path.to_str().unwrap(),
-        ]) {
-            Ok(_) => unreachable!(),
-            Err(e) => {
-                assert!(e
-                    .to_string()
-                    .contains("cannot be used with one or more of the other specified arguments"));
-            }
-        }
+        ])?;
+
+        assert_eq!(
+            command.execute().unwrap_err().to_string(),
+            "No existing setting named 'has_lse'"
+        );
 
         Ok(())
     }
@@ -372,17 +256,18 @@ mod test {
         let output_path = NamedTempFile::new()?.into_temp_path();
 
         for preset in &[
-            "--nehalem",
-            "--haswell",
-            "--broadwell",
-            "--skylake",
-            "--cannonlake",
-            "--icelake",
-            "--znver1",
+            "nehalem",
+            "haswell",
+            "broadwell",
+            "skylake",
+            "cannonlake",
+            "icelake",
+            "znver1",
         ] {
             let command = CompileCommand::from_iter_safe(vec![
                 "compile",
                 "--disable-logging",
+                "--cranelift-enable",
                 preset,
                 "-o",
                 output_path.to_str().unwrap(),
@@ -390,24 +275,6 @@ mod test {
             ])?;
 
             command.execute()?;
-        }
-
-        // Two presets should conflict
-        match CompileCommand::from_iter_safe(vec![
-            "compile",
-            "--disable-logging",
-            "--broadwell",
-            "--cannonlake",
-            "-o",
-            output_path.to_str().unwrap(),
-            input_path.to_str().unwrap(),
-        ]) {
-            Ok(_) => unreachable!(),
-            Err(e) => {
-                assert!(e
-                    .to_string()
-                    .contains("cannot be used with one or more of the other specified arguments"));
-            }
         }
 
         Ok(())

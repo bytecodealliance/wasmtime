@@ -3,6 +3,23 @@ use std::io::BufWriter;
 use wasmtime::*;
 
 #[test]
+fn checks_incompatible_target() -> Result<()> {
+    let mut target = target_lexicon::Triple::host();
+    target.operating_system = target_lexicon::OperatingSystem::Unknown;
+    match Module::new(
+        &Engine::new(Config::new().target(&target.to_string())?)?,
+        "(module)",
+    ) {
+        Ok(_) => unreachable!(),
+        Err(e) => assert!(e
+            .to_string()
+            .contains("configuration does not match the host")),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn caches_across_engines() {
     let c = Config::new();
 

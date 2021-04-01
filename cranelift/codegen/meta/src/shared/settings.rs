@@ -5,29 +5,29 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_enum(
         "regalloc",
-        r#"Register allocator to use with the MachInst backend.
+        "Register allocator to use with the MachInst backend.",
+        r#"
+            This selects the register allocator as an option among those offered by the `regalloc.rs`
+            crate. Please report register allocation bugs to the maintainers of this crate whenever
+            possible.
 
-        This selects the register allocator as an option among those offered by the `regalloc.rs`
-        crate. Please report register allocation bugs to the maintainers of this crate whenever
-        possible.
+            Note: this only applies to target that use the MachInst backend. As of 2020-04-17, this
+            means the x86_64 backend doesn't use this yet.
 
-        Note: this only applies to target that use the MachInst backend. As of 2020-04-17, this
-        means the x86_64 backend doesn't use this yet.
+            Possible values:
 
-        Possible values:
-
-        - `backtracking` is a greedy, backtracking register allocator as implemented in
-        Spidermonkey's optimizing tier IonMonkey. It may take more time to allocate registers, but
-        it should generate better code in general, resulting in better throughput of generated
-        code.
-        - `backtracking_checked` is the backtracking allocator with additional self checks that may
-        take some time to run, and thus these checks are disabled by default.
-        - `experimental_linear_scan` is an experimental linear scan allocator. It may take less
-        time to allocate registers, but generated code's quality may be inferior. As of
-        2020-04-17, it is still experimental and it should not be used in production settings.
-        - `experimental_linear_scan_checked` is the linear scan allocator with additional self
-        checks that may take some time to run, and thus these checks are disabled by default.
-    "#,
+            - `backtracking` is a greedy, backtracking register allocator as implemented in
+            Spidermonkey's optimizing tier IonMonkey. It may take more time to allocate registers, but
+            it should generate better code in general, resulting in better throughput of generated
+            code.
+            - `backtracking_checked` is the backtracking allocator with additional self checks that may
+            take some time to run, and thus these checks are disabled by default.
+            - `experimental_linear_scan` is an experimental linear scan allocator. It may take less
+            time to allocate registers, but generated code's quality may be inferior. As of
+            2020-04-17, it is still experimental and it should not be used in production settings.
+            - `experimental_linear_scan_checked` is the linear scan allocator with additional self
+            checks that may take some time to run, and thus these checks are disabled by default.
+        "#,
         vec![
             "backtracking",
             "backtracking_checked",
@@ -38,24 +38,23 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_enum(
         "opt_level",
+        "Optimization level for generated code.",
         r#"
-        Optimization level:
+            Supported levels:
 
-        - none: Minimise compile time by disabling most optimizations.
-        - speed: Generate the fastest possible code
-        - speed_and_size: like "speed", but also perform transformations
-          aimed at reducing code size.
+            - `none`: Minimise compile time by disabling most optimizations.
+            - `speed`: Generate the fastest possible code
+            - `speed_and_size`: like "speed", but also perform transformations aimed at reducing code size.
         "#,
         vec!["none", "speed", "speed_and_size"],
     );
 
     settings.add_bool(
         "enable_verifier",
+        "Run the Cranelift IR verifier at strategic times during compilation.",
         r#"
-        Run the Cranelift IR verifier at strategic times during compilation.
-
-        This makes compilation slower but catches many bugs. The verifier is always enabled by
-        default, which is useful during development.
+            This makes compilation slower but catches many bugs. The verifier is always enabled by
+            default, which is useful during development.
         "#,
         true,
     );
@@ -65,110 +64,110 @@ pub(crate) fn define() -> SettingGroup {
     // `colocated` flag on external functions and global values.
     settings.add_bool(
         "is_pic",
-        "Enable Position-Independent Code generation",
+        "Enable Position-Independent Code generation.",
+        "",
         false,
     );
 
     settings.add_bool(
         "use_colocated_libcalls",
+        "Use colocated libcalls.",
         r#"
-            Use colocated libcalls.
-
             Generate code that assumes that libcalls can be declared "colocated",
             meaning they will be defined along with the current function, such that
             they can use more efficient addressing.
-            "#,
+        "#,
         false,
     );
 
     settings.add_bool(
         "avoid_div_traps",
+        "Generate explicit checks around native division instructions to avoid their trapping.",
         r#"
-            Generate explicit checks around native division instructions to avoid
-            their trapping.
-
             This is primarily used by SpiderMonkey which doesn't install a signal
             handler for SIGFPE, but expects a SIGILL trap for division by zero.
 
             On ISAs like ARM where the native division instructions don't trap,
             this setting has no effect - explicit checks are always inserted.
-            "#,
+        "#,
         false,
     );
 
     settings.add_bool(
         "enable_float",
+        "Enable the use of floating-point instructions.",
         r#"
-            Enable the use of floating-point instructions
-
             Disabling use of floating-point instructions is not yet implemented.
-            "#,
+        "#,
         true,
     );
 
     settings.add_bool(
         "enable_nan_canonicalization",
+        "Enable NaN canonicalization.",
         r#"
-            Enable NaN canonicalization
-
             This replaces NaNs with a single canonical value, for users requiring
             entirely deterministic WebAssembly computation. This is not required
             by the WebAssembly spec, so it is not enabled by default.
-            "#,
+        "#,
         false,
     );
 
     settings.add_bool(
         "enable_pinned_reg",
-        r#"Enable the use of the pinned register.
-
-        This register is excluded from register allocation, and is completely under the control of
-        the end-user. It is possible to read it via the get_pinned_reg instruction, and to set it
-        with the set_pinned_reg instruction.
+        "Enable the use of the pinned register.",
+        r#"
+            This register is excluded from register allocation, and is completely under the control of
+            the end-user. It is possible to read it via the get_pinned_reg instruction, and to set it
+            with the set_pinned_reg instruction.
         "#,
         false,
     );
 
     settings.add_bool(
         "use_pinned_reg_as_heap_base",
-        r#"Use the pinned register as the heap base.
+        "Use the pinned register as the heap base.",
+        r#"
+            Enabling this requires the enable_pinned_reg setting to be set to true. It enables a custom
+            legalization of the `heap_addr` instruction so it will use the pinned register as the heap
+            base, instead of fetching it from a global value.
 
-        Enabling this requires the enable_pinned_reg setting to be set to true. It enables a custom
-        legalization of the `heap_addr` instruction so it will use the pinned register as the heap
-        base, instead of fetching it from a global value.
-
-        Warning! Enabling this means that the pinned register *must* be maintained to contain the
-        heap base address at all times, during the lifetime of a function. Using the pinned
-        register for other purposes when this is set is very likely to cause crashes.
+            Warning! Enabling this means that the pinned register *must* be maintained to contain the
+            heap base address at all times, during the lifetime of a function. Using the pinned
+            register for other purposes when this is set is very likely to cause crashes.
         "#,
         false,
     );
 
-    settings.add_bool("enable_simd", "Enable the use of SIMD instructions.", false);
+    settings.add_bool(
+        "enable_simd",
+        "Enable the use of SIMD instructions.",
+        "",
+        false,
+    );
 
     settings.add_bool(
         "enable_atomics",
         "Enable the use of atomic instructions",
+        "",
         true,
     );
 
     settings.add_bool(
         "enable_safepoints",
+        "Enable safepoint instruction insertions.",
         r#"
-            Enable safepoint instruction insertions.
-
             This will allow the emit_stack_maps() function to insert the safepoint
             instruction on top of calls and interrupt traps in order to display the
             live reference values at that point in the program.
-            "#,
+        "#,
         false,
     );
 
     settings.add_enum(
         "tls_model",
-        r#"
-            Defines the model used to perform TLS accesses.
-        "#,
+        "Defines the model used to perform TLS accesses.",
+        "",
         vec!["none", "elf_gd", "macho", "coff"],
     );
 
@@ -176,9 +175,9 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_enum(
         "libcall_call_conv",
+        "Defines the calling convention to use for LibCalls call expansion.",
         r#"
-            Defines the calling convention to use for LibCalls call expansion,
-            since it may be different from the ISA default calling convention.
+            This may be different from the ISA default calling convention.
 
             The default value is to use the same calling convention as the ISA
             default calling convention.
@@ -202,9 +201,8 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_num(
         "baldrdash_prologue_words",
+        "Number of pointer-sized words pushed by the baldrdash prologue.",
         r#"
-            Number of pointer-sized words pushed by the baldrdash prologue.
-
             Functions with the `baldrdash` calling convention don't generate their
             own prologue and epilogue. They depend on externally generated code
             that pushes a fixed number of words in the prologue and restores them
@@ -213,15 +211,14 @@ pub(crate) fn define() -> SettingGroup {
             This setting configures the number of pointer-sized words pushed on the
             stack when the Cranelift-generated code is entered. This includes the
             pushed return address on x86.
-            "#,
+        "#,
         0,
     );
 
     settings.add_bool(
         "enable_llvm_abi_extensions",
+        "Enable various ABI extensions defined by LLVM's behavior.",
         r#"
-            Enable various ABI extensions defined by LLVM's behavior.
-
             In some cases, LLVM's implementation of an ABI (calling convention)
             goes beyond a standard and supports additional argument types or
             behavior. This option instructs Cranelift codegen to follow LLVM's
@@ -232,18 +229,18 @@ pub(crate) fn define() -> SettingGroup {
             registers. The Fastcall implementation otherwise does not support
             `i128` arguments, and will panic if they are present and this
             option is not set.
-            "#,
+        "#,
         false,
     );
 
     settings.add_bool(
         "unwind_info",
+        "Generate unwind information.",
         r#"
-           Generate unwind info. This increases metadata size and compile time,
-           but allows for the debugger to trace frames, is needed for GC tracing
-           that relies on libunwind (such as in Wasmtime), and is
-           unconditionally needed on certain platforms (such as Windows) that
-           must always be able to unwind.
+            This increases metadata size and compile time, but allows for the
+            debugger to trace frames, is needed for GC tracing that relies on
+            libunwind (such as in Wasmtime), and is unconditionally needed on
+            certain platforms (such as Windows) that must always be able to unwind.
           "#,
         true,
     );
@@ -253,6 +250,7 @@ pub(crate) fn define() -> SettingGroup {
     settings.add_bool(
         "emit_all_ones_funcaddrs",
         "Emit not-yet-relocated function addresses as all-ones bit patterns.",
+        "",
         false,
     );
 
@@ -260,32 +258,27 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_bool(
         "enable_probestack",
-        r#"
-            Enable the use of stack probes, for calling conventions which support this
-            functionality.
-            "#,
+        "Enable the use of stack probes for supported calling conventions.",
+        "",
         true,
     );
 
     settings.add_bool(
         "probestack_func_adjusts_sp",
-        r#"
-            Set this to true of the stack probe function modifies the stack pointer
-            itself.
-            "#,
+        "Enable if the stack probe adjusts the stack pointer.",
+        "",
         false,
     );
 
     settings.add_num(
         "probestack_size_log2",
+        "The log2 of the size of the stack guard region.",
         r#"
-            The log2 of the size of the stack guard region.
-
             Stack frames larger than this size will have stack overflow checked
             by calling the probestack function.
 
             The default is 12, which translates to a size of 4096.
-            "#,
+        "#,
         12,
     );
 
@@ -294,6 +287,7 @@ pub(crate) fn define() -> SettingGroup {
     settings.add_bool(
         "enable_jump_tables",
         "Enable the use of jump tables in generated machine code.",
+        "",
         true,
     );
 
@@ -301,16 +295,15 @@ pub(crate) fn define() -> SettingGroup {
 
     settings.add_bool(
         "enable_heap_access_spectre_mitigation",
+        "Enable Spectre mitigation on heap bounds checks.",
         r#"
-        Enable Spectre mitigation on heap bounds checks.
+            This is a no-op for any heap that needs no bounds checks; e.g.,
+            if the limit is static and the guard region is large enough that
+            the index cannot reach past it.
 
-        This is a no-op for any heap that needs no bounds checks; e.g.,
-        if the limit is static and the guard region is large enough that
-        the index cannot reach past it.
-
-        This option is enabled by default because it is highly
-        recommended for secure sandboxing. The embedder should consider
-        the security implications carefully before disabling this option.
+            This option is enabled by default because it is highly
+            recommended for secure sandboxing. The embedder should consider
+            the security implications carefully before disabling this option.
         "#,
         true,
     );

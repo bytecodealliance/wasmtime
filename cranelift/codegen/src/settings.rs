@@ -44,6 +44,34 @@ pub trait Configurable {
     fn enable(&mut self, name: &str) -> SetResult<()>;
 }
 
+/// Represents the kind of setting.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingKind {
+    /// The setting is an enumeration.
+    Enum,
+    /// The setting is a number.
+    Num,
+    /// The setting is a boolean.
+    Bool,
+    /// The setting is a preset.
+    Preset,
+}
+
+/// Represents an available builder setting.
+///
+/// This is used for iterating settings in a builder.
+#[derive(Clone, Copy, Debug)]
+pub struct Setting {
+    /// The name of the setting.
+    pub name: &'static str,
+    /// The description of the setting.
+    pub description: &'static str,
+    /// The kind of the setting.
+    pub kind: SettingKind,
+    /// The supported values of the setting (for enum values).
+    pub values: Option<&'static [&'static str]>,
+}
+
 /// Collect settings values based on a template.
 #[derive(Clone, Hash)]
 pub struct Builder {
@@ -64,6 +92,30 @@ impl Builder {
     pub fn state_for(self, name: &str) -> Box<[u8]> {
         assert_eq!(name, self.template.name);
         self.bytes
+    }
+
+    /// Iterates the available settings in the builder.
+    pub fn iter(&self) -> impl Iterator<Item = Setting> {
+        let template = self.template;
+
+        template.descriptors.iter().map(move |d| {
+            let (kind, values) = match d.detail {
+                detail::Detail::Enum { last, enumerators } => {
+                    let values = template.enums(last, enumerators);
+                    (SettingKind::Enum, Some(values))
+                }
+                detail::Detail::Num => (SettingKind::Num, None),
+                detail::Detail::Bool { .. } => (SettingKind::Bool, None),
+                detail::Detail::Preset => (SettingKind::Preset, None),
+            };
+
+            Setting {
+                name: d.name,
+                description: d.description,
+                kind,
+                values,
+            }
+        })
     }
 
     /// Set the value of a single bit.
@@ -287,6 +339,9 @@ pub mod detail {
     pub struct Descriptor {
         /// Lower snake-case name of setting as defined in meta.
         pub name: &'static str,
+
+        /// The description of the setting.
+        pub description: &'static str,
 
         /// Offset of byte containing this setting.
         pub offset: u32,

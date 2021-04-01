@@ -3,7 +3,8 @@
 mod compile;
 mod config;
 mod run;
+mod settings;
 mod wasm2obj;
 mod wast;
 
-pub use self::{compile::*, config::*, run::*, wasm2obj::*, wast::*};
+pub use self::{compile::*, config::*, run::*, settings::*, wasm2obj::*, wast::*};

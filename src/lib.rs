@@ -212,12 +212,19 @@ struct CommonOptions {
     )]
     opt_level: Option<wasmtime::OptLevel>,
 
-    /// Cranelift common flags to set.
-    #[structopt(long = "cranelift-set", value_name = "NAME=VALUE", parse(try_from_str = parse_cranelift_flag))]
+    /// Set a Cranelift setting to a given value.
+    /// Use `wasmtime settings` to list Cranelift settings for a target.
+    #[structopt(long = "cranelift-set", value_name = "NAME=VALUE", number_of_values = 1, verbatim_doc_comment, parse(try_from_str = parse_cranelift_flag))]
     cranelift_set: Vec<(String, String)>,
 
-    /// The Cranelift boolean setting or preset to enable.
-    #[structopt(long, value_name = "SETTING")]
+    /// Enable a Cranelift boolean setting or preset.
+    /// Use `wasmtime settings` to list Cranelift settings for a target.
+    #[structopt(
+        long,
+        value_name = "SETTING",
+        number_of_values = 1,
+        verbatim_doc_comment
+    )]
     cranelift_enable: Vec<String>,
 
     /// Maximum size in bytes of wasm memory before it becomes dynamically

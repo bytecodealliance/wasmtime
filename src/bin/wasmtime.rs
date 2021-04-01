@@ -6,7 +6,7 @@
 use anyhow::Result;
 use structopt::{clap::AppSettings, clap::ErrorKind, StructOpt};
 use wasmtime_cli::commands::{
-    CompileCommand, ConfigCommand, RunCommand, WasmToObjCommand, WastCommand,
+    CompileCommand, ConfigCommand, RunCommand, SettingsCommand, WasmToObjCommand, WastCommand,
 };
 
 /// Wasmtime WebAssembly Runtime
@@ -42,6 +42,8 @@ enum WasmtimeApp {
     Compile(CompileCommand),
     /// Runs a WebAssembly module
     Run(RunCommand),
+    /// Displays available Cranelift settings for a target.
+    Settings(SettingsCommand),
     /// Translates a WebAssembly module to native object file
     #[structopt(name = "wasm2obj")]
     WasmToObj(WasmToObjCommand),
@@ -56,6 +58,7 @@ impl WasmtimeApp {
             Self::Config(c) => c.execute(),
             Self::Compile(c) => c.execute(),
             Self::Run(c) => c.execute(),
+            Self::Settings(c) => c.execute(),
             Self::WasmToObj(c) => c.execute(),
             Self::Wast(c) => c.execute(),
         }
