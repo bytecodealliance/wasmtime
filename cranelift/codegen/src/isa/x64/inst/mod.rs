@@ -22,6 +22,7 @@ pub mod args;
 mod emit;
 #[cfg(test)]
 mod emit_tests;
+pub(crate) mod encoding;
 pub mod regs;
 pub mod unwind;
 
