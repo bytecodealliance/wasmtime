@@ -273,6 +273,7 @@ impl Switch {
                         .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::max_value() as i64);
                 bx.ins().brnz(bigger_than_u32, otherwise, &[]);
                 bx.ins().jump(new_block, &[]);
+                bx.seal_block(new_block);
                 bx.switch_to_block(new_block);
 
                 // Cast to u32, as br_table is not implemented for integers bigger than 32bits.
