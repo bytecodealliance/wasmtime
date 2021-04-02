@@ -78,6 +78,43 @@ impl Engine {
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
+
+    /// Ahead-of-time (AOT) compiles a WebAssembly module.
+    ///
+    /// The `bytes` provided must be in one of two formats:
+    ///
+    /// * A [binary-encoded][binary] WebAssembly module. This is always supported.
+    /// * A [text-encoded][text] instance of the WebAssembly text format.
+    ///   This is only supported when the `wat` feature of this crate is enabled.
+    ///   If this is supplied then the text format will be parsed before validation.
+    ///   Note that the `wat` feature is enabled by default.
+    ///
+    /// This method may be used to compile a module for use with a different target
+    /// host. The output of this method may be used with [`Module::new`](crate::Module::new)
+    /// on hosts compatible with the [`Config`] associated with this [`Engine`].
+    ///
+    /// The output of this method is safe to send to another host machine for later
+    /// execution. As the output is already a compiled module, translation and code
+    /// generation will be skipped and this will improve the performance of constructing
+    /// a [`Module`](crate::Module) from the output of this method.
+    ///
+    /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
+    /// [text]: https://webassembly.github.io/spec/core/text/index.html
+    pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
+        const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
+
+        #[cfg(feature = "wat")]
+        let bytes = wat::parse_bytes(&bytes)?;
+
+        let (_, artifacts, types) = wasmtime_jit::CompilationArtifacts::build(
+            &self.inner.compiler,
+            &bytes,
+            USE_PAGED_MEM_INIT,
+        )?;
+
+        crate::module::SerializedModule::from_artifacts(&self.inner.compiler, &artifacts, &types)
+            .to_bytes()
+    }
 }
 
 impl Default for Engine {

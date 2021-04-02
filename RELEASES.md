@@ -2,6 +2,47 @@
 
 --------------------------------------------------------------------------------
 
+## Unreleased
+
+### Added
+
+* Added the `wasmtime compile` command to support AOT compilation of Wasm modules.
+
+* Added the `Engine::precompile_module` method to support AOT module compilation.
+
+* Added the `Config::target` method to change the compilation target of the
+  configuration. This can be used in conjunction with `Engine::precompile_module`
+  to target a different host triple than the current one.
+
+* Added the `Config::cranelift_flag_enable` method to enable setting Cranelift
+  boolean flags or presets in a config.
+
+* Added CLI option `--cranelift-enable` to enable boolean settings and ISA presets.
+
+### Changed
+
+* Wasmtime CLI options to enable WebAssembly features have been replaced with a
+  singular `--wasm-features` option. The previous options are still supported, but
+  are not displayed in help text.
+
+* Breaking: `Module::deserialize` has been removed in favor of `Module::new`.
+
+* Breaking: `Config::cranelift_clear_cpu_flags` was removed. Use `Config::target`
+  to clear the CPU flags for the host's target.
+
+* Breaking: `Config::cranelift_other_flag` was renamed to `Config::cranelift_flag_set`.
+
+* Breaking: the CLI option `--cranelift-flags` was changed to `--cranelift-set`.
+
+* Breaking: the CLI option `--enable-reference-types=false` has been changed to
+  `--wasm-features=-reference-types`.
+
+* Breaking: the CLI option `--enable-multi-value=false` has been changed to
+  `--wasm-features=-multi-value`.
+
+* Breaking: the CLI option `--enable-bulk-memory=false` has been changed to
+  `--wasm-features=-bulk-memory`.
+
 ## 0.25.0
 
 Released 2021-03-16.
@@ -39,7 +80,7 @@ Released 2021-03-16.
 
 ### Fixed
 
-* Interepretation of timestamps in `poll_oneoff` for WASI have been fixed to
+* Interpretation of timestamps in `poll_oneoff` for WASI have been fixed to
   correctly use nanoseconds instead of microseconds.
   [#2717](https://github.com/bytecodealliance/wasmtime/pull/2717)
 

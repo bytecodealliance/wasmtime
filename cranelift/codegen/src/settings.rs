@@ -44,6 +44,78 @@ pub trait Configurable {
     fn enable(&mut self, name: &str) -> SetResult<()>;
 }
 
+/// Represents the kind of setting.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingKind {
+    /// The setting is an enumeration.
+    Enum,
+    /// The setting is a number.
+    Num,
+    /// The setting is a boolean.
+    Bool,
+    /// The setting is a preset.
+    Preset,
+}
+
+/// Represents an available builder setting.
+///
+/// This is used for iterating settings in a builder.
+#[derive(Clone, Copy, Debug)]
+pub struct Setting {
+    /// The name of the setting.
+    pub name: &'static str,
+    /// The description of the setting.
+    pub description: &'static str,
+    /// The kind of the setting.
+    pub kind: SettingKind,
+    /// The supported values of the setting (for enum values).
+    pub values: Option<&'static [&'static str]>,
+}
+
+/// Represents a setting value.
+///
+/// This is used for iterating values in `Flags`.
+pub struct Value {
+    /// The name of the setting associated with this value.
+    pub name: &'static str,
+    pub(crate) detail: detail::Detail,
+    pub(crate) values: Option<&'static [&'static str]>,
+    pub(crate) value: u8,
+}
+
+impl Value {
+    /// Gets the kind of setting.
+    pub fn kind(&self) -> SettingKind {
+        match &self.detail {
+            detail::Detail::Enum { .. } => SettingKind::Enum,
+            detail::Detail::Num => SettingKind::Num,
+            detail::Detail::Bool { .. } => SettingKind::Bool,
+            detail::Detail::Preset => unreachable!(),
+        }
+    }
+
+    /// Gets the enum value if the value is from an enum setting.
+    pub fn as_enum(&self) -> Option<&'static str> {
+        self.values.map(|v| v[self.value as usize])
+    }
+
+    /// Gets the numerical value if the value is from a num setting.
+    pub fn as_num(&self) -> Option<u8> {
+        match &self.detail {
+            detail::Detail::Num => Some(self.value),
+            _ => None,
+        }
+    }
+
+    /// Gets the boolean value if the value is from a boolean setting.
+    pub fn as_bool(&self) -> Option<bool> {
+        match &self.detail {
+            detail::Detail::Bool { bit } => Some(self.value & (1 << bit) != 0),
+            _ => None,
+        }
+    }
+}
+
 /// Collect settings values based on a template.
 #[derive(Clone, Hash)]
 pub struct Builder {
@@ -64,6 +136,30 @@ impl Builder {
     pub fn state_for(self, name: &str) -> Box<[u8]> {
         assert_eq!(name, self.template.name);
         self.bytes
+    }
+
+    /// Iterates the available settings in the builder.
+    pub fn iter(&self) -> impl Iterator<Item = Setting> {
+        let template = self.template;
+
+        template.descriptors.iter().map(move |d| {
+            let (kind, values) = match d.detail {
+                detail::Detail::Enum { last, enumerators } => {
+                    let values = template.enums(last, enumerators);
+                    (SettingKind::Enum, Some(values))
+                }
+                detail::Detail::Num => (SettingKind::Num, None),
+                detail::Detail::Bool { .. } => (SettingKind::Bool, None),
+                detail::Detail::Preset => (SettingKind::Preset, None),
+            };
+
+            Setting {
+                name: d.name,
+                description: d.description,
+                kind,
+                values,
+            }
+        })
     }
 
     /// Set the value of a single bit.
@@ -287,6 +383,9 @@ pub mod detail {
     pub struct Descriptor {
         /// Lower snake-case name of setting as defined in meta.
         pub name: &'static str,
+
+        /// The description of the setting.
+        pub description: &'static str,
 
         /// Offset of byte containing this setting.
         pub offset: u32,

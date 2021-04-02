@@ -438,7 +438,7 @@ fn build_code_memory(
     isa: &dyn TargetIsa,
     obj: &[u8],
     module: &Module,
-    unwind_info: &Box<[ObjectUnwindInfo]>,
+    unwind_info: &[ObjectUnwindInfo],
 ) -> Result<
     (
         CodeMemory,

@@ -70,6 +70,33 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
     fmtln!(fmt, "}");
 }
 
+/// Generates the `iter` function.
+fn gen_iterator(group: &SettingGroup, fmt: &mut Formatter) {
+    fmtln!(fmt, "impl Flags {");
+    fmt.indent(|fmt| {
+        fmt.doc_comment("Iterates the setting values.");
+        fmtln!(fmt, "pub fn iter(&self) -> impl Iterator<Item = Value> {");
+        fmt.indent(|fmt| {
+            fmtln!(fmt, "let mut bytes = [0; {}];", group.settings_size);
+            fmtln!(fmt, "bytes.copy_from_slice(&self.bytes[0..{}]);", group.settings_size);
+            fmtln!(fmt, "DESCRIPTORS.iter().filter_map(move |d| {");
+            fmt.indent(|fmt| {
+                fmtln!(fmt, "let values = match &d.detail {");
+                fmt.indent(|fmt| {
+                    fmtln!(fmt, "detail::Detail::Preset => return None,");
+                    fmtln!(fmt, "detail::Detail::Enum { last, enumerators } => Some(TEMPLATE.enums(*last, *enumerators)),");
+                    fmtln!(fmt, "_ => None");
+                });
+                fmtln!(fmt, "};");
+                fmtln!(fmt, "Some(Value{ name: d.name, detail: d.detail, values, value: bytes[d.offset as usize] })");
+            });
+            fmtln!(fmt, "})");
+        });
+        fmtln!(fmt, "}");
+    });
+    fmtln!(fmt, "}");
+}
+
 /// Emit Display and FromStr implementations for enum settings.
 fn gen_to_and_from_str(name: &str, values: &[&'static str], fmt: &mut Formatter) {
     fmtln!(fmt, "impl fmt::Display for {} {{", name);
@@ -136,7 +163,7 @@ fn gen_enum_types(group: &SettingGroup, fmt: &mut Formatter) {
 
 /// Emit a getter function for `setting`.
 fn gen_getter(setting: &Setting, fmt: &mut Formatter) {
-    fmt.doc_comment(setting.comment);
+    fmt.doc_comment(format!("{}\n{}", setting.description, setting.comment));
     match setting.specific {
         SpecificSetting::Bool(BoolSetting {
             predicate_number, ..
@@ -254,6 +281,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmtln!(fmt, "detail::Descriptor {");
             fmt.indent(|fmt| {
                 fmtln!(fmt, "name: \"{}\",", setting.name);
+                fmtln!(fmt, "description: \"{}\",", setting.description);
                 fmtln!(fmt, "offset: {},", setting.byte_offset);
                 match setting.specific {
                     SpecificSetting::Bool(BoolSetting { bit_offset, .. }) => {
@@ -286,6 +314,7 @@ fn gen_descriptors(group: &SettingGroup, fmt: &mut Formatter) {
             fmtln!(fmt, "detail::Descriptor {");
             fmt.indent(|fmt| {
                 fmtln!(fmt, "name: \"{}\",", preset.name);
+                fmtln!(fmt, "description: \"{}\",", preset.description);
                 fmtln!(fmt, "offset: {},", (idx as u8) * group.settings_size);
                 fmtln!(fmt, "detail: detail::Detail::Preset,");
             });
@@ -427,6 +456,7 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
     fmtln!(fmt, "}");
 
     gen_constructor(group, parent, fmt);
+    gen_iterator(group, fmt);
     gen_enum_types(group, fmt);
     gen_getters(group, fmt);
     gen_descriptors(group, fmt);

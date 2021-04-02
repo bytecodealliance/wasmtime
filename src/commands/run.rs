@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime run` command.
 
-use crate::{init_file_per_thread_logger, CommonOptions};
+use crate::CommonOptions;
 use anyhow::{bail, Context as _, Result};
 use std::thread;
 use std::time::Duration;
@@ -28,9 +28,8 @@ use wasmtime_wasi_crypto::{
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
-        Some("help") | Some("config") | Some("run") | Some("wasm2obj") | Some("wast") => {
-            Err("module name cannot be the same as a subcommand".into())
-        }
+        Some("help") | Some("config") | Some("run") | Some("wasm2obj") | Some("wast")
+        | Some("compile") => Err("module name cannot be the same as a subcommand".into()),
         _ => Ok(s.into()),
     }
 }
@@ -69,9 +68,15 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
+lazy_static::lazy_static! {
+    static ref AFTER_HELP: String = {
+        crate::WASM_FEATURES.to_string()
+    };
+}
+
 /// Runs a WebAssembly module
 #[derive(StructOpt)]
-#[structopt(name = "run", setting = AppSettings::TrailingVarArg)]
+#[structopt(name = "run", setting = AppSettings::TrailingVarArg, after_help = AFTER_HELP.as_str())]
 pub struct RunCommand {
     #[structopt(flatten)]
     common: CommonOptions,
@@ -96,7 +101,7 @@ pub struct RunCommand {
     #[structopt(
         index = 1,
         required = true,
-        value_name = "WASM_MODULE",
+        value_name = "MODULE",
         parse(try_from_os_str = parse_module),
     )]
     module: PathBuf,
@@ -127,14 +132,9 @@ pub struct RunCommand {
 impl RunCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        if self.common.log_to_files {
-            let prefix = "wasmtime.dbg.";
-            init_file_per_thread_logger(prefix);
-        } else {
-            pretty_env_logger::init();
-        }
+        self.common.init_logging();
 
-        let mut config = self.common.config()?;
+        let mut config = self.common.config(None)?;
         if self.wasm_timeout.is_some() {
             config.interruptable(true);
         }

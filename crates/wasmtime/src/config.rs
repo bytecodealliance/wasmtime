@@ -2,6 +2,7 @@ use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use crate::{func::HostFunc, Caller, FuncType, IntoFunc, Trap, Val, WasmRet, WasmTy};
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -399,16 +400,6 @@ impl Config {
             .enable("avoid_div_traps")
             .expect("should be valid flag");
 
-        // Invert cranelift's default-on verification to instead default off.
-        flags
-            .set("enable_verifier", "false")
-            .expect("should be valid flag");
-
-        // Turn on cranelift speed optimizations by default
-        flags
-            .set("opt_level", "speed")
-            .expect("should be valid flag");
-
         // We don't use probestack as a stack limit mechanism
         flags
             .set("enable_probestack", "false")
@@ -426,12 +417,7 @@ impl Config {
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
-            features: WasmFeatures {
-                reference_types: true,
-                bulk_memory: true,
-                multi_value: true,
-                ..WasmFeatures::default()
-            },
+            features: WasmFeatures::default(),
             max_instances: 10_000,
             max_tables: 10_000,
             max_memories: 10_000,
@@ -440,8 +426,34 @@ impl Config {
             host_funcs: HostFuncMap::new(),
             async_support: false,
         };
+        ret.cranelift_debug_verifier(false);
+        ret.cranelift_opt_level(OptLevel::Speed);
+        ret.wasm_reference_types(true);
+        ret.wasm_multi_value(true);
+        ret.wasm_bulk_memory(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         ret
+    }
+
+    /// Sets the target triple for the [`Config`].
+    ///
+    /// By default, the host target triple is used for the [`Config`].
+    ///
+    /// This method can be used to change the target triple.
+    ///
+    /// Cranelift flags will not be inferred for the given target and any
+    /// existing target-specific Cranelift flags will be cleared.
+    ///
+    /// # Errors
+    ///
+    /// This method will error if the given target triple is not supported.
+    pub fn target(&mut self, target: &str) -> Result<&mut Self> {
+        use std::str::FromStr;
+        self.isa_flags = native::lookup(
+            target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?,
+        )?;
+
+        Ok(self)
     }
 
     /// Whether or not to enable support for asynchronous functions in Wasmtime.
@@ -884,18 +896,31 @@ impl Config {
         self
     }
 
-    /// Clears native CPU flags inferred from the host.
+    /// Allows setting a Cranelift boolean flag or preset. This allows
+    /// fine-tuning of Cranelift settings.
     ///
-    /// By default Wasmtime will tune generated code for the host that Wasmtime
-    /// itself is running on. If you're compiling on one host, however, and
-    /// shipping artifacts to another host then this behavior may not be
-    /// desired. This function will clear all inferred native CPU features.
+    /// Since Cranelift flags may be unstable, this method should not be considered to be stable
+    /// either; other `Config` functions should be preferred for stability.
     ///
-    /// To enable CPU features afterwards it's recommended to use the
-    /// [`Config::cranelift_other_flag`] method.
-    pub fn cranelift_clear_cpu_flags(&mut self) -> &mut Self {
-        self.isa_flags = native::builder_without_flags();
-        self
+    /// # Safety
+    ///
+    /// This is marked as unsafe, because setting the wrong flag might break invariants,
+    /// resulting in execution hazards.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail if the flag's name does not exist.
+    pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> Result<&mut Self> {
+        if let Err(err) = self.flags.enable(flag) {
+            match err {
+                SetError::BadName(_) => {
+                    // Try the target-specific flags.
+                    self.isa_flags.enable(flag)?;
+                }
+                _ => bail!(err),
+            }
+        }
+        Ok(self)
     }
 
     /// Allows settings another Cranelift flag defined by a flag name and value. This allows
@@ -911,7 +936,7 @@ impl Config {
     ///
     /// This method can fail if the flag's name does not exist, or the value is not appropriate for
     /// the flag type.
-    pub unsafe fn cranelift_other_flag(&mut self, name: &str, value: &str) -> Result<&mut Self> {
+    pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> Result<&mut Self> {
         if let Err(err) = self.flags.set(name, value) {
             match err {
                 SetError::BadName(_) => {
@@ -1419,7 +1444,7 @@ pub enum Strategy {
 
 /// Possible optimization levels for the Cranelift codegen backend.
 #[non_exhaustive]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum OptLevel {
     /// No optimizations performed, minimizes compilation time by disabling most
     /// optimizations.

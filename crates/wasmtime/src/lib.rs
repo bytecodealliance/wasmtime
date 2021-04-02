@@ -175,6 +175,10 @@
 //!   lock contention is hampering multithreading throughput. This feature is only
 //!   supported on Linux and requires a Linux kernel version 4.11 or higher.
 //!
+//! * `all-arch` - Not enabled by default. This feature compiles in support for
+//!   all architectures for both the JIT compiler and the `wasmtime compile` CLI
+//!   command.
+//!
 //! ## Examples
 //!
 //! In addition to the examples below be sure to check out the [online embedding

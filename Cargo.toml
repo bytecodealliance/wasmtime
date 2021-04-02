@@ -38,12 +38,13 @@ anyhow = "1.0.19"
 target-lexicon = { version = "0.12.0", default-features = false }
 pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
-wat = "1.0.36"
+wat = "1.0.37"
 libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"
 humantime = "2.0.0"
 wasmparser = "0.77.0"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 env_logger = "0.8.1"
@@ -90,6 +91,7 @@ vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
+all-arch = ["wasmtime/all-arch"]
 
 # Try the experimental, work-in-progress new x86_64 backend. This is not stable
 # as of June 2020.

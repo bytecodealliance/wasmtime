@@ -5,6 +5,7 @@ use crate::object::{build_object, ObjectUnwindInfo};
 use object::write::Object;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use std::mem;
 use wasmparser::WasmFeatures;
@@ -18,7 +19,7 @@ use wasmtime_environ::{
 };
 
 /// Select which kind of compilation to use.
-#[derive(Copy, Clone, Debug, Hash)]
+#[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, Eq, PartialEq)]
 pub enum CompilationStrategy {
     /// Let Wasmtime pick the strategy.
     Auto,
@@ -106,6 +107,11 @@ impl Compiler {
     /// Return the isa.
     pub fn isa(&self) -> &dyn TargetIsa {
         self.isa.as_ref()
+    }
+
+    /// Return the compiler's strategy.
+    pub fn strategy(&self) -> CompilationStrategy {
+        self.strategy
     }
 
     /// Return the target's frontend configuration settings.

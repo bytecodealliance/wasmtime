@@ -23,12 +23,55 @@
     )
 )]
 
+const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
+    ("all", "enables all supported WebAssembly features"),
+    (
+        "bulk-memory",
+        "enables support for bulk memory instructions",
+    ),
+    (
+        "module-linking",
+        "enables support for the module-linking proposal",
+    ),
+    (
+        "multi-memory",
+        "enables support for the multi-memory proposal",
+    ),
+    ("multi-value", "enables support for multi-value functions"),
+    ("reference-types", "enables support for reference types"),
+    ("simd", "enables support for proposed SIMD instructions"),
+    ("threads", "enables support for WebAssembly threads"),
+];
+
+lazy_static::lazy_static! {
+    static ref WASM_FEATURES: String = {
+        use std::fmt::Write;
+
+        let mut s = String::new();
+        writeln!(&mut s, "Supported values for `--wasm-features`:").unwrap();
+        writeln!(&mut s).unwrap();
+
+        let max = SUPPORTED_WASM_FEATURES.iter().max_by_key(|(name, _)| name.len()).unwrap();
+
+        for (name, desc) in SUPPORTED_WASM_FEATURES.iter() {
+            writeln!(&mut s, "{:width$} {}", name, desc, width = max.0.len() + 2).unwrap();
+        }
+
+        writeln!(&mut s).unwrap();
+        writeln!(&mut s, "Features prefixed with '-' will be disabled.").unwrap();
+
+        s
+    };
+}
+
 pub mod commands;
 mod obj;
 
 use anyhow::{bail, Result};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
+use target_lexicon::Triple;
 use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub use obj::compile_to_obj;
@@ -91,6 +134,10 @@ struct CommonOptions {
     #[structopt(long, conflicts_with = "lightbeam")]
     cranelift: bool,
 
+    /// Disable logging.
+    #[structopt(long, conflicts_with = "log_to_files")]
+    disable_logging: bool,
+
     /// Log to per-thread log files instead of stderr.
     #[structopt(long)]
     log_to_files: bool,
@@ -103,37 +150,41 @@ struct CommonOptions {
     #[structopt(long)]
     disable_cache: bool,
 
-    /// Enable support for proposed SIMD instructions
-    #[structopt(long)]
+    /// Enable support for proposed SIMD instructions (deprecated; use `--wasm-features=simd`)
+    #[structopt(long, hidden = true)]
     enable_simd: bool,
 
-    /// Enable support for reference types
-    #[structopt(long)]
-    enable_reference_types: Option<bool>,
+    /// Enable support for reference types (deprecated; use `--wasm-features=reference-types`)
+    #[structopt(long, hidden = true)]
+    enable_reference_types: bool,
 
-    /// Enable support for multi-value functions
-    #[structopt(long)]
-    enable_multi_value: Option<bool>,
+    /// Enable support for multi-value functions (deprecated; use `--wasm-features=multi-value`)
+    #[structopt(long, hidden = true)]
+    enable_multi_value: bool,
 
-    /// Enable support for Wasm threads
-    #[structopt(long)]
+    /// Enable support for Wasm threads (deprecated; use `--wasm-features=threads`)
+    #[structopt(long, hidden = true)]
     enable_threads: bool,
 
-    /// Enable support for bulk memory instructions
-    #[structopt(long)]
-    enable_bulk_memory: Option<bool>,
+    /// Enable support for bulk memory instructions (deprecated; use `--wasm-features=bulk-memory`)
+    #[structopt(long, hidden = true)]
+    enable_bulk_memory: bool,
 
-    /// Enable support for the multi-memory proposal
-    #[structopt(long)]
+    /// Enable support for the multi-memory proposal (deprecated; use `--wasm-features=multi-memory`)
+    #[structopt(long, hidden = true)]
     enable_multi_memory: bool,
 
-    /// Enable support for the module-linking proposal
-    #[structopt(long)]
+    /// Enable support for the module-linking proposal (deprecated; use `--wasm-features=module-linking`)
+    #[structopt(long, hidden = true)]
     enable_module_linking: bool,
 
-    /// Enable all experimental Wasm features
-    #[structopt(long)]
+    /// Enable all experimental Wasm features (deprecated; use `--wasm-features=all`)
+    #[structopt(long, hidden = true)]
     enable_all: bool,
+
+    /// Enables or disables WebAssembly features
+    #[structopt(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
+    wasm_features: Option<wasmparser::WasmFeatures>,
 
     /// Use Lightbeam for all compilation
     #[structopt(long, conflicts_with = "cranelift")]
@@ -151,30 +202,42 @@ struct CommonOptions {
     #[structopt(short = "O", long)]
     optimize: bool,
 
-    /// Optimization level for generated functions (0 (none), 1, 2 (most), or s
-    /// (size))
+    /// Optimization level for generated functions
+    /// Supported levels: 0 (none), 1, 2 (most), or s (size); default is "most"
     #[structopt(
         long,
+        value_name = "LEVEL",
         parse(try_from_str = parse_opt_level),
-        default_value = "2",
+        verbatim_doc_comment,
     )]
-    opt_level: wasmtime::OptLevel,
+    opt_level: Option<wasmtime::OptLevel>,
 
-    /// Other Cranelift flags to be passed down to Cranelift.
-    #[structopt(long, parse(try_from_str = parse_cranelift_flag))]
-    cranelift_flags: Vec<CraneliftFlag>,
+    /// Set a Cranelift setting to a given value.
+    /// Use `wasmtime settings` to list Cranelift settings for a target.
+    #[structopt(long = "cranelift-set", value_name = "NAME=VALUE", number_of_values = 1, verbatim_doc_comment, parse(try_from_str = parse_cranelift_flag))]
+    cranelift_set: Vec<(String, String)>,
+
+    /// Enable a Cranelift boolean setting or preset.
+    /// Use `wasmtime settings` to list Cranelift settings for a target.
+    #[structopt(
+        long,
+        value_name = "SETTING",
+        number_of_values = 1,
+        verbatim_doc_comment
+    )]
+    cranelift_enable: Vec<String>,
 
     /// Maximum size in bytes of wasm memory before it becomes dynamically
     /// relocatable instead of up-front-reserved.
-    #[structopt(long)]
+    #[structopt(long, value_name = "MAXIMUM")]
     static_memory_maximum_size: Option<u64>,
 
     /// Byte size of the guard region after static memories are allocated.
-    #[structopt(long)]
+    #[structopt(long, value_name = "SIZE")]
     static_memory_guard_size: Option<u64>,
 
     /// Byte size of the guard region after dynamic memories are allocated.
-    #[structopt(long)]
+    #[structopt(long, value_name = "SIZE")]
     dynamic_memory_guard_size: Option<u64>,
 
     /// Enable Cranelift's internal debug verifier (expensive)
@@ -187,31 +250,48 @@ struct CommonOptions {
 }
 
 impl CommonOptions {
-    fn config(&self) -> Result<Config> {
+    fn init_logging(&self) {
+        if self.disable_logging {
+            return;
+        }
+        if self.log_to_files {
+            let prefix = "wasmtime.dbg.";
+            init_file_per_thread_logger(prefix);
+        } else {
+            pretty_env_logger::init();
+        }
+    }
+
+    fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
+
+        // Set the target before setting any cranelift options
+        if let Some(target) = target {
+            config.target(target)?;
+        }
+
         config
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
-            .wasm_simd(self.enable_simd || self.enable_all)
-            .wasm_bulk_memory(self.enable_bulk_memory.unwrap_or(true) || self.enable_all)
-            .wasm_reference_types(
-                self.enable_reference_types
-                    .unwrap_or(cfg!(target_arch = "x86_64"))
-                    || self.enable_all,
-            )
-            .wasm_multi_value(self.enable_multi_value.unwrap_or(true) || self.enable_all)
-            .wasm_threads(self.enable_threads || self.enable_all)
-            .wasm_multi_memory(self.enable_multi_memory || self.enable_all)
-            .wasm_module_linking(self.enable_module_linking || self.enable_all)
             .cranelift_opt_level(self.opt_level())
             .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
-        for CraneliftFlag { name, value } in &self.cranelift_flags {
+
+        self.enable_wasm_features(&mut config);
+
+        for name in &self.cranelift_enable {
             unsafe {
-                config.cranelift_other_flag(name, value)?;
+                config.cranelift_flag_enable(name)?;
             }
         }
+
+        for (name, value) in &self.cranelift_set {
+            unsafe {
+                config.cranelift_flag_set(name, value)?;
+            }
+        }
+
         if !self.disable_cache {
             match &self.config {
                 Some(path) => {
@@ -222,22 +302,43 @@ impl CommonOptions {
                 }
             }
         }
+
         if let Some(max) = self.static_memory_maximum_size {
             config.static_memory_maximum_size(max);
         }
+
         if let Some(size) = self.static_memory_guard_size {
             config.static_memory_guard_size(size);
         }
+
         if let Some(size) = self.dynamic_memory_guard_size {
             config.dynamic_memory_guard_size(size);
         }
+
         Ok(config)
+    }
+
+    fn enable_wasm_features(&self, config: &mut Config) {
+        let features = self.wasm_features.unwrap_or_default();
+
+        config
+            .wasm_simd(features.simd || self.enable_simd || self.enable_all)
+            .wasm_bulk_memory(features.bulk_memory || self.enable_bulk_memory || self.enable_all)
+            .wasm_reference_types(
+                features.reference_types || self.enable_reference_types || self.enable_all,
+            )
+            .wasm_multi_value(features.multi_value || self.enable_multi_value || self.enable_all)
+            .wasm_threads(features.threads || self.enable_threads || self.enable_all)
+            .wasm_multi_memory(features.multi_memory || self.enable_multi_memory || self.enable_all)
+            .wasm_module_linking(
+                features.module_linking || self.enable_module_linking || self.enable_all,
+            );
     }
 
     fn opt_level(&self) -> wasmtime::OptLevel {
         match (self.optimize, self.opt_level.clone()) {
             (true, _) => wasmtime::OptLevel::Speed,
-            (false, other) => other,
+            (false, other) => other.unwrap_or(wasmtime::OptLevel::Speed),
         }
     }
 }
@@ -255,12 +356,59 @@ fn parse_opt_level(opt_level: &str) -> Result<wasmtime::OptLevel> {
     }
 }
 
-struct CraneliftFlag {
-    name: String,
-    value: String,
-}
+fn parse_wasm_features(features: &str) -> Result<wasmparser::WasmFeatures> {
+    let features = features.trim();
 
-fn parse_cranelift_flag(name_and_value: &str) -> Result<CraneliftFlag> {
+    let mut all = None;
+    let mut values: HashMap<_, _> = SUPPORTED_WASM_FEATURES
+        .iter()
+        .map(|(name, _)| (name.to_string(), None))
+        .collect();
+
+    if features == "all" {
+        all = Some(true);
+    } else if features == "-all" {
+        all = Some(false);
+    } else {
+        for feature in features.split(',') {
+            let feature = feature.trim();
+
+            if feature.is_empty() {
+                continue;
+            }
+
+            let (feature, value) = if feature.starts_with('-') {
+                (&feature[1..], false)
+            } else {
+                (feature, true)
+            };
+
+            if feature == "all" {
+                bail!("'all' cannot be specified with other WebAssembly features");
+            }
+
+            match values.get_mut(feature) {
+                Some(v) => *v = Some(value),
+                None => bail!("unsupported WebAssembly feature '{}'", feature),
+            }
+        }
+    }
+
+    Ok(wasmparser::WasmFeatures {
+        reference_types: all.unwrap_or(values["reference-types"].unwrap_or(true)),
+        multi_value: all.unwrap_or(values["multi-value"].unwrap_or(true)),
+        bulk_memory: all.unwrap_or(values["bulk-memory"].unwrap_or(true)),
+        module_linking: all.unwrap_or(values["module-linking"].unwrap_or(false)),
+        simd: all.unwrap_or(values["simd"].unwrap_or(false)),
+        threads: all.unwrap_or(values["threads"].unwrap_or(false)),
+        tail_call: false,
+        deterministic_only: false,
+        multi_memory: all.unwrap_or(values["multi-memory"].unwrap_or(false)),
+        exceptions: false,
+        memory64: false,
+    })
+}
+fn parse_cranelift_flag(name_and_value: &str) -> Result<(String, String)> {
     let mut split = name_and_value.splitn(2, '=');
     let name = if let Some(name) = split.next() {
         name.to_string()
@@ -272,5 +420,158 @@ fn parse_cranelift_flag(name_and_value: &str) -> Result<CraneliftFlag> {
     } else {
         bail!("missing value in cranelift flag");
     };
-    Ok(CraneliftFlag { name, value })
+    Ok((name, value))
+}
+
+fn parse_target(s: &str) -> Result<Triple> {
+    use std::str::FromStr;
+    Triple::from_str(&s).map_err(|e| anyhow::anyhow!(e))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_all_features() -> Result<()> {
+        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasm-features=all"])?;
+
+        let wasmparser::WasmFeatures {
+            reference_types,
+            multi_value,
+            bulk_memory,
+            module_linking,
+            simd,
+            threads,
+            tail_call,
+            deterministic_only,
+            multi_memory,
+            exceptions,
+            memory64,
+        } = options.wasm_features.unwrap();
+
+        assert!(reference_types);
+        assert!(multi_value);
+        assert!(bulk_memory);
+        assert!(module_linking);
+        assert!(simd);
+        assert!(threads);
+        assert!(!tail_call); // Not supported
+        assert!(!deterministic_only); // Not supported
+        assert!(multi_memory);
+        assert!(!exceptions); // Not supported
+        assert!(!memory64); // Not supported
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_no_features() -> Result<()> {
+        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasm-features=-all"])?;
+
+        let wasmparser::WasmFeatures {
+            reference_types,
+            multi_value,
+            bulk_memory,
+            module_linking,
+            simd,
+            threads,
+            tail_call,
+            deterministic_only,
+            multi_memory,
+            exceptions,
+            memory64,
+        } = options.wasm_features.unwrap();
+
+        assert!(!reference_types);
+        assert!(!multi_value);
+        assert!(!bulk_memory);
+        assert!(!module_linking);
+        assert!(!simd);
+        assert!(!threads);
+        assert!(!tail_call);
+        assert!(!deterministic_only);
+        assert!(!multi_memory);
+        assert!(!exceptions);
+        assert!(!memory64);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_multiple_features() -> Result<()> {
+        let options = CommonOptions::from_iter_safe(vec![
+            "foo",
+            "--wasm-features=-reference-types,simd,multi-memory",
+        ])?;
+
+        let wasmparser::WasmFeatures {
+            reference_types,
+            multi_value,
+            bulk_memory,
+            module_linking,
+            simd,
+            threads,
+            tail_call,
+            deterministic_only,
+            multi_memory,
+            exceptions,
+            memory64,
+        } = options.wasm_features.unwrap();
+
+        assert!(!reference_types);
+        assert!(multi_value);
+        assert!(bulk_memory);
+        assert!(!module_linking);
+        assert!(simd);
+        assert!(!threads);
+        assert!(!tail_call); // Not supported
+        assert!(!deterministic_only); // Not supported
+        assert!(multi_memory);
+        assert!(!exceptions); // Not supported
+        assert!(!memory64); // Not supported
+
+        Ok(())
+    }
+
+    macro_rules! feature_test {
+        ($test_name:ident, $name:ident, $flag:literal) => {
+            #[test]
+            fn $test_name() -> Result<()> {
+                let options =
+                    CommonOptions::from_iter_safe(vec!["foo", concat!("--wasm-features=", $flag)])?;
+
+                let wasmparser::WasmFeatures { $name, .. } = options.wasm_features.unwrap();
+
+                assert!($name);
+
+                let options = CommonOptions::from_iter_safe(vec![
+                    "foo",
+                    concat!("--wasm-features=-", $flag),
+                ])?;
+
+                let wasmparser::WasmFeatures { $name, .. } = options.wasm_features.unwrap();
+
+                assert!(!$name);
+
+                Ok(())
+            }
+        };
+    }
+
+    feature_test!(
+        test_reference_types_feature,
+        reference_types,
+        "reference-types"
+    );
+    feature_test!(test_multi_value_feature, multi_value, "multi-value");
+    feature_test!(test_bulk_memory_feature, bulk_memory, "bulk-memory");
+    feature_test!(
+        test_module_linking_feature,
+        module_linking,
+        "module-linking"
+    );
+    feature_test!(test_simd_feature, simd, "simd");
+    feature_test!(test_threads_feature, threads, "threads");
+    feature_test!(test_multi_memory_feature, multi_memory, "multi-memory");
 }

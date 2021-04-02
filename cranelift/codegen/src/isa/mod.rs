@@ -63,8 +63,7 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use crate::timing;
-use alloc::borrow::Cow;
-use alloc::boxed::Box;
+use alloc::{borrow::Cow, boxed::Box, vec::Vec};
 use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
@@ -201,6 +200,16 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Gets the triple for the builder.
+    pub fn triple(&self) -> &Triple {
+        &self.triple
+    }
+
+    /// Iterates the available settings in the builder.
+    pub fn iter(&self) -> impl Iterator<Item = settings::Setting> {
+        self.setup.iter()
+    }
+
     /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
     /// fully configured `TargetIsa` trait object.
     pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa> {
@@ -265,8 +274,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
 
-    /// Hashes all flags, both ISA-independent and ISA-specific, into the
-    /// specified hasher.
+    /// Get the ISA-dependent flag values that were used to make this trait object.
+    fn isa_flags(&self) -> Vec<settings::Value>;
+
+    /// Hashes all flags, both ISA-independent and ISA-dependent, into the specified hasher.
     fn hash_all_flags(&self, hasher: &mut dyn Hasher);
 
     /// Get the default calling convention of this target.

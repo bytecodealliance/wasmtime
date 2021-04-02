@@ -17,33 +17,39 @@ fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let supports_m = setting.add_bool(
         "supports_m",
         "CPU supports the 'M' extension (mul/div)",
+        "",
         false,
     );
     let supports_a = setting.add_bool(
         "supports_a",
         "CPU supports the 'A' extension (atomics)",
+        "",
         false,
     );
     let supports_f = setting.add_bool(
         "supports_f",
         "CPU supports the 'F' extension (float)",
+        "",
         false,
     );
     let supports_d = setting.add_bool(
         "supports_d",
         "CPU supports the 'D' extension (double)",
+        "",
         false,
     );
 
     let enable_m = setting.add_bool(
         "enable_m",
         "Enable the use of 'M' instructions if available",
+        "",
         true,
     );
 
     setting.add_bool(
         "enable_e",
         "Enable the 'RV32E' instruction set with only 16 registers",
+        "",
         false,
     );
 
