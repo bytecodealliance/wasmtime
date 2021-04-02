@@ -15,12 +15,7 @@ use crate::isa::enc_tables::{self as shared_enc_tables, lookup_enclist, Encoding
 use crate::isa::Builder as IsaBuilder;
 use crate::isa::{EncInfo, RegClass, RegInfo, TargetIsa};
 use crate::regalloc;
-use alloc::{
-    borrow::{Cow, ToOwned},
-    boxed::Box,
-    string::String,
-    vec::Vec,
-};
+use alloc::{borrow::Cow, boxed::Box, vec::Vec};
 use core::any::Any;
 use core::fmt;
 use core::hash::{Hash, Hasher};
@@ -74,15 +69,8 @@ impl TargetIsa for Isa {
         &self.shared_flags
     }
 
-    fn enabled_isa_flags(&self) -> Vec<String> {
-        self.isa_flags
-            .iter_enabled()
-            .map(ToOwned::to_owned)
-            .collect()
-    }
-
-    fn is_flag_enabled(&self, flag: &str) -> bool {
-        self.isa_flags.is_enabled(flag)
+    fn isa_flags(&self) -> Vec<shared_settings::Value> {
+        self.isa_flags.iter().collect()
     }
 
     fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {

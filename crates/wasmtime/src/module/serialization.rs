@@ -5,10 +5,11 @@ use crate::{Engine, Module, OptLevel};
 use anyhow::{anyhow, bail, Context, Result};
 use bincode::Options;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::borrow::Cow;
+use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::{collections::HashMap, fmt::Display};
 use wasmtime_environ::Tunables;
 use wasmtime_environ::{isa::TargetIsa, settings};
 use wasmtime_jit::{
@@ -29,7 +30,7 @@ fn bincode_options() -> impl Options {
 }
 
 // This exists because `wasmparser::WasmFeatures` isn't serializable
-#[derive(Hash, Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 struct WasmFeatures {
     pub reference_types: bool,
     pub multi_value: bool,
@@ -175,13 +176,39 @@ impl<'a> SerializedModuleData<'a> {
     }
 }
 
+#[derive(Serialize, Deserialize, Eq, PartialEq)]
+enum FlagValue {
+    Enum(Cow<'static, str>),
+    Num(u8),
+    Bool(bool),
+}
+
+impl From<settings::Value> for FlagValue {
+    fn from(v: settings::Value) -> Self {
+        match v.kind() {
+            settings::SettingKind::Enum => Self::Enum(v.as_enum().unwrap().into()),
+            settings::SettingKind::Num => Self::Num(v.as_num().unwrap()),
+            settings::SettingKind::Bool => Self::Bool(v.as_bool().unwrap()),
+            settings::SettingKind::Preset => unreachable!(),
+        }
+    }
+}
+
+impl Display for FlagValue {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Enum(v) => v.fmt(f),
+            Self::Num(v) => v.fmt(f),
+            Self::Bool(v) => v.fmt(f),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct SerializedModule<'a> {
     target: String,
-    flags_hash: u64,
-    // Record the opt level as it is the most common Cranelift flag users might change
-    opt_level: OptLevel,
-    isa_flags: Vec<String>,
+    shared_flags: HashMap<String, FlagValue>,
+    isa_flags: HashMap<String, FlagValue>,
     strategy: CompilationStrategy,
     tunables: Tunables,
     features: WasmFeatures,
@@ -220,9 +247,16 @@ impl<'a> SerializedModule<'a> {
 
         Self {
             target: isa.triple().to_string(),
-            opt_level: isa.flags().opt_level().into(),
-            flags_hash: Self::simple_hash(isa.flags()),
-            isa_flags: isa.enabled_isa_flags(),
+            shared_flags: isa
+                .flags()
+                .iter()
+                .map(|v| (v.name.to_owned(), v.into()))
+                .collect(),
+            isa_flags: isa
+                .isa_flags()
+                .into_iter()
+                .map(|v| (v.name.to_owned(), v.into()))
+                .collect(),
             strategy: compiler.strategy(),
             tunables: compiler.tunables().clone(),
             features: compiler.features().into(),
@@ -231,18 +265,16 @@ impl<'a> SerializedModule<'a> {
         }
     }
 
-    pub fn into_module(self, engine: &Engine) -> Result<Module> {
+    pub fn into_module(mut self, engine: &Engine) -> Result<Module> {
         let compiler = engine.compiler();
         let isa = compiler.isa();
 
         self.check_triple(isa)?;
+        self.check_shared_flags(isa)?;
         self.check_isa_flags(isa)?;
         self.check_strategy(compiler)?;
         self.check_tunables(compiler)?;
         self.check_features(compiler)?;
-
-        // Check the flags last as they are the least helpful in terms of diagnostic message
-        self.check_flags(isa)?;
 
         let types = self
             .tables
@@ -361,24 +393,61 @@ impl<'a> SerializedModule<'a> {
         Ok(())
     }
 
-    fn check_flags(&self, isa: &dyn TargetIsa) -> Result<()> {
-        let host_level = isa.flags().opt_level().into();
-        if self.opt_level != host_level {
-            bail!("Module was compiled with optimization level '{:?}' but '{:?}' is expected for the host", self.opt_level, host_level);
+    fn check_shared_flags(&mut self, isa: &dyn TargetIsa) -> Result<()> {
+        let mut shared_flags = std::mem::take(&mut self.shared_flags);
+        for value in isa.flags().iter() {
+            let name = value.name;
+            match shared_flags.remove(name) {
+                Some(v) => {
+                    let host: FlagValue = value.into();
+                    if v != host {
+                        bail!("Module was compiled with a different '{}' setting: expected '{}' but host has '{}'", name, v, host);
+                    }
+                }
+                None => bail!("Module was compiled without setting '{}'", name),
+            }
         }
 
-        if self.flags_hash != Self::simple_hash(isa.flags()) {
-            bail!("Module was compiled with different Cranelift flags than the host");
+        for (name, _) in shared_flags {
+            bail!(
+                "Module was compiled with setting '{}' but it is not present for the host",
+                name
+            );
         }
 
         Ok(())
     }
 
-    fn check_isa_flags(&self, isa: &dyn TargetIsa) -> Result<()> {
-        for flag in &self.isa_flags {
-            if !isa.is_flag_enabled(flag) {
-                bail!("Host is missing CPU flag '{}'", flag);
+    fn check_isa_flags(&mut self, isa: &dyn TargetIsa) -> Result<()> {
+        let mut isa_flags = std::mem::take(&mut self.isa_flags);
+        for value in isa.isa_flags().into_iter() {
+            let name = value.name;
+            let host: FlagValue = value.into();
+            match isa_flags.remove(name) {
+                Some(v) => match (&v, &host) {
+                    (FlagValue::Bool(v), FlagValue::Bool(host)) => {
+                        // ISA flags represent CPU features; for boolean values, only
+                        // treat it as an error if the module was compiled with the setting enabled
+                        // but the host does not have it enabled.
+                        if *v && !*host {
+                            bail!("Module was compiled with setting '{}' enabled but the host does not support it", name);
+                        }
+                    }
+                    _ => {
+                        if v != host {
+                            bail!("Module was compiled with a different '{}' setting: expected '{}' but host has '{}'", name, v, host);
+                        }
+                    }
+                },
+                None => bail!("Module was compiled without setting '{}'", name),
             }
+        }
+
+        for (name, _) in isa_flags {
+            bail!(
+                "Module was compiled with setting '{}' but it is not present for the host",
+                name
+            );
         }
 
         Ok(())
@@ -427,12 +496,6 @@ impl<'a> SerializedModule<'a> {
             feature,
             if expected { "is" } else { "is not" }
         );
-    }
-
-    fn simple_hash<T: Hash>(v: T) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        v.hash(&mut hasher);
-        hasher.finish()
     }
 
     fn check_tunables(&self, compiler: &Compiler) -> Result<()> {
@@ -596,54 +659,45 @@ mod test {
     }
 
     #[test]
-    fn test_opt_level_mismatch() -> Result<()> {
-        let engine = Engine::default();
-        let module = Module::new(&engine, "(module)")?;
-
-        let mut serialized = SerializedModule::new(&module);
-        serialized.opt_level = OptLevel::None;
-
-        match serialized.into_module(&engine) {
-            Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                "Module was compiled with optimization level 'None' but 'Speed' is expected for the host",
-            ),
-        }
-
-        Ok(())
-    }
-
-    #[test]
     fn test_cranelift_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.flags_hash += 1;
+        serialized.shared_flags.insert(
+            "opt_level".to_string(),
+            FlagValue::Enum(Cow::Borrowed("none")),
+        );
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
             Err(e) => assert_eq!(
                 e.to_string(),
-                "Module was compiled with different Cranelift flags than the host",
+                "Module was compiled with a different 'opt_level' setting: expected 'none' but host has 'speed'"
             ),
         }
 
         Ok(())
     }
 
+    #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_isa_flags_mismatch() -> Result<()> {
         let engine = Engine::default();
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.isa_flags.push("not_a_flag".to_string());
+
+        serialized
+            .isa_flags
+            .insert("not_a_flag".to_string(), FlagValue::Bool(true));
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Host is missing CPU flag 'not_a_flag'",),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled with setting 'not_a_flag' but it is not present for the host",
+            ),
         }
 
         Ok(())

@@ -7,7 +7,7 @@ use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter,
 use crate::result::CodegenResult;
 use crate::settings;
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use core::hash::{Hash, Hasher};
 use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Architecture, ArmArchitecture, Triple};
@@ -92,12 +92,8 @@ impl MachBackend for Arm32Backend {
         &self.flags
     }
 
-    fn enabled_isa_flags(&self) -> Vec<String> {
+    fn isa_flags(&self) -> Vec<settings::Value> {
         Vec::new()
-    }
-
-    fn is_flag_enabled(&self, _flag: &str) -> bool {
-        false
     }
 
     fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {

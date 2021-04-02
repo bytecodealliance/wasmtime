@@ -67,11 +67,13 @@ impl SettingsCommand {
             println!();
             println!("Settings inferred for the current host:");
 
-            let mut enabled = isa.enabled_isa_flags();
-            enabled.sort();
+            let mut values = isa.isa_flags();
+            values.sort_by_key(|k| k.name);
 
-            for flag in enabled {
-                println!("  {}", flag);
+            for value in values {
+                if value.as_bool().unwrap_or(false) {
+                    println!("  {}", value.name);
+                }
             }
         }
 

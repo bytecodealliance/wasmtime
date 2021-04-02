@@ -5,7 +5,7 @@ use crate::ir;
 use crate::isa::{EncInfo, Encoding, Encodings, Legalize, RegClass, RegInfo, TargetIsa};
 use crate::machinst::*;
 use crate::regalloc::RegisterSet;
-use crate::settings::Flags;
+use crate::settings::{self, Flags};
 
 #[cfg(feature = "testing_hooks")]
 use crate::regalloc::RegDiversions;
@@ -58,12 +58,8 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.flags()
     }
 
-    fn enabled_isa_flags(&self) -> Vec<String> {
-        self.backend.enabled_isa_flags()
-    }
-
-    fn is_flag_enabled(&self, flag: &str) -> bool {
-        self.backend.is_flag_enabled(flag)
+    fn isa_flags(&self) -> Vec<settings::Value> {
+        self.backend.isa_flags()
     }
 
     fn hash_all_flags(&self, hasher: &mut dyn Hasher) {

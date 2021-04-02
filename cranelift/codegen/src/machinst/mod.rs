@@ -64,7 +64,7 @@ use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, SourceLoc, StackSlot, Type, ValueLabel};
 use crate::result::CodegenResult;
-use crate::settings::Flags;
+use crate::settings::{self, Flags};
 use crate::value_label::ValueLabelsRanges;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -368,11 +368,8 @@ pub trait MachBackend {
     /// Return flags for this backend.
     fn flags(&self) -> &Flags;
 
-    /// Get the enabled ISA-dependent flags that were used to make this trait object.
-    fn enabled_isa_flags(&self) -> Vec<String>;
-
-    /// Determines if the given ISA-dependent flag is enabled.
-    fn is_flag_enabled(&self, flag: &str) -> bool;
+    /// Get the ISA-dependent flag values that were used to make this trait object.
+    fn isa_flags(&self) -> Vec<settings::Value>;
 
     /// Hashes all flags, both ISA-independent and ISA-dependent, into the specified hasher.
     fn hash_all_flags(&self, hasher: &mut dyn Hasher);

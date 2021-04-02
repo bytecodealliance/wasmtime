@@ -70,66 +70,27 @@ fn gen_constructor(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatte
     fmtln!(fmt, "}");
 }
 
-/// Generates the `iter_enabled` function.
+/// Generates the `iter` function.
 fn gen_iterator(group: &SettingGroup, fmt: &mut Formatter) {
     fmtln!(fmt, "impl Flags {");
     fmt.indent(|fmt| {
-        fmt.doc_comment("Iterates the enabled boolean settings.");
-        fmtln!(fmt, "pub fn iter_enabled(&self) -> impl Iterator<Item = &'static str> {");
+        fmt.doc_comment("Iterates the setting values.");
+        fmtln!(fmt, "pub fn iter(&self) -> impl Iterator<Item = Value> {");
         fmt.indent(|fmt| {
             fmtln!(fmt, "let mut bytes = [0; {}];", group.settings_size);
             fmtln!(fmt, "bytes.copy_from_slice(&self.bytes[0..{}]);", group.settings_size);
             fmtln!(fmt, "DESCRIPTORS.iter().filter_map(move |d| {");
             fmt.indent(|fmt| {
-                fmtln!(fmt, "if match d.detail {");
+                fmtln!(fmt, "let values = match &d.detail {");
                 fmt.indent(|fmt| {
-                    fmtln!(fmt, "detail::Detail::Bool { bit } => (bytes[d.offset as usize] & (1 << bit as usize)) != 0,");
-                    fmtln!(fmt, "_ => false");
+                    fmtln!(fmt, "detail::Detail::Preset => return None,");
+                    fmtln!(fmt, "detail::Detail::Enum { last, enumerators } => Some(TEMPLATE.enums(*last, *enumerators)),");
+                    fmtln!(fmt, "_ => None");
                 });
-                fmtln!(fmt, "} {");
-                fmt.indent(|fmt| {
-                    fmtln!(fmt, "Some(d.name)");
-                });
-                fmtln!(fmt, "} else {");
-                fmt.indent(|fmt| {
-                    fmtln!(fmt, "None");
-                });
-                fmtln!(fmt, "}");
+                fmtln!(fmt, "};");
+                fmtln!(fmt, "Some(Value{ name: d.name, detail: d.detail, values, value: bytes[d.offset as usize] })");
             });
             fmtln!(fmt, "})");
-        });
-        fmtln!(fmt, "}");
-    });
-    fmtln!(fmt, "}");
-}
-
-/// Generates the `is_enabled` function.
-fn gen_is_enabled(fmt: &mut Formatter) {
-    fmtln!(fmt, "impl Flags {");
-    fmt.indent(|fmt| {
-        fmt.doc_comment("Checks if a boolean setting is enabled by name.");
-        fmtln!(fmt, "pub fn is_enabled(&self, name: &str) -> bool {");
-        fmt.indent(|fmt| {
-            fmtln!(fmt, "match crate::constant_hash::probe(&TEMPLATE, name, crate::constant_hash::simple_hash(name)) {");
-            fmt.indent(|fmt| {
-                fmtln!(fmt, "Err(_) => false,");
-                fmtln!(fmt, "Ok(entry) => {");
-                fmt.indent(|fmt| {
-                    fmtln!(fmt, "let d = &TEMPLATE.descriptors[TEMPLATE.hash_table[entry] as usize];");
-                    fmtln!(fmt, "match &d.detail {");
-                    fmt.indent(|fmt| {
-                        fmtln!(fmt, "detail::Detail::Bool{ bit } => {");
-                        fmt.indent(|fmt| {
-                            fmtln!(fmt, "(self.bytes[d.offset as usize] & (1 << bit)) != 0");
-                        });
-                        fmtln!(fmt, "},");
-                        fmtln!(fmt, "_ => false");
-                    });
-                    fmtln!(fmt, "}");
-                });
-                fmtln!(fmt, "}");
-            });
-            fmtln!(fmt, "}");
         });
         fmtln!(fmt, "}");
     });
@@ -496,7 +457,6 @@ fn gen_group(group: &SettingGroup, parent: ParentGroup, fmt: &mut Formatter) {
 
     gen_constructor(group, parent, fmt);
     gen_iterator(group, fmt);
-    gen_is_enabled(fmt);
     gen_enum_types(group, fmt);
     gen_getters(group, fmt);
     gen_descriptors(group, fmt);
