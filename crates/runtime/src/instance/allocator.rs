@@ -379,7 +379,9 @@ fn initialize_instance(
                 for (page_index, page) in pages.iter().enumerate() {
                     if let Some(data) = page {
                         debug_assert_eq!(data.len(), WASM_PAGE_SIZE as usize);
-                        slice[page_index * WASM_PAGE_SIZE as usize..].copy_from_slice(data);
+                        let start = page_index * WASM_PAGE_SIZE as usize;
+                        let end = start + WASM_PAGE_SIZE as usize;
+                        slice[start..end].copy_from_slice(data);
                     }
                 }
             }
