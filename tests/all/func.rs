@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
@@ -576,5 +578,44 @@ fn typed_multiple_results() -> anyhow::Result<()> {
         f1.typed::<(i32, i32, i32), (f32, f64)>()?.call((1, 2, 3))?,
         (2., 3.)
     );
+    Ok(())
+}
+
+#[test]
+fn trap_doesnt_leak() -> anyhow::Result<()> {
+    struct Canary(Rc<Cell<bool>>);
+
+    impl Drop for Canary {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    let store = Store::default();
+
+    // test that `Func::wrap` is correct
+    let canary1 = Canary(Rc::new(Cell::new(false)));
+    let dtor1_run = canary1.0.clone();
+    let f1 = Func::wrap(&store, move || -> Result<(), Trap> {
+        drop(&canary1);
+        Err(Trap::new(""))
+    });
+    assert!(f1.typed::<(), ()>()?.call(()).is_err());
+    assert!(f1.call(&[]).is_err());
+
+    // test that `Func::new` is correct
+    let canary2 = Canary(Rc::new(Cell::new(false)));
+    let dtor2_run = canary2.0.clone();
+    let f2 = Func::new(&store, FuncType::new(None, None), move |_, _, _| {
+        drop(&canary2);
+        Err(Trap::new(""))
+    });
+    assert!(f2.typed::<(), ()>()?.call(()).is_err());
+    assert!(f2.call(&[]).is_err());
+
+    // drop everything and ensure dtors are run
+    drop((store, f1, f2));
+    assert!(dtor1_run.get());
+    assert!(dtor2_run.get());
     Ok(())
 }

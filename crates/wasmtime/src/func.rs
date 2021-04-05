@@ -1276,7 +1276,7 @@ pub unsafe trait WasmRet {
     // `invoke_wasm_and_catch_traps` is on the stack, and therefore this method
     // is unsafe.
     #[doc(hidden)]
-    unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi;
+    unsafe fn into_abi_for_ret(self, store: &Store) -> Result<Self::Abi, Trap>;
 
     // Same as `WasmTy::push`.
     #[doc(hidden)]
@@ -1303,7 +1303,9 @@ unsafe impl WasmRet for () {
     }
 
     #[inline]
-    unsafe fn into_abi_for_ret(self, _store: &Store) {}
+    unsafe fn into_abi_for_ret(self, _store: &Store) -> Result<(), Trap> {
+        Ok(())
+    }
 
     #[inline]
     fn valtype() -> Option<ValType> {
@@ -1331,11 +1333,8 @@ unsafe impl WasmRet for Result<(), Trap> {
     }
 
     #[inline]
-    unsafe fn into_abi_for_ret(self, _store: &Store) {
-        match self {
-            Ok(()) => {}
-            Err(trap) => raise_user_trap(trap.into()),
-        }
+    unsafe fn into_abi_for_ret(self, _store: &Store) -> Result<(), Trap> {
+        self
     }
 
     #[inline]
@@ -1365,8 +1364,8 @@ where
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi {
-        <Self as WasmTy>::into_abi(self, store)
+    unsafe fn into_abi_for_ret(self, store: &Store) -> Result<Self::Abi, Trap> {
+        Ok(<Self as WasmTy>::into_abi(self, store))
     }
 
     fn valtype() -> Option<ValType> {
@@ -1396,15 +1395,8 @@ where
         }
     }
 
-    unsafe fn into_abi_for_ret(self, store: &Store) -> Self::Abi {
-        match self {
-            Ok(val) => return <T as WasmTy>::into_abi(val, store),
-            Err(trap) => handle_trap(trap),
-        }
-
-        unsafe fn handle_trap(trap: Trap) -> ! {
-            raise_user_trap(trap.into())
-        }
+    unsafe fn into_abi_for_ret(self, store: &Store) -> Result<Self::Abi, Trap> {
+        self.map(|val| <T as WasmTy>::into_abi(val, store))
     }
 
     fn valtype() -> Option<ValType> {
@@ -1577,50 +1569,73 @@ macro_rules! impl_into_func {
                     $( $args: WasmTy, )*
                     R: WasmRet,
                 {
-                    let state = (*vmctx).host_state();
-                    // Double-check ourselves in debug mode, but we control
-                    // the `Any` here so an unsafe downcast should also
-                    // work.
-                    debug_assert!(state.is::<F>());
-                    let func = &*(state as *const _ as *const F);
+                    enum CallResult<T> {
+                        Ok(T),
+                        Trap(Trap),
+                        Panic(Box<dyn std::any::Any + Send>),
+                    }
 
-                    let store = wasmtime_runtime::with_last_info(|last| {
-                        last.and_then(|s| s.downcast_ref::<Store>())
-                            .cloned()
-                            .expect("function called without thread state")
-                    });
+                    // Note that this `result` is intentionally scoped into a
+                    // separate block. Handling traps and panics will involve
+                    // longjmp-ing from this function which means we won't run
+                    // destructors. As a result anything requiring a destructor
+                    // should be part of this block, and the long-jmp-ing
+                    // happens after the block in handling `CallResult`.
+                    let result = {
+                        let state = (*vmctx).host_state();
+                        // Double-check ourselves in debug mode, but we control
+                        // the `Any` here so an unsafe downcast should also
+                        // work.
+                        debug_assert!(state.is::<F>());
+                        let func = &*(state as *const _ as *const F);
 
-                    let ret = {
-                        panic::catch_unwind(AssertUnwindSafe(|| {
-                            func(
-                                Caller { store: &store, caller_vmctx },
-                                $( $args::from_abi($args, &store), )*
-                            )
-                        }))
+                        let store = wasmtime_runtime::with_last_info(|last| {
+                            last.and_then(|s| s.downcast_ref::<Store>())
+                                .cloned()
+                                .expect("function called without thread state")
+                        });
+
+                        let ret = {
+                            panic::catch_unwind(AssertUnwindSafe(|| {
+                                func(
+                                    Caller { store: &store, caller_vmctx },
+                                    $( $args::from_abi($args, &store), )*
+                                )
+                            }))
+                        };
+
+                        // Note that we need to be careful when dealing with traps
+                        // here. Traps are implemented with longjmp/setjmp meaning
+                        // that it's not unwinding and consequently no Rust
+                        // destructors are run. We need to be careful to ensure that
+                        // nothing on the stack needs a destructor when we exit
+                        // abnormally from this `match`, e.g. on `Err`, on
+                        // cross-store-issues, or if `Ok(Err)` is raised.
+                        match ret {
+                            Err(panic) => CallResult::Panic(panic),
+                            Ok(ret) => {
+                                // Because the wrapped function is not `unsafe`, we
+                                // can't assume it returned a value that is
+                                // compatible with this store.
+                                if !ret.compatible_with_store(&store) {
+                                    // Explicitly drop all locals with destructors prior to raising the trap
+                                    drop(store);
+                                    drop(ret);
+                                    raise_cross_store_trap();
+                                }
+
+                                match ret.into_abi_for_ret(&store) {
+                                    Ok(val) => CallResult::Ok(val),
+                                    Err(trap) => CallResult::Trap(trap),
+                                }
+                            }
+                        }
                     };
 
-                    // Note that we need to be careful when dealing with traps
-                    // here. Traps are implemented with longjmp/setjmp meaning
-                    // that it's not unwinding and consequently no Rust
-                    // destructors are run. We need to be careful to ensure that
-                    // nothing on the stack needs a destructor when we exit
-                    // abnormally from this `match`, e.g. on `Err`, on
-                    // cross-store-issues, or if `Ok(Err)` is raised.
-                    match ret {
-                        Err(panic) => wasmtime_runtime::resume_panic(panic),
-                        Ok(ret) => {
-                            // Because the wrapped function is not `unsafe`, we
-                            // can't assume it returned a value that is
-                            // compatible with this store.
-                            if !ret.compatible_with_store(&store) {
-                                // Explicitly drop all locals with destructors prior to raising the trap
-                                drop(store);
-                                drop(ret);
-                                raise_cross_store_trap();
-                            }
-
-                            ret.into_abi_for_ret(&store)
-                        }
+                    match result {
+                        CallResult::Ok(val) => val,
+                        CallResult::Trap(trap) => raise_user_trap(trap.into()),
+                        CallResult::Panic(panic) => wasmtime_runtime::resume_panic(panic),
                     }
                 }
 
