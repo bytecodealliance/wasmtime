@@ -34,6 +34,10 @@ struct Entry {
 
 impl SignatureRegistry {
     /// Register a signature and return its unique index.
+    ///
+    /// Note that `trampoline` can be `None` which indicates that an index is
+    /// desired for this signature but the trampoline for it is not compiled or
+    /// available.
     pub fn register(
         &mut self,
         wasm: &WasmFuncType,
@@ -45,6 +49,8 @@ impl SignatureRegistry {
             hash_map::Entry::Occupied(entry) => {
                 let ret = *entry.get();
                 let entry = &mut self.index_map[ret.bits() as usize];
+                // If the entry does not previously have a trampoline, then
+                // overwrite it with whatever was specified by this function.
                 if entry.trampoline.is_none() {
                     entry.trampoline = trampoline;
                 }

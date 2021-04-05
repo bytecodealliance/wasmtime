@@ -351,7 +351,7 @@ macro_rules! generate_wrap_async_func {
         where
             T: 'static,
             $($args: WasmTy,)*
-            R: WasmHostResults,
+            R: WasmRet,
         {
             assert!(store.async_support(), concat!("cannot use `wrap", $num, "_async` without enabling async support on the config"));
             Func::wrap(store, move |caller: Caller<'_>, $($args: $args),*| {
@@ -1261,7 +1261,7 @@ fn enter_wasm_init<'a>(store: &'a Store) -> Result<impl Drop + 'a, Trap> {
 /// stable over time.
 ///
 /// For more information see [`Func::wrap`]
-pub unsafe trait WasmHostResults {
+pub unsafe trait WasmRet {
     // Same as `WasmTy::Abi`.
     #[doc(hidden)]
     type Abi: Copy;
@@ -1291,14 +1291,14 @@ pub unsafe trait WasmHostResults {
     // explicitly, used when wrapping async functions which always bottom-out
     // in a function that returns a trap because futures can be cancelled.
     #[doc(hidden)]
-    type Fallible: WasmHostResults;
+    type Fallible: WasmRet;
     #[doc(hidden)]
     fn into_fallible(self) -> Self::Fallible;
     #[doc(hidden)]
     fn fallible_from_trap(trap: Trap) -> Self::Fallible;
 }
 
-unsafe impl<T> WasmHostResults for T
+unsafe impl<T> WasmRet for T
 where
     T: WasmTy,
 {
@@ -1331,17 +1331,17 @@ where
     }
 }
 
-unsafe impl<T> WasmHostResults for Result<T, Trap>
+unsafe impl<T> WasmRet for Result<T, Trap>
 where
-    T: WasmHostResults,
+    T: WasmRet,
 {
-    type Abi = <T as WasmHostResults>::Abi;
-    type Retptr = <T as WasmHostResults>::Retptr;
+    type Abi = <T as WasmRet>::Abi;
+    type Retptr = <T as WasmRet>::Retptr;
     type Fallible = Self;
 
     fn compatible_with_store(&self, store: &Store) -> bool {
         match self {
-            Ok(x) => <T as WasmHostResults>::compatible_with_store(x, store),
+            Ok(x) => <T as WasmRet>::compatible_with_store(x, store),
             Err(_) => true,
         }
     }
@@ -1374,7 +1374,7 @@ where
 macro_rules! impl_wasm_host_results {
     ($n:tt $($t:ident)*) => (
         #[allow(non_snake_case)]
-        unsafe impl<$($t),*> WasmHostResults for ($($t,)*)
+        unsafe impl<$($t),*> WasmRet for ($($t,)*)
         where
             $($t: WasmTy,)*
             ($($t::Abi,)*): HostAbi,
@@ -1649,7 +1649,7 @@ macro_rules! impl_into_func {
         where
             F: Fn($($args),*) -> R + 'static,
             $($args: WasmTy,)*
-            R: WasmHostResults,
+            R: WasmRet,
         {
             fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 let f = move |_: Caller<'_>, $($args:$args),*| {
@@ -1665,7 +1665,7 @@ macro_rules! impl_into_func {
         where
             F: Fn(Caller<'_>, $($args),*) -> R + 'static,
             $($args: WasmTy,)*
-            R: WasmHostResults,
+            R: WasmRet,
         {
             fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 /// This shim is called by Wasm code, constructs a `Caller`,
@@ -1684,7 +1684,7 @@ macro_rules! impl_into_func {
                 where
                     F: Fn(Caller<'_>, $( $args ),*) -> R + 'static,
                     $( $args: WasmTy, )*
-                    R: WasmHostResults,
+                    R: WasmRet,
                 {
                     enum CallResult<T> {
                         Ok(T),
@@ -1771,7 +1771,7 @@ macro_rules! impl_into_func {
                 )
                 where
                     $($args: WasmTy,)*
-                    R: WasmHostResults,
+                    R: WasmRet,
                 {
                     let ptr = mem::transmute::<
                         *const VMFunctionBody,

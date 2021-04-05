@@ -1,6 +1,6 @@
 use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
-use crate::{func::HostFunc, Caller, FuncType, IntoFunc, Trap, Val, WasmHostResults, WasmTy};
+use crate::{func::HostFunc, Caller, FuncType, IntoFunc, Trap, Val, WasmRet, WasmTy};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -339,7 +339,7 @@ macro_rules! generate_wrap_async_host_func {
         )
         where
             $($args: WasmTy,)*
-            R: WasmHostResults,
+            R: WasmRet,
         {
             // Defer the check for async support until engine creation time to not introduce an order dependency
             self.host_funcs.insert(

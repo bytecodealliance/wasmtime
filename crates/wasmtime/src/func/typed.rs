@@ -180,38 +180,11 @@ macro_rules! primitives {
 
 primitives! {
     i32 => I32
+    u32 => I32
     i64 => I64
+    u64 => I64
     f32 => F32
     f64 => F64
-}
-
-macro_rules! unsigned {
-    ($($unsigned:ident => $ty:ident/$signed:ident)*) => ($(
-        unsafe impl WasmTy for $unsigned {
-            type Abi = $signed;
-            #[inline]
-            fn valtype() -> ValType {
-                ValType::$ty
-            }
-            #[inline]
-            fn compatible_with_store(&self, _: &Store) -> bool {
-                true
-            }
-            #[inline]
-            fn into_abi(self, _store: &Store) -> Self::Abi {
-                self as $signed
-            }
-            #[inline]
-            unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
-                abi as $unsigned
-            }
-        }
-    )*)
-}
-
-unsigned! {
-    u32 => I32/i32
-    u64 => I64/i64
 }
 
 unsafe impl WasmTy for Option<ExternRef> {

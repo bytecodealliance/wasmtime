@@ -322,12 +322,18 @@ impl Store {
     fn register_signatures(&self, module: &Module) {
         let mut signatures = self.signatures().borrow_mut();
         let types = module.types();
+
+        // Register a unique index for all types in this module, even if they
+        // don't have a trampoline.
         for (_, ty) in module.compiled_module().module().types.iter() {
             if let wasmtime_environ::ModuleType::Function(index) = ty {
                 let wasm = &types.wasm_signatures[*index];
                 signatures.register(wasm, None);
             }
         }
+
+        // Afterwards register all compiled trampolines for this module with the
+        // signature registry as well.
         for (index, trampoline) in module.compiled_module().trampolines() {
             let wasm = &types.wasm_signatures[*index];
             signatures.register(wasm, Some(*trampoline));

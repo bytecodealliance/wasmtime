@@ -624,13 +624,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
 fn wrap_multiple_results() -> anyhow::Result<()> {
     fn test<T>(store: &Store, t: T) -> anyhow::Result<()>
     where
-        T: WasmHostResults
-            + WasmResults
-            + PartialEq
-            + Copy
-            + std::fmt::Debug
-            + EqualToValues
-            + 'static,
+        T: WasmRet + WasmResults + PartialEq + Copy + std::fmt::Debug + EqualToValues + 'static,
     {
         let f = Func::wrap(store, move || t);
         assert_eq!(f.typed::<(), T>()?.call(())?, t);
