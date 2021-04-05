@@ -1090,7 +1090,7 @@ pub fn create_unwind_info(
 
     // Assumption: RBP is being used as the frame pointer for both calling conventions
     // In the future, we should be omitting frame pointer as an optimization, so this will change
-    Ok(match func.signature.call_conv.unwind_info_kind() {
+    Ok(match isa.unwind_info_kind() {
         UnwindInfoKind::SystemV => {
             super::unwind::systemv::create_unwind_info(func, isa)?.map(|u| UnwindInfo::SystemV(u))
         }

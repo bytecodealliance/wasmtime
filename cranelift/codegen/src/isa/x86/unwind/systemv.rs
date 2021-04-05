@@ -97,7 +97,7 @@ pub(crate) fn create_unwind_info(
     isa: &dyn TargetIsa,
 ) -> CodegenResult<Option<UnwindInfo>> {
     // Only System V-like calling conventions are supported
-    match func.signature.call_conv.unwind_info_kind() {
+    match isa.unwind_info_kind() {
         crate::machinst::UnwindInfoKind::SystemV => {}
         _ => return Ok(None),
     }

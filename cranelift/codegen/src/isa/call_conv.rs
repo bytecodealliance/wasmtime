@@ -1,4 +1,3 @@
-use crate::machinst::UnwindInfoKind;
 use crate::settings::{self, LibcallCallConv};
 use core::fmt;
 use core::str;
@@ -86,19 +85,6 @@ impl CallConv {
         match self {
             Self::WasmtimeSystemV | Self::WasmtimeFastcall => true,
             _ => false,
-        }
-    }
-
-    /// Returns the kind of unwind info used for this calling convention
-    pub fn unwind_info_kind(self) -> UnwindInfoKind {
-        match self {
-            #[cfg(feature = "unwind")]
-            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => {
-                UnwindInfoKind::SystemV
-            }
-            #[cfg(feature = "unwind")]
-            CallConv::WindowsFastcall | CallConv::WasmtimeFastcall => UnwindInfoKind::Windows,
-            _ => UnwindInfoKind::None,
         }
     }
 }

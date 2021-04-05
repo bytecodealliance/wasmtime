@@ -1371,10 +1371,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         .next()
         .unwrap()
     }
-
-    fn unwind_info_kind(&self) -> UnwindInfoKind {
-        self.sig.call_conv.unwind_info_kind()
-    }
 }
 
 fn abisig_to_uses_and_defs<M: ABIMachineSpec>(sig: &ABISig) -> (Vec<Reg>, Vec<Writable<Reg>>) {
