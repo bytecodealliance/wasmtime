@@ -29,9 +29,15 @@ pub enum CallConv {
     Baldrdash2020,
     /// Specialized convention for the probestack function.
     Probestack,
-    /// Wasmtime equivalent of SystemV, except the multi-return ABI is tweaked.
+    /// Wasmtime equivalent of SystemV, not ABI-stable.
+    ///
+    /// Currently only differs in how multiple return values are handled,
+    /// returning the first return value in a register and everything else
+    /// through a return-pointer.
     WasmtimeSystemV,
-    /// Wasmtime equivalent of WindowsFastcall, except the multi-return ABI is tweaked.
+    /// Wasmtime equivalent of WindowsFastcall, not ABI-stable.
+    ///
+    /// Differs from fastcall in the same way as `WasmtimeSystemV`.
     WasmtimeFastcall,
 }
 
