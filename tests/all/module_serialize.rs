@@ -19,10 +19,9 @@ fn test_version_mismatch() -> Result<()> {
 
     match Module::new(&engine, &buffer) {
         Ok(_) => bail!("expected deserialization to fail"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            "Module was compiled with incompatible Wasmtime version 'x.25.0'"
-        ),
+        Err(e) => assert!(e
+            .to_string()
+            .starts_with("Module was compiled with incompatible Wasmtime version")),
     }
 
     Ok(())
