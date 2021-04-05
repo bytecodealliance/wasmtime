@@ -290,18 +290,19 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 // Compute the stack slot's size.
                 let size = (ty_bits(param.value_type) / 8) as u64;
 
-                let size =
-                    if call_conv == isa::CallConv::AppleAarch64 || call_conv.extends_wasmtime() {
-                        // MacOS aarch64 and Wasmtime allow stack slots with
-                        // sizes less than 8 bytes. They still need to be
-                        // properly aligned on their natural data alignment,
-                        // though.
-                        size
-                    } else {
-                        // Every arg takes a minimum slot of 8 bytes. (16-byte stack
-                        // alignment happens separately after all args.)
-                        std::cmp::max(size, 8)
-                    };
+                let size = if call_conv == isa::CallConv::AppleAarch64
+                    || (call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets)
+                {
+                    // MacOS aarch64 and Wasmtime allow stack slots with
+                    // sizes less than 8 bytes. They still need to be
+                    // properly aligned on their natural data alignment,
+                    // though.
+                    size
+                } else {
+                    // Every arg takes a minimum slot of 8 bytes. (16-byte stack
+                    // alignment happens separately after all args.)
+                    std::cmp::max(size, 8)
+                };
 
                 // Align the stack slot.
                 debug_assert!(size.is_power_of_two());
