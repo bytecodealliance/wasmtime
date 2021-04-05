@@ -1,3 +1,4 @@
+use crate::machinst::UnwindInfoKind;
 use crate::settings::{self, LibcallCallConv};
 use core::fmt;
 use core::str;
@@ -29,6 +30,10 @@ pub enum CallConv {
     Baldrdash2020,
     /// Specialized convention for the probestack function.
     Probestack,
+    /// Wasmtime equivalent of SystemV, except the multi-return ABI is tweaked.
+    WasmtimeSystemV,
+    /// Wasmtime equivalent of WindowsFastcall, except the multi-return ABI is tweaked.
+    WasmtimeFastcall,
 }
 
 impl CallConv {
@@ -63,7 +68,7 @@ impl CallConv {
     /// Is the calling convention extending the Windows Fastcall ABI?
     pub fn extends_windows_fastcall(self) -> bool {
         match self {
-            Self::WindowsFastcall | Self::BaldrdashWindows => true,
+            Self::WindowsFastcall | Self::BaldrdashWindows | Self::WasmtimeFastcall => true,
             _ => false,
         }
     }
@@ -73,6 +78,27 @@ impl CallConv {
         match self {
             Self::BaldrdashSystemV | Self::BaldrdashWindows | Self::Baldrdash2020 => true,
             _ => false,
+        }
+    }
+
+    /// Is the calling convention extending the Wasmtime ABI?
+    pub fn extends_wasmtime(self) -> bool {
+        match self {
+            Self::WasmtimeSystemV | Self::WasmtimeFastcall => true,
+            _ => false,
+        }
+    }
+
+    /// Returns the kind of unwind info used for this calling convention
+    pub fn unwind_info_kind(self) -> UnwindInfoKind {
+        match self {
+            #[cfg(feature = "unwind")]
+            CallConv::Fast | CallConv::Cold | CallConv::SystemV | CallConv::WasmtimeSystemV => {
+                UnwindInfoKind::SystemV
+            }
+            #[cfg(feature = "unwind")]
+            CallConv::WindowsFastcall | CallConv::WasmtimeFastcall => UnwindInfoKind::Windows,
+            _ => UnwindInfoKind::None,
         }
     }
 }
@@ -89,6 +115,8 @@ impl fmt::Display for CallConv {
             Self::BaldrdashWindows => "baldrdash_windows",
             Self::Baldrdash2020 => "baldrdash_2020",
             Self::Probestack => "probestack",
+            Self::WasmtimeSystemV => "wasmtime_system_v",
+            Self::WasmtimeFastcall => "wasmtime_fastcall",
         })
     }
 }
@@ -106,6 +134,8 @@ impl str::FromStr for CallConv {
             "baldrdash_windows" => Ok(Self::BaldrdashWindows),
             "baldrdash_2020" => Ok(Self::Baldrdash2020),
             "probestack" => Ok(Self::Probestack),
+            "wasmtime_system_v" => Ok(Self::WasmtimeSystemV),
+            "wasmtime_fastcall" => Ok(Self::WasmtimeFastcall),
             _ => Err(()),
         }
     }

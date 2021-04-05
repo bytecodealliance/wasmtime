@@ -702,11 +702,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     }
 
     /// Declares a function signature to the environment.
-    fn declare_type_func(
-        &mut self,
-        wasm_func_type: WasmFuncType,
-        sig: ir::Signature,
-    ) -> WasmResult<()>;
+    fn declare_type_func(&mut self, wasm_func_type: WasmFuncType) -> WasmResult<()>;
 
     /// Declares a module type signature to the environment.
     fn declare_type_module(

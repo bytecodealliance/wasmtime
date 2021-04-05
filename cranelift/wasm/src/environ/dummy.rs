@@ -660,8 +660,9 @@ impl TargetEnvironment for DummyEnvironment {
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn declare_type_func(&mut self, _wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
-        self.info.signatures.push(sig);
+    fn declare_type_func(&mut self, _wasm: WasmFuncType) -> WasmResult<()> {
+        // TODO
+        // self.info.signatures.push(sig);
         Ok(())
     }
 

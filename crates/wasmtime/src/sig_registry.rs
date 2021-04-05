@@ -29,7 +29,7 @@ struct Entry {
     // Note that the code memory for this trampoline is not owned by this
     // type, but instead it's expected to be owned by the store that this
     // registry lives within.
-    trampoline: VMTrampoline,
+    trampoline: Option<VMTrampoline>,
 }
 
 impl SignatureRegistry {
@@ -37,12 +37,19 @@ impl SignatureRegistry {
     pub fn register(
         &mut self,
         wasm: &WasmFuncType,
-        trampoline: VMTrampoline,
+        trampoline: Option<VMTrampoline>,
     ) -> VMSharedSignatureIndex {
         let len = self.wasm2index.len();
 
         match self.wasm2index.entry(wasm.clone()) {
-            hash_map::Entry::Occupied(entry) => *entry.get(),
+            hash_map::Entry::Occupied(entry) => {
+                let ret = *entry.get();
+                let entry = &mut self.index_map[ret.bits() as usize];
+                if entry.trampoline.is_none() {
+                    entry.trampoline = trampoline;
+                }
+                ret
+            }
             hash_map::Entry::Vacant(entry) => {
                 // Keep `signature_hash` len under 2**32 -- VMSharedSignatureIndex::new(std::u32::MAX)
                 // is reserved for VMSharedSignatureIndex::default().
@@ -75,8 +82,10 @@ impl SignatureRegistry {
         &self,
         idx: VMSharedSignatureIndex,
     ) -> Option<(&WasmFuncType, VMTrampoline)> {
-        self.index_map
+        let (wasm, trampoline) = self
+            .index_map
             .get(idx.bits() as usize)
-            .map(|e| (&e.wasm, e.trampoline))
+            .map(|e| (&e.wasm, e.trampoline))?;
+        Some((wasm, trampoline?))
     }
 }

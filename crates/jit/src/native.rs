@@ -11,9 +11,4 @@ pub fn builder_without_flags() -> cranelift_codegen::isa::Builder {
         .expect("host machine is not a supported target")
 }
 
-pub fn call_conv() -> cranelift_codegen::isa::CallConv {
-    use target_lexicon::HOST;
-    cranelift_codegen::isa::CallConv::triple_default(&HOST)
-}
-
 pub use cranelift_codegen::isa::lookup;

@@ -19,6 +19,7 @@ entity_impl!(FuncIndex);
 
 /// Index type of a defined function inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct DefinedFuncIndex(u32);
 entity_impl!(DefinedFuncIndex);
 

@@ -298,28 +298,6 @@ impl FuncType {
         &self.sig
     }
 
-    /// Get the Cranelift-compatible function signature.
-    pub(crate) fn get_wasmtime_signature(&self, pointer_type: ir::Type) -> ir::Signature {
-        use wasmtime_environ::ir::{AbiParam, ArgumentPurpose, Signature};
-        use wasmtime_jit::native;
-        let call_conv = native::call_conv();
-        let mut params = vec![
-            AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
-            AbiParam::new(pointer_type),
-        ];
-        params.extend(self.params().map(|p| AbiParam::new(p.get_wasmtime_type())));
-        let returns = self
-            .results()
-            .map(|p| AbiParam::new(p.get_wasmtime_type()))
-            .collect::<Vec<_>>();
-
-        Signature {
-            params,
-            returns,
-            call_conv,
-        }
-    }
-
     pub(crate) fn from_wasm_func_type(sig: &wasm::WasmFuncType) -> FuncType {
         FuncType { sig: sig.clone() }
     }

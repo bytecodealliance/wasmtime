@@ -6,6 +6,7 @@ use std::cmp::max;
 use std::fmt;
 use std::future::Future;
 use std::mem;
+use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
@@ -350,7 +351,7 @@ macro_rules! generate_wrap_async_func {
         where
             T: 'static,
             $($args: WasmTy,)*
-            R: WasmRet,
+            R: WasmHostResults,
         {
             assert!(store.async_support(), concat!("cannot use `wrap", $num, "_async` without enabling async support on the config"));
             Func::wrap(store, move |caller: Caller<'_>, $($args: $args),*| {
@@ -561,15 +562,15 @@ impl Func {
     /// Any of the Rust types can be returned from the closure as well, in
     /// addition to some extra types
     ///
-    /// | Rust Return Type  | WebAssembly Return Type | Meaning           |
-    /// |-------------------|-------------------------|-------------------|
-    /// | `()`              | nothing                 | no return value   |
-    /// | `Result<T, Trap>` | `T`                     | function may trap |
+    /// | Rust Return Type  | WebAssembly Return Type | Meaning               |
+    /// |-------------------|-------------------------|-----------------------|
+    /// | `()`              | nothing                 | no return value       |
+    /// | `T`               | `T`                     | a single return value |
+    /// | `(T1, T2, ...)`   | `T1 T2 ...`             | multiple returns      |
     ///
-    /// At this time multi-value returns are not supported, and supporting this
-    /// is the subject of [#1178].
-    ///
-    /// [#1178]: https://github.com/bytecodealliance/wasmtime/issues/1178
+    /// Note that all return types can also be wrapped in `Result<_, Trap>` to
+    /// indicate that the host function can generate a trap as well as possibly
+    /// returning a value.
     ///
     /// Finally you can also optionally take [`Caller`] as the first argument of
     /// your closure. If inserted then you're able to inspect the caller's
@@ -1260,10 +1261,12 @@ fn enter_wasm_init<'a>(store: &'a Store) -> Result<impl Drop + 'a, Trap> {
 /// stable over time.
 ///
 /// For more information see [`Func::wrap`]
-pub unsafe trait WasmRet {
+pub unsafe trait WasmHostResults {
     // Same as `WasmTy::Abi`.
     #[doc(hidden)]
     type Abi: Copy;
+    #[doc(hidden)]
+    type Retptr: Copy;
 
     // Same as `WasmTy::compatible_with_store`.
     #[doc(hidden)]
@@ -1276,100 +1279,47 @@ pub unsafe trait WasmRet {
     // `invoke_wasm_and_catch_traps` is on the stack, and therefore this method
     // is unsafe.
     #[doc(hidden)]
-    unsafe fn into_abi_for_ret(self, store: &Store) -> Result<Self::Abi, Trap>;
+    unsafe fn into_abi_for_ret(self, store: &Store, ptr: Self::Retptr) -> Result<Self::Abi, Trap>;
 
-    // Same as `WasmTy::push`.
     #[doc(hidden)]
-    fn valtype() -> Option<ValType>;
+    fn func_type(params: impl Iterator<Item = ValType>) -> FuncType;
+
+    #[doc(hidden)]
+    unsafe fn wrap_trampoline(ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi);
 
     // Utilities used to convert an instance of this type to a `Result`
     // explicitly, used when wrapping async functions which always bottom-out
     // in a function that returns a trap because futures can be cancelled.
     #[doc(hidden)]
-    type Fallible: WasmRet;
+    type Fallible: WasmHostResults;
     #[doc(hidden)]
     fn into_fallible(self) -> Self::Fallible;
     #[doc(hidden)]
     fn fallible_from_trap(trap: Trap) -> Self::Fallible;
 }
 
-unsafe impl WasmRet for () {
-    type Abi = ();
-    type Fallible = Result<(), Trap>;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    unsafe fn into_abi_for_ret(self, _store: &Store) -> Result<(), Trap> {
-        Ok(())
-    }
-
-    #[inline]
-    fn valtype() -> Option<ValType> {
-        None
-    }
-
-    #[inline]
-    fn into_fallible(self) -> Result<(), Trap> {
-        Ok(())
-    }
-
-    #[inline]
-    fn fallible_from_trap(trap: Trap) -> Result<(), Trap> {
-        Err(trap)
-    }
-}
-
-unsafe impl WasmRet for Result<(), Trap> {
-    type Abi = ();
-    type Fallible = Self;
-
-    #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
-        true
-    }
-
-    #[inline]
-    unsafe fn into_abi_for_ret(self, _store: &Store) -> Result<(), Trap> {
-        self
-    }
-
-    #[inline]
-    fn valtype() -> Option<ValType> {
-        None
-    }
-
-    #[inline]
-    fn into_fallible(self) -> Result<(), Trap> {
-        self
-    }
-
-    #[inline]
-    fn fallible_from_trap(trap: Trap) -> Result<(), Trap> {
-        Err(trap)
-    }
-}
-
-unsafe impl<T> WasmRet for T
+unsafe impl<T> WasmHostResults for T
 where
     T: WasmTy,
 {
     type Abi = <T as WasmTy>::Abi;
+    type Retptr = ();
     type Fallible = Result<T, Trap>;
 
     fn compatible_with_store(&self, store: &Store) -> bool {
         <Self as WasmTy>::compatible_with_store(self, store)
     }
 
-    unsafe fn into_abi_for_ret(self, store: &Store) -> Result<Self::Abi, Trap> {
+    unsafe fn into_abi_for_ret(self, store: &Store, _retptr: ()) -> Result<Self::Abi, Trap> {
         Ok(<Self as WasmTy>::into_abi(self, store))
     }
 
-    fn valtype() -> Option<ValType> {
-        Some(<Self as WasmTy>::valtype())
+    fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
+        FuncType::new(params, Some(<Self as WasmTy>::valtype()))
+    }
+
+    unsafe fn wrap_trampoline(ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
+        *ptr.cast::<Self::Abi>() = f(());
     }
 
     fn into_fallible(self) -> Result<T, Trap> {
@@ -1381,26 +1331,35 @@ where
     }
 }
 
-unsafe impl<T> WasmRet for Result<T, Trap>
+unsafe impl<T> WasmHostResults for Result<T, Trap>
 where
-    T: WasmTy,
+    T: WasmHostResults,
 {
-    type Abi = <T as WasmTy>::Abi;
+    type Abi = <T as WasmHostResults>::Abi;
+    type Retptr = <T as WasmHostResults>::Retptr;
     type Fallible = Self;
 
     fn compatible_with_store(&self, store: &Store) -> bool {
         match self {
-            Ok(x) => <T as WasmTy>::compatible_with_store(x, store),
+            Ok(x) => <T as WasmHostResults>::compatible_with_store(x, store),
             Err(_) => true,
         }
     }
 
-    unsafe fn into_abi_for_ret(self, store: &Store) -> Result<Self::Abi, Trap> {
-        self.map(|val| <T as WasmTy>::into_abi(val, store))
+    unsafe fn into_abi_for_ret(
+        self,
+        store: &Store,
+        retptr: Self::Retptr,
+    ) -> Result<Self::Abi, Trap> {
+        self.and_then(|val| val.into_abi_for_ret(store, retptr))
     }
 
-    fn valtype() -> Option<ValType> {
-        Some(<T as WasmTy>::valtype())
+    fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
+        T::func_type(params)
+    }
+
+    unsafe fn wrap_trampoline(ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
+        T::wrap_trampoline(ptr, f)
     }
 
     fn into_fallible(self) -> Result<T, Trap> {
@@ -1411,6 +1370,163 @@ where
         Err(trap)
     }
 }
+
+macro_rules! impl_wasm_host_results {
+    ($n:tt $($t:ident)*) => (
+        #[allow(non_snake_case)]
+        unsafe impl<$($t),*> WasmHostResults for ($($t,)*)
+        where
+            $($t: WasmTy,)*
+            ($($t::Abi,)*): HostAbi,
+        {
+            type Abi = <($($t::Abi,)*) as HostAbi>::Abi;
+            type Retptr = <($($t::Abi,)*) as HostAbi>::Retptr;
+            type Fallible = Result<Self, Trap>;
+
+            #[inline]
+            fn compatible_with_store(&self, _store: &Store) -> bool {
+                let ($($t,)*) = self;
+                $( $t.compatible_with_store(_store) && )* true
+            }
+
+            #[inline]
+            unsafe fn into_abi_for_ret(self, _store: &Store, ptr: Self::Retptr) -> Result<Self::Abi, Trap> {
+                let ($($t,)*) = self;
+                let abi = ($($t.into_abi(_store),)*);
+                Ok(<($($t::Abi,)*) as HostAbi>::into_abi(abi, ptr))
+            }
+
+            fn func_type(params: impl Iterator<Item = ValType>) -> FuncType {
+                FuncType::new(
+                    params,
+                    std::array::IntoIter::new([$($t::valtype(),)*]),
+                )
+            }
+
+            #[allow(unused_assignments)]
+            unsafe fn wrap_trampoline(mut _ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
+                let ($($t,)*) = <($($t::Abi,)*) as HostAbi>::call(f);
+                $(
+                    *_ptr.cast() = $t;
+                    _ptr = _ptr.add(1);
+                )*
+            }
+
+            #[inline]
+            fn into_fallible(self) -> Result<Self, Trap> {
+                Ok(self)
+            }
+
+            #[inline]
+            fn fallible_from_trap(trap: Trap) -> Result<Self, Trap> {
+                Err(trap)
+            }
+        }
+    )
+}
+
+for_each_function_signature!(impl_wasm_host_results);
+
+// Internal trait representing how to communicate tuples of return values across
+// an ABI boundary. This internally corresponds to the "wasmtime" ABI inside of
+// cranelift itself. Notably the first element of each tuple is returned via the
+// typical system ABI (e.g. systemv or fastcall depending on platform) and all
+// other values are returned packed via the stack.
+//
+// This trait helps to encapsulate all the details of that.
+#[doc(hidden)]
+pub trait HostAbi {
+    // A value returned from native functions which return `Self`
+    type Abi: Copy;
+    // A return pointer, added to the end of the argument list, for native
+    // functions that return `Self`. Note that a 0-sized type here should get
+    // elided at the ABI level.
+    type Retptr: Copy;
+
+    // Converts a value of `self` into its components. Stores necessary values
+    // into `ptr` and then returns whatever needs to be returned from the
+    // function.
+    unsafe fn into_abi(self, ptr: Self::Retptr) -> Self::Abi;
+
+    // Calls `f` with a suitably sized return area and requires `f` to return
+    // the raw abi value of the first element of our tuple. This will then
+    // unpack the `Retptr` and assemble it with `Self::Abi` to return an
+    // instance of the whole tuple.
+    unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self;
+}
+
+macro_rules! impl_host_abi {
+    // Base case, everything is `()`
+    (0) => {
+        impl HostAbi for () {
+            type Abi = ();
+            type Retptr = ();
+
+            unsafe fn into_abi(self, _ptr: Self::Retptr) -> Self::Abi {}
+
+            unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
+                f(())
+            }
+        }
+    };
+
+    // In the 1-case the retptr is not present, so it's a 0-sized value.
+    (1 $a:ident) => {
+        impl<$a: Copy> HostAbi for ($a,) {
+            type Abi = $a;
+            type Retptr = ();
+
+            unsafe fn into_abi(self, _ptr: Self::Retptr) -> Self::Abi {
+                self.0
+            }
+
+            unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
+                (f(()),)
+            }
+        }
+    };
+
+    // This is where the more interesting case happens. The first element of the
+    // tuple is returned via `Abi` and all other elements are returned via
+    // `Retptr`. We create a `TupleRetNN` structure to represent all of the
+    // return values here.
+    ($n:tt $t:ident $($u:ident)*) => {paste::paste!{
+        #[doc(hidden)]
+        #[allow(non_snake_case)]
+        #[repr(C)]
+        pub struct [<TupleRet $n>]<$($u,)*> {
+            $($u: $u,)*
+        }
+
+        #[allow(non_snake_case, unused_assignments)]
+        impl<$t: Copy, $($u: Copy,)*> HostAbi for ($t, $($u,)*) {
+            type Abi = $t;
+            type Retptr = *mut [<TupleRet $n>]<$($u,)*>;
+
+            unsafe fn into_abi(self, ptr: Self::Retptr) -> Self::Abi {
+                let ($t, $($u,)*) = self;
+                // Store the tail of our tuple into the return pointer...
+                $((*ptr).$u = $u;)*
+                // ... and return the head raw.
+                $t
+            }
+
+            unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
+                // Create space to store all the return values and then invoke
+                // the function.
+                let mut space = MaybeUninit::uninit();
+                let t = f(space.as_mut_ptr());
+                let space = space.assume_init();
+
+                // Use the return value as the head of the tuple and unpack our
+                // return area to get the rest of the tuple.
+                (t, $(space.$u,)*)
+            }
+        }
+    }};
+}
+
+for_each_function_signature!(impl_host_abi);
 
 /// Internal trait implemented for all arguments that can be passed to
 /// [`Func::wrap`] and [`Config::wrap_host_func`](crate::Config::wrap_host_func).
@@ -1533,7 +1649,7 @@ macro_rules! impl_into_func {
         where
             F: Fn($($args),*) -> R + 'static,
             $($args: WasmTy,)*
-            R: WasmRet,
+            R: WasmHostResults,
         {
             fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 let f = move |_: Caller<'_>, $($args:$args),*| {
@@ -1549,7 +1665,7 @@ macro_rules! impl_into_func {
         where
             F: Fn(Caller<'_>, $($args),*) -> R + 'static,
             $($args: WasmTy,)*
-            R: WasmRet,
+            R: WasmHostResults,
         {
             fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 /// This shim is called by Wasm code, constructs a `Caller`,
@@ -1563,11 +1679,12 @@ macro_rules! impl_into_func {
                     vmctx: *mut VMContext,
                     caller_vmctx: *mut VMContext,
                     $( $args: $args::Abi, )*
+                    retptr: R::Retptr,
                 ) -> R::Abi
                 where
                     F: Fn(Caller<'_>, $( $args ),*) -> R + 'static,
                     $( $args: WasmTy, )*
-                    R: WasmRet,
+                    R: WasmHostResults,
                 {
                     enum CallResult<T> {
                         Ok(T),
@@ -1624,7 +1741,7 @@ macro_rules! impl_into_func {
                                     raise_cross_store_trap();
                                 }
 
-                                match ret.into_abi_for_ret(&store) {
+                                match ret.into_abi_for_ret(&store, retptr) {
                                     Ok(val) => CallResult::Ok(val),
                                     Err(trap) => CallResult::Trap(trap),
                                 }
@@ -1654,7 +1771,7 @@ macro_rules! impl_into_func {
                 )
                 where
                     $($args: WasmTy,)*
-                    R: WasmRet,
+                    R: WasmHostResults,
                 {
                     let ptr = mem::transmute::<
                         *const VMFunctionBody,
@@ -1662,6 +1779,7 @@ macro_rules! impl_into_func {
                             *mut VMContext,
                             *mut VMContext,
                             $( $args::Abi, )*
+                            R::Retptr,
                         ) -> R::Abi,
                     >(ptr);
 
@@ -1670,15 +1788,14 @@ macro_rules! impl_into_func {
                         let $args = *args.add(_n).cast::<$args::Abi>();
                         _n += 1;
                     )*
-                    let ret = ptr(callee_vmctx, caller_vmctx, $( $args ),*);
-                    *args.cast::<R::Abi>() = ret;
+                    R::wrap_trampoline(args, |retptr| {
+                        ptr(callee_vmctx, caller_vmctx, $( $args, )* retptr)
+                    });
                 }
 
-                let ty = FuncType::new(
+                let ty = R::func_type(
                     None::<ValType>.into_iter()
                         $(.chain(Some($args::valtype())))*
-                    ,
-                    R::valtype(),
                 );
 
                 let trampoline = host_trampoline::<$($args,)* R>;
@@ -1686,7 +1803,7 @@ macro_rules! impl_into_func {
                 // If not given a registry, use a default signature index that is guaranteed to trap
                 // if the function is called indirectly without first being associated with a store (a bug condition).
                 let shared_signature_id = registry
-                    .map(|r| r.register(ty.as_wasm_func_type(), trampoline))
+                    .map(|r| r.register(ty.as_wasm_func_type(), Some(trampoline)))
                     .unwrap_or(VMSharedSignatureIndex::default());
 
                 let instance = unsafe {
