@@ -1,5 +1,5 @@
 test compile
-target x86_64 baseline
+target x86_64 legacy baseline
 
 ; umulhi/smulhi on 64 bit operands
 

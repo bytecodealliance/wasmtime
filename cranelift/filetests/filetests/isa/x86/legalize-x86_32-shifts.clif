@@ -1,6 +1,6 @@
 test compile
 set enable_simd
-target i686 haswell
+target i686 legacy haswell
 
 function u0:1(i32) -> i64 system_v {
     block1(v0: i32):

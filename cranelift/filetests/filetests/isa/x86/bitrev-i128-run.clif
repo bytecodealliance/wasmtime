@@ -1,5 +1,5 @@
 test run
-target x86_64
+target x86_64 legacy
 
 function %reverse_bits_zero() -> b1 {
 block0:

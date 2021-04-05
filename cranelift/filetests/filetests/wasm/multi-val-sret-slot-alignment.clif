@@ -1,5 +1,5 @@
 test legalizer
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ;; Need to insert padding after the `i8`s so that the `i32` and `i64` are
 ;; aligned.

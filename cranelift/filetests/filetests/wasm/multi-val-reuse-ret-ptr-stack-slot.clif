@@ -1,5 +1,5 @@
 test legalizer
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ;; Test that we don't reuse `sret` stack slots for multiple calls. We could do
 ;; this one day, but it would require some care to ensure that we don't have

@@ -20,7 +20,10 @@ wasmtime-fuzzing = { path = "../crates/fuzzing" }
 wasm-smith = "0.4.0"
 
 [features]
-experimental_x64 = ["wasmtime-fuzzing/experimental_x64"]
+# Leave a stub feature with no side-effects in place for now: the OSS-Fuzz
+# config builds fuzz targets with this feature enabled and we don't want to
+# break the build.
+experimental_x64 = []
 
 [[bin]]
 name = "compile"

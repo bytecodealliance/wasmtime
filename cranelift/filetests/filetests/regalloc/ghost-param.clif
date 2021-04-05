@@ -1,5 +1,5 @@
 test regalloc
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; This test case would create a block parameter that was a ghost value.
 ; The coalescer would insert a copy of the ghost value, leading to verifier errors.

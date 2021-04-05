@@ -1,7 +1,7 @@
 ; legalization of stack load and store instructions on x86-64.
 test legalizer
 set opt_level=none
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %stack_load_and_store() {
            ss0 = explicit_slot 8, offset 0

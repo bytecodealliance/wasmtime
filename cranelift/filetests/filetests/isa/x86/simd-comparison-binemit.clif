@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %icmp_i8x16() {
 block0:

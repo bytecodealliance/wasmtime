@@ -1,7 +1,7 @@
 test compile
 set opt_level=speed
 set enable_pinned_reg=true
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function u0:0(i32, i32, i32, i64 vmctx) -> i64 uext system_v {
 block0(v0: i32, v1: i32, v2: i32, v3: i64):

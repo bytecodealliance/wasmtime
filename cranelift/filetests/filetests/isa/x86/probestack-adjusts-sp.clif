@@ -1,7 +1,7 @@
 test compile
 set use_colocated_libcalls=1
 set probestack_func_adjusts_sp=1
-target x86_64
+target x86_64 legacy
 
 ; Like %big in probestack.clif, but with the probestack function adjusting
 ; the stack pointer itself.

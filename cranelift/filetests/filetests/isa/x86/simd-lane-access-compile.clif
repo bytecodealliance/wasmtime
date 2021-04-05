@@ -2,7 +2,7 @@ test compile
 set opt_level=speed_and_size
 set enable_probestack=false
 set enable_simd
-target x86_64
+target x86_64 legacy
 
 ; Ensure that scalar_to_vector emits no instructions for floats (already exist in an XMM register)
 function %scalar_to_vector_f32() -> f32x4 baldrdash_system_v {

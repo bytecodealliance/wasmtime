@@ -3,7 +3,7 @@
 cargo test \
             --locked \
             --features test-programs/test_programs \
-            --features experimental_x64 \
+            --features old-x86-backend \
             --all \
             --exclude wasmtime-lightbeam \
             --exclude wasmtime-wasi-nn \

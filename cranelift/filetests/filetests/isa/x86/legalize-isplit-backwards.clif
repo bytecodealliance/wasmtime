@@ -1,5 +1,5 @@
 test compile
-target x86_64
+target x86_64 legacy
 
 function u0:0(i128) -> i64, i64 fast {
 ; check: block0(v4: i64 [%rdi], v5: i64 [%rsi], v8: i64 [%rbp]):

@@ -4,7 +4,7 @@ set enable_pinned_reg=true
 set use_pinned_reg_as_heap_base=true
 set opt_level=speed_and_size
 
-target x86_64
+target x86_64 legacy
 
 ; regex: V=v\d+
 

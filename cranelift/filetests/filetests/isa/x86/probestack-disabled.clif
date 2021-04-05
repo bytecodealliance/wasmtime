@@ -1,7 +1,7 @@
 test compile
 set use_colocated_libcalls=1
 set enable_probestack=0
-target x86_64
+target x86_64 legacy
 
 ; Like %big in probestack.clif, but with probes disabled.
 

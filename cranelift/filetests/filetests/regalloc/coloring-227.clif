@@ -1,5 +1,5 @@
 test regalloc
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %pr227(i32 [%rdi], i32 [%rsi], i32 [%rdx], i32 [%rcx], i64 vmctx [%r8]) system_v {
     gv0 = vmctx

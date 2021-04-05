@@ -1,5 +1,5 @@
 test regalloc
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %value_aliases(i32, f32, i64 vmctx) baldrdash_system_v {
     gv0 = vmctx

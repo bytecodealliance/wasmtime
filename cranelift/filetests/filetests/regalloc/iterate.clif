@@ -1,5 +1,5 @@
 test regalloc
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function u0:9(i64 [%rdi], f32 [%xmm0], f64 [%xmm1], i32 [%rsi], i32 [%rdx], i64 vmctx [%r14]) -> i64 [%rax] baldrdash_system_v {
 block0(v0: i64, v1: f32, v2: f64, v3: i32, v4: i32, v5: i64):

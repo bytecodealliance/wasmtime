@@ -1,6 +1,6 @@
 ; Test the custom legalization of ineg.i64 on x86_64.
 test legalizer
-target x86_64
+target x86_64 legacy
 
 function %ineg_legalized_i64() {
 block0:

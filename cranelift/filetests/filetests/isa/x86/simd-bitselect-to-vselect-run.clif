@@ -1,7 +1,7 @@
 test run
 set opt_level=speed_and_size
 set enable_simd
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ;; Test if bitselect->vselect optimization works properly
 

@@ -1,5 +1,5 @@
 test run
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %test_icmp_eq_i128() -> b1 {
 block0:

@@ -21,32 +21,15 @@ use std::time;
 /// When a test must be skipped, returns an Option with a string containing an explanation why;
 /// otherwise, return None.
 fn skip_feature_mismatches(testfile: &TestFile) -> Option<&'static str> {
-    let mut has_experimental_x64 = false;
     let mut has_experimental_arm32 = false;
 
     for feature in &testfile.features {
         if let Feature::With(name) = feature {
             match *name {
-                "experimental_x64" => has_experimental_x64 = true,
                 "experimental_arm32" => has_experimental_arm32 = true,
                 _ => {}
             }
         }
-    }
-
-    // On the experimental x64 backend, skip tests which are not marked with the feature and
-    // that want to run on the x86_64 target isa.
-    #[cfg(feature = "experimental_x64")]
-    if let IsaSpec::Some(ref isas) = testfile.isa_spec {
-        if isas.iter().any(|isa| isa.name() == "x64") && !has_experimental_x64 {
-            return Some("test requiring x86_64 not marked with experimental_x64");
-        }
-    }
-
-    // On other targets, ignore tests marked as experimental_x64 only.
-    #[cfg(not(feature = "experimental_x64"))]
-    if has_experimental_x64 {
-        return Some("missing support for experimental_x64");
     }
 
     // Don't run tests if the experimental support for arm32 is disabled.

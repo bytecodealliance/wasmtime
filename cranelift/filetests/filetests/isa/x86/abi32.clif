@@ -1,6 +1,6 @@
 ; Test the legalization of function signatures.
 test legalizer
-target i686
+target i686 legacy
 
 ; regex: V=v\d+
 

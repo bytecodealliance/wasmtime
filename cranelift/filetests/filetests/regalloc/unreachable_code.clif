@@ -2,7 +2,7 @@
 test compile
 
 set enable_probestack=0
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; This function contains unreachable blocks which trip up the register
 ; allocator if they don't get cleared out.

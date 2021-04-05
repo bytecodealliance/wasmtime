@@ -1,6 +1,6 @@
 test binemit
 set opt_level=speed_and_size
-target x86_64 baseline
+target x86_64 legacy baseline
 
 ; The binary encodings can be verified with the command:
 ;

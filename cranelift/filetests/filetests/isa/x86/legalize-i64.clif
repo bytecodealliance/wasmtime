@@ -1,6 +1,6 @@
 ; Test the legalization of i64 instructions on x86_32.
 test legalizer
-target i686 haswell
+target i686 legacy haswell
 
 ; regex: V=v\d+
 

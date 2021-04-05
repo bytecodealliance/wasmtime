@@ -1,7 +1,6 @@
 test compile
 set enable_probestack=true
-target x86_64
-feature "experimental_x64"
+target x86_64 machinst
 
 function %f1() -> i64 {
 ss0 = explicit_slot 100000

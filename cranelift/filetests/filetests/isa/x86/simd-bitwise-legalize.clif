@@ -1,6 +1,6 @@
 test legalizer
 set enable_simd
-target x86_64 skylake
+target x86_64 legacy skylake
 
 function %ushr_i8x16() -> i8x16 {
 block0:

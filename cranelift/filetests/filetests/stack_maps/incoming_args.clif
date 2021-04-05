@@ -1,6 +1,6 @@
 test stack_maps
 set enable_safepoints=true
-target x86_64
+target x86_64 legacy
 
 ;; Incoming args get included in stack maps.
 

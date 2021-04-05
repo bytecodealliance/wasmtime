@@ -1,6 +1,6 @@
 test compile
 set enable_probestack=false
-target i686
+target i686 legacy
 
 function u0:0(i32 vmctx) baldrdash_system_v {
     sig0 = (i32 vmctx, i32 sigid) baldrdash_system_v
