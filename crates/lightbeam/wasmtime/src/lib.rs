@@ -174,8 +174,6 @@ struct FuncEnvironment<'module_environment> {
     /// The module-level environment which this function-level environment belongs to.
     module: &'module_environment Module,
 
-    native_signatures: &'module_environment PrimaryMap<SignatureIndex, ir::Signature>,
-
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
@@ -189,7 +187,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         Self {
             module: &translation.module,
             offsets: VMOffsets::new(pointer_bytes, &translation.module),
-            native_signatures: &types.native_signatures,
         }
     }
 }
@@ -227,8 +224,8 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
         self.module.functions[FuncIndex::from_u32(func_idx)].as_u32()
     }
 
-    fn signature(&self, index: u32) -> &Self::Signature {
-        &self.native_signatures[SignatureIndex::from_u32(index)]
+    fn signature(&self, _index: u32) -> &Self::Signature {
+        panic!("not impleemnted")
     }
 
     fn defined_table_index(&self, table_index: u32) -> Option<u32> {
