@@ -550,6 +550,7 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))]
 fn typed_multiple_results() -> anyhow::Result<()> {
     let store = Store::default();
     let module = Module::new(
@@ -621,6 +622,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))]
 fn wrap_multiple_results() -> anyhow::Result<()> {
     fn test<T>(store: &Store, t: T) -> anyhow::Result<()>
     where

@@ -6,7 +6,6 @@ use std::cmp::max;
 use std::fmt;
 use std::future::Future;
 use std::mem;
-use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::pin::Pin;
 use std::ptr::{self, NonNull};
@@ -1490,14 +1489,20 @@ macro_rules! impl_host_abi {
     // tuple is returned via `Abi` and all other elements are returned via
     // `Retptr`. We create a `TupleRetNN` structure to represent all of the
     // return values here.
+    //
+    // Also note that this isn't implemented for the old backend right now due
+    // to the original author not really being sure how to implement this in the
+    // old backend.
     ($n:tt $t:ident $($u:ident)*) => {paste::paste!{
         #[doc(hidden)]
         #[allow(non_snake_case)]
         #[repr(C)]
+        #[cfg(not(feature = "old-x86-backend"))]
         pub struct [<TupleRet $n>]<$($u,)*> {
             $($u: $u,)*
         }
 
+        #[cfg(not(feature = "old-x86-backend"))]
         #[allow(non_snake_case, unused_assignments)]
         impl<$t: Copy, $($u: Copy,)*> HostAbi for ($t, $($u,)*) {
             type Abi = $t;
@@ -1514,7 +1519,7 @@ macro_rules! impl_host_abi {
             unsafe fn call(f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
                 // Create space to store all the return values and then invoke
                 // the function.
-                let mut space = MaybeUninit::uninit();
+                let mut space = std::mem::MaybeUninit::uninit();
                 let t = f(space.as_mut_ptr());
                 let space = space.assume_init();
 
