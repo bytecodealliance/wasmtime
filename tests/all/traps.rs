@@ -27,6 +27,7 @@ fn test_trap_return() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn test_trap_trace() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -64,6 +65,7 @@ fn test_trap_trace() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn test_trap_trace_cb() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -95,6 +97,7 @@ fn test_trap_trace_cb() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn test_trap_stack_overflow() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -122,6 +125,7 @@ fn test_trap_stack_overflow() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn trap_display_pretty() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -153,6 +157,7 @@ wasm backtrace:
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn trap_display_multi_module() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -358,6 +363,7 @@ fn call_signature_mismatch() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn start_trap_pretty() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -391,6 +397,7 @@ wasm backtrace:
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn present_after_module_drop() -> Result<()> {
     let store = Store::default();
     let module = Module::new(store.engine(), r#"(func (export "foo") unreachable)"#)?;
@@ -474,6 +481,7 @@ fn rustc(src: &str) -> Vec<u8> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn parse_dwarf_info() -> Result<()> {
     let wasm = rustc(
         "
@@ -516,6 +524,7 @@ fn parse_dwarf_info() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn no_hint_even_with_dwarf_info() -> Result<()> {
     let mut config = Config::new();
     config.wasm_backtrace_details(WasmBacktraceDetails::Disable);
@@ -548,6 +557,7 @@ wasm backtrace:
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn hint_with_dwarf_info() -> Result<()> {
     // Skip this test if the env var is already configure, but in CI we're sure
     // to run tests without this env var configured.
