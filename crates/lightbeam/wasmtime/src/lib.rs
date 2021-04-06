@@ -221,7 +221,7 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
     }
 
     fn signature(&self, _index: u32) -> &Self::Signature {
-        panic!("not impleemnted")
+        panic!("not implemented")
     }
 
     fn defined_table_index(&self, table_index: u32) -> Option<u32> {
