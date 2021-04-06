@@ -1341,7 +1341,9 @@ mod test {
         assert_eq!(instances.offsets.num_defined_tables, 1);
         assert_eq!(instances.offsets.num_defined_memories, 1);
         assert_eq!(instances.offsets.num_defined_globals, 0);
-        assert_eq!(instances.instance_size, 4096);
+        // As of April 2021, the instance struct's size is largely below the size of a single page,
+        // so it's safe to assume it's been rounded to the size of a single memory page here.
+        assert_eq!(instances.instance_size, region::page::size());
         assert_eq!(instances.max_instances, 3);
 
         assert_eq!(&*instances.free_list.lock().unwrap(), &[0, 1, 2]);
@@ -1477,10 +1479,12 @@ mod test {
             },
         )?;
 
-        assert_eq!(pool.table_size, 4096);
+        let host_page_size = region::page::size();
+
+        assert_eq!(pool.table_size, host_page_size);
         assert_eq!(pool.max_tables, 4);
         assert_eq!(pool.max_instances, 7);
-        assert_eq!(pool.page_size, 4096);
+        assert_eq!(pool.page_size, host_page_size);
         assert_eq!(pool.max_elements, 100);
 
         let base = pool.mapping.as_ptr() as usize;
@@ -1512,9 +1516,10 @@ mod test {
             1,
         )?;
 
-        assert_eq!(pool.stack_size, 8192);
+        let native_page_size = region::page::size();
+        assert_eq!(pool.stack_size, 2 * native_page_size);
         assert_eq!(pool.max_instances, 10);
-        assert_eq!(pool.page_size, 4096);
+        assert_eq!(pool.page_size, native_page_size);
 
         assert_eq!(
             &*pool.free_list.lock().unwrap(),
