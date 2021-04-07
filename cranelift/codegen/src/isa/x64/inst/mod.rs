@@ -14,7 +14,7 @@ use regalloc::{
     PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
     RegUsageMapper, SpillSlot, VirtualReg, Writable,
 };
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::{String, ToString};
 
@@ -502,7 +502,11 @@ pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
 }
 
 impl Inst {
-    fn isa_requirement(&self) -> Option<InstructionSet> {
+    /// Retrieve a list of ISA feature sets in which the instruction is available. An empty list
+    /// indicates that the instruction is available in the baseline feature set (i.e. SSE2 and
+    /// below); more than one `InstructionSet` in the list indicates that the instruction is present
+    /// *any* of the included ISA feature sets.
+    fn available_in_any_isa(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
             // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
             // don't have to be checked.
@@ -555,7 +559,7 @@ impl Inst {
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
             | Inst::ValueLabelMarker { .. }
-            | Inst::Unwind { .. } => None,
+            | Inst::Unwind { .. } => smallvec![],
 
             Inst::UnaryRmR { op, .. } => op.available_from(),
 
@@ -566,7 +570,7 @@ impl Inst {
             | Inst::XmmRmR { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
-            | Inst::XmmUnaryRmR { op, .. } => Some(op.available_from()),
+            | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
         }
     }
 }
