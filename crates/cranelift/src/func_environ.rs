@@ -215,8 +215,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
         if self.module.is_imported_memory(index) {
             (
-                self.builtin_function_signatures
-                    .memory32_size(func),
+                self.builtin_function_signatures.memory32_size(func),
                 index.index(),
                 BuiltinFunctionIndex::memory32_size(),
             )
