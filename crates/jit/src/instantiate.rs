@@ -8,9 +8,11 @@ use crate::compiler::{Compilation, Compiler};
 use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
 use object::File as ObjectFile;
+use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
@@ -195,9 +197,17 @@ pub struct TypeTables {
 
 /// Container for data needed for an Instance function to exist.
 pub struct ModuleCode {
+    range: (usize, usize),
     code_memory: CodeMemory,
     #[allow(dead_code)]
     dbg_jit_registration: Option<GdbJitImageRegistration>,
+}
+
+impl ModuleCode {
+    /// Gets the [begin, end) range of the module's code.
+    pub fn range(&self) -> (usize, usize) {
+        self.range
+    }
 }
 
 /// A compiled wasm module, ready to be instantiated.
@@ -206,6 +216,7 @@ pub struct CompiledModule {
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
     trampolines: Vec<(SignatureIndex, VMTrampoline)>,
+    func_map: OnceCell<BTreeMap<usize, (usize, DefinedFuncIndex)>>,
 }
 
 impl CompiledModule {
@@ -259,15 +270,19 @@ impl CompiledModule {
         };
 
         let finished_functions = FinishedFunctions(finished_functions);
+        let start = code_range.0 as usize;
+        let end = start + code_range.1;
 
         Ok(Arc::new(Self {
             artifacts,
             code: Arc::new(ModuleCode {
+                range: (start, end),
                 code_memory,
                 dbg_jit_registration,
             }),
             finished_functions,
             trampolines,
+            func_map: Default::default(),
         }))
     }
 
@@ -312,25 +327,45 @@ impl CompiledModule {
         )
     }
 
-    /// Iterates over all functions in this module, returning information about
-    /// how to decode traps which happen in the function.
-    pub fn trap_information(
-        &self,
-    ) -> impl Iterator<
-        Item = (
-            DefinedFuncIndex,
-            *mut [VMFunctionBody],
-            &[TrapInformation],
-            &FunctionAddressMap,
-        ),
-    > {
-        self.finished_functions()
-            .iter()
-            .zip(self.artifacts.funcs.values())
-            .map(|((i, alloc), func)| (i, *alloc, func.traps.as_slice(), &func.address_map))
+    /// Gets the function map of the compiled module.
+    ///
+    /// The map is from ending address (inclusive) to a tuple of starting address and
+    /// defined function index.
+    ///
+    /// The map is lazily-initialized, so it will be populated the first time this
+    /// method is called.
+    pub fn func_map(&self) -> &BTreeMap<usize, (usize, DefinedFuncIndex)> {
+        self.func_map.get_or_init(|| {
+            let mut functions = BTreeMap::new();
+            for (index, allocated) in self.finished_functions().iter() {
+                let (start, end) = unsafe {
+                    let ptr = (**allocated).as_ptr();
+                    let len = (**allocated).len();
+                    // First and last byte of the function text.
+                    (ptr as usize, ptr as usize + len - 1)
+                };
+
+                // Finished functions cannot be empty
+                assert!(start <= end);
+                assert!(functions.insert(end, (start, index)).is_none());
+            }
+
+            functions
+        })
     }
 
-    /// Returns all ranges convered by JIT code.
+    /// Gets the function information for a given function index.
+    pub fn func_info(
+        &self,
+        index: DefinedFuncIndex,
+    ) -> Option<(&FunctionAddressMap, &[TrapInformation])> {
+        self.artifacts
+            .funcs
+            .get(index)
+            .map(|f| (&f.address_map, f.traps.as_ref()))
+    }
+
+    /// Returns all ranges covered by JIT code.
     pub fn jit_code_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
         self.code.code_memory.published_ranges()
     }

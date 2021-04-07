@@ -3407,6 +3407,7 @@ dependencies = [
  "log",
  "more-asserts",
  "object",
+ "once_cell",
  "rayon",
  "region",
  "serde",

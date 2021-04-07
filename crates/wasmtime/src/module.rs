@@ -436,7 +436,7 @@ impl Module {
         }
     }
 
-    pub(crate) fn compiled_module(&self) -> &CompiledModule {
+    pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
         &self.inner.module
     }
 
