@@ -8,11 +8,9 @@ use crate::compiler::{Compilation, Compiler};
 use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
 use object::File as ObjectFile;
-use once_cell::sync::OnceCell;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
@@ -216,7 +214,6 @@ pub struct CompiledModule {
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
     trampolines: Vec<(SignatureIndex, VMTrampoline)>,
-    func_map: OnceCell<BTreeMap<usize, (usize, DefinedFuncIndex)>>,
 }
 
 impl CompiledModule {
@@ -282,7 +279,6 @@ impl CompiledModule {
             }),
             finished_functions,
             trampolines,
-            func_map: Default::default(),
         }))
     }
 
@@ -327,42 +323,50 @@ impl CompiledModule {
         )
     }
 
-    /// Gets the function map of the compiled module.
+    /// Lookups a defined function by a program counter value.
     ///
-    /// The map is from ending address (inclusive) to a tuple of starting address and
-    /// defined function index.
-    ///
-    /// The map is lazily-initialized, so it will be populated the first time this
-    /// method is called.
-    pub fn func_map(&self) -> &BTreeMap<usize, (usize, DefinedFuncIndex)> {
-        self.func_map.get_or_init(|| {
-            let mut functions = BTreeMap::new();
-            for (index, allocated) in self.finished_functions().iter() {
-                let (start, end) = unsafe {
-                    let ptr = (**allocated).as_ptr();
-                    let len = (**allocated).len();
-                    // First and last byte of the function text.
-                    (ptr as usize, ptr as usize + len - 1)
-                };
+    /// Returns the defined function index, the start address, and the end address (exclusive).
+    pub fn func_by_pc(&self, pc: usize) -> Option<(DefinedFuncIndex, usize, usize)> {
+        let functions = self.finished_functions();
 
-                // Finished functions cannot be empty
-                assert!(start <= end);
-                assert!(functions.insert(end, (start, index)).is_none());
+        let index = match functions.binary_search_values_by_key(&pc, |body| unsafe {
+            debug_assert!(!(**body).is_empty());
+            // Return the inclusive "end" of the function
+            (**body).as_ptr() as usize + (**body).len() - 1
+        }) {
+            Ok(k) => {
+                // Exact match, pc is at the end of this function
+                k
             }
+            Err(k) => {
+                // Not an exact match, k is where `pc` would be "inserted"
+                // Since we key based on the end, function `k` might contain `pc`,
+                // so we'll validate on the range check below
+                k
+            }
+        };
 
-            functions
-        })
+        let body = functions.get(index)?;
+        let (start, end) = unsafe {
+            let ptr = (**body).as_ptr();
+            let len = (**body).len();
+            (ptr as usize, ptr as usize + len)
+        };
+
+        if pc < start || end < pc {
+            return None;
+        }
+
+        Some((index, start, end))
     }
 
     /// Gets the function information for a given function index.
-    pub fn func_info(
-        &self,
-        index: DefinedFuncIndex,
-    ) -> Option<(&FunctionAddressMap, &[TrapInformation])> {
+    pub fn func_info(&self, index: DefinedFuncIndex) -> (&FunctionAddressMap, &[TrapInformation]) {
         self.artifacts
             .funcs
             .get(index)
             .map(|f| (&f.address_map, f.traps.as_ref()))
+            .expect("defined function should be present")
     }
 
     /// Returns all ranges covered by JIT code.
@@ -489,25 +493,33 @@ fn build_code_memory(
 
     let allocation = code_memory.allocate_for_object(&obj, unwind_info)?;
 
-    // Second, create a PrimaryMap from result vector of pointers.
-    let mut finished_functions = PrimaryMap::new();
+    // Populate the finished functions from the allocation
+    let mut finished_functions = PrimaryMap::with_capacity(allocation.funcs_len());
     for (i, fat_ptr) in allocation.funcs() {
+        let start = fat_ptr.as_ptr() as usize;
         let fat_ptr: *mut [VMFunctionBody] = fat_ptr;
+        // Assert that the function bodies are pushed in sort order
+        // This property is relied upon to search for functions by PC values
+        assert!(
+            start
+                > finished_functions
+                    .last()
+                    .map(|f: &*mut [VMFunctionBody]| unsafe { (**f).as_ptr() as usize })
+                    .unwrap_or(0)
+        );
         assert_eq!(
             Some(finished_functions.push(fat_ptr)),
             module.defined_func_index(i)
         );
     }
 
-    let trampolines = allocation
-        .trampolines()
-        .map(|(i, fat_ptr)| {
-            let fnptr = unsafe {
-                std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr())
-            };
-            (i, fnptr)
-        })
-        .collect();
+    // Populate the trampolines from the allocation
+    let mut trampolines = Vec::with_capacity(allocation.trampolines_len());
+    for (i, fat_ptr) in allocation.trampolines() {
+        let fnptr =
+            unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr()) };
+        trampolines.push((i, fnptr));
+    }
 
     let code_range = allocation.code_range();
 

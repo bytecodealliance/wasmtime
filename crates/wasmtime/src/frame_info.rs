@@ -132,7 +132,7 @@ impl ModuleFrameInfo {
     /// if no information can be found.
     pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
         let (index, offset) = self.func(pc)?;
-        let (addr_map, _) = self.module.func_info(index)?;
+        let (addr_map, _) = self.module.func_info(index);
         let pos = Self::instr_pos(offset, addr_map);
 
         // In debug mode for now assert that we found a mapping for `pc` within
@@ -200,7 +200,7 @@ impl ModuleFrameInfo {
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
         let (index, offset) = self.func(pc)?;
-        let (_, traps) = self.module.func_info(index)?;
+        let (_, traps) = self.module.func_info(index);
         let idx = traps
             .binary_search_by_key(&offset, |info| info.code_offset)
             .ok()?;
@@ -208,13 +208,8 @@ impl ModuleFrameInfo {
     }
 
     fn func(&self, pc: usize) -> Option<(DefinedFuncIndex, u32)> {
-        let (end, (start, index)) = self.module.func_map().range(pc..).next()?;
-
-        if pc < *start || *end < pc {
-            return None;
-        }
-
-        Some((*index, (pc - *start) as u32))
+        let (index, start, _) = self.module.func_by_pc(pc)?;
+        Some((index, (pc - start) as u32))
     }
 
     fn instr_pos(offset: u32, addr_map: &FunctionAddressMap) -> Option<usize> {
@@ -286,7 +281,7 @@ impl GlobalFrameInfo {
 
                 match info.module.func(pc) {
                     Some((index, offset)) => {
-                        let (addr_map, _) = info.module.module.func_info(index).unwrap();
+                        let (addr_map, _) = info.module.module.func_info(index);
                         ModuleFrameInfo::instr_pos(offset, addr_map).is_some()
                     }
                     None => false,
