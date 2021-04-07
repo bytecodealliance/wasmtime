@@ -18,6 +18,7 @@ use wasmtime_jit::trampoline::{
     self, binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
 };
 use wasmtime_jit::CodeMemory;
+use wasmtime_jit::{blank_sig, wasmtime_call_conv};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     OnDemandInstanceAllocator, VMContext, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
@@ -91,16 +92,7 @@ fn make_trampoline(
     // Mostly reverse copy of the similar method from wasmtime's
     // wasmtime-jit/src/compiler.rs.
     let pointer_type = isa.pointer_type();
-    let mut stub_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
-
-    // Add the caller/callee `vmctx` parameters.
-    stub_sig.params.push(ir::AbiParam::special(
-        pointer_type,
-        ir::ArgumentPurpose::VMContext,
-    ));
-
-    // Add the caller `vmctx` parameter.
-    stub_sig.params.push(ir::AbiParam::new(pointer_type));
+    let mut stub_sig = blank_sig(isa, wasmtime_call_conv(isa));
 
     // Add the `values_vec` parameter.
     stub_sig.params.push(ir::AbiParam::new(pointer_type));
@@ -220,8 +212,15 @@ fn create_function_trampoline(
     // reference types which requires safepoints.
     let isa = config.target_isa_with_reference_types();
 
-    let pointer_type = isa.pointer_type();
-    let sig = ft.get_wasmtime_signature(pointer_type);
+    let mut sig = blank_sig(&*isa, wasmtime_call_conv(&*isa));
+    sig.params.extend(
+        ft.params()
+            .map(|p| ir::AbiParam::new(p.get_wasmtime_type())),
+    );
+    sig.returns.extend(
+        ft.results()
+            .map(|p| ir::AbiParam::new(p.get_wasmtime_type())),
+    );
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
@@ -271,7 +270,7 @@ pub fn create_function(
     // If there is no signature registry, use the default signature index which is
     // guaranteed to trap if there is ever an indirect call on the function (should not happen)
     let shared_signature_id = registry
-        .map(|r| r.register(ft.as_wasm_func_type(), trampoline))
+        .map(|r| r.register(ft.as_wasm_func_type(), Some(trampoline)))
         .unwrap_or(VMSharedSignatureIndex::default());
 
     unsafe {

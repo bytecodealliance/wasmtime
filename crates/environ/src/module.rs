@@ -2,12 +2,11 @@
 
 use crate::tunables::Tunables;
 use crate::WASM_MAX_PAGES;
-use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::*;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -367,6 +366,10 @@ pub struct Module {
 
     /// The type of each nested wasm module this module contains.
     pub modules: PrimaryMap<ModuleIndex, ModuleTypeIndex>,
+
+    /// The set of defined functions within this module which are located in
+    /// element segments.
+    pub possibly_exported_funcs: HashSet<DefinedFuncIndex>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
@@ -564,7 +567,6 @@ impl Module {
 #[allow(missing_docs)]
 pub struct TypeTables {
     pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-    pub native_signatures: PrimaryMap<SignatureIndex, ir::Signature>,
     pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
     pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
 }

@@ -647,7 +647,8 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
                 || call_conv == isa::CallConv::Cold
                 || call_conv.extends_baldrdash()
                 || call_conv.extends_windows_fastcall()
-                || call_conv == isa::CallConv::AppleAarch64,
+                || call_conv == isa::CallConv::AppleAarch64
+                || call_conv == isa::CallConv::WasmtimeSystemV,
             "Unsupported calling convention: {:?}",
             call_conv
         );
@@ -1369,18 +1370,6 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         .into_iter()
         .next()
         .unwrap()
-    }
-
-    fn unwind_info_kind(&self) -> UnwindInfoKind {
-        match self.sig.call_conv {
-            #[cfg(feature = "unwind")]
-            isa::CallConv::Fast | isa::CallConv::Cold | isa::CallConv::SystemV => {
-                UnwindInfoKind::SystemV
-            }
-            #[cfg(feature = "unwind")]
-            isa::CallConv::WindowsFastcall => UnwindInfoKind::Windows,
-            _ => UnwindInfoKind::None,
-        }
     }
 }
 

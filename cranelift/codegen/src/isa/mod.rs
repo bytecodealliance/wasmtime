@@ -57,7 +57,7 @@ use crate::flowgraph;
 use crate::ir;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::MachBackend;
+use crate::machinst::{MachBackend, UnwindInfoKind};
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
@@ -68,7 +68,7 @@ use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use core::hash::Hasher;
-use target_lexicon::{triple, Architecture, PointerWidth, Triple};
+use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
 use thiserror::Error;
 
 #[cfg(feature = "riscv")]
@@ -475,6 +475,18 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// IntCC condition for Unsigned Subtraction Overflow (Borrow/Carry).
     fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC;
+
+    /// Returns the flavor of unwind information emitted for this target.
+    fn unwind_info_kind(&self) -> UnwindInfoKind {
+        match self.triple().operating_system {
+            #[cfg(feature = "unwind")]
+            OperatingSystem::Windows => UnwindInfoKind::Windows,
+            #[cfg(feature = "unwind")]
+            _ => UnwindInfoKind::SystemV,
+            #[cfg(not(feature = "unwind"))]
+            _ => UnwindInfoKind::None,
+        }
+    }
 
     /// Creates unwind information for the function.
     ///

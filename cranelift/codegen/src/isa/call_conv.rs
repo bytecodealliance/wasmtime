@@ -29,6 +29,16 @@ pub enum CallConv {
     Baldrdash2020,
     /// Specialized convention for the probestack function.
     Probestack,
+    /// Wasmtime equivalent of SystemV, not ABI-stable.
+    ///
+    /// Currently only differs in how multiple return values are handled,
+    /// returning the first return value in a register and everything else
+    /// through a return-pointer.
+    WasmtimeSystemV,
+    /// Wasmtime equivalent of WindowsFastcall, not ABI-stable.
+    ///
+    /// Differs from fastcall in the same way as `WasmtimeSystemV`.
+    WasmtimeFastcall,
 }
 
 impl CallConv {
@@ -63,7 +73,7 @@ impl CallConv {
     /// Is the calling convention extending the Windows Fastcall ABI?
     pub fn extends_windows_fastcall(self) -> bool {
         match self {
-            Self::WindowsFastcall | Self::BaldrdashWindows => true,
+            Self::WindowsFastcall | Self::BaldrdashWindows | Self::WasmtimeFastcall => true,
             _ => false,
         }
     }
@@ -72,6 +82,14 @@ impl CallConv {
     pub fn extends_baldrdash(self) -> bool {
         match self {
             Self::BaldrdashSystemV | Self::BaldrdashWindows | Self::Baldrdash2020 => true,
+            _ => false,
+        }
+    }
+
+    /// Is the calling convention extending the Wasmtime ABI?
+    pub fn extends_wasmtime(self) -> bool {
+        match self {
+            Self::WasmtimeSystemV | Self::WasmtimeFastcall => true,
             _ => false,
         }
     }
@@ -89,6 +107,8 @@ impl fmt::Display for CallConv {
             Self::BaldrdashWindows => "baldrdash_windows",
             Self::Baldrdash2020 => "baldrdash_2020",
             Self::Probestack => "probestack",
+            Self::WasmtimeSystemV => "wasmtime_system_v",
+            Self::WasmtimeFastcall => "wasmtime_fastcall",
         })
     }
 }
@@ -106,6 +126,8 @@ impl str::FromStr for CallConv {
             "baldrdash_windows" => Ok(Self::BaldrdashWindows),
             "baldrdash_2020" => Ok(Self::Baldrdash2020),
             "probestack" => Ok(Self::Probestack),
+            "wasmtime_system_v" => Ok(Self::WasmtimeSystemV),
+            "wasmtime_fastcall" => Ok(Self::WasmtimeFastcall),
             _ => Err(()),
         }
     }

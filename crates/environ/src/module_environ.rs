@@ -4,14 +4,14 @@ use crate::module::{
 };
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, Alias, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType,
-    FuncIndex, Global, GlobalIndex, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex,
-    ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex, TargetEnvironment, TypeIndex,
-    WasmError, WasmFuncType, WasmResult,
+    FuncIndex, Global, GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, Memory,
+    MemoryIndex, ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex,
+    TargetEnvironment, TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
@@ -357,6 +357,15 @@ impl<'data> ModuleEnvironment<'data> {
             .module_signatures
             .push(ModuleSignature { imports, exports })
     }
+
+    fn flag_func_possibly_exported(&mut self, func: FuncIndex) {
+        if func.is_reserved_value() {
+            return;
+        }
+        if let Some(idx) = self.result.module.defined_func_index(func) {
+            self.result.module.possibly_exported_funcs.insert(idx);
+        }
+    }
 }
 
 impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
@@ -375,21 +384,17 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_types(&mut self, num: u32) -> WasmResult<()> {
         let num = usize::try_from(num).unwrap();
         self.result.module.types.reserve(num);
-        self.types.native_signatures.reserve(num);
         self.types.wasm_signatures.reserve(num);
         Ok(())
     }
 
-    fn declare_type_func(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_type_func(&mut self, wasm: WasmFuncType) -> WasmResult<()> {
         // Deduplicate wasm function signatures through `interned_func_types`,
         // which also deduplicates across wasm modules with module linking.
         let sig_index = match self.interned_func_types.get(&wasm) {
             Some(idx) => *idx,
             None => {
-                let sig = translate_signature(sig, self.pointer_type());
-                let sig_index = self.types.native_signatures.push(sig);
-                let sig_index2 = self.types.wasm_signatures.push(wasm.clone());
-                debug_assert_eq!(sig_index, sig_index2);
+                let sig_index = self.types.wasm_signatures.push(wasm.clone());
                 self.interned_func_types.insert(wasm, sig_index);
                 sig_index
             }
@@ -641,6 +646,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_global(&mut self, global: Global) -> WasmResult<()> {
+        if let GlobalInit::RefFunc(index) = global.initializer {
+            self.flag_func_possibly_exported(index);
+        }
         self.result.module.globals.push(global);
         Ok(())
     }
@@ -654,6 +662,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) -> WasmResult<()> {
+        self.flag_func_possibly_exported(func_index);
         self.declare_export(EntityIndex::Function(func_index), name)
     }
 
@@ -678,6 +687,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
+        self.flag_func_possibly_exported(func_index);
         debug_assert!(self.result.module.start_func.is_none());
         self.result.module.start_func = Some(func_index);
         Ok(())
@@ -698,6 +708,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         offset: usize,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
+        for element in elements.iter() {
+            self.flag_func_possibly_exported(*element);
+        }
         self.result
             .module
             .table_initializers
@@ -715,6 +728,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         elem_index: ElemIndex,
         segments: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
+        for element in segments.iter() {
+            self.flag_func_possibly_exported(*element);
+        }
         let index = self.result.module.passive_elements.len();
         self.result.module.passive_elements.push(segments);
         let old = self
@@ -1069,16 +1085,4 @@ and for re-adding support for interface types you can see this issue:
 
         Ok(())
     }
-}
-
-/// Add environment-specific function parameters.
-pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir::Signature {
-    // Prepend the vmctx argument.
-    sig.params.insert(
-        0,
-        AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
-    );
-    // Prepend the caller vmctx argument.
-    sig.params.insert(1, AbiParam::new(pointer_type));
-    sig
 }

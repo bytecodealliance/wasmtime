@@ -15,12 +15,13 @@ use crate::translation_utils::{
     DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
     Table, TableIndex, TypeIndex,
 };
+use crate::WasmType;
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, InstBuilder};
-use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_codegen::isa::{CallConv, TargetFrontendConfig};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use std::boxed::Box;
@@ -660,7 +661,25 @@ impl TargetEnvironment for DummyEnvironment {
 }
 
 impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
-    fn declare_type_func(&mut self, _wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
+    fn declare_type_func(&mut self, wasm: WasmFuncType) -> WasmResult<()> {
+        let mut sig = ir::Signature::new(CallConv::Fast);
+        let mut cvt = |ty: &WasmType| {
+            let reference_type = match self.pointer_type() {
+                ir::types::I32 => ir::types::R32,
+                ir::types::I64 => ir::types::R64,
+                _ => panic!("unsupported pointer type"),
+            };
+            ir::AbiParam::new(match ty {
+                WasmType::I32 => ir::types::I32,
+                WasmType::I64 => ir::types::I64,
+                WasmType::F32 => ir::types::F32,
+                WasmType::F64 => ir::types::F64,
+                WasmType::V128 => ir::types::I8X16,
+                WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => reference_type,
+            })
+        };
+        sig.params.extend(wasm.params.iter().map(&mut cvt));
+        sig.returns.extend(wasm.returns.iter().map(&mut cvt));
         self.info.signatures.push(sig);
         Ok(())
     }

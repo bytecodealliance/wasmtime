@@ -4,20 +4,20 @@ use cranelift_codegen::ir::condcodes::*;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{AbiParam, ArgumentPurpose, Function, InstBuilder, Signature};
-use cranelift_codegen::isa::{self, TargetFrontendConfig};
-use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_codegen::isa::{self, TargetFrontendConfig, TargetIsa};
+use cranelift_entity::EntityRef;
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
 use cranelift_wasm::{
-    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex,
-    SignatureIndex, TableIndex, TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
+    self, FuncIndex, FuncTranslationState, GlobalIndex, GlobalVariable, MemoryIndex, TableIndex,
+    TargetEnvironment, TypeIndex, WasmError, WasmResult, WasmType,
 };
 use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, TableStyle, Tunables, VMOffsets,
-    INTERRUPTED, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, TableStyle, Tunables, TypeTables,
+    VMOffsets, INTERRUPTED, WASM_PAGE_SIZE,
 };
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
@@ -109,14 +109,9 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 
 /// The `FuncEnvironment` implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
-    /// Target-specified configuration.
-    target_config: TargetFrontendConfig,
-
-    /// The module-level environment which this function-level environment belongs to.
+    isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
-
-    /// The native signatures for each type signature in this module
-    native_signatures: &'module_environment PrimaryMap<SignatureIndex, ir::Signature>,
+    types: &'module_environment TypeTables,
 
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
@@ -146,27 +141,27 @@ pub struct FuncEnvironment<'module_environment> {
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
-        target_config: TargetFrontendConfig,
+        isa: &'module_environment (dyn TargetIsa + 'module_environment),
         module: &'module_environment Module,
-        native_signatures: &'module_environment PrimaryMap<SignatureIndex, ir::Signature>,
+        types: &'module_environment TypeTables,
         tunables: &'module_environment Tunables,
     ) -> Self {
         let builtin_function_signatures = BuiltinFunctionSignatures::new(
-            target_config.pointer_type(),
-            match target_config.pointer_type() {
+            isa.pointer_type(),
+            match isa.pointer_type() {
                 ir::types::I32 => ir::types::R32,
                 ir::types::I64 => ir::types::R64,
                 _ => panic!(),
             },
-            target_config.default_call_conv,
+            crate::wasmtime_call_conv(isa),
         );
         Self {
-            target_config,
+            isa,
             module,
-            native_signatures,
+            types,
             vmctx: None,
             builtin_function_signatures,
-            offsets: VMOffsets::new(target_config.pointer_bytes(), module),
+            offsets: VMOffsets::new(isa.pointer_bytes(), module),
             tunables,
             fuel_var: Variable::new(0),
             vminterrupts_ptr: Variable::new(0),
@@ -178,7 +173,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn pointer_type(&self) -> ir::Type {
-        self.target_config.pointer_type()
+        self.isa.pointer_type()
     }
 
     fn vmctx(&mut self, func: &mut Function) -> ir::GlobalValue {
@@ -680,7 +675,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
     fn target_config(&self) -> TargetFrontendConfig {
-        self.target_config
+        self.isa.frontend_config()
     }
 
     fn reference_type(&self, ty: WasmType) -> ir::Type {
@@ -1339,7 +1334,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         let index = self.module.types[index].unwrap_function();
-        Ok(func.import_signature(self.native_signatures[index].clone()))
+        let sig = crate::indirect_signature(self.isa, self.types, index);
+        Ok(func.import_signature(sig))
     }
 
     fn make_direct_func(
@@ -1347,8 +1343,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sig_index = self.module.functions[index];
-        let sig = self.native_signatures[sig_index].clone();
+        let sig = crate::func_signature(self.isa, self.module, self.types, index);
         let signature = func.import_signature(sig);
         let name = get_func_name(index);
         Ok(func.import_function(ir::ExtFuncData {

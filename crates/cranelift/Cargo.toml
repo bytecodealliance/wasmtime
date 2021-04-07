@@ -18,3 +18,4 @@ cranelift-codegen = { path = "../../cranelift/codegen", version = "0.73.0" }
 cranelift-frontend = { path = "../../cranelift/frontend", version = "0.73.0" }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.73.0" }
 wasmparser = "0.77.0"
+target-lexicon = "0.12"

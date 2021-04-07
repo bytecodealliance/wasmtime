@@ -90,16 +90,18 @@
 
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use cranelift_codegen::ir::{self, ExternalName};
+use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_codegen::machinst::buffer::MachSrcLoc;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{binemit, isa, Context};
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, SignatureIndex, WasmType};
 use std::convert::TryFrom;
 use std::sync::Mutex;
+use target_lexicon::CallingConvention;
 use wasmtime_environ::{
     CompileError, CompiledFunction, Compiler, FunctionAddressMap, FunctionBodyData,
-    InstructionAddressMap, ModuleTranslation, Relocation, RelocationTarget, StackMapInformation,
-    TrapInformation, Tunables, TypeTables,
+    InstructionAddressMap, Module, ModuleTranslation, Relocation, RelocationTarget,
+    StackMapInformation, TrapInformation, Tunables, TypeTables,
 };
 
 mod func_environ;
@@ -354,18 +356,12 @@ impl Compiler for Cranelift {
         let func_index = module.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
-        let sig_index = module.functions[func_index];
-        context.func.signature = types.native_signatures[sig_index].clone();
+        context.func.signature = func_signature(isa, module, types, func_index);
         if tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(
-            isa.frontend_config(),
-            module,
-            &types.native_signatures,
-            tunables,
-        );
+        let mut func_env = FuncEnvironment::new(isa, module, types, tunables);
 
         // We use these as constant offsets below in
         // `stack_limit_from_arguments`, so assert their values here. This
@@ -456,4 +452,84 @@ impl Compiler for Cranelift {
             stack_maps: stack_map_sink.finish(),
         })
     }
+}
+
+pub fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
+    let pointer_type = isa.pointer_type();
+    let mut sig = ir::Signature::new(call_conv);
+    // Add the caller/callee `vmctx` parameters.
+    sig.params.push(ir::AbiParam::special(
+        pointer_type,
+        ir::ArgumentPurpose::VMContext,
+    ));
+    sig.params.push(ir::AbiParam::new(pointer_type));
+    return sig;
+}
+
+pub fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
+    match isa.triple().default_calling_convention() {
+        Ok(CallingConvention::SystemV) | Ok(CallingConvention::AppleAarch64) | Err(()) => {
+            CallConv::WasmtimeSystemV
+        }
+        Ok(CallingConvention::WindowsFastcall) => CallConv::WasmtimeFastcall,
+        Ok(unimp) => unimplemented!("calling convention: {:?}", unimp),
+    }
+}
+
+pub fn push_types(
+    isa: &dyn TargetIsa,
+    sig: &mut ir::Signature,
+    types: &TypeTables,
+    index: SignatureIndex,
+) {
+    let wasm = &types.wasm_signatures[index];
+
+    let cvt = |ty: &WasmType| {
+        ir::AbiParam::new(match ty {
+            WasmType::I32 => ir::types::I32,
+            WasmType::I64 => ir::types::I64,
+            WasmType::F32 => ir::types::F32,
+            WasmType::F64 => ir::types::F64,
+            WasmType::V128 => ir::types::I8X16,
+            WasmType::FuncRef | WasmType::ExternRef => {
+                wasmtime_environ::reference_type(*ty, isa.pointer_type())
+            }
+            WasmType::ExnRef => unimplemented!(),
+        })
+    };
+    sig.params.extend(wasm.params.iter().map(&cvt));
+    sig.returns.extend(wasm.returns.iter().map(&cvt));
+}
+
+pub fn indirect_signature(
+    isa: &dyn TargetIsa,
+    types: &TypeTables,
+    index: SignatureIndex,
+) -> ir::Signature {
+    let mut sig = blank_sig(isa, wasmtime_call_conv(isa));
+    push_types(isa, &mut sig, types, index);
+    return sig;
+}
+
+pub fn func_signature(
+    isa: &dyn TargetIsa,
+    module: &Module,
+    types: &TypeTables,
+    index: FuncIndex,
+) -> ir::Signature {
+    let call_conv = match module.defined_func_index(index) {
+        // If this is a defined function in the module and it's never possibly
+        // exported, then we can optimize this function to use the fastest
+        // calling convention since it's purely an internal implementation
+        // detail of the module itself.
+        Some(idx) if !module.possibly_exported_funcs.contains(&idx) => CallConv::Fast,
+
+        // ... otherwise if it's an imported function or if it's a possibly
+        // exported function then we use the default ABI wasmtime would
+        // otherwise select.
+        _ => wasmtime_call_conv(isa),
+    };
+    let mut sig = blank_sig(isa, call_conv);
+    push_types(isa, &mut sig, types, module.functions[index]);
+    return sig;
 }

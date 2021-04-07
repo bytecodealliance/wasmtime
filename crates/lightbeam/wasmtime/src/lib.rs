@@ -9,12 +9,12 @@ use cranelift_codegen::isa;
 use lightbeam::{CodeGenSession, NullOffsetSink, Sinks};
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, SignatureIndex, TableIndex, TypeIndex,
+    GlobalIndex, MemoryIndex, TableIndex, TypeIndex,
 };
 use wasmtime_environ::{
-    entity::PrimaryMap, BuiltinFunctionIndex, CompileError, CompiledFunction, Compiler,
-    FunctionBodyData, Module, ModuleTranslation, Relocation, RelocationTarget, TrapInformation,
-    Tunables, TypeTables, VMOffsets,
+    BuiltinFunctionIndex, CompileError, CompiledFunction, Compiler, FunctionBodyData, Module,
+    ModuleTranslation, Relocation, RelocationTarget, TrapInformation, Tunables, TypeTables,
+    VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -28,14 +28,14 @@ impl Compiler for Lightbeam {
         function_body: FunctionBodyData<'_>,
         isa: &dyn isa::TargetIsa,
         tunables: &Tunables,
-        types: &TypeTables,
+        _types: &TypeTables,
     ) -> Result<CompiledFunction, CompileError> {
         if tunables.generate_native_debuginfo {
             return Err(CompileError::DebugInfoNotSupported);
         }
         let func_index = translation.module.func_index(i);
 
-        let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation, types);
+        let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation);
         let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
             translation.function_body_inputs.len() as u32,
             &env,
@@ -174,22 +174,15 @@ struct FuncEnvironment<'module_environment> {
     /// The module-level environment which this function-level environment belongs to.
     module: &'module_environment Module,
 
-    native_signatures: &'module_environment PrimaryMap<SignatureIndex, ir::Signature>,
-
     /// Offsets to struct fields accessed by JIT code.
     offsets: VMOffsets,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
-    fn new(
-        pointer_bytes: u8,
-        translation: &'module_environment ModuleTranslation<'_>,
-        types: &'module_environment TypeTables,
-    ) -> Self {
+    fn new(pointer_bytes: u8, translation: &'module_environment ModuleTranslation<'_>) -> Self {
         Self {
             module: &translation.module,
             offsets: VMOffsets::new(pointer_bytes, &translation.module),
-            native_signatures: &types.native_signatures,
         }
     }
 }
@@ -227,8 +220,8 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
         self.module.functions[FuncIndex::from_u32(func_idx)].as_u32()
     }
 
-    fn signature(&self, index: u32) -> &Self::Signature {
-        &self.native_signatures[SignatureIndex::from_u32(index)]
+    fn signature(&self, _index: u32) -> &Self::Signature {
+        panic!("not implemented")
     }
 
     fn defined_table_index(&self, table_index: u32) -> Option<u32> {

@@ -550,6 +550,7 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))]
 fn typed_multiple_results() -> anyhow::Result<()> {
     let store = Store::default();
     let module = Module::new(
@@ -618,4 +619,158 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
     assert!(dtor1_run.get());
     assert!(dtor2_run.get());
     Ok(())
+}
+
+#[test]
+#[cfg(not(feature = "old-x86-backend"))]
+fn wrap_multiple_results() -> anyhow::Result<()> {
+    fn test<T>(store: &Store, t: T) -> anyhow::Result<()>
+    where
+        T: WasmRet + WasmResults + PartialEq + Copy + std::fmt::Debug + EqualToValues + 'static,
+    {
+        let f = Func::wrap(store, move || t);
+        assert_eq!(f.typed::<(), T>()?.call(())?, t);
+        assert!(t.eq_values(&f.call(&[])?));
+
+        let module = Module::new(store.engine(), &T::gen_wasm())?;
+        let instance = Instance::new(store, &module, &[f.into()])?;
+        let f = instance.get_func("foo").unwrap();
+
+        assert_eq!(f.typed::<(), T>()?.call(())?, t);
+        assert!(t.eq_values(&f.call(&[])?));
+        Ok(())
+    }
+
+    let store = Store::default();
+    // 0 element
+    test(&store, ())?;
+
+    // 1 element
+    test(&store, (1i32,))?;
+    test(&store, (2u32,))?;
+    test(&store, (3i64,))?;
+    test(&store, (4u64,))?;
+    test(&store, (5.0f32,))?;
+    test(&store, (6.0f64,))?;
+
+    // 2 element ...
+    test(&store, (7i32, 8i32))?;
+    test(&store, (7i32, 8i64))?;
+    test(&store, (7i32, 8f32))?;
+    test(&store, (7i32, 8f64))?;
+
+    test(&store, (7i64, 8i32))?;
+    test(&store, (7i64, 8i64))?;
+    test(&store, (7i64, 8f32))?;
+    test(&store, (7i64, 8f64))?;
+
+    test(&store, (7f32, 8i32))?;
+    test(&store, (7f32, 8i64))?;
+    test(&store, (7f32, 8f32))?;
+    test(&store, (7f32, 8f64))?;
+
+    test(&store, (7f64, 8i32))?;
+    test(&store, (7f64, 8i64))?;
+    test(&store, (7f64, 8f32))?;
+    test(&store, (7f64, 8f64))?;
+
+    // and beyond...
+    test(&store, (1i32, 2i32, 3i32))?;
+    test(&store, (1i32, 2f32, 3i32))?;
+    test(&store, (1f64, 2f32, 3i32))?;
+    test(&store, (1f64, 2i64, 3i32))?;
+    test(&store, (1f32, 2f32, 3i64, 4f64))?;
+    test(&store, (1f64, 2i64, 3i32, 4i64, 5f32))?;
+    test(&store, (1i32, 2f64, 3i64, 4f64, 5f64, 6f32))?;
+    test(&store, (1i64, 2i32, 3i64, 4f32, 5f32, 6i32, 7u64))?;
+    test(&store, (1u32, 2f32, 3u64, 4f64, 5i32, 6f32, 7u64, 8u32))?;
+    test(
+        &store,
+        (1f32, 2f64, 3f32, 4i32, 5u32, 6i64, 7f32, 8i32, 9u64),
+    )?;
+    return Ok(());
+
+    trait EqualToValues {
+        fn eq_values(&self, values: &[Val]) -> bool;
+        fn gen_wasm() -> String;
+    }
+
+    macro_rules! equal_tuples {
+        ($($cnt:tt ($($a:ident),*))*) => ($(
+            #[allow(non_snake_case)]
+            impl<$($a: EqualToValue,)*> EqualToValues for ($($a,)*) {
+                fn eq_values(&self, values: &[Val]) -> bool {
+                    let ($($a,)*) = self;
+                    let mut _values = values.iter();
+                    _values.len() == $cnt &&
+                        $($a.eq_value(_values.next().unwrap()) &&)*
+                        true
+                }
+
+                fn gen_wasm() -> String {
+                    let mut wasm = String::new();
+                    wasm.push_str("(module ");
+                    wasm.push_str("(type $t (func (result ");
+                    $(
+                        wasm.push_str($a::wasm_ty());
+                        wasm.push_str(" ");
+                    )*
+                    wasm.push_str(")))");
+
+                    wasm.push_str("(import \"\" \"\" (func $host (type $t)))");
+                    wasm.push_str("(func (export \"foo\") (type $t)");
+                    wasm.push_str("call $host");
+                    wasm.push_str(")");
+                    wasm.push_str(")");
+
+                    wasm
+                }
+            }
+        )*)
+    }
+
+    equal_tuples! {
+        0 ()
+        1 (A1)
+        2 (A1, A2)
+        3 (A1, A2, A3)
+        4 (A1, A2, A3, A4)
+        5 (A1, A2, A3, A4, A5)
+        6 (A1, A2, A3, A4, A5, A6)
+        7 (A1, A2, A3, A4, A5, A6, A7)
+        8 (A1, A2, A3, A4, A5, A6, A7, A8)
+        9 (A1, A2, A3, A4, A5, A6, A7, A8, A9)
+    }
+
+    trait EqualToValue {
+        fn eq_value(&self, value: &Val) -> bool;
+        fn wasm_ty() -> &'static str;
+    }
+
+    macro_rules! equal_values {
+        ($a:ident $($ty:ident $wasm:tt $variant:ident $e:expr,)*) => ($(
+            impl EqualToValue for $ty {
+                fn eq_value(&self, val: &Val) -> bool {
+                    if let Val::$variant($a) = *val {
+                        return *self == $e;
+                    }
+                    false
+                }
+
+                fn wasm_ty() -> &'static str {
+                    $wasm
+                }
+            }
+        )*)
+    }
+
+    equal_values! {
+        a
+        i32 "i32" I32 a,
+        u32 "i32" I32 a as u32,
+        i64 "i64" I64 a,
+        u64 "i64" I64 a as u64,
+        f32 "f32" F32 f32::from_bits(a),
+        f64 "f64" F64 f64::from_bits(a),
+    }
 }

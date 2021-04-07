@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use wasmtime_debug::DwarfSection;
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use wasmtime_environ::wasm::{FuncIndex, SignatureIndex};
-use wasmtime_environ::{CompiledFunctions, ModuleTranslation, ModuleType, TypeTables};
+use wasmtime_environ::{CompiledFunctions, ModuleTranslation, TypeTables};
 use wasmtime_obj::{ObjectBuilder, ObjectBuilderTarget};
 
 pub use wasmtime_obj::utils;
@@ -42,18 +42,18 @@ pub(crate) fn build_object(
     // Build trampolines for every signature that can be used by this module.
     let signatures = translation
         .module
-        .types
-        .values()
-        .filter_map(|t| match t {
-            ModuleType::Function(f) => Some(*f),
-            _ => None,
+        .functions
+        .iter()
+        .filter_map(|(i, sig)| match translation.module.defined_func_index(i) {
+            Some(i) if !translation.module.possibly_exported_funcs.contains(&i) => None,
+            _ => Some(*sig),
         })
         .collect::<BTreeSet<_>>();
     let mut trampolines = Vec::with_capacity(signatures.len());
     let mut cx = FunctionBuilderContext::new();
     for i in signatures {
-        let native_sig = &types.native_signatures[i];
-        let func = build_trampoline(isa, &mut cx, native_sig, std::mem::size_of::<u128>())?;
+        let native_sig = wasmtime_cranelift::indirect_signature(isa, &types, i);
+        let func = build_trampoline(isa, &mut cx, &native_sig, std::mem::size_of::<u128>())?;
         // Preserve trampoline function unwind info.
         if let Some(info) = &func.unwind_info {
             unwind_info.push(ObjectUnwindInfo::Trampoline(i, info.clone()))

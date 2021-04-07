@@ -197,18 +197,26 @@ impl ABIMachineSpec for AArch64MachineDeps {
             next_stack = 16;
         }
 
-        // Note on return values: on the regular non-baldrdash ABI, we may return values in 8
-        // registers for V128 and I64 registers independently of the number of register values
-        // returned in the other class. That is, we can return values in up to 8 integer and 8
-        // vector registers at once.
-        // In Baldrdash, we can only use one register for return value for all the register
-        // classes. That is, we can't return values in both one integer and one vector register;
-        // only one return value may be in a register.
+        let (max_per_class_reg_vals, mut remaining_reg_vals) = match args_or_rets {
+            ArgsOrRets::Args => (8, 16), // x0-x7 and v0-v7
 
-        let (max_per_class_reg_vals, mut remaining_reg_vals) = match (args_or_rets, is_baldrdash) {
-            (ArgsOrRets::Args, _) => (8, 16),     // x0-x7 and v0-v7
-            (ArgsOrRets::Rets, false) => (8, 16), // x0-x7 and v0-v7
-            (ArgsOrRets::Rets, true) => (1, 1),   // x0 or v0, but not both
+            // Note on return values: on the regular ABI, we may return values
+            // in 8 registers for V128 and I64 registers independently of the
+            // number of register values returned in the other class. That is,
+            // we can return values in up to 8 integer and
+            // 8 vector registers at once.
+            //
+            // In Baldrdash and Wasmtime, we can only use one register for
+            // return value for all the register classes. That is, we can't
+            // return values in both one integer and one vector register; only
+            // one return value may be in a register.
+            ArgsOrRets::Rets => {
+                if is_baldrdash || call_conv.extends_wasmtime() {
+                    (1, 1) // x0 or v0, but not both
+                } else {
+                    (8, 16) // x0-x7 and v0-v7
+                }
+            }
         };
 
         for i in 0..params.len() {
@@ -282,15 +290,18 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 // Compute the stack slot's size.
                 let size = (ty_bits(param.value_type) / 8) as u64;
 
-                let size = if call_conv != isa::CallConv::AppleAarch64 {
+                let size = if call_conv == isa::CallConv::AppleAarch64
+                    || (call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets)
+                {
+                    // MacOS aarch64 and Wasmtime allow stack slots with
+                    // sizes less than 8 bytes. They still need to be
+                    // properly aligned on their natural data alignment,
+                    // though.
+                    size
+                } else {
                     // Every arg takes a minimum slot of 8 bytes. (16-byte stack
                     // alignment happens separately after all args.)
                     std::cmp::max(size, 8)
-                } else {
-                    // MacOS aarch64 allows stack slots with sizes less than 8
-                    // bytes. They still need to be properly aligned on their
-                    // natural data alignment, though.
-                    size
                 };
 
                 // Align the stack slot.

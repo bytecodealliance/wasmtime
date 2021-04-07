@@ -98,7 +98,7 @@ all-arch = ["wasmtime/all-arch"]
 experimental_x64 = []
 
 # Use the old x86 backend.
-old-x86-backend = ["wasmtime-jit/old-x86-backend"]
+old-x86-backend = ["wasmtime/old-x86-backend"]
 
 [badges]
 maintenance = { status = "actively-developed" }
