@@ -8,9 +8,11 @@
 // You can execute this example with `cargo run --example multi`
 
 use anyhow::Result;
-use wasmtime::*;
 
+#[cfg(not(feature = "old-x86-backend"))]
 fn main() -> Result<()> {
+    use wasmtime::*;
+
     println!("Initializing...");
     let engine = Engine::default();
     let store = Store::new(&engine);
@@ -66,5 +68,10 @@ fn main() -> Result<()> {
     println!("> {:?}", results);
     assert_eq!(results, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9));
 
+    Ok(())
+}
+
+#[cfg(feature = "old-x86-backend")]
+fn main() -> Result<()> {
     Ok(())
 }
