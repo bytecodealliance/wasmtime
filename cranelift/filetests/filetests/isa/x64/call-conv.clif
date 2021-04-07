@@ -205,3 +205,140 @@ block0(v0: i32, v1: f32, v2: i64, v3: f64, v4: i32, v5: i32, v6: i32, v7: f32, v
     call_indirect sig0, v0(v0, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10)
     return
 }
+
+function %wasmtime_mix1(i32) wasmtime_system_v {
+    sig0 = (i32) system_v
+block0(v0: i32):
+    ; check:  movq    %rdi, %rsi
+    ; nextln: movq    %rsi, %rdi
+    ; nextln: call    *%rsi
+    call_indirect sig0, v0(v0)
+    return
+}
+
+function %wasmtime_mix2(i32) system_v {
+    sig0 = (i32) wasmtime_system_v
+block0(v0: i32):
+    ; check:  movq    %rdi, %rsi
+    ; nextln: movq    %rsi, %rdi
+    ; nextln: call    *%rsi
+    call_indirect sig0, v0(v0)
+    return
+}
+
+function %wasmtime_mix2() -> i32, i32 system_v {
+    sig0 = () -> i32, i32 wasmtime_system_v
+block0:
+    ; check:  pushq   %rbp
+    ; nextln: movq    %rsp, %rbp
+    ; nextln: movl    $$1, %esi
+    ; nextln: subq    $$16, %rsp
+    ; nextln: virtual_sp_offset_adjust 16
+    ; nextln: lea     0(%rsp), %rdi
+    ; nextln: call    *%rsi
+    ; nextln: movslq  0(%rsp), %rsi
+    ; nextln: addq    $$16, %rsp
+    ; nextln: virtual_sp_offset_adjust -16
+    ; nextln: movq    %rsi, %rdx
+    ; nextln: movq    %rbp, %rsp
+    ; nextln: popq    %rbp
+    ; nextln: ret
+    v2 = iconst.i32 1
+    v0, v1 = call_indirect sig0, v2()
+    return v0, v1
+}
+
+function %wasmtime_mix3() -> i32, i32 wasmtime_system_v {
+    sig0 = () -> i32, i32 system_v
+block0:
+    ; check:  pushq   %rbp
+    ; nextln: movq    %rsp, %rbp
+    ; nextln: subq    $$16, %rsp
+    ; nextln: movq    %r12, 0(%rsp)
+    ; nextln: movq    %rdi, %r12
+    ; nextln: movl    $$1, %esi
+    ; nextln: call    *%rsi
+    ; nextln: movl    %edx, 0(%r12)
+    ; nextln: movq    0(%rsp), %r12
+    ; nextln: addq    $$16, %rsp
+    ; nextln: movq    %rbp, %rsp
+    ; nextln: popq    %rbp
+    ; nextln: ret
+    v2 = iconst.i32 1
+    v0, v1 = call_indirect sig0, v2()
+    return v0, v1
+}
+
+function %wasmtime_mix4() -> i32, i64, i32 wasmtime_system_v {
+    sig0 = () -> i32, i64, i32 system_v
+block0:
+    ; check:  pushq   %rbp
+    ; nextln: movq    %rsp, %rbp
+    ; nextln: subq    $$16, %rsp
+    ; nextln: movq    %r12, 0(%rsp)
+    ; nextln: movq    %rdi, %r12
+    ; nextln: movl    $$1, %esi
+    ; nextln: subq    $$16, %rsp
+    ; nextln: virtual_sp_offset_adjust 16
+    ; nextln: lea     0(%rsp), %rdi
+    ; nextln: call    *%rsi
+    ; nextln: movslq  0(%rsp), %rsi
+    ; nextln: addq    $$16, %rsp
+    ; nextln: virtual_sp_offset_adjust -16
+    ; nextln: movq    %rdx, 0(%r12)
+    ; nextln: movl    %esi, 8(%r12)
+    ; nextln: movq    0(%rsp), %r12
+    ; nextln: addq    $$16, %rsp
+    ; nextln: movq    %rbp, %rsp
+    ; nextln: popq    %rbp
+    ; nextln: ret
+    v3 = iconst.i32 1
+    v0, v1, v2 = call_indirect sig0, v3()
+    return v0, v1, v2
+}
+
+function %wasmtime_mix5() -> f32, i64, i32, f32 wasmtime_system_v {
+    sig0 = () -> f32, i64, i32, f32 system_v
+block0:
+    ; check:  pushq   %rbp
+    ; nextln: movq    %rsp, %rbp
+    ; nextln: subq    $$16, %rsp
+    ; nextln: movq    %r12, 0(%rsp)
+    ; nextln: movq    %rdi, %r12
+    ; nextln: movl    $$1, %esi
+    ; nextln: call    *%rsi
+    ; nextln: movq    %rax, 0(%r12)
+    ; nextln: movl    %edx, 8(%r12)
+    ; nextln: movss   %xmm1, 12(%r12)
+    ; nextln: movq    0(%rsp), %r12
+    ; nextln: addq    $$16, %rsp
+    ; nextln: movq    %rbp, %rsp
+    ; nextln: popq    %rbp
+    ; nextln: ret
+    v5 = iconst.i32 1
+    v0, v1, v2, v3 = call_indirect sig0, v5()
+    return v0, v1, v2, v3
+}
+
+function %wasmtime_mix6(f32, i64, i32, f32) -> f32, i64, i32, f32 wasmtime_system_v {
+    sig0 = (f32, i64, i32, f32) -> f32, i64, i32, f32 system_v
+block0(v0: f32, v1: i64, v2: i32, v3: f32):
+    ; check:  pushq   %rbp
+    ; nextln: movq    %rsp, %rbp
+    ; nextln: subq    $$16, %rsp
+    ; nextln: movq    %r12, 0(%rsp)
+    ; nextln: movq    %rdx, %r12
+    ; nextln: movl    $$1, %eax
+    ; nextln: call    *%rax
+    ; nextln: movq    %rax, 0(%r12)
+    ; nextln: movl    %edx, 8(%r12)
+    ; nextln: movss   %xmm1, 12(%r12)
+    ; nextln: movq    0(%rsp), %r12
+    ; nextln: addq    $$16, %rsp
+    ; nextln: movq    %rbp, %rsp
+    ; nextln: popq    %rbp
+    ; nextln: ret
+    v4 = iconst.i32 1
+    v5, v6, v7, v8 = call_indirect sig0, v4(v0, v1, v2, v3)
+    return v5, v6, v7, v8
+}
