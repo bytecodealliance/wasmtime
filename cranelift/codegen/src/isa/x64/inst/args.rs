@@ -10,6 +10,7 @@ use regalloc::{
     PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
     RegUsageMapper, Writable,
 };
+use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::String;
 
@@ -411,12 +412,12 @@ pub enum UnaryRmROpcode {
 }
 
 impl UnaryRmROpcode {
-    pub(crate) fn available_from(&self) -> Option<InstructionSet> {
+    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => None,
-            UnaryRmROpcode::Lzcnt => Some(InstructionSet::Lzcnt),
-            UnaryRmROpcode::Tzcnt => Some(InstructionSet::BMI1),
-            UnaryRmROpcode::Popcnt => Some(InstructionSet::Popcnt),
+            UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => smallvec![],
+            UnaryRmROpcode::Lzcnt => smallvec![InstructionSet::Lzcnt],
+            UnaryRmROpcode::Tzcnt => smallvec![InstructionSet::BMI1],
+            UnaryRmROpcode::Popcnt => smallvec![InstructionSet::Popcnt],
         }
     }
 }
@@ -447,6 +448,7 @@ pub enum CmpOpcode {
     Test,
 }
 
+#[derive(Debug)]
 pub(crate) enum InstructionSet {
     SSE,
     SSE2,
@@ -458,6 +460,10 @@ pub(crate) enum InstructionSet {
     BMI1,
     #[allow(dead_code)] // never constructed (yet).
     BMI2,
+    #[allow(dead_code)]
+    AVX512F,
+    #[allow(dead_code)]
+    AVX512VL,
 }
 
 /// Some SSE operations requiring 2 operands r/m and r.
@@ -982,6 +988,37 @@ impl fmt::Debug for SseOpcode {
 }
 
 impl fmt::Display for SseOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+#[derive(Clone)]
+pub enum Avx512Opcode {
+    #[allow(dead_code)]
+    Vpabsq,
+}
+
+impl Avx512Opcode {
+    /// Which `InstructionSet`s support the opcode?
+    #[allow(dead_code)]
+    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
+        match self {
+            Avx512Opcode::Vpabsq => smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL],
+        }
+    }
+}
+
+impl fmt::Debug for Avx512Opcode {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let name = match self {
+            Avx512Opcode::Vpabsq => "vpabsq",
+        };
+        write!(fmt, "{}", name)
+    }
+}
+
+impl fmt::Display for Avx512Opcode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }

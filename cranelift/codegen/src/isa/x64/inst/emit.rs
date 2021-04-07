@@ -113,18 +113,30 @@ pub(crate) fn emit(
     info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    if let Some(iset_requirement) = inst.isa_requirement() {
+    let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
         match iset_requirement {
             // Cranelift assumes SSE2 at least.
-            InstructionSet::SSE | InstructionSet::SSE2 => {}
-            InstructionSet::SSSE3 => assert!(info.isa_flags.use_ssse3()),
-            InstructionSet::SSE41 => assert!(info.isa_flags.use_sse41()),
-            InstructionSet::SSE42 => assert!(info.isa_flags.use_sse42()),
-            InstructionSet::Popcnt => assert!(info.isa_flags.use_popcnt()),
-            InstructionSet::Lzcnt => assert!(info.isa_flags.use_lzcnt()),
-            InstructionSet::BMI1 => assert!(info.isa_flags.use_bmi1()),
-            InstructionSet::BMI2 => assert!(info.isa_flags.has_bmi2()),
+            InstructionSet::SSE | InstructionSet::SSE2 => true,
+            InstructionSet::SSSE3 => info.isa_flags.use_ssse3(),
+            InstructionSet::SSE41 => info.isa_flags.use_sse41(),
+            InstructionSet::SSE42 => info.isa_flags.use_sse42(),
+            InstructionSet::Popcnt => info.isa_flags.use_popcnt(),
+            InstructionSet::Lzcnt => info.isa_flags.use_lzcnt(),
+            InstructionSet::BMI1 => info.isa_flags.use_bmi1(),
+            InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
+            InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
+            InstructionSet::AVX512VL => info.isa_flags.has_avx512vl(),
         }
+    };
+
+    // Certain instructions may be present in more than one ISA feature set; we must at least match
+    // one of them in the target CPU.
+    let isa_requirements = inst.available_in_any_isa();
+    if !isa_requirements.is_empty() && !isa_requirements.iter().any(matches_isa_flags) {
+        panic!(
+            "Cannot emit inst '{:?}' for target; failed to match ISA requirements: {:?}",
+            inst, isa_requirements
+        )
     }
 
     match inst {
