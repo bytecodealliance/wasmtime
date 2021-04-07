@@ -225,6 +225,12 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
+    XmmUnaryRmREvex {
+        op: Avx512Opcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+    },
+
     /// XMM (scalar or vector) unary op (from xmm to reg/mem): stores, movd, movq
     XmmMovRM {
         op: SseOpcode,
@@ -571,6 +577,8 @@ impl Inst {
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
+
+            Inst::XmmUnaryRmREvex { op, .. } => op.available_from(),
         }
     }
 }
@@ -703,6 +711,12 @@ impl Inst {
         src.assert_regclass_is(RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::XmmUnaryRmR { op, src, dst }
+    }
+
+    pub(crate) fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::V128);
+        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        Inst::XmmUnaryRmREvex { op, src, dst }
     }
 
     pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
@@ -1391,6 +1405,13 @@ impl PrettyPrint for Inst {
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),
             ),
 
+            Inst::XmmUnaryRmREvex { op, src, dst, .. } => format!(
+                "{} {}, {}",
+                ljustify(op.to_string()),
+                src.show_rru_sized(mb_rru, 8),
+                show_ireg_sized(dst.to_reg(), mb_rru, 8),
+            ),
+
             Inst::XmmMovRM { op, src, dst, .. } => format!(
                 "{} {}, {}",
                 ljustify(op.to_string()),
@@ -1863,7 +1884,9 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_def(Writable::from_reg(regs::rdx()));
             }
         },
-        Inst::UnaryRmR { src, dst, .. } | Inst::XmmUnaryRmR { src, dst, .. } => {
+        Inst::UnaryRmR { src, dst, .. }
+        | Inst::XmmUnaryRmR { src, dst, .. }
+        | Inst::XmmUnaryRmREvex { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
@@ -2206,6 +2229,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
         Inst::SignExtendData { .. } => {}
         Inst::XmmUnaryRmR {
+            ref mut src,
+            ref mut dst,
+            ..
+        }
+        | Inst::XmmUnaryRmREvex {
             ref mut src,
             ref mut dst,
             ..
