@@ -1841,7 +1841,7 @@ macro_rules! load {
             ) -> Result<(), Error> {
                 let mem_index = 0;
                 let reg_offset = ctx.module_context
-                    .defined_memory_index(mem_index)
+                    .memory_index(mem_index)
                     .map(|index| (
                         None,
                         ctx.module_context.vmctx_vmmemory_definition(index) as i32
@@ -2021,7 +2021,7 @@ macro_rules! store {
             ) -> Result<(), Error> {
                 let mem_index = 0;
                 let reg_offset = ctx.module_context
-                    .defined_memory_index(mem_index)
+                    .memory_index(mem_index)
                     .map(|index| (
                         None,
                         ctx.module_context.vmctx_vmmemory_definition(index) as i32
@@ -5579,42 +5579,24 @@ impl<'this, M: ModuleContext> Context<'this, M> {
     // TODO: Other memory indices
     pub fn memory_size(&mut self) -> Result<(), Error> {
         let memory_index = 0;
-        if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
-            self.push(ValueLocation::Immediate(defined_memory_index.into()))?;
-            self.builtin_function_call(
-                BuiltinFunctionIndex::get_memory32_size_index(),
-                [self.pointer_type].iter().copied(),
-                [self.pointer_type].iter().copied(),
-            )?;
-        } else {
-            self.push(ValueLocation::Immediate(memory_index.into()))?;
-            self.builtin_function_call(
-                BuiltinFunctionIndex::get_memory32_size_index(),
-                [self.pointer_type].iter().copied(),
-                [self.pointer_type].iter().copied(),
-            )?;
-        }
+        self.push(ValueLocation::Immediate(memory_index.into()))?;
+        self.builtin_function_call(
+            BuiltinFunctionIndex::get_memory32_size_index(),
+            [self.pointer_type].iter().copied(),
+            [self.pointer_type].iter().copied(),
+        )?;
         Ok(())
     }
 
     // TODO: Other memory indices
     pub fn memory_grow(&mut self) -> Result<(), Error> {
         let memory_index = 0;
-        if let Some(defined_memory_index) = self.module_context.defined_memory_index(memory_index) {
-            self.push(ValueLocation::Immediate(defined_memory_index.into()))?;
-            self.builtin_function_call(
-                BuiltinFunctionIndex::get_memory32_grow_index(),
-                [self.pointer_type, self.pointer_type].iter().copied(),
-                [self.pointer_type].iter().copied(),
-            )?;
-        } else {
-            self.push(ValueLocation::Immediate(memory_index.into()))?;
-            self.builtin_function_call(
-                BuiltinFunctionIndex::get_memory32_grow_index(),
-                [self.pointer_type, self.pointer_type].iter().copied(),
-                [self.pointer_type].iter().copied(),
-            )?;
-        }
+        self.push(ValueLocation::Immediate(memory_index.into()))?;
+        self.builtin_function_call(
+            BuiltinFunctionIndex::get_memory32_grow_index(),
+            [self.pointer_type, self.pointer_type].iter().copied(),
+            [self.pointer_type].iter().copied(),
+        )?;
         Ok(())
     }
 

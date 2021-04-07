@@ -262,18 +262,18 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
         self.offsets
             .vmctx_vmmemory_import_from(MemoryIndex::from_u32(memory_index))
     }
-    fn vmctx_vmmemory_definition(&self, defined_memory_index: u32) -> u32 {
+    fn vmctx_vmmemory_definition(&self, memory_index: u32) -> u32 {
         self.offsets
-            .vmctx_vmmemory_definition(DefinedMemoryIndex::from_u32(defined_memory_index))
+            .vmctx_vmmemory_definition(MemoryIndex::from_u32(memory_index))
     }
-    fn vmctx_vmmemory_definition_base(&self, defined_memory_index: u32) -> u32 {
+    fn vmctx_vmmemory_definition_base(&self, memory_index: u32) -> u32 {
         self.offsets
-            .vmctx_vmmemory_definition_base(DefinedMemoryIndex::from_u32(defined_memory_index))
+            .vmctx_vmmemory_definition_base(MemoryIndex::from_u32(memory_index))
     }
-    fn vmctx_vmmemory_definition_current_length(&self, defined_memory_index: u32) -> u32 {
+    fn vmctx_vmmemory_definition_current_length(&self, memory_index: u32) -> u32 {
         self.offsets
-            .vmctx_vmmemory_definition_current_length(DefinedMemoryIndex::from_u32(
-                defined_memory_index,
+            .vmctx_vmmemory_definition_current_length(MemoryIndex::from_u32(
+                memory_index,
             ))
     }
     fn vmmemory_definition_base(&self) -> u8 {

@@ -63,7 +63,7 @@ use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use std::mem;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::wasm::{
-    DataIndex, DefinedMemoryIndex, ElemIndex, GlobalIndex, MemoryIndex, TableElementType,
+    DataIndex, ElemIndex, GlobalIndex, DefinedMemoryIndex, MemoryIndex, TableElementType,
     TableIndex,
 };
 

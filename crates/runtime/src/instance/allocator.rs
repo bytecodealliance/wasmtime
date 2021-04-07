@@ -271,11 +271,7 @@ unsafe fn get_memory_slice<'instance>(
     init: &MemoryInitializer,
     instance: &'instance Instance,
 ) -> &'instance mut [u8] {
-    let memory = if let Some(defined_memory_index) =
-        instance.module.defined_memory_index(init.memory_index)
-    {
-        instance.memory(defined_memory_index)
-    } else {
+    let memory = {
         let import = instance.imported_memory(init.memory_index);
         let foreign_instance = (&mut *(import).vmctx).instance();
         let foreign_memory = &mut *(import).from;

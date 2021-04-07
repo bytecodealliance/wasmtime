@@ -191,19 +191,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         index: MemoryIndex,
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        if self.module.is_imported_memory(index) {
-            (
-                self.builtin_function_signatures.memory32_grow(func),
-                index.index(),
-                BuiltinFunctionIndex::memory32_grow(),
-            )
-        } else {
-            (
-                self.builtin_function_signatures.memory32_grow(func),
-                self.module.defined_memory_index(index).unwrap().index(),
-                BuiltinFunctionIndex::memory32_grow(),
-            )
-        }
+        (
+            self.builtin_function_signatures.memory32_grow(func),
+            index.index(),
+            BuiltinFunctionIndex::memory32_grow(),
+        )
     }
 
     /// Return the memory.size function signature to call for the given index, along with the
@@ -213,19 +205,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         index: MemoryIndex,
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        if self.module.is_imported_memory(index) {
-            (
-                self.builtin_function_signatures.memory32_size(func),
-                index.index(),
-                BuiltinFunctionIndex::memory32_size(),
-            )
-        } else {
-            (
-                self.builtin_function_signatures.memory32_size(func),
-                self.module.defined_memory_index(index).unwrap().index(),
-                BuiltinFunctionIndex::memory32_size(),
-            )
-        }
+        (
+            self.builtin_function_signatures.memory32_size(func),
+            index.index(),
+            BuiltinFunctionIndex::memory32_size(),
+        )
     }
 
     fn get_table_copy_func(
@@ -263,19 +247,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         memory_index: MemoryIndex,
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
-            (
-                self.builtin_function_signatures.memory_fill(func),
-                defined_memory_index.index(),
-                BuiltinFunctionIndex::memory_fill(),
-            )
-        } else {
-            (
-                self.builtin_function_signatures.memory_fill(func),
-                memory_index.index(),
-                BuiltinFunctionIndex::memory_fill(),
-            )
-        }
+        (
+            self.builtin_function_signatures.memory_fill(func),
+            memory_index.index(),
+            BuiltinFunctionIndex::memory_fill(),
+        )
     }
 
     fn get_memory_atomic_notify(
@@ -283,19 +259,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         func: &mut Function,
         memory_index: MemoryIndex,
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
-        if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
-            (
-                self.builtin_function_signatures.memory_atomic_notify(func),
-                defined_memory_index.index(),
-                BuiltinFunctionIndex::memory_atomic_notify(),
-            )
-        } else {
-            (
-                self.builtin_function_signatures.memory_atomic_notify(func),
-                memory_index.index(),
-                BuiltinFunctionIndex::memory_atomic_notify(),
-            )
-        }
+        (
+            self.builtin_function_signatures.memory_atomic_notify(func),
+            memory_index.index(),
+            BuiltinFunctionIndex::memory_atomic_notify(),
+        )
     }
 
     fn get_memory_atomic_wait(
@@ -306,34 +274,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
         match ty {
             I32 => {
-                if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
-                    (
-                        self.builtin_function_signatures.memory_atomic_wait32(func),
-                        defined_memory_index.index(),
-                        BuiltinFunctionIndex::memory_atomic_wait32(),
-                    )
-                } else {
-                    (
-                        self.builtin_function_signatures.memory_atomic_wait32(func),
-                        memory_index.index(),
-                        BuiltinFunctionIndex::memory_atomic_wait32(),
-                    )
-                }
+                (
+                    self.builtin_function_signatures.memory_atomic_wait32(func),
+                    memory_index.index(),
+                    BuiltinFunctionIndex::memory_atomic_wait32(),
+                )
             }
             I64 => {
-                if let Some(defined_memory_index) = self.module.defined_memory_index(memory_index) {
-                    (
-                        self.builtin_function_signatures.memory_atomic_wait64(func),
-                        defined_memory_index.index(),
-                        BuiltinFunctionIndex::memory_atomic_wait64(),
-                    )
-                } else {
-                    (
-                        self.builtin_function_signatures.memory_atomic_wait64(func),
-                        memory_index.index(),
-                        BuiltinFunctionIndex::memory_atomic_wait64(),
-                    )
-                }
+                (
+                    self.builtin_function_signatures.memory_atomic_wait64(func),
+                    memory_index.index(),
+                    BuiltinFunctionIndex::memory_atomic_wait64(),
+                )
             }
             x => panic!("get_memory_atomic_wait unsupported type: {:?}", x),
         }
@@ -1226,28 +1178,17 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
 
         let (ptr, base_offset, current_length_offset) = {
             let vmctx = self.vmctx(func);
-            if let Some(def_index) = self.module.defined_memory_index(index) {
-                let base_offset =
-                    i32::try_from(self.offsets.vmctx_vmmemory_definition_base(def_index)).unwrap();
-                let current_length_offset = i32::try_from(
-                    self.offsets
-                        .vmctx_vmmemory_definition_current_length(def_index),
-                )
-                .unwrap();
-                (vmctx, base_offset, current_length_offset)
-            } else {
-                let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
-                let memory = func.create_global_value(ir::GlobalValueData::Load {
-                    base: vmctx,
-                    offset: Offset32::new(i32::try_from(from_offset).unwrap()),
-                    global_type: pointer_type,
-                    readonly: true,
-                });
-                let base_offset = i32::from(self.offsets.vmmemory_definition_base());
-                let current_length_offset =
-                    i32::from(self.offsets.vmmemory_definition_current_length());
-                (memory, base_offset, current_length_offset)
-            }
+            let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
+            let memory = func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: Offset32::new(i32::try_from(from_offset).unwrap()),
+                global_type: pointer_type,
+                readonly: true,
+            });
+            let base_offset = i32::from(self.offsets.vmmemory_definition_base());
+            let current_length_offset =
+                i32::from(self.offsets.vmmemory_definition_current_length());
+            (memory, base_offset, current_length_offset)
         };
 
         // If we have a declared maximum, we can make this a "static" heap, which is
