@@ -199,37 +199,12 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
         .unwrap_or(u32::max_value())
 }
 
-/// Implementation of memory.grow for imported 32-bit memories.
-pub unsafe extern "C" fn wasmtime_imported_memory32_grow(
-    vmctx: *mut VMContext,
-    delta: u32,
-    memory_index: u32,
-) -> u32 {
-    let instance = (&mut *vmctx).instance();
-    let memory_index = MemoryIndex::from_u32(memory_index);
-
-    instance
-        .imported_memory_grow(memory_index, delta)
-        .unwrap_or(u32::max_value())
-}
-
 /// Implementation of memory.size for locally-defined 32-bit memories.
 pub unsafe extern "C" fn wasmtime_memory32_size(vmctx: *mut VMContext, memory_index: u32) -> u32 {
     let instance = (&mut *vmctx).instance();
     let memory_index = DefinedMemoryIndex::from_u32(memory_index);
 
     instance.memory_size(memory_index)
-}
-
-/// Implementation of memory.size for imported 32-bit memories.
-pub unsafe extern "C" fn wasmtime_imported_memory32_size(
-    vmctx: *mut VMContext,
-    memory_index: u32,
-) -> u32 {
-    let instance = (&mut *vmctx).instance();
-    let memory_index = MemoryIndex::from_u32(memory_index);
-
-    instance.imported_memory_size(memory_index)
 }
 
 /// Implementation of `table.grow`.
@@ -388,24 +363,6 @@ pub unsafe extern "C" fn wasmtime_memory_fill(
     }
 }
 
-/// Implementation of `memory.fill` for imported memories.
-pub unsafe extern "C" fn wasmtime_imported_memory_fill(
-    vmctx: *mut VMContext,
-    memory_index: u32,
-    dst: u32,
-    val: u32,
-    len: u32,
-) {
-    let result = {
-        let memory_index = MemoryIndex::from_u32(memory_index);
-        let instance = (&mut *vmctx).instance();
-        instance.imported_memory_fill(memory_index, dst, val, len)
-    };
-    if let Err(trap) = result {
-        raise_lib_trap(trap);
-    }
-}
-
 /// Implementation of `memory.init`.
 pub unsafe extern "C" fn wasmtime_memory_init(
     vmctx: *mut VMContext,
@@ -518,18 +475,6 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_notify(
     ))));
 }
 
-/// Implementation of `memory.atomic.notify` for imported memories.
-pub unsafe extern "C" fn wasmtime_imported_memory_atomic_notify(
-    _vmctx: *mut VMContext,
-    _memory_index: u32,
-    _addr: u32,
-    _count: u32,
-) -> u32 {
-    raise_lib_trap(Trap::User(Box::new(Unimplemented(
-        "wasm atomics (fn wasmtime_imported_memory_atomic_notify) unsupported",
-    ))));
-}
-
 /// Implementation of `memory.atomic.wait32` for locally defined memories.
 pub unsafe extern "C" fn wasmtime_memory_atomic_wait32(
     _vmctx: *mut VMContext,
@@ -543,19 +488,6 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_wait32(
     ))));
 }
 
-/// Implementation of `memory.atomic.wait32` for imported memories.
-pub unsafe extern "C" fn wasmtime_imported_memory_atomic_wait32(
-    _vmctx: *mut VMContext,
-    _memory_index: u32,
-    _addr: u32,
-    _expected: u32,
-    _timeout: u64,
-) -> u32 {
-    raise_lib_trap(Trap::User(Box::new(Unimplemented(
-        "wasm atomics (fn wasmtime_imported_memory_atomic_wait32) unsupported",
-    ))));
-}
-
 /// Implementation of `memory.atomic.wait64` for locally defined memories.
 pub unsafe extern "C" fn wasmtime_memory_atomic_wait64(
     _vmctx: *mut VMContext,
@@ -566,19 +498,6 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_wait64(
 ) -> u32 {
     raise_lib_trap(Trap::User(Box::new(Unimplemented(
         "wasm atomics (fn wasmtime_memory_atomic_wait32) unsupported",
-    ))));
-}
-
-/// Implementation of `memory.atomic.wait32` for imported memories.
-pub unsafe extern "C" fn wasmtime_imported_memory_atomic_wait64(
-    _vmctx: *mut VMContext,
-    _memory_index: u32,
-    _addr: u32,
-    _expected: u64,
-    _timeout: u64,
-) -> u32 {
-    raise_lib_trap(Trap::User(Box::new(Unimplemented(
-        "wasm atomics (fn wasmtime_imported_memory_atomic_wait64) unsupported",
     ))));
 }
 

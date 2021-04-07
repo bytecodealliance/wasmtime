@@ -193,10 +193,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> (ir::SigRef, usize, BuiltinFunctionIndex) {
         if self.module.is_imported_memory(index) {
             (
-                self.builtin_function_signatures
-                    .imported_memory32_grow(func),
+                self.builtin_function_signatures.memory32_grow(func),
                 index.index(),
-                BuiltinFunctionIndex::imported_memory32_grow(),
+                BuiltinFunctionIndex::memory32_grow(),
             )
         } else {
             (
@@ -217,9 +216,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         if self.module.is_imported_memory(index) {
             (
                 self.builtin_function_signatures
-                    .imported_memory32_size(func),
+                    .memory32_size(func),
                 index.index(),
-                BuiltinFunctionIndex::imported_memory32_size(),
+                BuiltinFunctionIndex::memory32_size(),
             )
         } else {
             (
@@ -273,9 +272,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             )
         } else {
             (
-                self.builtin_function_signatures.imported_memory_fill(func),
+                self.builtin_function_signatures.memory_fill(func),
                 memory_index.index(),
-                BuiltinFunctionIndex::imported_memory_fill(),
+                BuiltinFunctionIndex::memory_fill(),
             )
         }
     }
@@ -293,10 +292,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             )
         } else {
             (
-                self.builtin_function_signatures
-                    .imported_memory_atomic_notify(func),
+                self.builtin_function_signatures.memory_atomic_notify(func),
                 memory_index.index(),
-                BuiltinFunctionIndex::imported_memory_atomic_notify(),
+                BuiltinFunctionIndex::memory_atomic_notify(),
             )
         }
     }
@@ -317,10 +315,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     )
                 } else {
                     (
-                        self.builtin_function_signatures
-                            .imported_memory_atomic_wait32(func),
+                        self.builtin_function_signatures.memory_atomic_wait32(func),
                         memory_index.index(),
-                        BuiltinFunctionIndex::imported_memory_atomic_wait32(),
+                        BuiltinFunctionIndex::memory_atomic_wait32(),
                     )
                 }
             }
@@ -333,10 +330,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     )
                 } else {
                     (
-                        self.builtin_function_signatures
-                            .imported_memory_atomic_wait64(func),
+                        self.builtin_function_signatures.memory_atomic_wait64(func),
                         memory_index.index(),
-                        BuiltinFunctionIndex::imported_memory_atomic_wait64(),
+                        BuiltinFunctionIndex::memory_atomic_wait64(),
                     )
                 }
             }

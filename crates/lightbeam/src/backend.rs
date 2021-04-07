@@ -30,17 +30,9 @@ mod magic {
         pub const fn get_memory32_grow_index() -> Self {
             Self(0)
         }
-        /// Returns an index for wasm's imported `memory.grow` builtin function.
-        pub const fn get_imported_memory32_grow_index() -> Self {
-            Self(1)
-        }
         /// Returns an index for wasm's `memory.size` builtin function.
         pub const fn get_memory32_size_index() -> Self {
-            Self(2)
-        }
-        /// Returns an index for wasm's imported `memory.size` builtin function.
-        pub const fn get_imported_memory32_size_index() -> Self {
-            Self(3)
+            Self(1)
         }
 
         /// Return the index as an u32 number.
@@ -5597,7 +5589,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()))?;
             self.builtin_function_call(
-                BuiltinFunctionIndex::get_imported_memory32_size_index(),
+                BuiltinFunctionIndex::get_memory32_size_index(),
                 [self.pointer_type].iter().copied(),
                 [self.pointer_type].iter().copied(),
             )?;
@@ -5618,7 +5610,7 @@ impl<'this, M: ModuleContext> Context<'this, M> {
         } else {
             self.push(ValueLocation::Immediate(memory_index.into()))?;
             self.builtin_function_call(
-                BuiltinFunctionIndex::get_imported_memory32_grow_index(),
+                BuiltinFunctionIndex::get_memory32_grow_index(),
                 [self.pointer_type, self.pointer_type].iter().copied(),
                 [self.pointer_type].iter().copied(),
             )?;
