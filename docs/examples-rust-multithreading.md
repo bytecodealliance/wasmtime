@@ -29,10 +29,11 @@ traits:
   * [`TableType`](https://docs.wasmtime.dev/api/wasmtime/struct.TableType.html)
   * [`InstanceType`](https://docs.wasmtime.dev/api/wasmtime/struct.InstanceType.html)
 
-These types, as the traits imply, safe to send and share across threads. Note
-that the major types to call out here are `Module` and `Engine`. The `Engine` is
-important because it enables sharing compilation configuration for an entire
-application. Each `Engine` is intended to be long-lived for this reason.
+These types, as the traits imply, are safe to send and share across threads.
+Note that the major types to call out here are `Module` and `Engine`. The
+`Engine` is important because it enables sharing compilation configuration for
+an entire application. Each `Engine` is intended to be long-lived for this
+reason.
 
 Additionally `Module`, the compiled version of a WebAssembly module, is safe to
 send and share across threads. This notably means that you can compile a module
@@ -110,12 +111,12 @@ some possibilities include:
   consumption](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.consume_fuel)
   as well as [yielding when out of
   fuel](https://docs.wasmtime.dev/api/wasmtime/struct.Store.html#method.out_of_fuel_async_yield).
-  This will ensure that no one request entirely hogs a thread executiong
+  This will ensure that no one request entirely hogs a thread executing
   WebAssembly and all requests scheduled onto that thread are able to execute.
   It's also worth pointing out that the threads executing WebAssembly may or may
   not be the same as the threads performing I/O for your server requests.
 
-* If absolutely required Wasmtime is engineered such that it is dynamically safe
+* If absolutely required, Wasmtime is engineered such that it is dynamically safe
   to move a `Store` as a whole to a separate thread. This option is not
   recommended due to its complexity, but it is one that Wasmtime tests in CI and
   considers supported. The principle here is that all objects connected to a
