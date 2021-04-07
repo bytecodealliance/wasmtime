@@ -1094,7 +1094,9 @@ impl Func {
     /// and similarly if a function has multiple results you can bind that too
     ///
     /// ```
+    /// # #[cfg(not(feature = "old-x86-backend"))]
     /// # use wasmtime::*;
+    /// # #[cfg(not(feature = "old-x86-backend"))]
     /// # fn foo(add_with_overflow: &Func) -> anyhow::Result<()> {
     /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>()?;
     /// let (result, overflow) = typed.call((u32::max_value(), 2))?;
