@@ -294,17 +294,8 @@ impl Store {
             .insert(ArcModuleCode(module.compiled_module().code().clone()));
     }
 
-    fn register_jit_code(&self, module: &CompiledModule) {
-        let functions = module.finished_functions();
-        let first_pc = match functions.values().next() {
-            Some(f) => unsafe { (**f).as_ptr() as usize },
-            None => return,
-        };
-        // Only register this module if it hasn't already been registered.
-        let mut info = self.inner.frame_info.borrow_mut();
-        if !info.contains_pc(first_pc) {
-            info.register(module);
-        }
+    fn register_jit_code(&self, module: &Arc<CompiledModule>) {
+        self.inner.frame_info.borrow_mut().register(module)
     }
 
     fn register_stack_maps(&self, module: &CompiledModule) {
