@@ -1156,7 +1156,7 @@ mod tests {
 
         let actual_offset = (next_ptr as usize) - (table_ptr as usize);
 
-        let offsets = wasmtime_environ::VMOffsets {
+        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             pointer_size: 8,
             num_signature_ids: 0,
             num_imported_functions: 0,
@@ -1167,7 +1167,7 @@ mod tests {
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
-        };
+        });
         assert_eq!(
             offsets.vm_extern_ref_activation_table_next() as usize,
             actual_offset
@@ -1183,7 +1183,7 @@ mod tests {
 
         let actual_offset = (end_ptr as usize) - (table_ptr as usize);
 
-        let offsets = wasmtime_environ::VMOffsets {
+        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             pointer_size: 8,
             num_signature_ids: 0,
             num_imported_functions: 0,
@@ -1194,7 +1194,7 @@ mod tests {
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
-        };
+        });
         assert_eq!(
             offsets.vm_extern_ref_activation_table_end() as usize,
             actual_offset

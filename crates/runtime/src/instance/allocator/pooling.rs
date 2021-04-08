@@ -21,7 +21,7 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
     entity::{EntitySet, PrimaryMap},
-    MemoryStyle, Module, Tunables, VMOffsets, WASM_PAGE_SIZE,
+    MemoryStyle, Module, Tunables, VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
 };
 
 cfg_if::cfg_if! {
@@ -302,7 +302,7 @@ impl InstancePool {
         let page_size = region::page::size();
 
         // Calculate the maximum size of an Instance structure given the limits
-        let offsets = VMOffsets {
+        let offsets = VMOffsets::from(VMOffsetsFields {
             pointer_size: std::mem::size_of::<*const u8>() as u8,
             num_signature_ids: module_limits.types,
             num_imported_functions: module_limits.imported_functions,
@@ -313,7 +313,7 @@ impl InstancePool {
             num_defined_tables: module_limits.tables,
             num_defined_memories: module_limits.memories,
             num_defined_globals: module_limits.globals,
-        };
+        });
 
         let instance_size = round_up_to_pow2(
             mem::size_of::<Instance>()
