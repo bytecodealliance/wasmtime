@@ -43,15 +43,6 @@ impl StoreFrameInfo {
             .map(|info| (info, module.has_unparsed_debuginfo()))
     }
 
-    /// Returns whether the `pc` specified is contained within some module's
-    /// function.
-    pub fn contains_pc(&self, pc: usize) -> bool {
-        match self.module(pc) {
-            Some(module) => module.contains_pc(pc),
-            None => false,
-        }
-    }
-
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
         self.module(pc)?.lookup_trap_info(pc)
@@ -78,10 +69,6 @@ impl StoreFrameInfo {
         // The module code range is exclusive for end, so make it inclusive as it
         // may be a valid PC value
         let end = end - 1;
-
-        if self.contains_pc(start) {
-            return;
-        }
 
         // Assert that this module's code doesn't collide with any other registered modules
         if let Some((_, prev)) = self.ranges.range(end..).next() {
@@ -189,12 +176,6 @@ impl ModuleFrameInfo {
             func_start: addr_map.start_srcloc,
             symbols,
         })
-    }
-
-    /// Returns whether the `pc` specified is contained within some module's
-    /// function.
-    pub fn contains_pc(&self, pc: usize) -> bool {
-        self.func(pc).is_some()
     }
 
     /// Fetches trap information about a program counter in a backtrace.

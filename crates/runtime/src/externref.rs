@@ -828,16 +828,6 @@ impl StackMapRegistry {
 
         let mut inner = self.inner.borrow_mut();
 
-        // Check if we've already registered this module.
-        if let Some(existing_module) = inner.ranges.get(&max) {
-            assert_eq!(existing_module.range, module_stack_maps.range);
-            debug_assert_eq!(
-                existing_module.pc_to_stack_map,
-                module_stack_maps.pc_to_stack_map,
-            );
-            return;
-        }
-
         // Assert that this chunk of ranges doesn't collide with any other known
         // chunks.
         if let Some((_, prev)) = inner.ranges.range(max..).next() {
