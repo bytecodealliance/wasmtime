@@ -970,6 +970,7 @@ impl InstanceHandle {
     /// of the internals, there's no lifetime tracking around its validity.
     /// You'll need to ensure that the returned handles all go out of scope at
     /// the same time.
+    #[inline]
     pub unsafe fn clone(&self) -> InstanceHandle {
         InstanceHandle {
             instance: self.instance,
