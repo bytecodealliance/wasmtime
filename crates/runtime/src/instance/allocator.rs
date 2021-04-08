@@ -45,8 +45,8 @@ pub struct InstanceAllocationRequest<'a> {
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
 
-    /// A callback for looking up shared signature indexes.
-    pub lookup_shared_signature: &'a dyn Fn(SignatureIndex) -> VMSharedSignatureIndex,
+    /// Translation from `SignatureIndex` to `VMSharedSignatureIndex`
+    pub shared_signatures: SharedSignatures<'a>,
 
     /// The host state to associate with the instance.
     pub host_state: Box<dyn Any>,
@@ -163,6 +163,46 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     /// The provided stack is required to have been allocated with `allocate_fiber_stack`.
     #[cfg(feature = "async")]
     unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack);
+}
+
+pub enum SharedSignatures<'a> {
+    /// Used for instantiating user-defined modules
+    Table(&'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>),
+    /// Used for instance creation that has only a single function
+    Always(VMSharedSignatureIndex),
+    /// Used for instance creation that has no functions
+    None,
+}
+
+impl SharedSignatures<'_> {
+    fn lookup(&self, index: SignatureIndex) -> VMSharedSignatureIndex {
+        match self {
+            SharedSignatures::Table(table) => table[index],
+            SharedSignatures::Always(index) => *index,
+            SharedSignatures::None => unreachable!(),
+        }
+    }
+}
+
+impl<'a> From<VMSharedSignatureIndex> for SharedSignatures<'a> {
+    fn from(val: VMSharedSignatureIndex) -> SharedSignatures<'a> {
+        SharedSignatures::Always(val)
+    }
+}
+
+impl<'a> From<Option<VMSharedSignatureIndex>> for SharedSignatures<'a> {
+    fn from(val: Option<VMSharedSignatureIndex>) -> SharedSignatures<'a> {
+        match val {
+            Some(idx) => SharedSignatures::Always(idx),
+            None => SharedSignatures::None,
+        }
+    }
+}
+
+impl<'a> From<&'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>> for SharedSignatures<'a> {
+    fn from(val: &'a PrimaryMap<SignatureIndex, VMSharedSignatureIndex>) -> SharedSignatures<'a> {
+        SharedSignatures::Table(val)
+    }
 }
 
 fn get_table_init_start(
@@ -413,7 +453,7 @@ unsafe fn initialize_vmcontext(instance: &Instance, req: InstanceAllocationReque
     let mut ptr = instance.signature_ids_ptr();
     for sig in module.types.values() {
         *ptr = match sig {
-            ModuleType::Function(sig) => (req.lookup_shared_signature)(*sig),
+            ModuleType::Function(sig) => req.shared_signatures.lookup(*sig),
             _ => VMSharedSignatureIndex::new(u32::max_value()),
         };
         ptr = ptr.add(1);
@@ -453,7 +493,7 @@ unsafe fn initialize_vmcontext(instance: &Instance, req: InstanceAllocationReque
 
     // Initialize the functions
     for (index, sig) in instance.module.functions.iter() {
-        let type_index = (req.lookup_shared_signature)(*sig);
+        let type_index = req.shared_signatures.lookup(*sig);
 
         let (func_ptr, vmctx) = if let Some(def_index) = instance.module.defined_func_index(index) {
             (

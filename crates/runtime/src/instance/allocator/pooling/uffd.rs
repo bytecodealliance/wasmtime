@@ -519,7 +519,7 @@ mod test {
                                     memories: &[],
                                     globals: &[],
                                 },
-                                lookup_shared_signature: &|_| VMSharedSignatureIndex::default(),
+                                shared_signatures: VMSharedSignatureIndex::default().into(),
                                 host_state: Box::new(()),
                                 interrupts: ptr::null(),
                                 externref_activations_table: ptr::null_mut(),

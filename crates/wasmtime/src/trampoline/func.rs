@@ -270,7 +270,7 @@ pub fn create_function(
     // If there is no signature registry, use the default signature index which is
     // guaranteed to trap if there is ever an indirect call on the function (should not happen)
     let shared_signature_id = registry
-        .map(|r| r.register(ft.as_wasm_func_type(), Some(trampoline)))
+        .map(|r| r.register(ft.as_wasm_func_type(), trampoline))
         .unwrap_or(VMSharedSignatureIndex::default());
 
     unsafe {
@@ -279,7 +279,7 @@ pub fn create_function(
                 module: Arc::new(module),
                 finished_functions: &finished_functions,
                 imports: Imports::default(),
-                lookup_shared_signature: &|_| shared_signature_id,
+                shared_signatures: shared_signature_id.into(),
                 host_state: Box::new(trampoline_state),
                 interrupts: std::ptr::null(),
                 externref_activations_table: std::ptr::null_mut(),
@@ -311,7 +311,7 @@ pub unsafe fn create_raw_function(
             module: Arc::new(module),
             finished_functions: &finished_functions,
             imports: Imports::default(),
-            lookup_shared_signature: &|_| shared_signature_id,
+            shared_signatures: shared_signature_id.into(),
             host_state,
             interrupts: std::ptr::null(),
             externref_activations_table: std::ptr::null_mut(),

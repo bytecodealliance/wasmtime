@@ -17,11 +17,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_environ::wasm;
-use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
+use wasmtime_jit::{CompiledModule, ModuleCode};
 use wasmtime_runtime::{
     Export, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler,
     StackMapRegistry, TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
+    VMExternRefActivationsTable, VMInterrupts, VMTrampoline,
 };
 
 /// Used to associate instances with the store.
@@ -202,7 +202,7 @@ impl Store {
                 .inner
                 .signatures
                 .borrow_mut()
-                .register(ty.as_wasm_func_type(), Some(trampoline));
+                .register(ty.as_wasm_func_type(), trampoline);
 
             Box::new(anyfunc)
         });
@@ -248,19 +248,23 @@ impl Store {
         &self.inner.signatures
     }
 
-    pub(crate) fn lookup_shared_signature<'a>(
-        &'a self,
-        types: &'a TypeTables,
-    ) -> impl Fn(wasm::SignatureIndex) -> VMSharedSignatureIndex + 'a {
-        move |index| {
-            self.signatures()
-                .borrow()
-                .lookup(&types.wasm_signatures[index])
-                .expect("signature not previously registered")
-        }
-    }
-
     pub(crate) fn register_module(&self, module: &Module) {
+        // With a module being instantiated into this `Store` we need to
+        // preserve its jit-code. References to this module's code and
+        // trampolines are not owning-references so it's our responsibility to
+        // keep it all alive within the `Store`.
+        //
+        // If this module is already present in the store then we skip all
+        // further registration steps.
+        let first = self
+            .inner
+            .modules
+            .borrow_mut()
+            .insert(ArcModuleCode(module.compiled_module().code().clone()));
+        if !first {
+            return;
+        }
+
         // All modules register their JIT code in a store for two reasons
         // currently:
         //
@@ -271,7 +275,10 @@ impl Store {
         // * Second when generating a backtrace we'll use this mapping to
         //   only generate wasm frames for instruction pointers that fall
         //   within jit code.
-        self.register_jit_code(module.compiled_module());
+        self.inner
+            .frame_info
+            .borrow_mut()
+            .register(module.compiled_module());
 
         // We need to know about all the stack maps of all instantiated modules
         // so when performing a GC we know about all wasm frames that we find
@@ -282,20 +289,7 @@ impl Store {
         // once-per-module (and once-per-signature). This allows us to create
         // a `Func` wrapper for any function in the module, which requires that
         // we know about the signature and trampoline for all instances.
-        self.register_signatures(module);
-
-        // And finally with a module being instantiated into this `Store` we
-        // need to preserve its jit-code. References to this module's code and
-        // trampolines are not owning-references so it's our responsibility to
-        // keep it all alive within the `Store`.
-        self.inner
-            .modules
-            .borrow_mut()
-            .insert(ArcModuleCode(module.compiled_module().code().clone()));
-    }
-
-    fn register_jit_code(&self, module: &Arc<CompiledModule>) {
-        self.inner.frame_info.borrow_mut().register(module)
+        self.signatures().borrow_mut().register_module(module);
     }
 
     fn register_stack_maps(&self, module: &CompiledModule) {
@@ -308,27 +302,6 @@ impl Store {
                 let range = start..end;
                 (range, stack_maps)
             }));
-    }
-
-    fn register_signatures(&self, module: &Module) {
-        let mut signatures = self.signatures().borrow_mut();
-        let types = module.types();
-
-        // Register a unique index for all types in this module, even if they
-        // don't have a trampoline.
-        for (_, ty) in module.compiled_module().module().types.iter() {
-            if let wasmtime_environ::ModuleType::Function(index) = ty {
-                let wasm = &types.wasm_signatures[*index];
-                signatures.register(wasm, None);
-            }
-        }
-
-        // Afterwards register all compiled trampolines for this module with the
-        // signature registry as well.
-        for (index, trampoline) in module.compiled_module().trampolines() {
-            let wasm = &types.wasm_signatures[*index];
-            signatures.register(wasm, Some(*trampoline));
-        }
     }
 
     pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {

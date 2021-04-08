@@ -298,6 +298,7 @@ impl CompiledModule {
     }
 
     /// Returns the map of all finished JIT functions compiled for this module
+    #[inline]
     pub fn finished_functions(&self) -> &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]> {
         &self.finished_functions.0
     }

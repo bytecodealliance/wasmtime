@@ -513,14 +513,14 @@ impl<'a> Instantiator<'a> {
         unsafe {
             let engine = self.store.engine();
             let allocator = engine.allocator();
+            let signatures = self.store.signatures().borrow();
+            let signatures = signatures.lookup_table(&self.cur.module);
 
             let instance = allocator.allocate(InstanceAllocationRequest {
                 module: compiled_module.module().clone(),
                 finished_functions: compiled_module.finished_functions(),
                 imports: self.cur.build(),
-                lookup_shared_signature: &self
-                    .store
-                    .lookup_shared_signature(self.cur.module.types()),
+                shared_signatures: (&signatures).into(),
                 host_state: Box::new(()),
                 interrupts: self.store.interrupts(),
                 externref_activations_table: self.store.externref_activations_table()

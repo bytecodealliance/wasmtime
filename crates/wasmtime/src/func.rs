@@ -1810,7 +1810,7 @@ macro_rules! impl_into_func {
                 // If not given a registry, use a default signature index that is guaranteed to trap
                 // if the function is called indirectly without first being associated with a store (a bug condition).
                 let shared_signature_id = registry
-                    .map(|r| r.register(ty.as_wasm_func_type(), Some(trampoline)))
+                    .map(|r| r.register(ty.as_wasm_func_type(), trampoline))
                     .unwrap_or(VMSharedSignatureIndex::default());
 
                 let instance = unsafe {

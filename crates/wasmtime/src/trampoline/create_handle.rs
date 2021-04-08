@@ -37,7 +37,7 @@ pub(crate) fn create_handle(
                 module: module.clone(),
                 finished_functions: &finished_functions,
                 imports,
-                lookup_shared_signature: &|_| shared_signature_id.unwrap(),
+                shared_signatures: shared_signature_id.into(),
                 host_state,
                 interrupts: store.interrupts(),
                 externref_activations_table: store.externref_activations_table()
