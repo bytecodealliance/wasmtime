@@ -16,6 +16,7 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_debug::create_gdbjit_image;
 use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::ir::StackMap;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
@@ -25,6 +26,7 @@ use wasmtime_environ::{
     ModuleSignature, ModuleTranslation, StackMapInformation, TrapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
+use wasmtime_runtime::StackMapLookup;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -214,6 +216,7 @@ pub struct CompiledModule {
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
     trampolines: Vec<(SignatureIndex, VMTrampoline)>,
+    has_stack_maps: bool,
 }
 
 impl CompiledModule {
@@ -270,6 +273,8 @@ impl CompiledModule {
         let start = code_range.0 as usize;
         let end = start + code_range.1;
 
+        let has_stack_maps = artifacts.funcs.values().any(|f| f.stack_maps.len() > 0);
+
         Ok(Arc::new(Self {
             artifacts,
             code: Arc::new(ModuleCode {
@@ -279,6 +284,7 @@ impl CompiledModule {
             }),
             finished_functions,
             trampolines,
+            has_stack_maps,
         }))
     }
 
@@ -313,15 +319,12 @@ impl CompiledModule {
     ///
     /// The iterator returned iterates over the span of the compiled function in
     /// memory with the stack maps associated with those bytes.
-    pub fn stack_maps(
-        &self,
-    ) -> impl Iterator<Item = (*mut [VMFunctionBody], &[StackMapInformation])> {
-        self.finished_functions().values().copied().zip(
-            self.artifacts
-                .funcs
-                .values()
-                .map(|f| f.stack_maps.as_slice()),
-        )
+    pub fn stack_maps(self: &Arc<Self>) -> Option<Box<dyn StackMapLookup>> {
+        if self.has_stack_maps {
+            Some(Box::new(StackMapLookupImpl(self.clone())))
+        } else {
+            None
+        }
     }
 
     /// Lookups a defined function by a program counter value.
@@ -586,5 +589,74 @@ mod arc_serde {
         T: Deserialize<'de>,
     {
         Ok(Arc::new(T::deserialize(de)?))
+    }
+}
+
+struct StackMapLookupImpl(Arc<CompiledModule>);
+
+impl StackMapLookup for StackMapLookupImpl {
+    fn lookup(&self, pc: usize) -> Option<&StackMap> {
+        let (index, start, _end) = self.0.func_by_pc(pc)?;
+        let func = self.0.artifacts.funcs.get(index)?;
+        let offset = (pc - start) as u32;
+
+        // Do a binary search to find the stack map for the given PC.
+        //
+        // Because GC safepoints are technically only associated with a single
+        // PC, we should ideally only care about `Ok(index)` values returned
+        // from the binary search. However, safepoints are inserted right before
+        // calls, and there are two things that can disturb the PC/offset
+        // associated with the safepoint versus the PC we actually use to query
+        // for the stack map:
+        //
+        // 1. The `backtrace` crate gives us the PC in a frame that will be
+        //    *returned to*, and where execution will continue from, rather than
+        //    the PC of the call we are currently at. So we would need to
+        //    disassemble one instruction backwards to query the actual PC for
+        //    the stack map.
+        //
+        //    TODO: One thing we *could* do to make this a little less error
+        //    prone, would be to assert/check that the nearest GC safepoint
+        //    found is within `max_encoded_size(any kind of call instruction)`
+        //    our queried PC for the target architecture.
+        //
+        // 2. Cranelift's stack maps only handle the stack, not
+        //    registers. However, some references that are arguments to a call
+        //    may need to be in registers. In these cases, what Cranelift will
+        //    do is:
+        //
+        //      a. spill all the live references,
+        //      b. insert a GC safepoint for those references,
+        //      c. reload the references into registers, and finally
+        //      d. make the call.
+        //
+        //    Step (c) adds drift between the GC safepoint and the location of
+        //    the call, which is where we actually walk the stack frame and
+        //    collect its live references.
+        //
+        //    Luckily, the spill stack slots for the live references are still
+        //    up to date, so we can still find all the on-stack roots.
+        //    Furthermore, we do not have a moving GC, so we don't need to worry
+        //    whether the following code will reuse the references in registers
+        //    (which would not have been updated to point to the moved objects)
+        //    or reload from the stack slots (which would have been updated to
+        //    point to the moved objects).
+        let index = match func
+            .stack_maps
+            .binary_search_by_key(&offset, |map| map.code_offset)
+        {
+            // Exact hit.
+            Ok(pos) => pos,
+
+            // `Err(0)` means that the associated stack map would have been the
+            // first element in the array if this pc had an associated stack
+            // map, but this pc does not have an associated stack map. This can
+            // only happen inside a Wasm frame if there are no live refs at this
+            // pc.
+            Err(0) => return None,
+
+            Err(n) => n - 1,
+        };
+        Some(&func.stack_maps[index].stack_map)
     }
 }

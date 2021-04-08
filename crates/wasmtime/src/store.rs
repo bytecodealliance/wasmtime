@@ -283,25 +283,17 @@ impl Store {
         // We need to know about all the stack maps of all instantiated modules
         // so when performing a GC we know about all wasm frames that we find
         // on the stack.
-        self.register_stack_maps(module.compiled_module());
+        if let Some(lookup) = module.compiled_module().stack_maps() {
+            let (start, end) = module.compiled_module().code().range();
+            self.stack_map_registry()
+                .register_stack_maps(start, end, lookup);
+        }
 
         // Signatures are loaded into our `SignatureRegistry` here
         // once-per-module (and once-per-signature). This allows us to create
         // a `Func` wrapper for any function in the module, which requires that
         // we know about the signature and trampoline for all instances.
         self.signatures().borrow_mut().register_module(module);
-    }
-
-    fn register_stack_maps(&self, module: &CompiledModule) {
-        self.stack_map_registry()
-            .register_stack_maps(module.stack_maps().map(|(func, stack_maps)| unsafe {
-                let ptr = (*func).as_ptr();
-                let len = (*func).len();
-                let start = ptr as usize;
-                let end = ptr as usize + len;
-                let range = start..end;
-                (range, stack_maps)
-            }));
     }
 
     pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
