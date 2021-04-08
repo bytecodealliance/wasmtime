@@ -561,7 +561,7 @@ dependencies = [
  "souper-ir",
  "target-lexicon",
  "thiserror",
- "wast 35.0.1",
+ "wast 35.0.2",
 ]
 
 [[package]]
@@ -1825,7 +1825,7 @@ dependencies = [
  "peepmatic-test-operator",
  "peepmatic-traits",
  "serde",
- "wast 35.0.1",
+ "wast 35.0.2",
  "z3",
 ]
 
@@ -1853,7 +1853,7 @@ dependencies = [
  "peepmatic-traits",
  "rand 0.8.3",
  "serde",
- "wast 35.0.1",
+ "wast 35.0.2",
 ]
 
 [[package]]
@@ -1878,7 +1878,7 @@ dependencies = [
  "serde",
  "serde_test",
  "thiserror",
- "wast 35.0.1",
+ "wast 35.0.2",
 ]
 
 [[package]]
@@ -1890,7 +1890,7 @@ dependencies = [
  "peepmatic",
  "peepmatic-test-operator",
  "souper-ir",
- "wast 35.0.1",
+ "wast 35.0.2",
 ]
 
 [[package]]
@@ -1911,7 +1911,7 @@ version = "0.73.0"
 dependencies = [
  "peepmatic-traits",
  "serde",
- "wast 35.0.1",
+ "wast 35.0.2",
 ]
 
 [[package]]
@@ -3298,7 +3298,7 @@ dependencies = [
  "wasmtime-wasi-crypto",
  "wasmtime-wasi-nn",
  "wasmtime-wast",
- "wast 35.0.1",
+ "wast 35.0.2",
  "wat",
 ]
 
@@ -3552,7 +3552,7 @@ version = "0.26.0"
 dependencies = [
  "anyhow",
  "wasmtime",
- "wast 35.0.1",
+ "wast 35.0.2",
 ]
 
 [[package]]
@@ -3590,9 +3590,9 @@ dependencies = [
 
 [[package]]
 name = "wast"
-version = "35.0.1"
+version = "35.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a5800e9f86a1eae935e38bea11e60fd253f6d514d153fb39b3e5535a7b37b56"
+checksum = "2ef140f1b49946586078353a453a1d28ba90adfc54dde75710bc1931de204d68"
 dependencies = [
  "leb128",
 ]
@@ -3603,7 +3603,7 @@ version = "1.0.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ec280a739b69173e0ffd12c1658507996836ba4e992ed9bc1e5385a0bd72a02"
 dependencies = [
- "wast 35.0.1",
+ "wast 35.0.2",
 ]
 
 [[package]]
