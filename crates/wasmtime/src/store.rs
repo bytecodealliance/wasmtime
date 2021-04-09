@@ -4,6 +4,7 @@ use crate::{
     DEFAULT_MEMORY_LIMIT, DEFAULT_TABLE_LIMIT,
 };
 use anyhow::{bail, Result};
+use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
@@ -12,13 +13,9 @@ use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::pin::Pin;
 use std::ptr;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::{
-    any::{Any, TypeId},
-    cell::Ref,
-};
 use wasmtime_runtime::{
     InstanceAllocator, InstanceHandle, ModuleInfo, OnDemandInstanceAllocator, SignalHandler,
     TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable,
@@ -93,7 +90,7 @@ pub(crate) struct StoreInner {
     current_poll_cx: Cell<*mut Context<'static>>,
     out_of_gas_behavior: Cell<OutOfGas>,
     context_values: RefCell<HashMap<TypeId, Box<dyn Any>>>,
-    limiter: RefCell<Option<Arc<dyn wasmtime_runtime::ResourceLimiter>>>,
+    limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>,
 }
 
 #[derive(Copy, Clone)]
@@ -127,6 +124,24 @@ impl Hash for HostInfoKey {
 impl Store {
     /// Creates a new store to be associated with the given [`Engine`].
     pub fn new(engine: &Engine) -> Self {
+        Self::new_(engine, None)
+    }
+
+    /// Creates a new store to be associated with the given [`Engine`] and using the supplied
+    /// resource limiter.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use wasmtime::{Engine, Store, StoreLimitsBuilder};
+    /// let engine = Engine::default();
+    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().instances(10).build());
+    /// ```
+    pub fn new_with_limits(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
+        Self::new_(engine, Some(Rc::new(ResourceLimiterProxy(limiter))))
+    }
+
+    fn new_(engine: &Engine, limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>) -> Self {
         // Ensure that wasmtime_runtime's signal handlers are configured. Note
         // that at the `Store` level it means we should perform this
         // once-per-thread. Platforms like Unix, however, only require this
@@ -154,30 +169,9 @@ impl Store {
                 current_poll_cx: Cell::new(ptr::null_mut()),
                 out_of_gas_behavior: Cell::new(OutOfGas::Trap),
                 context_values: RefCell::new(HashMap::new()),
-                limiter: RefCell::new(None),
+                limiter,
             }),
         }
-    }
-
-    /// Creates a new store to be associated with the given [`Engine`] and using the supplied
-    /// resource limiter.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use wasmtime::{Engine, Store, StoreLimitsBuilder};
-    /// let engine = Engine::default();
-    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().instances(10).build());
-    /// ```
-    pub fn new_with_limits(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
-        let store = Store::new(engine);
-
-        {
-            let mut l = store.inner.limiter.borrow_mut();
-            *l = Some(Arc::new(ResourceLimiterProxy::new(&store, limiter)));
-        }
-
-        store
     }
 
     /// Gets a host function from the [`Config`](crate::Config) associated with this [`Store`].
@@ -229,8 +223,8 @@ impl Store {
         }
     }
 
-    pub(crate) fn limiter(&self) -> Ref<Option<Arc<dyn wasmtime_runtime::ResourceLimiter>>> {
-        self.inner.limiter.borrow()
+    pub(crate) fn limiter(&self) -> &Option<Rc<dyn wasmtime_runtime::ResourceLimiter>> {
+        &self.inner.limiter
     }
 
     pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
@@ -278,7 +272,6 @@ impl Store {
         let module = module.env_module();
         let memories = module.memory_plans.len() - module.num_imported_memories;
         let tables = module.table_plans.len() - module.num_imported_tables;
-
         let (max_instances, max_memories, max_tables) = self.limits();
 
         bump(&self.inner.instance_count, max_instances, 1, "instance")?;
@@ -320,15 +313,6 @@ impl Store {
 
     pub(crate) unsafe fn existing_vmctx(&self, cx: *mut VMContext) -> StoreInstanceHandle {
         self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
-    }
-
-    pub(crate) fn weak(&self) -> Weak<StoreInner> {
-        Rc::downgrade(&self.inner)
-    }
-
-    pub(crate) fn upgrade(weak: &Weak<StoreInner>) -> Option<Self> {
-        let inner = weak.upgrade()?;
-        Some(Self { inner })
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
@@ -870,9 +854,8 @@ impl Store {
     }
 
     fn limits(&self) -> (usize, usize, usize) {
-        let limiter = self.inner.limiter.borrow();
-
-        limiter
+        self.inner
+            .limiter
             .as_ref()
             .map(|l| (l.instances(), l.memories(), l.tables()))
             .unwrap_or((

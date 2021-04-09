@@ -1,13 +1,10 @@
-use crate::{Store, StoreInner};
-use std::rc::Weak;
-
 pub(crate) const DEFAULT_INSTANCE_LIMIT: usize = 10000;
 pub(crate) const DEFAULT_TABLE_LIMIT: usize = 10000;
 pub(crate) const DEFAULT_MEMORY_LIMIT: usize = 10000;
 
 /// Used by hosts to limit resource consumption of instances at runtime.
 ///
-/// A [`Store`] can be created with a resource limiter so that hosts can take into account
+/// A [`Store`](crate::Store) can be created with a resource limiter so that hosts can take into account
 /// non-WebAssembly resource usage to determine if a linear memory or table should grow.
 pub trait ResourceLimiter {
     /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
@@ -25,13 +22,7 @@ pub trait ResourceLimiter {
     ///
     /// Returning `true` when a maximum has been exceeded will have no effect as the linear memory
     /// will not be grown.
-    fn memory_growing(
-        &self,
-        store: &Store,
-        current: u32,
-        desired: u32,
-        maximum: Option<u32>,
-    ) -> bool;
+    fn memory_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// Notifies the resource limiter that an instance's table has been requested to grow.
     ///
@@ -47,15 +38,9 @@ pub trait ResourceLimiter {
     ///
     /// Returning `true` when a maximum has been exceeded will have no effect as the table will
     /// not be grown.
-    fn table_growing(
-        &self,
-        store: &Store,
-        current: u32,
-        desired: u32,
-        maximum: Option<u32>,
-    ) -> bool;
+    fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
-    /// The maximum number of instances that can be created for a `Store`.
+    /// The maximum number of instances that can be created for a [`Store`](crate::Store).
     ///
     /// Module instantiation will fail if this limit is exceeded.
     ///
@@ -64,7 +49,7 @@ pub trait ResourceLimiter {
         DEFAULT_INSTANCE_LIMIT
     }
 
-    /// The maximum number of tables that can be created for a `Store`.
+    /// The maximum number of tables that can be created for a [`Store`](crate::Store).
     ///
     /// Module instantiation will fail if this limit is exceeded.
     ///
@@ -73,7 +58,7 @@ pub trait ResourceLimiter {
         DEFAULT_TABLE_LIMIT
     }
 
-    /// The maximum number of linear memories that can be created for a `Store`.
+    /// The maximum number of linear memories that can be created for a [`Store`](crate::Store).
     ///
     /// Instantiation will fail with an error if this limit is exceeded.
     ///
@@ -83,49 +68,27 @@ pub trait ResourceLimiter {
     }
 }
 
-pub(crate) struct ResourceLimiterProxy<T> {
-    store: Weak<StoreInner>,
-    limiter: T,
-}
-
-impl<T: ResourceLimiter> ResourceLimiterProxy<T> {
-    pub(crate) fn new(store: &Store, limiter: T) -> Self {
-        Self {
-            store: store.weak(),
-            limiter,
-        }
-    }
-}
+pub(crate) struct ResourceLimiterProxy<T>(pub T);
 
 impl<T: ResourceLimiter> wasmtime_runtime::ResourceLimiter for ResourceLimiterProxy<T> {
     fn memory_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
-        self.limiter.memory_growing(
-            &Store::upgrade(&self.store).unwrap(),
-            current,
-            desired,
-            maximum,
-        )
+        self.0.memory_growing(current, desired, maximum)
     }
 
     fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
-        self.limiter.table_growing(
-            &Store::upgrade(&self.store).unwrap(),
-            current,
-            desired,
-            maximum,
-        )
+        self.0.table_growing(current, desired, maximum)
     }
 
     fn instances(&self) -> usize {
-        self.limiter.instances()
+        self.0.instances()
     }
 
     fn tables(&self) -> usize {
-        self.limiter.tables()
+        self.0.tables()
     }
 
     fn memories(&self) -> usize {
-        self.limiter.memories()
+        self.0.memories()
     }
 }
 
@@ -158,7 +121,7 @@ impl StoreLimitsBuilder {
         self
     }
 
-    /// The maximum number of instances that can be created for a `Store`.
+    /// The maximum number of instances that can be created for a [`Store`](crate::Store).
     ///
     /// Module instantiation will fail if this limit is exceeded.
     ///
@@ -168,7 +131,7 @@ impl StoreLimitsBuilder {
         self
     }
 
-    /// The maximum number of tables that can be created for a `Store`.
+    /// The maximum number of tables that can be created for a [`Store`](crate::Store).
     ///
     /// Module instantiation will fail if this limit is exceeded.
     ///
@@ -178,7 +141,7 @@ impl StoreLimitsBuilder {
         self
     }
 
-    /// The maximum number of linear memories that can be created for a `Store`.
+    /// The maximum number of linear memories that can be created for a [`Store`](crate::Store).
     ///
     /// Instantiation will fail with an error if this limit is exceeded.
     ///
@@ -194,7 +157,7 @@ impl StoreLimitsBuilder {
     }
 }
 
-/// Provides limits for a [`Store`].
+/// Provides limits for a [`Store`](crate::Store).
 pub struct StoreLimits {
     memory_pages: Option<u32>,
     table_elements: Option<u32>,
@@ -216,26 +179,14 @@ impl Default for StoreLimits {
 }
 
 impl ResourceLimiter for StoreLimits {
-    fn memory_growing(
-        &self,
-        _store: &Store,
-        _current: u32,
-        desired: u32,
-        _maximum: Option<u32>,
-    ) -> bool {
+    fn memory_growing(&self, _current: u32, desired: u32, _maximum: Option<u32>) -> bool {
         match self.memory_pages {
             Some(limit) if desired > limit => false,
             _ => true,
         }
     }
 
-    fn table_growing(
-        &self,
-        _store: &Store,
-        _current: u32,
-        desired: u32,
-        _maximum: Option<u32>,
-    ) -> bool {
+    fn table_growing(&self, _current: u32, desired: u32, _maximum: Option<u32>) -> bool {
         match self.table_elements {
             Some(limit) if desired > limit => false,
             _ => true,

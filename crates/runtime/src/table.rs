@@ -4,12 +4,13 @@
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use crate::{ResourceLimiter, Trap, VMExternRef};
+use anyhow::{bail, Result};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
 use std::convert::TryInto;
 use std::ops::Range;
 use std::ptr;
-use std::sync::Arc;
+use std::rc::Rc;
 use wasmtime_environ::wasm::TableElementType;
 use wasmtime_environ::{ir, TablePlan};
 
@@ -110,23 +111,26 @@ enum TableStorage {
 /// Represents an instance's table.
 pub struct Table {
     storage: TableStorage,
-    limiter: Option<Arc<dyn ResourceLimiter>>,
+    limiter: Option<Rc<dyn ResourceLimiter>>,
 }
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(plan: &TablePlan, limiter: &Option<&Arc<dyn ResourceLimiter>>) -> Self {
+    pub fn new_dynamic(
+        plan: &TablePlan,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<Self> {
         let elements = RefCell::new(vec![ptr::null_mut(); plan.table.minimum as usize]);
         let ty = plan.table.ty.clone();
         let maximum = plan.table.maximum;
-        Self {
-            storage: TableStorage::Dynamic {
-                elements,
-                ty,
-                maximum,
-            },
-            limiter: limiter.cloned(),
-        }
+
+        let storage = TableStorage::Dynamic {
+            elements,
+            ty,
+            maximum,
+        };
+
+        Self::new(plan, storage, limiter)
     }
 
     /// Create a new static (immovable) table instance for the specified table plan.
@@ -134,20 +138,40 @@ impl Table {
         plan: &TablePlan,
         data: *mut *mut u8,
         maximum: u32,
-        limiter: &Option<&Arc<dyn ResourceLimiter>>,
-    ) -> Self {
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<Self> {
         let size = Cell::new(plan.table.minimum);
         let ty = plan.table.ty.clone();
         let maximum = min(plan.table.maximum.unwrap_or(maximum), maximum);
-        Self {
-            storage: TableStorage::Static {
-                data,
-                size,
-                ty,
-                maximum,
-            },
-            limiter: limiter.cloned(),
+
+        let storage = TableStorage::Static {
+            data,
+            size,
+            ty,
+            maximum,
+        };
+
+        Self::new(plan, storage, limiter)
+    }
+
+    fn new(
+        plan: &TablePlan,
+        storage: TableStorage,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<Self> {
+        if let Some(limiter) = limiter {
+            if !limiter.table_growing(0, plan.table.minimum, plan.table.maximum) {
+                bail!(
+                    "table minimum size of {} elements exceeds table limits",
+                    plan.table.minimum
+                );
+            }
         }
+
+        Ok(Self {
+            storage,
+            limiter: limiter.cloned(),
+        })
     }
 
     /// Returns the type of the elements in this table.
@@ -235,18 +259,15 @@ impl Table {
     /// Generally, prefer using `InstanceHandle::table_grow`, which encapsulates
     /// this unsafety.
     pub unsafe fn grow(&self, delta: u32, init_value: TableElement) -> Option<u32> {
-        if let Some(limiter) = &self.limiter {
-            let current = self.size();
-            let desired = current.checked_add(delta)?;
+        let old_size = self.size();
+        let new_size = old_size.checked_add(delta)?;
 
-            if !limiter.table_growing(current, desired, self.maximum()) {
+        if let Some(limiter) = &self.limiter {
+            if !limiter.table_growing(old_size, new_size, self.maximum()) {
                 return None;
             }
         }
 
-        let old_size = self.size();
-
-        let new_size = old_size.checked_add(delta)?;
         if let Some(max) = self.maximum() {
             if new_size > max {
                 return None;

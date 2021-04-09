@@ -18,6 +18,7 @@ use std::cell::RefCell;
 use std::cmp::min;
 use std::convert::TryFrom;
 use std::mem;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
     entity::{EntitySet, PrimaryMap},
@@ -376,10 +377,45 @@ impl InstancePool {
         }
     }
 
+    unsafe fn setup_instance(
+        &self,
+        index: usize,
+        mut req: InstanceAllocationRequest,
+    ) -> Result<InstanceHandle, InstantiationError> {
+        let instance = self.instance(index);
+
+        instance.module = req.module.clone();
+        instance.offsets = VMOffsets::new(
+            std::mem::size_of::<*const u8>() as u8,
+            instance.module.as_ref(),
+        );
+        instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+
+        Self::set_instance_memories(
+            instance,
+            self.memories.get(index),
+            self.memories.max_wasm_pages,
+            req.limiter,
+        )?;
+
+        Self::set_instance_tables(
+            instance,
+            self.tables.get(index),
+            self.tables.max_elements,
+            req.limiter,
+        )?;
+
+        initialize_vmcontext(instance, req);
+
+        Ok(InstanceHandle {
+            instance: instance as _,
+        })
+    }
+
     fn allocate(
         &self,
         strategy: PoolingAllocationStrategy,
-        mut req: InstanceAllocationRequest,
+        req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
         let index = {
             let mut free_list = self.free_list.lock().unwrap();
@@ -390,36 +426,14 @@ impl InstancePool {
             free_list.swap_remove(free_index)
         };
 
-        let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
-
         unsafe {
-            let instance = self.instance(index);
-
-            instance.module = req.module.clone();
-            instance.offsets = VMOffsets::new(
-                std::mem::size_of::<*const u8>() as u8,
-                instance.module.as_ref(),
-            );
-            instance.host_state = host_state;
-
-            Self::set_instance_memories(
-                instance,
-                self.memories.get(index),
-                self.memories.max_wasm_pages,
-                &req.limiter,
-            )?;
-
-            Self::set_instance_tables(
-                instance,
-                self.tables.get(index),
-                self.tables.max_elements,
-                &req.limiter,
-            )?;
-
-            initialize_vmcontext(instance, req);
-
-            Ok(InstanceHandle {
-                instance: instance as _,
+            self.setup_instance(index, req).or_else(|e| {
+                // Deallocate the allocated instance on error
+                let instance = self.instance(index);
+                self.deallocate(&InstanceHandle {
+                    instance: instance as _,
+                });
+                Err(e)
             })
         }
     }
@@ -482,7 +496,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
         max_pages: u32,
-        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -514,7 +528,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut tables: impl Iterator<Item = *mut u8>,
         max_elements: u32,
-        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -526,9 +540,10 @@ impl InstancePool {
             commit_table_pages(base, max_elements as usize * mem::size_of::<*mut u8>())
                 .map_err(InstantiationError::Resource)?;
 
-            instance
-                .tables
-                .push(Table::new_static(plan, base as _, max_elements, limiter));
+            instance.tables.push(
+                Table::new_static(plan, base as _, max_elements, limiter)
+                    .map_err(InstantiationError::Resource)?,
+            );
         }
 
         let mut dropped_elements = instance.dropped_elements.borrow_mut();

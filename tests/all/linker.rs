@@ -51,11 +51,11 @@ fn link_twice_bad() -> Result<()> {
 
     // memories
     let ty = MemoryType::new(Limits::new(1, None));
-    let memory = Memory::new(&store, ty);
+    let memory = Memory::new(&store, ty)?;
     linker.define("m", "", memory.clone())?;
     assert!(linker.define("m", "", memory.clone()).is_err());
     let ty = MemoryType::new(Limits::new(2, None));
-    let memory = Memory::new(&store, ty);
+    let memory = Memory::new(&store, ty)?;
     assert!(linker.define("m", "", memory.clone()).is_err());
 
     // tables

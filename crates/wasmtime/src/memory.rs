@@ -262,7 +262,7 @@ impl Memory {
     /// let store = Store::new(&engine);
     ///
     /// let memory_ty = MemoryType::new(Limits::new(1, None));
-    /// let memory = Memory::new(&store, memory_ty);
+    /// let memory = Memory::new(&store, memory_ty)?;
     ///
     /// let module = Module::new(&engine, "(module (memory (import \"\" \"\") 1))")?;
     /// let instance = Instance::new(&store, &module, &[memory.into()])?;
@@ -270,13 +270,12 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(store: &Store, ty: MemoryType) -> Memory {
-        let (instance, wasmtime_export) =
-            generate_memory_export(store, &ty).expect("generated memory");
-        Memory {
+    pub fn new(store: &Store, ty: MemoryType) -> Result<Memory> {
+        let (instance, wasmtime_export) = generate_memory_export(store, &ty)?;
+        Ok(Memory {
             instance,
             wasmtime_export,
-        }
+        })
     }
 
     /// Returns the underlying type of this memory.
@@ -572,7 +571,7 @@ mod tests {
             .dynamic_memory_guard_size(0);
         let store = Store::new(&Engine::new(&cfg).unwrap());
         let ty = MemoryType::new(Limits::new(1, None));
-        let mem = Memory::new(&store, ty);
+        let mem = Memory::new(&store, ty).unwrap();
         assert_eq!(mem.wasmtime_export.memory.offset_guard_size, 0);
         match mem.wasmtime_export.memory.style {
             wasmtime_environ::MemoryStyle::Dynamic => {}

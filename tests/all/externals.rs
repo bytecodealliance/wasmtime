@@ -67,7 +67,7 @@ fn cross_store() -> anyhow::Result<()> {
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let global = Global::new(&store2, ty, Val::I32(0))?;
     let ty = MemoryType::new(Limits::new(1, None));
-    let memory = Memory::new(&store2, ty);
+    let memory = Memory::new(&store2, ty)?;
     let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
     let table = Table::new(&store2, ty, Val::FuncRef(None))?;
 
@@ -356,7 +356,7 @@ fn read_write_memory_via_api() {
     let cfg = Config::new();
     let store = Store::new(&Engine::new(&cfg).unwrap());
     let ty = MemoryType::new(Limits::new(1, None));
-    let mem = Memory::new(&store, ty);
+    let mem = Memory::new(&store, ty).unwrap();
     mem.grow(1).unwrap();
 
     let value = b"hello wasm";

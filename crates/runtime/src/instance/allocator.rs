@@ -15,6 +15,7 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::ptr::{self, NonNull};
+use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
@@ -61,7 +62,7 @@ pub struct InstanceAllocationRequest<'a> {
     pub module_info_lookup: Option<*const dyn ModuleInfoLookup>,
 
     /// The resource limiter to use for the instance.
-    pub limiter: Option<&'a Arc<dyn ResourceLimiter>>,
+    pub limiter: Option<&'a Rc<dyn ResourceLimiter>>,
 }
 
 /// An link error while instantiating a module.
@@ -595,21 +596,21 @@ impl OnDemandInstanceAllocator {
 
     fn create_tables(
         module: &Module,
-        limiter: &Option<&Arc<dyn ResourceLimiter>>,
-    ) -> PrimaryMap<DefinedTableIndex, Table> {
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<PrimaryMap<DefinedTableIndex, Table>, InstantiationError> {
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
-            tables.push(Table::new_dynamic(table, limiter));
+            tables.push(Table::new_dynamic(table, limiter).map_err(InstantiationError::Resource)?);
         }
-        tables
+        Ok(tables)
     }
 
     fn create_memories(
         &self,
         module: &Module,
-        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -642,8 +643,8 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module, &req.limiter)?;
-        let tables = Self::create_tables(&req.module, &req.limiter);
+        let memories = self.create_memories(&req.module, req.limiter)?;
+        let tables = Self::create_tables(&req.module, req.limiter)?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 

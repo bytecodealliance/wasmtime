@@ -5,13 +5,13 @@
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
 use crate::ResourceLimiter;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use more_asserts::{assert_ge, assert_le};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
 use std::convert::TryFrom;
 use std::ptr;
-use std::sync::Arc;
+use std::rc::Rc;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A memory allocator
@@ -203,7 +203,7 @@ enum MemoryStorage {
 /// Represents an instantiation of a WebAssembly memory.
 pub struct Memory {
     storage: MemoryStorage,
-    limiter: Option<Arc<dyn ResourceLimiter>>,
+    limiter: Option<Rc<dyn ResourceLimiter>>,
 }
 
 impl Memory {
@@ -211,12 +211,13 @@ impl Memory {
     pub fn new_dynamic(
         plan: &MemoryPlan,
         creator: &dyn RuntimeMemoryCreator,
-        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<Self> {
-        Ok(Self {
-            storage: MemoryStorage::Dynamic(creator.new_memory(plan)?),
-            limiter: limiter.cloned(),
-        })
+        Self::new(
+            plan,
+            MemoryStorage::Dynamic(creator.new_memory(plan)?),
+            limiter,
+        )
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
@@ -225,21 +226,50 @@ impl Memory {
         base: *mut u8,
         maximum: u32,
         make_accessible: fn(*mut u8, usize) -> Result<()>,
-        limiter: &Option<&Arc<dyn ResourceLimiter>>,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<Self> {
-        if plan.memory.minimum > 0 {
-            make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize)?;
+        let storage = MemoryStorage::Static {
+            base,
+            size: Cell::new(plan.memory.minimum),
+            maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
+            make_accessible,
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            guard_page_faults: RefCell::new(Vec::new()),
+        };
+
+        Self::new(plan, storage, limiter)
+    }
+
+    fn new(
+        plan: &MemoryPlan,
+        storage: MemoryStorage,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<Self> {
+        if let Some(limiter) = limiter {
+            if !limiter.memory_growing(0, plan.memory.minimum, plan.memory.maximum) {
+                bail!(
+                    "memory minimum size of {} pages exceeds memory limits",
+                    plan.memory.minimum
+                );
+            }
+        }
+
+        if let MemoryStorage::Static {
+            base,
+            make_accessible,
+            ..
+        } = &storage
+        {
+            if plan.memory.minimum > 0 {
+                make_accessible(
+                    *base,
+                    plan.memory.minimum as usize * WASM_PAGE_SIZE as usize,
+                )?;
+            }
         }
 
         Ok(Self {
-            storage: MemoryStorage::Static {
-                base,
-                size: Cell::new(plan.memory.minimum),
-                maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
-                make_accessible,
-                #[cfg(all(feature = "uffd", target_os = "linux"))]
-                guard_page_faults: RefCell::new(Vec::new()),
-            },
+            storage,
             limiter: limiter.cloned(),
         })
     }
@@ -288,11 +318,15 @@ impl Memory {
     /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
     /// this unsafety.
     pub unsafe fn grow(&self, delta: u32) -> Option<u32> {
-        if let Some(limiter) = &self.limiter {
-            let current = self.size();
-            let desired = current.checked_add(delta)?;
+        let old_size = self.size();
+        if delta == 0 {
+            return Some(old_size);
+        }
 
-            if !limiter.memory_growing(current, desired, self.maximum()) {
+        let new_size = old_size.checked_add(delta)?;
+
+        if let Some(limiter) = &self.limiter {
+            if !limiter.memory_growing(old_size, new_size, self.maximum()) {
                 return None;
             }
         }
@@ -308,13 +342,6 @@ impl Memory {
                 // Reset any faulted guard pages before growing the memory.
                 #[cfg(all(feature = "uffd", target_os = "linux"))]
                 self.reset_guard_pages().ok()?;
-
-                let old_size = size.get();
-                if delta == 0 {
-                    return Some(old_size);
-                }
-
-                let new_size = old_size.checked_add(delta)?;
 
                 if new_size > *maximum || new_size >= WASM_MAX_PAGES {
                     return None;
