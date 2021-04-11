@@ -362,6 +362,7 @@ impl<'a> Instantiator<'a> {
                         let expected_ty =
                             self.cur.module.compiled_module().module().type_of(*index);
                         matching::MatchCx {
+                            signatures: self.cur.module.signatures(),
                             types: self.cur.module.types(),
                             store: self.store,
                         }
@@ -513,14 +514,12 @@ impl<'a> Instantiator<'a> {
         unsafe {
             let engine = self.store.engine();
             let allocator = engine.allocator();
-            let signatures = self.store.signatures().borrow();
-            let signatures = signatures.lookup_table(&self.cur.module);
 
             let instance = allocator.allocate(InstanceAllocationRequest {
                 module: compiled_module.module().clone(),
                 finished_functions: compiled_module.finished_functions(),
                 imports: self.cur.build(),
-                shared_signatures: (&signatures).into(),
+                shared_signatures: self.cur.module.signatures().into(),
                 host_state: Box::new(()),
                 interrupts: self.store.interrupts(),
                 externref_activations_table: self.store.externref_activations_table()

@@ -1,10 +1,31 @@
+use crate::signatures::{SharedSignatures, SignatureRegistry, TrampolineMap};
 use crate::Config;
 use anyhow::Result;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
+use wasmtime_environ::{
+    entity::PrimaryMap,
+    wasm::{SignatureIndex, WasmFuncType},
+};
 use wasmtime_jit::Compiler;
-use wasmtime_runtime::{debug_builtins, InstanceAllocator};
+use wasmtime_runtime::{
+    debug_builtins, InstanceAllocator, InstanceHandle, VMCallerCheckedAnyfunc,
+    VMSharedSignatureIndex, VMTrampoline,
+};
+
+#[derive(Default)]
+struct EngineHostFuncs {
+    anyfuncs: HashMap<InstanceHandle, Box<VMCallerCheckedAnyfunc>>,
+    trampolines: TrampolineMap,
+}
+
+// This is safe for send and sync as it is read-only once the
+// engine is constructed and the host functions live with the config,
+// which the engine keeps a strong reference to.
+unsafe impl Send for EngineHostFuncs {}
+unsafe impl Sync for EngineHostFuncs {}
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -37,6 +58,16 @@ struct EngineInner {
     config: Config,
     compiler: Compiler,
     allocator: Box<dyn InstanceAllocator>,
+    signatures: RwLock<SignatureRegistry>,
+    host_funcs: EngineHostFuncs,
+}
+
+impl Drop for EngineInner {
+    fn drop(&mut self) {
+        let mut signatures = self.signatures.write().unwrap();
+        signatures.unregister(self.host_funcs.trampolines.indexes());
+        assert!(signatures.is_empty());
+    }
 }
 
 impl Engine {
@@ -46,11 +77,29 @@ impl Engine {
         debug_builtins::ensure_exported();
         config.validate()?;
         let allocator = config.build_allocator()?;
+        let mut signatures = SignatureRegistry::default();
+        let mut host_funcs = EngineHostFuncs::default();
+
+        // Register all the host function signatures
+        for func in config.host_funcs() {
+            let sig = signatures.register(func.ty.as_wasm_func_type());
+
+            // Cloning the instance handle is safe as host functions outlive the engine
+            host_funcs.anyfuncs.insert(
+                unsafe { func.instance.clone() },
+                Box::new(func.anyfunc(sig)),
+            );
+
+            host_funcs.trampolines.insert(sig, func.trampoline);
+        }
+
         Ok(Engine {
             inner: Arc::new(EngineInner {
                 config: config.clone(),
                 compiler: config.build_compiler(allocator.as_ref()),
                 allocator,
+                signatures: RwLock::new(signatures),
+                host_funcs,
             }),
         })
     }
@@ -77,6 +126,53 @@ impl Engine {
     /// Returns whether the engine `a` and `b` refer to the same configuration.
     pub fn same(a: &Engine, b: &Engine) -> bool {
         Arc::ptr_eq(&a.inner, &b.inner)
+    }
+
+    pub(crate) fn register_module_signatures(
+        &self,
+        signatures: &PrimaryMap<SignatureIndex, WasmFuncType>,
+        trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
+    ) -> (SharedSignatures, TrampolineMap) {
+        self.inner
+            .signatures
+            .write()
+            .unwrap()
+            .register_module(signatures, trampolines)
+    }
+
+    pub(crate) fn register_signature(&self, ty: &WasmFuncType) -> VMSharedSignatureIndex {
+        self.inner.signatures.write().unwrap().register(ty)
+    }
+
+    pub(crate) fn unregister_signatures(
+        &self,
+        indexes: impl Iterator<Item = VMSharedSignatureIndex>,
+    ) {
+        self.inner.signatures.write().unwrap().unregister(indexes);
+    }
+
+    pub(crate) fn lookup_func_type(&self, index: VMSharedSignatureIndex) -> Option<WasmFuncType> {
+        self.inner
+            .signatures
+            .read()
+            .unwrap()
+            .lookup_type(index)
+            .cloned()
+    }
+
+    pub(crate) fn host_func_trampolines(&self) -> &TrampolineMap {
+        &self.inner.host_funcs.trampolines
+    }
+
+    pub(crate) fn host_func_anyfunc(
+        &self,
+        instance: &InstanceHandle,
+    ) -> Option<&VMCallerCheckedAnyfunc> {
+        self.inner
+            .host_funcs
+            .anyfuncs
+            .get(instance)
+            .map(AsRef::as_ref)
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.

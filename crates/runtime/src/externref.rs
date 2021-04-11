@@ -753,7 +753,7 @@ pub struct StackMapRegistry {
 struct StackMapRegistryInner {
     /// A map from the highest pc in a module, to its stack maps.
     ///
-    /// For details, see the comment above `GlobalFrameInfo::ranges`.
+    /// For details, see the comment above `GlobalModuleRegistry`.
     ranges: BTreeMap<usize, ModuleStackMaps>,
 }
 

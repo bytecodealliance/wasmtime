@@ -25,7 +25,7 @@
 //! use a thread-local to store information about how to unwind. Additionally
 //! this requires that the check of whether a pc is a wasm trap or not is a
 //! global check rather than a per-thread check. This necessitates the existence
-//! of `GlobalFrameInfo` in the `wasmtime` crate.
+//! of `GlobalModuleRegistry` in the `wasmtime` crate.
 //!
 //! Otherwise this file heavily uses the `mach` Rust crate for type and
 //! function declarations. Many bits and pieces are copied or translated from

@@ -1,35 +1,30 @@
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::Mutex;
-use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::ir;
-use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::{FunctionAddressMap, TrapInformation};
-use wasmtime_jit::CompiledModule;
+//! Implements a registry of modules for a store.
 
-/// This is a structure that lives within a `Store` and retains information
-/// about all modules registered with the `Store` via instantiation.
-///
-/// "frame information" here refers to things like determining whether a
-/// program counter is a wasm program counter, and additionally mapping program
-/// counters to wasm filenames, modules, line numbers, etc. This store of
-/// information lives as long as a `Store` lives since modules are never
-/// unloaded today.
-#[derive(Default)]
-pub struct StoreFrameInfo {
-    /// An internal map that keeps track of backtrace frame information for
-    /// each module.
-    ///
-    /// This map is morally a map of ranges to a map of information for that
-    /// module. Each module is expected to reside in a disjoint section of
-    /// contiguous memory. No modules can overlap.
-    ///
-    /// The key of this map is the highest address in the module and the value
-    /// is the module's information, which also contains the start address.
-    ranges: BTreeMap<usize, ModuleFrameInfo>,
+use crate::{module::ModuleSharedSignatures, Module};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
+use wasmtime_environ::{
+    entity::EntityRef, ir, wasm::DefinedFuncIndex, FunctionAddressMap, TrapInformation,
+};
+use wasmtime_jit::CompiledModule;
+use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
+
+lazy_static::lazy_static! {
+    static ref GLOBAL_MODULES: Mutex<GlobalModuleRegistry> = Default::default();
 }
 
-impl StoreFrameInfo {
+/// Used for registering modules with a store.
+///
+/// The map is from the ending (exclusive) address for the module code to
+/// the registered module.
+///
+/// The `BTreeMap` is used to quickly locate a module based on a program counter value.
+#[derive(Default)]
+pub struct ModuleRegistry(BTreeMap<usize, RegisteredModule>);
+
+impl ModuleRegistry {
     /// Fetches frame information about a program counter in a backtrace.
     ///
     /// Returns an object if this `pc` is known to some previously registered
@@ -48,8 +43,8 @@ impl StoreFrameInfo {
         self.module(pc)?.lookup_trap_info(pc)
     }
 
-    fn module(&self, pc: usize) -> Option<&ModuleFrameInfo> {
-        let (end, info) = self.ranges.range(pc..).next()?;
+    fn module(&self, pc: usize) -> Option<&RegisteredModule> {
+        let (end, info) = self.0.range(pc..).next()?;
         if pc < info.start || *end < pc {
             return None;
         }
@@ -57,57 +52,78 @@ impl StoreFrameInfo {
         Some(info)
     }
 
-    /// Registers a new compiled module's frame information.
-    pub fn register(&mut self, module: &Arc<CompiledModule>) {
-        let (start, end) = module.code().range();
+    /// Registers a new module with the registry.
+    pub fn register(&mut self, module: &Module) -> bool {
+        let compiled_module = module.compiled_module();
+        let (start, end) = compiled_module.code().range();
 
-        // Ignore modules with no code or finished functions
-        if start == end || module.finished_functions().is_empty() {
-            return;
+        // Ignore modules with no code, finished functions, or if the module is already registered
+        if start == end || compiled_module.finished_functions().is_empty() {
+            return false;
         }
 
         // The module code range is exclusive for end, so make it inclusive as it
         // may be a valid PC value
         let end = end - 1;
 
+        if self.0.get(&end).is_some() {
+            return false;
+        }
+
         // Assert that this module's code doesn't collide with any other registered modules
-        if let Some((_, prev)) = self.ranges.range(end..).next() {
+        if let Some((_, prev)) = self.0.range(end..).next() {
             assert!(prev.start > end);
         }
-        if let Some((prev_end, _)) = self.ranges.range(..=start).next_back() {
+
+        if let Some((prev_end, _)) = self.0.range(..=start).next_back() {
             assert!(*prev_end < start);
         }
 
-        let prev = self.ranges.insert(
+        let prev = self.0.insert(
             end,
-            ModuleFrameInfo {
+            RegisteredModule {
                 start,
-                module: module.clone(),
+                module: compiled_module.clone(),
+                signatures: module.shared_signatures().clone(),
             },
         );
         assert!(prev.is_none());
 
-        GLOBAL_INFO.lock().unwrap().register(start, end, module);
+        GLOBAL_MODULES.lock().unwrap().register(start, end, module);
+        true
+    }
+
+    /// Looks up a trampoline from a shared signature index.
+    ///
+    /// This will search all modules associated with the store for a suitable trampoline
+    /// given the shared signature index.
+    pub fn lookup_trampoline(&self, index: VMSharedSignatureIndex) -> Option<VMTrampoline> {
+        for (_, m) in &self.0 {
+            if let Some(trampoline) = m.signatures.trampolines.get(index) {
+                return Some(trampoline);
+            }
+        }
+
+        None
     }
 }
 
-impl Drop for StoreFrameInfo {
+impl Drop for ModuleRegistry {
     fn drop(&mut self) {
-        let mut info = GLOBAL_INFO.lock().unwrap();
-        for end in self.ranges.keys() {
+        let mut info = GLOBAL_MODULES.lock().unwrap();
+        for end in self.0.keys() {
             info.unregister(*end);
         }
     }
 }
 
-/// Represents a module's frame information.
-#[derive(Clone)]
-pub struct ModuleFrameInfo {
+struct RegisteredModule {
     start: usize,
     module: Arc<CompiledModule>,
+    signatures: Arc<ModuleSharedSignatures>,
 }
 
-impl ModuleFrameInfo {
+impl RegisteredModule {
     /// Determines if the related module has unparsed debug information.
     pub fn has_unparsed_debuginfo(&self) -> bool {
         self.module.has_unparsed_debuginfo()
@@ -214,47 +230,29 @@ impl ModuleFrameInfo {
     }
 }
 
-/// This is the dual of `StoreFrameInfo` and is stored globally (as the name
-/// implies) rather than simply in one `Store`.
+/// This is the global module registry that stores information for all modules
+/// that are currently in use by any `Store`.
 ///
 /// The purpose of this map is to be called from signal handlers to determine
 /// whether a program counter is a wasm trap or not. Specifically macOS has
 /// no contextual information about the thread available, hence the necessity
 /// for global state rather than using thread local state.
 ///
-/// This is similar to `StoreFrameInfo` except that it has less information and
-/// supports removal. Any time anything is registered with a `StoreFrameInfo`
-/// it is also automatically registered with the singleton global frame
-/// information. When a `StoreFrameInfo` is destroyed then all of its entries
-/// are removed from the global frame information.
+/// This is similar to `ModuleRegistry` except that it has less information and
+/// supports removal. Any time anything is registered with a `ModuleRegistry`
+/// it is also automatically registered with the singleton global module
+/// registry. When a `ModuleRegistry` is destroyed then all of its entries
+/// are removed from the global module registry.
 #[derive(Default)]
-pub struct GlobalFrameInfo {
-    // The map here behaves the same way as `StoreFrameInfo`.
-    ranges: BTreeMap<usize, GlobalModuleFrameInfo>,
-}
+pub struct GlobalModuleRegistry(BTreeMap<usize, GlobalRegisteredModule>);
 
-/// This is the equivalent of `ModuleFrameInfo` except it keeps a reference count.
-struct GlobalModuleFrameInfo {
-    module: ModuleFrameInfo,
-
-    /// Note that modules can be instantiated in many stores, so the purpose of
-    /// this field is to keep track of how many stores have registered a
-    /// module. Information is only removed from the global store when this
-    /// reference count reaches 0.
-    references: usize,
-}
-
-lazy_static::lazy_static! {
-    static ref GLOBAL_INFO: Mutex<GlobalFrameInfo> = Default::default();
-}
-
-impl GlobalFrameInfo {
+impl GlobalModuleRegistry {
     /// Returns whether the `pc`, according to globally registered information,
     /// is a wasm trap or not.
     pub(crate) fn is_wasm_pc(pc: usize) -> bool {
-        let info = GLOBAL_INFO.lock().unwrap();
+        let info = GLOBAL_MODULES.lock().unwrap();
 
-        match info.ranges.range(pc..).next() {
+        match info.0.range(pc..).next() {
             Some((end, info)) => {
                 if pc < info.module.start || *end < pc {
                     return false;
@@ -263,7 +261,7 @@ impl GlobalFrameInfo {
                 match info.module.func(pc) {
                     Some((index, offset)) => {
                         let (addr_map, _) = info.module.module.func_info(index);
-                        ModuleFrameInfo::instr_pos(offset, addr_map).is_some()
+                        RegisteredModule::instr_pos(offset, addr_map).is_some()
                     }
                     None => false,
                 }
@@ -274,17 +272,15 @@ impl GlobalFrameInfo {
 
     /// Registers a new region of code, described by `(start, end)` and with
     /// the given function information, with the global information.
-    fn register(&mut self, start: usize, end: usize, module: &Arc<CompiledModule>) {
-        let info = self
-            .ranges
-            .entry(end)
-            .or_insert_with(|| GlobalModuleFrameInfo {
-                module: ModuleFrameInfo {
-                    start,
-                    module: module.clone(),
-                },
-                references: 0,
-            });
+    fn register(&mut self, start: usize, end: usize, module: &Module) {
+        let info = self.0.entry(end).or_insert_with(|| GlobalRegisteredModule {
+            module: RegisteredModule {
+                start,
+                module: module.compiled_module().clone(),
+                signatures: module.shared_signatures().clone(),
+            },
+            references: 0,
+        });
 
         // Note that ideally we'd debug_assert that the information previously
         // stored, if any, matches the `functions` we were given, but for now we
@@ -293,15 +289,26 @@ impl GlobalFrameInfo {
         info.references += 1;
     }
 
-    /// Unregisters a region of code (keyed by the `end` address) from this
+    /// Unregisters a region of code (keyed by the `end` address) from the
     /// global information.
     fn unregister(&mut self, end: usize) {
-        let info = self.ranges.get_mut(&end).unwrap();
+        let info = self.0.get_mut(&end).unwrap();
         info.references -= 1;
         if info.references == 0 {
-            self.ranges.remove(&end);
+            self.0.remove(&end);
         }
     }
+}
+
+/// This is the equivalent of `RegisteredModule` except it keeps a reference count.
+struct GlobalRegisteredModule {
+    module: RegisteredModule,
+
+    /// Note that modules can be instantiated in many stores, so the purpose of
+    /// this field is to keep track of how many stores have registered a
+    /// module. Information is only removed from the global registry when this
+    /// reference count reaches 0.
+    references: usize,
 }
 
 /// Description of a frame in a backtrace for a [`Trap`].
@@ -319,19 +326,6 @@ pub struct FrameInfo {
     func_start: ir::SourceLoc,
     instr: ir::SourceLoc,
     symbols: Vec<FrameSymbol>,
-}
-
-/// Debug information for a symbol that is attached to a [`FrameInfo`].
-///
-/// When DWARF debug information is present in a wasm file then this structure
-/// can be found on a [`FrameInfo`] and can be used to learn about filenames,
-/// line numbers, etc, which are the origin of a function in a stack trace.
-#[derive(Debug)]
-pub struct FrameSymbol {
-    name: Option<String>,
-    file: Option<String>,
-    line: Option<u32>,
-    column: Option<u32>,
 }
 
 impl FrameInfo {
@@ -405,6 +399,19 @@ impl FrameInfo {
     }
 }
 
+/// Debug information for a symbol that is attached to a [`FrameInfo`].
+///
+/// When DWARF debug information is present in a wasm file then this structure
+/// can be found on a [`FrameInfo`] and can be used to learn about filenames,
+/// line numbers, etc, which are the origin of a function in a stack trace.
+#[derive(Debug)]
+pub struct FrameSymbol {
+    name: Option<String>,
+    file: Option<String>,
+    line: Option<u32>,
+    column: Option<u32>,
+}
+
 impl FrameSymbol {
     /// Returns the function name associated with this symbol.
     ///
@@ -463,7 +470,7 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
     )?;
     // Create an instance to ensure the frame information is registered.
     Instance::new(&store, &module, &[])?;
-    let info = store.frame_info().borrow();
+    let modules = store.modules().borrow();
     for (i, alloc) in module.compiled_module().finished_functions() {
         let (start, end) = unsafe {
             let ptr = (**alloc).as_ptr();
@@ -471,7 +478,7 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
             (ptr as usize, ptr as usize + len)
         };
         for pc in start..end {
-            let (frame, _) = info.lookup_frame_info(pc).unwrap();
+            let (frame, _) = modules.lookup_frame_info(pc).unwrap();
             assert!(frame.func_index() == i.as_u32());
         }
     }

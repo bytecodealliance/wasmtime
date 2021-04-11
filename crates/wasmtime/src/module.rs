@@ -1,4 +1,7 @@
-use crate::types::{ExportType, ExternType, ImportType};
+use crate::{
+    signatures::{SharedSignatures, TrampolineMap},
+    types::{ExportType, ExternType, ImportType},
+};
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
 use std::fs;
@@ -8,12 +11,35 @@ use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::ModuleIndex;
+use wasmtime_environ::wasm::{ModuleIndex, SignatureIndex};
 use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
+use wasmtime_runtime::VMSharedSignatureIndex;
 
+mod registry;
 mod serialization;
 
+pub use registry::{FrameInfo, FrameSymbol, GlobalModuleRegistry, ModuleRegistry};
 pub use serialization::SerializedModule;
+
+// A wrapper around registered signatures and trampolines that will automatically
+/// unregister the signatures when dropped.
+pub(crate) struct ModuleSharedSignatures {
+    engine: Engine,
+    signatures: SharedSignatures,
+    trampolines: TrampolineMap,
+}
+
+impl Drop for ModuleSharedSignatures {
+    fn drop(&mut self) {
+        if !self.signatures.is_empty() {
+            // Use the shared signatures map to unregister as not every registered
+            // signature will have a trampoline, but every index in the trampoline map
+            // will be present in the shared signatures map.
+            self.engine
+                .unregister_signatures(self.signatures.values().cloned());
+        }
+    }
+}
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -102,6 +128,8 @@ struct ModuleInner {
     /// Type information of this module and all `artifact_upvars` compiled
     /// modules.
     types: Arc<TypeTables>,
+    /// Registered shared signature for the module.
+    signatures: Arc<ModuleSharedSignatures>,
 }
 
 impl Module {
@@ -318,10 +346,16 @@ impl Module {
             engine.compiler().isa(),
             &*engine.config().profiler,
         )?;
-        let module = modules.remove(main_module);
 
         // Validate the module can be used with the current allocator
-        engine.allocator().validate(module.module())?;
+        engine.allocator().validate(modules[main_module].module())?;
+
+        let (signatures, trampolines) = engine.register_module_signatures(
+            &types.wasm_signatures,
+            modules.iter().flat_map(|m| m.trampolines().iter().cloned()),
+        );
+
+        let module = modules.remove(main_module);
 
         Ok(Module {
             inner: Arc::new(ModuleInner {
@@ -330,6 +364,11 @@ impl Module {
                 types: Arc::new(types),
                 artifact_upvars: modules,
                 module_upvars: Vec::new(),
+                signatures: Arc::new(ModuleSharedSignatures {
+                    engine: engine.clone(),
+                    signatures,
+                    trampolines,
+                }),
             }),
         })
     }
@@ -416,8 +455,8 @@ impl Module {
     ) -> Module {
         Module {
             inner: Arc::new(ModuleInner {
-                types: self.types().clone(),
-                engine: self.engine().clone(),
+                types: self.inner.types.clone(),
+                engine: self.inner.engine.clone(),
                 module: self.inner.artifact_upvars[artifact_index].clone(),
                 artifact_upvars: artifact_upvars
                     .iter()
@@ -432,6 +471,7 @@ impl Module {
                         wasmtime_environ::ModuleUpvar::Local(i) => modules[i].clone(),
                     })
                     .collect(),
+                signatures: self.inner.signatures.clone(),
             }),
         }
     }
@@ -446,6 +486,14 @@ impl Module {
 
     pub(crate) fn types(&self) -> &Arc<TypeTables> {
         &self.inner.types
+    }
+
+    pub(crate) fn signatures(&self) -> &PrimaryMap<SignatureIndex, VMSharedSignatureIndex> {
+        &self.inner.signatures.signatures
+    }
+
+    pub(crate) fn shared_signatures(&self) -> &Arc<ModuleSharedSignatures> {
+        &self.inner.signatures
     }
 
     /// Looks up the module upvar value at the `index` specified.
