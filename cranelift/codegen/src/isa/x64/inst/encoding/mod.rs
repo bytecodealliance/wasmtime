@@ -1,4 +1,5 @@
 use crate::{isa::x64, machinst::MachBuffer};
+use std::vec::Vec;
 
 pub mod evex;
 pub mod rex;
@@ -33,5 +34,24 @@ impl CodeSink for MachBuffer<x64::inst::Inst> {
 
     fn put8(&mut self, value: u64) {
         self.put8(value)
+    }
+}
+
+/// Provide a convenient implementation for testing.
+impl CodeSink for Vec<u8> {
+    fn put1(&mut self, v: u8) {
+        self.extend_from_slice(&[v])
+    }
+
+    fn put2(&mut self, v: u16) {
+        self.extend_from_slice(&v.to_le_bytes())
+    }
+
+    fn put4(&mut self, v: u32) {
+        self.extend_from_slice(&v.to_le_bytes())
+    }
+
+    fn put8(&mut self, v: u64) {
+        self.extend_from_slice(&v.to_le_bytes())
     }
 }
