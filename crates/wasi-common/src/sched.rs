@@ -1,16 +1,18 @@
 use crate::clocks::WasiMonotonicClock;
 use crate::file::WasiFile;
 use crate::Error;
-use cap_std::time::{Duration, Instant};
+use cap_std::time::Instant;
 use std::cell::Ref;
 pub mod subscription;
+pub use cap_std::time::Duration;
 
 use subscription::{MonotonicClockSubscription, RwSubscription, Subscription, SubscriptionResult};
 
+#[wiggle::async_trait]
 pub trait WasiSched {
-    fn poll_oneoff(&self, poll: &Poll) -> Result<(), Error>;
-    fn sched_yield(&self) -> Result<(), Error>;
-    fn sleep(&self, duration: Duration) -> Result<(), Error>;
+    async fn poll_oneoff<'a>(&self, poll: &Poll<'a>) -> Result<(), Error>;
+    async fn sched_yield(&self) -> Result<(), Error>;
+    async fn sleep(&self, duration: Duration) -> Result<(), Error>;
 }
 
 pub struct Userdata(u64);

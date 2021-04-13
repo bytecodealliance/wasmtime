@@ -22,6 +22,7 @@ use wiggle::GuestPtr;
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
     errors: { errno => Error },
+    async: { wasi_snapshot_preview1::{poll_oneoff, sched_yield} }
 });
 
 impl wiggle::GuestErrorType for types::Errno {
@@ -188,7 +189,8 @@ impl TryFrom<std::io::Error> for types::Errno {
     }
 }
 
-impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
+#[wiggle::async_trait]
+impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     fn args_get<'b>(
         &self,
         argv: &GuestPtr<'b, GuestPtr<'b, u8>>,
@@ -891,10 +893,10 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .unlink_file(path.as_str()?.deref())
     }
 
-    fn poll_oneoff(
+    async fn poll_oneoff<'b>(
         &self,
-        subs: &GuestPtr<types::Subscription>,
-        events: &GuestPtr<types::Event>,
+        subs: &GuestPtr<'b, types::Subscription>,
+        events: &GuestPtr<'b, types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
         if nsubscriptions == 0 {
@@ -912,7 +914,9 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                     .flags
                     .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
                 {
-                    self.sched.sleep(Duration::from_nanos(clocksub.timeout))?;
+                    self.sched
+                        .sleep(Duration::from_nanos(clocksub.timeout))
+                        .await?;
                     events.write(types::Event {
                         userdata: sub.userdata,
                         error: types::Errno::Success,
@@ -978,7 +982,7 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
         }
 
-        self.sched.poll_oneoff(&poll)?;
+        self.sched.poll_oneoff(&poll).await?;
 
         let results = poll.results();
         let num_results = results.len();
@@ -1066,8 +1070,8 @@ impl<'a> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Err(Error::trap("proc_raise unsupported"))
     }
 
-    fn sched_yield(&self) -> Result<(), Error> {
-        self.sched.sched_yield()
+    async fn sched_yield(&self) -> Result<(), Error> {
+        self.sched.sched_yield().await
     }
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<(), Error> {

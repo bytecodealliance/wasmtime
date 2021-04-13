@@ -16,6 +16,7 @@ use wiggle::GuestPtr;
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
     errors: { errno => Error },
+    async: { wasi_unstable::{poll_oneoff, sched_yield} }
 });
 
 impl wiggle::GuestErrorType for types::Errno {
@@ -332,6 +333,7 @@ convert_flags_bidirectional!(
 
 // This implementation, wherever possible, delegates directly to the Snapshot1 implementation,
 // performing the no-op type conversions along the way.
+#[wiggle::async_trait]
 impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
     fn args_get<'b>(
         &self,
@@ -720,10 +722,10 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
     // The implementations are identical, but the `types::` in scope locally is different.
     // The bodies of these functions is mostly about converting the GuestPtr and types::-based
     // representation to use the Poll abstraction.
-    fn poll_oneoff(
+    async fn poll_oneoff<'b>(
         &self,
-        subs: &GuestPtr<types::Subscription>,
-        events: &GuestPtr<types::Event>,
+        subs: &GuestPtr<'b, types::Subscription>,
+        events: &GuestPtr<'b, types::Event>,
         nsubscriptions: types::Size,
     ) -> Result<types::Size, Error> {
         if nsubscriptions == 0 {
@@ -741,7 +743,9 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
                     .flags
                     .contains(types::Subclockflags::SUBSCRIPTION_CLOCK_ABSTIME)
                 {
-                    self.sched.sleep(Duration::from_nanos(clocksub.timeout))?;
+                    self.sched
+                        .sleep(Duration::from_nanos(clocksub.timeout))
+                        .await?;
                     events.write(types::Event {
                         userdata: sub.userdata,
                         error: types::Errno::Success,
@@ -807,7 +811,7 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
             }
         }
 
-        self.sched.poll_oneoff(&poll)?;
+        self.sched.poll_oneoff(&poll).await?;
 
         let results = poll.results();
         let num_results = results.len();
@@ -890,8 +894,8 @@ impl<'a> wasi_unstable::WasiUnstable for WasiCtx {
         Err(Error::trap("proc_raise unsupported"))
     }
 
-    fn sched_yield(&self) -> Result<(), Error> {
-        Snapshot1::sched_yield(self)
+    async fn sched_yield(&self) -> Result<(), Error> {
+        Snapshot1::sched_yield(self).await
     }
 
     fn random_get(&self, buf: &GuestPtr<u8>, buf_len: types::Size) -> Result<(), Error> {
