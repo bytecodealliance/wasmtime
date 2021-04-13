@@ -11,10 +11,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::{
-    sync::{Dir, WasiCtxBuilder},
-    Wasi,
-};
+use wasmtime_wasi::sync::{Dir, Wasi, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
