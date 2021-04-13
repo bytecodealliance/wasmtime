@@ -48,11 +48,6 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = Names::new(quote!(wasmtime_wiggle));
 
-    #[cfg(feature = "async")]
-    let async_config = config.async_.clone();
-    #[cfg(not(feature = "async"))]
-    let async_config = AsyncConf::default();
-
     let modules = config.modules.iter().map(|(name, module_conf)| {
         let module = doc
             .module(&witx::Id::new(name))
@@ -63,7 +58,7 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
             &names,
             &config.target,
             &config.ctx.name,
-            &async_config,
+            &config.async_,
         )
     });
     quote!( #(#modules)* ).into()
@@ -106,14 +101,22 @@ fn generate_module(
     let mut ctor_externs = Vec::new();
     let mut host_funcs = Vec::new();
 
+    #[cfg(not(feature = "async"))]
+    let mut requires_dummy_executor = false;
+
     for f in module.funcs() {
+        let is_async = async_conf.is_async(module.name.as_str(), f.name.as_str());
+        #[cfg(not(feature = "async"))]
+        if is_async {
+            requires_dummy_executor = true;
+        }
         generate_func(
             &module_id,
             &f,
             names,
             &target_module,
             ctx_type,
-            async_conf.is_async(module.name.as_str(), f.name.as_str()),
+            is_async,
             &mut fns,
             &mut ctor_externs,
             &mut host_funcs,
@@ -156,6 +159,15 @@ contained in the `cx` parameter.",
             Self::#adder_func(config, #module, #field);
         }
     });
+
+    #[cfg(not(feature = "async"))]
+    let dummy_executor = if requires_dummy_executor {
+        dummy_executor()
+    } else {
+        quote!()
+    };
+    #[cfg(feature = "async")]
+    let dummy_executor = quote!();
 
     quote! {
         #type_docs
@@ -219,6 +231,8 @@ contained in the `cx` parameter.",
             }
 
             #(#fns)*
+
+            #dummy_executor
         }
     }
 }
@@ -283,8 +297,10 @@ fn generate_func(
     });
 
     if is_async {
-        let wrapper = format_ident!("wrap{}_async", params.len());
-        ctors.push(quote! {
+        #[cfg(feature = "async")]
+        {
+            let wrapper = format_ident!("wrap{}_async", params.len());
+            ctors.push(quote! {
             let #name_ident = wasmtime::Func::#wrapper(
                 store,
                 ctx.clone(),
@@ -294,6 +310,23 @@ fn generate_func(
                 }
             );
         });
+        }
+
+        #[cfg(not(feature = "async"))]
+        {
+            // Emit a synchronous function. Self::#fn_ident returns a Future, so we need to
+            // use a dummy executor to let any synchronous code inside there execute correctly. If
+            // the future ends up Pending, this func will Trap.
+            ctors.push(quote! {
+                let my_ctx = ctx.clone();
+                let #name_ident = wasmtime::Func::wrap(
+                    store,
+                    move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                        Self::run_in_dummy_executor(Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*))
+                    }
+                );
+            });
+        }
     } else {
         ctors.push(quote! {
             let my_ctx = ctx.clone();
@@ -307,22 +340,45 @@ fn generate_func(
     }
 
     let host_wrapper = if is_async {
-        let wrapper = format_ident!("wrap{}_host_func_async", params.len());
-        quote! {
-            config.#wrapper(
-                module,
-                field,
-                move |caller #(,#arg_decls)*|
-                    -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
-                    Box::new(async move {
-                        let ctx = caller.store()
+        #[cfg(feature = "async")]
+        {
+            let wrapper = format_ident!("wrap{}_host_func_async", params.len());
+            quote! {
+                config.#wrapper(
+                    module,
+                    field,
+                    move |caller #(,#arg_decls)*|
+                        -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
+                        Box::new(async move {
+                            let ctx = caller.store()
+                                .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
+                                .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
+                            let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut() #(, #arg_names)*).await;
+                            result
+                        })
+                    }
+                );
+            }
+        }
+
+        #[cfg(not(feature = "async"))]
+        {
+            // Emit a synchronous host function. Self::#fn_ident returns a Future, so we need to
+            // use a dummy executor to let any synchronous code inside there execute correctly. If
+            // the future ends up Pending, this func will Trap.
+            quote! {
+                config.wrap_host_func(
+                    module,
+                    field,
+                    move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                        let ctx = caller
+                            .store()
                             .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
                             .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
-                        let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut() #(, #arg_names)*).await;
-                        result
-                    })
-                }
-            );
+                        Self::run_in_dummy_executor(Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*))
+                    },
+                );
+            }
         }
     } else {
         quote! {
@@ -334,11 +390,52 @@ fn generate_func(
                         .store()
                         .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
                         .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
-                    let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*);
-                    result
+                    Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*)
                 },
             );
         }
     };
     host_funcs.push((func.name.clone(), host_wrapper));
+}
+#[cfg(not(feature = "async"))]
+fn dummy_executor() -> TokenStream2 {
+    quote! {
+        fn run_in_dummy_executor<F: std::future::Future>(future: F) -> F::Output {
+            use std::pin::Pin;
+            use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+
+            let mut f = Pin::from(Box::new(future));
+            let waker = dummy_waker();
+            let mut cx = Context::from_waker(&waker);
+            match f.as_mut().poll(&mut cx) {
+                Poll::Ready(val) => return val,
+                Poll::Pending => {
+                    panic!("Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store")
+                }
+            }
+
+            fn dummy_waker() -> Waker {
+                return unsafe { Waker::from_raw(clone(5 as *const _)) };
+
+                unsafe fn clone(ptr: *const ()) -> RawWaker {
+                    assert_eq!(ptr as usize, 5);
+                    const VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
+                    RawWaker::new(ptr, &VTABLE)
+                }
+
+                unsafe fn wake(ptr: *const ()) {
+                    assert_eq!(ptr as usize, 5);
+                }
+
+                unsafe fn wake_by_ref(ptr: *const ()) {
+                    assert_eq!(ptr as usize, 5);
+                }
+
+                unsafe fn drop(ptr: *const ()) {
+                    assert_eq!(ptr as usize, 5);
+                }
+            }
+
+        }
+    }
 }

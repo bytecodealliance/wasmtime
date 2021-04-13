@@ -16,7 +16,6 @@ pub struct Config {
     pub witx: WitxConf,
     pub ctx: CtxConf,
     pub modules: ModulesConf,
-    #[cfg(feature = "async")]
     pub async_: AsyncConf,
 }
 
@@ -26,7 +25,6 @@ pub enum ConfigField {
     Witx(WitxConf),
     Ctx(CtxConf),
     Modules(ModulesConf),
-    #[cfg(feature = "async")]
     Async(AsyncConf),
 }
 
@@ -67,17 +65,7 @@ impl Parse for ConfigField {
         } else if lookahead.peek(Token![async]) {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
-            #[cfg(feature = "async")]
-            {
-                Ok(ConfigField::Async(input.parse()?))
-            }
-            #[cfg(not(feature = "async"))]
-            {
-                Err(syn::Error::new(
-                    input.span(),
-                    "async not supported, enable cargo feature \"async\"",
-                ))
-            }
+            Ok(ConfigField::Async(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -90,7 +78,6 @@ impl Config {
         let mut witx = None;
         let mut ctx = None;
         let mut modules = None;
-        #[cfg(feature = "async")]
         let mut async_ = None;
         for f in fields {
             match f {
@@ -118,7 +105,6 @@ impl Config {
                     }
                     modules = Some(c);
                 }
-                #[cfg(feature = "async")]
                 ConfigField::Async(c) => {
                     if async_.is_some() {
                         return Err(Error::new(err_loc, "duplicate `async` field"));
@@ -132,7 +118,6 @@ impl Config {
             witx: witx.ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
             ctx: ctx.ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
             modules: modules.ok_or_else(|| Error::new(err_loc, "`modules` field required"))?,
-            #[cfg(feature = "async")]
             async_: async_.unwrap_or_default(),
         })
     }

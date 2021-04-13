@@ -26,6 +26,11 @@ name = "atoms_async"
 path = "tests/atoms_async.rs"
 required-features = ["async", "wasmtime/wat"]
 
+[[test]]
+name = "atoms_sync"
+path = "tests/atoms_sync.rs"
+required-features = ["wasmtime/wat"]
+
 [badges]
 maintenance = { status = "actively-developed" }
 
