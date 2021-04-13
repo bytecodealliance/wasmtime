@@ -73,7 +73,7 @@ impl SImm7Scaled {
     /// Create a SImm7Scaled from a raw offset and the known scale type, if
     /// possible.
     pub fn maybe_from_i64(value: i64, scale_ty: Type) -> Option<SImm7Scaled> {
-        assert!(scale_ty == I64 || scale_ty == I32);
+        assert!(scale_ty == I64 || scale_ty == I32 || scale_ty == F64 || scale_ty == I8X16);
         let scale = scale_ty.bytes();
         assert!(scale.is_power_of_two());
         let scale = i64::from(scale);
