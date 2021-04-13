@@ -3533,6 +3533,7 @@ name = "wasmtime-wasi"
 version = "0.26.0"
 dependencies = [
  "anyhow",
+ "wasi-cap-std-async",
  "wasi-cap-std-sync",
  "wasi-common",
  "wasmtime",

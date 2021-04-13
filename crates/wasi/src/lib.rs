@@ -20,6 +20,13 @@ pub mod sync {
     pub use wasi_cap_std_sync::*;
 }
 
+/// Re-export the wasi-cap-std-async crate here. This saves consumers of this library from having
+/// to keep additional dependencies in sync.
+#[cfg(feature = "async")]
+pub mod async_ {
+    pub use wasi_cap_std_async::*;
+}
+
 /// An instantiated instance of all available wasi exports. Presently includes
 /// both the "preview1" snapshot and the "unstable" (preview0) snapshot.
 pub struct Wasi {
@@ -79,6 +86,7 @@ necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
                 },
             },
+            async: { wasi_snapshot_preview1::{ poll_oneoff, sched_yield } }
         });
     }
     pub mod preview_0 {
@@ -106,6 +114,7 @@ necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
                 },
             },
+            async: { wasi_unstable::{ poll_oneoff, sched_yield } }
         });
     }
 }
