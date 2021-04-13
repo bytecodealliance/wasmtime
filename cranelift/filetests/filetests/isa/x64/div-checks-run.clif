@@ -2,10 +2,31 @@ test run
 set avoid_div_traps=false
 target x86_64 machinst
 
-function %f0(i32, i32) -> i32 {
+function %i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = srem.i8 v0, v1
+  return v2
+}
+; run: %i8(0x80, 0xff) == 0
+; run: %i8(0x2, 0x7) == 0x2
+
+function %i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = srem.i16 v0, v1
+  return v2
+}
+; run: %i16(0x8000, 0xffff) == 0
+
+function %i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
   v2 = srem.i32 v0, v1
   return v2
 }
+; run: %i32(0x80000000, 0xffffffff) == 0
 
-; run: %f0(0x80000000, 0xffffffff) == 0
+function %i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = srem.i64 v0, v1
+  return v2
+}
+; run: %i32(0x800000000000000, 0xffffffffffffffff) == 0

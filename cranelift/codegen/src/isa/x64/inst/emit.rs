@@ -489,7 +489,7 @@ pub(crate) fn emit(
                     // x % -1 = 0; put the result into the destination, $rdx.
                     let done_label = sink.get_label();
 
-                    let inst = Inst::imm(*size, 0, Writable::from_reg(regs::rdx()));
+                    let inst = Inst::imm(OperandSize::Size64, 0, Writable::from_reg(regs::rdx()));
                     inst.emit(sink, info, state);
 
                     let inst = Inst::jmp_known(done_label);
@@ -528,11 +528,6 @@ pub(crate) fn emit(
             if let Some(do_op) = do_op {
                 sink.bind_label(do_op);
             }
-
-            assert!(
-                *size != OperandSize::Size8,
-                "CheckedDivOrRemSeq for i8 is not yet implemented"
-            );
 
             // Fill in the high parts:
             if kind.is_signed() {
