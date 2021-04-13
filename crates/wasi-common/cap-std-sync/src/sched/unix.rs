@@ -21,8 +21,9 @@ impl SyncSched {
     }
 }
 
+#[wiggle::async_trait]
 impl WasiSched for SyncSched {
-    fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error> {
+    async fn poll_oneoff<'a>(&self, poll: &'_ Poll<'a>) -> Result<(), Error> {
         if poll.is_empty() {
             return Ok(());
         }
@@ -104,11 +105,11 @@ impl WasiSched for SyncSched {
         }
         Ok(())
     }
-    fn sched_yield(&self) -> Result<(), Error> {
+    async fn sched_yield(&self) -> Result<(), Error> {
         std::thread::yield_now();
         Ok(())
     }
-    fn sleep(&self, duration: Duration) -> Result<(), Error> {
+    async fn sleep(&self, duration: Duration) -> Result<(), Error> {
         std::thread::sleep(duration);
         Ok(())
     }
