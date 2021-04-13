@@ -1126,16 +1126,7 @@ impl Inst {
     pub(crate) fn store(ty: Type, from_reg: Reg, to_addr: impl Into<SyntheticAmode>) -> Inst {
         let rc = from_reg.get_class();
         match rc {
-            RegClass::I64 => Inst::mov_r_m(
-                match ty {
-                    types::B1 => OperandSize::Size8,
-                    types::I32 | types::R32 => OperandSize::Size32,
-                    types::I64 | types::R64 => OperandSize::Size64,
-                    _ => unimplemented!("integer store of type: {}", ty),
-                },
-                from_reg,
-                to_addr,
-            ),
+            RegClass::I64 => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
             RegClass::V128 => {
                 let opcode = match ty {
                     types::F32 => SseOpcode::Movss,
