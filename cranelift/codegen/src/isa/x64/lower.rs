@@ -4822,28 +4822,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             if elem_ty == types::I128 {
                 let srcs = put_input_in_regs(ctx, inputs[0]);
-                ctx.emit(Inst::mov_r_m(
-                    OperandSize::Size64,
-                    srcs.regs()[0],
-                    addr.clone(),
-                ));
-                ctx.emit(Inst::mov_r_m(
-                    OperandSize::Size64,
-                    srcs.regs()[1],
-                    addr.offset(8),
-                ));
+                ctx.emit(Inst::store(types::I64, srcs.regs()[0], addr.clone()));
+                ctx.emit(Inst::store(types::I64, srcs.regs()[1], addr.offset(8)));
             } else {
                 let src = put_input_in_reg(ctx, inputs[0]);
-
-                ctx.emit(match elem_ty {
-                    types::F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr),
-                    types::F64 => Inst::xmm_mov_r_m(SseOpcode::Movsd, src, addr),
-                    _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
-                        // TODO Specialize for different types: MOVUPD, MOVDQU, etc.
-                        Inst::xmm_mov_r_m(SseOpcode::Movups, src, addr)
-                    }
-                    _ => Inst::mov_r_m(OperandSize::from_ty(elem_ty), src, addr),
-                });
+                ctx.emit(Inst::store(elem_ty, src, addr));
             }
         }
 
@@ -4947,7 +4930,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty_access = ctx.input_ty(insn, 0);
             assert!(is_valid_atomic_transaction_ty(ty_access));
 
-            ctx.emit(Inst::mov_r_m(OperandSize::from_ty(ty_access), data, addr));
+            ctx.emit(Inst::store(ty_access, data, addr));
             ctx.emit(Inst::Fence {
                 kind: FenceKind::MFence,
             });
