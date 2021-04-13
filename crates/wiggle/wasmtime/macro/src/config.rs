@@ -1,4 +1,4 @@
-pub use wiggle_generate::config::AsyncConf;
+use wiggle_generate::config::AsyncConfField;
 use {
     proc_macro2::Span,
     std::collections::HashMap,
@@ -37,6 +37,7 @@ mod kw {
     syn::custom_keyword!(name);
     syn::custom_keyword!(docs);
     syn::custom_keyword!(function_override);
+    syn::custom_keyword!(block_on);
 }
 
 impl Parse for ConfigField {
@@ -66,6 +67,12 @@ impl Parse for ConfigField {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Async(input.parse()?))
+        } else if lookahead.peek(kw::block_on) {
+            input.parse::<kw::block_on>()?;
+            input.parse::<Token![:]>()?;
+            let mut async_conf: AsyncConf = input.parse()?;
+            async_conf.blocking = true;
+            Ok(ConfigField::Async(async_conf))
         } else {
             Err(lookahead.error())
         }
@@ -258,6 +265,79 @@ impl Parse for ModulesConf {
             })?;
         Ok(ModulesConf {
             mods: fields.into_iter().collect(),
+        })
+    }
+}
+
+#[derive(Clone, Default, Debug)]
+/// Modules and funcs that have async signatures
+pub struct AsyncConf {
+    blocking: bool,
+    functions: HashMap<String, Vec<String>>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Asyncness {
+    /// Wiggle function is synchronous, wasmtime Func is synchronous
+    Sync,
+    /// Wiggle function is asynchronous, but wasmtime Func is synchronous
+    Blocking,
+    /// Wiggle function and wasmtime Func are asynchronous.
+    Async,
+}
+
+impl Asyncness {
+    pub fn is_sync(&self) -> bool {
+        match self {
+            Asyncness::Sync => true,
+            _ => false,
+        }
+    }
+}
+
+impl AsyncConf {
+    pub fn is_async(&self, module: &str, function: &str) -> Asyncness {
+        if self
+            .functions
+            .get(module)
+            .and_then(|fs| fs.iter().find(|f| *f == function))
+            .is_some()
+        {
+            if self.blocking {
+                Asyncness::Blocking
+            } else {
+                Asyncness::Async
+            }
+        } else {
+            Asyncness::Sync
+        }
+    }
+}
+
+impl Parse for AsyncConf {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        let _ = braced!(content in input);
+        let items: Punctuated<AsyncConfField, Token![,]> =
+            content.parse_terminated(Parse::parse)?;
+        let mut functions: HashMap<String, Vec<String>> = HashMap::new();
+        use std::collections::hash_map::Entry;
+        for i in items {
+            let function_names = i
+                .function_names
+                .iter()
+                .map(|i| i.to_string())
+                .collect::<Vec<String>>();
+            match functions.entry(i.module_name.to_string()) {
+                Entry::Occupied(o) => o.into_mut().extend(function_names),
+                Entry::Vacant(v) => {
+                    v.insert(function_names);
+                }
+            }
+        }
+        Ok(AsyncConf {
+            functions,
+            blocking: false,
         })
     }
 }

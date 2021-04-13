@@ -1,11 +1,3 @@
-#![allow(unused)]
-// These tests are designed to check the behavior with the crate's async feature (& wasmtimes async
-// feature) disabled. Run with:
-// `cargo test --no-default-features --features wasmtime/wat --test atoms_sync`
-#[cfg(feature = "async")]
-#[test]
-fn these_tests_require_async_feature_disabled() {}
-
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -21,7 +13,7 @@ wasmtime_wiggle::wasmtime_integration!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
     ctx: Ctx,
     modules: { atoms => { name: Atoms } },
-    async: {
+    block_on: {
         atoms::double_int_return_float
     }
 });
@@ -94,7 +86,6 @@ fn run_double_int_return_float(linker: &wasmtime::Linker) {
     assert_eq!((input * 2) as f32, result);
 }
 
-#[cfg(not(feature = "async"))]
 #[test]
 fn test_sync_host_func() {
     let store = store();
@@ -108,7 +99,6 @@ fn test_sync_host_func() {
     run_int_float_args(&linker);
 }
 
-#[cfg(not(feature = "async"))]
 #[test]
 fn test_async_host_func() {
     let store = store();
@@ -122,7 +112,6 @@ fn test_async_host_func() {
     run_double_int_return_float(&linker);
 }
 
-#[cfg(not(feature = "async"))]
 #[test]
 fn test_sync_config_host_func() {
     let mut config = wasmtime::Config::new();
@@ -137,7 +126,6 @@ fn test_sync_config_host_func() {
     run_int_float_args(&linker);
 }
 
-#[cfg(not(feature = "async"))]
 #[test]
 fn test_async_config_host_func() {
     let mut config = wasmtime::Config::new();

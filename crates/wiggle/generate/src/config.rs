@@ -280,12 +280,14 @@ impl Parse for ErrorConfField {
 }
 
 #[derive(Clone, Default, Debug)]
-/// Modules and funcs that should be async
-pub struct AsyncConf(HashMap<String, Vec<String>>);
+/// Modules and funcs that have async signatures
+pub struct AsyncConf {
+    functions: HashMap<String, Vec<String>>,
+}
 
 impl AsyncConf {
     pub fn is_async(&self, module: &str, function: &str) -> bool {
-        self.0
+        self.functions
             .get(module)
             .and_then(|fs| fs.iter().find(|f| *f == function))
             .is_some()
@@ -298,7 +300,7 @@ impl Parse for AsyncConf {
         let _ = braced!(content in input);
         let items: Punctuated<AsyncConfField, Token![,]> =
             content.parse_terminated(Parse::parse)?;
-        let mut m: HashMap<String, Vec<String>> = HashMap::new();
+        let mut functions: HashMap<String, Vec<String>> = HashMap::new();
         use std::collections::hash_map::Entry;
         for i in items {
             let function_names = i
@@ -306,14 +308,14 @@ impl Parse for AsyncConf {
                 .iter()
                 .map(|i| i.to_string())
                 .collect::<Vec<String>>();
-            match m.entry(i.module_name.to_string()) {
+            match functions.entry(i.module_name.to_string()) {
                 Entry::Occupied(o) => o.into_mut().extend(function_names),
                 Entry::Vacant(v) => {
                     v.insert(function_names);
                 }
             }
         }
-        Ok(AsyncConf(m))
+        Ok(AsyncConf { functions })
     }
 }
 

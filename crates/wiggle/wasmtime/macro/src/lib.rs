@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::{AsyncConf, ModuleConf, TargetConf};
+use config::{AsyncConf, Asyncness, ModuleConf, TargetConf};
 
 /// Define the structs required to integrate a Wiggle implementation with Wasmtime.
 ///
@@ -101,14 +101,19 @@ fn generate_module(
     let mut ctor_externs = Vec::new();
     let mut host_funcs = Vec::new();
 
-    #[cfg(not(feature = "async"))]
     let mut requires_dummy_executor = false;
 
     for f in module.funcs() {
-        let is_async = async_conf.is_async(module.name.as_str(), f.name.as_str());
-        #[cfg(not(feature = "async"))]
-        if is_async {
-            requires_dummy_executor = true;
+        let asyncness = async_conf.is_async(module.name.as_str(), f.name.as_str());
+        match asyncness {
+            Asyncness::Blocking => requires_dummy_executor = true,
+            Asyncness::Async => {
+                assert!(
+                    cfg!(feature = "async"),
+                    "generating async wasmtime Funcs requires cargo feature \"async\""
+                );
+            }
+            _ => {}
         }
         generate_func(
             &module_id,
@@ -116,7 +121,7 @@ fn generate_module(
             names,
             &target_module,
             ctx_type,
-            is_async,
+            asyncness,
             &mut fns,
             &mut ctor_externs,
             &mut host_funcs,
@@ -160,14 +165,11 @@ contained in the `cx` parameter.",
         }
     });
 
-    #[cfg(not(feature = "async"))]
     let dummy_executor = if requires_dummy_executor {
         dummy_executor()
     } else {
         quote!()
     };
-    #[cfg(feature = "async")]
-    let dummy_executor = quote!();
 
     quote! {
         #type_docs
@@ -243,7 +245,7 @@ fn generate_func(
     names: &Names,
     target_module: &TokenStream2,
     ctx_type: &syn::Type,
-    is_async: bool,
+    asyncness: Asyncness,
     fns: &mut Vec<TokenStream2>,
     ctors: &mut Vec<TokenStream2>,
     host_funcs: &mut Vec<(witx::Id, TokenStream2)>,
@@ -271,8 +273,16 @@ fn generate_func(
         _ => unimplemented!(),
     };
 
-    let async_ = if is_async { quote!(async) } else { quote!() };
-    let await_ = if is_async { quote!(.await) } else { quote!() };
+    let async_ = if asyncness.is_sync() {
+        quote!()
+    } else {
+        quote!(async)
+    };
+    let await_ = if asyncness.is_sync() {
+        quote!()
+    } else {
+        quote!(.await)
+    };
 
     let runtime = names.runtime_mod();
     let fn_ident = format_ident!("{}_{}", module_ident, name_ident);
@@ -296,9 +306,8 @@ fn generate_func(
         }
     });
 
-    if is_async {
-        #[cfg(feature = "async")]
-        {
+    match asyncness {
+        Asyncness::Async => {
             let wrapper = format_ident!("wrap{}_async", params.len());
             ctors.push(quote! {
             let #name_ident = wasmtime::Func::#wrapper(
@@ -309,11 +318,9 @@ fn generate_func(
                     Box::new(async move { Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*).await })
                 }
             );
-        });
+            });
         }
-
-        #[cfg(not(feature = "async"))]
-        {
+        Asyncness::Blocking => {
             // Emit a synchronous function. Self::#fn_ident returns a Future, so we need to
             // use a dummy executor to let any synchronous code inside there execute correctly. If
             // the future ends up Pending, this func will Trap.
@@ -327,8 +334,8 @@ fn generate_func(
                 );
             });
         }
-    } else {
-        ctors.push(quote! {
+        Asyncness::Sync => {
+            ctors.push(quote! {
             let my_ctx = ctx.clone();
             let #name_ident = wasmtime::Func::wrap(
                 store,
@@ -337,11 +344,11 @@ fn generate_func(
                 }
             );
         });
+        }
     }
 
-    let host_wrapper = if is_async {
-        #[cfg(feature = "async")]
-        {
+    let host_wrapper = match asyncness {
+        Asyncness::Async => {
             let wrapper = format_ident!("wrap{}_host_func_async", params.len());
             quote! {
                 config.#wrapper(
@@ -361,8 +368,7 @@ fn generate_func(
             }
         }
 
-        #[cfg(not(feature = "async"))]
-        {
+        Asyncness::Blocking => {
             // Emit a synchronous host function. Self::#fn_ident returns a Future, so we need to
             // use a dummy executor to let any synchronous code inside there execute correctly. If
             // the future ends up Pending, this func will Trap.
@@ -380,24 +386,25 @@ fn generate_func(
                 );
             }
         }
-    } else {
-        quote! {
-            config.wrap_host_func(
-                module,
-                field,
-                move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
-                    let ctx = caller
-                        .store()
-                        .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
-                        .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
-                    Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*)
-                },
-            );
+        Asyncness::Sync => {
+            quote! {
+                config.wrap_host_func(
+                    module,
+                    field,
+                    move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                        let ctx = caller
+                            .store()
+                            .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
+                            .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
+                        Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*)
+                    },
+                );
+            }
         }
     };
     host_funcs.push((func.name.clone(), host_wrapper));
 }
-#[cfg(not(feature = "async"))]
+
 fn dummy_executor() -> TokenStream2 {
     quote! {
         fn run_in_dummy_executor<F: std::future::Future>(future: F) -> F::Output {
