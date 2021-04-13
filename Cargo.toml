@@ -78,6 +78,7 @@ members = [
   "crates/wiggle/wasmtime",
   "crates/wasi-common",
   "crates/wasi-common/cap-std-sync",
+  "crates/wasi-common/cap-std-async",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "fuzz",
