@@ -76,7 +76,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
+        toolchain: nightly-2021-04-11
     - run: |
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
@@ -169,7 +169,7 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly
+        toolchain: nightly-2021-04-11
     - run: cargo install cargo-fuzz --vers "^0.8"
     - run: cargo fetch
       working-directory: ./fuzz
@@ -219,7 +219,7 @@ jobs:
             rust: beta
           - build: nightly
             os: ubuntu-latest
-            rust: nightly
+            rust: nightly-2021-04-11
           - build: macos
             os: macos-latest
             rust: stable
