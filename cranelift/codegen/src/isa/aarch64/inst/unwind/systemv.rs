@@ -56,8 +56,8 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
     fn sp(&self) -> u16 {
         regs::stack_reg().get_hw_encoding().into()
     }
-    fn fp(&self) -> u16 {
-        regs::fp_reg().get_hw_encoding().into()
+    fn fp(&self) -> Option<u16> {
+        Some(regs::fp_reg().get_hw_encoding().into())
     }
     fn lr(&self) -> Option<u16> {
         Some(regs::link_reg().get_hw_encoding().into())
