@@ -1285,7 +1285,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
 
         // Save clobbered registers.
-        let (_, clobber_insts) = M::gen_clobber_save(
+        let (clobber_size, clobber_insts) = M::gen_clobber_save(
             self.call_conv,
             &self.flags,
             &self.clobbered,
@@ -1304,7 +1304,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // [crate::machinst::abi_impl](this module) for more details
         // on stackframe layout and nominal SP maintenance.
 
-        self.total_frame_size = Some(total_stacksize);
+        self.total_frame_size = Some(total_stacksize + clobber_size as u32);
         insts
     }
 
