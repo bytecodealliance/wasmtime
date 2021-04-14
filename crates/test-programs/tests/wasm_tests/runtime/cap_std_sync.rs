@@ -1,8 +1,8 @@
 use anyhow::Context;
 use std::path::Path;
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasi_common::pipe::WritePipe;
 use wasmtime::{Linker, Module, Store};
+use wasmtime_wasi::sync::{Wasi, WasiCtxBuilder};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     let stdout = WritePipe::new_in_memory();
@@ -49,7 +49,7 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         // cap-std-sync does not yet support the sync family of fdflags
         builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-        let wasi = wasmtime_wasi::Wasi::new(&store, builder.build()?);
+        let wasi = Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
 
@@ -103,7 +103,7 @@ pub fn instantiate_inherit_stdio(
             builder = builder.preopened_dir(preopen_dir, ".")?;
         }
 
-        let snapshot1 = wasmtime_wasi::Wasi::new(&store, builder.build()?);
+        let snapshot1 = Wasi::new(&store, builder.build()?);
 
         let mut linker = Linker::new(&store);
 
