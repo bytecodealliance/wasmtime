@@ -95,7 +95,7 @@ impl WasiSched for SyncSched {
                     // XXX This doesnt strictly preserve the behavior in the earlier
                     // implementation, which would always do complete(0) for reads from
                     // stdout/err.
-                    match r.file.num_ready_bytes() {
+                    match r.file.num_ready_bytes().await {
                         Ok(ready_bytes) => {
                             r.complete(ready_bytes, RwEventFlags::empty());
                             ready = true;
