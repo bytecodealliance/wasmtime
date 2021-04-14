@@ -30,6 +30,12 @@ pub trait ABICallee {
     /// Access the (possibly legalized) signature.
     fn signature(&self) -> &Signature;
 
+    /// Accumulate outgoing arguments.  This ensures that at least SIZE bytes
+    /// are allocated in the prologue to be available for use in function calls
+    /// to hold arguments and/or return values.  If this function is called
+    /// multiple times, the maximum of all SIZE values will be available.
+    fn accumulate_outgoing_args_size(&mut self, size: u32);
+
     /// Get the settings controlling this function's compilation.
     fn flags(&self) -> &settings::Flags;
 
@@ -241,6 +247,13 @@ pub trait ABICaller {
 
     /// Emit code to post-adjust the satck, after call return and return-value copies.
     fn emit_stack_post_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
+
+    /// Accumulate outgoing arguments.  This ensures that the caller (as
+    /// identified via the CTX argument) allocates enough space in the
+    /// prologue to hold all arguments and return values for this call.
+    /// There is no code emitted at the call site, everything is done
+    /// in the caller's function prologue.
+    fn accumulate_outgoing_args_size<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C);
 
     /// Emit the call itself.
     ///

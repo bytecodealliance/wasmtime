@@ -444,6 +444,7 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
+        outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>);
 
     /// Generate a clobber-restore sequence. This sequence should perform the
@@ -455,6 +456,7 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
+        outgoing_args_size: u32,
     ) -> SmallVec<[Self::I; 16]>;
 
     /// Generate a call instruction/sequence. This method is provided one
@@ -576,6 +578,8 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     stackslots: PrimaryMap<StackSlot, u32>,
     /// Total stack size of all stackslots.
     stackslots_size: u32,
+    /// Stack size to be reserved for outgoing arguments.
+    outgoing_args_size: u32,
     /// Clobbered registers, from regalloc.
     clobbered: Set<Writable<RealReg>>,
     /// Total number of spillslots, from regalloc.
@@ -691,6 +695,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             sig,
             stackslots,
             stackslots_size: stack_offset,
+            outgoing_args_size: 0,
             clobbered: Set::empty(),
             spillslots: None,
             fixed_frame_storage_size: 0,
@@ -914,6 +919,12 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         if self.sig.stack_ret_arg.is_some() {
             assert!(maybe_tmp.is_some());
             self.ret_area_ptr = maybe_tmp;
+        }
+    }
+
+    fn accumulate_outgoing_args_size(&mut self, size: u32) {
+        if size > self.outgoing_args_size {
+            self.outgoing_args_size = size;
         }
     }
 
@@ -1290,6 +1301,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             &self.flags,
             &self.clobbered,
             self.fixed_frame_storage_size,
+            self.outgoing_args_size,
         );
         insts.extend(clobber_insts);
 
@@ -1317,6 +1329,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             &self.flags,
             &self.clobbered,
             self.fixed_frame_storage_size,
+            self.outgoing_args_size,
         ));
 
         // N.B.: we do *not* emit a nominal SP adjustment here, because (i) there will be no
@@ -1517,6 +1530,11 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         } else {
             self.sig.args.len()
         }
+    }
+
+    fn accumulate_outgoing_args_size<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
+        ctx.abi().accumulate_outgoing_args_size(off as u32);
     }
 
     fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
