@@ -6,9 +6,10 @@ use std::cell::Ref;
 use std::ops::Deref;
 use std::path::PathBuf;
 
+#[wiggle::async_trait]
 pub trait WasiDir {
     fn as_any(&self) -> &dyn Any;
-    fn open_file(
+    async fn open_file(
         &self,
         symlink_follow: bool,
         path: &str,
@@ -17,26 +18,33 @@ pub trait WasiDir {
         write: bool,
         fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error>;
-    fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
-    fn create_dir(&self, path: &str) -> Result<(), Error>;
-    fn readdir(
+    async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error>;
+    async fn create_dir(&self, path: &str) -> Result<(), Error>;
+    // XXX the iterator here needs to be asyncified as well!
+    async fn readdir(
         &self,
         cursor: ReaddirCursor,
     ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>>>, Error>;
-    fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
-    fn remove_dir(&self, path: &str) -> Result<(), Error>;
-    fn unlink_file(&self, path: &str) -> Result<(), Error>;
-    fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
-    fn get_filestat(&self) -> Result<Filestat, Error>;
-    fn get_path_filestat(&self, path: &str, follow_symlinks: bool) -> Result<Filestat, Error>;
-    fn rename(&self, path: &str, dest_dir: &dyn WasiDir, dest_path: &str) -> Result<(), Error>;
-    fn hard_link(
+    async fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
+    async fn remove_dir(&self, path: &str) -> Result<(), Error>;
+    async fn unlink_file(&self, path: &str) -> Result<(), Error>;
+    async fn read_link(&self, path: &str) -> Result<PathBuf, Error>;
+    async fn get_filestat(&self) -> Result<Filestat, Error>;
+    async fn get_path_filestat(&self, path: &str, follow_symlinks: bool)
+        -> Result<Filestat, Error>;
+    async fn rename(
+        &self,
+        path: &str,
+        dest_dir: &dyn WasiDir,
+        dest_path: &str,
+    ) -> Result<(), Error>;
+    async fn hard_link(
         &self,
         path: &str,
         target_dir: &dyn WasiDir,
         target_path: &str,
     ) -> Result<(), Error>;
-    fn set_times(
+    async fn set_times(
         &self,
         path: &str,
         atime: Option<SystemTimeSpec>,

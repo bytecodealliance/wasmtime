@@ -378,7 +378,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let filestat = table
                 .get_dir(fd)?
                 .get_cap(DirCaps::FILESTAT_GET)?
-                .get_filestat()?;
+                .get_filestat()
+                .await?;
             Ok(filestat.into())
         } else {
             Err(Error::badf())
@@ -429,6 +430,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .expect("checked that entry is dir")
                 .get_cap(DirCaps::FILESTAT_SET_TIMES)?
                 .set_times(".", atim, mtim, false)
+                .await
         } else {
             Err(Error::badf())
         }
@@ -658,7 +660,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_dir(u32::from(fd))?
             .get_cap(DirCaps::READDIR)?
-            .readdir(ReaddirCursor::from(cookie))?
+            .readdir(ReaddirCursor::from(cookie))
+            .await?
         {
             let entity = entity?;
             let dirent_raw = dirent_bytes(types::Dirent::try_from(&entity)?);
@@ -707,6 +710,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::CREATE_DIRECTORY)?
             .create_dir(path.as_str()?.deref())
+            .await
     }
 
     async fn path_filestat_get<'a>(
@@ -722,7 +726,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_path_filestat(
                 path.as_str()?.deref(),
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
-            )?;
+            )
+            .await?;
         Ok(types::Filestat::from(filestat))
     }
 
@@ -751,6 +756,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 mtim,
                 flags.contains(types::Lookupflags::SYMLINK_FOLLOW),
             )
+            .await
     }
 
     async fn path_link<'a>(
@@ -774,11 +780,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .context("symlink following on path_link is not supported"));
         }
 
-        src_dir.hard_link(
-            src_path.as_str()?.deref(),
-            target_dir.deref(),
-            target_path.as_str()?.deref(),
-        )
+        src_dir
+            .hard_link(
+                src_path.as_str()?.deref(),
+                target_dir.deref(),
+                target_path.as_str()?.deref(),
+            )
+            .await
     }
 
     async fn path_open<'a>(
@@ -813,7 +821,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let dir_caps = dir_entry.child_dir_caps(DirCaps::from(&fs_rights_base));
             let file_caps = dir_entry.child_file_caps(FileCaps::from(&fs_rights_inheriting));
             let dir = dir_entry.get_cap(DirCaps::OPEN)?;
-            let child_dir = dir.open_dir(symlink_follow, path.deref())?;
+            let child_dir = dir.open_dir(symlink_follow, path.deref()).await?;
             drop(dir);
             let fd = table.push(Box::new(DirEntry::new(
                 dir_caps, file_caps, None, child_dir,
@@ -831,7 +839,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let write = file_caps.contains(FileCaps::WRITE)
                 || file_caps.contains(FileCaps::ALLOCATE)
                 || file_caps.contains(FileCaps::FILESTAT_SET_SIZE);
-            let file = dir.open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)?;
+            let file = dir
+                .open_file(symlink_follow, path.deref(), oflags, read, write, fdflags)
+                .await?;
             drop(dir);
             let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
             Ok(types::Fd::from(fd))
@@ -849,7 +859,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::READLINK)?
-            .read_link(path.as_str()?.deref())?
+            .read_link(path.as_str()?.deref())
+            .await?
             .into_os_string()
             .into_string()
             .map_err(|_| Error::illegal_byte_sequence().context("link contents"))?;
@@ -872,6 +883,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::REMOVE_DIRECTORY)?
             .remove_dir(path.as_str()?.deref())
+            .await
     }
 
     async fn path_rename<'a>(
@@ -888,11 +900,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let dest_dir = table
             .get_dir(u32::from(dest_fd))?
             .get_cap(DirCaps::RENAME_TARGET)?;
-        src_dir.rename(
-            src_path.as_str()?.deref(),
-            dest_dir.deref(),
-            dest_path.as_str()?.deref(),
-        )
+        src_dir
+            .rename(
+                src_path.as_str()?.deref(),
+                dest_dir.deref(),
+                dest_path.as_str()?.deref(),
+            )
+            .await
     }
 
     async fn path_symlink<'a>(
@@ -905,6 +919,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::SYMLINK)?
             .symlink(src_path.as_str()?.deref(), dest_path.as_str()?.deref())
+            .await
     }
 
     async fn path_unlink_file<'a>(
@@ -916,6 +931,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_dir(u32::from(dirfd))?
             .get_cap(DirCaps::UNLINK_FILE)?
             .unlink_file(path.as_str()?.deref())
+            .await
     }
 
     async fn poll_oneoff<'a>(
