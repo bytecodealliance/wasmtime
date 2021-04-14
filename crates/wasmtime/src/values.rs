@@ -98,7 +98,7 @@ impl Val {
                 let externref_ptr = x.inner.as_raw();
                 store
                     .externref_activations_table()
-                    .insert_with_gc(x.inner, store.stack_map_registry());
+                    .insert_with_gc(x.inner, &*store.stack_map_lookup());
                 ptr::write(p as *mut *mut u8, externref_ptr)
             }
             Val::FuncRef(f) => ptr::write(

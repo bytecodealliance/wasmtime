@@ -103,14 +103,12 @@ use std::alloc::Layout;
 use std::any::Any;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
-use std::rc::Rc;
-use wasmtime_environ::{ir::StackMap, StackMapInformation};
+use wasmtime_environ::ir::StackMap;
 
 /// An external reference to some opaque data.
 ///
@@ -596,10 +594,10 @@ impl VMExternRefActivationsTable {
     pub unsafe fn insert_with_gc(
         &self,
         externref: VMExternRef,
-        stack_maps_registry: &StackMapRegistry,
+        stack_map_lookup: &dyn StackMapLookup,
     ) {
         if let Err(externref) = self.try_insert(externref) {
-            self.gc_and_insert_slow(externref, stack_maps_registry);
+            self.gc_and_insert_slow(externref, stack_map_lookup);
         }
     }
 
@@ -607,9 +605,9 @@ impl VMExternRefActivationsTable {
     unsafe fn gc_and_insert_slow(
         &self,
         externref: VMExternRef,
-        stack_maps_registry: &StackMapRegistry,
+        stack_map_lookup: &dyn StackMapLookup,
     ) {
-        gc(stack_maps_registry, self);
+        gc(stack_map_lookup, self);
 
         // Might as well insert right into the hash set, rather than the bump
         // chunk, since we are already on a slow path and we get de-duplication
@@ -743,182 +741,21 @@ impl VMExternRefActivationsTable {
     }
 }
 
-/// A registry of stack maps for currently active Wasm modules.
-#[derive(Default)]
-pub struct StackMapRegistry {
-    inner: RefCell<StackMapRegistryInner>,
+/// Used by the runtime to lookup a stack map from a PC value.
+pub trait StackMapLookup {
+    /// Lookup the stack map at a program counter (PC) value.
+    fn lookup(&self, pc: usize) -> Option<*const StackMap>;
 }
 
-#[derive(Default)]
-struct StackMapRegistryInner {
-    /// A map from the highest pc in a module, to its stack maps.
-    ///
-    /// For details, see the comment above `GlobalModuleRegistry`.
-    ranges: BTreeMap<usize, ModuleStackMaps>,
-}
+pub(crate) struct EmptyStackMapLookup;
 
-#[derive(Debug)]
-struct ModuleStackMaps {
-    /// The range of PCs that this module covers. Different modules must always
-    /// have distinct ranges.
-    range: std::ops::Range<usize>,
-
-    /// A map from a PC in this module (that is a GC safepoint) to its
-    /// associated stack map. If `None` then it means that the PC is the start
-    /// of a range which has no stack map.
-    pc_to_stack_map: Vec<(usize, Option<Rc<StackMap>>)>,
-}
-
-impl StackMapRegistry {
-    /// Register the stack maps for a given module.
-    ///
-    /// The stack maps should be given as an iterator over a function's PC range
-    /// in memory (that is, where the JIT actually allocated and emitted the
-    /// function's code at), and the stack maps and code offsets within that
-    /// range for each of its GC safepoints.
-    pub fn register_stack_maps<'a>(
-        &self,
-        stack_maps: impl IntoIterator<Item = (std::ops::Range<usize>, &'a [StackMapInformation])>,
-    ) {
-        let mut min = usize::max_value();
-        let mut max = 0;
-        let mut pc_to_stack_map = vec![];
-        let mut last_is_none_marker = true;
-
-        for (range, infos) in stack_maps {
-            let len = range.end - range.start;
-
-            min = std::cmp::min(min, range.start);
-            max = std::cmp::max(max, range.end);
-
-            // Add a marker between functions indicating that this function's pc
-            // starts with no stack map so when our binary search later on finds
-            // a pc between the start of the function and the function's first
-            // stack map it doesn't think the previous stack map is our stack
-            // map.
-            //
-            // We skip this if the previous entry pushed was also a `None`
-            // marker, in which case the starting pc already has no stack map.
-            // This is also skipped if the first `code_offset` is zero since
-            // what we'll push applies for the first pc anyway.
-            if !last_is_none_marker && (infos.is_empty() || infos[0].code_offset > 0) {
-                pc_to_stack_map.push((range.start, None));
-                last_is_none_marker = true;
-            }
-
-            for info in infos {
-                assert!((info.code_offset as usize) < len);
-                pc_to_stack_map.push((
-                    range.start + (info.code_offset as usize),
-                    Some(Rc::new(info.stack_map.clone())),
-                ));
-                last_is_none_marker = false;
-            }
-        }
-
-        if pc_to_stack_map.is_empty() {
-            // Nothing to register.
-            return;
-        }
-
-        let module_stack_maps = ModuleStackMaps {
-            range: min..max,
-            pc_to_stack_map,
-        };
-
-        let mut inner = self.inner.borrow_mut();
-
-        // Assert that this chunk of ranges doesn't collide with any other known
-        // chunks.
-        if let Some((_, prev)) = inner.ranges.range(max..).next() {
-            assert!(prev.range.start > max);
-        }
-        if let Some((prev_end, _)) = inner.ranges.range(..=min).next_back() {
-            assert!(*prev_end < min);
-        }
-
-        let old = inner.ranges.insert(max, module_stack_maps);
-        assert!(old.is_none());
-    }
-
-    /// Lookup the stack map for the given PC, if any.
-    pub fn lookup_stack_map(&self, pc: usize) -> Option<Rc<StackMap>> {
-        let inner = self.inner.borrow();
-        let stack_maps = inner.module_stack_maps(pc)?;
-
-        // Do a binary search to find the stack map for the given PC.
-        //
-        // Because GC safepoints are technically only associated with a single
-        // PC, we should ideally only care about `Ok(index)` values returned
-        // from the binary search. However, safepoints are inserted right before
-        // calls, and there are two things that can disturb the PC/offset
-        // associated with the safepoint versus the PC we actually use to query
-        // for the stack map:
-        //
-        // 1. The `backtrace` crate gives us the PC in a frame that will be
-        //    *returned to*, and where execution will continue from, rather than
-        //    the PC of the call we are currently at. So we would need to
-        //    disassemble one instruction backwards to query the actual PC for
-        //    the stack map.
-        //
-        //    TODO: One thing we *could* do to make this a little less error
-        //    prone, would be to assert/check that the nearest GC safepoint
-        //    found is within `max_encoded_size(any kind of call instruction)`
-        //    our queried PC for the target architecture.
-        //
-        // 2. Cranelift's stack maps only handle the stack, not
-        //    registers. However, some references that are arguments to a call
-        //    may need to be in registers. In these cases, what Cranelift will
-        //    do is:
-        //
-        //      a. spill all the live references,
-        //      b. insert a GC safepoint for those references,
-        //      c. reload the references into registers, and finally
-        //      d. make the call.
-        //
-        //    Step (c) adds drift between the GC safepoint and the location of
-        //    the call, which is where we actually walk the stack frame and
-        //    collect its live references.
-        //
-        //    Luckily, the spill stack slots for the live references are still
-        //    up to date, so we can still find all the on-stack roots.
-        //    Furthermore, we do not have a moving GC, so we don't need to worry
-        //    whether the following code will reuse the references in registers
-        //    (which would not have been updated to point to the moved objects)
-        //    or reload from the stack slots (which would have been updated to
-        //    point to the moved objects).
-        let index = match stack_maps
-            .pc_to_stack_map
-            .binary_search_by_key(&pc, |(pc, _stack_map)| *pc)
-        {
-            // Exact hit.
-            Ok(i) => i,
-
-            // `Err(0)` means that the associated stack map would have been the
-            // first element in the array if this pc had an associated stack
-            // map, but this pc does not have an associated stack map. This can
-            // only happen inside a Wasm frame if there are no live refs at this
-            // pc.
-            Err(0) => return None,
-
-            Err(n) => n - 1,
-        };
-
-        let stack_map = stack_maps.pc_to_stack_map[index].1.as_ref()?.clone();
-        Some(stack_map)
+impl StackMapLookup for EmptyStackMapLookup {
+    fn lookup(&self, _pc: usize) -> Option<*const StackMap> {
+        None
     }
 }
 
-impl StackMapRegistryInner {
-    fn module_stack_maps(&self, pc: usize) -> Option<&ModuleStackMaps> {
-        let (end, stack_maps) = self.ranges.range(pc..).next()?;
-        if pc < stack_maps.range.start || *end < pc {
-            None
-        } else {
-            Some(stack_maps)
-        }
-    }
-}
+pub(crate) const EMPTY_STACK_MAP_LOOKUP: EmptyStackMapLookup = EmptyStackMapLookup;
 
 #[derive(Debug, Default)]
 struct DebugOnly<T> {
@@ -965,7 +802,7 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 /// Additionally, you must have registered the stack maps for every Wasm module
 /// that has frames on the stack with the given `stack_maps_registry`.
 pub unsafe fn gc(
-    stack_maps_registry: &StackMapRegistry,
+    stack_map_lookup: &dyn StackMapLookup,
     externref_activations_table: &VMExternRefActivationsTable,
 ) {
     // We borrow the precise stack roots `RefCell` for the whole duration of
@@ -1003,7 +840,7 @@ pub unsafe fn gc(
             if cfg!(debug_assertions) {
                 // Assert that there aren't any Wasm frames on the stack.
                 backtrace::trace(|frame| {
-                    let stack_map = stack_maps_registry.lookup_stack_map(frame.ip() as usize);
+                    let stack_map = stack_map_lookup.lookup(frame.ip() as usize);
                     assert!(stack_map.is_none());
                     true
                 });
@@ -1048,11 +885,11 @@ pub unsafe fn gc(
         let pc = frame.ip() as usize;
         let sp = frame.sp() as usize;
 
-        if let Some(stack_map) = stack_maps_registry.lookup_stack_map(pc) {
+        if let Some(stack_map) = stack_map_lookup.lookup(pc) {
             debug_assert!(sp != 0, "we should always get a valid SP for Wasm frames");
 
-            for i in 0..(stack_map.mapped_words() as usize) {
-                if stack_map.get_bit(i) {
+            for i in 0..((*stack_map).mapped_words() as usize) {
+                if (*stack_map).get_bit(i) {
                     // Stack maps have one bit per word in the frame, and the
                     // zero^th bit is the *lowest* addressed word in the frame,
                     // i.e. the closest to the SP. So to get the `i`^th word in

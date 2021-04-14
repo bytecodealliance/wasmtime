@@ -13,7 +13,7 @@ use wasmtime_environ::wasm::{
 };
 use wasmtime_environ::Initializer;
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, RuntimeInstance, StackMapRegistry,
+    Imports, InstanceAllocationRequest, InstantiationError, RuntimeInstance, StackMapLookup,
     VMContext, VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMGlobalImport,
     VMMemoryImport, VMTableImport,
 };
@@ -525,8 +525,7 @@ impl<'a> Instantiator<'a> {
                 externref_activations_table: self.store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_registry: self.store.stack_map_registry() as *const StackMapRegistry
-                    as *mut _,
+                stack_map_lookup: Some(self.store.stack_map_lookup() as *const dyn StackMapLookup),
             })?;
 
             // After we've created the `InstanceHandle` we still need to run

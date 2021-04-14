@@ -1,4 +1,4 @@
-use crate::externref::{StackMapRegistry, VMExternRefActivationsTable};
+use crate::externref::{StackMapLookup, VMExternRefActivationsTable, EMPTY_STACK_MAP_LOOKUP};
 use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
@@ -57,8 +57,8 @@ pub struct InstanceAllocationRequest<'a> {
     /// The pointer to the reference activations table to use for the instance.
     pub externref_activations_table: *mut VMExternRefActivationsTable,
 
-    /// The pointer to the stack map registry to use for the instance.
-    pub stack_map_registry: *mut StackMapRegistry,
+    /// The pointer to the stack map lookup to use for the instance.
+    pub stack_map_lookup: Option<*const dyn StackMapLookup>,
 }
 
 /// An link error while instantiating a module.
@@ -447,7 +447,7 @@ unsafe fn initialize_vmcontext(instance: &Instance, req: InstanceAllocationReque
 
     *instance.interrupts() = req.interrupts;
     *instance.externref_activations_table() = req.externref_activations_table;
-    *instance.stack_map_registry() = req.stack_map_registry;
+    *instance.stack_map_lookup() = req.stack_map_lookup.unwrap_or(&EMPTY_STACK_MAP_LOOKUP);
 
     // Initialize shared signatures
     let mut ptr = instance.signature_ids_ptr();

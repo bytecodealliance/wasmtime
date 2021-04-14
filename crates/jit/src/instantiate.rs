@@ -362,11 +362,18 @@ impl CompiledModule {
     }
 
     /// Gets the function information for a given function index.
-    pub fn func_info(&self, index: DefinedFuncIndex) -> (&FunctionAddressMap, &[TrapInformation]) {
+    pub fn func_info(
+        &self,
+        index: DefinedFuncIndex,
+    ) -> (
+        &FunctionAddressMap,
+        &[TrapInformation],
+        &[StackMapInformation],
+    ) {
         self.artifacts
             .funcs
             .get(index)
-            .map(|f| (&f.address_map, f.traps.as_ref()))
+            .map(|f| (&f.address_map, f.traps.as_ref(), f.stack_maps.as_ref()))
             .expect("defined function should be present")
     }
 

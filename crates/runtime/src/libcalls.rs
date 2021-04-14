@@ -449,8 +449,8 @@ pub unsafe extern "C" fn wasmtime_activations_table_insert_with_gc(
     let externref = VMExternRef::clone_from_raw(externref);
     let instance = (&mut *vmctx).instance();
     let activations_table = &**instance.externref_activations_table();
-    let registry = &**instance.stack_map_registry();
-    activations_table.insert_with_gc(externref, registry);
+    let stack_map_lookup = &**instance.stack_map_lookup();
+    activations_table.insert_with_gc(externref, stack_map_lookup);
 }
 
 /// Perform a Wasm `global.get` for `externref` globals.
@@ -466,8 +466,8 @@ pub unsafe extern "C" fn wasmtime_externref_global_get(
         Some(externref) => {
             let raw = externref.as_raw();
             let activations_table = &**instance.externref_activations_table();
-            let registry = &**instance.stack_map_registry();
-            activations_table.insert_with_gc(externref, registry);
+            let stack_map_lookup = &**instance.stack_map_lookup();
+            activations_table.insert_with_gc(externref, stack_map_lookup);
             raw
         }
     }

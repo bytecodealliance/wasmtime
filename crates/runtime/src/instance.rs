@@ -3,7 +3,7 @@
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
 use crate::export::Export;
-use crate::externref::{StackMapRegistry, VMExternRefActivationsTable};
+use crate::externref::{StackMapLookup, VMExternRefActivationsTable};
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
@@ -249,9 +249,9 @@ impl Instance {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_externref_activations_table()) }
     }
 
-    /// Return a pointer to the `StackMapRegistry`.
-    pub fn stack_map_registry(&self) -> *mut *mut StackMapRegistry {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_stack_map_registry()) }
+    /// Return a pointer to the `StackMapLookup`.
+    pub fn stack_map_lookup(&self) -> *mut *const dyn StackMapLookup {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_stack_map_lookup()) }
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.

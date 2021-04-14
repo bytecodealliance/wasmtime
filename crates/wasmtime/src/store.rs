@@ -16,11 +16,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_environ::wasm::WasmFuncType;
-use wasmtime_jit::{CompiledModule, ModuleCode};
+use wasmtime_jit::ModuleCode;
 use wasmtime_runtime::{
-    InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler, StackMapRegistry,
-    TrapInfo, VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
-    VMSharedSignatureIndex, VMTrampoline,
+    InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler, TrapInfo,
+    VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 /// Used to associate instances with the store.
@@ -75,7 +75,6 @@ pub(crate) struct StoreInner {
     instances: RefCell<Vec<StoreInstance>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     externref_activations_table: VMExternRefActivationsTable,
-    stack_map_registry: StackMapRegistry,
     modules: RefCell<ModuleRegistry>,
     trampolines: RefCell<TrampolineMap>,
     // Numbers of resources instantiated in this store.
@@ -139,7 +138,6 @@ impl Store {
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
                 externref_activations_table: VMExternRefActivationsTable::new(),
-                stack_map_registry: StackMapRegistry::default(),
                 modules: RefCell::new(ModuleRegistry::default()),
                 trampolines: RefCell::new(TrampolineMap::default()),
                 instance_count: Default::default(),
@@ -207,26 +205,7 @@ impl Store {
 
     pub(crate) fn register_module(&self, module: &Module) {
         // Register the module with the registry
-        if !self.inner.modules.borrow_mut().register(module) {
-            return;
-        }
-
-        // We need to know about all the stack maps of all instantiated modules
-        // so when performing a GC we know about all wasm frames that we find
-        // on the stack.
-        self.register_stack_maps(module.compiled_module());
-    }
-
-    fn register_stack_maps(&self, module: &CompiledModule) {
-        self.stack_map_registry()
-            .register_stack_maps(module.stack_maps().map(|(func, stack_maps)| unsafe {
-                let ptr = (*func).as_ptr();
-                let len = (*func).len();
-                let start = ptr as usize;
-                let end = ptr as usize + len;
-                let range = start..end;
-                (range, stack_maps)
-            }));
+        self.inner.modules.borrow_mut().register(module);
     }
 
     // This is used to register a `Func` with the store
@@ -448,10 +427,6 @@ impl Store {
     }
 
     #[inline]
-    pub(crate) fn stack_map_registry(&self) -> &StackMapRegistry {
-        &self.inner.stack_map_registry
-    }
-
     pub(crate) fn modules(&self) -> &RefCell<ModuleRegistry> {
         &self.inner.modules
     }
@@ -471,20 +446,21 @@ impl Store {
     ///
     /// It is fine to call this several times: only the first call will have an effect.
     pub unsafe fn notify_switched_thread(&self) {
-        wasmtime_runtime::init_traps(frame_info::GlobalFrameInfo::is_wasm_pc)
+        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc)
             .expect("failed to initialize per-threads traps");
+    }
+
+    #[inline]
+    pub(crate) fn stack_map_lookup(&self) -> *const dyn wasmtime_runtime::StackMapLookup {
+        self.inner.as_ref()
     }
 
     /// Perform garbage collection of `ExternRef`s.
     pub fn gc(&self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
-        // are upheld for all host-->Wasm calls, and we register every module
-        // used with this store in `self.inner.stack_map_registry`.
+        // are upheld for all host-->Wasm calls.
         unsafe {
-            wasmtime_runtime::gc(
-                &self.inner.stack_map_registry,
-                &self.inner.externref_activations_table,
-            );
+            wasmtime_runtime::gc(self.inner.as_ref(), &self.inner.externref_activations_table);
         }
     }
 
@@ -948,6 +924,13 @@ impl Drop for StoreInner {
         if !trampolines.is_empty() {
             self.engine.unregister_signatures(trampolines.indexes());
         }
+    }
+}
+
+impl wasmtime_runtime::StackMapLookup for StoreInner {
+    fn lookup(&self, pc: usize) -> Option<*const wasmtime_environ::ir::StackMap> {
+        // The address of the stack map is stable for the lifetime of the store
+        self.modules.borrow().lookup_stack_map(pc).map(|m| m as _)
     }
 }
 

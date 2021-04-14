@@ -6,7 +6,7 @@
 // struct VMContext {
 //      interrupts: *const VMInterrupts,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
-//      stack_map_registry: *mut StackMapRegistry,
+//      stack_map_lookup: *const dyn StackMapLookup,
 //      signature_ids: [VMSharedSignatureIndex; module.num_signature_ids],
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
@@ -77,7 +77,7 @@ pub struct VMOffsets {
     // precalculated offsets of various member fields
     interrupts: u32,
     externref_activations_table: u32,
-    stack_map_registry: u32,
+    stack_map_lookup: u32,
     signature_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
@@ -149,7 +149,7 @@ impl From<VMOffsetsFields> for VMOffsets {
             num_defined_globals: fields.num_defined_globals,
             interrupts: 0,
             externref_activations_table: 0,
-            stack_map_registry: 0,
+            stack_map_lookup: 0,
             signature_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
@@ -168,13 +168,13 @@ impl From<VMOffsetsFields> for VMOffsets {
             .interrupts
             .checked_add(u32::from(fields.pointer_size))
             .unwrap();
-        ret.stack_map_registry = ret
+        ret.stack_map_lookup = ret
             .externref_activations_table
             .checked_add(u32::from(fields.pointer_size))
             .unwrap();
         ret.signature_ids = ret
-            .stack_map_registry
-            .checked_add(u32::from(fields.pointer_size))
+            .stack_map_lookup
+            .checked_add(u32::from(fields.pointer_size * 2))
             .unwrap();
         ret.imported_functions = ret
             .signature_ids
@@ -507,10 +507,10 @@ impl VMOffsets {
         self.externref_activations_table
     }
 
-    /// The offset of the `*mut StackMapRegistry` member.
+    /// The offset of the `*const dyn StackMapLookup` member.
     #[inline]
-    pub fn vmctx_stack_map_registry(&self) -> u32 {
-        self.stack_map_registry
+    pub fn vmctx_stack_map_lookup(&self) -> u32 {
+        self.stack_map_lookup
     }
 
     /// The offset of the `signature_ids` array.

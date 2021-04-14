@@ -9,7 +9,7 @@ use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, StackMapRegistry,
+    Imports, InstanceAllocationRequest, InstanceAllocator, StackMapLookup,
     VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
 };
 
@@ -43,7 +43,7 @@ pub(crate) fn create_handle(
                 externref_activations_table: store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
+                stack_map_lookup: &store,
             })?;
 
         Ok(store.add_instance(handle, true))
