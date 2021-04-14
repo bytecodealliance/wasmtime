@@ -99,7 +99,7 @@ necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
                 },
             },
-            $async_mode: { wasi_snapshot_preview1::{ poll_oneoff, sched_yield } }
+            $async_mode: *
         });
     }
     pub mod preview_0 {
@@ -127,7 +127,7 @@ necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
                 },
             },
-            $async_mode: { wasi_unstable::{ poll_oneoff, sched_yield } }
+            $async_mode: *
         });
     }
 }
