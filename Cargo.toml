@@ -79,7 +79,7 @@ members = [
   "crates/wiggle/wasmtime",
   "crates/wasi-common",
   "crates/wasi-common/cap-std-sync",
-  "crates/wasi-common/cap-std-async",
+  "crates/wasi-common/tokio",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
@@ -112,7 +112,7 @@ harness = false
 
 [[example]]
 name = "tokio"
-required-features = ["wasmtime-wasi/async"]
+required-features = ["wasmtime-wasi/tokio"]
 
 [profile.dev.package.backtrace]
 debug = false # FIXME(#1813)

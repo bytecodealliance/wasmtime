@@ -1,5 +1,5 @@
 [package]
-name = "wasi-cap-std-async"
+name = "wasi-tokio"
 version = "0.26.0"
 authors = ["The Wasmtime Project Developers"]
 description = "WASI implementation in Rust"

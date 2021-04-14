@@ -18,11 +18,11 @@ pub mod sync {
     super::define_wasi!(block_on);
 }
 
-/// Re-export the wasi-cap-std-async crate here. This saves consumers of this library from having
+/// Re-export the wasi-tokio crate here. This saves consumers of this library from having
 /// to keep additional dependencies in sync.
-#[cfg(feature = "async")]
-pub mod async_ {
-    pub use wasi_cap_std_async::*;
+#[cfg(feature = "tokio")]
+pub mod tokio {
+    pub use wasi_tokio::*;
     super::define_wasi!(async);
 }
 
