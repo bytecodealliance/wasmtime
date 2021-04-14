@@ -79,7 +79,7 @@ impl WasiSched for SyncSched {
                 if let Some(revents) = pollfd.revents() {
                     let (nbytes, rwsub) = match rwsub {
                         Subscription::Read(sub) => {
-                            let ready = sub.file.num_ready_bytes()?;
+                            let ready = sub.file.num_ready_bytes().await?;
                             (std::cmp::max(ready, 1), sub)
                         }
                         Subscription::Write(sub) => (0, sub),

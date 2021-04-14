@@ -20,27 +20,28 @@ impl File {
     }
 }
 
+#[wiggle::async_trait]
 impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn datasync(&self) -> Result<(), Error> {
+    async fn datasync(&self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())
     }
-    fn sync(&self) -> Result<(), Error> {
+    async fn sync(&self) -> Result<(), Error> {
         self.0.sync_all()?;
         Ok(())
     }
-    fn get_filetype(&self) -> Result<FileType, Error> {
+    async fn get_filetype(&self) -> Result<FileType, Error> {
         let meta = self.0.metadata()?;
         Ok(filetype_from(&meta.file_type()))
     }
-    fn get_fdflags(&self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         let fdflags = self.0.get_fd_flags()?;
         Ok(from_sysif_fdflags(fdflags))
     }
-    fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
+    async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
         if fdflags.intersects(
             wasi_common::file::FdFlags::DSYNC
                 | wasi_common::file::FdFlags::SYNC
@@ -50,7 +51,7 @@ impl WasiFile for File {
         }
         Ok(self.0.set_fd_flags(to_sysif_fdflags(fdflags))?)
     }
-    fn get_filestat(&self) -> Result<Filestat, Error> {
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
         Ok(Filestat {
             device_id: meta.dev(),
@@ -63,19 +64,19 @@ impl WasiFile for File {
             ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
         })
     }
-    fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
+    async fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
         self.0.set_len(size)?;
         Ok(())
     }
-    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
         self.0.advise(offset, len, convert_advice(advice))?;
         Ok(())
     }
-    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
         self.0.allocate(offset, len)?;
         Ok(())
     }
-    fn set_times(
+    async fn set_times(
         &self,
         atime: Option<wasi_common::SystemTimeSpec>,
         mtime: Option<wasi_common::SystemTimeSpec>,
@@ -84,30 +85,38 @@ impl WasiFile for File {
             .set_times(convert_systimespec(atime), convert_systimespec(mtime))?;
         Ok(())
     }
-    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let n = self.0.read_vectored(bufs)?;
         Ok(n.try_into()?)
     }
-    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
+    async fn read_vectored_at<'a>(
+        &self,
+        bufs: &mut [io::IoSliceMut<'a>],
+        offset: u64,
+    ) -> Result<u64, Error> {
         let n = self.0.read_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         let n = self.0.write_vectored(bufs)?;
         Ok(n.try_into()?)
     }
-    fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
+    async fn write_vectored_at<'a>(
+        &self,
+        bufs: &[io::IoSlice<'a>],
+        offset: u64,
+    ) -> Result<u64, Error> {
         let n = self.0.write_vectored_at(bufs, offset)?;
         Ok(n.try_into()?)
     }
-    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Ok(self.0.seek(pos)?)
     }
-    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         let n = self.0.peek(buf)?;
         Ok(n.try_into()?)
     }
-    fn num_ready_bytes(&self) -> Result<u64, Error> {
+    async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
 }
