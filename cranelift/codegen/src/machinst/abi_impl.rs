@@ -1213,6 +1213,19 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+
+        // When reloading from a spill slot, we might have lost information about real integer
+        // types. For instance, on the x64 backend, a zero-extension can become spurious and
+        // optimized into a move, causing vregs of types I32 and I64 to share the same coalescing
+        // equivalency class. As a matter of fact, such a value can be spilled as an I32 and later
+        // reloaded as an I64; to make sure the high bits are always defined, do a word-sized store
+        // all the time, in this case.
+        let ty = if ty.is_int() && ty.bytes() < M::word_bytes() {
+            M::word_type()
+        } else {
+            ty
+        };
+
         gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
     }
 
