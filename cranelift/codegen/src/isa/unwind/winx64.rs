@@ -356,6 +356,12 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<regalloc::Reg>>(
                 frame_register_offset = ensure_unwind_offset(offset_downward_to_clobbers)?;
                 unwind_codes.push(UnwindCode::SetFPReg { instruction_offset });
             }
+            &UnwindInst::StackAlloc { size } => {
+                unwind_codes.push(UnwindCode::StackAlloc {
+                    instruction_offset,
+                    size,
+                });
+            }
             &UnwindInst::SaveReg {
                 clobber_offset,
                 reg,

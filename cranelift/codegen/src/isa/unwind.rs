@@ -225,6 +225,11 @@ pub enum UnwindInst {
         /// the clobber area.
         offset_downward_to_clobbers: u32,
     },
+    /// The stack pointer was adjusted to allocate the stack.
+    StackAlloc {
+        /// Size to allocate.
+        size: u32,
+    },
     /// The stack slot at the given offset from the clobber-area base has been
     /// used to save the given register.
     ///
