@@ -1103,6 +1103,10 @@ name = "example-fib-debug-wasm"
 version = "0.0.0"
 
 [[package]]
+name = "example-tokio-wasm"
+version = "0.0.0"
+
+[[package]]
 name = "example-wasi-wasm"
 version = "0.0.0"
 
@@ -2815,7 +2819,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83f0c8e7c0addab50b663055baf787d0af7f413a46e6e7fb9559a4e4db7137a5"
 dependencies = [
  "autocfg 1.0.1",
+ "num_cpus",
  "pin-project-lite",
+ "tokio-macros",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "caf7b11a536f46a809a8a9f0bb4237020f70ecbf115b842360afb127ea2fda57"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -3305,6 +3322,7 @@ dependencies = [
  "target-lexicon",
  "tempfile",
  "test-programs",
+ "tokio",
  "tracing-subscriber",
  "wasmparser",
  "wasmtime",
