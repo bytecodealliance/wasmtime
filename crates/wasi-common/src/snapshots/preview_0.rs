@@ -422,7 +422,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
     }
 
     async fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat, Error> {
-        Ok(Snapshot1::fd_filestat_get(self, fd.into())?.into()).await
+        Ok(Snapshot1::fd_filestat_get(self, fd.into()).await?.into())
     }
 
     async fn fd_filestat_set_size(
@@ -473,7 +473,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .map(|s| IoSliceMut::new(&mut *s))
             .collect();
 
-        let bytes_read = f.read_vectored(&mut ioslices)?;
+        let bytes_read = f.read_vectored(&mut ioslices).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -502,7 +502,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .map(|s| IoSliceMut::new(&mut *s))
             .collect();
 
-        let bytes_read = f.read_vectored_at(&mut ioslices, offset)?;
+        let bytes_read = f.read_vectored_at(&mut ioslices, offset).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -527,7 +527,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .iter()
             .map(|s| IoSlice::new(s.deref()))
             .collect();
-        let bytes_written = f.write_vectored(&ioslices)?;
+        let bytes_written = f.write_vectored(&ioslices).await?;
 
         Ok(types::Size::try_from(bytes_written)?)
     }
@@ -556,7 +556,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             .iter()
             .map(|s| IoSlice::new(s.deref()))
             .collect();
-        let bytes_written = f.write_vectored_at(&ioslices, offset)?;
+        let bytes_written = f.write_vectored_at(&ioslices, offset).await?;
 
         Ok(types::Size::try_from(bytes_written)?)
     }

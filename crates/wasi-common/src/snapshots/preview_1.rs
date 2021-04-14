@@ -22,6 +22,9 @@ use wiggle::GuestPtr;
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/snapshot/witx/wasi_snapshot_preview1.witx"],
     errors: { errno => Error },
+    // Note: not every function actually needs to be async, however, nearly all of them do, and
+    // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
+    // tedious, and there is no cost to having a sync function be async in this case.
     async: *
 });
 
@@ -261,7 +264,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::ADVISE)?
-            .advise(offset, len, advice.into())?;
+            .advise(offset, len, advice.into())
+            .await?;
         Ok(())
     }
 
@@ -274,7 +278,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::ALLOCATE)?
-            .allocate(offset, len)?;
+            .allocate(offset, len)
+            .await?;
         Ok(())
     }
 
@@ -308,7 +313,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::DATASYNC)?
-            .datasync()?;
+            .datasync()
+            .await?;
         Ok(())
     }
 
@@ -317,7 +323,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
             let file_entry: Ref<FileEntry> = table.get(fd)?;
-            let fdstat = file_entry.get_fdstat()?;
+            let fdstat = file_entry.get_fdstat().await?;
             Ok(types::Fdstat::from(&fdstat))
         } else if table.is::<DirEntry>(fd) {
             let dir_entry: Ref<DirEntry> = table.get(fd)?;
@@ -333,6 +339,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .get_file_mut(u32::from(fd))?
             .get_cap(FileCaps::FDSTAT_SET_FLAGS)?
             .set_fdflags(FdFlags::from(flags))
+            .await
     }
 
     async fn fd_fdstat_set_rights(
@@ -364,7 +371,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let filestat = table
                 .get_file(fd)?
                 .get_cap(FileCaps::FILESTAT_GET)?
-                .get_filestat()?;
+                .get_filestat()
+                .await?;
             Ok(filestat.into())
         } else if table.is::<DirEntry>(fd) {
             let filestat = table
@@ -385,7 +393,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::FILESTAT_SET_SIZE)?
-            .set_filestat_size(size)?;
+            .set_filestat_size(size)
+            .await?;
         Ok(())
     }
 
@@ -413,6 +422,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .expect("checked that entry is file")
                 .get_cap(FileCaps::FILESTAT_SET_TIMES)?
                 .set_times(atim, mtim)
+                .await
         } else if table.is::<DirEntry>(fd) {
             table
                 .get_dir(fd)
@@ -446,7 +456,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .map(|s| IoSliceMut::new(&mut *s))
             .collect();
 
-        let bytes_read = f.read_vectored(&mut ioslices)?;
+        let bytes_read = f.read_vectored(&mut ioslices).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -475,7 +485,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .map(|s| IoSliceMut::new(&mut *s))
             .collect();
 
-        let bytes_read = f.read_vectored_at(&mut ioslices, offset)?;
+        let bytes_read = f.read_vectored_at(&mut ioslices, offset).await?;
         Ok(types::Size::try_from(bytes_read)?)
     }
 
@@ -500,7 +510,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .iter()
             .map(|s| IoSlice::new(s.deref()))
             .collect();
-        let bytes_written = f.write_vectored(&ioslices)?;
+        let bytes_written = f.write_vectored(&ioslices).await?;
 
         Ok(types::Size::try_from(bytes_written)?)
     }
@@ -529,7 +539,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .iter()
             .map(|s| IoSlice::new(s.deref()))
             .collect();
-        let bytes_written = f.write_vectored_at(&ioslices, offset)?;
+        let bytes_written = f.write_vectored_at(&ioslices, offset).await?;
 
         Ok(types::Size::try_from(bytes_written)?)
     }
@@ -610,7 +620,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_file(u32::from(fd))?
             .get_cap(required_caps)?
-            .seek(whence)?;
+            .seek(whence)
+            .await?;
         Ok(newoffset)
     }
 
@@ -618,7 +629,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         self.table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::SYNC)?
-            .sync()?;
+            .sync()
+            .await?;
         Ok(())
     }
 
@@ -628,7 +640,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             .table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::TELL)?
-            .seek(std::io::SeekFrom::Current(0))?;
+            .seek(std::io::SeekFrom::Current(0))
+            .await?;
         Ok(offset)
     }
 
