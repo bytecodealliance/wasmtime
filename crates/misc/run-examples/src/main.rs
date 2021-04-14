@@ -13,7 +13,11 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
 
-        examples.insert((path.file_stem().unwrap().to_str().unwrap().to_owned(), dir));
+        examples.insert((
+            path.clone(),
+            path.file_stem().unwrap().to_str().unwrap().to_owned(),
+            dir,
+        ));
     }
 
     println!("======== Building libwasmtime.a ===========");
@@ -21,7 +25,7 @@ fn main() -> anyhow::Result<()> {
         .args(&["build"])
         .current_dir("crates/c-api"))?;
 
-    for (example, is_dir) in examples {
+    for (example_path, example, is_dir) in examples {
         if example == "README" {
             continue;
         }
@@ -45,10 +49,17 @@ fn main() -> anyhow::Result<()> {
                 .arg(target))?;
         }
         println!("======== Rust example `{}` ============", example);
-        run(Command::new("cargo")
-            .arg("run")
-            .arg("--example")
-            .arg(&example))?;
+        let mut cargo_cmd = Command::new("cargo");
+        cargo_cmd.arg("run").arg("--example").arg(&example);
+        if is_dir {
+            let mut features_path = std::path::PathBuf::from(example_path);
+            features_path.push("CARGO_FEATURES");
+            if features_path.exists() {
+                let features = std::fs::read_to_string(features_path)?;
+                cargo_cmd.arg("--features").arg(features);
+            }
+        }
+        run(&mut cargo_cmd)?;
 
         println!("======== C/C++ example `{}` ============", example);
         for extension in ["c", "cc"].iter() {
