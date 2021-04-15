@@ -14,7 +14,7 @@
 //! (e.g. SIB byte, displacements, immediates) based on the instruction (see section 2.6, Intel
 //! Software Development Manual, volume 2A).
 use super::rex::{encode_modrm, LegacyPrefixes, OpcodeMap};
-use super::CodeSink;
+use super::ByteSink;
 use core::ops::RangeInclusive;
 
 /// Constructs an EVEX-encoded instruction using a builder pattern. This approach makes it visually
@@ -151,7 +151,7 @@ impl EvexInstruction {
     /// - finally, the ModR/M byte.
     ///
     /// Eventually this method should support encodings of more than just the reg-reg addressing mode (TODO).
-    pub fn encode<CS: CodeSink + ?Sized>(&self, sink: &mut CS) {
+    pub fn encode<CS: ByteSink + ?Sized>(&self, sink: &mut CS) {
         sink.put4(self.bits);
         sink.put1(self.opcode);
         sink.put1(encode_modrm(3, self.reg.0 & 7, self.rm.0 & 7));

@@ -5,7 +5,7 @@ pub mod evex;
 pub mod rex;
 pub mod vex;
 
-pub trait CodeSink {
+pub trait ByteSink {
     /// Add 1 byte to the code section.
     fn put1(&mut self, _: u8);
 
@@ -19,7 +19,7 @@ pub trait CodeSink {
     fn put8(&mut self, _: u64);
 }
 
-impl CodeSink for MachBuffer<x64::inst::Inst> {
+impl ByteSink for MachBuffer<x64::inst::Inst> {
     fn put1(&mut self, value: u8) {
         self.put1(value)
     }
@@ -38,7 +38,7 @@ impl CodeSink for MachBuffer<x64::inst::Inst> {
 }
 
 /// Provide a convenient implementation for testing.
-impl CodeSink for Vec<u8> {
+impl ByteSink for Vec<u8> {
     fn put1(&mut self, v: u8) {
         self.extend_from_slice(&[v])
     }
