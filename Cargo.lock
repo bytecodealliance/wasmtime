@@ -3138,7 +3138,14 @@ dependencies = [
 name = "wasi-tokio"
 version = "0.26.0"
 dependencies = [
+ "cap-fs-ext",
+ "cap-std",
+ "cap-time-ext",
+ "fs-set-times",
+ "system-interface",
+ "tempfile",
  "tokio",
+ "unsafe-io",
  "wasi-cap-std-sync",
  "wasi-common",
  "wiggle",

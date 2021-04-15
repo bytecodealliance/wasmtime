@@ -15,4 +15,14 @@ include = ["src/**/*", "LICENSE" ]
 wasi-common = { path = "../", version = "0.26.0" }
 wasi-cap-std-sync = { path = "../cap-std-sync", version = "0.26.0" }
 wiggle = { path = "../../wiggle", version = "0.26.0" }
-tokio = { version = "1.5.0", features = [ "rt", "time" ] }
+tokio = { version = "1.5.0", features = [ "rt", "fs", "time" ] }
+cap-std = "0.13.7"
+cap-fs-ext = "0.13.7"
+cap-time-ext = "0.13.7"
+fs-set-times = "0.3.1"
+unsafe-io = "0.6.2"
+system-interface = { version = "0.6.3", features = ["cap_std_impls"] }
+
+[dev-dependencies]
+tempfile = "3.1.0"
+tokio = { features = [ "macros" ] }

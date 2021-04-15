@@ -1,14 +1,14 @@
+mod dir;
+mod file;
+
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 pub use wasi_cap_std_sync::{clocks_ctx, random_ctx, Dir};
-use wasi_common::{Table, WasiCtx};
+use wasi_common::{Error, Table, WasiCtx};
 
 pub fn sched_ctx() -> Box<dyn wasi_common::WasiSched> {
-    use wasi_common::{
-        sched::{Duration, Poll, WasiSched},
-        Error,
-    };
+    use wasi_common::sched::{Duration, Poll, WasiSched};
     struct AsyncSched;
 
     #[wiggle::async_trait]
