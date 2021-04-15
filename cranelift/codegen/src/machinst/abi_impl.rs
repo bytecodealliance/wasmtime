@@ -1209,6 +1209,15 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+
+        // Integer types smaller than word size have been spilled as words below,
+        // and therefore must be reloaded in the same type.
+        let ty = if ty.is_int() && ty.bytes() < M::word_bytes() {
+            M::word_type()
+        } else {
+            ty
+        };
+
         gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
     }
 
