@@ -460,9 +460,7 @@ pub(crate) enum InstructionSet {
     BMI1,
     #[allow(dead_code)] // never constructed (yet).
     BMI2,
-    #[allow(dead_code)]
     AVX512F,
-    #[allow(dead_code)]
     AVX512VL,
 }
 
@@ -995,13 +993,11 @@ impl fmt::Display for SseOpcode {
 
 #[derive(Clone)]
 pub enum Avx512Opcode {
-    #[allow(dead_code)]
     Vpabsq,
 }
 
 impl Avx512Opcode {
     /// Which `InstructionSet`s support the opcode?
-    #[allow(dead_code)]
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
             Avx512Opcode::Vpabsq => smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL],

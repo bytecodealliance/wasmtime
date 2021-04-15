@@ -6,9 +6,11 @@ use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel};
 use core::convert::TryInto;
+use encoding::evex::{EvexInstruction, EvexVectorLength};
 use encoding::rex::{
     emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
-    low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, RexFlags,
+    low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, OpcodeMap,
+    RexFlags,
 };
 use log::debug;
 use regalloc::{Reg, Writable};
@@ -1401,6 +1403,24 @@ pub(crate) fn emit(
                         rex,
                     );
                 }
+            };
+        }
+
+        Inst::XmmUnaryRmREvex { op, src, dst } => {
+            let opcode = match op {
+                Avx512Opcode::Vpabsq => 0x1f,
+            };
+            match src {
+                RegMem::Reg { reg: src } => EvexInstruction::new()
+                    .length(EvexVectorLength::V128)
+                    .prefix(LegacyPrefixes::_66)
+                    .map(OpcodeMap::_0F38)
+                    .w(true)
+                    .opcode(opcode)
+                    .reg(dst.to_reg().get_hw_encoding())
+                    .rm(src.get_hw_encoding())
+                    .encode(sink),
+                _ => todo!(),
             };
         }
 
