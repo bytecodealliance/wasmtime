@@ -109,3 +109,20 @@ impl WasiCtxBuilder {
         self.0.build()
     }
 }
+
+pub(crate) async fn asyncify<'a, F, T>(f: F) -> Result<T, Error>
+where
+    F: FnOnce() -> Result<T, std::io::Error> + Send + 'a,
+    T: Send + 'static,
+{
+    // spawn_blocking requires a 'static function, but since we await on the
+    // JoinHandle the lifetime of the spawn will be no longer than this function's body
+    let f: Box<dyn FnOnce() -> Result<T, std::io::Error> + Send + 'a> = Box::new(f);
+    let f = unsafe {
+        std::mem::transmute::<_, Box<dyn FnOnce() -> Result<T, std::io::Error> + Send + 'static>>(f)
+    };
+    match tokio::task::spawn_blocking(|| f()).await {
+        Ok(res) => Ok(res?),
+        Err(_) => panic!("spawn_blocking died"),
+    }
+}
