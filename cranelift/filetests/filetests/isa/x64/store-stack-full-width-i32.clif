@@ -51,7 +51,7 @@ block0(v0: i32, v1: i32, v2: i32):
 ;; This should be movq below, not movl.
 ; nextln:  movq    %rsi, rsp(0 + virtual offset)
 
-; nextln:  movslq  rsp(0 + virtual offset), %rsi
+; nextln:  movq    rsp(0 + virtual offset), %rsi
 ; nextln:  addl    %edi, %esi
 
     ;; Put an effectful instruction so that the live-ranges of the adds and
