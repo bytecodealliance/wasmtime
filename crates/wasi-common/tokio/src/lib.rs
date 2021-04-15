@@ -85,6 +85,7 @@ impl WasiCtxBuilder {
     pub fn stderr(self, f: Box<dyn wasi_common::WasiFile>) -> Self {
         WasiCtxBuilder(self.0.stderr(f))
     }
+    // XXX our crate needs its own stdios
     pub fn inherit_stdin(self) -> Self {
         self.stdin(Box::new(wasi_cap_std_sync::stdio::stdin()))
     }
@@ -102,7 +103,7 @@ impl WasiCtxBuilder {
         dir: Dir,
         guest_path: impl AsRef<Path>,
     ) -> Result<Self, wasi_common::Error> {
-        let dir = Box::new(wasi_cap_std_sync::dir::Dir::from_cap_std(dir));
+        let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
         Ok(WasiCtxBuilder(self.0.preopened_dir(dir, guest_path)?))
     }
     pub fn build(self) -> Result<WasiCtx, wasi_common::Error> {
