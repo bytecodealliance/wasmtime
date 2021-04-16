@@ -2312,6 +2312,16 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRPair {
+            op: VecPairOp::Addp,
+            rd: writable_vreg(0),
+            rn: vreg(30),
+        },
+        "C0BBF15E",
+        "addp d0, v30.2d",
+    ));
+
+    insns.push((
         Inst::VecRRR {
             alu_op: VecALUOp::Sqadd,
             rd: writable_vreg(1),
@@ -3801,6 +3811,17 @@ fn test_aarch64_binemit() {
         },
         "B758200E",
         "cnt v23.8b, v5.8b",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmeq0,
+            rd: writable_vreg(12),
+            rn: vreg(27),
+            size: VectorSize::Size16x8,
+        },
+        "6C9B604E",
+        "cmeq v12.8h, v27.8h, #0",
     ));
 
     insns.push((
