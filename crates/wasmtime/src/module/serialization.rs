@@ -1,7 +1,6 @@
 //! Implements module serialization.
 
-use super::ModuleInner;
-use crate::{signatures::SignatureCollection, Engine, Module, OptLevel};
+use crate::{Engine, Module, OptLevel};
 use anyhow::{anyhow, bail, Context, Result};
 use bincode::Options;
 use serde::{Deserialize, Serialize};
@@ -124,13 +123,13 @@ impl From<settings::OptLevel> for OptLevel {
 
 /// A small helper struct for serialized module upvars.
 #[derive(Serialize, Deserialize)]
-struct SerializedModuleUpvar {
+pub struct SerializedModuleUpvar {
     /// The module's index into the compilation artifact.
-    index: usize,
+    pub index: usize,
     /// Indexes into the list of all compilation artifacts for this module.
-    artifact_upvars: Vec<usize>,
+    pub artifact_upvars: Vec<usize>,
     /// Closed-over module values that are also needed for this module.
-    module_upvars: Vec<SerializedModuleUpvar>,
+    pub module_upvars: Vec<SerializedModuleUpvar>,
 }
 
 impl SerializedModuleUpvar {
@@ -285,8 +284,7 @@ impl<'a> SerializedModule<'a> {
         self.check_tunables(compiler)?;
         self.check_features(compiler)?;
 
-        let types = Arc::new(self.types.unwrap_owned());
-        let mut modules = CompiledModule::from_artifacts_list(
+        let modules = CompiledModule::from_artifacts_list(
             self.artifacts
                 .into_iter()
                 .map(|i| i.unwrap_owned())
@@ -295,82 +293,17 @@ impl<'a> SerializedModule<'a> {
             &*engine.config().profiler,
         )?;
 
-        // Validate the module can be used with the current allocator
-        engine
-            .allocator()
-            .validate(modules.last().unwrap().module())?;
+        assert!(!modules.is_empty());
 
-        let signatures = Arc::new(SignatureCollection::new_for_module(
-            engine.signatures(),
-            &types.wasm_signatures,
-            modules.iter().flat_map(|m| m.trampolines().iter().cloned()),
-        ));
+        let main_module = modules.len() - 1;
 
-        let module = modules.pop().unwrap();
-
-        let module_upvars = self
-            .module_upvars
-            .iter()
-            .map(|m| {
-                mk(
-                    engine,
-                    &modules,
-                    &types,
-                    m.index,
-                    &m.artifact_upvars,
-                    &m.module_upvars,
-                    &signatures,
-                )
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        return Ok(Module {
-            inner: Arc::new(ModuleInner {
-                engine: engine.clone(),
-                types,
-                module,
-                artifact_upvars: modules,
-                module_upvars,
-                signatures,
-            }),
-        });
-
-        fn mk(
-            engine: &Engine,
-            artifacts: &[Arc<CompiledModule>],
-            types: &Arc<TypeTables>,
-            module_index: usize,
-            artifact_upvars: &[usize],
-            module_upvars: &[SerializedModuleUpvar],
-            signatures: &Arc<SignatureCollection>,
-        ) -> Result<Module> {
-            Ok(Module {
-                inner: Arc::new(ModuleInner {
-                    engine: engine.clone(),
-                    types: types.clone(),
-                    module: artifacts[module_index].clone(),
-                    artifact_upvars: artifact_upvars
-                        .iter()
-                        .map(|i| artifacts[*i].clone())
-                        .collect(),
-                    module_upvars: module_upvars
-                        .into_iter()
-                        .map(|m| {
-                            mk(
-                                engine,
-                                artifacts,
-                                types,
-                                m.index,
-                                &m.artifact_upvars,
-                                &m.module_upvars,
-                                signatures,
-                            )
-                        })
-                        .collect::<Result<Vec<_>>>()?,
-                    signatures: signatures.clone(),
-                }),
-            })
-        }
+        Module::from_parts(
+            engine,
+            modules,
+            main_module,
+            Arc::new(self.types.unwrap_owned()),
+            &self.module_upvars,
+        )
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {

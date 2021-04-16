@@ -320,12 +320,22 @@ impl Module {
             }
         };
 
-        let mut modules = CompiledModule::from_artifacts_list(
+        let modules = CompiledModule::from_artifacts_list(
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
         )?;
 
+        Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
+    }
+
+    fn from_parts(
+        engine: &Engine,
+        mut modules: Vec<Arc<CompiledModule>>,
+        main_module: usize,
+        types: Arc<TypeTables>,
+        module_upvars: &[serialization::SerializedModuleUpvar],
+    ) -> Result<Self> {
         // Validate the module can be used with the current allocator
         engine.allocator().validate(modules[main_module].module())?;
 
@@ -337,16 +347,68 @@ impl Module {
 
         let module = modules.remove(main_module);
 
-        Ok(Module {
+        let module_upvars = module_upvars
+            .iter()
+            .map(|m| {
+                mk(
+                    engine,
+                    &modules,
+                    &types,
+                    m.index,
+                    &m.artifact_upvars,
+                    &m.module_upvars,
+                    &signatures,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        return Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
+                types,
                 module,
-                types: Arc::new(types),
                 artifact_upvars: modules,
-                module_upvars: Vec::new(),
+                module_upvars,
                 signatures,
             }),
-        })
+        });
+
+        fn mk(
+            engine: &Engine,
+            artifacts: &[Arc<CompiledModule>],
+            types: &Arc<TypeTables>,
+            module_index: usize,
+            artifact_upvars: &[usize],
+            module_upvars: &[serialization::SerializedModuleUpvar],
+            signatures: &Arc<SignatureCollection>,
+        ) -> Result<Module> {
+            Ok(Module {
+                inner: Arc::new(ModuleInner {
+                    engine: engine.clone(),
+                    types: types.clone(),
+                    module: artifacts[module_index].clone(),
+                    artifact_upvars: artifact_upvars
+                        .iter()
+                        .map(|i| artifacts[*i].clone())
+                        .collect(),
+                    module_upvars: module_upvars
+                        .into_iter()
+                        .map(|m| {
+                            mk(
+                                engine,
+                                artifacts,
+                                types,
+                                m.index,
+                                &m.artifact_upvars,
+                                &m.module_upvars,
+                                signatures,
+                            )
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                    signatures: signatures.clone(),
+                }),
+            })
+        }
     }
 
     /// Validates `binary` input data as a WebAssembly binary given the
