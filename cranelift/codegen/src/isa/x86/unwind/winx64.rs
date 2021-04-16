@@ -2,7 +2,7 @@
 
 use crate::ir::Function;
 use crate::isa::x86::registers::{FPR, GPR};
-use crate::isa::{unwind::winx64::UnwindInfo, CallConv, RegUnit, TargetIsa};
+use crate::isa::{unwind::winx64::UnwindInfo, RegUnit, TargetIsa};
 use crate::result::CodegenResult;
 
 pub(crate) fn create_unwind_info(
@@ -10,7 +10,7 @@ pub(crate) fn create_unwind_info(
     isa: &dyn TargetIsa,
 ) -> CodegenResult<Option<UnwindInfo>> {
     // Only Windows fastcall is supported for unwind information
-    if func.signature.call_conv != CallConv::WindowsFastcall || func.prologue_end.is_none() {
+    if !func.signature.call_conv.extends_windows_fastcall() || func.prologue_end.is_none() {
         return Ok(None);
     }
 
