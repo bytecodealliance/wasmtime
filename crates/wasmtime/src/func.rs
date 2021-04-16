@@ -1,4 +1,4 @@
-use crate::{sig_registry::SignatureRegistry, trampoline::StoreInstanceHandle};
+use crate::trampoline::StoreInstanceHandle;
 use crate::{Config, Extern, FuncType, Store, Trap, Val, ValType};
 use anyhow::{bail, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
@@ -22,9 +22,9 @@ use wasmtime_runtime::{
 /// This differs from `Func` in that it is not associated with a `Store`.
 /// Host functions are associated with a `Config`.
 pub(crate) struct HostFunc {
-    ty: FuncType,
-    instance: InstanceHandle,
-    trampoline: VMTrampoline,
+    pub ty: FuncType,
+    pub instance: InstanceHandle,
+    pub trampoline: VMTrampoline,
 }
 
 impl HostFunc {
@@ -73,6 +73,23 @@ impl HostFunc {
         }
     }
 
+    /// Gets a caller-checked anyfunc for this host function given a shared signature index.
+    ///
+    /// The shared signature index must have been registered for the signature of
+    /// this host function.
+    pub fn anyfunc(&self, sig: VMSharedSignatureIndex) -> VMCallerCheckedAnyfunc {
+        let mut anyfunc = match self
+            .instance
+            .lookup_by_declaration(&EntityIndex::Function(FuncIndex::from_u32(0)))
+        {
+            wasmtime_runtime::Export::Function(f) => unsafe { f.anyfunc.as_ref() }.clone(),
+            _ => unreachable!(),
+        };
+
+        anyfunc.type_index = sig;
+        anyfunc
+    }
+
     /// Converts a `HostFunc` to a `Func`.
     ///
     /// # Safety
@@ -88,11 +105,11 @@ impl HostFunc {
         };
 
         let export = ExportFunction {
-            anyfunc: std::ptr::NonNull::new_unchecked(store.get_host_anyfunc(
-                &self.instance,
-                &self.ty,
-                self.trampoline,
-            )),
+            anyfunc: store
+                .engine()
+                .host_func_anyfunc(&self.instance)
+                .unwrap()
+                .into(),
         };
 
         Func {
@@ -408,13 +425,9 @@ impl Func {
             Func::invoke(&store, &ty_clone, caller_vmctx, values_vec, &func)
         });
 
-        let (instance, trampoline) = crate::trampoline::create_function(
-            &ty,
-            func,
-            store.engine().config(),
-            Some(&mut store.signatures().borrow_mut()),
-        )
-        .expect("failed to create function");
+        let (instance, trampoline) =
+            crate::trampoline::create_function(&ty, func, store.engine().config(), Some(store))
+                .expect("failed to create function");
 
         let idx = EntityIndex::Function(FuncIndex::from_u32(0));
         let (instance, export) = match instance.lookup_by_declaration(&idx) {
@@ -734,7 +747,7 @@ impl Func {
     /// # }
     /// ```
     pub fn wrap<Params, Results>(store: &Store, func: impl IntoFunc<Params, Results>) -> Func {
-        let (_, instance, trampoline) = func.into_func(Some(&mut store.signatures().borrow_mut()));
+        let (_, instance, trampoline) = func.into_func(Some(store));
 
         let (instance, export) = unsafe {
             let idx = EntityIndex::Function(FuncIndex::from_u32(0));
@@ -759,35 +772,26 @@ impl Func {
 
     /// Returns the underlying wasm type that this `Func` has.
     pub fn ty(&self) -> FuncType {
-        // Signatures should always be registered in the store's registry of
+        // Signatures should always be registered in the engine's registry of
         // shared signatures, so we should be able to unwrap safely here.
-        let signatures = self.instance.store.signatures().borrow();
-        let (wft, _) = signatures
-            .lookup_shared(self.sig_index())
-            .expect("signature should be registered");
-
-        // This is only called with `Export::Function`, and since it's coming
-        // from wasmtime_runtime itself we should support all the types coming
-        // out of it, so assert such here.
-        FuncType::from_wasm_func_type(&wft)
+        FuncType::from_wasm_func_type(
+            self.instance
+                .store
+                .engine()
+                .signatures()
+                .lookup_type(self.sig_index())
+                .expect("signature should be registered"),
+        )
     }
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        let signatures = self.instance.store.signatures().borrow();
-        let (sig, _) = signatures
-            .lookup_shared(self.sig_index())
-            .expect("signature should be registered");
-        sig.params.len()
+        self.ty().params().len()
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        let signatures = self.instance.store.signatures().borrow();
-        let (sig, _) = signatures
-            .lookup_shared(self.sig_index())
-            .expect("signature should be registered");
-        sig.returns.len()
+        self.ty().results().len()
     }
 
     /// Invokes this function with the `params` given, returning the results and
@@ -907,21 +911,12 @@ impl Func {
     }
 
     pub(crate) unsafe fn from_wasmtime_function(export: &ExportFunction, store: &Store) -> Self {
-        // Each function signature in a module should have a trampoline stored
-        // on that module as well, so unwrap the result here since otherwise
-        // it's a bug in wasmtime.
         let anyfunc = export.anyfunc.as_ref();
-        let trampoline = store
-            .signatures()
-            .borrow()
-            .lookup_shared(anyfunc.type_index)
-            .expect("failed to retrieve trampoline from module")
-            .1;
 
         Func {
             instance: store.existing_vmctx(anyfunc.vmctx),
             export: export.clone(),
-            trampoline,
+            trampoline: store.lookup_trampoline(&*anyfunc),
         }
     }
 
@@ -1542,10 +1537,7 @@ for_each_function_signature!(impl_host_abi);
 /// as an implementation detail of this crate.
 pub trait IntoFunc<Params, Results> {
     #[doc(hidden)]
-    fn into_func(
-        self,
-        registry: Option<&mut SignatureRegistry>,
-    ) -> (FuncType, InstanceHandle, VMTrampoline);
+    fn into_func(self, store: Option<&Store>) -> (FuncType, InstanceHandle, VMTrampoline);
 }
 
 /// A structure representing the *caller's* context when creating a function
@@ -1658,12 +1650,12 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
+            fn into_func(self, store: Option<&Store>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 let f = move |_: Caller<'_>, $($args:$args),*| {
                     self($($args),*)
                 };
 
-                f.into_func(registry)
+                f.into_func(store)
             }
         }
 
@@ -1674,7 +1666,7 @@ macro_rules! impl_into_func {
             $($args: WasmTy,)*
             R: WasmRet,
         {
-            fn into_func(self, registry: Option<&mut SignatureRegistry>) -> (FuncType, InstanceHandle, VMTrampoline) {
+            fn into_func(self, store: Option<&Store>) -> (FuncType, InstanceHandle, VMTrampoline) {
                 /// This shim is called by Wasm code, constructs a `Caller`,
                 /// calls the wrapped host function, and returns the translated
                 /// result back to Wasm.
@@ -1807,10 +1799,10 @@ macro_rules! impl_into_func {
 
                 let trampoline = host_trampoline::<$($args,)* R>;
 
-                // If not given a registry, use a default signature index that is guaranteed to trap
-                // if the function is called indirectly without first being associated with a store (a bug condition).
-                let shared_signature_id = registry
-                    .map(|r| r.register(ty.as_wasm_func_type(), trampoline))
+                // If not given a store, use a default signature index that is guaranteed to trap.
+                // If the function is called indirectly without first being associated with a store (a bug condition).
+                let shared_signature_id = store
+                    .map(|s| s.signatures().borrow_mut().register(ty.as_wasm_func_type(), trampoline))
                     .unwrap_or(VMSharedSignatureIndex::default());
 
                 let instance = unsafe {

@@ -523,7 +523,7 @@ mod test {
                                 host_state: Box::new(()),
                                 interrupts: ptr::null(),
                                 externref_activations_table: ptr::null_mut(),
-                                stack_map_registry: ptr::null_mut(),
+                                module_info_lookup: None,
                             },
                         )
                         .expect("instance should allocate"),

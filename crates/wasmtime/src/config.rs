@@ -319,6 +319,10 @@ impl HostFuncMap {
     fn async_required(&self) -> bool {
         self.funcs.values().any(|f| f.1)
     }
+
+    fn iter(&self) -> impl Iterator<Item = &HostFunc> {
+        self.funcs.values().map(|v| &*v.0)
+    }
 }
 
 macro_rules! generate_wrap_async_host_func {
@@ -1317,6 +1321,10 @@ impl Config {
     }
 
     for_each_function_signature!(generate_wrap_async_host_func);
+
+    pub(crate) fn host_funcs(&self) -> impl Iterator<Item = &HostFunc> {
+        self.host_funcs.iter()
+    }
 
     pub(crate) fn get_host_func(&self, module: &str, name: &str) -> Option<&HostFunc> {
         self.host_funcs.get(module, name)

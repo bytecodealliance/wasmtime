@@ -1,6 +1,5 @@
 //! Implements module serialization.
 
-use super::ModuleInner;
 use crate::{Engine, Module, OptLevel};
 use anyhow::{anyhow, bail, Context, Result};
 use bincode::Options;
@@ -10,8 +9,7 @@ use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::{collections::HashMap, fmt::Display};
-use wasmtime_environ::Tunables;
-use wasmtime_environ::{isa::TargetIsa, settings};
+use wasmtime_environ::{isa::TargetIsa, settings, Tunables};
 use wasmtime_jit::{
     CompilationArtifacts, CompilationStrategy, CompiledModule, Compiler, TypeTables,
 };
@@ -123,55 +121,44 @@ impl From<settings::OptLevel> for OptLevel {
     }
 }
 
-/// A small helper struct which defines modules are serialized.
+/// A small helper struct for serialized module upvars.
 #[derive(Serialize, Deserialize)]
-struct SerializedModuleData<'a> {
-    /// All compiled artifacts needed by this module, where the last entry in
-    /// this list is the artifacts for the module itself.
-    artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
+pub struct SerializedModuleUpvar {
+    /// The module's index into the compilation artifact.
+    pub index: usize,
+    /// Indexes into the list of all compilation artifacts for this module.
+    pub artifact_upvars: Vec<usize>,
     /// Closed-over module values that are also needed for this module.
-    modules: Vec<SerializedModuleData<'a>>,
-    /// The index into the list of type tables that are used for this module's
-    /// type tables.
-    type_tables: usize,
+    pub module_upvars: Vec<SerializedModuleUpvar>,
 }
 
-impl<'a> SerializedModuleData<'a> {
-    pub fn new(module: &'a Module) -> (Self, Vec<MyCow<'a, TypeTables>>) {
-        let mut pushed = HashMap::new();
-        let mut tables = Vec::new();
-        return (module_data(module, &mut pushed, &mut tables), tables);
+impl SerializedModuleUpvar {
+    pub fn new(module: &Module, artifacts: &[Arc<CompiledModule>]) -> Self {
+        // TODO: improve upon the linear searches in the artifact list
+        let index = artifacts
+            .iter()
+            .position(|a| Arc::as_ptr(a) == Arc::as_ptr(&module.inner.module))
+            .expect("module should be in artifacts list");
 
-        fn module_data<'a>(
-            module: &'a Module,
-            type_tables_pushed: &mut HashMap<usize, usize>,
-            type_tables: &mut Vec<MyCow<'a, TypeTables>>,
-        ) -> SerializedModuleData<'a> {
-            // Deduplicate `Arc<TypeTables>` using our two parameters to ensure we
-            // serialize type tables as little as possible.
-            let ptr = Arc::as_ptr(module.types());
-            let type_tables_idx = *type_tables_pushed.entry(ptr as usize).or_insert_with(|| {
-                type_tables.push(MyCow::Borrowed(module.types()));
-                type_tables.len() - 1
-            });
-            SerializedModuleData {
-                artifacts: module
-                    .inner
-                    .artifact_upvars
-                    .iter()
-                    .map(|i| MyCow::Borrowed(i.compilation_artifacts()))
-                    .chain(Some(MyCow::Borrowed(
-                        module.compiled_module().compilation_artifacts(),
-                    )))
-                    .collect(),
-                modules: module
-                    .inner
-                    .module_upvars
-                    .iter()
-                    .map(|i| module_data(i, type_tables_pushed, type_tables))
-                    .collect(),
-                type_tables: type_tables_idx,
-            }
+        SerializedModuleUpvar {
+            index,
+            artifact_upvars: module
+                .inner
+                .artifact_upvars
+                .iter()
+                .map(|m| {
+                    artifacts
+                        .iter()
+                        .position(|a| Arc::as_ptr(a) == Arc::as_ptr(m))
+                        .expect("artifact should be in artifacts list")
+                })
+                .collect(),
+            module_upvars: module
+                .inner
+                .module_upvars
+                .iter()
+                .map(|m| SerializedModuleUpvar::new(m, artifacts))
+                .collect(),
         }
     }
 }
@@ -212,14 +199,36 @@ pub struct SerializedModule<'a> {
     strategy: CompilationStrategy,
     tunables: Tunables,
     features: WasmFeatures,
-    data: SerializedModuleData<'a>,
-    tables: Vec<MyCow<'a, TypeTables>>,
+    artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
+    module_upvars: Vec<SerializedModuleUpvar>,
+    types: MyCow<'a, TypeTables>,
 }
 
 impl<'a> SerializedModule<'a> {
     pub fn new(module: &'a Module) -> Self {
-        let (data, tables) = SerializedModuleData::new(module);
-        Self::with_data(module.engine().compiler(), data, tables)
+        let compiler = module.engine().compiler();
+        let artifacts = module
+            .inner
+            .artifact_upvars
+            .iter()
+            .map(|m| MyCow::Borrowed(m.compilation_artifacts()))
+            .chain(Some(MyCow::Borrowed(
+                module.inner.module.compilation_artifacts(),
+            )))
+            .collect::<Vec<_>>();
+        let module_upvars = module
+            .inner
+            .module_upvars
+            .iter()
+            .map(|m| SerializedModuleUpvar::new(m, &module.inner.artifact_upvars))
+            .collect::<Vec<_>>();
+
+        Self::with_data(
+            compiler,
+            artifacts,
+            module_upvars,
+            MyCow::Borrowed(module.types()),
+        )
     }
 
     pub fn from_artifacts(
@@ -229,19 +238,17 @@ impl<'a> SerializedModule<'a> {
     ) -> Self {
         Self::with_data(
             compiler,
-            SerializedModuleData {
-                artifacts: artifacts.iter().map(MyCow::Borrowed).collect(),
-                modules: Vec::new(),
-                type_tables: 0,
-            },
-            vec![MyCow::Borrowed(types)],
+            artifacts.iter().map(MyCow::Borrowed).collect(),
+            Vec::new(),
+            MyCow::Borrowed(types),
         )
     }
 
     fn with_data(
         compiler: &Compiler,
-        data: SerializedModuleData<'a>,
-        tables: Vec<MyCow<'a, TypeTables>>,
+        artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
+        module_upvars: Vec<SerializedModuleUpvar>,
+        types: MyCow<'a, TypeTables>,
     ) -> Self {
         let isa = compiler.isa();
 
@@ -260,8 +267,9 @@ impl<'a> SerializedModule<'a> {
             strategy: compiler.strategy(),
             tunables: compiler.tunables().clone(),
             features: compiler.features().into(),
-            data,
-            tables,
+            artifacts,
+            module_upvars,
+            types,
         }
     }
 
@@ -276,47 +284,26 @@ impl<'a> SerializedModule<'a> {
         self.check_tunables(compiler)?;
         self.check_features(compiler)?;
 
-        let types = self
-            .tables
-            .into_iter()
-            .map(|t| Arc::new(t.unwrap_owned()))
-            .collect::<Vec<_>>();
-        let module = mk(engine, &types, self.data)?;
+        let modules = CompiledModule::from_artifacts_list(
+            self.artifacts
+                .into_iter()
+                .map(|i| i.unwrap_owned())
+                .collect(),
+            engine.compiler().isa(),
+            &*engine.config().profiler,
+        )?;
 
-        // Validate the module can be used with the current allocator
-        engine.allocator().validate(module.inner.module.module())?;
+        assert!(!modules.is_empty());
 
-        return Ok(module);
+        let main_module = modules.len() - 1;
 
-        fn mk(
-            engine: &Engine,
-            types: &Vec<Arc<TypeTables>>,
-            data: SerializedModuleData<'_>,
-        ) -> Result<Module> {
-            let mut artifacts = CompiledModule::from_artifacts_list(
-                data.artifacts
-                    .into_iter()
-                    .map(|i| i.unwrap_owned())
-                    .collect(),
-                engine.compiler().isa(),
-                &*engine.config().profiler,
-            )?;
-            let inner = ModuleInner {
-                engine: engine.clone(),
-                types: types[data.type_tables].clone(),
-                module: artifacts.pop().unwrap(),
-                artifact_upvars: artifacts,
-                module_upvars: data
-                    .modules
-                    .into_iter()
-                    .map(|m| mk(engine, types, m))
-                    .collect::<Result<Vec<_>>>()?,
-            };
-
-            Ok(Module {
-                inner: Arc::new(inner),
-            })
-        }
+        Module::from_parts(
+            engine,
+            modules,
+            main_module,
+            Arc::new(self.types.unwrap_owned()),
+            &self.module_upvars,
+        )
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {

@@ -204,8 +204,7 @@ impl ExternType {
     ) -> ExternType {
         match ty {
             EntityType::Function(idx) => {
-                let sig = &types.wasm_signatures[*idx];
-                FuncType::from_wasm_func_type(sig).into()
+                FuncType::from_wasm_func_type(types.wasm_signatures[*idx].clone()).into()
             }
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
@@ -298,8 +297,8 @@ impl FuncType {
         &self.sig
     }
 
-    pub(crate) fn from_wasm_func_type(sig: &wasm::WasmFuncType) -> FuncType {
-        FuncType { sig: sig.clone() }
+    pub(crate) fn from_wasm_func_type(sig: wasm::WasmFuncType) -> FuncType {
+        Self { sig }
     }
 }
 

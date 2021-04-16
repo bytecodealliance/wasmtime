@@ -1370,7 +1370,7 @@ mod test {
                             host_state: Box::new(()),
                             interrupts: std::ptr::null(),
                             externref_activations_table: std::ptr::null_mut(),
-                            stack_map_registry: std::ptr::null_mut(),
+                            module_info_lookup: None,
                         },
                     )
                     .expect("allocation should succeed"),
@@ -1394,7 +1394,7 @@ mod test {
                 host_state: Box::new(()),
                 interrupts: std::ptr::null(),
                 externref_activations_table: std::ptr::null_mut(),
-                stack_map_registry: std::ptr::null_mut(),
+                module_info_lookup: None,
             },
         ) {
             Err(InstantiationError::Limit(3)) => {}

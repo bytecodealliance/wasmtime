@@ -1,4 +1,7 @@
-use crate::types::{ExportType, ExternType, ImportType};
+use crate::{
+    signatures::SignatureCollection,
+    types::{ExportType, ExternType, ImportType},
+};
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
 use std::fs;
@@ -11,8 +14,10 @@ use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::ModuleIndex;
 use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 
+mod registry;
 mod serialization;
 
+pub use registry::{FrameInfo, FrameSymbol, GlobalModuleRegistry, ModuleRegistry};
 pub use serialization::SerializedModule;
 
 /// A compiled WebAssembly module, ready to be instantiated.
@@ -102,6 +107,8 @@ struct ModuleInner {
     /// Type information of this module and all `artifact_upvars` compiled
     /// modules.
     types: Arc<TypeTables>,
+    /// Registered shared signature for the module.
+    signatures: Arc<SignatureCollection>,
 }
 
 impl Module {
@@ -313,25 +320,95 @@ impl Module {
             }
         };
 
-        let mut modules = CompiledModule::from_artifacts_list(
+        let modules = CompiledModule::from_artifacts_list(
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
         )?;
+
+        Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
+    }
+
+    fn from_parts(
+        engine: &Engine,
+        mut modules: Vec<Arc<CompiledModule>>,
+        main_module: usize,
+        types: Arc<TypeTables>,
+        module_upvars: &[serialization::SerializedModuleUpvar],
+    ) -> Result<Self> {
+        // Validate the module can be used with the current allocator
+        engine.allocator().validate(modules[main_module].module())?;
+
+        let signatures = Arc::new(SignatureCollection::new_for_module(
+            engine.signatures(),
+            &types.wasm_signatures,
+            modules.iter().flat_map(|m| m.trampolines().iter().cloned()),
+        ));
+
         let module = modules.remove(main_module);
 
-        // Validate the module can be used with the current allocator
-        engine.allocator().validate(module.module())?;
+        let module_upvars = module_upvars
+            .iter()
+            .map(|m| {
+                mk(
+                    engine,
+                    &modules,
+                    &types,
+                    m.index,
+                    &m.artifact_upvars,
+                    &m.module_upvars,
+                    &signatures,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
 
-        Ok(Module {
+        return Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
+                types,
                 module,
-                types: Arc::new(types),
                 artifact_upvars: modules,
-                module_upvars: Vec::new(),
+                module_upvars,
+                signatures,
             }),
-        })
+        });
+
+        fn mk(
+            engine: &Engine,
+            artifacts: &[Arc<CompiledModule>],
+            types: &Arc<TypeTables>,
+            module_index: usize,
+            artifact_upvars: &[usize],
+            module_upvars: &[serialization::SerializedModuleUpvar],
+            signatures: &Arc<SignatureCollection>,
+        ) -> Result<Module> {
+            Ok(Module {
+                inner: Arc::new(ModuleInner {
+                    engine: engine.clone(),
+                    types: types.clone(),
+                    module: artifacts[module_index].clone(),
+                    artifact_upvars: artifact_upvars
+                        .iter()
+                        .map(|i| artifacts[*i].clone())
+                        .collect(),
+                    module_upvars: module_upvars
+                        .into_iter()
+                        .map(|m| {
+                            mk(
+                                engine,
+                                artifacts,
+                                types,
+                                m.index,
+                                &m.artifact_upvars,
+                                &m.module_upvars,
+                                signatures,
+                            )
+                        })
+                        .collect::<Result<Vec<_>>>()?,
+                    signatures: signatures.clone(),
+                }),
+            })
+        }
     }
 
     /// Validates `binary` input data as a WebAssembly binary given the
@@ -416,8 +493,8 @@ impl Module {
     ) -> Module {
         Module {
             inner: Arc::new(ModuleInner {
-                types: self.types().clone(),
-                engine: self.engine().clone(),
+                types: self.inner.types.clone(),
+                engine: self.inner.engine.clone(),
                 module: self.inner.artifact_upvars[artifact_index].clone(),
                 artifact_upvars: artifact_upvars
                     .iter()
@@ -432,6 +509,7 @@ impl Module {
                         wasmtime_environ::ModuleUpvar::Local(i) => modules[i].clone(),
                     })
                     .collect(),
+                signatures: self.inner.signatures.clone(),
             }),
         }
     }
@@ -446,6 +524,10 @@ impl Module {
 
     pub(crate) fn types(&self) -> &Arc<TypeTables> {
         &self.inner.types
+    }
+
+    pub(crate) fn signatures(&self) -> &Arc<SignatureCollection> {
+        &self.inner.signatures
     }
 
     /// Looks up the module upvar value at the `index` specified.

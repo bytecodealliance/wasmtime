@@ -1,12 +1,11 @@
-use crate::frame_info;
-use crate::frame_info::StoreFrameInfo;
-use crate::sig_registry::SignatureRegistry;
-use crate::trampoline::StoreInstanceHandle;
-use crate::{Engine, Func, FuncType, Module, Trap};
+use crate::{
+    module::ModuleRegistry, signatures::SignatureCollection, trampoline::StoreInstanceHandle,
+    Engine, Func, Module, Trap,
+};
 use anyhow::{bail, Result};
 use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
 use std::fmt;
 use std::future::Future;
@@ -16,12 +15,10 @@ use std::ptr;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use wasmtime_environ::wasm;
-use wasmtime_jit::{CompiledModule, ModuleCode};
 use wasmtime_runtime::{
-    Export, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler,
-    StackMapRegistry, TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMInterrupts, VMTrampoline,
+    InstanceAllocator, InstanceHandle, ModuleInfo, OnDemandInstanceAllocator, SignalHandler,
+    TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable,
+    VMInterrupts, VMTrampoline,
 };
 
 /// Used to associate instances with the store.
@@ -72,20 +69,13 @@ pub struct Store {
 
 pub(crate) struct StoreInner {
     engine: Engine,
-    /// The map of all host functions registered with this store's signature registry
-    host_funcs: RefCell<HashMap<InstanceHandle, Box<VMCallerCheckedAnyfunc>>>,
     interrupts: Arc<VMInterrupts>,
-    signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<StoreInstance>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     externref_activations_table: VMExternRefActivationsTable,
-    stack_map_registry: StackMapRegistry,
-    /// Information about JIT code which allows us to test if a program counter
-    /// is in JIT code, lookup trap information, etc.
-    frame_info: RefCell<StoreFrameInfo>,
-    /// Set of all compiled modules that we're holding a strong reference to
-    /// the module's code for. This includes JIT functions, trampolines, etc.
-    modules: RefCell<HashSet<ArcModuleCode>>,
+    modules: RefCell<ModuleRegistry>,
+    // The signatures and trampolines for `Func` objects
+    signatures: RefCell<SignatureCollection>,
     // Numbers of resources instantiated in this store.
     instance_count: Cell<usize>,
     memory_count: Cell<usize>,
@@ -137,21 +127,18 @@ impl Store {
         // once-per-thread. Platforms like Unix, however, only require this
         // once-per-program. In any case this is safe to call many times and
         // each one that's not relevant just won't do anything.
-        wasmtime_runtime::init_traps(frame_info::GlobalFrameInfo::is_wasm_pc)
+        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc)
             .expect("failed to initialize trap handling");
 
         Store {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
-                host_funcs: RefCell::new(HashMap::new()),
                 interrupts: Arc::new(Default::default()),
-                signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
                 externref_activations_table: VMExternRefActivationsTable::new(),
-                stack_map_registry: StackMapRegistry::default(),
-                frame_info: Default::default(),
-                modules: Default::default(),
+                modules: RefCell::new(ModuleRegistry::default()),
+                signatures: RefCell::new(SignatureCollection::new(engine.signatures())),
                 instance_count: Default::default(),
                 memory_count: Default::default(),
                 table_count: Default::default(),
@@ -179,35 +166,6 @@ impl Store {
                 // config associated with this store
                 unsafe { f.to_func(self) }
             })
-    }
-
-    pub(crate) fn get_host_anyfunc(
-        &self,
-        instance: &InstanceHandle,
-        ty: &FuncType,
-        trampoline: VMTrampoline,
-    ) -> *mut VMCallerCheckedAnyfunc {
-        let mut funcs = self.inner.host_funcs.borrow_mut();
-
-        let anyfunc = funcs.entry(unsafe { instance.clone() }).or_insert_with(|| {
-            let mut anyfunc = match instance
-                .lookup_by_declaration(&wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0)))
-            {
-                Export::Function(f) => unsafe { f.anyfunc.as_ref() }.clone(),
-                _ => unreachable!(),
-            };
-
-            // Register the function with this store's signature registry
-            anyfunc.type_index = self
-                .inner
-                .signatures
-                .borrow_mut()
-                .register(ty.as_wasm_func_type(), trampoline);
-
-            Box::new(anyfunc)
-        });
-
-        &mut **anyfunc
     }
 
     /// Returns the [`Engine`] that this store is associated with.
@@ -244,64 +202,32 @@ impl Store {
         }
     }
 
-    pub(crate) fn signatures(&self) -> &RefCell<SignatureRegistry> {
+    pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
         &self.inner.signatures
     }
 
-    pub(crate) fn register_module(&self, module: &Module) {
-        // With a module being instantiated into this `Store` we need to
-        // preserve its jit-code. References to this module's code and
-        // trampolines are not owning-references so it's our responsibility to
-        // keep it all alive within the `Store`.
-        //
-        // If this module is already present in the store then we skip all
-        // further registration steps.
-        let first = self
+    pub(crate) fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
+        // Look up the trampoline with the store's trampolines (from `Func`).
+        if let Some(trampoline) = self
             .inner
-            .modules
-            .borrow_mut()
-            .insert(ArcModuleCode(module.compiled_module().code().clone()));
-        if !first {
-            return;
+            .signatures
+            .borrow()
+            .trampoline(anyfunc.type_index)
+        {
+            return trampoline;
         }
 
-        // All modules register their JIT code in a store for two reasons
-        // currently:
-        //
-        // * First we only catch signals/traps if the program counter falls
-        //   within the jit code of an instantiated wasm module. This ensures
-        //   we don't catch accidental Rust/host segfaults.
-        //
-        // * Second when generating a backtrace we'll use this mapping to
-        //   only generate wasm frames for instruction pointers that fall
-        //   within jit code.
+        // Look up the trampoline with the registered modules
+        if let Some(trampoline) = self.inner.modules.borrow().lookup_trampoline(anyfunc) {
+            return trampoline;
+        }
+
+        // Lastly, check with the engine (for `HostFunc`)
         self.inner
-            .frame_info
-            .borrow_mut()
-            .register(module.compiled_module());
-
-        // We need to know about all the stack maps of all instantiated modules
-        // so when performing a GC we know about all wasm frames that we find
-        // on the stack.
-        self.register_stack_maps(module.compiled_module());
-
-        // Signatures are loaded into our `SignatureRegistry` here
-        // once-per-module (and once-per-signature). This allows us to create
-        // a `Func` wrapper for any function in the module, which requires that
-        // we know about the signature and trampoline for all instances.
-        self.signatures().borrow_mut().register_module(module);
-    }
-
-    fn register_stack_maps(&self, module: &CompiledModule) {
-        self.stack_map_registry()
-            .register_stack_maps(module.stack_maps().map(|(func, stack_maps)| unsafe {
-                let ptr = (*func).as_ptr();
-                let len = (*func).len();
-                let start = ptr as usize;
-                let end = ptr as usize + len;
-                let range = start..end;
-                (range, stack_maps)
-            }));
+            .engine
+            .host_func_signatures()
+            .trampoline(anyfunc.type_index)
+            .expect("trampoline missing")
     }
 
     pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
@@ -363,7 +289,7 @@ impl Store {
                 .borrow()
                 .iter()
                 .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr())
-                || self.inner.host_funcs.borrow().get(&handle).is_some()
+                || self.inner.engine.host_func_anyfunc(&handle).is_some()
         );
         StoreInstanceHandle {
             store: self.clone(),
@@ -490,12 +416,8 @@ impl Store {
     }
 
     #[inline]
-    pub(crate) fn stack_map_registry(&self) -> &StackMapRegistry {
-        &self.inner.stack_map_registry
-    }
-
-    pub(crate) fn frame_info(&self) -> &RefCell<StoreFrameInfo> {
-        &self.inner.frame_info
+    pub(crate) fn modules(&self) -> &RefCell<ModuleRegistry> {
+        &self.inner.modules
     }
 
     /// Notifies that the current Store (and all referenced entities) has been moved over to a
@@ -513,20 +435,21 @@ impl Store {
     ///
     /// It is fine to call this several times: only the first call will have an effect.
     pub unsafe fn notify_switched_thread(&self) {
-        wasmtime_runtime::init_traps(frame_info::GlobalFrameInfo::is_wasm_pc)
+        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc)
             .expect("failed to initialize per-threads traps");
+    }
+
+    #[inline]
+    pub(crate) fn module_info_lookup(&self) -> &dyn wasmtime_runtime::ModuleInfoLookup {
+        self.inner.as_ref()
     }
 
     /// Perform garbage collection of `ExternRef`s.
     pub fn gc(&self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
-        // are upheld for all host-->Wasm calls, and we register every module
-        // used with this store in `self.inner.stack_map_registry`.
+        // are upheld for all host-->Wasm calls.
         unsafe {
-            wasmtime_runtime::gc(
-                &self.inner.stack_map_registry,
-                &self.inner.externref_activations_table,
-            );
+            wasmtime_runtime::gc(self.inner.as_ref(), &self.inner.externref_activations_table);
         }
     }
 
@@ -987,6 +910,12 @@ impl Drop for StoreInner {
     }
 }
 
+impl wasmtime_runtime::ModuleInfoLookup for StoreInner {
+    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
+        self.modules.borrow().lookup_module(pc)
+    }
+}
+
 /// A threadsafe handle used to interrupt instances executing within a
 /// particular `Store`.
 ///
@@ -1012,24 +941,6 @@ impl InterruptHandle {
     /// [`Store::interrupt_handle`].
     pub fn interrupt(&self) {
         self.interrupts.interrupt()
-    }
-}
-
-// Wrapper struct to implement hash/equality based on the pointer value of the
-// `Arc` in question.
-struct ArcModuleCode(Arc<ModuleCode>);
-
-impl PartialEq for ArcModuleCode {
-    fn eq(&self, other: &ArcModuleCode) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-impl Eq for ArcModuleCode {}
-
-impl Hash for ArcModuleCode {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        Arc::as_ptr(&self.0).hash(hasher)
     }
 }
 
