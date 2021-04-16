@@ -501,6 +501,9 @@ impl Store {
     /// Notifies that the current Store (and all referenced entities) has been moved over to a
     /// different thread.
     ///
+    /// See also the multithreading documentation for more details:
+    /// <https://docs.wasmtime.dev/examples-rust-multithreading.html>.
+    ///
     /// # Safety
     ///
     /// In general, it's not possible to move a `Store` to a different thread, because it isn't `Send`.
