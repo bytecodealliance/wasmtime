@@ -4,8 +4,9 @@ pub(crate) const DEFAULT_MEMORY_LIMIT: usize = 10000;
 
 /// Used by hosts to limit resource consumption of instances at runtime.
 ///
-/// A [`Store`](crate::Store) can be created with a resource limiter so that hosts can take into account
-/// non-WebAssembly resource usage to determine if a linear memory or table should grow.
+/// [`Store::new_with_limits`](crate::Store::new_with_limits) can be used
+/// with a resource limiter to take into account non-WebAssembly resource
+/// usage to determine if a linear memory or table should be grown.
 pub trait ResourceLimiter {
     /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
     ///

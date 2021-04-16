@@ -122,20 +122,37 @@ impl Hash for HostInfoKey {
 }
 
 impl Store {
-    /// Creates a new store to be associated with the given [`Engine`].
+    /// Creates a new [`Store`] to be associated with the given [`Engine`].
+    ///
+    /// The created [`Store`] will place no additional limits on the size of linear
+    /// memories or tables at runtime. Linear memories and tables will be allowed to
+    /// grow to any upper limit specified in their definitions.
+    ///
+    /// The store will limit the number of instances, linear memories, and tables created to 10,000.
+    ///
+    /// Use [`Store::new_with_limits`] with a [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) to
+    /// specify different limits for the store.
     pub fn new(engine: &Engine) -> Self {
         Self::new_(engine, None)
     }
 
-    /// Creates a new store to be associated with the given [`Engine`] and using the supplied
+    /// Creates a new [`Store`] to be associated with the given [`Engine`] and using the supplied
     /// resource limiter.
+    ///
+    /// A [`ResourceLimiter`] can be implemented by hosts to control the size of WebAssembly
+    /// linear memories and tables when a request is made to grow them.
+    ///
+    /// [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) can be used to create a
+    /// [`StoreLimits`](crate::StoreLimits) that implements [`ResourceLimiter`] using
+    /// static limit values.
     ///
     /// # Example
     ///
     /// ```rust
     /// # use wasmtime::{Engine, Store, StoreLimitsBuilder};
+    /// // Place a limit on linear memories so they cannot grow beyond 1 MiB
     /// let engine = Engine::default();
-    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().instances(10).build());
+    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().memory_pages(16).build());
     /// ```
     pub fn new_with_limits(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
         Self::new_(engine, Some(Rc::new(ResourceLimiterProxy(limiter))))

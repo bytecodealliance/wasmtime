@@ -215,9 +215,13 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 #[test]
 fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
     let mut config = Config::new();
+    config.wasm_multi_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
-        module_limits: ModuleLimits::default(),
+        module_limits: ModuleLimits {
+            memories: 2,
+            ..Default::default()
+        },
         instance_limits: InstanceLimits {
             count: 1,
             ..Default::default()
@@ -225,7 +229,10 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
     });
 
     let engine = Engine::new(&config)?;
-    let module = Module::new(&engine, r#"(module (memory (export "m") 5))"#)?;
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m1") 2) (memory (export "m2") 5))"#,
+    )?;
 
     let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().memory_pages(3).build());
 
