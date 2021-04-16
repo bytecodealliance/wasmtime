@@ -498,6 +498,25 @@ impl Store {
         &self.inner.frame_info
     }
 
+    /// Notifies that the current Store (and all referenced entities) has been moved over to a
+    /// different thread.
+    ///
+    /// See also the multithreading documentation for more details:
+    /// <https://docs.wasmtime.dev/examples-rust-multithreading.html>.
+    ///
+    /// # Safety
+    ///
+    /// In general, it's not possible to move a `Store` to a different thread, because it isn't `Send`.
+    /// That being said, it is possible to create an unsafe `Send` wrapper over a `Store`, assuming
+    /// the safety guidelines exposed in the multithreading documentation have been applied. So it
+    /// is in general unnecessary to do this, if you're not doing unsafe things.
+    ///
+    /// It is fine to call this several times: only the first call will have an effect.
+    pub unsafe fn notify_switched_thread(&self) {
+        wasmtime_runtime::init_traps(frame_info::GlobalFrameInfo::is_wasm_pc)
+            .expect("failed to initialize per-threads traps");
+    }
+
     /// Perform garbage collection of `ExternRef`s.
     pub fn gc(&self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants

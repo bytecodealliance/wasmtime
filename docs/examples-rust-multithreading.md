@@ -129,11 +129,16 @@ some possibilities include:
     `Store::set` or `Func::wrap`) implement the `Send` trait.
 
   If these requirements are met it is technically safe to move a store and its
-  objects between threads. The reason that this strategy isn't recommended,
-  however, is that you will receive no assistance from the Rust compiler in
-  verifying that the transfer across threads is indeed actually safe. This will
-  require auditing your embedding of Wasmtime itself to ensure it meets these
-  requirements.
+  objects between threads. When you move a store to another thread, it is
+  required that you run the `Store::notify_switched_thread()` method after the
+  store has landed on the new thread, so that per-thread initialization is
+  correctly re-run. Failure to do so may cause wasm traps to crash the whole
+  application.
+
+  The reason that this strategy isn't recommended, however, is that you will
+  receive no assistance from the Rust compiler in verifying that the transfer
+  across threads is indeed actually safe. This will require auditing your
+  embedding of Wasmtime itself to ensure it meets these requirements.
 
   It's important to note that the requirements here also apply to the futures
   returned from `Func::call_async`. These futures are not `Send` due to them

@@ -591,3 +591,42 @@ note: run with `WASMTIME_BACKTRACE_DETAILS=1` environment variable to display mo
     );
     Ok(())
 }
+
+#[test]
+fn multithreaded_traps() -> Result<()> {
+    // Compile and run unreachable on a thread, then moves over the whole store to another thread,
+    // and make sure traps are still correctly caught after notifying the store of the move.
+    let instance = {
+        let store = Store::default();
+        let module = Module::new(
+            store.engine(),
+            r#"(module (func (export "run") unreachable))"#,
+        )?;
+        Instance::new(&store, &module, &[])?
+    };
+
+    assert!(instance.get_typed_func::<(), ()>("run")?.call(()).is_err());
+
+    struct SendInstance {
+        inner: Instance,
+    }
+    unsafe impl Send for SendInstance {}
+
+    let instance = SendInstance { inner: instance };
+
+    let handle = std::thread::spawn(move || {
+        let instance = instance.inner;
+        unsafe {
+            instance.store().notify_switched_thread();
+        }
+        assert!(instance
+            .get_typed_func::<(), ()>("run")
+            .unwrap()
+            .call(())
+            .is_err());
+    });
+
+    handle.join().expect("couldn't join thread");
+
+    Ok(())
+}
