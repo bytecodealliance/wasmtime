@@ -15,7 +15,6 @@ use std::ptr;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use wasmtime_jit::ModuleCode;
 use wasmtime_runtime::{
     InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler, TrapInfo,
     VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
@@ -943,24 +942,6 @@ impl InterruptHandle {
     /// [`Store::interrupt_handle`].
     pub fn interrupt(&self) {
         self.interrupts.interrupt()
-    }
-}
-
-// Wrapper struct to implement hash/equality based on the pointer value of the
-// `Arc` in question.
-struct ArcModuleCode(Arc<ModuleCode>);
-
-impl PartialEq for ArcModuleCode {
-    fn eq(&self, other: &ArcModuleCode) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-impl Eq for ArcModuleCode {}
-
-impl Hash for ArcModuleCode {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        Arc::as_ptr(&self.0).hash(hasher)
     }
 }
 
