@@ -750,7 +750,7 @@ impl VMExternRefActivationsTable {
 ///
 /// It is the responsibility of the caller to not have the pointer outlive
 /// the stack map lookup trait object.
-pub unsafe trait StackMapLookup {
+pub unsafe trait StackMapLookup: 'static {
     /// Lookup the stack map at a program counter (PC) value.
     fn lookup(&self, pc: usize) -> Option<*const StackMap>;
 }

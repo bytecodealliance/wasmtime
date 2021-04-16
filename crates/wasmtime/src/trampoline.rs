@@ -77,7 +77,7 @@ fn create_handle(
                 externref_activations_table: store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_lookup: Some(std::mem::transmute(store.stack_map_lookup())),
+                stack_map_lookup: Some(store.stack_map_lookup()),
             },
         )?;
 

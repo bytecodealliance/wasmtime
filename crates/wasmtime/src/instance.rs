@@ -524,7 +524,7 @@ impl<'a> Instantiator<'a> {
                 externref_activations_table: self.store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_lookup: Some(std::mem::transmute(self.store.stack_map_lookup())),
+                stack_map_lookup: Some(self.store.stack_map_lookup()),
             })?;
 
             // After we've created the `InstanceHandle` we still need to run
