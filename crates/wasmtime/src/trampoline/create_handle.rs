@@ -43,7 +43,7 @@ pub(crate) fn create_handle(
                 externref_activations_table: store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_lookup: &store,
+                module_info_lookup: &store,
             })?;
 
         Ok(store.add_instance(handle, true))

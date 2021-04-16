@@ -6,10 +6,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 use wasmtime_environ::{
-    entity::EntityRef, ir, wasm::DefinedFuncIndex, FunctionAddressMap, TrapInformation,
+    entity::EntityRef,
+    ir::{self, StackMap},
+    wasm::DefinedFuncIndex,
+    FunctionAddressMap, TrapInformation,
 };
 use wasmtime_jit::CompiledModule;
-use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMTrampoline};
+use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
 lazy_static::lazy_static! {
     static ref GLOBAL_MODULES: Mutex<GlobalModuleRegistry> = Default::default();
@@ -27,7 +30,7 @@ fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u
 ///
 /// The `BTreeMap` is used to quickly locate a module based on a program counter value.
 #[derive(Default)]
-pub struct ModuleRegistry(BTreeMap<usize, RegisteredModule>);
+pub struct ModuleRegistry(BTreeMap<usize, Arc<RegisteredModule>>);
 
 impl ModuleRegistry {
     /// Fetches frame information about a program counter in a backtrace.
@@ -48,12 +51,13 @@ impl ModuleRegistry {
         self.module(pc)?.lookup_trap_info(pc)
     }
 
-    /// Looks up a stack map from a program counter.
-    pub fn lookup_stack_map<'a>(&'a self, pc: usize) -> Option<&'a ir::StackMap> {
-        self.module(pc)?.lookup_stack_map(pc)
+    /// Fetches information about a registered module given a program counter value.
+    pub fn lookup_module(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
+        self.module(pc)
+            .map(|m| -> Arc<dyn ModuleInfo> { m.clone() })
     }
 
-    fn module(&self, pc: usize) -> Option<&RegisteredModule> {
+    fn module(&self, pc: usize) -> Option<&Arc<RegisteredModule>> {
         let (end, info) = self.0.range(pc..).next()?;
         if pc < info.start || *end < pc {
             return None;
@@ -94,11 +98,11 @@ impl ModuleRegistry {
 
         let prev = self.0.insert(
             end,
-            RegisteredModule {
+            Arc::new(RegisteredModule {
                 start,
                 module: compiled_module.clone(),
                 signatures: module.signatures().clone(),
-            },
+            }),
         );
         assert!(prev.is_none());
 
@@ -209,8 +213,29 @@ impl RegisteredModule {
         Some(&info.traps[idx])
     }
 
-    /// Looks up a stack map from a program counter
-    pub fn lookup_stack_map(&self, pc: usize) -> Option<&ir::StackMap> {
+    fn instr_pos(offset: u32, addr_map: &FunctionAddressMap) -> Option<usize> {
+        // Use our relative position from the start of the function to find the
+        // machine instruction that corresponds to `pc`, which then allows us to
+        // map that to a wasm original source location.
+        match addr_map
+            .instructions
+            .binary_search_by_key(&offset, |map| map.code_offset)
+        {
+            // Exact hit!
+            Ok(pos) => Some(pos),
+
+            // This *would* be at the first slot in the array, so no
+            // instructions cover `pc`.
+            Err(0) => None,
+
+            // This would be at the `nth` slot, so we're at the `n-1`th slot.
+            Err(n) => Some(n - 1),
+        }
+    }
+}
+
+impl ModuleInfo for RegisteredModule {
+    fn lookup_stack_map(&self, pc: usize) -> Option<&StackMap> {
         let (index, offset) = func_by_pc(&self.module, pc)?;
         let info = self.module.func_info(index);
 
@@ -274,26 +299,6 @@ impl RegisteredModule {
         };
 
         Some(&info.stack_maps[index].stack_map)
-    }
-
-    fn instr_pos(offset: u32, addr_map: &FunctionAddressMap) -> Option<usize> {
-        // Use our relative position from the start of the function to find the
-        // machine instruction that corresponds to `pc`, which then allows us to
-        // map that to a wasm original source location.
-        match addr_map
-            .instructions
-            .binary_search_by_key(&offset, |map| map.code_offset)
-        {
-            // Exact hit!
-            Ok(pos) => Some(pos),
-
-            // This *would* be at the first slot in the array, so no
-            // instructions cover `pc`.
-            Err(0) => None,
-
-            // This would be at the `nth` slot, so we're at the `n-1`th slot.
-            Err(n) => Some(n - 1),
-        }
     }
 }
 

@@ -16,9 +16,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
-    InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler, TrapInfo,
-    VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
-    VMTrampoline,
+    InstanceAllocator, InstanceHandle, ModuleInfo, OnDemandInstanceAllocator, SignalHandler,
+    TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable,
+    VMInterrupts, VMTrampoline,
 };
 
 /// Used to associate instances with the store.
@@ -440,7 +440,7 @@ impl Store {
     }
 
     #[inline]
-    pub(crate) fn stack_map_lookup(&self) -> &dyn wasmtime_runtime::StackMapLookup {
+    pub(crate) fn module_info_lookup(&self) -> &dyn wasmtime_runtime::ModuleInfoLookup {
         self.inner.as_ref()
     }
 
@@ -910,10 +910,9 @@ impl Drop for StoreInner {
     }
 }
 
-unsafe impl wasmtime_runtime::StackMapLookup for StoreInner {
-    fn lookup(&self, pc: usize) -> Option<*const wasmtime_environ::ir::StackMap> {
-        // The address of the stack map is stable for the lifetime of the store
-        self.modules.borrow().lookup_stack_map(pc).map(|m| m as _)
+impl wasmtime_runtime::ModuleInfoLookup for StoreInner {
+    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
+        self.modules.borrow().lookup_module(pc)
     }
 }
 

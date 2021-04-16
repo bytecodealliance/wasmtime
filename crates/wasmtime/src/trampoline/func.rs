@@ -287,7 +287,7 @@ pub fn create_function(
                 host_state: Box::new(trampoline_state),
                 interrupts: std::ptr::null(),
                 externref_activations_table: std::ptr::null_mut(),
-                stack_map_lookup: None,
+                module_info_lookup: None,
             })?,
             trampoline,
         ))
@@ -319,7 +319,7 @@ pub unsafe fn create_raw_function(
             host_state,
             interrupts: std::ptr::null(),
             externref_activations_table: std::ptr::null_mut(),
-            stack_map_lookup: None,
+            module_info_lookup: None,
         })?,
     )
 }

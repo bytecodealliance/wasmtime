@@ -99,7 +99,6 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
-use std::alloc::Layout;
 use std::any::Any;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::cmp::Ordering;
@@ -108,6 +107,7 @@ use std::hash::{Hash, Hasher};
 use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
+use std::{alloc::Layout, sync::Arc};
 use wasmtime_environ::ir::StackMap;
 
 /// An external reference to some opaque data.
@@ -594,10 +594,10 @@ impl VMExternRefActivationsTable {
     pub unsafe fn insert_with_gc(
         &self,
         externref: VMExternRef,
-        stack_map_lookup: &dyn StackMapLookup,
+        module_info_lookup: &dyn ModuleInfoLookup,
     ) {
         if let Err(externref) = self.try_insert(externref) {
-            self.gc_and_insert_slow(externref, stack_map_lookup);
+            self.gc_and_insert_slow(externref, module_info_lookup);
         }
     }
 
@@ -605,9 +605,9 @@ impl VMExternRefActivationsTable {
     unsafe fn gc_and_insert_slow(
         &self,
         externref: VMExternRef,
-        stack_map_lookup: &dyn StackMapLookup,
+        module_info_lookup: &dyn ModuleInfoLookup,
     ) {
-        gc(stack_map_lookup, self);
+        gc(module_info_lookup, self);
 
         // Might as well insert right into the hash set, rather than the bump
         // chunk, since we are already on a slow path and we get de-duplication
@@ -741,29 +741,28 @@ impl VMExternRefActivationsTable {
     }
 }
 
-/// Used by the runtime to lookup a stack map from a PC value.
-///
-/// # Safety
-///
-/// This trait is unsafe as it returns pointers to a stack map without
-/// any clear ownership.
-///
-/// It is the responsibility of the caller to not have the pointer outlive
-/// the stack map lookup trait object.
-pub unsafe trait StackMapLookup: 'static {
-    /// Lookup the stack map at a program counter (PC) value.
-    fn lookup(&self, pc: usize) -> Option<*const StackMap>;
+/// Used by the runtime to lookup information about a module given a
+/// program counter value.
+pub trait ModuleInfoLookup: 'static {
+    /// Lookup the module information from a program counter value.
+    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>>;
 }
 
-pub(crate) struct EmptyStackMapLookup;
+/// Used by the runtime to query module information.
+pub trait ModuleInfo {
+    /// Lookup the stack map at a program counter value.
+    fn lookup_stack_map(&self, pc: usize) -> Option<&StackMap>;
+}
 
-unsafe impl StackMapLookup for EmptyStackMapLookup {
-    fn lookup(&self, _pc: usize) -> Option<*const StackMap> {
+pub(crate) struct EmptyModuleInfoLookup;
+
+impl ModuleInfoLookup for EmptyModuleInfoLookup {
+    fn lookup(&self, _pc: usize) -> Option<Arc<dyn ModuleInfo>> {
         None
     }
 }
 
-pub(crate) const EMPTY_STACK_MAP_LOOKUP: EmptyStackMapLookup = EmptyStackMapLookup;
+pub(crate) const EMPTY_MODULE_LOOKUP: EmptyModuleInfoLookup = EmptyModuleInfoLookup;
 
 #[derive(Debug, Default)]
 struct DebugOnly<T> {
@@ -810,7 +809,7 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 /// Additionally, you must have registered the stack maps for every Wasm module
 /// that has frames on the stack with the given `stack_maps_registry`.
 pub unsafe fn gc(
-    stack_map_lookup: &dyn StackMapLookup,
+    module_info_lookup: &dyn ModuleInfoLookup,
     externref_activations_table: &VMExternRefActivationsTable,
 ) {
     // We borrow the precise stack roots `RefCell` for the whole duration of
@@ -848,8 +847,7 @@ pub unsafe fn gc(
             if cfg!(debug_assertions) {
                 // Assert that there aren't any Wasm frames on the stack.
                 backtrace::trace(|frame| {
-                    let stack_map = stack_map_lookup.lookup(frame.ip() as usize);
-                    assert!(stack_map.is_none());
+                    assert!(module_info_lookup.lookup(frame.ip() as usize).is_none());
                     true
                 });
             }
@@ -893,28 +891,30 @@ pub unsafe fn gc(
         let pc = frame.ip() as usize;
         let sp = frame.sp() as usize;
 
-        if let Some(stack_map) = stack_map_lookup.lookup(pc) {
-            debug_assert!(sp != 0, "we should always get a valid SP for Wasm frames");
+        if let Some(module_info) = module_info_lookup.lookup(pc) {
+            if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+                debug_assert!(sp != 0, "we should always get a valid SP for Wasm frames");
 
-            for i in 0..((*stack_map).mapped_words() as usize) {
-                if (*stack_map).get_bit(i) {
-                    // Stack maps have one bit per word in the frame, and the
-                    // zero^th bit is the *lowest* addressed word in the frame,
-                    // i.e. the closest to the SP. So to get the `i`^th word in
-                    // this frame, we add `i * sizeof(word)` to the SP.
-                    let ptr_to_ref = sp + i * mem::size_of::<usize>();
+                for i in 0..(stack_map.mapped_words() as usize) {
+                    if stack_map.get_bit(i) {
+                        // Stack maps have one bit per word in the frame, and the
+                        // zero^th bit is the *lowest* addressed word in the frame,
+                        // i.e. the closest to the SP. So to get the `i`^th word in
+                        // this frame, we add `i * sizeof(word)` to the SP.
+                        let ptr_to_ref = sp + i * mem::size_of::<usize>();
 
-                    let r = std::ptr::read(ptr_to_ref as *const *mut VMExternData);
-                    debug_assert!(
-                        r.is_null() || activations_table_set.contains(&r),
-                        "every on-stack externref inside a Wasm frame should \
-                         have an entry in the VMExternRefActivationsTable"
-                    );
-                    if let Some(r) = NonNull::new(r) {
-                        VMExternRefActivationsTable::insert_precise_stack_root(
-                            &mut precise_stack_roots,
-                            r,
+                        let r = std::ptr::read(ptr_to_ref as *const *mut VMExternData);
+                        debug_assert!(
+                            r.is_null() || activations_table_set.contains(&r),
+                            "every on-stack externref inside a Wasm frame should \
+                            have an entry in the VMExternRefActivationsTable"
                         );
+                        if let Some(r) = NonNull::new(r) {
+                            VMExternRefActivationsTable::insert_precise_stack_root(
+                                &mut precise_stack_roots,
+                                r,
+                            );
+                        }
                     }
                 }
             }

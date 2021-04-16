@@ -207,7 +207,7 @@ unsafe impl WasmTy for Option<ExternRef> {
             unsafe {
                 store
                     .externref_activations_table()
-                    .insert_with_gc(x.inner, store.stack_map_lookup());
+                    .insert_with_gc(x.inner, store.module_info_lookup());
             }
             abi
         } else {
