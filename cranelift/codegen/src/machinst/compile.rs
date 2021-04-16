@@ -1,11 +1,12 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::ir::Function;
+use crate::log::DeferredDisplay;
 use crate::machinst::*;
 use crate::settings;
 use crate::timing;
 
-use log::{debug, log_enabled, Level};
+use log::debug;
 use regalloc::{allocate_registers_with_opts, Algorithm, Options, PrettyPrint};
 
 /// Compile the given function down to VCode with allocated registers, ready
@@ -29,15 +30,12 @@ where
         lower.lower(b)?
     };
 
-    // Creating the vcode string representation may be costly for large functions, so don't do it
-    // if the Debug level hasn't been statically (through features) or dynamically (through
-    // RUST_LOG) enabled.
-    if log_enabled!(Level::Debug) {
-        debug!(
-            "vcode from lowering: \n{}",
-            vcode.show_rru(Some(b.reg_universe()))
-        );
-    }
+    // Creating the vcode string representation may be costly for large functions, so defer its
+    // rendering.
+    debug!(
+        "vcode from lowering: \n{}",
+        DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
+    );
 
     // Perform register allocation.
     let (run_checker, algorithm) = match vcode.flags().regalloc() {
@@ -106,12 +104,10 @@ where
         vcode.replace_insns_from_regalloc(result);
     }
 
-    if log_enabled!(Level::Debug) {
-        debug!(
-            "vcode after regalloc: final version:\n{}",
-            vcode.show_rru(Some(b.reg_universe()))
-        );
-    }
+    debug!(
+        "vcode after regalloc: final version:\n{}",
+        DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
+    );
 
     Ok(vcode)
 }
