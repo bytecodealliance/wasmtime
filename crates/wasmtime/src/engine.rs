@@ -1,24 +1,34 @@
-use crate::signatures::{SharedSignatures, SignatureRegistry, TrampolineMap};
+use crate::signatures::{SignatureCollection, SignatureRegistry};
 use crate::Config;
 use anyhow::Result;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::{
-    entity::PrimaryMap,
-    wasm::{SignatureIndex, WasmFuncType},
-};
 use wasmtime_jit::Compiler;
-use wasmtime_runtime::{
-    debug_builtins, InstanceAllocator, InstanceHandle, VMCallerCheckedAnyfunc,
-    VMSharedSignatureIndex, VMTrampoline,
-};
+use wasmtime_runtime::{debug_builtins, InstanceAllocator, InstanceHandle, VMCallerCheckedAnyfunc};
 
-#[derive(Default)]
+/// This is used as a Send+Sync wrapper around two data structures relating to
+/// host functions defined on `Config`:
+///
+/// * `anyfuncs` - this stores a mapping between the host function instance and
+///   a `VMCallerCheckedAnyfunc` that can be used as the function's value in Wasmtime's ABI.
+///   The address of the anyfunc needs to be stable, thus the boxed value.
+///
+/// * `signatures` - this stores the collection of shared signatures registered for every
+///   usable host functions with this engine.
 struct EngineHostFuncs {
     anyfuncs: HashMap<InstanceHandle, Box<VMCallerCheckedAnyfunc>>,
-    trampolines: TrampolineMap,
+    signatures: SignatureCollection,
+}
+
+impl EngineHostFuncs {
+    fn new(registry: &SignatureRegistry) -> Self {
+        Self {
+            anyfuncs: HashMap::new(),
+            signatures: SignatureCollection::new(registry),
+        }
+    }
 }
 
 // This is safe for send and sync as it is read-only once the
@@ -58,16 +68,8 @@ struct EngineInner {
     config: Config,
     compiler: Compiler,
     allocator: Box<dyn InstanceAllocator>,
-    signatures: RwLock<SignatureRegistry>,
+    signatures: SignatureRegistry,
     host_funcs: EngineHostFuncs,
-}
-
-impl Drop for EngineInner {
-    fn drop(&mut self) {
-        let mut signatures = self.signatures.write().unwrap();
-        signatures.unregister(self.host_funcs.trampolines.indexes());
-        assert!(signatures.is_empty());
-    }
 }
 
 impl Engine {
@@ -77,20 +79,20 @@ impl Engine {
         debug_builtins::ensure_exported();
         config.validate()?;
         let allocator = config.build_allocator()?;
-        let mut signatures = SignatureRegistry::default();
-        let mut host_funcs = EngineHostFuncs::default();
+        let registry = SignatureRegistry::new();
+        let mut host_funcs = EngineHostFuncs::new(&registry);
 
-        // Register all the host function signatures
+        // Register all the host function signatures with the collection
         for func in config.host_funcs() {
-            let sig = signatures.register(func.ty.as_wasm_func_type());
+            let sig = host_funcs
+                .signatures
+                .register(func.ty.as_wasm_func_type(), func.trampoline);
 
             // Cloning the instance handle is safe as host functions outlive the engine
             host_funcs.anyfuncs.insert(
                 unsafe { func.instance.clone() },
                 Box::new(func.anyfunc(sig)),
             );
-
-            host_funcs.trampolines.insert(sig, func.trampoline);
         }
 
         Ok(Engine {
@@ -98,7 +100,7 @@ impl Engine {
                 config: config.clone(),
                 compiler: config.build_compiler(allocator.as_ref()),
                 allocator,
-                signatures: RwLock::new(signatures),
+                signatures: registry,
                 host_funcs,
             }),
         })
@@ -128,40 +130,12 @@ impl Engine {
         Arc::ptr_eq(&a.inner, &b.inner)
     }
 
-    pub(crate) fn register_module_signatures(
-        &self,
-        signatures: &PrimaryMap<SignatureIndex, WasmFuncType>,
-        trampolines: impl Iterator<Item = (SignatureIndex, VMTrampoline)>,
-    ) -> (SharedSignatures, TrampolineMap) {
-        self.inner
-            .signatures
-            .write()
-            .unwrap()
-            .register_module(signatures, trampolines)
+    pub(crate) fn signatures(&self) -> &SignatureRegistry {
+        &self.inner.signatures
     }
 
-    pub(crate) fn register_signature(&self, ty: &WasmFuncType) -> VMSharedSignatureIndex {
-        self.inner.signatures.write().unwrap().register(ty)
-    }
-
-    pub(crate) fn unregister_signatures(
-        &self,
-        indexes: impl Iterator<Item = VMSharedSignatureIndex>,
-    ) {
-        self.inner.signatures.write().unwrap().unregister(indexes);
-    }
-
-    pub(crate) fn lookup_func_type(&self, index: VMSharedSignatureIndex) -> Option<WasmFuncType> {
-        self.inner
-            .signatures
-            .read()
-            .unwrap()
-            .lookup_type(index)
-            .cloned()
-    }
-
-    pub(crate) fn host_func_trampolines(&self) -> &TrampolineMap {
-        &self.inner.host_funcs.trampolines
+    pub(crate) fn host_func_signatures(&self) -> &SignatureCollection {
+        &self.inner.host_funcs.signatures
     }
 
     pub(crate) fn host_func_anyfunc(

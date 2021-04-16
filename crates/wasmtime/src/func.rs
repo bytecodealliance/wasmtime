@@ -778,31 +778,20 @@ impl Func {
             self.instance
                 .store
                 .engine()
-                .lookup_func_type(self.sig_index())
+                .signatures()
+                .lookup_type(self.sig_index())
                 .expect("signature should be registered"),
         )
     }
 
     /// Returns the number of parameters that this function takes.
     pub fn param_arity(&self) -> usize {
-        let sig = self
-            .instance
-            .store
-            .engine()
-            .lookup_func_type(self.sig_index())
-            .expect("signature should be registered");
-        sig.params.len()
+        self.ty().params().len()
     }
 
     /// Returns the number of results this function produces.
     pub fn result_arity(&self) -> usize {
-        let sig = self
-            .instance
-            .store
-            .engine()
-            .lookup_func_type(self.sig_index())
-            .expect("signature should be registered");
-        sig.returns.len()
+        self.ty().results().len()
     }
 
     /// Invokes this function with the `params` given, returning the results and
@@ -927,7 +916,7 @@ impl Func {
         Func {
             instance: store.existing_vmctx(anyfunc.vmctx),
             export: export.clone(),
-            trampoline: store.lookup_trampoline(anyfunc.type_index),
+            trampoline: store.lookup_trampoline(&*anyfunc),
         }
     }
 
@@ -1813,7 +1802,7 @@ macro_rules! impl_into_func {
                 // If not given a store, use a default signature index that is guaranteed to trap.
                 // If the function is called indirectly without first being associated with a store (a bug condition).
                 let shared_signature_id = store
-                    .map(|s| s.register_signature(ty.as_wasm_func_type(), trampoline))
+                    .map(|s| s.signatures().borrow_mut().register(ty.as_wasm_func_type(), trampoline))
                     .unwrap_or(VMSharedSignatureIndex::default());
 
                 let instance = unsafe {

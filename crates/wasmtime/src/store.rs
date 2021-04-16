@@ -1,6 +1,6 @@
 use crate::{
-    module::ModuleRegistry, signatures::TrampolineMap, trampoline::StoreInstanceHandle, Engine,
-    Func, Module, Trap,
+    module::ModuleRegistry, signatures::SignatureCollection, trampoline::StoreInstanceHandle,
+    Engine, Func, Module, Trap,
 };
 use anyhow::{bail, Result};
 use std::any::{Any, TypeId};
@@ -15,11 +15,10 @@ use std::ptr;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use wasmtime_environ::wasm::WasmFuncType;
 use wasmtime_jit::ModuleCode;
 use wasmtime_runtime::{
     InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler, TrapInfo,
-    VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex,
+    VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable, VMInterrupts,
     VMTrampoline,
 };
 
@@ -76,7 +75,8 @@ pub(crate) struct StoreInner {
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     externref_activations_table: VMExternRefActivationsTable,
     modules: RefCell<ModuleRegistry>,
-    trampolines: RefCell<TrampolineMap>,
+    // The signatures and trampolines for `Func` objects
+    signatures: RefCell<SignatureCollection>,
     // Numbers of resources instantiated in this store.
     instance_count: Cell<usize>,
     memory_count: Cell<usize>,
@@ -139,7 +139,7 @@ impl Store {
                 signal_handler: RefCell::new(None),
                 externref_activations_table: VMExternRefActivationsTable::new(),
                 modules: RefCell::new(ModuleRegistry::default()),
-                trampolines: RefCell::new(TrampolineMap::default()),
+                signatures: RefCell::new(SignatureCollection::new(engine.signatures())),
                 instance_count: Default::default(),
                 memory_count: Default::default(),
                 table_count: Default::default(),
@@ -203,41 +203,31 @@ impl Store {
         }
     }
 
-    pub(crate) fn register_module(&self, module: &Module) {
-        // Register the module with the registry
-        self.inner.modules.borrow_mut().register(module);
+    pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
+        &self.inner.signatures
     }
 
-    // This is used to register a `Func` with the store
-    pub(crate) fn register_signature(
-        &self,
-        ty: &WasmFuncType,
-        trampoline: VMTrampoline,
-    ) -> VMSharedSignatureIndex {
-        let index = self.inner.engine.register_signature(ty);
-        self.inner
-            .trampolines
-            .borrow_mut()
-            .insert(index, trampoline);
-        index
-    }
-
-    pub(crate) fn lookup_trampoline(&self, index: VMSharedSignatureIndex) -> VMTrampoline {
+    pub(crate) fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
         // Look up the trampoline with the store's trampolines (from `Func`).
-        if let Some(trampoline) = self.inner.trampolines.borrow().get(index) {
+        if let Some(trampoline) = self
+            .inner
+            .signatures
+            .borrow()
+            .trampoline(anyfunc.type_index)
+        {
             return trampoline;
         }
 
         // Look up the trampoline with the registered modules
-        if let Some(trampoline) = self.inner.modules.borrow().lookup_trampoline(index) {
+        if let Some(trampoline) = self.inner.modules.borrow().lookup_trampoline(anyfunc) {
             return trampoline;
         }
 
         // Lastly, check with the engine (for `HostFunc`)
         self.inner
             .engine
-            .host_func_trampolines()
-            .get(index)
+            .host_func_signatures()
+            .trampoline(anyfunc.type_index)
             .expect("trampoline missing")
     }
 
@@ -451,7 +441,7 @@ impl Store {
     }
 
     #[inline]
-    pub(crate) fn stack_map_lookup(&self) -> *const dyn wasmtime_runtime::StackMapLookup {
+    pub(crate) fn stack_map_lookup(&self) -> &dyn wasmtime_runtime::StackMapLookup {
         self.inner.as_ref()
     }
 
@@ -918,16 +908,10 @@ impl Drop for StoreInner {
                 }
             }
         }
-
-        let trampolines = self.trampolines.borrow();
-
-        if !trampolines.is_empty() {
-            self.engine.unregister_signatures(trampolines.indexes());
-        }
     }
 }
 
-impl wasmtime_runtime::StackMapLookup for StoreInner {
+unsafe impl wasmtime_runtime::StackMapLookup for StoreInner {
     fn lookup(&self, pc: usize) -> Option<*const wasmtime_environ::ir::StackMap> {
         // The address of the stack map is stable for the lifetime of the store
         self.modules.borrow().lookup_stack_map(pc).map(|m| m as _)

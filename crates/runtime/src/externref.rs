@@ -742,14 +742,22 @@ impl VMExternRefActivationsTable {
 }
 
 /// Used by the runtime to lookup a stack map from a PC value.
-pub trait StackMapLookup {
+///
+/// # Safety
+///
+/// This trait is unsafe as it returns pointers to a stack map without
+/// any clear ownership.
+///
+/// It is the responsibility of the caller to not have the pointer outlive
+/// the stack map lookup trait object.
+pub unsafe trait StackMapLookup {
     /// Lookup the stack map at a program counter (PC) value.
     fn lookup(&self, pc: usize) -> Option<*const StackMap>;
 }
 
 pub(crate) struct EmptyStackMapLookup;
 
-impl StackMapLookup for EmptyStackMapLookup {
+unsafe impl StackMapLookup for EmptyStackMapLookup {
     fn lookup(&self, _pc: usize) -> Option<*const StackMap> {
         None
     }

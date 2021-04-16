@@ -176,11 +176,13 @@ struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
 
+/// Information about a function, such as trap information, address map,
+/// and stack maps.
 #[derive(Serialize, Deserialize, Clone)]
-struct FunctionInfo {
-    traps: Vec<TrapInformation>,
-    address_map: FunctionAddressMap,
-    stack_maps: Vec<StackMapInformation>,
+pub struct FunctionInfo {
+    pub traps: Vec<TrapInformation>,
+    pub address_map: FunctionAddressMap,
+    pub stack_maps: Vec<StackMapInformation>,
 }
 
 /// This is intended to mirror the type tables in `wasmtime_environ`, except that
@@ -362,18 +364,10 @@ impl CompiledModule {
     }
 
     /// Gets the function information for a given function index.
-    pub fn func_info(
-        &self,
-        index: DefinedFuncIndex,
-    ) -> (
-        &FunctionAddressMap,
-        &[TrapInformation],
-        &[StackMapInformation],
-    ) {
+    pub fn func_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
         self.artifacts
             .funcs
             .get(index)
-            .map(|f| (&f.address_map, f.traps.as_ref(), f.stack_maps.as_ref()))
             .expect("defined function should be present")
     }
 

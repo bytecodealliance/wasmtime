@@ -1,7 +1,7 @@
 //! Implements module serialization.
 
-use super::{ModuleInner, ModuleSharedSignatures};
-use crate::{Engine, Module, OptLevel};
+use super::ModuleInner;
+use crate::{signatures::SignatureCollection, Engine, Module, OptLevel};
 use anyhow::{anyhow, bail, Context, Result};
 use bincode::Options;
 use serde::{Deserialize, Serialize};
@@ -300,16 +300,11 @@ impl<'a> SerializedModule<'a> {
             .allocator()
             .validate(modules.last().unwrap().module())?;
 
-        let (signatures, trampolines) = engine.register_module_signatures(
+        let signatures = Arc::new(SignatureCollection::new_for_module(
+            engine.signatures(),
             &types.wasm_signatures,
             modules.iter().flat_map(|m| m.trampolines().iter().cloned()),
-        );
-
-        let signatures = Arc::new(ModuleSharedSignatures {
-            engine: engine.clone(),
-            signatures,
-            trampolines,
-        });
+        ));
 
         let module = modules.pop().unwrap();
 
@@ -347,7 +342,7 @@ impl<'a> SerializedModule<'a> {
             module_index: usize,
             artifact_upvars: &[usize],
             module_upvars: &[SerializedModuleUpvar],
-            signatures: &Arc<ModuleSharedSignatures>,
+            signatures: &Arc<SignatureCollection>,
         ) -> Result<Module> {
             Ok(Module {
                 inner: Arc::new(ModuleInner {

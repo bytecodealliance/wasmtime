@@ -1,4 +1,4 @@
-use crate::{signatures::SharedSignatures, Extern, Store};
+use crate::{signatures::SignatureCollection, Extern, Store};
 use anyhow::{bail, Context, Result};
 use wasmtime_environ::wasm::{
     EntityType, Global, InstanceTypeIndex, Memory, ModuleTypeIndex, SignatureIndex, Table,
@@ -6,7 +6,7 @@ use wasmtime_environ::wasm::{
 use wasmtime_jit::TypeTables;
 
 pub struct MatchCx<'a> {
-    pub signatures: &'a SharedSignatures,
+    pub signatures: &'a SignatureCollection,
     pub types: &'a TypeTables,
     pub store: &'a Store,
 }
@@ -71,8 +71,8 @@ impl MatchCx<'_> {
     }
 
     pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
-        let matches = match self.signatures.get(expected) {
-            Some(idx) => actual.sig_index() == *idx,
+        let matches = match self.signatures.shared_signature(expected) {
+            Some(idx) => actual.sig_index() == idx,
             // If our expected signature isn't registered, then there's no way
             // that `actual` can match it.
             None => false,
@@ -133,7 +133,7 @@ impl MatchCx<'_> {
     fn imports_match<'a>(
         &self,
         expected: ModuleTypeIndex,
-        actual_signatures: &SharedSignatures,
+        actual_signatures: &SignatureCollection,
         actual_types: &TypeTables,
         actual_imports: impl Iterator<Item = (&'a str, EntityType)>,
     ) -> Result<()> {
@@ -162,7 +162,7 @@ impl MatchCx<'_> {
     fn exports_match(
         &self,
         expected: InstanceTypeIndex,
-        actual_signatures: &SharedSignatures,
+        actual_signatures: &SignatureCollection,
         actual_types: &TypeTables,
         lookup: impl Fn(&str) -> Option<EntityType>,
     ) -> Result<()> {
@@ -186,7 +186,7 @@ impl MatchCx<'_> {
         &self,
         expected: &EntityType,
         actual_ty: &EntityType,
-        actual_signatures: &SharedSignatures,
+        actual_signatures: &SignatureCollection,
         actual_types: &TypeTables,
     ) -> Result<()> {
         let actual_desc = match actual_ty {

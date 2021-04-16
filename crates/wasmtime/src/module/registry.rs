@@ -1,6 +1,6 @@
 //! Implements a registry of modules for a store.
 
-use crate::{module::ModuleSharedSignatures, Module};
+use crate::{signatures::SignatureCollection, Module};
 use std::{
     collections::BTreeMap,
     sync::{Arc, Mutex},
@@ -9,10 +9,15 @@ use wasmtime_environ::{
     entity::EntityRef, ir, wasm::DefinedFuncIndex, FunctionAddressMap, TrapInformation,
 };
 use wasmtime_jit::CompiledModule;
-use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
+use wasmtime_runtime::{VMCallerCheckedAnyfunc, VMTrampoline};
 
 lazy_static::lazy_static! {
     static ref GLOBAL_MODULES: Mutex<GlobalModuleRegistry> = Default::default();
+}
+
+fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u32)> {
+    let (index, start, _) = module.func_by_pc(pc)?;
+    Some((index, (pc - start) as u32))
 }
 
 /// Used for registering modules with a store.
@@ -62,7 +67,7 @@ impl ModuleRegistry {
         let compiled_module = module.compiled_module();
         let (start, end) = compiled_module.code().range();
 
-        // Ignore modules with no code, finished functions, or if the module is already registered
+        // Ignore modules with no code or finished functions
         if start == end || compiled_module.finished_functions().is_empty() {
             return;
         }
@@ -71,7 +76,10 @@ impl ModuleRegistry {
         // may be a valid PC value
         let end = end - 1;
 
-        if self.0.get(&end).is_some() {
+        // Ensure the module isn't already present in the registry
+        // This is expected when a module is instantiated multiple times in the same store
+        if let Some(m) = self.0.get(&end) {
+            assert_eq!(m.start, start);
             return;
         }
 
@@ -89,7 +97,7 @@ impl ModuleRegistry {
             RegisteredModule {
                 start,
                 module: compiled_module.clone(),
-                signatures: module.shared_signatures().clone(),
+                signatures: module.signatures().clone(),
             },
         );
         assert!(prev.is_none());
@@ -97,18 +105,10 @@ impl ModuleRegistry {
         GLOBAL_MODULES.lock().unwrap().register(start, end, module);
     }
 
-    /// Looks up a trampoline from a shared signature index.
-    ///
-    /// This will search all modules associated with the store for a suitable trampoline
-    /// given the shared signature index.
-    pub fn lookup_trampoline(&self, index: VMSharedSignatureIndex) -> Option<VMTrampoline> {
-        for (_, m) in &self.0 {
-            if let Some(trampoline) = m.signatures.trampolines.get(index) {
-                return Some(trampoline);
-            }
-        }
-
-        None
+    /// Looks up a trampoline from an anyfunc.
+    pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> Option<VMTrampoline> {
+        let module = self.module(anyfunc.func_ptr.as_ptr() as usize)?;
+        module.signatures.trampoline(anyfunc.type_index)
     }
 }
 
@@ -124,7 +124,7 @@ impl Drop for ModuleRegistry {
 struct RegisteredModule {
     start: usize,
     module: Arc<CompiledModule>,
-    signatures: Arc<ModuleSharedSignatures>,
+    signatures: Arc<SignatureCollection>,
 }
 
 impl RegisteredModule {
@@ -138,9 +138,9 @@ impl RegisteredModule {
     /// Returns an object if this `pc` is known to this module, or returns `None`
     /// if no information can be found.
     pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
-        let (index, offset) = self.func(pc)?;
-        let (addr_map, _, _) = self.module.func_info(index);
-        let pos = Self::instr_pos(offset, addr_map);
+        let (index, offset) = func_by_pc(&self.module, pc)?;
+        let info = self.module.func_info(index);
+        let pos = Self::instr_pos(offset, &info.address_map);
 
         // In debug mode for now assert that we found a mapping for `pc` within
         // the function, because otherwise something is buggy along the way and
@@ -149,8 +149,8 @@ impl RegisteredModule {
         debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
 
         let instr = match pos {
-            Some(pos) => addr_map.instructions[pos].srcloc,
-            None => addr_map.start_srcloc,
+            Some(pos) => info.address_map.instructions[pos].srcloc,
+            None => info.address_map.start_srcloc,
         };
 
         // Use our wasm-relative pc to symbolize this frame. If there's a
@@ -193,25 +193,26 @@ impl RegisteredModule {
             func_index: index.index() as u32,
             func_name: module.func_names.get(&index).cloned(),
             instr,
-            func_start: addr_map.start_srcloc,
+            func_start: info.address_map.start_srcloc,
             symbols,
         })
     }
 
     /// Fetches trap information about a program counter in a backtrace.
     pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
-        let (index, offset) = self.func(pc)?;
-        let (_, traps, _) = self.module.func_info(index);
-        let idx = traps
+        let (index, offset) = func_by_pc(&self.module, pc)?;
+        let info = self.module.func_info(index);
+        let idx = info
+            .traps
             .binary_search_by_key(&offset, |info| info.code_offset)
             .ok()?;
-        Some(&traps[idx])
+        Some(&info.traps[idx])
     }
 
     /// Looks up a stack map from a program counter
     pub fn lookup_stack_map(&self, pc: usize) -> Option<&ir::StackMap> {
-        let (index, offset) = self.func(pc)?;
-        let (_, _, stack_maps) = self.module.func_info(index);
+        let (index, offset) = func_by_pc(&self.module, pc)?;
+        let info = self.module.func_info(index);
 
         // Do a binary search to find the stack map for the given offset.
         //
@@ -255,7 +256,10 @@ impl RegisteredModule {
         //    or reload from the stack slots (which would have been updated to
         //    point to the moved objects).
 
-        let index = match stack_maps.binary_search_by_key(&offset, |i| i.code_offset) {
+        let index = match info
+            .stack_maps
+            .binary_search_by_key(&offset, |i| i.code_offset)
+        {
             // Exact hit.
             Ok(i) => i,
 
@@ -269,12 +273,7 @@ impl RegisteredModule {
             Err(i) => i - 1,
         };
 
-        Some(&stack_maps[index].stack_map)
-    }
-
-    fn func(&self, pc: usize) -> Option<(DefinedFuncIndex, u32)> {
-        let (index, start, _) = self.module.func_by_pc(pc)?;
-        Some((index, (pc - start) as u32))
+        Some(&info.stack_maps[index].stack_map)
     }
 
     fn instr_pos(offset: u32, addr_map: &FunctionAddressMap) -> Option<usize> {
@@ -298,6 +297,17 @@ impl RegisteredModule {
     }
 }
 
+// Counterpart to `RegisteredModule`, but stored in the global registry.
+struct GlobalRegisteredModule {
+    start: usize,
+    module: Arc<CompiledModule>,
+    /// Note that modules can be instantiated in many stores, so the purpose of
+    /// this field is to keep track of how many stores have registered a
+    /// module. Information is only removed from the global registry when this
+    /// reference count reaches 0.
+    references: usize,
+}
+
 /// This is the global module registry that stores information for all modules
 /// that are currently in use by any `Store`.
 ///
@@ -318,18 +328,18 @@ impl GlobalModuleRegistry {
     /// Returns whether the `pc`, according to globally registered information,
     /// is a wasm trap or not.
     pub(crate) fn is_wasm_pc(pc: usize) -> bool {
-        let info = GLOBAL_MODULES.lock().unwrap();
+        let modules = GLOBAL_MODULES.lock().unwrap();
 
-        match info.0.range(pc..).next() {
-            Some((end, info)) => {
-                if pc < info.module.start || *end < pc {
+        match modules.0.range(pc..).next() {
+            Some((end, entry)) => {
+                if pc < entry.start || *end < pc {
                     return false;
                 }
 
-                match info.module.func(pc) {
+                match func_by_pc(&entry.module, pc) {
                     Some((index, offset)) => {
-                        let (addr_map, _, _) = info.module.module.func_info(index);
-                        RegisteredModule::instr_pos(offset, addr_map).is_some()
+                        let info = entry.module.func_info(index);
+                        RegisteredModule::instr_pos(offset, &info.address_map).is_some()
                     }
                     None => false,
                 }
@@ -342,18 +352,15 @@ impl GlobalModuleRegistry {
     /// the given function information, with the global information.
     fn register(&mut self, start: usize, end: usize, module: &Module) {
         let info = self.0.entry(end).or_insert_with(|| GlobalRegisteredModule {
-            module: RegisteredModule {
-                start,
-                module: module.compiled_module().clone(),
-                signatures: module.shared_signatures().clone(),
-            },
+            start,
+            module: module.compiled_module().clone(),
             references: 0,
         });
 
         // Note that ideally we'd debug_assert that the information previously
         // stored, if any, matches the `functions` we were given, but for now we
         // just do some simple checks to hope it's the same.
-        assert_eq!(info.module.start, start);
+        assert_eq!(info.start, start);
         info.references += 1;
     }
 
@@ -366,17 +373,6 @@ impl GlobalModuleRegistry {
             self.0.remove(&end);
         }
     }
-}
-
-/// This is the equivalent of `RegisteredModule` except it keeps a reference count.
-struct GlobalRegisteredModule {
-    module: RegisteredModule,
-
-    /// Note that modules can be instantiated in many stores, so the purpose of
-    /// this field is to keep track of how many stores have registered a
-    /// module. Information is only removed from the global registry when this
-    /// reference count reaches 0.
-    references: usize,
 }
 
 /// Description of a frame in a backtrace for a [`Trap`].

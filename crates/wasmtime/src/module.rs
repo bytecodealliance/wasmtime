@@ -1,5 +1,5 @@
 use crate::{
-    signatures::{SharedSignatures, TrampolineMap},
+    signatures::SignatureCollection,
     types::{ExportType, ExternType, ImportType},
 };
 use crate::{Engine, ModuleType};
@@ -11,35 +11,14 @@ use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::{ModuleIndex, SignatureIndex};
+use wasmtime_environ::wasm::ModuleIndex;
 use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
-use wasmtime_runtime::VMSharedSignatureIndex;
 
 mod registry;
 mod serialization;
 
 pub use registry::{FrameInfo, FrameSymbol, GlobalModuleRegistry, ModuleRegistry};
 pub use serialization::SerializedModule;
-
-// A wrapper around registered signatures and trampolines that will automatically
-/// unregister the signatures when dropped.
-pub(crate) struct ModuleSharedSignatures {
-    engine: Engine,
-    signatures: SharedSignatures,
-    trampolines: TrampolineMap,
-}
-
-impl Drop for ModuleSharedSignatures {
-    fn drop(&mut self) {
-        if !self.signatures.is_empty() {
-            // Use the shared signatures map to unregister as not every registered
-            // signature will have a trampoline, but every index in the trampoline map
-            // will be present in the shared signatures map.
-            self.engine
-                .unregister_signatures(self.signatures.values().cloned());
-        }
-    }
-}
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///
@@ -129,7 +108,7 @@ struct ModuleInner {
     /// modules.
     types: Arc<TypeTables>,
     /// Registered shared signature for the module.
-    signatures: Arc<ModuleSharedSignatures>,
+    signatures: Arc<SignatureCollection>,
 }
 
 impl Module {
@@ -350,10 +329,11 @@ impl Module {
         // Validate the module can be used with the current allocator
         engine.allocator().validate(modules[main_module].module())?;
 
-        let (signatures, trampolines) = engine.register_module_signatures(
+        let signatures = Arc::new(SignatureCollection::new_for_module(
+            engine.signatures(),
             &types.wasm_signatures,
             modules.iter().flat_map(|m| m.trampolines().iter().cloned()),
-        );
+        ));
 
         let module = modules.remove(main_module);
 
@@ -364,11 +344,7 @@ impl Module {
                 types: Arc::new(types),
                 artifact_upvars: modules,
                 module_upvars: Vec::new(),
-                signatures: Arc::new(ModuleSharedSignatures {
-                    engine: engine.clone(),
-                    signatures,
-                    trampolines,
-                }),
+                signatures,
             }),
         })
     }
@@ -488,11 +464,7 @@ impl Module {
         &self.inner.types
     }
 
-    pub(crate) fn signatures(&self) -> &PrimaryMap<SignatureIndex, VMSharedSignatureIndex> {
-        &self.inner.signatures.signatures
-    }
-
-    pub(crate) fn shared_signatures(&self) -> &Arc<ModuleSharedSignatures> {
+    pub(crate) fn signatures(&self) -> &Arc<SignatureCollection> {
         &self.inner.signatures
     }
 

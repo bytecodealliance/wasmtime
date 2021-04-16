@@ -270,7 +270,11 @@ pub fn create_function(
     // If there is no store, use the default signature index which is
     // guaranteed to trap if there is ever an indirect call on the function (should not happen)
     let shared_signature_id = store
-        .map(|s| s.register_signature(ft.as_wasm_func_type(), trampoline))
+        .map(|s| {
+            s.signatures()
+                .borrow_mut()
+                .register(ft.as_wasm_func_type(), trampoline)
+        })
         .unwrap_or(VMSharedSignatureIndex::default());
 
     unsafe {
