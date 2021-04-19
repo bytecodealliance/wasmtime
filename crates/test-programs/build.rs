@@ -40,7 +40,9 @@ mod wasi_tests {
             File::create(out_dir.join("wasi_tests.rs")).expect("error generating test source file");
         build_tests("wasi-tests", &out_dir).expect("building tests");
         test_directory(&mut out, "wasi-cap-std-sync", "cap_std_sync", &out_dir)
-            .expect("generating tests");
+            .expect("generating wasi-cap-std-sync tests");
+        test_directory(&mut out, "wasi-tokio", "tokio", &out_dir)
+            .expect("generating wasi-tokio tests");
     }
 
     fn build_tests(testsuite: &str, out_dir: &Path) -> io::Result<()> {
@@ -173,6 +175,7 @@ mod wasi_tests {
         match testsuite {
             "wasi-cap-std-sync" => cap_std_sync_ignore(name),
             "wasi-virtfs" => virtfs_ignore(name),
+            "wasi-tokio" => tokio_ignore(name),
             _ => panic!("unknown test suite: {}", testsuite),
         }
     }
@@ -200,6 +203,10 @@ mod wasi_tests {
         .contains(&name)
     }
 
+    /// Tokio should support the same things as cap_std_sync
+    fn tokio_ignore(name: &str) -> bool {
+        cap_std_sync_ignore(name)
+    }
     /// Virtfs barely works at all and is not suitable for any purpose
     fn virtfs_ignore(name: &str) -> bool {
         [
@@ -260,7 +267,7 @@ mod wasi_tests {
     /// Mark tests which require inheriting parent process stdio
     fn inherit_stdio(testsuite: &str, name: &str) -> bool {
         match testsuite {
-            "wasi-cap-std-sync" => match name {
+            "wasi-cap-std-sync" | "wasi-tokio" => match name {
                 "poll_oneoff_stdio" => true,
                 _ => false,
             },
