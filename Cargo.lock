@@ -2763,6 +2763,7 @@ dependencies = [
  "pretty_env_logger",
  "target-lexicon",
  "tempfile",
+ "tokio",
  "wasi-cap-std-sync",
  "wasi-common",
  "wasmtime",
@@ -3146,17 +3147,22 @@ dependencies = [
 name = "wasi-tokio"
 version = "0.26.0"
 dependencies = [
+ "bitflags",
  "cap-fs-ext",
  "cap-std",
  "cap-time-ext",
  "fs-set-times",
+ "lazy_static",
+ "libc",
  "system-interface",
  "tempfile",
  "tokio",
+ "tracing",
  "unsafe-io",
  "wasi-cap-std-sync",
  "wasi-common",
  "wiggle",
+ "winapi",
 ]
 
 [[package]]
