@@ -87,7 +87,7 @@ pub fn dummy_table(store: &Store, ty: TableType) -> Table {
 
 /// Construct a dummy memory for the given memory type.
 pub fn dummy_memory(store: &Store, ty: MemoryType) -> Memory {
-    Memory::new(store, ty)
+    Memory::new(store, ty).unwrap()
 }
 
 /// Construct a dummy instance for the given instance type.

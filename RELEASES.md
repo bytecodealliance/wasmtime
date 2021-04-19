@@ -4,6 +4,19 @@
 
 ## Unreleased
 
+### Added
+
+* Added `Store::with_limits`, `StoreLimits`, and `ResourceLimiter` to the
+  Wasmtime API to help with enforcing resource limits at runtime. The
+  `ResourceLimiter` trait can be implemented by custom resource limiters to
+  decide if linear memories or tables can be grown.
+
+### Changed
+
+* Breaking: `Memory::new` has been changed to return `Result` as creating a
+  host memory object is now a fallible operation when the initial size of
+  the memory exceeds the store limits.
+
 ## 0.26.0
 
 Released 2021-04-05.

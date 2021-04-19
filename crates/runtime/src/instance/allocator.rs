@@ -1,6 +1,6 @@
 use crate::externref::{ModuleInfoLookup, VMExternRefActivationsTable, EMPTY_MODULE_LOOKUP};
 use crate::imports::Imports;
-use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
+use crate::instance::{Instance, InstanceHandle, ResourceLimiter, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
@@ -15,6 +15,7 @@ use std::any::Any;
 use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::ptr::{self, NonNull};
+use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
@@ -59,6 +60,9 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// The pointer to the module info lookup to use for the instance.
     pub module_info_lookup: Option<*const dyn ModuleInfoLookup>,
+
+    /// The resource limiter to use for the instance.
+    pub limiter: Option<&'a Rc<dyn ResourceLimiter>>,
 }
 
 /// An link error while instantiating a module.
@@ -590,19 +594,23 @@ impl OnDemandInstanceAllocator {
         }
     }
 
-    fn create_tables(module: &Module) -> PrimaryMap<DefinedTableIndex, Table> {
+    fn create_tables(
+        module: &Module,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<PrimaryMap<DefinedTableIndex, Table>, InstantiationError> {
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
-            tables.push(Table::new_dynamic(table));
+            tables.push(Table::new_dynamic(table, limiter).map_err(InstantiationError::Resource)?);
         }
-        tables
+        Ok(tables)
     }
 
     fn create_memories(
         &self,
         module: &Module,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -612,8 +620,10 @@ impl OnDemandInstanceAllocator {
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
-            memories
-                .push(Memory::new_dynamic(plan, creator).map_err(InstantiationError::Resource)?);
+            memories.push(
+                Memory::new_dynamic(plan, creator, limiter)
+                    .map_err(InstantiationError::Resource)?,
+            );
         }
         Ok(memories)
     }
@@ -633,8 +643,8 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module)?;
-        let tables = Self::create_tables(&req.module);
+        let memories = self.create_memories(&req.module, req.limiter)?;
+        let tables = Self::create_tables(&req.module, req.limiter)?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
@@ -657,7 +667,9 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 alloc::handle_alloc_error(layout);
             }
             ptr::write(instance_ptr, instance);
-            InstanceHandle::new(instance_ptr)
+            InstanceHandle {
+                instance: instance_ptr,
+            }
         };
 
         initialize_vmcontext(handle.instance(), req);

@@ -1,6 +1,7 @@
 use crate::{
     module::ModuleRegistry, signatures::SignatureCollection, trampoline::StoreInstanceHandle,
-    Engine, Func, Module, Trap,
+    Engine, Func, Module, ResourceLimiter, ResourceLimiterProxy, Trap, DEFAULT_INSTANCE_LIMIT,
+    DEFAULT_MEMORY_LIMIT, DEFAULT_TABLE_LIMIT,
 };
 use anyhow::{bail, Result};
 use std::any::{Any, TypeId};
@@ -89,6 +90,7 @@ pub(crate) struct StoreInner {
     current_poll_cx: Cell<*mut Context<'static>>,
     out_of_gas_behavior: Cell<OutOfGas>,
     context_values: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>,
 }
 
 #[derive(Copy, Clone)]
@@ -120,8 +122,43 @@ impl Hash for HostInfoKey {
 }
 
 impl Store {
-    /// Creates a new store to be associated with the given [`Engine`].
-    pub fn new(engine: &Engine) -> Store {
+    /// Creates a new [`Store`] to be associated with the given [`Engine`].
+    ///
+    /// The created [`Store`] will place no additional limits on the size of linear
+    /// memories or tables at runtime. Linear memories and tables will be allowed to
+    /// grow to any upper limit specified in their definitions.
+    ///
+    /// The store will limit the number of instances, linear memories, and tables created to 10,000.
+    ///
+    /// Use [`Store::new_with_limits`] with a [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) to
+    /// specify different limits for the store.
+    pub fn new(engine: &Engine) -> Self {
+        Self::new_(engine, None)
+    }
+
+    /// Creates a new [`Store`] to be associated with the given [`Engine`] and using the supplied
+    /// resource limiter.
+    ///
+    /// A [`ResourceLimiter`] can be implemented by hosts to control the size of WebAssembly
+    /// linear memories and tables when a request is made to grow them.
+    ///
+    /// [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) can be used to create a
+    /// [`StoreLimits`](crate::StoreLimits) that implements [`ResourceLimiter`] using
+    /// static limit values.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use wasmtime::{Engine, Store, StoreLimitsBuilder};
+    /// // Place a limit on linear memories so they cannot grow beyond 1 MiB
+    /// let engine = Engine::default();
+    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().memory_pages(16).build());
+    /// ```
+    pub fn new_with_limits(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
+        Self::new_(engine, Some(Rc::new(ResourceLimiterProxy(limiter))))
+    }
+
+    fn new_(engine: &Engine, limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>) -> Self {
         // Ensure that wasmtime_runtime's signal handlers are configured. Note
         // that at the `Store` level it means we should perform this
         // once-per-thread. Platforms like Unix, however, only require this
@@ -130,7 +167,7 @@ impl Store {
         wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc)
             .expect("failed to initialize trap handling");
 
-        Store {
+        Self {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
                 interrupts: Arc::new(Default::default()),
@@ -149,6 +186,7 @@ impl Store {
                 current_poll_cx: Cell::new(ptr::null_mut()),
                 out_of_gas_behavior: Cell::new(OutOfGas::Trap),
                 context_values: RefCell::new(HashMap::new()),
+                limiter,
             }),
         }
     }
@@ -202,6 +240,10 @@ impl Store {
         }
     }
 
+    pub(crate) fn limiter(&self) -> &Option<Rc<dyn wasmtime_runtime::ResourceLimiter>> {
+        &self.inner.limiter
+    }
+
     pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
         &self.inner.signatures
     }
@@ -231,8 +273,6 @@ impl Store {
     }
 
     pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
-        let config = self.engine().config();
-
         fn bump(slot: &Cell<usize>, max: usize, amt: usize, desc: &str) -> Result<()> {
             let new = slot.get().saturating_add(amt);
             if new > max {
@@ -249,20 +289,11 @@ impl Store {
         let module = module.env_module();
         let memories = module.memory_plans.len() - module.num_imported_memories;
         let tables = module.table_plans.len() - module.num_imported_tables;
+        let (max_instances, max_memories, max_tables) = self.limits();
 
-        bump(
-            &self.inner.instance_count,
-            config.max_instances,
-            1,
-            "instance",
-        )?;
-        bump(
-            &self.inner.memory_count,
-            config.max_memories,
-            memories,
-            "memory",
-        )?;
-        bump(&self.inner.table_count, config.max_tables, tables, "table")?;
+        bump(&self.inner.instance_count, max_instances, 1, "instance")?;
+        bump(&self.inner.memory_count, max_memories, memories, "memory")?;
+        bump(&self.inner.table_count, max_tables, tables, "table")?;
 
         Ok(())
     }
@@ -837,6 +868,18 @@ impl Store {
             // wasm and get caught on the other side to clean things up.
             Err(trap) => unsafe { wasmtime_runtime::raise_user_trap(trap.into()) },
         }
+    }
+
+    fn limits(&self) -> (usize, usize, usize) {
+        self.inner
+            .limiter
+            .as_ref()
+            .map(|l| (l.instances(), l.memories(), l.tables()))
+            .unwrap_or((
+                DEFAULT_INSTANCE_LIMIT,
+                DEFAULT_MEMORY_LIMIT,
+                DEFAULT_TABLE_LIMIT,
+            ))
     }
 }
 

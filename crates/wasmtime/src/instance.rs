@@ -525,6 +525,7 @@ impl<'a> Instantiator<'a> {
                     as *const VMExternRefActivationsTable
                     as *mut _,
                 module_info_lookup: Some(self.store.module_info_lookup()),
+                limiter: self.store.limiter().as_ref(),
             })?;
 
             // After we've created the `InstanceHandle` we still need to run

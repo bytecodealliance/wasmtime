@@ -524,6 +524,7 @@ mod test {
                                 interrupts: ptr::null(),
                                 externref_activations_table: ptr::null_mut(),
                                 module_info_lookup: None,
+                                limiter: None,
                             },
                         )
                         .expect("instance should allocate"),

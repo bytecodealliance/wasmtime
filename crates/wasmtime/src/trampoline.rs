@@ -78,6 +78,7 @@ fn create_handle(
                     as *const VMExternRefActivationsTable
                     as *mut _,
                 module_info_lookup: Some(store.module_info_lookup()),
+                limiter: store.limiter().as_ref(),
             },
         )?;
 

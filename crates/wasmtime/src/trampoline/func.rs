@@ -288,6 +288,7 @@ pub fn create_function(
                 interrupts: std::ptr::null(),
                 externref_activations_table: std::ptr::null_mut(),
                 module_info_lookup: None,
+                limiter: None,
             })?,
             trampoline,
         ))
@@ -320,6 +321,7 @@ pub unsafe fn create_raw_function(
             interrupts: std::ptr::null(),
             externref_activations_table: std::ptr::null_mut(),
             module_info_lookup: None,
+            limiter: None,
         })?,
     )
 }

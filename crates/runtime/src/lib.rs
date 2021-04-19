@@ -40,7 +40,7 @@ pub use crate::imports::Imports;
 pub use crate::instance::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
     InstantiationError, LinkError, ModuleLimits, OnDemandInstanceAllocator,
-    PoolingAllocationStrategy, PoolingInstanceAllocator, RuntimeInstance,
+    PoolingAllocationStrategy, PoolingInstanceAllocator, ResourceLimiter, RuntimeInstance,
 };
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
