@@ -1368,9 +1368,9 @@ checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 
 [[package]]
 name = "iter-enum"
-version = "0.2.7"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cad34f24d3b48ceffdff38af2df5ce1b7d1d9cc113e503d8e86fe8cdb889c871"
+checksum = "4f947f0d9df7e69c4df60a950c0a83741455bb9ebd8fd9b5a87994dda4dbb005"
 dependencies = [
  "derive_utils",
  "quote",
