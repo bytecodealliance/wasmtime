@@ -71,7 +71,7 @@ impl TableElement {
     unsafe fn into_raw(self) -> *mut u8 {
         match self {
             Self::FuncRef(e) => e as _,
-            Self::ExternRef(e) => e.map(|e| e.into_raw()).unwrap_or(ptr::null_mut()),
+            Self::ExternRef(e) => e.map_or(ptr::null_mut(), |e| e.into_raw()),
         }
     }
 }
