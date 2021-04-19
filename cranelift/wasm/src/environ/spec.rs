@@ -937,7 +937,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         table_index: TableIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()>;
 
@@ -984,7 +984,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         data: &'data [u8],
     ) -> WasmResult<()>;
 

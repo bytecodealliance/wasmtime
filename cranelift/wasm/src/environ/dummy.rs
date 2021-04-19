@@ -747,7 +747,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         _table_index: TableIndex,
         _base: Option<GlobalIndex>,
-        _offset: usize,
+        _offset: u32,
         _elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
         // We do nothing
@@ -792,7 +792,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         _memory_index: MemoryIndex,
         _base: Option<GlobalIndex>,
-        _offset: usize,
+        _offset: u32,
         _data: &'data [u8],
     ) -> WasmResult<()> {
         // We do nothing
