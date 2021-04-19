@@ -7,7 +7,7 @@ use crate::{ResourceLimiter, Trap, VMExternRef};
 use anyhow::{bail, Result};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
 use std::rc::Rc;
@@ -210,6 +210,32 @@ impl Table {
             TableStorage::Static { maximum, .. } => Some(*maximum),
             TableStorage::Dynamic { maximum, .. } => maximum.clone(),
         }
+    }
+
+    /// Fill `table[dst..]` with values from `items`
+    ///
+    /// Returns a trap error on out-of-bounds accesses.
+    pub fn init_funcs(
+        &self,
+        dst: u32,
+        items: impl ExactSizeIterator<Item = *mut VMCallerCheckedAnyfunc>,
+    ) -> Result<(), Trap> {
+        assert!(self.element_type() == TableElementType::Func);
+
+        self.with_elements_mut(|elements| {
+            let elements = match elements
+                .get_mut(usize::try_from(dst).unwrap()..)
+                .and_then(|s| s.get_mut(..items.len()))
+            {
+                Some(elements) => elements,
+                None => return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds)),
+            };
+
+            for (item, slot) in items.zip(elements) {
+                *slot = item as *mut u8;
+            }
+            Ok(())
+        })
     }
 
     /// Fill `table[dst..dst + len]` with `val`.

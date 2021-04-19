@@ -573,11 +573,11 @@ impl Instance {
             return None;
         }
 
-        Some(unsafe { &*self.anyfunc_ptr(index) })
+        unsafe { Some(&*self.vmctx_plus_offset(self.offsets.vmctx_anyfunc(index))) }
     }
 
-    unsafe fn anyfunc_ptr(&self, index: FuncIndex) -> *mut VMCallerCheckedAnyfunc {
-        self.vmctx_plus_offset(self.offsets.vmctx_anyfunc(index))
+    unsafe fn anyfunc_base(&self) -> *mut VMCallerCheckedAnyfunc {
+        self.vmctx_plus_offset(self.offsets.vmctx_anyfuncs_begin())
     }
 
     fn find_passive_segment<'a, I, D, T>(
@@ -611,38 +611,56 @@ impl Instance {
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
-
-        let table = self.get_table(table_index);
-
         let elements = Self::find_passive_segment(
             elem_index,
             &self.module.passive_elements_map,
             &self.module.passive_elements,
             &self.dropped_elements,
         );
+        self.table_init_segment(table_index, elements, dst, src, len)
+    }
 
-        if src
-            .checked_add(len)
-            .map_or(true, |n| n as usize > elements.len())
-            || dst.checked_add(len).map_or(true, |m| m > table.size())
+    pub(crate) fn table_init_segment(
+        &self,
+        table_index: TableIndex,
+        elements: &[FuncIndex],
+        dst: u32,
+        src: u32,
+        len: u32,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
+
+        let table = self.get_table(table_index);
+
+        let elements = match elements
+            .get(usize::try_from(src).unwrap()..)
+            .and_then(|s| s.get(..usize::try_from(len).unwrap()))
         {
-            return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
+            Some(elements) => elements,
+            None => return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds)),
+        };
+
+        match table.element_type() {
+            TableElementType::Func => unsafe {
+                let base = self.anyfunc_base();
+                table.init_funcs(
+                    dst,
+                    elements.iter().map(|idx| {
+                        if *idx == FuncIndex::reserved_value() {
+                            ptr::null_mut()
+                        } else {
+                            debug_assert!(idx.as_u32() < self.offsets.num_defined_functions);
+                            base.add(usize::try_from(idx.as_u32()).unwrap())
+                        }
+                    }),
+                )?;
+            },
+
+            TableElementType::Val(_) => {
+                debug_assert!(elements.iter().all(|e| *e == FuncIndex::reserved_value()));
+                table.fill(dst, TableElement::ExternRef(None), len)?;
+            }
         }
-
-        // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
-        for (dst, src) in (dst..dst + len).zip(src..src + len) {
-            let elem = self
-                .get_caller_checked_anyfunc(elements[src as usize])
-                .map_or(ptr::null_mut(), |f: &VMCallerCheckedAnyfunc| {
-                    f as *const VMCallerCheckedAnyfunc as *mut _
-                });
-
-            table
-                .set(dst, TableElement::FuncRef(elem))
-                .expect("should never panic because we already did the bounds check above");
-        }
-
         Ok(())
     }
 
@@ -773,16 +791,26 @@ impl Instance {
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
-
-        let memory = self.get_memory(memory_index);
-
         let data = Self::find_passive_segment(
             data_index,
             &self.module.passive_data_map,
             &self.module.passive_data,
             &self.dropped_data,
         );
+        self.memory_init_segment(memory_index, &data, dst, src, len)
+    }
+
+    pub(crate) fn memory_init_segment(
+        &self,
+        memory_index: MemoryIndex,
+        data: &[u8],
+        dst: u32,
+        src: u32,
+        len: u32,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
+
+        let memory = self.get_memory(memory_index);
 
         if src
             .checked_add(len)
