@@ -220,8 +220,7 @@ impl Table {
         dst: u32,
         items: impl ExactSizeIterator<Item = *mut VMCallerCheckedAnyfunc>,
     ) -> Result<(), Trap> {
-        let ty = TableElementType::Func;
-        assert!(ty == TableElementType::Func);
+        assert!(self.element_type() == TableElementType::Func);
 
         self.with_elements_mut(|elements| {
             let elements = match elements
@@ -233,7 +232,7 @@ impl Table {
             };
 
             for (item, slot) in items.zip(elements) {
-                Self::set_raw(ty, slot, item.into())
+                *slot = item as *mut u8;
             }
             Ok(())
         })
