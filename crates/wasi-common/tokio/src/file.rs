@@ -173,7 +173,8 @@ impl WasiFile for File {
         Ok(n.try_into()?)
     }
     async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-        asyncify(move || self.0.seek(pos)).await
+        use tokio::io::AsyncSeekExt;
+        Ok(self.0.inner().seek(pos).await?)
     }
     async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         let n = asyncify(move || self.0.peek(buf)).await?;
