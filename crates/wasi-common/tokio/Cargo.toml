@@ -22,6 +22,15 @@ cap-time-ext = "0.13.7"
 fs-set-times = "0.3.1"
 unsafe-io = "0.6.2"
 system-interface = { version = "0.6.3", features = ["cap_std_impls"] }
+tracing = "0.1.19"
+bitflags = "1.2"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+winapi = "0.3"
+lazy_static = "1.4"
 
 [dev-dependencies]
 tempfile = "3.1.0"

@@ -1,5 +1,6 @@
 mod dir;
 mod file;
+mod sched;
 
 use std::cell::RefCell;
 use std::path::Path;
@@ -7,27 +8,7 @@ use std::rc::Rc;
 pub use wasi_cap_std_sync::{clocks_ctx, random_ctx, Dir};
 use wasi_common::{Error, Table, WasiCtx};
 
-pub fn sched_ctx() -> Box<dyn wasi_common::WasiSched> {
-    use wasi_common::sched::{Duration, Poll, WasiSched};
-    struct AsyncSched;
-
-    #[wiggle::async_trait]
-    impl WasiSched for AsyncSched {
-        async fn poll_oneoff<'a>(&self, _poll: &'_ Poll<'a>) -> Result<(), Error> {
-            todo!()
-        }
-        async fn sched_yield(&self) -> Result<(), Error> {
-            tokio::task::yield_now().await;
-            Ok(())
-        }
-        async fn sleep(&self, duration: Duration) -> Result<(), Error> {
-            tokio::time::sleep(duration).await;
-            Ok(())
-        }
-    }
-
-    Box::new(AsyncSched)
-}
+use crate::sched::sched_ctx;
 
 pub struct WasiCtxBuilder(wasi_common::WasiCtxBuilder);
 
