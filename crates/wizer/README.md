@@ -84,6 +84,8 @@ pub extern "C" fn init() {
 }
 ```
 
+For a complete C++ example, see [this](https://github.com/bytecodealliance/wizer/tree/main/examples/cpp).
+
 Then, if your Wasm module is named `input.wasm`, run the `wizer` CLI:
 
 ```shell-session
