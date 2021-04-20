@@ -746,6 +746,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         Ok(())
     }
 
+    fn declare_elements(&mut self, segments: Box<[FuncIndex]>) -> WasmResult<()> {
+        for element in segments.iter() {
+            self.flag_func_possibly_exported(*element);
+        }
+        Ok(())
+    }
+
     fn reserve_function_bodies(&mut self, _count: u32, offset: u64) {
         self.result.debuginfo.wasm_file.code_section_offset = offset;
     }

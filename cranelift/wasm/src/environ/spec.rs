@@ -948,6 +948,13 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()>;
 
+    /// Indicates that a declarative element segment was seen in the wasm
+    /// module.
+    fn declare_elements(&mut self, elements: Box<[FuncIndex]>) -> WasmResult<()> {
+        drop(elements);
+        Ok(())
+    }
+
     /// Provides the number of passive data segments up front.
     ///
     /// By default this does nothing, but implementations may use this to

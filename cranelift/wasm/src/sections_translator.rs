@@ -400,7 +400,7 @@ pub fn parse_element_section<'data>(
                 environ.declare_passive_element(index, segments)?;
             }
             ElementKind::Declared => {
-                // Nothing to do here.
+                environ.declare_elements(segments)?;
             }
         }
     }
