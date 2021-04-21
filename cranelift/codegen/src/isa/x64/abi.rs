@@ -317,19 +317,19 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
-        let ext_kind = match ty {
+        // For integer-typed values, we always load a full 64 bits (and we always spill a full 64
+        // bits as well -- see `Inst::store()`).
+        let ty = match ty {
             types::B1
             | types::B8
             | types::I8
             | types::B16
             | types::I16
             | types::B32
-            | types::I32 => ExtKind::SignExtend,
-            types::B64 | types::I64 | types::R64 | types::F32 | types::F64 => ExtKind::None,
-            _ if ty.bytes() == 16 => ExtKind::None,
-            _ => panic!("load_stack({})", ty),
+            | types::I32 => types::I64,
+            _ => ty,
         };
-        Inst::load(ty, mem, into_reg, ext_kind)
+        Inst::load(ty, mem, into_reg, ExtKind::None)
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {

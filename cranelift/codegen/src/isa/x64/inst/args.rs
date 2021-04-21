@@ -1033,6 +1033,7 @@ impl fmt::Display for Avx512Opcode {
 /// This defines the ways a value can be extended: either signed- or zero-extension, or none for
 /// types that are not extended. Contrast with [ExtMode], which defines the widths from and to which
 /// values can be extended.
+#[allow(dead_code)]
 #[derive(Clone, PartialEq)]
 pub enum ExtKind {
     None,
