@@ -2,6 +2,7 @@ pub use crate::transform::transform_dwarf;
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
 use wasmtime_environ::entity::EntityRef;
+use wasmtime_environ::ir::Endianness;
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use wasmtime_environ::{CompiledFunctions, DebugInfoData, ModuleMemoryOffset};
 
@@ -26,10 +27,19 @@ pub struct DwarfSection {
 }
 
 fn emit_dwarf_sections(
+    isa: &dyn TargetIsa,
     mut dwarf: Dwarf,
     frames: Option<FrameTable>,
 ) -> anyhow::Result<Vec<DwarfSection>> {
-    let mut sections = Sections::new(WriterRelocate::default());
+    let endian = match isa.endianness() {
+        Endianness::Little => RunTimeEndian::Little,
+        Endianness::Big => RunTimeEndian::Big,
+    };
+    let writer = WriterRelocate {
+        relocs: Vec::new(),
+        writer: EndianVec::new(endian),
+    };
+    let mut sections = Sections::new(writer);
     dwarf.write(&mut sections)?;
     if let Some(frames) = frames {
         frames.write_debug_frame(&mut sections.debug_frame)?;
@@ -52,15 +62,6 @@ fn emit_dwarf_sections(
 pub struct WriterRelocate {
     relocs: Vec<DwarfSectionReloc>,
     writer: EndianVec<RunTimeEndian>,
-}
-
-impl Default for WriterRelocate {
-    fn default() -> Self {
-        WriterRelocate {
-            relocs: Vec::new(),
-            writer: EndianVec::new(RunTimeEndian::Little),
-        }
-    }
 }
 
 impl Writer for WriterRelocate {
@@ -156,6 +157,6 @@ pub fn emit_dwarf<'a>(
 ) -> anyhow::Result<Vec<DwarfSection>> {
     let dwarf = transform_dwarf(isa, debuginfo_data, funcs, memory_offset)?;
     let frame_table = create_frame_table(isa, funcs);
-    let sections = emit_dwarf_sections(dwarf, frame_table)?;
+    let sections = emit_dwarf_sections(isa, dwarf, frame_table)?;
     Ok(sections)
 }
