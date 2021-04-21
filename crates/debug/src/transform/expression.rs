@@ -565,6 +565,7 @@ where
                         // Add frame base expressions.
                         flush_code_chunk!();
                         parts.extend_from_slice(&frame_base.unwrap().parts);
+                        need_deref = frame_base.unwrap().need_deref;
                     }
                     if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
                         // Reset local trailing flag.
@@ -966,7 +967,7 @@ mod tests {
                     },
                     CompiledExpressionPart::Code(vec![35, 18])
                 ],
-                need_deref: true,
+                need_deref: false,
             }
         );
 
