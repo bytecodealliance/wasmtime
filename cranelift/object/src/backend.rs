@@ -639,8 +639,8 @@ fn translate_linkage(linkage: Linkage) -> (SymbolScope, bool) {
     (scope, weak)
 }
 
-/// This is the output of `Module`'s
-/// [`finish`](../cranelift_module/struct.Module.html#method.finish) function.
+/// This is the output of `ObjectModule`'s
+/// [`finish`](../struct.ObjectModule.html#method.finish) function.
 /// It contains the generated `Object` and other information produced during
 /// compilation.
 pub struct ObjectProduct {
