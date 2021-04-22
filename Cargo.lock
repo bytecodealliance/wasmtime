@@ -544,7 +544,6 @@ name = "cranelift-codegen"
 version = "0.73.0"
 dependencies = [
  "bincode",
- "byteorder",
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
@@ -591,7 +590,6 @@ name = "cranelift-filetests"
 version = "0.73.0"
 dependencies = [
  "anyhow",
- "byteorder",
  "cranelift-codegen",
  "cranelift-frontend",
  "cranelift-interpreter",
