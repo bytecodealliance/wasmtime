@@ -3,7 +3,6 @@
 use crate::isa::unwind::input;
 use crate::result::{CodegenError, CodegenResult};
 use alloc::vec::Vec;
-use byteorder::{ByteOrder, LittleEndian};
 use log::warn;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -31,13 +30,13 @@ impl<'a> Writer<'a> {
         self.offset += 1;
     }
 
-    fn write_u16<T: ByteOrder>(&mut self, v: u16) {
-        T::write_u16(&mut self.buf[self.offset..(self.offset + 2)], v);
+    fn write_u16_le(&mut self, v: u16) {
+        self.buf[self.offset..(self.offset + 2)].copy_from_slice(&v.to_le_bytes());
         self.offset += 2;
     }
 
-    fn write_u32<T: ByteOrder>(&mut self, v: u32) {
-        T::write_u32(&mut self.buf[self.offset..(self.offset + 4)], v);
+    fn write_u32_le(&mut self, v: u32) {
+        self.buf[self.offset..(self.offset + 4)].copy_from_slice(&v.to_le_bytes());
         self.offset += 4;
     }
 }
@@ -121,11 +120,11 @@ impl UnwindCode {
                 let scaled_stack_offset = stack_offset / 16;
                 if scaled_stack_offset <= core::u16::MAX as u32 {
                     writer.write_u8((*reg << 4) | (op_small as u8));
-                    writer.write_u16::<LittleEndian>(scaled_stack_offset as u16);
+                    writer.write_u16_le(scaled_stack_offset as u16);
                 } else {
                     writer.write_u8((*reg << 4) | (op_large as u8));
-                    writer.write_u16::<LittleEndian>(*stack_offset as u16);
-                    writer.write_u16::<LittleEndian>((stack_offset >> 16) as u16);
+                    writer.write_u16_le(*stack_offset as u16);
+                    writer.write_u16_le((stack_offset >> 16) as u16);
                 }
             }
             Self::StackAlloc {
@@ -143,10 +142,10 @@ impl UnwindCode {
                     );
                 } else if *size <= LARGE_ALLOC_16BIT_MAX_SIZE {
                     writer.write_u8(UnwindOperation::LargeStackAlloc as u8);
-                    writer.write_u16::<LittleEndian>((*size / 8) as u16);
+                    writer.write_u16_le((*size / 8) as u16);
                 } else {
                     writer.write_u8((1 << 4) | (UnwindOperation::LargeStackAlloc as u8));
-                    writer.write_u32::<LittleEndian>(*size);
+                    writer.write_u32_le(*size);
                 }
             }
             Self::SetFPReg { instruction_offset } => {
@@ -248,7 +247,7 @@ impl UnwindInfo {
 
         // To keep a 32-bit alignment, emit 2 bytes of padding if there's an odd number of 16-bit nodes
         if (node_count & 1) == 1 {
-            writer.write_u16::<LittleEndian>(0);
+            writer.write_u16_le(0);
         }
 
         // Ensure the correct number of bytes was emitted
