@@ -103,6 +103,12 @@ impl WasiFile for Stdin {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
+    async fn readable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+    async fn writable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
 }
 #[cfg(windows)]
 impl AsRawHandle for Stdin {
@@ -202,6 +208,12 @@ macro_rules! wasi_file_write_impl {
             }
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 Ok(0)
+            }
+            async fn readable(&mut self) -> Result<(), Error> {
+                Err(Error::badf())
+            }
+            async fn writable(&mut self) -> Result<(), Error> {
+                Err(Error::badf())
             }
         }
         #[cfg(windows)]

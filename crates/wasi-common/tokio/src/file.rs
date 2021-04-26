@@ -184,6 +184,12 @@ impl WasiFile for File {
         use unsafe_io::AsUnsafeFile;
         asyncify(|| self.0.as_file_view().num_ready_bytes()).await
     }
+    async fn readable(&mut self) -> Result<(), Error> {
+        todo!("implement this in terms of tokio::io::AsyncFd")
+    }
+    async fn writable(&mut self) -> Result<(), Error> {
+        todo!("implement this in terms of tokio::io::AsyncFd")
+    }
 }
 pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
     use cap_fs_ext::FileTypeExt;

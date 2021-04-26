@@ -183,6 +183,12 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
     }
+    async fn readable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+    async fn writable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
 }
 
 /// A virtual pipe write end.
@@ -335,5 +341,11 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
     }
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
+    }
+    async fn readable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+    async fn writable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
     }
 }

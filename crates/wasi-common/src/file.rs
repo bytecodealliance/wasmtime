@@ -36,6 +36,9 @@ pub trait WasiFile {
     async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error>; // file op that generates a new stream from a file will supercede this
     async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error>; // read op
     async fn num_ready_bytes(&self) -> Result<u64, Error>; // read op
+
+    async fn readable(&mut self) -> Result<(), Error>;
+    async fn writable(&mut self) -> Result<(), Error>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
