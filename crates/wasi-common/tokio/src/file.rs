@@ -184,13 +184,47 @@ impl WasiFile for File {
         use unsafe_io::AsUnsafeFile;
         asyncify(|| self.0.as_file_view().num_ready_bytes()).await
     }
+    #[cfg(not(windows))]
     async fn readable(&mut self) -> Result<(), Error> {
-        todo!("implement this in terms of tokio::io::AsyncFd")
+        // The Inner impls OwnsRaw, which asserts exclusive use of the handle by the owned object.
+        // AsyncFd needs to wrap an owned `impl std::os::unix::io::AsRawFd`. Rather than introduce
+        // mutability to let it own the `Inner`, we are depending on the `&mut self` bound on this
+        // async method to ensure this is the only Future which can access the RawFd during the
+        // lifetime of the AsyncFd.
+        use tokio::io::{unix::AsyncFd, Interest};
+        use unsafe_io::os::posish::AsRawFd;
+        let rawfd = self.0.as_raw_fd();
+        let asyncfd = AsyncFd::with_interest(rawfd, Interest::READABLE)?;
+        let _ = asyncfd.readable().await?;
+        Ok(())
     }
+    #[cfg(windows)]
+    async fn readable(&mut self) -> Result<(), Error> {
+        // Windows uses a rawfd based scheduler :(
+        Err(Error::badf())
+    }
+
+    #[cfg(not(windows))]
     async fn writable(&mut self) -> Result<(), Error> {
-        todo!("implement this in terms of tokio::io::AsyncFd")
+        // The Inner impls OwnsRaw, which asserts exclusive use of the handle by the owned object.
+        // AsyncFd needs to wrap an owned `impl std::os::unix::io::AsRawFd`. Rather than introduce
+        // mutability to let it own the `Inner`, we are depending on the `&mut self` bound on this
+        // async method to ensure this is the only Future which can access the RawFd during the
+        // lifetime of the AsyncFd.
+        use tokio::io::{unix::AsyncFd, Interest};
+        use unsafe_io::os::posish::AsRawFd;
+        let rawfd = self.0.as_raw_fd();
+        let asyncfd = AsyncFd::with_interest(rawfd, Interest::WRITABLE)?;
+        let _ = asyncfd.writable().await?;
+        Ok(())
+    }
+    #[cfg(windows)]
+    async fn writable(&mut self) -> Result<(), Error> {
+        // Windows uses a rawfd based scheduler :(
+        Err(Error::badf())
     }
 }
+
 pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
     use cap_fs_ext::FileTypeExt;
     if ft.is_dir() {
