@@ -22,7 +22,7 @@ wasmtime-wasi = { path = "../wasi", version = "0.26.0" }
 wiggle = { path = "../wiggle", version = "0.26.0" }
 
 # These dependencies are necessary for the wasi-nn implementation:
-openvino = "0.1.5"
+openvino = { version = "0.3.1", features = ["runtime-linking"] }
 thiserror = "1.0"
 
 [build-dependencies]

@@ -12,6 +12,8 @@ use wiggle::GuestPtr;
 
 #[derive(Debug, Error)]
 pub enum UsageError {
+    #[error("Invalid context; has the load function been called?")]
+    InvalidContext,
     #[error("Only OpenVINO's IR is currently supported, passed encoding: {0:?}")]
     InvalidEncoding(GraphEncoding),
     #[error("OpenVINO expects only two buffers (i.e. [ir, weights]), passed: {0}")]
@@ -34,9 +36,21 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         if encoding != GraphEncoding::Openvino {
             return Err(UsageError::InvalidEncoding(encoding).into());
         }
+
         if builders.len() != 2 {
             return Err(UsageError::InvalidNumberOfBuilders(builders.len()).into());
         }
+
+        // Construct the context if none is present; this is done lazily (i.e. upon actually loading
+        // a model) because it may fail to find and load the OpenVINO libraries. The laziness limits
+        // the extent of the error only to wasi-nn users, not all WASI users.
+        if self.ctx.borrow().core.is_none() {
+            self.ctx
+                .borrow_mut()
+                .core
+                .replace(openvino::Core::new(None)?);
+        }
+
         let builders = builders.as_ptr();
         let xml = builders.read()?.as_slice()?;
         let weights = builders.add(1)?.read()?.as_slice()?;
@@ -44,11 +58,15 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
             .ctx
             .borrow_mut()
             .core
+            .as_mut()
+            .ok_or(UsageError::InvalidContext)?
             .read_network_from_buffer(&xml, &weights)?;
         let executable_graph = self
             .ctx
             .borrow_mut()
             .core
+            .as_mut()
+            .ok_or(UsageError::InvalidContext)?
             .load_network(&graph, map_execution_target_to_string(target))?;
         let id = self
             .ctx
@@ -94,7 +112,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
             .dimensions
             .as_slice()?
             .iter()
-            .map(|d| *d as u64)
+            .map(|d| *d as usize)
             .collect::<Vec<_>>();
         let precision = match tensor.type_ {
             TensorType::F16 => Precision::FP16,
