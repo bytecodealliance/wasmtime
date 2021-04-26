@@ -329,9 +329,9 @@ impl<'a> SerializedModule<'a> {
         Ok(bytes)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Option<Self>> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if !bytes.starts_with(HEADER) {
-            return Ok(None);
+            bail!("bytes are not a compatible serialized wasmtime module");
         }
 
         let bytes = &bytes[HEADER.len()..];
@@ -353,11 +353,9 @@ impl<'a> SerializedModule<'a> {
             );
         }
 
-        Ok(Some(
-            bincode_options()
-                .deserialize::<SerializedModule<'_>>(&bytes[1 + version_len..])
-                .context("deserialize compilation artifacts")?,
-        ))
+        Ok(bincode_options()
+            .deserialize::<SerializedModule<'_>>(&bytes[1 + version_len..])
+            .context("deserialize compilation artifacts")?)
     }
 
     fn check_triple(&self, isa: &dyn TargetIsa) -> Result<()> {

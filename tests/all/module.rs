@@ -27,18 +27,18 @@ fn caches_across_engines() {
         .serialize()
         .unwrap();
 
-    let res = Module::new(&Engine::new(&Config::new()).unwrap(), &bytes);
+    let res = Module::deserialize(&Engine::new(&Config::new()).unwrap(), &bytes);
     assert!(res.is_ok());
 
     // differ in shared cranelift flags
-    let res = Module::new(
+    let res = Module::deserialize(
         &Engine::new(Config::new().cranelift_nan_canonicalization(true)).unwrap(),
         &bytes,
     );
     assert!(res.is_err());
 
     // differ in cranelift settings
-    let res = Module::new(
+    let res = Module::deserialize(
         &Engine::new(Config::new().cranelift_opt_level(OptLevel::None)).unwrap(),
         &bytes,
     );
@@ -46,7 +46,7 @@ fn caches_across_engines() {
 
     // Missing required cpu flags
     if cfg!(target_arch = "x86_64") {
-        let res = Module::new(
+        let res = Module::deserialize(
             &Engine::new(
                 Config::new()
                     .target(&target_lexicon::Triple::host().to_string())
@@ -66,7 +66,7 @@ fn aot_compiles() -> Result<()> {
         "(module (func (export \"f\") (param i32) (result i32) local.get 0))".as_bytes(),
     )?;
 
-    let module = Module::from_binary(&engine, &bytes)?;
+    let module = Module::deserialize(&engine, &bytes)?;
 
     let store = Store::new(&engine);
     let instance = Instance::new(&store, &module, &[])?;

@@ -121,9 +121,6 @@ impl Module {
     ///   This is only supported when the `wat` feature of this crate is enabled.
     ///   If this is supplied then the text format will be parsed before validation.
     ///   Note that the `wat` feature is enabled by default.
-    /// * A module serialized with [`Module::serialize`].
-    /// * A module compiled with [`Engine::precompile_module`] or the
-    ///   `wasmtime compile` command.
     ///
     /// The data for the wasm module must be loaded in-memory if it's present
     /// elsewhere, for example on disk. This requires that the entire binary is
@@ -182,11 +179,6 @@ impl Module {
     /// ```
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let bytes = bytes.as_ref();
-
-        if let Some(module) = SerializedModule::from_bytes(bytes)? {
-            return module.into_module(engine);
-        }
-
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(bytes)?;
         Self::from_binary(engine, &bytes)
@@ -258,10 +250,10 @@ impl Module {
     /// data.
     ///
     /// This is similar to [`Module::new`] except that it requires that the
-    /// `binary` input is a WebAssembly binary or a compiled module, the
-    /// text format is not supported by this function. It's generally
-    /// recommended to use [`Module::new`], but if it's required to not
-    /// support the text format this function can be used instead.
+    /// `binary` input is a WebAssembly binary, the text format is not supported
+    /// by this function. It's generally recommended to use [`Module::new`], but
+    /// if it's required to not support the text format this function can be
+    /// used instead.
     ///
     /// # Examples
     ///
@@ -286,10 +278,6 @@ impl Module {
     /// # }
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
-        if let Some(module) = SerializedModule::from_bytes(binary)? {
-            return module.into_module(engine);
-        }
-
         // Check to see that the config's target matches the host
         let target = engine.config().isa_flags.triple();
         if *target != target_lexicon::Triple::host() {
@@ -327,6 +315,27 @@ impl Module {
         )?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
+    }
+
+    /// Deserializes an in-memory compiled module previously created with
+    /// [`Module::serialize`] or [`Engine::precompile_module`].
+    ///
+    /// This function will deserialize the binary blobs emitted by
+    /// [`Module::serialize`] and [`Engine::precompile_module`] back into an
+    /// in-memory [`Module`] that's ready to be instantiated. Note that this is
+    /// only compatible with bytes that were produced by the same version of the
+    /// wasmtime crate itself.
+    ///
+    /// It's important to not that this is somewhat `unsafe` but is not marked
+    /// as `unsafe`. It is technically possible to feed in arbitrary bytes here
+    /// and have custom jit code which enables arbitrary code execution. The
+    /// `bytes` structure is validated to have the right "structure" of bytes
+    /// but the contents are not validated by `wasmtime`. It is safe to pass in
+    /// any wasmtime-compiled blob here (from future and past versions), but
+    /// this should not be exposed to arbitrary user-defined input.
+    pub fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
+        let module = SerializedModule::from_bytes(bytes.as_ref())?;
+        module.into_module(engine)
     }
 
     fn from_parts(

@@ -160,8 +160,9 @@ impl Engine {
     ///   Note that the `wat` feature is enabled by default.
     ///
     /// This method may be used to compile a module for use with a different target
-    /// host. The output of this method may be used with [`Module::new`](crate::Module::new)
-    /// on hosts compatible with the [`Config`] associated with this [`Engine`].
+    /// host. The output of this method may be used with
+    /// [`Module::deserialize`](crate::Module::deserialize) on hosts compatible
+    /// with the [`Config`] associated with this [`Engine`].
     ///
     /// The output of this method is safe to send to another host machine for later
     /// execution. As the output is already a compiled module, translation and code
