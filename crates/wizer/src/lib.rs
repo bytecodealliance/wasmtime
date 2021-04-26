@@ -4,7 +4,11 @@
 
 #![deny(missing_docs)]
 
+#[cfg(fuzzing)]
+pub mod dummy;
+#[cfg(not(fuzzing))]
 mod dummy;
+
 mod info;
 mod instrument;
 mod parse;

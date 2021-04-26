@@ -1,0 +1,228 @@
+//! Check that we get the same result whether we
+//!
+//! 1. Call the initialization function
+//! 2. Call the main function
+//!
+//! or
+//!
+//! 1. Call the initialization function
+//! 2. Snapshot with Wizer
+//! 3. Instantiate the snapshot
+//! 4. Call the instantiated snapshot's main function
+//!
+//! When checking that we get the same result, we don't just consider the main
+//! function's results: we also consider memories and globals.
+
+#![no_main]
+
+use libfuzzer_sys::{arbitrary, fuzz_target};
+use wasmtime::*;
+
+const FUEL: u32 = 1_000;
+
+fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
+    let _ = env_logger::try_init();
+
+    let mut module = module;
+    module.ensure_termination(FUEL);
+    let wasm = module.to_bytes();
+
+    if log::log_enabled!(log::Level::Debug) {
+        log::debug!("Writing test case to `test.wasm`");
+        std::fs::write("test.wasm", &wasm).unwrap();
+        if let Ok(wat) = wasmprinter::print_bytes(&wasm) {
+            log::debug!("Writing disassembly to `test.wat`");
+            std::fs::write("test.wat", wat).unwrap();
+        }
+    }
+
+    let mut config = Config::new();
+    config.cache_config_load_default().unwrap();
+    config.wasm_module_linking(true);
+    config.wasm_multi_memory(true);
+    config.wasm_multi_value(true);
+
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(&engine, &wasm).unwrap();
+    if module.imports().len() > 0 {
+        // Not using the `WasmConfig` for this because we want to encourage
+        // imports/exports between modules within the bundle, just not at the
+        // top level.
+        return;
+    }
+
+    let mut main_funcs = vec![];
+    let mut init_funcs = vec![];
+    for exp in module.exports() {
+        if let ExternType::Func(ty) = exp.ty() {
+            main_funcs.push(exp.name());
+            if ty.params().len() == 0 && ty.results().len() == 0 {
+                init_funcs.push(exp.name());
+            }
+        }
+    }
+
+    'init_loop: for init_func in init_funcs {
+        log::debug!("Using initialization function: {:?}", init_func);
+
+        // Create a wizened snapshot of the given Wasm using `init_func` as the
+        // initialization routine.
+        let mut wizer = wizer::Wizer::new();
+        wizer
+            .wasm_module_linking(true)
+            .wasm_multi_memory(true)
+            .wasm_multi_value(true)
+            .init_func(init_func);
+        let snapshot_wasm = match wizer.run(&wasm) {
+            Err(_) => continue 'init_loop,
+            Ok(s) => s,
+        };
+        let snapshot_module =
+            Module::new(&engine, &snapshot_wasm).expect("snapshot should be valid wasm");
+
+        // Now check that each "main" function behaves the same whether we call
+        // it on an instantiated snapshot or if we instantiate the original
+        // Wasm, call the initialization routine, and then call the "main"
+        // function.
+        'main_loop: for main_func in &main_funcs {
+            if *main_func == init_func {
+                // Wizer un-exports the initialization function, so we can't use
+                // it as a main function.
+                continue 'main_loop;
+            }
+            log::debug!("Using main function: {:?}", main_func);
+
+            let store = Store::new(&engine);
+
+            // Instantiate the snapshot and call the main function.
+            let snapshot_instance = Instance::new(&store, &snapshot_module, &[]).unwrap();
+            let snapshot_main_func = snapshot_instance.get_func(main_func).unwrap();
+            let main_args = wizer::dummy::dummy_values(snapshot_main_func.ty().params());
+            let snapshot_result = snapshot_main_func.call(&main_args);
+
+            // Instantiate the original Wasm and then call the initialization
+            // and main functions back to back.
+            let instance = Instance::new(&store, &module, &[]).unwrap();
+            let init_func = instance.get_typed_func::<(), ()>(init_func).unwrap();
+            init_func.call(()).unwrap();
+            let main_func = instance.get_func(main_func).unwrap();
+            let result = main_func.call(&main_args);
+
+            // Check that the function return values / traps are the same.
+            match (snapshot_result, result) {
+                // Both did not trap.
+                (Ok(snapshot_result), Ok(result)) => {
+                    assert_eq!(snapshot_result.len(), result.len());
+                    for (s, r) in snapshot_result.iter().zip(result.iter()) {
+                        assert_val_eq(s, r);
+                    }
+                }
+
+                // Both trapped.
+                (Err(_), Err(_)) => {}
+
+                // Divergence.
+                (s, r) => {
+                    panic!(
+                        "divergence between whether the main function traps or not!\n\n\
+                         no snapshotting result = {:?}\n\n\
+                         snapshotted result = {:?}",
+                        r, s,
+                    );
+                }
+            }
+
+            // Assert that all other exports have the same state as well.
+            for export in snapshot_instance.exports() {
+                let name = export.name().to_string();
+                match export.into_extern() {
+                    Extern::Global(snapshot_global) => {
+                        let global = instance.get_global(&name).unwrap();
+                        assert_val_eq(&snapshot_global.get(), &global.get());
+                    }
+                    Extern::Memory(snapshot_memory) => {
+                        let memory = instance.get_memory(&name).unwrap();
+                        unsafe {
+                            let snapshot_memory = snapshot_memory.data_unchecked();
+                            let memory = memory.data_unchecked();
+                            assert_eq!(snapshot_memory.len(), memory.len());
+                            // NB: Don't use `assert_eq` here so that we don't
+                            // try to print the full memories' debug
+                            // representations on failure.
+                            if snapshot_memory != memory {
+                                panic!("divergence between snapshot and non-snapshot memories");
+                            }
+                        }
+                    }
+                    Extern::Instance(_)
+                    | Extern::Func(_)
+                    | Extern::Table(_)
+                    | Extern::Module(_) => continue,
+                }
+            }
+        }
+    }
+});
+
+fn assert_val_eq(a: &Val, b: &Val) {
+    match (a, b) {
+        (Val::I32(a), Val::I32(b)) => assert_eq!(a, b),
+        (Val::I64(a), Val::I64(b)) => assert_eq!(a, b),
+        (Val::F32(a), Val::F32(b)) => assert!({
+            let a = f32::from_bits(*a);
+            let b = f32::from_bits(*b);
+            a == b || (a.is_nan() && b.is_nan())
+        }),
+        (Val::F64(a), Val::F64(b)) => assert!({
+            let a = f64::from_bits(*a);
+            let b = f64::from_bits(*b);
+            a == b || (a.is_nan() && b.is_nan())
+        }),
+        _ => panic!("{:?} != {:?}", a, b),
+    }
+}
+
+#[derive(Clone, Default, Debug)]
+struct WasmConfig;
+
+impl<'a> arbitrary::Arbitrary<'a> for WasmConfig {
+    fn arbitrary(_: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(WasmConfig)
+    }
+}
+
+impl wasm_smith::Config for WasmConfig {
+    fn module_linking_enabled(&self) -> bool {
+        true
+    }
+
+    fn max_memories(&self) -> usize {
+        10
+    }
+
+    fn max_memory_pages(&self) -> u32 {
+        // We want small memories that are quick to compare, but we also want to
+        // allow memories to grow so we can shake out any memory-growth-related
+        // bugs, so we choose `2` instead of `1`.
+        2
+    }
+
+    fn min_funcs(&self) -> usize {
+        // Always generate at least one function that we can hopefully use as an
+        // initialization function.
+        1
+    }
+
+    fn min_exports(&self) -> usize {
+        // Always at least one export, hopefully a function we can use as an
+        // initialization routine.
+        1
+    }
+
+    fn memory_offset_choices(&self) -> (u32, u32, u32) {
+        // Always use an offset immediate that is within the memory's minimum
+        // size. This should make trapping on loads/stores a little less
+        // frequent.
+        (1, 0, 0)
+    }
+}

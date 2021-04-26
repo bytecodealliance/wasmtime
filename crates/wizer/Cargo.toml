@@ -48,6 +48,7 @@ wat = "1.0.36"
 members = [
     "benches/regex-bench",
     "benches/uap-bench",
+    "fuzz",
     "tests/regex-test",
 ]
 

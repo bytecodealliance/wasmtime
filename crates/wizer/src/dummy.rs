@@ -93,6 +93,12 @@ pub fn dummy_value(val_ty: ValType) -> Val {
     }
 }
 
+/// Construct a sequence of dummy values for the given types.
+#[cfg(fuzzing)]
+pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Vec<Val> {
+    val_tys.into_iter().map(dummy_value).collect()
+}
+
 /// Construct a dummy global for the given global type.
 pub fn dummy_global(store: &Store, ty: GlobalType) -> Global {
     let val = dummy_value(ty.content().clone());
