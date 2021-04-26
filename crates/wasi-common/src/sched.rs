@@ -2,7 +2,7 @@ use crate::clocks::WasiMonotonicClock;
 use crate::file::WasiFile;
 use crate::Error;
 use cap_std::time::Instant;
-use std::cell::Ref;
+use std::cell::RefMut;
 pub mod subscription;
 pub use cap_std::time::Duration;
 
@@ -52,11 +52,11 @@ impl<'a> Poll<'a> {
             ud,
         ));
     }
-    pub fn subscribe_read(&mut self, file: Ref<'a, dyn WasiFile>, ud: Userdata) {
+    pub fn subscribe_read(&mut self, file: RefMut<'a, dyn WasiFile>, ud: Userdata) {
         self.subs
             .push((Subscription::Read(RwSubscription::new(file)), ud));
     }
-    pub fn subscribe_write(&mut self, file: Ref<'a, dyn WasiFile>, ud: Userdata) {
+    pub fn subscribe_write(&mut self, file: RefMut<'a, dyn WasiFile>, ud: Userdata) {
         self.subs
             .push((Subscription::Write(RwSubscription::new(file)), ud));
     }

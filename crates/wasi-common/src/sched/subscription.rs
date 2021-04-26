@@ -3,7 +3,7 @@ use crate::file::WasiFile;
 use crate::Error;
 use bitflags::bitflags;
 use cap_std::time::{Duration, Instant};
-use std::cell::{Cell, Ref};
+use std::cell::{Cell, RefMut};
 
 bitflags! {
     pub struct RwEventFlags: u32 {
@@ -12,12 +12,12 @@ bitflags! {
 }
 
 pub struct RwSubscription<'a> {
-    pub file: Ref<'a, dyn WasiFile>,
+    pub file: RefMut<'a, dyn WasiFile>,
     status: Cell<Option<Result<(u64, RwEventFlags), Error>>>,
 }
 
 impl<'a> RwSubscription<'a> {
-    pub fn new(file: Ref<'a, dyn WasiFile>) -> Self {
+    pub fn new(file: RefMut<'a, dyn WasiFile>) -> Self {
         Self {
             file,
             status: Cell::new(None),

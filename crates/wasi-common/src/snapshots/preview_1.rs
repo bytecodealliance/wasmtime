@@ -13,6 +13,7 @@ use crate::{
 use anyhow::Context;
 use cap_std::time::{Duration, SystemClock};
 use std::cell::{Ref, RefMut};
+use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::{Deref, DerefMut};
@@ -970,6 +971,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
 
         let table = self.table();
+        let mut subscribed_fds = HashSet::new();
         let mut poll = Poll::new();
 
         let subs = subs.as_array(nsubscriptions);
@@ -1008,15 +1010,27 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 },
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
+                    if subscribed_fds.contains(&fd) {
+                        return Err(Error::invalid_argument()
+                            .context("Fd can be subscribed to at most once per poll_oneoff"));
+                    } else {
+                        subscribed_fds.insert(fd);
+                    }
                     let file = table
-                        .get_file(u32::from(fd))?
+                        .get_file_mut(u32::from(fd))?
                         .get_cap(FileCaps::POLL_READWRITE)?;
                     poll.subscribe_read(file, sub.userdata.into());
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
                     let fd = writesub.file_descriptor;
+                    if subscribed_fds.contains(&fd) {
+                        return Err(Error::invalid_argument()
+                            .context("Fd can be subscribed to at most once per poll_oneoff"));
+                    } else {
+                        subscribed_fds.insert(fd);
+                    }
                     let file = table
-                        .get_file(u32::from(fd))?
+                        .get_file_mut(u32::from(fd))?
                         .get_cap(FileCaps::POLL_READWRITE)?;
                     poll.subscribe_write(file, sub.userdata.into());
                 }
