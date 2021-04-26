@@ -97,26 +97,7 @@ pub async fn poll_oneoff<'a>(poll: &'_ Poll<'a>) -> Result<(), Error> {
 }
 
 fn wasi_file_raw_fd(f: &dyn WasiFile) -> Option<RawFd> {
-    let a = f.as_any();
-    if a.is::<crate::file::File>() {
-        Some(a.downcast_ref::<crate::file::File>().unwrap().as_raw_fd())
-    } else if a.is::<crate::stdio::Stdin>() {
-        Some(a.downcast_ref::<crate::stdio::Stdin>().unwrap().as_raw_fd())
-    } else if a.is::<crate::stdio::Stdout>() {
-        Some(
-            a.downcast_ref::<crate::stdio::Stdout>()
-                .unwrap()
-                .as_raw_fd(),
-        )
-    } else if a.is::<crate::stdio::Stderr>() {
-        Some(
-            a.downcast_ref::<crate::stdio::Stderr>()
-                .unwrap()
-                .as_raw_fd(),
-        )
-    } else {
-        None
-    }
+    todo!()
 }
 
 mod poll {
