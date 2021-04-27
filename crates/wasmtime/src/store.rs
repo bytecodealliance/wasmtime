@@ -159,13 +159,10 @@ impl Store {
     }
 
     fn new_(engine: &Engine, limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>) -> Self {
-        // Ensure that wasmtime_runtime's signal handlers are configured. Note
-        // that at the `Store` level it means we should perform this
-        // once-per-thread. Platforms like Unix, however, only require this
-        // once-per-program. In any case this is safe to call many times and
-        // each one that's not relevant just won't do anything.
-        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc)
-            .expect("failed to initialize trap handling");
+        // Ensure that wasmtime_runtime's signal handlers are configured. This
+        // is the per-program initialization required for handling traps, such
+        // as configuring signals, vectored exception handlers, etc.
+        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc);
 
         Self {
             inner: Rc::new(StoreInner {
@@ -451,25 +448,6 @@ impl Store {
         &self.inner.modules
     }
 
-    /// Notifies that the current Store (and all referenced entities) has been moved over to a
-    /// different thread.
-    ///
-    /// See also the multithreading documentation for more details:
-    /// <https://docs.wasmtime.dev/examples-rust-multithreading.html>.
-    ///
-    /// # Safety
-    ///
-    /// In general, it's not possible to move a `Store` to a different thread, because it isn't `Send`.
-    /// That being said, it is possible to create an unsafe `Send` wrapper over a `Store`, assuming
-    /// the safety guidelines exposed in the multithreading documentation have been applied. So it
-    /// is in general unnecessary to do this, if you're not doing unsafe things.
-    ///
-    /// It is fine to call this several times: only the first call will have an effect.
-    pub unsafe fn notify_switched_thread(&self) {
-        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc)
-            .expect("failed to initialize per-threads traps");
-    }
-
     #[inline]
     pub(crate) fn module_info_lookup(&self) -> &dyn wasmtime_runtime::ModuleInfoLookup {
         self.inner.as_ref()
@@ -673,7 +651,8 @@ impl Store {
             }
 
             unsafe {
-                let before = wasmtime_runtime::TlsRestore::take();
+                let before = wasmtime_runtime::TlsRestore::take()
+                    .map_err(|e| Trap::from_runtime(self, e))?;
                 let res = (*suspend).suspend(());
                 before.replace().map_err(|e| Trap::from_runtime(self, e))?;
                 res?;

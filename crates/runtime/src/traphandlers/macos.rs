@@ -42,7 +42,6 @@ use mach::message::*;
 use mach::port::*;
 use mach::thread_act::*;
 use mach::traps::*;
-use std::cell::Cell;
 use std::mem;
 use std::thread;
 
@@ -425,26 +424,16 @@ impl Drop for ClosePort {
 /// task-level port which is where we'd expected things like breakpad/crashpad
 /// exception handlers to get registered.
 pub fn lazy_per_thread_init() -> Result<(), Trap> {
-    thread_local! {
-        static PORTS_SET: Cell<bool> = Cell::new(false);
+    unsafe {
+        assert!(WASMTIME_PORT != MACH_PORT_NULL);
+        let kret = thread_set_exception_ports(
+            MY_PORT.with(|p| p.0),
+            EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
+            WASMTIME_PORT,
+            EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
+            mach_addons::THREAD_STATE_NONE,
+        );
+        assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
     }
-
-    PORTS_SET.with(|ports| {
-        if ports.replace(true) {
-            return;
-        }
-
-        unsafe {
-            assert!(WASMTIME_PORT != MACH_PORT_NULL);
-            let kret = thread_set_exception_ports(
-                MY_PORT.with(|p| p.0),
-                EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
-                WASMTIME_PORT,
-                EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
-                mach_addons::THREAD_STATE_NONE,
-            );
-            assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
-        }
-    });
     Ok(())
 }

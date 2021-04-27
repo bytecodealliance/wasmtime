@@ -154,41 +154,35 @@ unsafe fn get_pc(cx: *mut libc::c_void) -> *const u8 {
 /// and registering our own alternate stack that is large enough and has a guard
 /// page.
 pub fn lazy_per_thread_init() -> Result<(), Trap> {
+    // This thread local is purely used to register a `Stack` to get deallocated
+    // when the thread exists. Otherwise this function is only ever called at
+    // most once per-thread.
     thread_local! {
-        /// Thread-local state is lazy-initialized on the first time it's used,
-        /// and dropped when the thread exits.
-        static TLS: RefCell<Tls> = RefCell::new(Tls::None);
+        static STACK: RefCell<Option<Stack>> = RefCell::new(None);
     }
 
     /// The size of the sigaltstack (not including the guard, which will be
     /// added). Make this large enough to run our signal handlers.
     const MIN_STACK_SIZE: usize = 16 * 4096;
 
-    enum Tls {
-        None,
-        Allocated {
-            mmap_ptr: *mut libc::c_void,
-            mmap_size: usize,
-        },
-        BigEnough,
+    struct Stack {
+        mmap_ptr: *mut libc::c_void,
+        mmap_size: usize,
     }
 
-    return TLS.with(|slot| unsafe {
-        let mut slot = slot.borrow_mut();
-        match *slot {
-            Tls::None => {}
-            // already checked
-            _ => return Ok(()),
-        }
+    return STACK.with(|s| {
+        *s.borrow_mut() = unsafe { allocate_sigaltstack()? };
+        Ok(())
+    });
 
+    unsafe fn allocate_sigaltstack() -> Result<Option<Stack>, Trap> {
         // Check to see if the existing sigaltstack, if it exists, is big
         // enough. If so we don't need to allocate our own.
         let mut old_stack = mem::zeroed();
         let r = libc::sigaltstack(ptr::null(), &mut old_stack);
         assert_eq!(r, 0, "learning about sigaltstack failed");
         if old_stack.ss_flags & libc::SS_DISABLE == 0 && old_stack.ss_size >= MIN_STACK_SIZE {
-            *slot = Tls::BigEnough;
-            return Ok(());
+            return Ok(None);
         }
 
         // ... but failing that we need to allocate our own, so do all that
@@ -226,25 +220,17 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
         let r = libc::sigaltstack(&new_stack, ptr::null_mut());
         assert_eq!(r, 0, "registering new sigaltstack failed");
 
-        *slot = Tls::Allocated {
+        Ok(Some(Stack {
             mmap_ptr: ptr,
             mmap_size: alloc_size,
-        };
-        Ok(())
-    });
+        }))
+    }
 
-    impl Drop for Tls {
+    impl Drop for Stack {
         fn drop(&mut self) {
-            let (ptr, size) = match self {
-                Tls::Allocated {
-                    mmap_ptr,
-                    mmap_size,
-                } => (*mmap_ptr, *mmap_size),
-                _ => return,
-            };
             unsafe {
                 // Deallocate the stack memory.
-                let r = libc::munmap(ptr, size);
+                let r = libc::munmap(self.mmap_ptr, self.mmap_size);
                 debug_assert_eq!(r, 0, "munmap failed during thread shutdown");
             }
         }
