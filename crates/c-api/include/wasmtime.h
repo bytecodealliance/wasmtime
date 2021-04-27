@@ -992,9 +992,13 @@ WASM_API_EXTERN own wasmtime_error_t* wasmtime_module_serialize(
 
 /**
  * \brief Build a module from serialized data.
- * *
+ *
  * This function does not take ownership of any of its arguments, but the
  * returned error and module are owned by the caller.
+ *
+ * This function is not safe to receive arbitrary user input. See the Rust
+ * documentation for more information on what inputs are safe to pass in here
+ * (e.g. only that of #wasmtime_module_serialize)
  */
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
     wasm_engine_t *engine,

@@ -39,7 +39,9 @@ fn compile() -> Result<()> {
     assert_eq!(m.imports().len(), 0);
     assert_eq!(m.exports().len(), 0);
     let bytes = m.serialize()?;
-    Module::new(&engine, &bytes)?;
+    unsafe {
+        Module::deserialize(&engine, &bytes)?;
+    }
     assert_eq!(m.imports().len(), 0);
     assert_eq!(m.exports().len(), 0);
     Ok(())

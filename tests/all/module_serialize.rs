@@ -6,8 +6,8 @@ fn serialize(engine: &Engine, wat: &'static str) -> Result<Vec<u8>> {
     Ok(module.serialize()?)
 }
 
-fn deserialize_and_instantiate(store: &Store, buffer: &[u8]) -> Result<Instance> {
-    let module = Module::new(store.engine(), buffer)?;
+unsafe fn deserialize_and_instantiate(store: &Store, buffer: &[u8]) -> Result<Instance> {
+    let module = Module::deserialize(store.engine(), buffer)?;
     Ok(Instance::new(&store, &module, &[])?)
 }
 
@@ -17,7 +17,7 @@ fn test_version_mismatch() -> Result<()> {
     let mut buffer = serialize(&engine, "(module)")?;
     buffer[13 /* header length */ + 1 /* version length */] = 'x' as u8;
 
-    match Module::new(&engine, &buffer) {
+    match unsafe { Module::deserialize(&engine, &buffer) } {
         Ok(_) => bail!("expected deserialization to fail"),
         Err(e) => assert!(e
             .to_string()
@@ -35,7 +35,7 @@ fn test_module_serialize_simple() -> Result<()> {
     )?;
 
     let store = Store::default();
-    let instance = deserialize_and_instantiate(&store, &buffer)?;
+    let instance = unsafe { deserialize_and_instantiate(&store, &buffer)? };
     let run = instance.get_typed_func::<(), i32>("run")?;
     let result = run.call(())?;
 
@@ -53,7 +53,7 @@ fn test_module_serialize_fail() -> Result<()> {
     let mut config = Config::new();
     config.cranelift_opt_level(OptLevel::None);
     let store = Store::new(&Engine::new(&config)?);
-    match deserialize_and_instantiate(&store, &buffer) {
+    match unsafe { deserialize_and_instantiate(&store, &buffer) } {
         Ok(_) => bail!("expected failure at deserialization"),
         Err(_) => (),
     }

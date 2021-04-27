@@ -126,7 +126,8 @@ mod test {
         command.execute()?;
 
         let engine = Engine::default();
-        let module = Module::from_file(&engine, output_path)?;
+        let contents = std::fs::read(output_path)?;
+        let module = unsafe { Module::deserialize(&engine, contents)? };
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
         let f = instance.get_typed_func::<i32, i32>("f")?;
