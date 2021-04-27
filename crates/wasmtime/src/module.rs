@@ -322,18 +322,40 @@ impl Module {
     ///
     /// This function will deserialize the binary blobs emitted by
     /// [`Module::serialize`] and [`Engine::precompile_module`] back into an
-    /// in-memory [`Module`] that's ready to be instantiated. Note that this is
-    /// only compatible with bytes that were produced by the same version of the
-    /// wasmtime crate itself.
+    /// in-memory [`Module`] that's ready to be instantiated.
     ///
-    /// It's important to not that this is somewhat `unsafe` but is not marked
-    /// as `unsafe`. It is technically possible to feed in arbitrary bytes here
-    /// and have custom jit code which enables arbitrary code execution. The
-    /// `bytes` structure is validated to have the right "structure" of bytes
-    /// but the contents are not validated by `wasmtime`. It is safe to pass in
-    /// any wasmtime-compiled blob here (from future and past versions), but
-    /// this should not be exposed to arbitrary user-defined input.
-    pub fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
+    /// # Unsafety
+    ///
+    /// This function is marked as `unsafe` because if fed invalid input or used
+    /// improperly this could lead to memory safety vulnerabilities. This method
+    /// should not, for example, be exposed to arbitrary user input.
+    ///
+    /// The structure of the binary blob read here is only lightly validated
+    /// internally in `wasmtime`. This is intended to be an efficient
+    /// "rehydration" for a [`Module`] which has very few runtime checks beyond
+    /// deserialization. Arbitrary input could, for example, replace valid
+    /// compiled code with any other valid compiled code, meaning that this can
+    /// trivially be used to execute arbitrary code otherwise.
+    ///
+    /// For these reasons this function is `unsafe`. This function is only
+    /// designed to receive the previous input from [`Module::serialize`] and
+    /// [`Engine::precompile_module`]. If the exact output of those functions
+    /// (unmodified) is passed to this function then calls to this function can
+    /// be considered safe. It is the caller's responsibility to provide the
+    /// guarantee that only previously-serialized bytes are being passed in
+    /// here.
+    ///
+    /// Note that this function is designed to be safe receiving output from
+    /// *any* compiled version of `wasmtime` itself. This means that it is safe
+    /// to feed output from older versions of Wasmtime into this function, in
+    /// addition to newer versions of wasmtime (from the future!). These inputs
+    /// will deterministically and safely produce an `Err`. This function only
+    /// successfully accepts inputs from the same version of `wasmtime`, but the
+    /// safety guarantee only applies to externally-defined blobs of bytes, not
+    /// those defined by any version of wasmtime. (this means that if you cache
+    /// blobs across versions of wasmtime you can be safely guaranteed that
+    /// future versions of wasmtime will reject old cache entries).
+    pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let module = SerializedModule::from_bytes(bytes.as_ref())?;
         module.into_module(engine)
     }
