@@ -34,7 +34,7 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleInfo<'a>> {
             .parse(wasm, true)
             .context("failed to parse Wasm")?
         {
-            wasmparser::Chunk::NeedMoreData(_) => anyhow::bail!("invalid Wasm module"),
+            wasmparser::Chunk::NeedMoreData(_) => unreachable!(),
             wasmparser::Chunk::Parsed { payload, consumed } => (payload, consumed),
         };
         wasm = &wasm[consumed..];
