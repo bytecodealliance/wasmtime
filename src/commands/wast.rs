@@ -9,7 +9,7 @@ use wasmtime_wast::WastContext;
 
 lazy_static::lazy_static! {
     static ref AFTER_HELP: String = {
-        crate::WASM_FEATURES.to_string()
+        crate::FLAG_EXPLANATIONS.to_string()
     };
 }
 

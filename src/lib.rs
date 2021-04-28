@@ -43,17 +43,45 @@ const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("threads", "enables support for WebAssembly threads"),
 ];
 
+const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
+    (
+        "default",
+        "enables all stable WASI modules (no experimental modules)",
+    ),
+    (
+        "wasi-common",
+        "enables support for the WASI common APIs, see https://github.com/WebAssembly/WASI",
+    ),
+    (
+        "experimental-wasi-nn",
+        "enables support for the WASI neural network API (experimental), see https://github.com/WebAssembly/wasi-nn",
+    ),
+    (
+        "experimental-wasi-crypto",
+        "enables support for the WASI cryptography APIs (experimental), see https://github.com/WebAssembly/wasi-crypto",
+    ),
+];
+
 lazy_static::lazy_static! {
-    static ref WASM_FEATURES: String = {
+    static ref FLAG_EXPLANATIONS: String = {
         use std::fmt::Write;
 
         let mut s = String::new();
+
+        // Explain --wasm-features.
         writeln!(&mut s, "Supported values for `--wasm-features`:").unwrap();
         writeln!(&mut s).unwrap();
-
         let max = SUPPORTED_WASM_FEATURES.iter().max_by_key(|(name, _)| name.len()).unwrap();
-
         for (name, desc) in SUPPORTED_WASM_FEATURES.iter() {
+            writeln!(&mut s, "{:width$} {}", name, desc, width = max.0.len() + 2).unwrap();
+        }
+        writeln!(&mut s).unwrap();
+
+        // Explain --wasi-modules.
+        writeln!(&mut s, "Supported values for `--wasi-modules`:").unwrap();
+        writeln!(&mut s).unwrap();
+        let max = SUPPORTED_WASI_MODULES.iter().max_by_key(|(name, _)| name.len()).unwrap();
+        for (name, desc) in SUPPORTED_WASI_MODULES.iter() {
             writeln!(&mut s, "{:width$} {}", name, desc, width = max.0.len() + 2).unwrap();
         }
 
@@ -185,6 +213,10 @@ struct CommonOptions {
     /// Enables or disables WebAssembly features
     #[structopt(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
     wasm_features: Option<wasmparser::WasmFeatures>,
+
+    /// Enables or disables WASI modules
+    #[structopt(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
+    wasi_modules: Option<WasiModules>,
 
     /// Use Lightbeam for all compilation
     #[structopt(long, conflicts_with = "cranelift")]
@@ -408,6 +440,75 @@ fn parse_wasm_features(features: &str) -> Result<wasmparser::WasmFeatures> {
         memory64: false,
     })
 }
+
+fn parse_wasi_modules(modules: &str) -> Result<WasiModules> {
+    let modules = modules.trim();
+    match modules {
+        "default" => Ok(WasiModules::default()),
+        "-default" => Ok(WasiModules::none()),
+        _ => {
+            // Starting from the default set of WASI modules, enable or disable a list of
+            // comma-separated modules.
+            let mut wasi_modules = WasiModules::default();
+            let mut set = |module: &str, enable: bool| match module {
+                "" => Ok(()),
+                "wasi-common" => Ok(wasi_modules.wasi_common = enable),
+                "experimental-wasi-nn" => Ok(wasi_modules.wasi_nn = enable),
+                "experimental-wasi-crypto" => Ok(wasi_modules.wasi_crypto = enable),
+                "default" => bail!("'default' cannot be specified with other WASI modules"),
+                _ => bail!("unsupported WASI module '{}'", module),
+            };
+
+            for module in modules.split(',') {
+                let module = module.trim();
+                let (module, value) = if module.starts_with('-') {
+                    (&module[1..], false)
+                } else {
+                    (module, true)
+                };
+                set(module, value)?;
+            }
+
+            Ok(wasi_modules)
+        }
+    }
+}
+
+/// Select which WASI modules are available at runtime for use by Wasm programs.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WasiModules {
+    /// Enable the wasi-common implementation; eventually this should be split into its separate
+    /// parts once the implementation allows for it (e.g. wasi-fs, wasi-clocks, etc.).
+    pub wasi_common: bool,
+
+    /// Enable the experimental wasi-nn implementation.
+    pub wasi_nn: bool,
+
+    /// Enable the experimental wasi-crypto implementation.
+    pub wasi_crypto: bool,
+}
+
+impl Default for WasiModules {
+    fn default() -> Self {
+        Self {
+            wasi_common: true,
+            wasi_nn: false,
+            wasi_crypto: false,
+        }
+    }
+}
+
+impl WasiModules {
+    /// Enable no modules.
+    pub fn none() -> Self {
+        Self {
+            wasi_common: false,
+            wasi_nn: false,
+            wasi_crypto: false,
+        }
+    }
+}
+
 fn parse_cranelift_flag(name_and_value: &str) -> Result<(String, String)> {
     let mut split = name_and_value.splitn(2, '=');
     let name = if let Some(name) = split.next() {
@@ -574,4 +675,61 @@ mod test {
     feature_test!(test_simd_feature, simd, "simd");
     feature_test!(test_threads_feature, threads, "threads");
     feature_test!(test_multi_memory_feature, multi_memory, "multi-memory");
+
+    #[test]
+    fn test_default_modules() {
+        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasi-modules=default"]).unwrap();
+        assert_eq!(
+            options.wasi_modules.unwrap(),
+            WasiModules {
+                wasi_common: true,
+                wasi_nn: false,
+                wasi_crypto: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_empty_modules() {
+        let options = CommonOptions::from_iter_safe(vec!["foo", "--wasi-modules="]).unwrap();
+        assert_eq!(
+            options.wasi_modules.unwrap(),
+            WasiModules {
+                wasi_common: true,
+                wasi_nn: false,
+                wasi_crypto: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_some_modules() {
+        let options = CommonOptions::from_iter_safe(vec![
+            "foo",
+            "--wasi-modules=experimental-wasi-nn,-wasi-common",
+        ])
+        .unwrap();
+        assert_eq!(
+            options.wasi_modules.unwrap(),
+            WasiModules {
+                wasi_common: false,
+                wasi_nn: true,
+                wasi_crypto: false
+            }
+        );
+    }
+
+    #[test]
+    fn test_no_modules() {
+        let options =
+            CommonOptions::from_iter_safe(vec!["foo", "--wasi-modules=-default"]).unwrap();
+        assert_eq!(
+            options.wasi_modules.unwrap(),
+            WasiModules {
+                wasi_common: false,
+                wasi_nn: false,
+                wasi_crypto: false
+            }
+        );
+    }
 }
