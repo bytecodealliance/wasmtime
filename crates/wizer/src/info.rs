@@ -207,8 +207,7 @@ impl<'a> ModuleInfo<'a> {
                         },
                     }
                 })
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+                .collect(),
         }
     }
 
