@@ -9,7 +9,7 @@ use std::convert::TryFrom;
 ///
 /// These are created during during our `parse` pass and then used throughout
 /// our later passes.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct ModuleInfo<'a> {
     /// This module's id (i.e. its pre-order traversal index).
     pub id: u32,
@@ -101,49 +101,14 @@ pub(crate) struct ModuleInfo<'a> {
 impl<'a> ModuleInfo<'a> {
     /// Create the `ModuleInfo` for the root of a module-linking bundle.
     pub fn for_root() -> Self {
-        Self {
-            id: 0,
-            raw_sections: vec![],
-            instance_import_counts: vec![],
-            modules: vec![],
-            types: vec![],
-            imports: vec![],
-            aliases: vec![],
-            globals: vec![],
-            defined_globals_index: None,
-            instances: vec![],
-            instantiations: BTreeMap::new(),
-            child_modules_expected: 0,
-            module_section: None,
-            exports: vec![],
-            functions: vec![],
-            tables: vec![],
-            memories: vec![],
-            defined_memories_index: None,
-        }
+        Self::default()
     }
 
     /// Create a new `ModuleInfo` for an inner module.
     pub fn for_inner(id: u32) -> Self {
         Self {
             id,
-            raw_sections: vec![],
-            instance_import_counts: vec![],
-            modules: vec![],
-            types: vec![],
-            imports: vec![],
-            aliases: vec![],
-            globals: vec![],
-            defined_globals_index: None,
-            instances: vec![],
-            instantiations: BTreeMap::new(),
-            child_modules_expected: 0,
-            module_section: None,
-            exports: vec![],
-            functions: vec![],
-            tables: vec![],
-            memories: vec![],
-            defined_memories_index: None,
+            ..Self::default()
         }
     }
 
