@@ -1,6 +1,6 @@
 use cap_std::time::Duration;
 use std::convert::TryInto;
-use std::future::{Future, Poll as FPoll};
+use std::future::Future;
 use std::ops::Deref;
 use std::pin::Pin;
 use std::task::Context;
@@ -23,15 +23,15 @@ pub async fn poll_oneoff<'a>(poll: &'_ Poll<'a>) -> Result<(), Error> {
         match s {
             Subscription::Read(f) => {
                 futures.push(Box::pin(async move {
-                    f.file.readable().await?;
-                    f.complete(f.file.num_ready_bytes().await?, RwEventFlags::empty());
+                    f.file()?.readable().await?;
+                    f.complete(f.file()?.num_ready_bytes().await?, RwEventFlags::empty());
                     Ok(())
                 }));
             }
 
             Subscription::Write(f) => {
                 futures.push(Box::pin(async move {
-                    f.file.writable().await?;
+                    f.file()?.writable().await?;
                     f.complete(0, RwEventFlags::empty());
                     Ok(())
                 }));

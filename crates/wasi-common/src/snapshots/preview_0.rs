@@ -1,4 +1,4 @@
-use crate::file::{FileCaps, FileEntryExt, FileEntryMutExt, TableFileExt};
+use crate::file::{FileCaps, FileEntryExt, TableFileExt};
 use crate::sched::{
     subscription::{RwEventFlags, SubscriptionResult},
     Poll,
@@ -7,7 +7,6 @@ use crate::snapshots::preview_1::types as snapshot1_types;
 use crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
 use crate::{Error, ErrorExt, WasiCtx};
 use cap_std::time::Duration;
-use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::Deref;
@@ -779,8 +778,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
         }
 
         let table = self.table();
-        let mut subscribed_fds = HashSet::new();
-        let mut poll = Poll::new();
+        let mut poll = Poll::new(&table);
 
         let subs = subs.as_array(nsubscriptions);
         for sub_elem in subs.iter() {
@@ -818,29 +816,11 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
                 },
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
-                    if subscribed_fds.contains(&fd) {
-                        Err(Error::invalid_argument()
-                            .context("Fd can be subscribed to at most once per poll_oneoff"))?;
-                    } else {
-                        subscribed_fds.insert(fd);
-                    }
-                    let file = table
-                        .get_file_mut(u32::from(fd))?
-                        .get_cap(FileCaps::POLL_READWRITE)?;
-                    poll.subscribe_read(file, sub.userdata.into());
+                    poll.subscribe_read(u32::from(fd), sub.userdata.into())?;
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
                     let fd = writesub.file_descriptor;
-                    if subscribed_fds.contains(&fd) {
-                        Err(Error::invalid_argument()
-                            .context("Fd can be subscribed to at most once per poll_oneoff"))?;
-                    } else {
-                        subscribed_fds.insert(fd);
-                    }
-                    let file = table
-                        .get_file_mut(u32::from(fd))?
-                        .get_cap(FileCaps::POLL_READWRITE)?;
-                    poll.subscribe_write(file, sub.userdata.into());
+                    poll.subscribe_write(u32::from(fd), sub.userdata.into())?;
                 }
             }
         }

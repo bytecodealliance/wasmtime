@@ -1,8 +1,8 @@
 use crate::clocks::WasiMonotonicClock;
-use crate::file::WasiFile;
-use crate::Error;
+use crate::table::Table;
+use crate::{Error, ErrorExt};
 use cap_std::time::Instant;
-use std::cell::RefMut;
+use std::collections::HashSet;
 pub mod subscription;
 pub use cap_std::time::Duration;
 
@@ -29,12 +29,18 @@ impl From<Userdata> for u64 {
 }
 
 pub struct Poll<'a> {
+    table: &'a Table,
+    fds: HashSet<u32>,
     subs: Vec<(Subscription<'a>, Userdata)>,
 }
 
 impl<'a> Poll<'a> {
-    pub fn new() -> Self {
-        Self { subs: Vec::new() }
+    pub fn new(table: &'a Table) -> Self {
+        Self {
+            table,
+            fds: HashSet::new(),
+            subs: Vec::new(),
+        }
     }
     pub fn subscribe_monotonic_clock(
         &mut self,
@@ -52,13 +58,31 @@ impl<'a> Poll<'a> {
             ud,
         ));
     }
-    pub fn subscribe_read(&mut self, file: RefMut<'a, dyn WasiFile>, ud: Userdata) {
+    pub fn subscribe_read(&mut self, fd: u32, ud: Userdata) -> Result<(), Error> {
+        if self.fds.contains(&fd) {
+            return Err(
+                Error::invalid_argument().context("Fd can be subscribed to at most once per poll")
+            );
+        } else {
+            self.fds.insert(fd);
+        }
         self.subs
-            .push((Subscription::Read(RwSubscription::new(file)), ud));
+            .push((Subscription::Read(RwSubscription::new(self.table, fd)?), ud));
+        Ok(())
     }
-    pub fn subscribe_write(&mut self, file: RefMut<'a, dyn WasiFile>, ud: Userdata) {
-        self.subs
-            .push((Subscription::Write(RwSubscription::new(file)), ud));
+    pub fn subscribe_write(&mut self, fd: u32, ud: Userdata) -> Result<(), Error> {
+        if self.fds.contains(&fd) {
+            return Err(
+                Error::invalid_argument().context("Fd can be subscribed to at most once per poll")
+            );
+        } else {
+            self.fds.insert(fd);
+        }
+        self.subs.push((
+            Subscription::Write(RwSubscription::new(self.table, fd)?),
+            ud,
+        ));
+        Ok(())
     }
     pub fn results(self) -> Vec<(SubscriptionResult, Userdata)> {
         self.subs

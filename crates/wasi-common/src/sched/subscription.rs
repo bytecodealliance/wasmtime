@@ -1,5 +1,6 @@
 use crate::clocks::WasiMonotonicClock;
-use crate::file::WasiFile;
+use crate::file::{FileCaps, FileEntryMutExt, TableFileExt, WasiFile};
+use crate::table::Table;
 use crate::Error;
 use bitflags::bitflags;
 use cap_std::time::{Duration, Instant};
@@ -12,16 +13,29 @@ bitflags! {
 }
 
 pub struct RwSubscription<'a> {
-    pub file: RefMut<'a, dyn WasiFile>,
+    table: &'a Table,
+    fd: u32,
     status: Cell<Option<Result<(u64, RwEventFlags), Error>>>,
 }
 
 impl<'a> RwSubscription<'a> {
-    pub fn new(file: RefMut<'a, dyn WasiFile>) -> Self {
-        Self {
-            file,
+    /// Create an RwSubscription. This constructor checks to make sure the file we need exists, and
+    /// has the correct rights. But, we can't hold onto the WasiFile RefMut inside this structure
+    /// (Pat can't convince borrow checker, either not clever enough or a rustc bug), so we need to
+    /// re-borrow at use time.
+    pub fn new(table: &'a Table, fd: u32) -> Result<Self, Error> {
+        let _ = table.get_file_mut(fd)?.get_cap(FileCaps::POLL_READWRITE)?;
+        Ok(Self {
+            table,
+            fd,
             status: Cell::new(None),
-        }
+        })
+    }
+    /// This accessor could fail if there is an outstanding borrow of the file.
+    pub fn file(&self) -> Result<RefMut<'a, dyn WasiFile>, Error> {
+        self.table
+            .get_file_mut(self.fd)?
+            .get_cap(FileCaps::POLL_READWRITE)
     }
     pub fn complete(&self, size: u64, flags: RwEventFlags) {
         self.status.set(Some(Ok((size, flags))))

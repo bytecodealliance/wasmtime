@@ -32,14 +32,14 @@ impl WasiSched for SyncSched {
         for s in poll.rw_subscriptions() {
             match s {
                 Subscription::Read(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(
+                    let raw_fd = wasi_file_raw_fd(f.file()?.deref()).ok_or(
                         Error::invalid_argument().context("read subscription fd downcast failed"),
                     )?;
                     pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLIN) });
                 }
 
                 Subscription::Write(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(
+                    let raw_fd = wasi_file_raw_fd(f.file()?.deref()).ok_or(
                         Error::invalid_argument().context("write subscription fd downcast failed"),
                     )?;
                     pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLOUT) });
@@ -79,7 +79,11 @@ impl WasiSched for SyncSched {
                 if let Some(revents) = pollfd.revents() {
                     let (nbytes, rwsub) = match rwsub {
                         Subscription::Read(sub) => {
-                            let ready = sub.file.num_ready_bytes().await?;
+                            let ready = sub
+                                .file()
+                                .expect("validated file already")
+                                .num_ready_bytes()
+                                .await?;
                             (std::cmp::max(ready, 1), sub)
                         }
                         Subscription::Write(sub) => (0, sub),
