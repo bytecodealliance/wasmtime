@@ -41,7 +41,7 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleInfo<'a>> {
 
         use wasmparser::Payload::*;
         match payload {
-            Version { .. } => continue,
+            Version { .. } => {}
             TypeSection(types) => type_section(&mut stack, full_wasm, types)?,
             ImportSection(imports) => import_section(&mut stack, full_wasm, imports)?,
             AliasSection(aliases) => alias_section(&mut stack, full_wasm, aliases)?,
