@@ -149,7 +149,7 @@ impl Wizer {
             root.section(&code_modules);
 
             let state_modules =
-                rewrite_state_modules(info, &id_to_module_info, &snapshot.instantiations, 0);
+                rewrite_state_modules(info, &id_to_module_info, &snapshot.instantiations);
             root.section(&state_modules);
         }
 
@@ -804,15 +804,13 @@ fn rewrite_state_modules(
     info: &ModuleInfo,
     id_to_module_info: &Vec<&ModuleInfo>,
     snapshots: &[Snapshot],
-    depth: u32,
 ) -> wasm_encoder::ModuleSection {
     let mut modules = wasm_encoder::ModuleSection::new();
 
     assert_eq!(snapshots.len(), info.instantiations.len());
     for (snapshot, (module_id, _)) in snapshots.iter().zip(info.instantiations.values()) {
         let module_info = &id_to_module_info[usize::try_from(*module_id).unwrap()];
-        let state_module =
-            rewrite_one_state_module(module_info, id_to_module_info, snapshot, depth);
+        let state_module = rewrite_one_state_module(module_info, id_to_module_info, snapshot, 0);
         modules.module(&state_module);
     }
 
