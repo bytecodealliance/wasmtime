@@ -137,8 +137,60 @@ fn type_section<'a>(
             wasmparser::TypeDef::Func(_) | wasmparser::TypeDef::Instance(_) => {
                 info.types.push(ty);
             }
+
+            // We need to disallow module imports, even within nested modules
+            // that only ever have other nested modules supplied as
+            // arguments. Two different modules could be supplied for two
+            // different instantiations of the module-importing module, but then
+            // after we export all modules' globals in our instrumentation
+            // phase, those two different module arguments could become
+            // type-incompatible with each other:
+            //
+            // ```
+            // (module
+            //
+            //   ;; Module A exports and `f` function. Internally it has
+            //   ;; one global.
+            //   (module $A
+            //     (global $g ...)
+            //     (func (export "f") ...))
+            //
+            //   ;; Module B has an identical interface as A. Internally
+            //   ;; it has two globals.
+            //   (module $B
+            //     (global $g ...)
+            //     (global $h ...)
+            //     (func (export "f") ...))
+            //
+            //   ;; Module C imports any module that exports an `f`
+            //   ;; function. It instantiates this imported module.
+            //   (module $C
+            //     (import "env" "module"
+            //       (module (export "f" (func)))
+            //     (instance 0)))
+            //
+            //   ;; C is instantiated with both A and B.
+            //   (instance $C (import "env" "module" $A))
+            //   (instance $C (import "env" "module" $B))
+            // )
+            // ```
+            //
+            // After this instrumentation pass, we need to make module C
+            // transitively export all of the globals from its inner
+            // instances. Which means that the module type used in the module
+            // import needs to specify how many modules are in the imported
+            // module, but in our two instantiations, we have two different
+            // numbers of globals defined in each module! The only way to
+            // resolve this would be to duplicate and specialize module C for
+            // each instantiation, which we don't want to do for complexity and
+            // code size reasons.
+            //
+            // Since module types are only used with importing and exporting
+            // modules, which we don't intend to support as described above, we
+            // can disallow module types to reject all of them in one fell
+            // swoop.
             wasmparser::TypeDef::Module(_) => Err(anyhow::anyhow!(
-                "wizer does not support importing or exporting modules"
+                "wizer does not support importing or exporting modules or module types"
             )
             .context("module types are not supported"))?,
         }
@@ -200,7 +252,7 @@ fn import_section<'a>(
             }
 
             wasmparser::ImportSectionEntryType::Module(_) => {
-                unreachable!("should have been rejected by `check_import_type`")
+                unreachable!()
             }
             wasmparser::ImportSectionEntryType::Event(_) => {
                 unreachable!("should have been rejected by validation")
@@ -223,53 +275,7 @@ fn check_import_type(
 ) -> Result<()> {
     match ty {
         wasmparser::ImportSectionEntryType::Module(_) => {
-            // We need to disallow module imports, even within nested modules
-            // that only ever have other nested modules supplied as
-            // arguments. Two different modules could be supplied for two
-            // different instantiations of the module-importing module, but then
-            // after we export all modules' globals in our instrumentation
-            // phase, those two different module arguments could become
-            // type-incompatible with each other:
-            //
-            // ```
-            // (module
-            //
-            //   ;; Module A exports and `f` function. Internally it has
-            //   ;; one global.
-            //   (module $A
-            //     (global $g ...)
-            //     (func (export "f") ...))
-            //
-            //   ;; Module B has an identical interface as A. Internally
-            //   ;; it has two globals.
-            //   (module $B
-            //     (global $g ...)
-            //     (global $h ...)
-            //     (func (export "f") ...))
-            //
-            //   ;; Module C imports any module that exports an `f`
-            //   ;; function. It instantiates this imported module.
-            //   (module $C
-            //     (import "env" "module"
-            //       (module (export "f" (func)))
-            //     (instance 0)))
-            //
-            //   ;; C is instantiated with both A and B.
-            //   (instance $C (import "env" "module" $A))
-            //   (instance $C (import "env" "module" $B))
-            // )
-            // ```
-            //
-            // After this instrumentation pass, we need to make module C
-            // transitively export all of the globals from its inner
-            // instances. Which means that the module type used in the module
-            // import needs to specify how many modules are in the imported
-            // module, but in our two instantiations, we have two different
-            // numbers of globals defined in each module! The only way to
-            // resolve this would be to duplicate and specialize module C for
-            // each instantiation, which we don't want to do for complexity and
-            // code size reasons.
-            anyhow::bail!("imported modules are not supported by Wizer")
+            unreachable!();
         }
         wasmparser::ImportSectionEntryType::Instance(inst_ty_index) => {
             // We allow importing instances that only export things that are
