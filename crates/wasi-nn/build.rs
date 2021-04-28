@@ -1,8 +1,5 @@
 //! This build script:
 //!  - has the configuration necessary for the wiggle and witx macros.
-
-use std::path::PathBuf;
-
 fn main() {
     // This is necessary for Wiggle/Witx macros.
     let cwd = std::env::current_dir().unwrap();
