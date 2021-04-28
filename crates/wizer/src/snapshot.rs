@@ -79,50 +79,49 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
     let mut memory_index = 0;
     loop {
         let name = format!("__wizer_memory_{}", memory_index);
-        match instance.get_memory(&name) {
+        let memory = match instance.get_memory(&name) {
             None => break,
-            Some(memory) => {
-                memory_mins.push(memory.size());
+            Some(memory) => memory,
+        };
+        memory_mins.push(memory.size());
 
-                let num_wasm_pages = memory.size();
-                let num_native_pages = num_wasm_pages * (WASM_PAGE_SIZE / NATIVE_PAGE_SIZE);
+        let num_wasm_pages = memory.size();
+        let num_native_pages = num_wasm_pages * (WASM_PAGE_SIZE / NATIVE_PAGE_SIZE);
 
-                let memory: &'a [u8] = unsafe {
-                    // Safe because no one else has a (potentially mutable)
-                    // view to this memory and we know the memory will live
-                    // as long as the store is alive.
-                    std::slice::from_raw_parts(memory.data_ptr(), memory.data_size())
-                };
+        let memory: &'a [u8] = unsafe {
+            // Safe because no one else has a (potentially mutable)
+            // view to this memory and we know the memory will live
+            // as long as the store is alive.
+            std::slice::from_raw_parts(memory.data_ptr(), memory.data_size())
+        };
 
-                // Consider each "native" page of the memory. (Scare quotes
-                // because we have no guarantee that anyone isn't using huge
-                // page sizes or something). Process each page in
-                // parallel. If any byte has changed, add the whole page as
-                // a data segment. This means that the resulting Wasm module
-                // should instantiate faster, since there are fewer segments
-                // to bounds check on instantiation. Engines could even
-                // theoretically recognize that each of these segments is
-                // page sized and aligned, and use lazy copy-on-write
-                // initialization of each instance's memory.
-                data_segments.par_extend((0..num_native_pages).into_par_iter().filter_map(|i| {
-                    let start = i * NATIVE_PAGE_SIZE;
-                    let end = ((i + 1) * NATIVE_PAGE_SIZE) as usize;
-                    let page = &memory[start as usize..end];
-                    for byte in page {
-                        if *byte != 0 {
-                            return Some(DataSegment {
-                                memory_index,
-                                offset: start as u32,
-                                data: page,
-                            });
-                        }
-                    }
-                    None
-                }));
-
-                memory_index += 1;
+        // Consider each "native" page of the memory. (Scare quotes
+        // because we have no guarantee that anyone isn't using huge
+        // page sizes or something). Process each page in
+        // parallel. If any byte has changed, add the whole page as
+        // a data segment. This means that the resulting Wasm module
+        // should instantiate faster, since there are fewer segments
+        // to bounds check on instantiation. Engines could even
+        // theoretically recognize that each of these segments is
+        // page sized and aligned, and use lazy copy-on-write
+        // initialization of each instance's memory.
+        data_segments.par_extend((0..num_native_pages).into_par_iter().filter_map(|i| {
+            let start = i * NATIVE_PAGE_SIZE;
+            let end = ((i + 1) * NATIVE_PAGE_SIZE) as usize;
+            let page = &memory[start as usize..end];
+            for byte in page {
+                if *byte != 0 {
+                    return Some(DataSegment {
+                        memory_index,
+                        offset: start as u32,
+                        data: page,
+                    });
+                }
             }
-        }
+            None
+        }));
+
+        memory_index += 1;
     }
 
     // Sort data segments to enforce determinism in the face of the
