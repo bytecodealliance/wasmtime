@@ -616,9 +616,6 @@ fn multithreaded_traps() -> Result<()> {
 
     let handle = std::thread::spawn(move || {
         let instance = instance.inner;
-        unsafe {
-            instance.store().notify_switched_thread();
-        }
         assert!(instance
             .get_typed_func::<(), ()>("run")
             .unwrap()
