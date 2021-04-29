@@ -66,7 +66,7 @@ pub use cap_rand::RngCore;
 pub use clocks::{SystemTimeSpec, WasiClocks, WasiMonotonicClock, WasiSystemClock};
 pub use ctx::{WasiCtx, WasiCtxBuilder};
 pub use dir::WasiDir;
-pub use error::{Error, ErrorExt, ErrorKind};
+pub use error::{Context, Error, ErrorExt, ErrorKind};
 pub use file::WasiFile;
 pub use sched::{Poll, WasiSched};
 pub use string_array::StringArrayError;

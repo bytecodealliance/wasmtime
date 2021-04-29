@@ -2,17 +2,18 @@ use crate::{
     dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
         Advice, FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileEntryMutExt, FileType,
-        Filestat, OFlags, TableFileExt,
+        Filestat, OFlags, TableFileExt, WasiFile,
     },
     sched::{
         subscription::{RwEventFlags, SubscriptionResult},
-        Poll,
+        Poll, Userdata,
     },
     Error, ErrorExt, ErrorKind, SystemTimeSpec, WasiCtx,
 };
 use anyhow::Context;
 use cap_std::time::{Duration, SystemClock};
 use std::cell::{Ref, RefMut};
+use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
 use std::ops::{Deref, DerefMut};
@@ -970,7 +971,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
 
         let table = self.table();
-        let mut poll = Poll::new(&table);
+        let mut sub_fds: HashSet<types::Fd> = HashSet::new();
+        // We need these refmuts to outlive Poll, which will hold the &mut dyn WasiFile inside
+        let mut read_refs: Vec<(RefMut<'_, dyn WasiFile>, Userdata)> = Vec::new();
+        let mut write_refs: Vec<(RefMut<'_, dyn WasiFile>, Userdata)> = Vec::new();
+        let mut poll = Poll::new();
 
         let subs = subs.as_array(nsubscriptions);
         for sub_elem in subs.iter() {
@@ -1008,13 +1013,38 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 },
                 types::SubscriptionU::FdRead(readsub) => {
                     let fd = readsub.file_descriptor;
-                    poll.subscribe_read(u32::from(fd), sub.userdata.into())?;
+                    if sub_fds.contains(&fd) {
+                        return Err(Error::invalid_argument()
+                            .context("Fd can be subscribed to at most once per poll"));
+                    } else {
+                        sub_fds.insert(fd);
+                    }
+                    let file_ref = table
+                        .get_file_mut(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    read_refs.push((file_ref, sub.userdata.into()));
                 }
                 types::SubscriptionU::FdWrite(writesub) => {
                     let fd = writesub.file_descriptor;
-                    poll.subscribe_write(u32::from(fd), sub.userdata.into())?;
+                    if sub_fds.contains(&fd) {
+                        return Err(Error::invalid_argument()
+                            .context("Fd can be subscribed to at most once per poll"));
+                    } else {
+                        sub_fds.insert(fd);
+                    }
+                    let file_ref = table
+                        .get_file_mut(u32::from(fd))?
+                        .get_cap(FileCaps::POLL_READWRITE)?;
+                    write_refs.push((file_ref, sub.userdata.into()));
                 }
             }
+        }
+
+        for (f, ud) in read_refs.iter_mut() {
+            poll.subscribe_read(f.deref_mut(), *ud);
+        }
+        for (f, ud) in write_refs.iter_mut() {
+            poll.subscribe_write(f.deref_mut(), *ud);
         }
 
         self.sched.poll_oneoff(&poll).await?;

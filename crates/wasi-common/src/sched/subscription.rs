@@ -1,10 +1,9 @@
 use crate::clocks::WasiMonotonicClock;
-use crate::file::{FileCaps, FileEntryMutExt, TableFileExt, WasiFile};
-use crate::table::Table;
+use crate::file::WasiFile;
 use crate::Error;
 use bitflags::bitflags;
 use cap_std::time::{Duration, Instant};
-use std::cell::{Cell, RefMut};
+use std::cell::Cell;
 
 bitflags! {
     pub struct RwEventFlags: u32 {
@@ -13,29 +12,16 @@ bitflags! {
 }
 
 pub struct RwSubscription<'a> {
-    table: &'a Table,
-    fd: u32,
+    pub file: &'a mut dyn WasiFile,
     status: Cell<Option<Result<(u64, RwEventFlags), Error>>>,
 }
 
 impl<'a> RwSubscription<'a> {
-    /// Create an RwSubscription. This constructor checks to make sure the file we need exists, and
-    /// has the correct rights. But, we can't hold onto the WasiFile RefMut inside this structure
-    /// (Pat can't convince borrow checker, either not clever enough or a rustc bug), so we need to
-    /// re-borrow at use time.
-    pub fn new(table: &'a Table, fd: u32) -> Result<Self, Error> {
-        let _ = table.get_file_mut(fd)?.get_cap(FileCaps::POLL_READWRITE)?;
-        Ok(Self {
-            table,
-            fd,
+    pub fn new(file: &'a mut dyn WasiFile) -> Self {
+        Self {
+            file,
             status: Cell::new(None),
-        })
-    }
-    /// This accessor could fail if there is an outstanding borrow of the file.
-    pub fn file(&self) -> Result<RefMut<'a, dyn WasiFile>, Error> {
-        self.table
-            .get_file_mut(self.fd)?
-            .get_cap(FileCaps::POLL_READWRITE)
+        }
     }
     pub fn complete(&self, size: u64, flags: RwEventFlags) {
         self.status.set(Some(Ok((size, flags))))
@@ -43,8 +29,8 @@ impl<'a> RwSubscription<'a> {
     pub fn error(&self, error: Error) {
         self.status.set(Some(Err(error)))
     }
-    pub fn result(self) -> Option<Result<(u64, RwEventFlags), Error>> {
-        self.status.into_inner()
+    pub fn result(&self) -> Option<Result<(u64, RwEventFlags), Error>> {
+        self.status.take()
     }
 }
 
@@ -83,7 +69,7 @@ pub enum SubscriptionResult {
 }
 
 impl SubscriptionResult {
-    pub fn from_subscription(s: Subscription) -> Option<SubscriptionResult> {
+    pub fn from_subscription(s: &Subscription) -> Option<SubscriptionResult> {
         match s {
             Subscription::Read(s) => s.result().map(SubscriptionResult::Read),
             Subscription::Write(s) => s.result().map(SubscriptionResult::Write),

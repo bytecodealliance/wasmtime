@@ -1,6 +1,5 @@
 use cap_std::time::Duration;
 use std::convert::TryInto;
-use std::ops::Deref;
 use std::os::unix::io::{AsRawFd, RawFd};
 use wasi_common::{
     file::WasiFile,
@@ -23,23 +22,22 @@ impl SyncSched {
 
 #[wiggle::async_trait]
 impl WasiSched for SyncSched {
-    async fn poll_oneoff<'a>(&self, poll: &'_ Poll<'a>) -> Result<(), Error> {
+    async fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error> {
         if poll.is_empty() {
             return Ok(());
         }
         let mut pollfds = Vec::new();
-        let timeout = poll.earliest_clock_deadline();
         for s in poll.rw_subscriptions() {
             match s {
                 Subscription::Read(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file()?.deref()).ok_or(
+                    let raw_fd = wasi_file_raw_fd(f.file).ok_or(
                         Error::invalid_argument().context("read subscription fd downcast failed"),
                     )?;
                     pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLIN) });
                 }
 
                 Subscription::Write(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file()?.deref()).ok_or(
+                    let raw_fd = wasi_file_raw_fd(f.file).ok_or(
                         Error::invalid_argument().context("write subscription fd downcast failed"),
                     )?;
                     pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLOUT) });
@@ -49,7 +47,7 @@ impl WasiSched for SyncSched {
         }
 
         let ready = loop {
-            let poll_timeout = if let Some(t) = timeout {
+            let poll_timeout = if let Some(t) = poll.earliest_clock_deadline() {
                 let duration = t.duration_until().unwrap_or(Duration::from_secs(0));
                 (duration.as_millis() + 1) // XXX try always rounding up?
                     .try_into()
@@ -79,11 +77,7 @@ impl WasiSched for SyncSched {
                 if let Some(revents) = pollfd.revents() {
                     let (nbytes, rwsub) = match rwsub {
                         Subscription::Read(sub) => {
-                            let ready = sub
-                                .file()
-                                .expect("validated file already")
-                                .num_ready_bytes()
-                                .await?;
+                            let ready = sub.file.num_ready_bytes().await?;
                             (std::cmp::max(ready, 1), sub)
                         }
                         Subscription::Write(sub) => (0, sub),
@@ -101,7 +95,7 @@ impl WasiSched for SyncSched {
                 }
             }
         } else {
-            timeout
+            poll.earliest_clock_deadline()
                 .expect("timed out")
                 .result()
                 .expect("timer deadline is past")

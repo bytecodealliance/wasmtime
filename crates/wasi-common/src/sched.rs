@@ -1,8 +1,7 @@
 use crate::clocks::WasiMonotonicClock;
-use crate::table::Table;
-use crate::{Error, ErrorExt};
+use crate::file::WasiFile;
+use crate::Error;
 use cap_std::time::Instant;
-use std::collections::HashSet;
 pub mod subscription;
 pub use cap_std::time::Duration;
 
@@ -10,11 +9,12 @@ use subscription::{MonotonicClockSubscription, RwSubscription, Subscription, Sub
 
 #[wiggle::async_trait]
 pub trait WasiSched {
-    async fn poll_oneoff<'a>(&self, poll: &Poll<'a>) -> Result<(), Error>;
+    async fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error>;
     async fn sched_yield(&self) -> Result<(), Error>;
     async fn sleep(&self, duration: Duration) -> Result<(), Error>;
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Userdata(u64);
 impl From<u64> for Userdata {
     fn from(u: u64) -> Userdata {
@@ -28,19 +28,15 @@ impl From<Userdata> for u64 {
     }
 }
 
+pub type PollResults = Vec<(SubscriptionResult, Userdata)>;
+
 pub struct Poll<'a> {
-    table: &'a Table,
-    fds: HashSet<u32>,
     subs: Vec<(Subscription<'a>, Userdata)>,
 }
 
 impl<'a> Poll<'a> {
-    pub fn new(table: &'a Table) -> Self {
-        Self {
-            table,
-            fds: HashSet::new(),
-            subs: Vec::new(),
-        }
+    pub fn new() -> Self {
+        Self { subs: Vec::new() }
     }
     pub fn subscribe_monotonic_clock(
         &mut self,
@@ -58,36 +54,18 @@ impl<'a> Poll<'a> {
             ud,
         ));
     }
-    pub fn subscribe_read(&mut self, fd: u32, ud: Userdata) -> Result<(), Error> {
-        if self.fds.contains(&fd) {
-            return Err(
-                Error::invalid_argument().context("Fd can be subscribed to at most once per poll")
-            );
-        } else {
-            self.fds.insert(fd);
-        }
+    pub fn subscribe_read(&mut self, file: &'a mut dyn WasiFile, ud: Userdata) {
         self.subs
-            .push((Subscription::Read(RwSubscription::new(self.table, fd)?), ud));
-        Ok(())
+            .push((Subscription::Read(RwSubscription::new(file)), ud));
     }
-    pub fn subscribe_write(&mut self, fd: u32, ud: Userdata) -> Result<(), Error> {
-        if self.fds.contains(&fd) {
-            return Err(
-                Error::invalid_argument().context("Fd can be subscribed to at most once per poll")
-            );
-        } else {
-            self.fds.insert(fd);
-        }
-        self.subs.push((
-            Subscription::Write(RwSubscription::new(self.table, fd)?),
-            ud,
-        ));
-        Ok(())
-    }
-    pub fn results(self) -> Vec<(SubscriptionResult, Userdata)> {
+    pub fn subscribe_write(&mut self, file: &'a mut dyn WasiFile, ud: Userdata) {
         self.subs
-            .into_iter()
-            .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, ud)))
+            .push((Subscription::Write(RwSubscription::new(file)), ud));
+    }
+    pub fn results(&self) -> Vec<(SubscriptionResult, Userdata)> {
+        self.subs
+            .iter()
+            .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, *ud)))
             .collect()
     }
     pub fn is_empty(&self) -> bool {
