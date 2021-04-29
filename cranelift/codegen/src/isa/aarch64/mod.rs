@@ -69,7 +69,7 @@ impl MachBackend for AArch64Backend {
         let flags = self.flags();
         let vcode = self.compile_vcode(func, flags.clone())?;
 
-        let buffer = vcode.emit();
+        let (buffer, bb_starts, bb_edges) = vcode.emit();
         let frame_size = vcode.frame_size();
         let stackslot_offsets = vcode.stackslot_offsets().clone();
 
@@ -87,6 +87,8 @@ impl MachBackend for AArch64Backend {
             disasm,
             value_labels_ranges: Default::default(),
             stackslot_offsets,
+            bb_starts,
+            bb_edges,
         })
     }
 
