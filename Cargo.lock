@@ -191,30 +191,6 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.55.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75b13ce559e6433d360c26305643803cb52cfbabbc2b9c47ce04a58493dfb443"
-dependencies = [
- "bitflags",
- "cexpr",
- "cfg-if 0.1.10",
- "clang-sys",
- "clap",
- "env_logger 0.7.1",
- "lazy_static",
- "lazycell",
- "log",
- "peeking_take_while",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "which",
-]
-
-[[package]]
-name = "bindgen"
 version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd4865004a46a0aafb2a0a5eb19d3c9fc46ee5f063a6cfc605c69ac9ecf5263d"
@@ -1730,22 +1706,30 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openvino"
-version = "0.1.8"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43eeb44285b7ce8e2012b92bec32968622e1dad452e812e6edea9e001e5e9410"
+checksum = "0cb74b3d8c653f7a9928bda494d329e6363ea0b428d3a3e5805b45ebb74ace76"
 dependencies = [
  "openvino-sys",
  "thiserror",
 ]
 
 [[package]]
-name = "openvino-sys"
-version = "0.1.8"
+name = "openvino-finder"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fb64bef270a1ff665b0b2e28ebfa213e6205a007ce88223d020730225d6008f"
+checksum = "426587a131841eb1e1111b0fea96cbd4fd0fd5d7b6526fb9c41400587d1c525c"
+
+[[package]]
+name = "openvino-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83d5e5d5e913f4e9aa42b2a7ae9c8719aedb4bc0eb443bf92f07d9ee9a05e7b1"
 dependencies = [
- "bindgen 0.55.1",
  "cmake",
+ "lazy_static",
+ "libloading",
+ "openvino-finder",
 ]
 
 [[package]]
@@ -2984,7 +2968,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ada4f4ae167325015f52cc65f9fb6c251b868d8fb3b6dd0ce2d60e497c4870a"
 dependencies = [
- "bindgen 0.57.0",
+ "bindgen",
  "cc",
  "cfg-if 0.1.10",
 ]
@@ -3602,15 +3586,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ec280a739b69173e0ffd12c1658507996836ba4e992ed9bc1e5385a0bd72a02"
 dependencies = [
  "wast 35.0.2",
-]
-
-[[package]]
-name = "which"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
-dependencies = [
- "libc",
 ]
 
 [[package]]

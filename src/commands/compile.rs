@@ -28,7 +28,7 @@ lazy_static::lazy_static! {
             Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
             \n  \
             wasmtime compile --target x86_64-unknown-linux --cranelift-enable skylake foo.wasm\n",
-            crate::WASM_FEATURES.as_str()
+            crate::FLAG_EXPLANATIONS.as_str()
         )
     };
 }

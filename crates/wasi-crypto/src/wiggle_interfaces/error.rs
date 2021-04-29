@@ -1,4 +1,4 @@
-use super::{guest_types, WasiCryptoCtx};
+use super::guest_types;
 
 use std::num::TryFromIntError;
 use wasi_crypto::CryptoError;
