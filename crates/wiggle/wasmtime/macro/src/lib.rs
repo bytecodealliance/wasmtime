@@ -101,12 +101,10 @@ fn generate_module(
     let mut ctor_externs = Vec::new();
     let mut host_funcs = Vec::new();
 
-    let mut requires_dummy_executor = false;
-
     for f in module.funcs() {
         let asyncness = async_conf.is_async(module.name.as_str(), f.name.as_str());
         match asyncness {
-            Asyncness::Blocking => requires_dummy_executor = true,
+            Asyncness::Blocking => {}
             Asyncness::Async => {
                 assert!(
                     cfg!(feature = "async"),
@@ -164,12 +162,6 @@ contained in the `cx` parameter.",
             Self::#adder_func(config, #module, #field);
         }
     });
-
-    let dummy_executor = if requires_dummy_executor {
-        dummy_executor()
-    } else {
-        quote!()
-    };
 
     quote! {
         #type_docs
@@ -233,8 +225,6 @@ contained in the `cx` parameter.",
             }
 
             #(#fns)*
-
-            #dummy_executor
         }
     }
 }
@@ -250,6 +240,7 @@ fn generate_func(
     ctors: &mut Vec<TokenStream2>,
     host_funcs: &mut Vec<(witx::Id, TokenStream2)>,
 ) {
+    let rt = names.runtime_mod();
     let name_ident = names.func(&func.name);
 
     let (params, results) = func.wasm_signature();
@@ -329,7 +320,7 @@ fn generate_func(
                 let #name_ident = wasmtime::Func::wrap(
                     store,
                     move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
-                        Self::run_in_dummy_executor(Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*))
+                        unsafe { #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*)) }
                     }
                 );
             });
@@ -381,7 +372,7 @@ fn generate_func(
                             .store()
                             .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
                             .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
-                        Self::run_in_dummy_executor(Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*))
+                        unsafe { #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*)) }
                     },
                 );
             }
@@ -403,46 +394,4 @@ fn generate_func(
         }
     };
     host_funcs.push((func.name.clone(), host_wrapper));
-}
-
-fn dummy_executor() -> TokenStream2 {
-    quote! {
-        fn run_in_dummy_executor<F: std::future::Future>(future: F) -> F::Output {
-            use std::pin::Pin;
-            use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-
-            let mut f = Pin::from(Box::new(future));
-            let waker = dummy_waker();
-            let mut cx = Context::from_waker(&waker);
-            match f.as_mut().poll(&mut cx) {
-                Poll::Ready(val) => return val,
-                Poll::Pending => {
-                    panic!("Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store")
-                }
-            }
-
-            fn dummy_waker() -> Waker {
-                return unsafe { Waker::from_raw(clone(5 as *const _)) };
-
-                unsafe fn clone(ptr: *const ()) -> RawWaker {
-                    assert_eq!(ptr as usize, 5);
-                    const VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
-                    RawWaker::new(ptr, &VTABLE)
-                }
-
-                unsafe fn wake(ptr: *const ()) {
-                    assert_eq!(ptr as usize, 5);
-                }
-
-                unsafe fn wake_by_ref(ptr: *const ()) {
-                    assert_eq!(ptr as usize, 5);
-                }
-
-                unsafe fn drop(ptr: *const ()) {
-                    assert_eq!(ptr as usize, 5);
-                }
-            }
-
-        }
-    }
 }
