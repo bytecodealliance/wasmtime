@@ -130,6 +130,15 @@ impl JITBuilder {
     }
 }
 
+/// A pending update to the GOT.
+struct GotUpdate {
+    /// The entry that is to be updated.
+    entry: NonNull<AtomicPtr<u8>>,
+
+    /// The new value of the entry.
+    ptr: *const u8,
+}
+
 /// A `JITModule` implements `Module` and emits code and data into memory where it can be
 /// directly called and accessed.
 ///
@@ -150,6 +159,9 @@ pub struct JITModule {
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
+
+    /// Updates to the GOT awaiting relocations to be made and region protections to be set
+    pending_got_updates: Vec<GotUpdate>,
 }
 
 /// A handle to allow freeing memory allocated by the `Module`.
@@ -420,6 +432,10 @@ impl JITModule {
         // Now that we're done patching, prepare the memory for execution!
         self.memory.readonly.set_readonly();
         self.memory.code.set_readable_and_executable();
+
+        for update in self.pending_got_updates.drain(..) {
+            unsafe { update.entry.as_ref() }.store(update.ptr as *mut _, Ordering::SeqCst);
+        }
     }
 
     /// Create a new `JITModule`.
@@ -451,6 +467,7 @@ impl JITModule {
             compiled_data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
+            pending_got_updates: Vec::new(),
         };
 
         // Pre-create a GOT and PLT entry for each libcall.
@@ -655,9 +672,10 @@ impl Module for JITModule {
         });
 
         if self.isa.flags().is_pic() {
-            unsafe {
-                (*self.function_got_entries[id].unwrap().as_ptr()).store(ptr, Ordering::SeqCst);
-            }
+            self.pending_got_updates.push(GotUpdate {
+                entry: self.function_got_entries[id].unwrap(),
+                ptr,
+            })
         }
 
         if self.hotswap_enabled {
@@ -727,9 +745,10 @@ impl Module for JITModule {
         });
 
         if self.isa.flags().is_pic() {
-            unsafe {
-                (*self.function_got_entries[id].unwrap().as_ptr()).store(ptr, Ordering::SeqCst);
-            }
+            self.pending_got_updates.push(GotUpdate {
+                entry: self.function_got_entries[id].unwrap(),
+                ptr,
+            })
         }
 
         if self.hotswap_enabled {
@@ -809,9 +828,10 @@ impl Module for JITModule {
         self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
         self.data_objects_to_finalize.push(id);
         if self.isa.flags().is_pic() {
-            unsafe {
-                (*self.data_object_got_entries[id].unwrap().as_ptr()).store(ptr, Ordering::SeqCst);
-            }
+            self.pending_got_updates.push(GotUpdate {
+                entry: self.data_object_got_entries[id].unwrap(),
+                ptr,
+            })
         }
 
         Ok(())
