@@ -512,24 +512,28 @@ where
             }
         };
     }
+
     // Find all landing pads by scanning bytes, do not care about
     // false location at this moment.
     // Looks hacky but it is fast; does not need to be really exact.
-    for i in 0..buf.len() - 2 {
-        let op = buf[i];
-        if op == gimli::constants::DW_OP_bra.0 || op == gimli::constants::DW_OP_skip.0 {
-            // TODO fix for big-endian
-            let offset = i16::from_le_bytes([buf[i + 1], buf[i + 2]]);
-            let origin = i + 3;
-            // Discarding out-of-bounds jumps (also some of falsely detected ops)
-            if (offset >= 0 && offset as usize + origin <= buf.len())
-                || (offset < 0 && -offset as usize <= origin)
-            {
-                let target = buf.len() as isize - origin as isize - offset as isize;
-                jump_targets.insert(target as u64, JumpTargetMarker::new());
+    if buf.len() > 2 {
+        for i in 0..buf.len() - 2 {
+            let op = buf[i];
+            if op == gimli::constants::DW_OP_bra.0 || op == gimli::constants::DW_OP_skip.0 {
+                // TODO fix for big-endian
+                let offset = i16::from_le_bytes([buf[i + 1], buf[i + 2]]);
+                let origin = i + 3;
+                // Discarding out-of-bounds jumps (also some of falsely detected ops)
+                if (offset >= 0 && offset as usize + origin <= buf.len())
+                    || (offset < 0 && -offset as usize <= origin)
+                {
+                    let target = buf.len() as isize - origin as isize - offset as isize;
+                    jump_targets.insert(target as u64, JumpTargetMarker::new());
+                }
             }
         }
     }
+
     while !pc.is_empty() {
         let unread_bytes = pc.len().into_u64();
         if let Some(marker) = jump_targets.get(&unread_bytes) {
