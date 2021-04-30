@@ -1047,7 +1047,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             poll.subscribe_write(f.deref_mut(), *ud);
         }
 
-        self.sched.poll_oneoff(&poll).await?;
+        self.sched.poll_oneoff(&mut poll).await?;
 
         let results = poll.results();
         let num_results = results.len();

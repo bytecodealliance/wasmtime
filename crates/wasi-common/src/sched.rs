@@ -9,7 +9,7 @@ use subscription::{MonotonicClockSubscription, RwSubscription, Subscription, Sub
 
 #[wiggle::async_trait]
 pub trait WasiSched {
-    async fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error>;
+    async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error>;
     async fn sched_yield(&self) -> Result<(), Error>;
     async fn sleep(&self, duration: Duration) -> Result<(), Error>;
 }
@@ -62,16 +62,16 @@ impl<'a> Poll<'a> {
         self.subs
             .push((Subscription::Write(RwSubscription::new(file)), ud));
     }
-    pub fn results(&self) -> Vec<(SubscriptionResult, Userdata)> {
+    pub fn results(self) -> Vec<(SubscriptionResult, Userdata)> {
         self.subs
-            .iter()
-            .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, *ud)))
+            .into_iter()
+            .filter_map(|(s, ud)| SubscriptionResult::from_subscription(s).map(|r| (r, ud)))
             .collect()
     }
     pub fn is_empty(&self) -> bool {
         self.subs.is_empty()
     }
-    pub fn earliest_clock_deadline(&'a self) -> Option<&MonotonicClockSubscription<'a>> {
+    pub fn earliest_clock_deadline(&self) -> Option<&MonotonicClockSubscription<'a>> {
         self.subs
             .iter()
             .filter_map(|(s, _ud)| match s {
@@ -80,8 +80,8 @@ impl<'a> Poll<'a> {
             })
             .min_by(|a, b| a.deadline.cmp(&b.deadline))
     }
-    pub fn rw_subscriptions(&'a self) -> impl Iterator<Item = &Subscription<'a>> {
-        self.subs.iter().filter_map(|(s, _ud)| match s {
+    pub fn rw_subscriptions<'b>(&'b mut self) -> impl Iterator<Item = &'b mut Subscription<'a>> {
+        self.subs.iter_mut().filter_map(|(s, _ud)| match s {
             Subscription::Read { .. } | Subscription::Write { .. } => Some(s),
             _ => None,
         })

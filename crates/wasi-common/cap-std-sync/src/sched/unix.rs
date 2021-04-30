@@ -22,7 +22,7 @@ impl SyncSched {
 
 #[wiggle::async_trait]
 impl WasiSched for SyncSched {
-    async fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error> {
+    async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
         if poll.is_empty() {
             return Ok(());
         }

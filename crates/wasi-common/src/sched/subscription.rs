@@ -69,7 +69,7 @@ pub enum SubscriptionResult {
 }
 
 impl SubscriptionResult {
-    pub fn from_subscription(s: &Subscription) -> Option<SubscriptionResult> {
+    pub fn from_subscription(s: Subscription) -> Option<SubscriptionResult> {
         match s {
             Subscription::Read(s) => s.result().map(SubscriptionResult::Read),
             Subscription::Write(s) => s.result().map(SubscriptionResult::Write),

@@ -849,7 +849,7 @@ impl wasi_unstable::WasiUnstable for WasiCtx {
             }
         }
 
-        self.sched.poll_oneoff(&poll).await?;
+        self.sched.poll_oneoff(&mut poll).await?;
 
         let results = poll.results();
         let num_results = results.len();
