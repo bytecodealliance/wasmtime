@@ -1,12 +1,12 @@
 #[cfg(unix)]
 mod unix;
 #[cfg(unix)]
-use unix::poll_oneoff;
+pub use unix::poll_oneoff;
 
 #[cfg(windows)]
 mod windows;
 #[cfg(windows)]
-use windows::poll_oneoff;
+pub use windows::poll_oneoff;
 
 use wasi_common::{
     sched::{Duration, Poll, WasiSched},
@@ -18,7 +18,7 @@ pub fn sched_ctx() -> Box<dyn wasi_common::WasiSched> {
 
     #[wiggle::async_trait]
     impl WasiSched for AsyncSched {
-        async fn poll_oneoff<'a>(&self, poll: &'_ Poll<'a>) -> Result<(), Error> {
+        async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
             poll_oneoff(poll).await
         }
         async fn sched_yield(&self) -> Result<(), Error> {

@@ -64,7 +64,7 @@ impl File {
 
     async fn metadata(&self) -> Result<cap_std::fs::Metadata, Error> {
         use unsafe_io::AsUnsafeFile;
-        asyncify(|| Ok(cap_std::fs::Metadata::from_file(&self.0.as_file_view())?)).await
+        asyncify(|| Ok(cap_std::fs::Metadata::from_file(&self.0.as_file_view())?))
     }
 }
 
@@ -86,7 +86,7 @@ impl WasiFile for File {
         Ok(filetype_from(&meta.file_type()))
     }
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
-        let fdflags = asyncify(|| self.0.get_fd_flags()).await?;
+        let fdflags = asyncify(|| self.0.get_fd_flags())?;
         Ok(from_sysif_fdflags(fdflags))
     }
     async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
@@ -97,7 +97,7 @@ impl WasiFile for File {
         ) {
             return Err(Error::invalid_argument().context("cannot set DSYNC, SYNC, or RSYNC flag"));
         }
-        asyncify(move || self.0.set_fd_flags(to_sysif_fdflags(fdflags))).await?;
+        asyncify(move || self.0.set_fd_flags(to_sysif_fdflags(fdflags)))?;
         Ok(())
     }
     async fn get_filestat(&self) -> Result<Filestat, Error> {
@@ -118,11 +118,11 @@ impl WasiFile for File {
         Ok(())
     }
     async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-        asyncify(move || self.0.advise(offset, len, convert_advice(advice))).await?;
+        asyncify(move || self.0.advise(offset, len, convert_advice(advice)))?;
         Ok(())
     }
     async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-        asyncify(move || self.0.allocate(offset, len)).await?;
+        asyncify(move || self.0.allocate(offset, len))?;
         Ok(())
     }
     async fn set_times(
@@ -133,8 +133,7 @@ impl WasiFile for File {
         asyncify(|| {
             self.0
                 .set_times(convert_systimespec(atime), convert_systimespec(mtime))
-        })
-        .await?;
+        })?;
         Ok(())
     }
     async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
@@ -155,7 +154,7 @@ impl WasiFile for File {
         bufs: &mut [io::IoSliceMut<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
-        let n = asyncify(move || self.0.read_vectored_at(bufs, offset)).await?;
+        let n = asyncify(move || self.0.read_vectored_at(bufs, offset))?;
         Ok(n.try_into()?)
     }
     async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
@@ -169,7 +168,7 @@ impl WasiFile for File {
         bufs: &[io::IoSlice<'a>],
         offset: u64,
     ) -> Result<u64, Error> {
-        let n = asyncify(move || self.0.write_vectored_at(bufs, offset)).await?;
+        let n = asyncify(move || self.0.write_vectored_at(bufs, offset))?;
         Ok(n.try_into()?)
     }
     async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
@@ -177,12 +176,12 @@ impl WasiFile for File {
         Ok(self.0.inner().seek(pos).await?)
     }
     async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
-        let n = asyncify(move || self.0.peek(buf)).await?;
+        let n = asyncify(move || self.0.peek(buf))?;
         Ok(n.try_into()?)
     }
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         use unsafe_io::AsUnsafeFile;
-        asyncify(|| self.0.as_file_view().num_ready_bytes()).await
+        asyncify(|| self.0.as_file_view().num_ready_bytes())
     }
     #[cfg(not(windows))]
     async fn readable(&mut self) -> Result<(), Error> {
@@ -194,9 +193,18 @@ impl WasiFile for File {
         use tokio::io::{unix::AsyncFd, Interest};
         use unsafe_io::os::posish::AsRawFd;
         let rawfd = self.0.as_raw_fd();
-        let asyncfd = AsyncFd::with_interest(rawfd, Interest::READABLE)?;
-        let _ = asyncfd.readable().await?;
-        Ok(())
+        match AsyncFd::with_interest(rawfd, Interest::READABLE) {
+            Ok(asyncfd) => {
+                let _ = asyncfd.readable().await?;
+                Ok(())
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                // if e is EPERM, this file isnt supported by epoll because it is immediately
+                // available for reading:
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
     #[cfg(windows)]
     async fn readable(&mut self) -> Result<(), Error> {
@@ -214,9 +222,18 @@ impl WasiFile for File {
         use tokio::io::{unix::AsyncFd, Interest};
         use unsafe_io::os::posish::AsRawFd;
         let rawfd = self.0.as_raw_fd();
-        let asyncfd = AsyncFd::with_interest(rawfd, Interest::WRITABLE)?;
-        let _ = asyncfd.writable().await?;
-        Ok(())
+        match AsyncFd::with_interest(rawfd, Interest::WRITABLE) {
+            Ok(asyncfd) => {
+                let _ = asyncfd.writable().await?;
+                Ok(())
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                // if e is EPERM, this file isnt supported by epoll because it is immediately
+                // available for writing:
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
     #[cfg(windows)]
     async fn writable(&mut self) -> Result<(), Error> {

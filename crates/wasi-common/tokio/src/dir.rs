@@ -76,7 +76,7 @@ impl WasiDir for Dir {
             return Err(Error::not_supported().context("SYNC family of FdFlags"));
         }
 
-        let f = asyncify(move || self.0.open_with(Path::new(path), &opts)).await?;
+        let f = asyncify(move || self.0.open_with(Path::new(path), &opts))?;
         let mut f = File::from_cap_std(f);
         // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
         if fdflags.contains(FdFlags::NONBLOCK) {
@@ -88,15 +88,15 @@ impl WasiDir for Dir {
     async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
         let path = unsafe { std::mem::transmute::<_, &'static str>(path) };
         let d = if symlink_follow {
-            asyncify(move || self.0.open_dir(Path::new(path))).await?
+            asyncify(move || self.0.open_dir(Path::new(path)))?
         } else {
-            asyncify(move || self.0.open_dir_nofollow(Path::new(path))).await?
+            asyncify(move || self.0.open_dir_nofollow(Path::new(path)))?
         };
         Ok(Box::new(Dir::from_cap_std(d)))
     }
 
     async fn create_dir(&self, path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.create_dir(Path::new(path))).await?;
+        asyncify(|| self.0.create_dir(Path::new(path)))?;
         Ok(())
     }
     async fn readdir(
@@ -106,7 +106,7 @@ impl WasiDir for Dir {
         // cap_std's read_dir does not include . and .., we should prepend these.
         // Why does the Ok contain a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
         // have enough info to make a ReaddirEntity yet.
-        let dir_meta = asyncify(|| self.0.dir_metadata()).await?;
+        let dir_meta = asyncify(|| self.0.dir_metadata())?;
         let rd = vec![
             {
                 let name = ".".to_owned();
@@ -150,24 +150,24 @@ impl WasiDir for Dir {
     }
 
     async fn symlink(&self, src_path: &str, dest_path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.symlink(src_path, dest_path)).await?;
+        asyncify(|| self.0.symlink(src_path, dest_path))?;
         Ok(())
     }
     async fn remove_dir(&self, path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.remove_dir(Path::new(path))).await?;
+        asyncify(|| self.0.remove_dir(Path::new(path)))?;
         Ok(())
     }
 
     async fn unlink_file(&self, path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.remove_file_or_symlink(Path::new(path))).await?;
+        asyncify(|| self.0.remove_file_or_symlink(Path::new(path)))?;
         Ok(())
     }
     async fn read_link(&self, path: &str) -> Result<PathBuf, Error> {
-        let link = asyncify(|| self.0.read_link(Path::new(path))).await?;
+        let link = asyncify(|| self.0.read_link(Path::new(path)))?;
         Ok(link)
     }
     async fn get_filestat(&self) -> Result<Filestat, Error> {
-        let meta = asyncify(|| self.0.dir_metadata()).await?;
+        let meta = asyncify(|| self.0.dir_metadata())?;
         Ok(Filestat {
             device_id: meta.dev(),
             inode: meta.ino(),
@@ -185,9 +185,9 @@ impl WasiDir for Dir {
         follow_symlinks: bool,
     ) -> Result<Filestat, Error> {
         let meta = if follow_symlinks {
-            asyncify(|| self.0.metadata(Path::new(path))).await?
+            asyncify(|| self.0.metadata(Path::new(path)))?
         } else {
-            asyncify(|| self.0.symlink_metadata(Path::new(path))).await?
+            asyncify(|| self.0.symlink_metadata(Path::new(path)))?
         };
         Ok(Filestat {
             device_id: meta.dev(),
@@ -213,8 +213,7 @@ impl WasiDir for Dir {
         asyncify(|| {
             self.0
                 .rename(Path::new(src_path), &dest_dir.0, Path::new(dest_path))
-        })
-        .await?;
+        })?;
         Ok(())
     }
     async fn hard_link(
@@ -229,7 +228,7 @@ impl WasiDir for Dir {
             .ok_or(Error::badf().context("failed downcast to cap-std Dir"))?;
         let src_path = Path::new(src_path);
         let target_path = Path::new(target_path);
-        asyncify(|| self.0.hard_link(src_path, &target_dir.0, target_path)).await?;
+        asyncify(|| self.0.hard_link(src_path, &target_dir.0, target_path))?;
         Ok(())
     }
     async fn set_times(
@@ -253,8 +252,7 @@ impl WasiDir for Dir {
                     convert_systimespec(mtime),
                 )
             }
-        })
-        .await?;
+        })?;
         Ok(())
     }
 }
@@ -270,7 +268,7 @@ fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemT
 #[cfg(test)]
 mod test {
     use super::Dir;
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn scratch_dir() {
         let tempdir = tempfile::Builder::new()
             .prefix("cap-std-sync")
@@ -286,7 +284,7 @@ mod test {
 
     // Readdir does not work on windows, so we won't test it there.
     #[cfg(not(windows))]
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn readdir() {
         use std::collections::HashMap;
         use wasi_common::dir::{ReaddirCursor, ReaddirEntity, WasiDir};

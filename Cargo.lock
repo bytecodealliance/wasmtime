@@ -346,6 +346,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap-tempfile"
+version = "0.13.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d2f6f45ddb06ff26f4cf2ba9838d5826d52e1a5f6b321d71f114bb38cf34a57"
+dependencies = [
+ "cap-std",
+ "rand 0.8.3",
+ "uuid",
+]
+
+[[package]]
 name = "cap-time-ext"
 version = "0.13.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3061,6 +3072,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+dependencies = [
+ "getrandom 0.2.2",
+]
+
+[[package]]
 name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3180,13 +3200,16 @@ dependencies = [
 name = "wasi-tokio"
 version = "0.26.0"
 dependencies = [
+ "anyhow",
  "bitflags",
  "cap-fs-ext",
  "cap-std",
+ "cap-tempfile",
  "cap-time-ext",
  "fs-set-times",
  "lazy_static",
  "libc",
+ "posish",
  "system-interface",
  "tempfile",
  "tokio",

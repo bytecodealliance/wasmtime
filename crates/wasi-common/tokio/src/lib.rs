@@ -1,12 +1,16 @@
 mod dir;
 mod file;
-mod sched;
+pub mod sched;
+pub mod stdio;
 
 use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
-pub use wasi_cap_std_sync::{clocks_ctx, random_ctx, Dir};
+pub use wasi_cap_std_sync::{clocks_ctx, random_ctx};
 use wasi_common::{Error, Table, WasiCtx};
+
+pub use dir::Dir;
+pub use file::File;
 
 use crate::sched::sched_ctx;
 
@@ -81,10 +85,10 @@ impl WasiCtxBuilder {
     }
     pub fn preopened_dir(
         self,
-        dir: Dir,
+        dir: cap_std::fs::Dir,
         guest_path: impl AsRef<Path>,
     ) -> Result<Self, wasi_common::Error> {
-        let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
+        let dir = Box::new(Dir::from_cap_std(dir));
         Ok(WasiCtxBuilder(self.0.preopened_dir(dir, guest_path)?))
     }
     pub fn build(self) -> Result<WasiCtx, wasi_common::Error> {
@@ -92,19 +96,10 @@ impl WasiCtxBuilder {
     }
 }
 
-pub(crate) async fn asyncify<'a, F, T>(f: F) -> Result<T, Error>
+pub(crate) fn asyncify<'a, F, T>(f: F) -> Result<T, Error>
 where
     F: FnOnce() -> Result<T, std::io::Error> + Send + 'a,
     T: Send + 'static,
 {
-    // spawn_blocking requires a 'static function, but since we await on the
-    // JoinHandle the lifetime of the spawn will be no longer than this function's body
-    let f: Box<dyn FnOnce() -> Result<T, std::io::Error> + Send + 'a> = Box::new(f);
-    let f = unsafe {
-        std::mem::transmute::<_, Box<dyn FnOnce() -> Result<T, std::io::Error> + Send + 'static>>(f)
-    };
-    match tokio::task::spawn_blocking(|| f()).await {
-        Ok(res) => Ok(res?),
-        Err(_) => panic!("spawn_blocking died"),
-    }
+    tokio::task::block_in_place(f).map_err(Into::into)
 }
