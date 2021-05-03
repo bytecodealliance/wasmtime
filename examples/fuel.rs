@@ -17,12 +17,12 @@ fn main() -> Result<()> {
     // Invoke `fibonacci` export with higher and higher numbers until we exhaust our fuel.
     let fibonacci = instance.get_typed_func::<i32, i32>("fibonacci")?;
     for n in 1.. {
-      let fuel_before = store.fuel_consumed().unwrap();
-      let output = fibonacci.call(n)?;
-      let fuel_consumed = store.fuel_consumed().unwrap() - fuel_before;
+        let fuel_before = store.fuel_consumed().unwrap();
+        let output = fibonacci.call(n)?;
+        let fuel_consumed = store.fuel_consumed().unwrap() - fuel_before;
 
-      println!("fib({}) = {} [consumed {} fuel]", n, output, fuel_consumed);
-      store.add_fuel(fuel_consumed)?;
+        println!("fib({}) = {} [consumed {} fuel]", n, output, fuel_consumed);
+        store.add_fuel(fuel_consumed)?;
     }
     Ok(())
 }
