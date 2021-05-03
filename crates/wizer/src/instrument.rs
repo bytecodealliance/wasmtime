@@ -1,6 +1,6 @@
 //! The initial instrumentation pass.
 
-use crate::info::ModuleInfo;
+use crate::info::{Module, ModuleContext};
 use crate::stack_ext::StackExt;
 use std::convert::TryFrom;
 use wasm_encoder::SectionId;
@@ -59,15 +59,15 @@ use wasm_encoder::SectionId;
 /// export their memories and globals individually, that would disturb the
 /// modules locally defined memoryies' and globals' indices, which would require
 /// rewriting the code section, which would break debug info offsets.
-pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
+pub(crate) fn instrument(cx: &ModuleContext<'_>) -> Vec<u8> {
     log::debug!("Instrumenting the input Wasm");
 
     struct StackEntry<'a> {
-        /// This entry's module info.
-        info: &'a ModuleInfo<'a>,
+        /// This entry's module.
+        module: Module,
 
         /// The work-in-progress encoding of the new, instrumented module.
-        module: wasm_encoder::Module,
+        encoder: wasm_encoder::Module,
 
         /// Sections in this module info that we are iterating over.
         sections: std::slice::Iter<'a, wasm_encoder::RawSection<'a>>,
@@ -78,7 +78,7 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
 
         /// Nested child modules that still need to be instrumented and added to
         /// one of this entry's module's module sections.
-        children: std::slice::Iter<'a, ModuleInfo<'a>>,
+        children: std::slice::Iter<'a, Module>,
 
         /// The current module section we are building for this entry's
         /// module. Only `Some` if we are currently processing this module's
@@ -91,12 +91,13 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
         children_remaining: usize,
     }
 
+    let root = cx.root();
     let mut stack = vec![StackEntry {
-        info: root_info,
-        module: wasm_encoder::Module::new(),
-        sections: root_info.raw_sections.iter(),
+        module: root,
+        encoder: wasm_encoder::Module::new(),
+        sections: root.raw_sections(cx).iter(),
         parent_index: None,
-        children: root_info.modules.iter(),
+        children: root.child_modules(cx).iter(),
         module_section: None,
         children_remaining: 0,
     }];
@@ -113,7 +114,7 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
                 let mut exports = wasm_encoder::ExportSection::new();
 
                 // First, copy over all the original exports.
-                for export in &entry.info.exports {
+                for export in entry.module.exports(cx) {
                     exports.export(
                         export.field,
                         match export.kind {
@@ -144,26 +145,20 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
                 // Now export all of this module's defined globals, memories,
                 // and instantiations under well-known names so we can inspect
                 // them after initialization.
-                for (i, j) in (entry.info.defined_globals_index.unwrap_or(u32::MAX)
-                    ..u32::try_from(entry.info.globals.len()).unwrap())
-                    .enumerate()
-                {
+                for (i, (j, _)) in entry.module.defined_globals(cx).enumerate() {
                     let name = format!("__wizer_global_{}", i);
                     exports.export(&name, wasm_encoder::Export::Global(j));
                 }
-                for (i, j) in (entry.info.defined_memories_index.unwrap_or(u32::MAX)
-                    ..u32::try_from(entry.info.memories.len()).unwrap())
-                    .enumerate()
-                {
+                for (i, (j, _)) in entry.module.defined_memories(cx).enumerate() {
                     let name = format!("__wizer_memory_{}", i);
                     exports.export(&name, wasm_encoder::Export::Memory(j));
                 }
-                for (i, j) in entry.info.instantiations.keys().enumerate() {
+                for (i, j) in entry.module.instantiations(cx).keys().enumerate() {
                     let name = format!("__wizer_instance_{}", i);
                     exports.export(&name, wasm_encoder::Export::Instance(*j));
                 }
 
-                entry.module.section(&exports);
+                entry.encoder.section(&exports);
             }
 
             // Nested module sections need to recursively instrument each child
@@ -186,6 +181,7 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
                     .top_mut()
                     .children
                     .by_ref()
+                    .copied()
                     .take(count)
                     .collect::<Vec<_>>();
 
@@ -202,11 +198,11 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
                         // Reverse so that we pop them off the stack in order.
                         .rev()
                         .map(|c| StackEntry {
-                            info: c,
-                            module: wasm_encoder::Module::new(),
-                            sections: c.raw_sections.iter(),
+                            module: c,
+                            encoder: wasm_encoder::Module::new(),
+                            sections: c.raw_sections(cx).iter(),
                             parent_index,
-                            children: c.modules.iter(),
+                            children: c.child_modules(cx).iter(),
                             module_section: None,
                             children_remaining: 0,
                         }),
@@ -221,9 +217,9 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
                 assert!(entry.module_section.is_none());
                 assert_eq!(entry.children_remaining, 0);
 
-                if entry.info.is_root() {
+                if entry.module.is_root() {
                     assert!(stack.is_empty());
-                    return entry.module.finish();
+                    return entry.encoder.finish();
                 }
 
                 let parent = &mut stack[entry.parent_index.unwrap()];
@@ -231,21 +227,21 @@ pub(crate) fn instrument(root_info: &ModuleInfo) -> Vec<u8> {
                     .module_section
                     .as_mut()
                     .unwrap()
-                    .module(&entry.module);
+                    .module(&entry.encoder);
 
                 assert!(parent.children_remaining > 0);
                 parent.children_remaining -= 1;
 
                 if parent.children_remaining == 0 {
                     let module_section = parent.module_section.take().unwrap();
-                    parent.module.section(&module_section);
+                    parent.encoder.section(&module_section);
                 }
             }
 
             // All other sections don't need instrumentation and can be copied
             // over directly.
             Some(section) => {
-                stack.top_mut().module.section(section);
+                stack.top_mut().encoder.section(section);
             }
         }
     }

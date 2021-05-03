@@ -302,8 +302,8 @@ impl Wizer {
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(&wasm)?;
 
-        let info = parse::parse(wasm)?;
-        let wasm = instrument::instrument(&info);
+        let cx = parse::parse(wasm)?;
+        let wasm = instrument::instrument(&cx);
 
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&wasm) {
@@ -320,7 +320,7 @@ impl Wizer {
 
         let instance = self.initialize(&store, &module)?;
         let snapshot = snapshot::snapshot(&store, &instance);
-        let initialized_wasm = self.rewrite(&snapshot, &info, &renames);
+        let initialized_wasm = self.rewrite(&cx, &snapshot, &renames);
 
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&initialized_wasm) {

@@ -1,36 +1,34 @@
-use crate::info::ModuleInfo;
+use crate::info::{Module, ModuleContext};
 use crate::stack_ext::StackExt;
 use anyhow::{Context, Result};
 use std::convert::TryFrom;
 use wasm_encoder::SectionId;
 use wasmparser::{SectionReader, SectionWithLimitedItems};
 
+struct StackEntry {
+    parser: wasmparser::Parser,
+    module: Module,
+}
+
 /// Parse the given Wasm bytes into a `ModuleInfo` tree.
-pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleInfo<'a>> {
+pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>> {
     log::debug!("Parsing the input Wasm");
+
+    let mut cx = ModuleContext::new();
 
     // The wasm we are currently parsing. This is advanced as the parser
     // consumes input.
     let mut wasm = full_wasm;
 
-    // The counter for making unique-within-the-whole-bundle module identifiers
-    // (i.e. the module's pre-order traversal index).
-    let mut id_counter = 0;
-
-    // The stack of module infos we are parsing. As we visit inner modules
-    // during parsing, we push new entries, and when we finish processing them,
-    // we pop them.
-    let mut stack = vec![ModuleInfo::for_root()];
-
-    // Stack of parsers for each module we are parsing. Has a parallel structure
-    // to `stack`.
-    let mut parsers = vec![wasmparser::Parser::new(0)];
+    let mut stack = vec![StackEntry {
+        parser: wasmparser::Parser::new(0),
+        module: cx.root(),
+    }];
 
     loop {
-        assert_eq!(stack.len(), parsers.len());
-
-        let (payload, consumed) = match parsers
+        let (payload, consumed) = match stack
             .top_mut()
+            .parser
             .parse(wasm, true)
             .context("failed to parse Wasm")?
         {
@@ -42,100 +40,110 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleInfo<'a>> {
         use wasmparser::Payload::*;
         match payload {
             Version { .. } => {}
-            TypeSection(types) => type_section(&mut stack, full_wasm, types)?,
-            ImportSection(imports) => import_section(&mut stack, full_wasm, imports)?,
-            AliasSection(aliases) => alias_section(&mut stack, full_wasm, aliases)?,
-            InstanceSection(instances) => instance_section(&mut stack, full_wasm, instances)?,
+            TypeSection(types) => type_section(&mut cx, &mut stack, full_wasm, types)?,
+            ImportSection(imports) => import_section(&mut cx, &mut stack, full_wasm, imports)?,
+            AliasSection(aliases) => alias_section(&mut cx, &mut stack, full_wasm, aliases)?,
+            InstanceSection(instances) => {
+                instance_section(&mut cx, &mut stack, full_wasm, instances)?
+            }
             ModuleSectionStart {
                 range,
                 size: _,
                 count: _,
             } => {
-                let info = stack.top_mut();
-                info.add_raw_section(SectionId::Module, range, full_wasm);
+                stack.top_mut().module.add_raw_section(
+                    &mut cx,
+                    SectionId::Module,
+                    range,
+                    full_wasm,
+                );
             }
             ModuleSectionEntry { parser, range: _ } => {
-                id_counter += 1;
-                stack.push(ModuleInfo::for_inner(id_counter));
-                parsers.push(parser);
+                stack.push(StackEntry {
+                    parser,
+                    module: Module::new_defined(&mut cx),
+                });
             }
-            FunctionSection(funcs) => function_section(&mut stack, full_wasm, funcs)?,
-            TableSection(tables) => table_section(&mut stack, full_wasm, tables)?,
-            MemorySection(mems) => memory_section(&mut stack, full_wasm, mems)?,
-            GlobalSection(globals) => global_section(&mut stack, full_wasm, globals)?,
-            ExportSection(exports) => export_section(&mut stack, full_wasm, exports)?,
+            FunctionSection(funcs) => function_section(&mut cx, &mut stack, full_wasm, funcs)?,
+            TableSection(tables) => table_section(&mut cx, &mut stack, full_wasm, tables)?,
+            MemorySection(mems) => memory_section(&mut cx, &mut stack, full_wasm, mems)?,
+            GlobalSection(globals) => global_section(&mut cx, &mut stack, full_wasm, globals)?,
+            ExportSection(exports) => export_section(&mut cx, &mut stack, full_wasm, exports)?,
             StartSection { func: _, range } => {
                 stack
                     .top_mut()
-                    .add_raw_section(SectionId::Start, range, full_wasm)
+                    .module
+                    .add_raw_section(&mut cx, SectionId::Start, range, full_wasm)
             }
-            ElementSection(elems) => {
-                stack
-                    .top_mut()
-                    .add_raw_section(SectionId::Element, elems.range(), full_wasm)
-            }
+            ElementSection(elems) => stack.top_mut().module.add_raw_section(
+                &mut cx,
+                SectionId::Element,
+                elems.range(),
+                full_wasm,
+            ),
             DataCountSection { .. } => unreachable!("validation rejects bulk memory"),
-            DataSection(data) => {
-                stack
-                    .top_mut()
-                    .add_raw_section(SectionId::Data, data.range(), full_wasm)
-            }
+            DataSection(data) => stack.top_mut().module.add_raw_section(
+                &mut cx,
+                SectionId::Data,
+                data.range(),
+                full_wasm,
+            ),
             CustomSection { range, .. } => {
                 stack
                     .top_mut()
-                    .add_raw_section(SectionId::Custom, range, full_wasm)
+                    .module
+                    .add_raw_section(&mut cx, SectionId::Custom, range, full_wasm)
             }
             CodeSectionStart {
                 range,
                 count: _,
                 size,
             } => {
-                parsers.top_mut().skip_section();
                 wasm = &wasm[usize::try_from(size).unwrap()..];
-                stack
-                    .top_mut()
-                    .add_raw_section(SectionId::Code, range, full_wasm)
+                let entry = stack.top_mut();
+                entry.parser.skip_section();
+                entry
+                    .module
+                    .add_raw_section(&mut cx, SectionId::Code, range, full_wasm)
             }
             CodeSectionEntry(_) => unreachable!(),
             UnknownSection { .. } => anyhow::bail!("unknown section"),
             EventSection(_) => anyhow::bail!("exceptions are not supported yet"),
             End => {
-                let info = stack.pop().unwrap();
-                parsers.pop();
+                let entry = stack.pop().unwrap();
 
                 // If we finished parsing the root Wasm module, then we're done.
-                if info.is_root() {
+                if entry.module.is_root() {
                     assert!(stack.is_empty());
-                    assert!(parsers.is_empty());
-                    return Ok(info);
+                    return Ok(cx);
                 }
 
                 // Otherwise, we need to add this module to its parent's module
                 // section.
                 let parent = stack.top_mut();
-                parent.modules.push(info);
+                parent.module.push_child_module(&mut cx, entry.module);
             }
         }
     }
 }
 
 fn type_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut types: wasmparser::TypeSectionReader<'a>,
 ) -> anyhow::Result<()> {
-    let info = stack.top_mut();
-    info.add_raw_section(SectionId::Type, types.range(), full_wasm);
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Type, types.range(), full_wasm);
 
     // Parse out types, as we will need them later when processing
     // instance imports.
     let count = usize::try_from(types.get_count()).unwrap();
-    info.types.reserve(count);
     for _ in 0..count {
         let ty = types.read()?;
         match ty {
             wasmparser::TypeDef::Func(_) | wasmparser::TypeDef::Instance(_) => {
-                info.types.push(ty);
+                module.push_type(cx, ty);
             }
 
             // We need to disallow module imports, even within nested modules
@@ -190,7 +198,7 @@ fn type_section<'a>(
             // can disallow module types to reject all of them in one fell
             // swoop.
             wasmparser::TypeDef::Module(_) => Err(anyhow::anyhow!(
-                "wizer does not support importing or exporting modules or module types"
+                "wizer does not support importing or exporting modules"
             )
             .context("module types are not supported"))?,
         }
@@ -200,13 +208,16 @@ fn type_section<'a>(
 }
 
 fn import_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut imports: wasmparser::ImportSectionReader<'a>,
 ) -> anyhow::Result<()> {
+    let module = stack.top().module;
     stack
         .top_mut()
-        .add_raw_section(SectionId::Import, imports.range(), full_wasm);
+        .module
+        .add_raw_section(cx, SectionId::Import, imports.range(), full_wasm);
 
     let mut instance_import_count = 0;
 
@@ -214,8 +225,6 @@ fn import_section<'a>(
     let count = imports.get_count();
     for _ in 0..count {
         let imp = imports.read()?;
-        stack.top_mut().imports.push(imp);
-        check_import_type(&stack.top().types, stack.top().is_root(), &imp.ty)?;
 
         if imp.module.starts_with("__wizer_")
             || imp.field.map_or(false, |f| f.starts_with("__wizer_"))
@@ -225,46 +234,18 @@ fn import_section<'a>(
             );
         }
 
-        // Add the import to the appropriate index space for our current module.
-        match imp.ty {
-            wasmparser::ImportSectionEntryType::Memory(ty) => {
-                assert!(stack.top().defined_memories_index.is_none());
-                stack.top_mut().memories.push(ty);
-            }
-            wasmparser::ImportSectionEntryType::Global(ty) => {
-                assert!(stack.top().defined_globals_index.is_none());
-                stack.top_mut().globals.push(ty);
-            }
-            wasmparser::ImportSectionEntryType::Instance(ty_idx) => {
-                let info = stack.top_mut();
-                let ty = match &info.types[usize::try_from(ty_idx).unwrap()] {
-                    wasmparser::TypeDef::Instance(ty) => ty.clone(),
-                    _ => unreachable!(),
-                };
-                info.instances.push(ty);
-                instance_import_count += 1;
-            }
-            wasmparser::ImportSectionEntryType::Function(func_ty) => {
-                stack.top_mut().functions.push(func_ty);
-            }
-            wasmparser::ImportSectionEntryType::Table(ty) => {
-                stack.top_mut().tables.push(ty);
-            }
-
-            wasmparser::ImportSectionEntryType::Module(_) => {
-                unreachable!()
-            }
-            wasmparser::ImportSectionEntryType::Event(_) => {
-                unreachable!("should have been rejected by validation")
-            }
+        check_import_type(
+            &stack.top().module.types(cx),
+            stack.top().module.is_root(),
+            &imp.ty,
+        )?;
+        if let wasmparser::ImportSectionEntryType::Instance(_) = imp.ty {
+            instance_import_count += 1;
         }
+        module.push_import(cx, imp);
     }
 
-    stack
-        .top_mut()
-        .instance_import_counts
-        .push(instance_import_count);
-
+    module.push_instance_import_count(cx, instance_import_count);
     Ok(())
 }
 
@@ -319,13 +300,13 @@ fn check_import_type(
 }
 
 fn alias_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut aliases: wasmparser::AliasSectionReader<'a>,
 ) -> anyhow::Result<()> {
-    stack
-        .top_mut()
-        .add_raw_section(SectionId::Alias, aliases.range(), full_wasm);
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Alias, aliases.range(), full_wasm);
 
     // Clone any aliases over into this module's index spaces.
     for _ in 0..aliases.get_count() {
@@ -336,22 +317,26 @@ fn alias_section<'a>(
                 index,
             } => {
                 let relative_depth = usize::try_from(*relative_depth).unwrap();
-                let index = usize::try_from(*index).unwrap();
                 // NB: `- 2` rather than `- 1` because
                 // `relative_depth=0` means this module's immediate
                 // parent, not this module itself.
-                let ty = stack[stack.len() - 2 - relative_depth].types[index].clone();
-                stack.top_mut().types.push(ty);
+                let ty = stack[stack.len() - 2 - relative_depth]
+                    .module
+                    .type_at(cx, *index)
+                    .clone();
+                module.push_type(cx, ty);
             }
             wasmparser::Alias::OuterModule {
                 relative_depth,
                 index,
             } => {
                 let relative_depth = usize::try_from(*relative_depth).unwrap();
-                let index = usize::try_from(*index).unwrap();
                 // Ditto regarding `- 2`.
-                let module = stack[stack.len() - 2 - relative_depth].modules[index].clone();
-                stack.top_mut().modules.push(module);
+                let alias_of = stack[stack.len() - 2 - relative_depth]
+                    .module
+                    .child_module_at(cx, *index);
+                let aliased = Module::new_aliased(cx, alias_of);
+                module.push_child_module(cx, aliased);
             }
             wasmparser::Alias::InstanceExport {
                 instance,
@@ -362,50 +347,40 @@ fn alias_section<'a>(
                     anyhow::bail!("exported modules are not supported yet")
                 }
                 wasmparser::ExternalKind::Instance => {
-                    let info = stack.top_mut();
-                    let inst_ty_idx = match info.instance_export(*instance, export) {
+                    let inst_ty_idx = match module.instance_export(cx, *instance, export) {
                         Some(wasmparser::ImportSectionEntryType::Instance(i)) => i,
                         _ => unreachable!(),
                     };
-                    let inst_ty = match &info.types[usize::try_from(inst_ty_idx).unwrap()] {
-                        wasmparser::TypeDef::Instance(ty) => ty.clone(),
-                        _ => unreachable!(),
-                    };
-                    info.instances.push(inst_ty);
+                    let inst_ty = module.instance_type_at(cx, inst_ty_idx).clone();
+                    module.push_aliased_instance(cx, inst_ty);
                 }
                 wasmparser::ExternalKind::Function => {
-                    let info = stack.top_mut();
-                    let func_ty_idx = match info.instance_export(*instance, export) {
+                    let func_ty_idx = match module.instance_export(cx, *instance, export) {
                         Some(wasmparser::ImportSectionEntryType::Function(i)) => i,
                         _ => unreachable!(),
                     };
-                    info.functions.push(func_ty_idx);
+                    module.push_function(cx, func_ty_idx);
                 }
                 wasmparser::ExternalKind::Table => {
-                    let info = stack.top_mut();
-                    let table_ty = match info.instance_export(*instance, export) {
+                    let table_ty = match module.instance_export(cx, *instance, export) {
                         Some(wasmparser::ImportSectionEntryType::Table(ty)) => ty,
                         _ => unreachable!(),
                     };
-                    info.tables.push(table_ty);
+                    module.push_table(cx, table_ty);
                 }
                 wasmparser::ExternalKind::Memory => {
-                    let info = stack.top_mut();
-                    assert!(info.defined_memories_index.is_none());
-                    let ty = match info.instance_export(*instance, export) {
+                    let ty = match module.instance_export(cx, *instance, export) {
                         Some(wasmparser::ImportSectionEntryType::Memory(ty)) => ty,
                         _ => unreachable!(),
                     };
-                    info.memories.push(ty);
+                    module.push_imported_memory(cx, ty);
                 }
                 wasmparser::ExternalKind::Global => {
-                    let info = stack.top_mut();
-                    assert!(info.defined_globals_index.is_none());
-                    let ty = match info.instance_export(*instance, export) {
+                    let ty = match module.instance_export(cx, *instance, export) {
                         Some(wasmparser::ImportSectionEntryType::Global(ty)) => ty,
                         _ => unreachable!(),
                     };
-                    info.globals.push(ty);
+                    module.push_imported_global(cx, ty);
                 }
                 wasmparser::ExternalKind::Event => {
                     unreachable!("validation should reject the exceptions proposal")
@@ -413,136 +388,118 @@ fn alias_section<'a>(
                 wasmparser::ExternalKind::Type => unreachable!("can't export types"),
             },
         }
-        stack.top_mut().aliases.push(alias);
+        module.push_alias(cx, alias);
     }
 
     Ok(())
 }
 
 fn instance_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut instances: wasmparser::InstanceSectionReader<'a>,
 ) -> anyhow::Result<()> {
-    stack
-        .top_mut()
-        .add_raw_section(SectionId::Instance, instances.range(), full_wasm);
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Instance, instances.range(), full_wasm);
 
     // Record the instantiations made in this module, and which modules were
     // instantiated.
-    let info = stack.top_mut();
     for _ in 0..instances.get_count() {
         let inst = instances.read()?;
-        let module_index: usize = usize::try_from(inst.module()).unwrap();
-        let module = &info.modules[module_index];
-        let module_id = module.id;
-        let inst_ty = module.instance_type();
+        let module_index = inst.module();
+        let child_module = module.child_module_at(cx, module_index);
+        let inst_ty = child_module.instance_type(cx);
 
-        let mut import_args_reader = inst.args()?;
-        let import_args_count = usize::try_from(import_args_reader.get_count()).unwrap();
-        let mut import_args = Vec::with_capacity(import_args_count);
-        for _ in 0..import_args_count {
-            import_args.push(import_args_reader.read()?);
+        let mut instance_args_reader = inst.args()?;
+        let instance_args_count = usize::try_from(instance_args_reader.get_count()).unwrap();
+        let mut instance_args = Vec::with_capacity(instance_args_count);
+        for _ in 0..instance_args_count {
+            instance_args.push(instance_args_reader.read()?);
         }
 
-        info.instantiations.insert(
-            u32::try_from(info.instances.len()).unwrap(),
-            (module_id, import_args),
-        );
-        info.instances.push(inst_ty);
+        module.push_defined_instance(cx, inst_ty, child_module, instance_args);
     }
 
     Ok(())
 }
 
 fn function_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut funcs: wasmparser::FunctionSectionReader<'a>,
 ) -> anyhow::Result<()> {
-    stack
-        .top_mut()
-        .add_raw_section(SectionId::Function, funcs.range(), full_wasm);
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Function, funcs.range(), full_wasm);
 
-    let info = stack.top_mut();
     let count = usize::try_from(funcs.get_count()).unwrap();
-    info.functions.reserve(count);
     for _ in 0..count {
         let ty = funcs.read()?;
-        info.functions.push(ty);
+        module.push_function(cx, ty);
     }
     Ok(())
 }
 
 fn table_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut tables: wasmparser::TableSectionReader<'a>,
 ) -> anyhow::Result<()> {
-    stack
-        .top_mut()
-        .add_raw_section(SectionId::Table, tables.range(), full_wasm);
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Table, tables.range(), full_wasm);
 
-    let info = stack.top_mut();
     let count = usize::try_from(tables.get_count()).unwrap();
-    info.tables.reserve(count);
     for _ in 0..count {
-        info.tables.push(tables.read()?);
+        module.push_table(cx, tables.read()?);
     }
     Ok(())
 }
 
 fn memory_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut mems: wasmparser::MemorySectionReader<'a>,
 ) -> anyhow::Result<()> {
-    let info = stack.top_mut();
-    info.add_raw_section(SectionId::Memory, mems.range(), full_wasm);
-
-    assert!(info.defined_memories_index.is_none());
-    info.defined_memories_index = Some(u32::try_from(info.memories.len()).unwrap());
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Memory, mems.range(), full_wasm);
 
     let count = usize::try_from(mems.get_count()).unwrap();
-    info.memories.reserve(count);
     for _ in 0..count {
         let m = mems.read()?;
-        info.memories.push(m);
+        module.push_defined_memory(cx, m);
     }
     Ok(())
 }
 
 fn global_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut globals: wasmparser::GlobalSectionReader<'a>,
 ) -> anyhow::Result<()> {
-    let info = stack.top_mut();
-    info.add_raw_section(SectionId::Global, globals.range(), full_wasm);
-
-    assert!(info.defined_globals_index.is_none());
-    info.defined_globals_index = Some(u32::try_from(info.globals.len()).unwrap());
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Global, globals.range(), full_wasm);
 
     let count = usize::try_from(globals.get_count()).unwrap();
-    info.globals.reserve(count);
     for _ in 0..count {
         let g = globals.read()?;
-        info.globals.push(g.ty);
+        module.push_defined_global(cx, g.ty);
     }
-
     Ok(())
 }
 
 fn export_section<'a>(
-    stack: &mut Vec<ModuleInfo<'a>>,
+    cx: &mut ModuleContext<'a>,
+    stack: &mut Vec<StackEntry>,
     full_wasm: &'a [u8],
     mut exports: wasmparser::ExportSectionReader<'a>,
 ) -> anyhow::Result<()> {
-    stack
-        .top_mut()
-        .add_raw_section(SectionId::Export, exports.range(), full_wasm);
+    let module = stack.top().module;
+    module.add_raw_section(cx, SectionId::Export, exports.range(), full_wasm);
 
-    let info = stack.top_mut();
     for _ in 0..exports.get_count() {
         let export = exports.read()?;
 
@@ -564,7 +521,7 @@ fn export_section<'a>(
             | wasmparser::ExternalKind::Memory
             | wasmparser::ExternalKind::Global
             | wasmparser::ExternalKind::Instance => {
-                info.exports.push(export.clone());
+                module.push_export(cx, export);
             }
         }
     }

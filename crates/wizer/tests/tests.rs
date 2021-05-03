@@ -505,6 +505,41 @@ fn start_sections_in_nested_modules() -> anyhow::Result<()> {
 }
 
 #[test]
+fn outer_module_alias() -> anyhow::Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (module $A
+    (global (export "g") (mut i32) (i32.const 0))
+  )
+
+  (module $B
+    (alias outer 0 0 (module $A))
+    (instance $a (instantiate $A))
+    (func (export "init")
+      i32.const 42
+      global.set (global $a "g")
+    )
+    (func (export "run") (result i32)
+      global.get (global $a "g")
+    )
+  )
+  (instance $b (instantiate $B))
+
+  (func (export "wizer.initialize")
+    call (func $b "init")
+  )
+  (func (export "run") (result i32)
+    call (func $b "run")
+  )
+)
+"#,
+    )
+}
+
+#[test]
 fn rust_regex() -> anyhow::Result<()> {
     run_wasm(
         &[wasmtime::Val::I32(13)],

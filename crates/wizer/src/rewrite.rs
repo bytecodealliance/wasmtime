@@ -2,7 +2,11 @@
 
 mod renumbering;
 
-use crate::{info::ModuleInfo, snapshot::Snapshot, translate, FuncRenames, Wizer};
+use crate::{
+    info::{Module, ModuleContext},
+    snapshot::Snapshot,
+    translate, FuncRenames, Wizer,
+};
 use renumbering::Renumbering;
 use std::{convert::TryFrom, iter};
 use wasm_encoder::SectionId;
@@ -118,54 +122,53 @@ impl Wizer {
     /// for those lifted instantiations, and the easiest way to do that is to
     /// flatten the code module tree (as opposed to re-exporting the nested
     /// modules under well-known symbols). The pre-order traversal ensures that
-    /// the `ModuleInfo::id` we assigned during the instrumentation phase
-    /// matches the module's place in the index space. The state modules,
-    /// however, remain a nested tree, and we emit them in a traversal of the
-    /// `Snapshot` instance tree. This is safe because, unlike code modules,
-    /// each state module is only instantiated exactly once. The instantiations'
-    /// references to nested modules become outer aliases pointing to the
-    /// module's position in the parent's flat sequence of nested modules.
+    /// the `Module::id` we assigned during the instrumentation phase matches
+    /// the module's place in the index space. The state modules, however,
+    /// remain a nested tree, and we emit them in a traversal of the `Snapshot`
+    /// instance tree. This is safe because, unlike code modules, each state
+    /// module is only instantiated exactly once. The instantiations' references
+    /// to nested modules become outer aliases pointing to the module's position
+    /// in the parent's flat sequence of nested modules.
     pub(crate) fn rewrite(
         &self,
+        cx: &ModuleContext,
         snapshot: &Snapshot,
-        info: &ModuleInfo,
         renames: &FuncRenames,
     ) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
+        let root_info = cx.root();
         let mut root = wasm_encoder::Module::new();
 
-        let types = make_complete_type_section(info);
+        let types = make_complete_type_section(cx, root_info);
         root.section(&types);
 
-        let mut id_to_module_info = vec![];
-        make_id_to_module_info(&mut id_to_module_info, info);
-
-        let (code_modules, num_code_modules) = rewrite_code_modules(info, &id_to_module_info);
+        let (code_modules, num_code_modules) = rewrite_code_modules(cx);
         // Only add the module section if there are multiple code modules,
         // so that we avoid introducing the module section when module
         // linking isn't in use.
         if num_code_modules > 0 {
             root.section(&code_modules);
 
-            let state_modules =
-                rewrite_state_modules(info, &id_to_module_info, &snapshot.instantiations);
+            let state_modules = rewrite_state_modules(cx, &snapshot.instantiations);
             root.section(&state_modules);
         }
 
-        self.rewrite_root(&mut root, info, snapshot, renames, num_code_modules);
+        self.rewrite_root(cx, &mut root, snapshot, renames, num_code_modules);
 
         root.finish()
     }
 
     fn rewrite_root(
         &self,
+        cx: &ModuleContext,
         root: &mut wasm_encoder::Module,
-        root_info: &ModuleInfo,
         snapshot: &Snapshot,
         renames: &FuncRenames,
         num_code_modules: u32,
     ) {
+        let root_info = cx.root();
+
         // Encode the initialized data segments from the snapshot rather
         // than the original, uninitialized data segments.
         let mut data_section = if snapshot.data_segments.is_empty() {
@@ -198,11 +201,11 @@ impl Wizer {
         // instance numbering.
         let mut instance_renumbering = Renumbering::default();
 
-        let mut instance_import_counts = root_info.instance_import_counts.iter().copied();
-        let mut instantiations = root_info.instantiations.values().enumerate();
-        let mut aliases = root_info.aliases.iter();
+        let mut instance_import_counts = root_info.instance_import_counts(cx).iter().copied();
+        let mut instantiations = root_info.instantiations(cx).values().enumerate();
+        let mut aliases = root_info.aliases(cx).iter();
 
-        for section in &root_info.raw_sections {
+        for section in root_info.raw_sections(cx) {
             match section {
                 // Some tools expect the name custom section to come last, even
                 // though custom sections are allowed in any order. Therefore,
@@ -259,7 +262,7 @@ impl Wizer {
                     let count = wasmparser::InstanceSectionReader::new(s.data, 0)
                         .unwrap()
                         .get_count();
-                    for (nth_defined_inst, (module_id, instance_args)) in instantiations
+                    for (nth_defined_inst, (module, instance_args)) in instantiations
                         .by_ref()
                         .take(usize::try_from(count).unwrap())
                     {
@@ -295,7 +298,7 @@ impl Wizer {
                             arg
                         }))
                         .collect();
-                        instances.instantiate(module_id - 1, args);
+                        instances.instantiate(module.pre_order_index() - 1, args);
                         instance_renumbering.define_both();
                     }
                     root.section(&instances);
@@ -352,9 +355,12 @@ impl Wizer {
                 // memory.
                 s if s.id == SectionId::Memory.into() => {
                     let mut memories = wasm_encoder::MemorySection::new();
-                    assert_eq!(root_info.defined_memories_len(), snapshot.memory_mins.len());
-                    for (mem, new_min) in root_info
-                        .defined_memories()
+                    assert_eq!(
+                        root_info.defined_memories_len(cx),
+                        snapshot.memory_mins.len()
+                    );
+                    for ((_, mem), new_min) in root_info
+                        .defined_memories(cx)
                         .zip(snapshot.memory_mins.iter().copied())
                     {
                         let mut mem = translate::memory_type(mem);
@@ -368,7 +374,9 @@ impl Wizer {
                 // rather than the original values.
                 s if s.id == SectionId::Global.into() => {
                     let mut globals = wasm_encoder::GlobalSection::new();
-                    for (glob_ty, val) in root_info.defined_globals().zip(snapshot.globals.iter()) {
+                    for ((_, glob_ty), val) in
+                        root_info.defined_globals(cx).zip(snapshot.globals.iter())
+                    {
                         let glob_ty = translate::global_type(glob_ty);
                         globals.global(
                             glob_ty,
@@ -392,7 +400,7 @@ impl Wizer {
                 // requested renames.
                 s if s.id == SectionId::Export.into() => {
                     let mut exports = wasm_encoder::ExportSection::new();
-                    for export in &root_info.exports {
+                    for export in root_info.exports(cx) {
                         if export.field == self.init_func {
                             continue;
                         }
@@ -460,14 +468,11 @@ fn is_name_section(s: &wasm_encoder::RawSection) -> bool {
 ///
 /// Returns the modules encoded in a module section and total number of code
 /// modules defined.
-fn rewrite_code_modules(
-    root_info: &ModuleInfo,
-    id_to_module_info: &Vec<&ModuleInfo>,
-) -> (wasm_encoder::ModuleSection, u32) {
+fn rewrite_code_modules(cx: &ModuleContext) -> (wasm_encoder::ModuleSection, u32) {
     let mut modules = wasm_encoder::ModuleSection::new();
     let mut num_code_modules = 0;
 
-    root_info.pre_order(|info| {
+    cx.root().pre_order(cx, |info| {
         // The root module is handled by `rewrite_root`; we are only dealing
         // with nested children here.
         if info.is_root() {
@@ -509,8 +514,8 @@ fn rewrite_code_modules(
         // avoid renumbering types, we do a first pass over this module's types
         // and build out a full type section with the same numbering as the
         // original module, and then append the state import's type at the end.
-        let mut types = make_complete_type_section(info);
-        let import = make_state_import(info, &mut types, id_to_module_info);
+        let mut types = make_complete_type_section(cx, info);
+        let import = make_state_import(cx, info, &mut types);
         module.section(&types);
         module.section(&import);
 
@@ -522,10 +527,10 @@ fn rewrite_code_modules(
         // imports. We do *not* add all imports all at once. This is because
         // imports and aliases might be interleaved, and adding all imports all
         // at once could perturb entity numbering.
-        let mut sections = info.raw_sections.iter();
-        let mut imports = info.imports.iter();
-        let mut instantiations = 0..info.instantiations.len();
-        let mut aliases = info.aliases.iter();
+        let mut sections = info.raw_sections(cx).iter();
+        let mut imports = info.imports(cx).iter();
+        let mut instantiations = 0..info.instantiations(cx).len();
+        let mut aliases = info.aliases(cx).iter();
         let mut first_non_initial_section = None;
         for section in sections.by_ref() {
             match section {
@@ -624,28 +629,23 @@ fn rewrite_code_modules(
         // numbering. Therefore we add these aliases here, after we've processed
         // the initial sections, but before we start with the rest of the
         // sections.
-        if let Some(defined_memories_index) = info.defined_memories_index {
+        if info.defined_memories_index(cx).is_some() {
             let mut section = wasm_encoder::AliasSection::new();
-            let num_defined_memories =
-                info.memories.len() - usize::try_from(defined_memories_index).unwrap();
-            for mem in 0..num_defined_memories {
+            for (i, _) in info.defined_memories(cx).enumerate() {
                 // Our state instance is always instance 0.
                 let from_instance = 0;
-                let name = format!("__wizer_memory_{}", mem);
+                let name = format!("__wizer_memory_{}", i);
                 section.instance_export(from_instance, wasm_encoder::ItemKind::Memory, &name);
             }
             module.section(&section);
         }
 
         // Globals are handled the same way as memories.
-        if let Some(defined_globals_index) = info.defined_globals_index {
+        if info.defined_globals_index(cx).is_some() {
             let mut section = wasm_encoder::AliasSection::new();
-            let num_defined_globals =
-                info.globals.len() - usize::try_from(defined_globals_index).unwrap();
-            for mem in 0..num_defined_globals {
-                // Our state instance is always instance 0.
+            for (i, _) in info.defined_globals(cx).enumerate() {
                 let from_instance = 0;
-                let name = format!("__wizer_global_{}", mem);
+                let name = format!("__wizer_global_{}", i);
                 section.instance_export(from_instance, wasm_encoder::ItemKind::Global, &name);
             }
             module.section(&section);
@@ -682,22 +682,12 @@ fn rewrite_code_modules(
     (modules, num_code_modules)
 }
 
-/// Flatten the `ModuleInfo` tree into a vector that maps each module id
-/// (i.e. pre-order index) to the associated module info.
-fn make_id_to_module_info<'a>(id_to_info: &mut Vec<&'a ModuleInfo<'a>>, info: &'a ModuleInfo<'a>) {
-    debug_assert_eq!(u32::try_from(id_to_info.len()).unwrap(), info.id);
-    id_to_info.push(info);
-    for m in &info.modules {
-        make_id_to_module_info(id_to_info, m);
-    }
-}
-
 /// Make a single complete type section for the given module info, regardless of
 /// how many initial type sections these types might have been defined within in
 /// the original module's serialization.
-fn make_complete_type_section(info: &ModuleInfo) -> wasm_encoder::TypeSection {
+fn make_complete_type_section(cx: &ModuleContext, info: Module) -> wasm_encoder::TypeSection {
     let mut types = wasm_encoder::TypeSection::new();
-    for ty in &info.types {
+    for ty in info.types(cx) {
         match ty {
             wasmparser::TypeDef::Func(func_ty) => {
                 types.function(
@@ -726,35 +716,32 @@ fn make_complete_type_section(info: &ModuleInfo) -> wasm_encoder::TypeSection {
 
 /// Make an import section that imports a code module's state instance import.
 fn make_state_import(
-    info: &ModuleInfo,
+    cx: &ModuleContext,
+    info: Module,
     types: &mut wasm_encoder::TypeSection,
-    id_to_module_info: &Vec<&ModuleInfo>,
 ) -> wasm_encoder::ImportSection {
-    let mut num_types = u32::try_from(info.types.len()).unwrap();
+    let mut num_types = u32::try_from(info.types(cx).len()).unwrap();
 
     // Define instance types for each of the instances that we
     // previously instantiated locally so that we can refer to
     // these types in the state instance's type.
     let instance_types = info
-        .instantiations
+        .instantiations(cx)
         .values()
-        .map(|(m, _)| {
-            id_to_module_info[usize::try_from(*m).unwrap()]
-                .define_instance_type(&mut num_types, types)
-        })
+        .map(|(m, _)| m.define_instance_type(cx, &mut num_types, types))
         .collect::<Vec<_>>();
 
     // Define the state instance's type.
     let state_instance_exports = info
-        .defined_globals()
+        .defined_globals(cx)
         .enumerate()
-        .map(|(i, g)| {
+        .map(|(i, (_, g))| {
             (
                 format!("__wizer_global_{}", i),
                 wasm_encoder::EntityType::Global(translate::global_type(g)),
             )
         })
-        .chain(info.defined_memories().enumerate().map(|(i, m)| {
+        .chain(info.defined_memories(cx).enumerate().map(|(i, (_, m))| {
             (
                 format!("__wizer_memory_{}", i),
                 wasm_encoder::EntityType::Memory(translate::memory_type(m)),
@@ -801,16 +788,14 @@ fn make_state_import(
 /// i.e. another recursive invocation of this function that is one frame up the
 /// stack).
 fn rewrite_state_modules(
-    info: &ModuleInfo,
-    id_to_module_info: &Vec<&ModuleInfo>,
+    cx: &ModuleContext,
     snapshots: &[Snapshot],
 ) -> wasm_encoder::ModuleSection {
     let mut modules = wasm_encoder::ModuleSection::new();
 
-    assert_eq!(snapshots.len(), info.instantiations.len());
-    for (snapshot, (module_id, _)) in snapshots.iter().zip(info.instantiations.values()) {
-        let module_info = &id_to_module_info[usize::try_from(*module_id).unwrap()];
-        let state_module = rewrite_one_state_module(module_info, id_to_module_info, snapshot, 0);
+    assert_eq!(snapshots.len(), cx.root().instantiations(cx).len());
+    for (snapshot, (module, _)) in snapshots.iter().zip(cx.root().instantiations(cx).values()) {
+        let state_module = rewrite_one_state_module(cx, *module, snapshot, 0);
         modules.module(&state_module);
     }
 
@@ -818,8 +803,8 @@ fn rewrite_state_modules(
 }
 
 fn rewrite_one_state_module(
-    info: &ModuleInfo,
-    id_to_module_info: &Vec<&ModuleInfo>,
+    cx: &ModuleContext,
+    info: Module,
     snapshot: &Snapshot,
     depth: u32,
 ) -> wasm_encoder::Module {
@@ -828,7 +813,7 @@ fn rewrite_one_state_module(
 
     // If there are nested instantiations, then define the nested state
     // modules and then instantiate them.
-    assert_eq!(info.instantiations.len(), snapshot.instantiations.len());
+    assert_eq!(info.instantiations(cx).len(), snapshot.instantiations.len());
     if !snapshot.instantiations.is_empty() {
         // We create nested instantiations such that each state module has
         // the following module index space:
@@ -856,14 +841,14 @@ fn rewrite_one_state_module(
         // indices.
         let mut instance_renumbering = Renumbering::default();
 
-        let types = make_complete_type_section(&info);
+        let types = make_complete_type_section(cx, info);
         state_module.section(&types);
 
-        let mut instance_import_counts = info.instance_import_counts.iter().copied();
-        let mut aliases = info.aliases.iter();
-        let mut instantiations = info.instantiations.values().enumerate();
+        let mut instance_import_counts = info.instance_import_counts(cx).iter().copied();
+        let mut aliases = info.aliases(cx).iter();
+        let mut instantiations = info.instantiations(cx).values().enumerate();
 
-        for section in info.initial_sections() {
+        for section in info.initial_sections(cx) {
             match section {
                 // Handled by `make_complete_type_section` above.
                 s if s.id == SectionId::Type.into() => continue,
@@ -931,25 +916,24 @@ fn rewrite_one_state_module(
                     let mut alias_section = wasm_encoder::AliasSection::new();
                     let mut instance_section = wasm_encoder::InstanceSection::new();
                     let mut module_section = wasm_encoder::ModuleSection::new();
-                    for (i, (module_id, instance_args)) in instantiations
+                    for (i, (module, instance_args)) in instantiations
                         .by_ref()
                         .take(usize::try_from(count).unwrap())
                     {
                         // Alias this instantiation's code module.
                         //
                         // Because we flatten the code modules into the root
-                        // with a pre-order traversal, the module id is the
-                        // module's pre-order index, and the root module is not
-                        // in the flattened list, this instantiation's code
-                        // module is the `module_id - 1`th module in the root
-                        // module's module index space.
-                        let root_module_index = *module_id - 1;
-                        alias_section.outer_module(depth, root_module_index);
+                        // with a pre-order traversal, and the root module is
+                        // not in the flattened list, this instantiation's code
+                        // module is the `module.pre_order_index() - 1`th module
+                        // in the root module's module index space.
+                        let code_module_index_in_root = module.pre_order_index() - 1;
+                        alias_section.outer_module(depth, code_module_index_in_root);
 
                         // Define the state module for this instantiation.
                         let state_module = rewrite_one_state_module(
-                            id_to_module_info[usize::try_from(*module_id).unwrap()],
-                            id_to_module_info,
+                            cx,
+                            *module,
                             &snapshot.instantiations[i],
                             depth + 1,
                         );
@@ -1011,14 +995,14 @@ fn rewrite_one_state_module(
     }
 
     // Add defined memories.
-    assert_eq!(info.defined_memories_len(), snapshot.memory_mins.len());
-    if info.defined_memories_index.is_some() {
+    assert_eq!(info.defined_memories_len(cx), snapshot.memory_mins.len());
+    if info.defined_memories_index(cx).is_some() {
         let mut memories = wasm_encoder::MemorySection::new();
-        for (i, (new_min, mem)) in snapshot
+        for (i, (new_min, (_, mem))) in snapshot
             .memory_mins
             .iter()
             .copied()
-            .zip(info.defined_memories())
+            .zip(info.defined_memories(cx))
             .enumerate()
         {
             let mut mem = translate::memory_type(mem);
@@ -1037,13 +1021,13 @@ fn rewrite_one_state_module(
     }
 
     // Add defined globals.
-    assert_eq!(info.defined_globals_len(), snapshot.globals.len());
-    if info.defined_globals_index.is_some() {
+    assert_eq!(info.defined_globals_len(cx), snapshot.globals.len());
+    if info.defined_globals_index(cx).is_some() {
         let mut globals = wasm_encoder::GlobalSection::new();
-        for (i, (val, glob_ty)) in snapshot
+        for (i, (val, (_, glob_ty))) in snapshot
             .globals
             .iter()
-            .zip(info.defined_globals())
+            .zip(info.defined_globals(cx))
             .enumerate()
         {
             let glob_ty = translate::global_type(glob_ty);
