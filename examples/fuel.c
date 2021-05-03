@@ -26,6 +26,8 @@ to tweak the `-lpthread` and such annotations.
 static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 int main() {
+  wasmtime_error_t *error = NULL;
+
   wasm_config_t *config = wasm_config_new();
   assert(config != NULL);
   wasmtime_config_consume_fuel_set(config, true);
@@ -35,7 +37,9 @@ int main() {
   assert(engine != NULL);
   wasm_store_t *store = wasm_store_new(engine);
   assert(store != NULL);
-  wasmtime_store_add_fuel(store, 10000);
+  error = wasmtime_store_add_fuel(store, 10000);
+  if (error != NULL)
+    exit_with_error("failed to add fuel", error, NULL);
 
   // Load our input file to parse it next
   FILE* file = fopen("examples/fuel.wat", "r");
@@ -56,7 +60,7 @@ int main() {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t wasm;
-  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
+  error = wasmtime_wat2wasm(&wat, &wasm);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
@@ -100,8 +104,9 @@ int main() {
     assert(results[0].kind == WASM_I32);
     printf("fib(%d) = %d [consumed %lld fuel]\n", n, results[0].of.i32, fuel_after - fuel_before);
 
-    
-    wasmtime_store_add_fuel(store, fuel_after - fuel_before);
+    error = wasmtime_store_add_fuel(store, fuel_after - fuel_before);
+    if (error != NULL)
+      exit_with_error("failed to add fuel", error, NULL);
   }
 
   // Clean up after ourselves at this point
