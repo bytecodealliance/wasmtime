@@ -80,6 +80,7 @@ fn to_object_relocations<'a>(
                 RelocationEncoding::Generic,
                 32,
             ),
+            Reloc::S390xPCRel32Dbl => (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32),
             other => unimplemented!("Unimplemented relocation {:?}", other),
         };
         Some(ObjectRelocation {
@@ -102,6 +103,7 @@ fn to_object_architecture(
         X86_64 => Architecture::X86_64,
         Arm(_) => Architecture::Arm,
         Aarch64(_) => Architecture::Aarch64,
+        S390x => Architecture::S390x,
         architecture => {
             anyhow::bail!("target architecture {:?} is unsupported", architecture,);
         }

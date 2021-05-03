@@ -120,6 +120,7 @@ fn ensure_supported_elf_format(bytes: &mut Vec<u8>) -> Result<Endianness, Error>
 
     match header.e_machine.get(e) {
         EM_X86_64 => (),
+        EM_S390 => (),
         machine => {
             bail!("Unsupported ELF target machine: {:x}", machine);
         }

@@ -153,6 +153,11 @@ cfg_if! {
                     cs.set_skipdata(true).map_err(map_caperr)?;
                     cs
                 }
+                Architecture::S390x {..} => Capstone::new()
+                    .sysz()
+                    .mode(arch::sysz::ArchMode::Default)
+                    .build()
+                    .map_err(map_caperr)?,
                 _ => anyhow::bail!("Unknown ISA"),
             };
 
