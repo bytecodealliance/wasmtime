@@ -38,6 +38,13 @@ wasmparser = "0.78.0"
 wasmtime = "0.26.0"
 wasmtime-wasi = "0.26.0"
 
+# Enable this dependency to get messages with WAT disassemblies when certain
+# internal panics occur.
+[dependencies.wasmprinter]
+version = "0.2.26"
+optional = true
+
+
 [dev-dependencies]
 criterion = "0.3.4"
 env_logger = "0.8.2"

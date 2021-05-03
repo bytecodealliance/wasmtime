@@ -24,6 +24,18 @@ impl<'a> ModuleContext<'a> {
         Module { id: 0 }
     }
 
+    /// Does this context represent a single Wasm module that doesn't use module
+    /// linking, or does it represent a bundle of one or more Wasm modules that
+    /// use module linking?
+    pub fn uses_module_linking(&self) -> bool {
+        self.arena.len() > 1
+            || self.root().initial_sections(self).any(|s| {
+                s.id == SectionId::Alias.into()
+                    || s.id == SectionId::Module.into()
+                    || s.id == SectionId::Instance.into()
+            })
+    }
+
     /// Get a shared reference to the `DefinedModuleInfo` for this module,
     /// following through aliases.
     fn resolve(&self, module: Module) -> &DefinedModuleInfo<'a> {

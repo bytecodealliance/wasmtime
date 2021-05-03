@@ -303,32 +303,47 @@ impl Wizer {
         self.wasm_validate(&wasm)?;
 
         let cx = parse::parse(wasm)?;
-        let wasm = instrument::instrument(&cx);
+        let instrumented_wasm = instrument::instrument(&cx);
 
         if cfg!(debug_assertions) {
-            if let Err(error) = self.wasm_validate(&wasm) {
-                panic!("instrumented Wasm is not valid: {:?}", error);
+            if let Err(error) = self.wasm_validate(&instrumented_wasm) {
+                let wat = if cfg!(feature = "wasmprinter") {
+                    wasmprinter::print_bytes(&wasm)
+                        .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e))
+                } else {
+                    "`wasmprinter` cargo feature is not enabled".into()
+                };
+                panic!(
+                    "instrumented Wasm is not valid: {:?}\n\nWAT:\n{}",
+                    error, wat
+                );
             }
         }
 
         let config = self.wasmtime_config()?;
         let engine = wasmtime::Engine::new(&config)?;
         let store = wasmtime::Store::new(&engine);
-        let module =
-            wasmtime::Module::new(&engine, &wasm).context("failed to compile the Wasm module")?;
+        let module = wasmtime::Module::new(&engine, &instrumented_wasm)
+            .context("failed to compile the Wasm module")?;
         self.validate_init_func(&module)?;
 
         let instance = self.initialize(&store, &module)?;
         let snapshot = snapshot::snapshot(&store, &instance);
-        let initialized_wasm = self.rewrite(&cx, &snapshot, &renames);
+        let rewritten_wasm = self.rewrite(&cx, &snapshot, &renames);
 
         if cfg!(debug_assertions) {
-            if let Err(error) = self.wasm_validate(&initialized_wasm) {
-                panic!("rewritten Wasm is not valid: {:?}", error);
+            if let Err(error) = self.wasm_validate(&rewritten_wasm) {
+                let wat = if cfg!(feature = "wasmprinter") {
+                    wasmprinter::print_bytes(&rewritten_wasm)
+                        .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e))
+                } else {
+                    "`wasmprinter` cargo feature is not enabled".into()
+                };
+                panic!("rewritten Wasm is not valid: {:?}\n\nWAT:\n{}", error, wat);
             }
         }
 
-        Ok(initialized_wasm)
+        Ok(rewritten_wasm)
     }
 
     // NB: keep this in sync with the wasmparser features.
