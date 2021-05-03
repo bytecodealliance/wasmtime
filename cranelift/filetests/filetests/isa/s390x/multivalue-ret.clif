@@ -1,0 +1,79 @@
+test compile
+target s390x
+
+;; Test default (non-SpiderMonkey) ABI.
+function %f1() -> i64, i64, i64, i64 {
+block1:
+  v0 = iconst.i64 1
+  v1 = iconst.i64 2
+  v2 = iconst.i64 3
+  v3 = iconst.i64 4
+  return v0, v1, v2, v3
+}
+
+; check:  lghi %r2, 1
+; nextln: lghi %r3, 2
+; nextln: lghi %r4, 3
+; nextln: lghi %r5, 4
+; nextln: br %r14
+
+function %f1() -> i64, i64, i64, i64, i64, i64 {
+block1:
+  v0 = iconst.i64 1
+  v1 = iconst.i64 2
+  v2 = iconst.i64 3
+  v3 = iconst.i64 4
+  v4 = iconst.i64 5
+  v5 = iconst.i64 6
+  return v0, v1, v2, v3, v4, v5
+}
+
+; check:  stmg %r12, %r15, 96(%r15)
+; nextln: lgr %r14, %r2
+; nextln: lghi %r2, 1
+; nextln: lghi %r3, 2
+; nextln: lghi %r4, 3
+; nextln: lghi %r5, 4
+; nextln: lghi %r13, 5
+; nextln: lghi %r12, 6
+; nextln: stg %r13, 0(%r14)
+; nextln: stg %r12, 8(%r14)
+; nextln: lmg %r12, %r15, 96(%r15)
+; nextln: br %r14
+
+;; Test default (non-SpiderMonkey) ABI.
+function %f3() -> f64, f64, f64, f64 {
+block1:
+  v0 = f64const 0x0.0
+  v1 = f64const 0x1.0
+  v2 = f64const 0x2.0
+  v3 = f64const 0x3.0
+  return v0, v1, v2, v3
+}
+
+; check:  bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
+; nextln: br %r14
+
+function %f4() -> f64, f64, f64, f64, f64, f64 {
+block1:
+  v0 = f64const 0x0.0
+  v1 = f64const 0x1.0
+  v2 = f64const 0x2.0
+  v3 = f64const 0x3.0
+  v4 = f64const 0x4.0
+  v5 = f64const 0x5.0
+  return v0, v1, v2, v3, v4, v5
+}
+
+; check:  bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 4 ; ld %f1, 0(%r1)
+; nextln: bras %r1, 12 ; data.f64 5 ; ld %f3, 0(%r1)
+; nextln: std %f1, 0(%r2)
+; nextln: std %f3, 8(%r2)
+; nextln: br %r14

@@ -1,0 +1,748 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; UEXTEND
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %uextend_i32_i64(i32) -> i64 {
+block0(v0: i32):
+  v1 = uextend.i64 v0
+  return v1
+}
+
+; check:  llgfr %r2, %r2
+; nextln: br %r14
+
+function %uextend_i16_i64(i16) -> i64 {
+block0(v0: i16):
+  v1 = uextend.i64 v0
+  return v1
+}
+
+; check:  llghr %r2, %r2
+; nextln: br %r14
+
+function %uextend_i16_i32(i16) -> i32 {
+block0(v0: i16):
+  v1 = uextend.i32 v0
+  return v1
+}
+
+; check:  llhr %r2, %r2
+; nextln: br %r14
+
+function %uextend_i8_i64(i8) -> i64 {
+block0(v0: i8):
+  v1 = uextend.i64 v0
+  return v1
+}
+
+; check:  llgcr %r2, %r2
+; nextln: br %r14
+
+function %uextend_i8_i32(i8) -> i32 {
+block0(v0: i8):
+  v1 = uextend.i32 v0
+  return v1
+}
+
+; check:  llcr %r2, %r2
+; nextln: br %r14
+
+function %uextend_i8_i16(i8) -> i16 {
+block0(v0: i8):
+  v1 = uextend.i16 v0
+  return v1
+}
+
+; check:  llcr %r2, %r2
+; nextln: br %r14
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SEXTEND
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %sextend_i32_i64(i32) -> i64 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; check:  lgfr %r2, %r2
+; nextln: br %r14
+
+function %sextend_i16_i64(i16) -> i64 {
+block0(v0: i16):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; check:  lghr %r2, %r2
+; nextln: br %r14
+
+function %sextend_i16_i32(i16) -> i32 {
+block0(v0: i16):
+  v1 = sextend.i32 v0
+  return v1
+}
+
+; check:  lhr %r2, %r2
+; nextln: br %r14
+
+function %sextend_i8_i64(i8) -> i64 {
+block0(v0: i8):
+  v1 = sextend.i64 v0
+  return v1
+}
+
+; check:  lgbr %r2, %r2
+; nextln: br %r14
+
+function %sextend_i8_i32(i8) -> i32 {
+block0(v0: i8):
+  v1 = sextend.i32 v0
+  return v1
+}
+
+; check:  lbr %r2, %r2
+; nextln: br %r14
+
+function %sextend_i8_i16(i8) -> i16 {
+block0(v0: i8):
+  v1 = sextend.i16 v0
+  return v1
+}
+
+; check:  lbr %r2, %r2
+; nextln: br %r14
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IREDUCE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %ireduce_i64_i32(i64, i64) -> i32 {
+block0(v0: i64, v1: i64):
+  v2 = ireduce.i32 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %ireduce_i64_i16(i64, i64) -> i16 {
+block0(v0: i64, v1: i64):
+  v2 = ireduce.i16 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %ireduce_i64_i8(i64, i64) -> i8 {
+block0(v0: i64, v1: i64):
+  v2 = ireduce.i8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %ireduce_i32_i16(i32, i32) -> i16 {
+block0(v0: i32, v1: i32):
+  v2 = ireduce.i16 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %ireduce_i32_i8(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+  v2 = ireduce.i8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %ireduce_i16_i8(i16, i16) -> i8 {
+block0(v0: i16, v1: i16):
+  v2 = ireduce.i8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; BEXTEND
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %bextend_b32_b64(b32) -> b64 {
+block0(v0: b32):
+  v1 = bextend.b64 v0
+  return v1
+}
+
+; check:  lgfr %r2, %r2
+; nextln: br %r14
+
+function %bextend_b16_b64(b16) -> b64 {
+block0(v0: b16):
+  v1 = bextend.b64 v0
+  return v1
+}
+
+; check:  lghr %r2, %r2
+; nextln: br %r14
+
+function %bextend_b16_b32(b16) -> b32 {
+block0(v0: b16):
+  v1 = bextend.b32 v0
+  return v1
+}
+
+; check:  lhr %r2, %r2
+; nextln: br %r14
+
+function %bextend_b8_b64(b8) -> b64 {
+block0(v0: b8):
+  v1 = bextend.b64 v0
+  return v1
+}
+
+; check:  lgbr %r2, %r2
+; nextln: br %r14
+
+function %bextend_b8_b32(b8) -> b32 {
+block0(v0: b8):
+  v1 = bextend.b32 v0
+  return v1
+}
+
+; check:  lbr %r2, %r2
+; nextln: br %r14
+
+function %bextend_b8_b16(b8) -> b16 {
+block0(v0: b8):
+  v1 = bextend.b16 v0
+  return v1
+}
+
+; check:  lbr %r2, %r2
+; nextln: br %r14
+
+function %bextend_b1_b64(b1) -> b64 {
+block0(v0: b1):
+  v1 = bextend.b64 v0
+  return v1
+}
+
+; check:  sllg %r2, %r2, 63
+; nextln: srag %r2, %r2, 63
+; nextln: br %r14
+
+function %bextend_b1_b32(b1) -> b32 {
+block0(v0: b1):
+  v1 = bextend.b32 v0
+  return v1
+}
+
+; check:  sllk %r2, %r2, 31
+; nextln: srak %r2, %r2, 31
+; nextln: br %r14
+
+function %bextend_b1_b16(b1) -> b16 {
+block0(v0: b1):
+  v1 = bextend.b16 v0
+  return v1
+}
+
+; check:  sllk %r2, %r2, 31
+; nextln: srak %r2, %r2, 31
+; nextln: br %r14
+
+function %bextend_b1_b8(b1) -> b8 {
+block0(v0: b1):
+  v1 = bextend.b8 v0
+  return v1
+}
+
+; check:  sllk %r2, %r2, 31
+; nextln: srak %r2, %r2, 31
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; BREDUCE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %breduce_b64_b32(b64, b64) -> b32 {
+block0(v0: b64, v1: b64):
+  v2 = breduce.b32 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b64_b16(b64, b64) -> b16 {
+block0(v0: b64, v1: b64):
+  v2 = breduce.b16 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b64_b8(b64, b64) -> b8 {
+block0(v0: b64, v1: b64):
+  v2 = breduce.b8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b64_b1(b64, b64) -> b1 {
+block0(v0: b64, v1: b64):
+  v2 = breduce.b1 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b32_b16(b32, b32) -> b16 {
+block0(v0: b32, v1: b32):
+  v2 = breduce.b16 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b32_b8(b32, b32) -> b8 {
+block0(v0: b32, v1: b32):
+  v2 = breduce.b8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b32_b1(b32, b32) -> b1 {
+block0(v0: b32, v1: b32):
+  v2 = breduce.b1 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b16_b8(b16, b16) -> b8 {
+block0(v0: b16, v1: b16):
+  v2 = breduce.b8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b16_b1(b16, b16) -> b1 {
+block0(v0: b16, v1: b16):
+  v2 = breduce.b1 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %breduce_b8_b1(b8, b8) -> b1 {
+block0(v0: b8, v1: b8):
+  v2 = breduce.b1 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; BMASK
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %bmask_b64_i64(b64, b64) -> i64 {
+block0(v0: b64, v1: b64):
+  v2 = bmask.i64 v1
+  return v2
+}
+
+; check:  lgr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b64_i32(b64, b64) -> i32 {
+block0(v0: b64, v1: b64):
+  v2 = bmask.i32 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b64_i16(b64, b64) -> i16 {
+block0(v0: b64, v1: b64):
+  v2 = bmask.i16 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b64_i8(b64, b64) -> i8 {
+block0(v0: b64, v1: b64):
+  v2 = bmask.i8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b32_i64(b32, b32) -> i64 {
+block0(v0: b32, v1: b32):
+  v2 = bmask.i64 v1
+  return v2
+}
+
+; check:  lgfr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b32_i32(b32, b32) -> i32 {
+block0(v0: b32, v1: b32):
+  v2 = bmask.i32 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b32_i16(b32, b32) -> i16 {
+block0(v0: b32, v1: b32):
+  v2 = bmask.i16 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b32_i8(b32, b32) -> i8 {
+block0(v0: b32, v1: b32):
+  v2 = bmask.i8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b16_i64(b16, b16) -> i64 {
+block0(v0: b16, v1: b16):
+  v2 = bmask.i64 v1
+  return v2
+}
+
+; check:  lghr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b16_i32(b16, b16) -> i32 {
+block0(v0: b16, v1: b16):
+  v2 = bmask.i32 v1
+  return v2
+}
+
+; check:  lhr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b16_i16(b16, b16) -> i16 {
+block0(v0: b16, v1: b16):
+  v2 = bmask.i16 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b16_i8(b16, b16) -> i8 {
+block0(v0: b16, v1: b16):
+  v2 = bmask.i8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b8_i64(b8, b8) -> i64 {
+block0(v0: b8, v1: b8):
+  v2 = bmask.i64 v1
+  return v2
+}
+
+; check:  lgbr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b8_i32(b8, b8) -> i32 {
+block0(v0: b8, v1: b8):
+  v2 = bmask.i32 v1
+  return v2
+}
+
+; check:  lbr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b8_i16(b8, b8) -> i16 {
+block0(v0: b8, v1: b8):
+  v2 = bmask.i16 v1
+  return v2
+}
+
+; check:  lbr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b8_i8(b8, b8) -> i8 {
+block0(v0: b8, v1: b8):
+  v2 = bmask.i8 v1
+  return v2
+}
+
+; check:  lr %r2, %r3
+; nextln: br %r14
+
+function %bmask_b1_i64(b1, b1) -> i64 {
+block0(v0: b1, v1: b1):
+  v2 = bmask.i64 v1
+  return v2
+}
+
+; check:  sllg %r2, %r3, 63
+; nextln: srag %r2, %r2, 63
+; nextln: br %r14
+
+function %bmask_b1_i32(b1, b1) -> i32 {
+block0(v0: b1, v1: b1):
+  v2 = bmask.i32 v1
+  return v2
+}
+
+; check:  sllk %r2, %r3, 31
+; nextln: srak %r2, %r2, 31
+; nextln: br %r14
+
+function %bmask_b1_i16(b1, b1) -> i16 {
+block0(v0: b1, v1: b1):
+  v2 = bmask.i16 v1
+  return v2
+}
+
+; check:  sllk %r2, %r3, 31
+; nextln: srak %r2, %r2, 31
+; nextln: br %r14
+
+function %bmask_b1_i8(b1, b1) -> i8 {
+block0(v0: b1, v1: b1):
+  v2 = bmask.i8 v1
+  return v2
+}
+
+; check:  sllk %r2, %r3, 31
+; nextln: srak %r2, %r2, 31
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; BINT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %bint_b64_i64(b64) -> i64 {
+block0(v0: b64):
+  v1 = bint.i64 v0
+  return v1
+}
+
+; check:  lghi %r3, 1
+; nextln: ngr %r2, %r3
+; nextln: br %r14
+
+function %bint_b64_i32(b64) -> i32 {
+block0(v0: b64):
+  v1 = bint.i32 v0
+  return v1
+}
+
+; check:  nilf %r2, 1
+; nextln: br %r14
+
+function %bint_b64_i16(b64) -> i16 {
+block0(v0: b64):
+  v1 = bint.i16 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b64_i8(b64) -> i8 {
+block0(v0: b64):
+  v1 = bint.i8 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b32_i64(b32) -> i64 {
+block0(v0: b32):
+  v1 = bint.i64 v0
+  return v1
+}
+
+; check:  lghi %r3, 1
+; nextln: ngr %r2, %r3
+; nextln: br %r14
+
+function %bint_b32_i32(b32) -> i32 {
+block0(v0: b32):
+  v1 = bint.i32 v0
+  return v1
+}
+
+; check:  nilf %r2, 1
+; nextln: br %r14
+
+function %bint_b32_i16(b32) -> i16 {
+block0(v0: b32):
+  v1 = bint.i16 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b32_i8(b32) -> i8 {
+block0(v0: b32):
+  v1 = bint.i8 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b16_i64(b16) -> i64 {
+block0(v0: b16):
+  v1 = bint.i64 v0
+  return v1
+}
+
+; check:  lghi %r3, 1
+; nextln: ngr %r2, %r3
+; nextln: br %r14
+
+function %bint_b16_i32(b16) -> i32 {
+block0(v0: b16):
+  v1 = bint.i32 v0
+  return v1
+}
+
+; check:  nilf %r2, 1
+; nextln: br %r14
+
+function %bint_b16_i16(b16) -> i16 {
+block0(v0: b16):
+  v1 = bint.i16 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b16_i8(b16) -> i8 {
+block0(v0: b16):
+  v1 = bint.i8 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b8_i64(b8) -> i64 {
+block0(v0: b8):
+  v1 = bint.i64 v0
+  return v1
+}
+
+; check:  lghi %r3, 1
+; nextln: ngr %r2, %r3
+; nextln: br %r14
+
+function %bint_b8_i32(b8) -> i32 {
+block0(v0: b8):
+  v1 = bint.i32 v0
+  return v1
+}
+
+; check:  nilf %r2, 1
+; nextln: br %r14
+
+function %bint_b8_i16(b8) -> i16 {
+block0(v0: b8):
+  v1 = bint.i16 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b8_i8(b8) -> i8 {
+block0(v0: b8):
+  v1 = bint.i8 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b1_i64(b1) -> i64 {
+block0(v0: b1):
+  v1 = bint.i64 v0
+  return v1
+}
+
+; check:  lghi %r3, 1
+; nextln: ngr %r2, %r3
+; nextln: br %r14
+
+function %bint_b1_i32(b1) -> i32 {
+block0(v0: b1):
+  v1 = bint.i32 v0
+  return v1
+}
+
+; check:  nilf %r2, 1
+; nextln: br %r14
+
+function %bint_b1_i16(b1) -> i16 {
+block0(v0: b1):
+  v1 = bint.i16 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+
+function %bint_b1_i8(b1) -> i8 {
+block0(v0: b1):
+  v1 = bint.i8 v0
+  return v1
+}
+
+; check:  nill %r2, 1
+; nextln: br %r14
+

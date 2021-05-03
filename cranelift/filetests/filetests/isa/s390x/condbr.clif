@@ -1,0 +1,62 @@
+test compile
+target s390x
+
+function %f(i64, i64) -> b1 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  return v2
+}
+
+; check:  clgr %r2, %r3
+; nextln: lhi %r2, 0
+; nextln: lochie %r2, 1
+; nextln: br %r14
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brnz v2, block1
+  jump block2
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+
+block2:
+  v5 = iconst.i64 2
+  return v5
+}
+
+; check: Block 0:
+; check:  clgr %r2, %r3
+; nextln: jge label1 ; jg label2
+; check: Block 1:
+; check:  lghi %r2, 1
+; nextln: br %r14
+; check: Block 2:
+; check:  lghi %r2, 2
+; nextln: br %r14
+
+function %f(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  brnz v2, block1
+  jump block1
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+}
+
+; FIXME: Should optimize away branches
+
+; check: Block 0:
+; check:  clgr %r2, %r3
+; nextln: jge label1 ; jg label2
+; check: Block 1:
+; check:  jg label3
+; check: Block 2:
+; check:  jg label3
+; check: Block 3:
+; check:  lghi %r2, 1
+; nextln: br %r14

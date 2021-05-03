@@ -1,0 +1,113 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CALL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %call(i64) -> i64 {
+    fn0 = %g(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check:  stmg %r14, %r15, 112(%r15)
+; nextln: aghi %r15, -160
+; nextln: virtual_sp_offset_adjust 160
+; nextln: bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
+; nextln: basr %r14, %r3
+; nextln: lmg %r14, %r15, 272(%r15)
+; nextln: br %r14
+
+function %call_uext(i32) -> i64 {
+    fn0 = %g(i32 uext) -> i64
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check:  stmg %r14, %r15, 112(%r15)
+; nextln: aghi %r15, -160
+; nextln: virtual_sp_offset_adjust 160
+; nextln: llgfr %r2, %r2
+; nextln: bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
+; nextln: basr %r14, %r3
+; nextln: lmg %r14, %r15, 272(%r15)
+; nextln: br %r14
+
+function %ret_uext(i32) -> i32 uext {
+block0(v0: i32):
+    return v0
+}
+
+; check:  llgfr %r2, %r2
+; nextln: br %r14
+
+function %call_uext(i32) -> i64 {
+    fn0 = %g(i32 sext) -> i64
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check:  stmg %r14, %r15, 112(%r15)
+; nextln: aghi %r15, -160
+; nextln: virtual_sp_offset_adjust 160
+; nextln: lgfr %r2, %r2
+; nextln: bras %r1, 12 ; data %g + 0 ; lg %r3, 0(%r1)
+; nextln: basr %r14, %r3
+; nextln: lmg %r14, %r15, 272(%r15)
+; nextln: br %r14
+
+function %ret_uext(i32) -> i32 sext {
+block0(v0: i32):
+    return v0
+}
+
+; check:  lgfr %r2, %r2
+; nextln: br %r14
+
+function %call_colocated(i64) -> i64 {
+    fn0 = colocated %g(i64) -> i64
+
+block0(v0: i64):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; check:  stmg %r14, %r15, 112(%r15)
+; nextln: aghi %r15, -160
+; nextln: virtual_sp_offset_adjust 160
+; nextln: brasl %r14, %g
+; nextln: lmg %r14, %r15, 272(%r15)
+; nextln: br %r14
+
+function %f2(i32) -> i64 {
+    fn0 = %g(i32 uext) -> i64
+
+block0(v0: i32):
+    v1 = call fn0(v0)
+    return v1
+}
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CALL_INDIRECT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %call_indirect(i64, i64) -> i64 {
+    sig0 = (i64) -> i64
+block0(v0: i64, v1: i64):
+    v2 = call_indirect.i64 sig0, v1(v0)
+    return v2
+}
+
+; check:  stmg %r14, %r15, 112(%r15)
+; nextln: aghi %r15, -160
+; nextln: virtual_sp_offset_adjust 160
+; nextln: basr %r14, %r3
+; nextln: lmg %r14, %r15, 272(%r15)
+; nextln: br %r14

@@ -62,6 +62,7 @@ unwind = ["gimli"]
 x86 = []
 arm64 = []
 riscv = []
+s390x = []
 arm32 = [] # Work-in-progress codegen backend for ARM.
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
@@ -75,7 +76,8 @@ old-x86-backend = []
 all-arch = [
     "x86",
     "arm64",
-    "riscv"
+    "riscv",
+    "s390x"
 ]
 
 # For dependent crates that want to serialize some parts of cranelift
