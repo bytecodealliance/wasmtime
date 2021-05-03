@@ -72,6 +72,15 @@ impl CompiledBlob {
                         write_unaligned(at as *mut i32, pcrel)
                     };
                 }
+                Reloc::S390xPCRel32Dbl => {
+                    let base = get_address(name);
+                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
+                    let pcrel = i32::try_from(((what as isize) - (at as isize)) >> 1).unwrap();
+                    #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
+                    unsafe {
+                        write_unaligned(at as *mut i32, pcrel)
+                    };
+                }
                 _ => unimplemented!(),
             }
         }

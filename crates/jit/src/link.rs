@@ -111,6 +111,19 @@ fn apply_reloc(
             );
             write_unaligned(reloc_address as *mut u32, reloc_delta_u64 as u32);
         },
+        #[cfg(target_pointer_width = "64")]
+        (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32) => unsafe {
+            let reloc_address = body.add(offset as usize) as usize;
+            let reloc_addend = r.addend() as isize;
+            let reloc_delta_u64 = (target_func_address as u64)
+                .wrapping_sub(reloc_address as u64)
+                .wrapping_add(reloc_addend as u64);
+            assert!(
+                (reloc_delta_u64 as isize) >> 1 <= i32::max_value() as isize,
+                "relocation too large to fit in i32"
+            );
+            write_unaligned(reloc_address as *mut u32, (reloc_delta_u64 >> 1) as u32);
+        },
         (RelocationKind::Elf(elf::R_AARCH64_CALL26), RelocationEncoding::Generic, 32) => unsafe {
             let reloc_address = body.add(offset as usize) as usize;
             let reloc_addend = r.addend() as isize;
