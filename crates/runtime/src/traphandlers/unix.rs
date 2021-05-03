@@ -47,8 +47,8 @@ pub unsafe fn platform_init() {
     // Handle `unreachable` instructions which execute `ud2` right now
     register(&mut PREV_SIGILL, libc::SIGILL);
 
-    // x86 uses SIGFPE to report division by zero
-    if cfg!(target_arch = "x86") || cfg!(target_arch = "x86_64") {
+    // x86 and s390x use SIGFPE to report division by zero
+    if cfg!(target_arch = "x86") || cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
         register(&mut PREV_SIGFPE, libc::SIGFPE);
     }
 
@@ -85,7 +85,7 @@ unsafe extern "C" fn trap_handler(
         // Otherwise flag ourselves as handling a trap, do the trap
         // handling, and reset our trap handling flag. Then we figure
         // out what to do based on the result of the trap handling.
-        let pc = get_pc(context);
+        let pc = get_pc(context, signum);
         let jmp_buf = info.jmp_buf_if_trap(pc, |handler| handler(signum, siginfo, context));
 
         // Figure out what to do based on the result of this handling of
@@ -127,7 +127,7 @@ unsafe extern "C" fn trap_handler(
     }
 }
 
-unsafe fn get_pc(cx: *mut libc::c_void) -> *const u8 {
+unsafe fn get_pc(cx: *mut libc::c_void, _signum: libc::c_int) -> *const u8 {
     cfg_if::cfg_if! {
         if #[cfg(all(target_os = "linux", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
@@ -138,6 +138,23 @@ unsafe fn get_pc(cx: *mut libc::c_void) -> *const u8 {
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             cx.uc_mcontext.pc as *const u8
+        } else if #[cfg(all(target_os = "linux", target_arch = "s390x"))] {
+            // On s390x, SIGILL and SIGFPE are delivered with the PSW address
+            // pointing *after* the faulting instruction, while SIGSEGV and
+            // SIGBUS are delivered with the PSW address pointing *to* the
+            // faulting instruction.  To handle this, the code generator registers
+            // any trap that results in one of "late" signals on the last byte
+            // of the instruction, and any trap that results in one of the "early"
+            // signals on the first byte of the instruction (as usual).  This
+            // means we simply need to decrement the reported PSW address by
+            // one in the case of a "late" signal here to ensure we always
+            // correctly find the associated trap handler.
+            let trap_offset = match _signum {
+                libc::SIGILL | libc::SIGFPE => 1,
+                _ => 0,
+            };
+            let cx = &*(cx as *const libc::ucontext_t);
+            (cx.uc_mcontext.psw.addr - trap_offset) as *const u8
         } else if #[cfg(all(target_os = "freebsd", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             cx.uc_mcontext.mc_rip as *const u8
