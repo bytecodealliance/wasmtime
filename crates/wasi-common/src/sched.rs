@@ -5,7 +5,9 @@ use cap_std::time::Instant;
 pub mod subscription;
 pub use cap_std::time::Duration;
 
-use subscription::{MonotonicClockSubscription, RwSubscription, Subscription, SubscriptionResult};
+pub use subscription::{
+    MonotonicClockSubscription, RwEventFlags, RwSubscription, Subscription, SubscriptionResult,
+};
 
 #[wiggle::async_trait]
 pub trait WasiSched {
