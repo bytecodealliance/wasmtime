@@ -535,7 +535,6 @@ dependencies = [
  "smallvec",
  "souper-ir",
  "target-lexicon",
- "thiserror",
  "wast 35.0.2",
 ]
 
@@ -635,7 +634,6 @@ dependencies = [
  "cranelift-entity",
  "hashbrown",
  "log",
- "thiserror",
 ]
 
 [[package]]
@@ -675,7 +673,6 @@ dependencies = [
  "cranelift-codegen",
  "smallvec",
  "target-lexicon",
- "thiserror",
 ]
 
 [[package]]
@@ -3315,7 +3312,6 @@ dependencies = [
 name = "wasmtime-environ"
 version = "0.26.0"
 dependencies = [
- "anyhow",
  "cfg-if 1.0.0",
  "cranelift-codegen",
  "cranelift-entity",
@@ -3324,7 +3320,6 @@ dependencies = [
  "indexmap",
  "log",
  "more-asserts",
- "region",
  "serde",
  "thiserror",
  "wasmparser",
