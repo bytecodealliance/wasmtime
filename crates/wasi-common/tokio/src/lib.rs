@@ -4,6 +4,7 @@ pub mod sched;
 pub mod stdio;
 
 use std::cell::RefCell;
+use std::future::Future;
 use std::path::Path;
 use std::rc::Rc;
 pub use wasi_cap_std_sync::{clocks_ctx, random_ctx};
@@ -70,15 +71,14 @@ impl WasiCtxBuilder {
     pub fn stderr(self, f: Box<dyn wasi_common::WasiFile>) -> Self {
         WasiCtxBuilder(self.0.stderr(f))
     }
-    // XXX our crate needs its own stdios
     pub fn inherit_stdin(self) -> Self {
-        self.stdin(Box::new(wasi_cap_std_sync::stdio::stdin()))
+        self.stdin(Box::new(crate::stdio::stdin()))
     }
     pub fn inherit_stdout(self) -> Self {
-        self.stdout(Box::new(wasi_cap_std_sync::stdio::stdout()))
+        self.stdout(Box::new(crate::stdio::stdout()))
     }
     pub fn inherit_stderr(self) -> Self {
-        self.stderr(Box::new(wasi_cap_std_sync::stdio::stderr()))
+        self.stderr(Box::new(crate::stdio::stderr()))
     }
     pub fn inherit_stdio(self) -> Self {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
@@ -96,10 +96,14 @@ impl WasiCtxBuilder {
     }
 }
 
-pub(crate) fn asyncify<'a, F, T>(f: F) -> Result<T, Error>
+// This function takes the "async" code which is in fact blocking
+// but always returns Poll::Ready, and executes it in a dummy executor
+// on a blocking thread in the tokio thread pool.
+pub(crate) fn asyncify<'a, F, Fut, T>(f: F) -> Result<T, Error>
 where
-    F: FnOnce() -> Result<T, std::io::Error> + Send + 'a,
+    F: FnOnce() -> Fut + Send + 'a,
+    Fut: Future<Output = Result<T, Error>>,
     T: Send + 'static,
 {
-    tokio::task::block_in_place(f).map_err(Into::into)
+    tokio::task::block_in_place(move || unsafe { wiggle::run_in_dummy_executor(f()) })
 }

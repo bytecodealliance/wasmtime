@@ -7,7 +7,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 
 #[wiggle::async_trait]
-pub trait WasiDir {
+pub trait WasiDir: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     async fn open_file(
         &self,
@@ -24,7 +24,7 @@ pub trait WasiDir {
     async fn readdir(
         &self,
         cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>>>, Error>;
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error>;
     async fn symlink(&self, old_path: &str, new_path: &str) -> Result<(), Error>;
     async fn remove_dir(&self, path: &str) -> Result<(), Error>;
     async fn unlink_file(&self, path: &str) -> Result<(), Error>;

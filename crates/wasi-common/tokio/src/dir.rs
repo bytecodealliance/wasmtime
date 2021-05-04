@@ -1,21 +1,17 @@
-use crate::{
-    asyncify,
-    file::{filetype_from, File},
-};
-use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, SystemTimeSpec};
+use crate::{asyncify, file::File};
 use std::any::Any;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use wasi_common::{
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
-    file::{FdFlags, FileType, Filestat, OFlags, WasiFile},
+    file::{FdFlags, Filestat, OFlags, WasiFile},
     Error, ErrorExt,
 };
 
-pub struct Dir(cap_std::fs::Dir);
+pub struct Dir(wasi_cap_std_sync::dir::Dir);
 
 impl Dir {
     pub fn from_cap_std(dir: cap_std::fs::Dir) -> Self {
-        Dir(dir)
+        Dir(wasi_cap_std_sync::dir::Dir::from_cap_std(dir))
     }
 }
 
@@ -33,172 +29,59 @@ impl WasiDir for Dir {
         write: bool,
         fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error> {
-        use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
-        use wasi_common::file::FdFlags;
-
-        let mut opts = cap_std::fs::OpenOptions::new();
-
-        if oflags.contains(OFlags::CREATE | OFlags::EXCLUSIVE) {
-            opts.create_new(true);
-            opts.write(true);
-        } else if oflags.contains(OFlags::CREATE) {
-            opts.create(true);
-            opts.write(true);
-        }
-        if oflags.contains(OFlags::TRUNCATE) {
-            opts.truncate(true);
-        }
-        if read {
-            opts.read(true);
-        }
-        if write {
-            opts.write(true);
-        } else {
-            // If not opened write, open read. This way the OS lets us open the file.
-            // If FileCaps::READ is not set, read calls will be rejected at the
-            // get_cap check.
-            opts.read(true);
-        }
-        if fdflags.contains(FdFlags::APPEND) {
-            opts.append(true);
-        }
-
-        if symlink_follow {
-            opts.follow(FollowSymlinks::Yes);
-        } else {
-            opts.follow(FollowSymlinks::No);
-        }
-        // the DSYNC, SYNC, and RSYNC flags are ignored! We do not
-        // have support for them in cap-std yet.
-        // ideally OpenOptions would just support this though:
-        // https://github.com/bytecodealliance/cap-std/issues/146
-        if fdflags.intersects(FdFlags::DSYNC | FdFlags::SYNC | FdFlags::RSYNC) {
-            return Err(Error::not_supported().context("SYNC family of FdFlags"));
-        }
-
-        let f = asyncify(move || self.0.open_with(Path::new(path), &opts))?;
-        let mut f = File::from_cap_std(f);
-        // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
-        if fdflags.contains(FdFlags::NONBLOCK) {
-            f.set_fdflags(FdFlags::NONBLOCK).await?;
-        }
-        Ok(Box::new(f))
+        let f = asyncify(move || async move {
+            self.0
+                .open_file_(symlink_follow, path, oflags, read, write, fdflags)
+        })?;
+        Ok(Box::new(File::from_inner(f)))
     }
 
     async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
-        let path = unsafe { std::mem::transmute::<_, &'static str>(path) };
-        let d = if symlink_follow {
-            asyncify(move || self.0.open_dir(Path::new(path)))?
-        } else {
-            asyncify(move || self.0.open_dir_nofollow(Path::new(path)))?
-        };
-        Ok(Box::new(Dir::from_cap_std(d)))
+        let d = asyncify(move || async move { self.0.open_dir_(symlink_follow, path) })?;
+        Ok(Box::new(Dir(d)))
     }
 
     async fn create_dir(&self, path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.create_dir(Path::new(path)))?;
-        Ok(())
+        asyncify(|| self.0.create_dir(path))
     }
     async fn readdir(
         &self,
         cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>>>, Error> {
-        // cap_std's read_dir does not include . and .., we should prepend these.
-        // Why does the Ok contain a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
-        // have enough info to make a ReaddirEntity yet.
-        let dir_meta = asyncify(|| self.0.dir_metadata())?;
-        let rd = vec![
-            {
-                let name = ".".to_owned();
-                Ok((FileType::Directory, dir_meta.ino(), name))
-            },
-            {
-                let name = "..".to_owned();
-                Ok((FileType::Directory, dir_meta.ino(), name))
-            },
-        ]
-        .into_iter()
-        .chain(
-            // Now process the `DirEntry`s:
-            self.0.entries()?.map(|entry| {
-                let entry = entry?;
-                // XXX full_metadata blocks, but we arent in an async iterator:
-                let meta = entry.full_metadata()?;
-                let inode = meta.ino();
-                let filetype = filetype_from(&meta.file_type());
-                let name = entry
-                    .file_name()
-                    .into_string()
-                    .map_err(|_| Error::illegal_byte_sequence().context("filename"))?;
-                Ok((filetype, inode, name))
-            }),
-        )
-        // Enumeration of the iterator makes it possible to define the ReaddirCursor
-        .enumerate()
-        .map(|(ix, r)| match r {
-            Ok((filetype, inode, name)) => Ok(ReaddirEntity {
-                next: ReaddirCursor::from(ix as u64 + 1),
-                filetype,
-                inode,
-                name,
-            }),
-            Err(e) => Err(e),
-        })
-        .skip(u64::from(cursor) as usize);
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error> {
+        struct I(Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>);
+        impl Iterator for I {
+            type Item = Result<ReaddirEntity, Error>;
+            fn next(&mut self) -> Option<Self::Item> {
+                tokio::task::block_in_place(move || self.0.next())
+            }
+        }
 
-        Ok(Box::new(rd))
+        let inner = asyncify(move || self.0.readdir(cursor))?;
+        Ok(Box::new(I(inner)))
     }
 
     async fn symlink(&self, src_path: &str, dest_path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.symlink(src_path, dest_path))?;
-        Ok(())
+        asyncify(move || self.0.symlink(src_path, dest_path))
     }
     async fn remove_dir(&self, path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.remove_dir(Path::new(path)))?;
-        Ok(())
+        asyncify(move || self.0.remove_dir(path))
     }
 
     async fn unlink_file(&self, path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.remove_file_or_symlink(Path::new(path)))?;
-        Ok(())
+        asyncify(move || self.0.unlink_file(path))
     }
     async fn read_link(&self, path: &str) -> Result<PathBuf, Error> {
-        let link = asyncify(|| self.0.read_link(Path::new(path)))?;
-        Ok(link)
+        asyncify(move || self.0.read_link(path))
     }
     async fn get_filestat(&self) -> Result<Filestat, Error> {
-        let meta = asyncify(|| self.0.dir_metadata())?;
-        Ok(Filestat {
-            device_id: meta.dev(),
-            inode: meta.ino(),
-            filetype: filetype_from(&meta.file_type()),
-            nlink: meta.nlink(),
-            size: meta.len(),
-            atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),
-            mtim: meta.modified().map(|t| Some(t.into_std())).unwrap_or(None),
-            ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
-        })
+        asyncify(|| self.0.get_filestat())
     }
     async fn get_path_filestat(
         &self,
         path: &str,
         follow_symlinks: bool,
     ) -> Result<Filestat, Error> {
-        let meta = if follow_symlinks {
-            asyncify(|| self.0.metadata(Path::new(path)))?
-        } else {
-            asyncify(|| self.0.symlink_metadata(Path::new(path)))?
-        };
-        Ok(Filestat {
-            device_id: meta.dev(),
-            inode: meta.ino(),
-            filetype: filetype_from(&meta.file_type()),
-            nlink: meta.nlink(),
-            size: meta.len(),
-            atim: meta.accessed().map(|t| Some(t.into_std())).unwrap_or(None),
-            mtim: meta.modified().map(|t| Some(t.into_std())).unwrap_or(None),
-            ctim: meta.created().map(|t| Some(t.into_std())).unwrap_or(None),
-        })
+        asyncify(move || self.0.get_path_filestat(path, follow_symlinks))
     }
     async fn rename(
         &self,
@@ -209,12 +92,8 @@ impl WasiDir for Dir {
         let dest_dir = dest_dir
             .as_any()
             .downcast_ref::<Self>()
-            .ok_or(Error::badf().context("failed downcast to cap-std Dir"))?;
-        asyncify(|| {
-            self.0
-                .rename(Path::new(src_path), &dest_dir.0, Path::new(dest_path))
-        })?;
-        Ok(())
+            .ok_or(Error::badf().context("failed downcast to tokio Dir"))?;
+        asyncify(move || async move { self.0.rename_(src_path, &dest_dir.0, dest_path) })
     }
     async fn hard_link(
         &self,
@@ -225,11 +104,8 @@ impl WasiDir for Dir {
         let target_dir = target_dir
             .as_any()
             .downcast_ref::<Self>()
-            .ok_or(Error::badf().context("failed downcast to cap-std Dir"))?;
-        let src_path = Path::new(src_path);
-        let target_path = Path::new(target_path);
-        asyncify(|| self.0.hard_link(src_path, &target_dir.0, target_path))?;
-        Ok(())
+            .ok_or(Error::badf().context("failed downcast to tokio Dir"))?;
+        asyncify(move || async move { self.0.hard_link_(src_path, &target_dir.0, target_path) })
     }
     async fn set_times(
         &self,
@@ -238,30 +114,7 @@ impl WasiDir for Dir {
         mtime: Option<wasi_common::SystemTimeSpec>,
         follow_symlinks: bool,
     ) -> Result<(), Error> {
-        asyncify(|| {
-            if follow_symlinks {
-                self.0.set_times(
-                    Path::new(path),
-                    convert_systimespec(atime),
-                    convert_systimespec(mtime),
-                )
-            } else {
-                self.0.set_symlink_times(
-                    Path::new(path),
-                    convert_systimespec(atime),
-                    convert_systimespec(mtime),
-                )
-            }
-        })?;
-        Ok(())
-    }
-}
-
-fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemTimeSpec> {
-    match t {
-        Some(wasi_common::SystemTimeSpec::Absolute(t)) => Some(SystemTimeSpec::Absolute(t)),
-        Some(wasi_common::SystemTimeSpec::SymbolicNow) => Some(SystemTimeSpec::SymbolicNow),
-        None => None,
+        asyncify(move || self.0.set_times(path, atime, mtime, follow_symlinks))
     }
 }
 

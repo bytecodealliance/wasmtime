@@ -15,14 +15,8 @@ impl Dir {
     pub fn from_cap_std(dir: cap_std::fs::Dir) -> Self {
         Dir(dir)
     }
-}
 
-#[wiggle::async_trait]
-impl WasiDir for Dir {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-    async fn open_file(
+    pub fn open_file_(
         &self,
         symlink_follow: bool,
         path: &str,
@@ -30,7 +24,7 @@ impl WasiDir for Dir {
         read: bool,
         write: bool,
         fdflags: FdFlags,
-    ) -> Result<Box<dyn WasiFile>, Error> {
+    ) -> Result<File, Error> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt};
 
         let mut opts = cap_std::fs::OpenOptions::new();
@@ -82,16 +76,57 @@ impl WasiDir for Dir {
         if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
             f.set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
         }
-        Ok(Box::new(File::from_cap_std(f)))
+        Ok(File::from_cap_std(f))
     }
 
-    async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
+    pub fn open_dir_(&self, symlink_follow: bool, path: &str) -> Result<Self, Error> {
         let d = if symlink_follow {
             self.0.open_dir(Path::new(path))?
         } else {
             self.0.open_dir_nofollow(Path::new(path))?
         };
-        Ok(Box::new(Dir::from_cap_std(d)))
+        Ok(Dir::from_cap_std(d))
+    }
+
+    pub fn rename_(&self, src_path: &str, dest_dir: &Self, dest_path: &str) -> Result<(), Error> {
+        self.0
+            .rename(Path::new(src_path), &dest_dir.0, Path::new(dest_path))?;
+        Ok(())
+    }
+    pub fn hard_link_(
+        &self,
+        src_path: &str,
+        target_dir: &Self,
+        target_path: &str,
+    ) -> Result<(), Error> {
+        let src_path = Path::new(src_path);
+        let target_path = Path::new(target_path);
+        self.0.hard_link(src_path, &target_dir.0, target_path)?;
+        Ok(())
+    }
+}
+
+#[wiggle::async_trait]
+impl WasiDir for Dir {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    async fn open_file(
+        &self,
+        symlink_follow: bool,
+        path: &str,
+        oflags: OFlags,
+        read: bool,
+        write: bool,
+        fdflags: FdFlags,
+    ) -> Result<Box<dyn WasiFile>, Error> {
+        let f = self.open_file_(symlink_follow, path, oflags, read, write, fdflags)?;
+        Ok(Box::new(f))
+    }
+
+    async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
+        let d = self.open_dir_(symlink_follow, path)?;
+        Ok(Box::new(d))
     }
 
     async fn create_dir(&self, path: &str) -> Result<(), Error> {
@@ -101,7 +136,7 @@ impl WasiDir for Dir {
     async fn readdir(
         &self,
         cursor: ReaddirCursor,
-    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>>>, Error> {
+    ) -> Result<Box<dyn Iterator<Item = Result<ReaddirEntity, Error>> + Send>, Error> {
         // cap_std's read_dir does not include . and .., we should prepend these.
         // Why does the Ok contain a tuple? We can't construct a cap_std::fs::DirEntry, and we don't
         // have enough info to make a ReaddirEntity yet.
@@ -208,9 +243,7 @@ impl WasiDir for Dir {
             .as_any()
             .downcast_ref::<Self>()
             .ok_or(Error::badf().context("failed downcast to cap-std Dir"))?;
-        self.0
-            .rename(Path::new(src_path), &dest_dir.0, Path::new(dest_path))?;
-        Ok(())
+        self.rename_(src_path, dest_dir, dest_path)
     }
     async fn hard_link(
         &self,
@@ -222,10 +255,7 @@ impl WasiDir for Dir {
             .as_any()
             .downcast_ref::<Self>()
             .ok_or(Error::badf().context("failed downcast to cap-std Dir"))?;
-        let src_path = Path::new(src_path);
-        let target_path = Path::new(target_path);
-        self.0.hard_link(src_path, &target_dir.0, target_path)?;
-        Ok(())
+        self.hard_link_(src_path, target_dir, target_path)
     }
     async fn set_times(
         &self,

@@ -5,7 +5,7 @@ use std::cell::{Ref, RefMut};
 use std::ops::{Deref, DerefMut};
 
 #[wiggle::async_trait]
-pub trait WasiFile {
+pub trait WasiFile: Send {
     fn as_any(&self) -> &dyn Any;
     async fn datasync(&self) -> Result<(), Error>; // write op
     async fn sync(&self) -> Result<(), Error>; // file op

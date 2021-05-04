@@ -3039,9 +3039,9 @@ dependencies = [
 
 [[package]]
 name = "unsafe-io"
-version = "0.6.2"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0301dd0f2c21baed606faa2717fbfbb1a68b7e289ea29b40bc21a16f5ae9f5aa"
+checksum = "fe39acfe60d3754452ea6881613c3240100b23ffd94a627c138863f8cd314b1b"
 dependencies = [
  "rustc_version",
  "winapi",

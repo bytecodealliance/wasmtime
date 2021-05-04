@@ -78,7 +78,10 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         }
     }
     if let Some(Some(remaining_duration)) = duration {
-        tokio::time::timeout(remaining_duration, futures).await??;
+        match tokio::time::timeout(remaining_duration, futures).await {
+            Ok(r) => r?,
+            Err(_deadline_elapsed) => {}
+        }
     } else {
         futures.await?;
     }
