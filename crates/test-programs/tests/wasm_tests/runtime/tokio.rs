@@ -119,6 +119,7 @@ pub fn instantiate_inherit_stdio(
                 builder = builder.preopened_dir(preopen_dir, ".")?;
             }
 
+            store.out_of_fuel_async_yield(u32::MAX, 10000);
             Wasi::set_context(&store, builder.build()?)
                 .map_err(|_| anyhow::anyhow!("wasi set_context failed"))?;
 
