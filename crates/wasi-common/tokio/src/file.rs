@@ -1,6 +1,8 @@
 use crate::asyncify;
 use std::any::Any;
 use std::io;
+#[cfg(windows)]
+use std::os::windows::io::{AsRawHandle, RawHandle};
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error,
@@ -135,6 +137,7 @@ macro_rules! wasi_file_impl {
             #[cfg(windows)]
             async fn readable(&mut self) -> Result<(), Error> {
                 // Windows uses a rawfd based scheduler :(
+                use wasi_common::ErrorExt;
                 Err(Error::badf())
             }
 
@@ -164,7 +167,14 @@ macro_rules! wasi_file_impl {
             #[cfg(windows)]
             async fn writable(&mut self) -> Result<(), Error> {
                 // Windows uses a rawfd based scheduler :(
+                use wasi_common::ErrorExt;
                 Err(Error::badf())
+            }
+        }
+        #[cfg(windows)]
+        impl AsRawHandle for $ty {
+            fn as_raw_handle(&self) -> RawHandle {
+                self.0.as_raw_handle()
             }
         }
     };

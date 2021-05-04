@@ -1,3 +1,4 @@
+use crate::asyncify;
 use anyhow::Context;
 use std::ops::Deref;
 use std::os::windows::io::{AsRawHandle, RawHandle};
@@ -9,12 +10,16 @@ use wasi_common::{
     file::WasiFile,
     sched::{
         subscription::{RwEventFlags, Subscription},
-        Poll, WasiSched,
+        Poll,
     },
     Error, ErrorExt,
 };
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
+    asyncify(move || poll_oneoff_(poll))
+}
+
+async fn poll_oneoff_<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     if poll.is_empty() {
         return Ok(());
     }
