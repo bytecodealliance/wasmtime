@@ -1219,7 +1219,6 @@ fn enter_wasm_init<'a>(store: &'a Store) -> Result<impl Drop + 'a, Trap> {
             // considered interrupted.
             interrupts.stack_limit.store(usize::max_value(), Relaxed);
             return Err(Trap::new_wasm(
-                Some(store),
                 None,
                 wasmtime_environ::ir::TrapCode::Interrupt,
                 backtrace::Backtrace::new_unresolved(),
