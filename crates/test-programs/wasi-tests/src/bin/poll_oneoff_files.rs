@@ -150,16 +150,37 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
 
 unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
     // Create a file in the scratch directory.
-    let readable_fd = wasi::path_open(
+    let nonempty_file = wasi::path_open(
         dir_fd,
         0,
         "readable_file",
         wasi::OFLAGS_CREAT,
+        wasi::RIGHTS_FD_WRITE,
+        0,
+        0,
+    )
+    .expect("create writable file");
+    // Write to file
+    let contents = &[1u8];
+    let ciovec = wasi::Ciovec {
+        buf: contents.as_ptr() as *const _,
+        buf_len: contents.len(),
+    };
+    wasi::fd_write(nonempty_file, &[ciovec]).expect("write");
+    wasi::fd_close(nonempty_file).expect("close");
+
+    // Now open the file for reading
+    let readable_fd = wasi::path_open(
+        dir_fd,
+        0,
+        "readable_file",
+        0,
         wasi::RIGHTS_FD_READ | wasi::RIGHTS_POLL_FD_READWRITE,
         0,
         0,
     )
     .expect("opening a readable file");
+
     assert_gt!(
         readable_fd,
         libc::STDERR_FILENO as wasi::Fd,

@@ -62,6 +62,7 @@ pub enum Subscription<'a> {
     MonotonicClock(MonotonicClockSubscription<'a>),
 }
 
+#[derive(Debug)]
 pub enum SubscriptionResult {
     Read(Result<(u64, RwEventFlags), Error>),
     Write(Result<(u64, RwEventFlags), Error>),

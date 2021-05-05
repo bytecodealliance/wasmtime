@@ -2,7 +2,7 @@ use anyhow::{Context, Error};
 use wasi_common::{
     file::{FdFlags, OFlags},
     sched::{Poll, RwEventFlags, SubscriptionResult, Userdata},
-    WasiDir,
+    WasiDir, WasiFile,
 };
 use wasi_tokio::{sched::poll_oneoff, Dir};
 
@@ -13,24 +13,34 @@ async fn empty_file_readable() -> Result<(), Error> {
     let d = workspace.open_dir("d").context("open dir")?;
     let d = Dir::from_cap_std(d);
 
-    let mut readable_f = d
-        .open_file(false, "f", OFlags::CREATE, true, false, FdFlags::empty())
+    let mut f = d
+        .open_file(false, "f", OFlags::CREATE, false, true, FdFlags::empty())
         .await
-        .context("create readable file")?;
+        .context("create writable file f")?;
+    let to_write: Vec<u8> = vec![0];
+    f.write_vectored(&vec![std::io::IoSlice::new(&to_write)])
+        .await
+        .context("write to f")?;
+    drop(f);
+
+    let mut f = d
+        .open_file(false, "f", OFlags::empty(), true, false, FdFlags::empty())
+        .await
+        .context("open f as readable")?;
 
     let mut poll = Poll::new();
-    poll.subscribe_read(&mut *readable_f, Userdata::from(123));
+    poll.subscribe_read(&mut *f, Userdata::from(123));
     poll_oneoff(&mut poll).await?;
 
     let events = poll.results();
 
-    assert_eq!(events.len(), 1);
+    assert_eq!(events.len(), 1, "expected 1 event, got: {:?}", events);
     match events[0] {
-        (SubscriptionResult::Read(Ok((0, flags))), ud) => {
+        (SubscriptionResult::Read(Ok((1, flags))), ud) => {
             assert_eq!(flags, RwEventFlags::empty());
             assert_eq!(ud, Userdata::from(123));
         }
-        _ => panic!(""),
+        _ => panic!("expected (Read(Ok(1, empty), 123), got: {:?}", events[0]),
     }
 
     Ok(())
