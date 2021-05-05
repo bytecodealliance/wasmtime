@@ -125,7 +125,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
         },
     ];
     let out = poll_oneoff_impl(&r#in).unwrap();
-    assert_eq!(out.len(), 2, "should return 2 events");
+    assert_eq!(out.len(), 2, "should return 2 events, got: {:?}", out);
     assert_eq!(
         out[0].userdata, 1,
         "the event.userdata should contain fd userdata specified by the user"
