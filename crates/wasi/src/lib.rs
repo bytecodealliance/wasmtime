@@ -18,6 +18,11 @@ pub mod sync {
     super::define_wasi!(block_on);
 }
 
+/// Sync mode is the "default" of this crate, so we also export it at the top
+/// level.
+#[cfg(feature = "sync")]
+pub use sync::*;
+
 /// Re-export the wasi-tokio crate here. This saves consumers of this library from having
 /// to keep additional dependencies in sync.
 #[cfg(feature = "tokio")]
