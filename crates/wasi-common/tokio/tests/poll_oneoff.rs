@@ -2,7 +2,7 @@ use anyhow::{Context, Error};
 use wasi_common::{
     file::{FdFlags, OFlags},
     sched::{Poll, RwEventFlags, SubscriptionResult, Userdata},
-    WasiDir, WasiFile,
+    WasiDir,
 };
 use wasi_tokio::{sched::poll_oneoff, Dir};
 
@@ -13,7 +13,7 @@ async fn empty_file_readable() -> Result<(), Error> {
     let d = workspace.open_dir("d").context("open dir")?;
     let d = Dir::from_cap_std(d);
 
-    let mut f = d
+    let f = d
         .open_file(false, "f", OFlags::CREATE, false, true, FdFlags::empty())
         .await
         .context("create writable file f")?;
