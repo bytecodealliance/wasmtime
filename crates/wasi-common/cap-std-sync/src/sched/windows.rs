@@ -1,3 +1,13 @@
+// The windows scheduler is unmaintained and due for a rewrite.
+//
+// Rather than use a polling mechanism for file read/write readiness,
+// it checks readiness just once, before sleeping for any timer subscriptions.
+// Checking stdin readiness uses a worker thread which, once started, lives for the
+// lifetime of the process.
+//
+// We suspect there are bugs in this scheduler, however, we have not
+// taken the time to improve it. See bug #2880.
+
 use anyhow::Context;
 use std::ops::Deref;
 use std::os::windows::io::{AsRawHandle, RawHandle};
@@ -9,130 +19,121 @@ use wasi_common::{
     file::WasiFile,
     sched::{
         subscription::{RwEventFlags, Subscription},
-        Poll, WasiSched,
+        Poll,
     },
     Error, ErrorExt,
 };
-pub struct SyncSched {}
 
-impl SyncSched {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
+    poll_oneoff_(poll, wasi_file_raw_handle).await
 }
 
-#[async_trait::async_trait(?Send)]
-impl WasiSched for SyncSched {
-    async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error> {
-        if poll.is_empty() {
-            return Ok(());
-        }
+// For reuse by wasi-tokio, which has a different WasiFile -> RawHandle translator.
+pub async fn poll_oneoff_<'a>(
+    poll: &mut Poll<'a>,
+    file_to_handle: impl Fn(&dyn WasiFile) -> Option<RawHandle>,
+) -> Result<(), Error> {
+    if poll.is_empty() {
+        return Ok(());
+    }
 
-        let mut ready = false;
-        let waitmode = if let Some(t) = poll.earliest_clock_deadline() {
-            if let Some(duration) = t.duration_until() {
-                WaitMode::Timeout(duration)
-            } else {
-                WaitMode::Immediate
-            }
+    let mut ready = false;
+    let waitmode = if let Some(t) = poll.earliest_clock_deadline() {
+        if let Some(duration) = t.duration_until() {
+            WaitMode::Timeout(duration)
         } else {
-            if ready {
-                WaitMode::Immediate
-            } else {
-                WaitMode::Infinite
-            }
-        };
-
-        let mut stdin_read_subs = Vec::new();
-        let mut immediate_reads = Vec::new();
-        let mut immediate_writes = Vec::new();
-        for s in poll.rw_subscriptions() {
-            match s {
-                Subscription::Read(r) => {
-                    if r.file.as_any().is::<crate::stdio::Stdin>() {
-                        stdin_read_subs.push(r);
-                    } else if wasi_file_raw_handle(r.file.deref()).is_some() {
-                        immediate_reads.push(r);
-                    } else {
-                        return Err(Error::invalid_argument()
-                            .context("read subscription fd downcast failed"));
-                    }
-                }
-                Subscription::Write(w) => {
-                    if wasi_file_raw_handle(w.file.deref()).is_some() {
-                        immediate_writes.push(w);
-                    } else {
-                        return Err(Error::invalid_argument()
-                            .context("write subscription fd downcast failed"));
-                    }
-                }
-                Subscription::MonotonicClock { .. } => unreachable!(),
-            }
+            WaitMode::Immediate
         }
+    } else {
+        if ready {
+            WaitMode::Immediate
+        } else {
+            WaitMode::Infinite
+        }
+    };
 
-        if !stdin_read_subs.is_empty() {
-            let state = STDIN_POLL
-                .lock()
-                .map_err(|_| Error::trap("failed to take lock of STDIN_POLL"))?
-                .poll(waitmode)?;
-            for readsub in stdin_read_subs.into_iter() {
-                match state {
-                    PollState::Ready => {
-                        readsub.complete(1, RwEventFlags::empty());
-                        ready = true;
-                    }
-                    PollState::NotReady | PollState::TimedOut => {}
-                    PollState::Error(ref e) => {
-                        // Unfortunately, we need to deliver the Error to each of the
-                        // subscriptions, but there is no Clone on std::io::Error. So, we convert it to the
-                        // kind, and then back to std::io::Error, and finally to anyhow::Error.
-                        // When its time to turn this into an errno elsewhere, the error kind will
-                        // be inspected.
-                        let ekind = e.kind();
-                        let ioerror = std::io::Error::from(ekind);
-                        readsub.error(ioerror.into());
-                        ready = true;
-                    }
+    let mut stdin_read_subs = Vec::new();
+    let mut immediate_reads = Vec::new();
+    let mut immediate_writes = Vec::new();
+    for s in poll.rw_subscriptions() {
+        match s {
+            Subscription::Read(r) => {
+                if r.file.as_any().is::<crate::stdio::Stdin>() {
+                    stdin_read_subs.push(r);
+                } else if file_to_handle(r.file.deref()).is_some() {
+                    immediate_reads.push(r);
+                } else {
+                    return Err(
+                        Error::invalid_argument().context("read subscription fd downcast failed")
+                    );
                 }
             }
+            Subscription::Write(w) => {
+                if wasi_file_raw_handle(w.file.deref()).is_some() {
+                    immediate_writes.push(w);
+                } else {
+                    return Err(
+                        Error::invalid_argument().context("write subscription fd downcast failed")
+                    );
+                }
+            }
+            Subscription::MonotonicClock { .. } => unreachable!(),
         }
-        for r in immediate_reads {
-            match r.file.num_ready_bytes().await {
-                Ok(ready_bytes) => {
-                    r.complete(ready_bytes, RwEventFlags::empty());
+    }
+
+    if !stdin_read_subs.is_empty() {
+        let state = STDIN_POLL
+            .lock()
+            .map_err(|_| Error::trap("failed to take lock of STDIN_POLL"))?
+            .poll(waitmode)?;
+        for readsub in stdin_read_subs.into_iter() {
+            match state {
+                PollState::Ready => {
+                    readsub.complete(1, RwEventFlags::empty());
                     ready = true;
                 }
-                Err(e) => {
-                    r.error(e);
+                PollState::NotReady | PollState::TimedOut => {}
+                PollState::Error(ref e) => {
+                    // Unfortunately, we need to deliver the Error to each of the
+                    // subscriptions, but there is no Clone on std::io::Error. So, we convert it to the
+                    // kind, and then back to std::io::Error, and finally to anyhow::Error.
+                    // When its time to turn this into an errno elsewhere, the error kind will
+                    // be inspected.
+                    let ekind = e.kind();
+                    let ioerror = std::io::Error::from(ekind);
+                    readsub.error(ioerror.into());
                     ready = true;
                 }
             }
         }
-        for w in immediate_writes {
-            // Everything is always ready for writing, apparently?
-            w.complete(0, RwEventFlags::empty());
-            ready = true;
-        }
-
-        if !ready {
-            if let WaitMode::Timeout(duration) = waitmode {
-                thread::sleep(duration);
+    }
+    for r in immediate_reads {
+        match r.file.num_ready_bytes().await {
+            Ok(ready_bytes) => {
+                r.complete(ready_bytes, RwEventFlags::empty());
+                ready = true;
+            }
+            Err(e) => {
+                r.error(e);
+                ready = true;
             }
         }
+    }
+    for w in immediate_writes {
+        // Everything is always ready for writing, apparently?
+        w.complete(0, RwEventFlags::empty());
+        ready = true;
+    }
 
-        Ok(())
+    if !ready {
+        if let WaitMode::Timeout(duration) = waitmode {
+            thread::sleep(duration);
+        }
     }
-    async fn sched_yield(&self) -> Result<(), Error> {
-        thread::yield_now();
-        Ok(())
-    }
-    async fn sleep(&self, duration: Duration) -> Result<(), Error> {
-        std::thread::sleep(duration);
-        Ok(())
-    }
+
+    Ok(())
 }
-
-fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
+pub fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
     let a = f.as_any();
     if a.is::<crate::file::File>() {
         Some(
