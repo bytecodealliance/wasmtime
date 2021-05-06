@@ -20,7 +20,7 @@ impl File {
     }
 }
 
-#[wiggle::async_trait]
+#[async_trait::async_trait(?Send)]
 impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self

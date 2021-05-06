@@ -13,7 +13,7 @@ include = ["src/**/*", "LICENSE" ]
 
 [dependencies]
 wasi-common = { path = "../", version = "0.26.0" }
-wiggle = { path = "../../wiggle", version = "0.26.0" }
+async_trait = "0.1"
 anyhow = "1.0"
 cap-std = "0.13.7"
 cap-fs-ext = "0.13.7"

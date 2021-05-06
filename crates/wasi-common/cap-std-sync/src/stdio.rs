@@ -22,7 +22,7 @@ pub fn stdin() -> Stdin {
     Stdin(std::io::stdin())
 }
 
-#[wiggle::async_trait]
+#[async_trait::async_trait(?Send)]
 impl WasiFile for Stdin {
     fn as_any(&self) -> &dyn Any {
         self
@@ -125,7 +125,7 @@ impl AsRawFd for Stdin {
 
 macro_rules! wasi_file_write_impl {
     ($ty:ty) => {
-        #[wiggle::async_trait]
+        #[async_trait::async_trait(?Send)]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self

@@ -106,7 +106,7 @@ impl Dir {
     }
 }
 
-#[wiggle::async_trait]
+#[async_trait::async_trait(?Send)]
 impl WasiDir for Dir {
     fn as_any(&self) -> &dyn Any {
         self
