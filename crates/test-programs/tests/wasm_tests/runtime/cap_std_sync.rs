@@ -5,6 +5,17 @@ use wasmtime::{Linker, Module, Store};
 use wasmtime_wasi::sync::{Wasi, WasiCtxBuilder};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
+    run(data, bin_name, workspace, false)
+}
+pub fn instantiate_inherit_stdio(
+    data: &[u8],
+    bin_name: &str,
+    workspace: Option<&Path>,
+) -> anyhow::Result<()> {
+    run(data, bin_name, workspace, true)
+}
+
+fn run(data: &[u8], bin_name: &str, workspace: Option<&Path>, stdio: bool) -> anyhow::Result<()> {
     let stdout = WritePipe::new_in_memory();
     let stderr = WritePipe::new_in_memory();
 
@@ -14,6 +25,10 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         // Create our wasi context.
         // Additionally register any preopened directories if we have them.
         let mut builder = WasiCtxBuilder::new();
+
+        if stdio {
+            builder = builder.inherit_stdio();
+        }
 
         builder = builder
             .arg(bin_name)?
@@ -26,24 +41,8 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(workspace) }?;
             builder = builder.preopened_dir(preopen_dir, ".")?;
         }
-
-        #[cfg(windows)]
-        {
-            builder = builder
-                .env("ERRNO_MODE_WINDOWS", "1")?
-                .env("NO_DANGLING_FILESYSTEM", "1")?
-                .env("NO_FD_ALLOCATE", "1")?
-                .env("NO_RENAME_DIR_TO_EMPTY_DIR", "1")?
-        }
-        #[cfg(all(unix, not(target_os = "macos")))]
-        {
-            builder = builder.env("ERRNO_MODE_UNIX", "1")?;
-        }
-        #[cfg(target_os = "macos")]
-        {
-            builder = builder
-                .env("ERRNO_MODE_MACOS", "1")?
-                .env("NO_FD_ALLOCATE", "1")?;
+        for (var, val) in super::test_suite_environment() {
+            builder = builder.env(var, val)?;
         }
 
         // cap-std-sync does not yet support the sync family of fdflags
@@ -80,43 +79,5 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             }
             Err(trap.context(format!("error while testing Wasm module '{}'", bin_name,)))
         }
-    }
-}
-
-pub fn instantiate_inherit_stdio(
-    data: &[u8],
-    bin_name: &str,
-    workspace: Option<&Path>,
-) -> anyhow::Result<()> {
-    let r = {
-        let store = Store::default();
-
-        // Create our wasi context.
-        // Additionally register any preopened directories if we have them.
-        let mut builder = WasiCtxBuilder::new();
-
-        builder = builder.arg(bin_name)?.arg(".")?.inherit_stdio();
-
-        if let Some(workspace) = workspace {
-            println!("preopen: {:?}", workspace);
-            let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(workspace) }?;
-            builder = builder.preopened_dir(preopen_dir, ".")?;
-        }
-
-        let snapshot1 = Wasi::new(&store, builder.build()?);
-
-        let mut linker = Linker::new(&store);
-
-        snapshot1.add_to_linker(&mut linker)?;
-
-        let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
-        let instance = linker.instantiate(&module)?;
-        let start = instance.get_typed_func::<(), ()>("_start")?;
-        start.call(()).map_err(anyhow::Error::from)
-    };
-
-    match r {
-        Ok(()) => Ok(()),
-        Err(trap) => Err(trap.context(format!("error while testing Wasm module '{}'", bin_name,))),
     }
 }
