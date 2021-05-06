@@ -208,7 +208,6 @@ jobs:
     name: Test
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         build: [stable, beta, nightly, windows, macos]
         include:
@@ -263,9 +262,6 @@ jobs:
     - run: cargo run -p run-examples
       env:
         RUST_BACKTRACE: 1
-
-    # DEBUG: run these tests first
-    - run: cargo test -p wasi-tokio
 
     # Build and test all features except for lightbeam
     - run: |
