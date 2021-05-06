@@ -5,7 +5,7 @@ pub mod tokio;
 // Test programs use these environment variables to determine what behavior
 // is expected: different errnos are expected on windows, mac, and other unixes,
 // and other filesystem operations are supported or not.
-pub fn test_suite_environment() -> &'static [(&str, &str)] {
+pub fn test_suite_environment() -> &'static [(&'static str, &'static str)] {
     #[cfg(windows)]
     {
         &[
