@@ -15,7 +15,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
         .block_on(async move {
             let mut config = Config::new();
             config.async_support(true);
-            config.consume_fuel(true);
             Wasi::add_to_config(&mut config);
             let engine = Engine::new(&config)?;
             let store = Store::new(&engine);
@@ -58,7 +57,6 @@ pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> any
             // cap-std-sync does not yet support the sync family of fdflags
             builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-            store.out_of_fuel_async_yield(u32::MAX, 10000);
             Wasi::set_context(&store, builder.build()?)
                 .map_err(|_| anyhow::anyhow!("wasi set_context failed"))?;
 
