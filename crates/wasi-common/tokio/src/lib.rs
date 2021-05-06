@@ -96,10 +96,15 @@ impl WasiCtxBuilder {
     }
 }
 
-// This function takes the "async" code which is in fact blocking
-// but always returns Poll::Ready, and executes it in a dummy executor
-// on a blocking thread in the tokio thread pool.
-pub(crate) fn asyncify<'a, F, Fut, T>(f: F) -> Result<T, Error>
+// Much of this crate is implemented in terms of `async` methods from the
+// wasi-cap-std-sync crate. These methods may be async in signature, however,
+// they are synchronous in implementation (always Poll::Ready on first poll)
+// and perform blocking syscalls.
+//
+// This function takes this blocking code and executes it using a dummy executor
+// to assert its immediate readiness. We tell tokio this is a blocking operation
+// with the block_in_place function.
+pub(crate) fn block_on_dummy_executor<'a, F, Fut, T>(f: F) -> Result<T, Error>
 where
     F: FnOnce() -> Fut + Send + 'a,
     Fut: Future<Output = Result<T, Error>>,

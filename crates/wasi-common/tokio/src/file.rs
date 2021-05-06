@@ -1,4 +1,4 @@
-use crate::asyncify;
+use crate::block_on_dummy_executor;
 use std::any::Any;
 use std::io;
 #[cfg(windows)]
@@ -45,70 +45,70 @@ macro_rules! wasi_file_impl {
                 self
             }
             async fn datasync(&self) -> Result<(), Error> {
-                asyncify(|| self.0.datasync())
+                block_on_dummy_executor(|| self.0.datasync())
             }
             async fn sync(&self) -> Result<(), Error> {
-                asyncify(|| self.0.sync())
+                block_on_dummy_executor(|| self.0.sync())
             }
             async fn get_filetype(&self) -> Result<FileType, Error> {
-                asyncify(|| self.0.get_filetype())
+                block_on_dummy_executor(|| self.0.get_filetype())
             }
             async fn get_fdflags(&self) -> Result<FdFlags, Error> {
-                asyncify(|| self.0.get_fdflags())
+                block_on_dummy_executor(|| self.0.get_fdflags())
             }
             async fn set_fdflags(&mut self, fdflags: FdFlags) -> Result<(), Error> {
-                asyncify(|| self.0.set_fdflags(fdflags))
+                block_on_dummy_executor(|| self.0.set_fdflags(fdflags))
             }
             async fn get_filestat(&self) -> Result<Filestat, Error> {
-                asyncify(|| self.0.get_filestat())
+                block_on_dummy_executor(|| self.0.get_filestat())
             }
             async fn set_filestat_size(&self, size: u64) -> Result<(), Error> {
-                asyncify(move || self.0.set_filestat_size(size))
+                block_on_dummy_executor(move || self.0.set_filestat_size(size))
             }
             async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
-                asyncify(move || self.0.advise(offset, len, advice))
+                block_on_dummy_executor(move || self.0.advise(offset, len, advice))
             }
             async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
-                asyncify(move || self.0.allocate(offset, len))
+                block_on_dummy_executor(move || self.0.allocate(offset, len))
             }
             async fn read_vectored<'a>(
                 &self,
                 bufs: &mut [io::IoSliceMut<'a>],
             ) -> Result<u64, Error> {
-                asyncify(move || self.0.read_vectored(bufs))
+                block_on_dummy_executor(move || self.0.read_vectored(bufs))
             }
             async fn read_vectored_at<'a>(
                 &self,
                 bufs: &mut [io::IoSliceMut<'a>],
                 offset: u64,
             ) -> Result<u64, Error> {
-                asyncify(move || self.0.read_vectored_at(bufs, offset))
+                block_on_dummy_executor(move || self.0.read_vectored_at(bufs, offset))
             }
             async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                asyncify(move || self.0.write_vectored(bufs))
+                block_on_dummy_executor(move || self.0.write_vectored(bufs))
             }
             async fn write_vectored_at<'a>(
                 &self,
                 bufs: &[io::IoSlice<'a>],
                 offset: u64,
             ) -> Result<u64, Error> {
-                asyncify(move || self.0.write_vectored_at(bufs, offset))
+                block_on_dummy_executor(move || self.0.write_vectored_at(bufs, offset))
             }
             async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
-                asyncify(move || self.0.seek(pos))
+                block_on_dummy_executor(move || self.0.seek(pos))
             }
             async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
-                asyncify(move || self.0.peek(buf))
+                block_on_dummy_executor(move || self.0.peek(buf))
             }
             async fn set_times(
                 &self,
                 atime: Option<wasi_common::SystemTimeSpec>,
                 mtime: Option<wasi_common::SystemTimeSpec>,
             ) -> Result<(), Error> {
-                asyncify(move || self.0.set_times(atime, mtime))
+                block_on_dummy_executor(move || self.0.set_times(atime, mtime))
             }
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
-                asyncify(|| self.0.num_ready_bytes())
+                block_on_dummy_executor(|| self.0.num_ready_bytes())
             }
 
             #[cfg(not(windows))]

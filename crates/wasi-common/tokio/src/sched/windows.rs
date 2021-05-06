@@ -1,4 +1,4 @@
-use crate::asyncify;
+use crate::block_on_dummy_executor;
 use anyhow::Context;
 use std::ops::Deref;
 use std::os::windows::io::{AsRawHandle, RawHandle};
@@ -16,7 +16,7 @@ use wasi_common::{
 };
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
-    asyncify(move || poll_oneoff_(poll))
+    block_on_dummy_executor(move || poll_oneoff_(poll))
 }
 
 async fn poll_oneoff_<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {

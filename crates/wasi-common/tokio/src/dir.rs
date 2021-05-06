@@ -1,4 +1,4 @@
-use crate::{asyncify, file::File};
+use crate::{block_on_dummy_executor, file::File};
 use std::any::Any;
 use std::path::PathBuf;
 use wasi_common::{
@@ -29,7 +29,7 @@ impl WasiDir for Dir {
         write: bool,
         fdflags: FdFlags,
     ) -> Result<Box<dyn WasiFile>, Error> {
-        let f = asyncify(move || async move {
+        let f = block_on_dummy_executor(move || async move {
             self.0
                 .open_file_(symlink_follow, path, oflags, read, write, fdflags)
         })?;
@@ -37,12 +37,13 @@ impl WasiDir for Dir {
     }
 
     async fn open_dir(&self, symlink_follow: bool, path: &str) -> Result<Box<dyn WasiDir>, Error> {
-        let d = asyncify(move || async move { self.0.open_dir_(symlink_follow, path) })?;
+        let d =
+            block_on_dummy_executor(move || async move { self.0.open_dir_(symlink_follow, path) })?;
         Ok(Box::new(Dir(d)))
     }
 
     async fn create_dir(&self, path: &str) -> Result<(), Error> {
-        asyncify(|| self.0.create_dir(path))
+        block_on_dummy_executor(|| self.0.create_dir(path))
     }
     async fn readdir(
         &self,
@@ -56,32 +57,32 @@ impl WasiDir for Dir {
             }
         }
 
-        let inner = asyncify(move || self.0.readdir(cursor))?;
+        let inner = block_on_dummy_executor(move || self.0.readdir(cursor))?;
         Ok(Box::new(I(inner)))
     }
 
     async fn symlink(&self, src_path: &str, dest_path: &str) -> Result<(), Error> {
-        asyncify(move || self.0.symlink(src_path, dest_path))
+        block_on_dummy_executor(move || self.0.symlink(src_path, dest_path))
     }
     async fn remove_dir(&self, path: &str) -> Result<(), Error> {
-        asyncify(move || self.0.remove_dir(path))
+        block_on_dummy_executor(move || self.0.remove_dir(path))
     }
 
     async fn unlink_file(&self, path: &str) -> Result<(), Error> {
-        asyncify(move || self.0.unlink_file(path))
+        block_on_dummy_executor(move || self.0.unlink_file(path))
     }
     async fn read_link(&self, path: &str) -> Result<PathBuf, Error> {
-        asyncify(move || self.0.read_link(path))
+        block_on_dummy_executor(move || self.0.read_link(path))
     }
     async fn get_filestat(&self) -> Result<Filestat, Error> {
-        asyncify(|| self.0.get_filestat())
+        block_on_dummy_executor(|| self.0.get_filestat())
     }
     async fn get_path_filestat(
         &self,
         path: &str,
         follow_symlinks: bool,
     ) -> Result<Filestat, Error> {
-        asyncify(move || self.0.get_path_filestat(path, follow_symlinks))
+        block_on_dummy_executor(move || self.0.get_path_filestat(path, follow_symlinks))
     }
     async fn rename(
         &self,
@@ -93,7 +94,9 @@ impl WasiDir for Dir {
             .as_any()
             .downcast_ref::<Self>()
             .ok_or(Error::badf().context("failed downcast to tokio Dir"))?;
-        asyncify(move || async move { self.0.rename_(src_path, &dest_dir.0, dest_path) })
+        block_on_dummy_executor(
+            move || async move { self.0.rename_(src_path, &dest_dir.0, dest_path) },
+        )
     }
     async fn hard_link(
         &self,
@@ -105,7 +108,9 @@ impl WasiDir for Dir {
             .as_any()
             .downcast_ref::<Self>()
             .ok_or(Error::badf().context("failed downcast to tokio Dir"))?;
-        asyncify(move || async move { self.0.hard_link_(src_path, &target_dir.0, target_path) })
+        block_on_dummy_executor(move || async move {
+            self.0.hard_link_(src_path, &target_dir.0, target_path)
+        })
     }
     async fn set_times(
         &self,
@@ -114,7 +119,7 @@ impl WasiDir for Dir {
         mtime: Option<wasi_common::SystemTimeSpec>,
         follow_symlinks: bool,
     ) -> Result<(), Error> {
-        asyncify(move || self.0.set_times(path, atime, mtime, follow_symlinks))
+        block_on_dummy_executor(move || self.0.set_times(path, atime, mtime, follow_symlinks))
     }
 }
 
