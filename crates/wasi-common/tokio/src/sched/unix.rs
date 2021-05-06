@@ -28,7 +28,8 @@ impl<'a, T> Future for FirstReady<'a, T> {
             match f.as_mut().poll(cx) {
                 FPoll::Ready(r) => match result {
                     // First ready gets to set the result. But, continue the loop so all futures
-                    // get the opportunity to become ready.
+                    // which are ready simultaneously (often on first poll) get to report their
+                    // readiness.
                     FPoll::Pending => {
                         result = FPoll::Ready(r);
                     }
