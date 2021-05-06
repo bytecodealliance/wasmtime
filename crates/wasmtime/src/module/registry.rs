@@ -563,17 +563,18 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
     )?;
     // Create an instance to ensure the frame information is registered.
     Instance::new(&store, &module, &[])?;
-    let modules = store.modules().borrow();
-    for (i, alloc) in module.compiled_module().finished_functions() {
-        let (start, end) = unsafe {
-            let ptr = (**alloc).as_ptr();
-            let len = (**alloc).len();
-            (ptr as usize, ptr as usize + len)
-        };
-        for pc in start..end {
-            let (frame, _) = modules.lookup_frame_info(pc).unwrap();
-            assert!(frame.func_index() == i.as_u32());
+    GlobalModuleRegistry::with(|modules| {
+        for (i, alloc) in module.compiled_module().finished_functions() {
+            let (start, end) = unsafe {
+                let ptr = (**alloc).as_ptr();
+                let len = (**alloc).len();
+                (ptr as usize, ptr as usize + len)
+            };
+            for pc in start..end {
+                let (frame, _, _) = modules.lookup_frame_info(pc).unwrap();
+                assert!(frame.func_index() == i.as_u32());
+            }
         }
-    }
+    });
     Ok(())
 }
