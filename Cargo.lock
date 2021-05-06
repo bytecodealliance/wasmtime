@@ -3135,6 +3135,7 @@ name = "wasi-cap-std-sync"
 version = "0.26.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bitflags",
  "cap-fs-ext",
  "cap-rand",
@@ -3148,7 +3149,6 @@ dependencies = [
  "tracing",
  "unsafe-io",
  "wasi-common",
- "wiggle",
  "winapi",
 ]
 

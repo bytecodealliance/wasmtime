@@ -155,9 +155,8 @@ async fn _run_wasm(inputs: Inputs) -> Result<(), Error> {
     // Instantiate
     let instance = linker.instantiate_async(&inputs.env.module).await?;
     instance
-        .get_typed_func("_start")
-        .ok_or_else(|| anyhow!("wasm is a wasi command with export _start"))?
-        .call_async(&[])
+        .get_typed_func::<(), ()>("_start")?
+        .call_async(())
         .await?;
 
     Ok(())
