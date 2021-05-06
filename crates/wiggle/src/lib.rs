@@ -954,7 +954,7 @@ impl From<GuestError> for Trap {
     }
 }
 
-pub unsafe fn run_in_dummy_executor<F: std::future::Future>(future: F) -> F::Output {
+pub fn run_in_dummy_executor<F: std::future::Future>(future: F) -> F::Output {
     use std::pin::Pin;
     use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 

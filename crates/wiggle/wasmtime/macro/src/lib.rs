@@ -320,7 +320,7 @@ fn generate_func(
                 let #name_ident = wasmtime::Func::wrap(
                     store,
                     move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
-                        unsafe { #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*)) }
+                        #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*))
                     }
                 );
             });
@@ -372,7 +372,7 @@ fn generate_func(
                             .store()
                             .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
                             .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
-                        unsafe { #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*)) }
+                        #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*))
                     },
                 );
             }
