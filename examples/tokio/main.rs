@@ -79,6 +79,10 @@ impl Inputs {
 fn run_wasm(inputs: Inputs) -> impl Future<Output = Result<(), Error>> {
     use std::pin::Pin;
     use std::task::{Context, Poll};
+    // IMPORTANT: The current wasmtime API is very challenging to use safely
+    // on an async runtime. This RFC describes a redesign of the API that will
+    // resolve these safety issues:
+    // https://github.com/alexcrichton/rfcs-2/blob/new-api/accepted/new-api.md
 
     // This is a "marker type future" which simply wraps some other future and
     // the only purpose it serves is to forward the implementation of `Future`
@@ -151,10 +155,8 @@ async fn _run_wasm(inputs: Inputs) -> Result<(), Error> {
     // Instantiate
     let instance = linker.instantiate_async(&inputs.env.module).await?;
     instance
-        .get_export("_start")
+        .get_typed_func("_start")
         .ok_or_else(|| anyhow!("wasm is a wasi command with export _start"))?
-        .into_func()
-        .ok_or_else(|| anyhow!("_start is a func"))?
         .call_async(&[])
         .await?;
 
