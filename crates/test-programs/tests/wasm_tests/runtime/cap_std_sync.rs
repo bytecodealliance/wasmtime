@@ -15,7 +15,12 @@ pub fn instantiate_inherit_stdio(
     run(data, bin_name, workspace, true)
 }
 
-fn run(data: &[u8], bin_name: &str, workspace: Option<&Path>, stdio: bool) -> anyhow::Result<()> {
+fn run(
+    data: &[u8],
+    bin_name: &str,
+    workspace: Option<&Path>,
+    inherit_stdio: bool,
+) -> anyhow::Result<()> {
     let stdout = WritePipe::new_in_memory();
     let stderr = WritePipe::new_in_memory();
 
@@ -26,15 +31,15 @@ fn run(data: &[u8], bin_name: &str, workspace: Option<&Path>, stdio: bool) -> an
         // Additionally register any preopened directories if we have them.
         let mut builder = WasiCtxBuilder::new();
 
-        if stdio {
+        if inherit_stdio {
             builder = builder.inherit_stdio();
+        } else {
+            builder = builder
+                .stdout(Box::new(stdout.clone()))
+                .stderr(Box::new(stderr.clone()));
         }
 
-        builder = builder
-            .arg(bin_name)?
-            .arg(".")?
-            .stdout(Box::new(stdout.clone()))
-            .stderr(Box::new(stderr.clone()));
+        builder = builder.arg(bin_name)?.arg(".")?;
 
         if let Some(workspace) = workspace {
             println!("preopen: {:?}", workspace);
