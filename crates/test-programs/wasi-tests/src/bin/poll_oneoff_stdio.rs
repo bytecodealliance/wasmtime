@@ -95,7 +95,7 @@ unsafe fn test_stdout_stderr_write() {
             u: wasi::SubscriptionUU {
                 clock: wasi::SubscriptionClock {
                     id: wasi::CLOCKID_MONOTONIC,
-                    timeout: 5_000_000u64, // 5 milliseconds
+                    timeout: 10_000_000u64, // 10 milliseconds
                     precision: 0,
                     flags: 0,
                 },
