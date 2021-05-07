@@ -40,7 +40,7 @@ async fn empty_file_readable() -> Result<(), Error> {
         clocks
             .monotonic
             .now(clocks.monotonic.resolution())
-            .checked_add(Duration::from_millis(1))
+            .checked_add(Duration::from_millis(5))
             .unwrap(),
         clocks.monotonic.resolution(),
         Userdata::from(0),
@@ -83,7 +83,7 @@ async fn empty_file_writable() -> Result<(), Error> {
         clocks
             .monotonic
             .now(clocks.monotonic.resolution())
-            .checked_add(Duration::from_millis(1))
+            .checked_add(Duration::from_millis(5))
             .unwrap(),
         clocks.monotonic.resolution(),
         Userdata::from(0),
@@ -111,7 +111,7 @@ async fn stdio_readable() -> Result<(), Error> {
     let deadline = clocks
         .monotonic
         .now(clocks.monotonic.resolution())
-        .checked_add(Duration::from_millis(1))
+        .checked_add(Duration::from_millis(5))
         .unwrap();
 
     let mut waiting_on: HashMap<u64, Box<dyn WasiFile>> = vec![
