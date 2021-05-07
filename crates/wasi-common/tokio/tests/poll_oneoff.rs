@@ -40,7 +40,7 @@ async fn empty_file_readable() -> Result<(), Error> {
         clocks
             .monotonic
             .now(clocks.monotonic.resolution())
-            .checked_add(Duration::from_millis(5))
+            .checked_add(Duration::from_millis(10))
             .unwrap(),
         clocks.monotonic.resolution(),
         Userdata::from(0),
@@ -49,11 +49,10 @@ async fn empty_file_readable() -> Result<(), Error> {
 
     let events = poll.results();
 
-    assert_eq!(events.len(), 1, "expected 1 event, got: {:?}", events);
-    match events[0] {
+    match events.get(0).expect("at least one event") {
         (SubscriptionResult::Read(Ok((1, flags))), ud) => {
-            assert_eq!(flags, RwEventFlags::empty());
-            assert_eq!(ud, Userdata::from(123));
+            assert_eq!(*flags, RwEventFlags::empty());
+            assert_eq!(*ud, Userdata::from(123));
         }
         _ => panic!("expected (Read(Ok(1, empty), 123), got: {:?}", events[0]),
     }
@@ -83,7 +82,7 @@ async fn empty_file_writable() -> Result<(), Error> {
         clocks
             .monotonic
             .now(clocks.monotonic.resolution())
-            .checked_add(Duration::from_millis(5))
+            .checked_add(Duration::from_millis(10))
             .unwrap(),
         clocks.monotonic.resolution(),
         Userdata::from(0),
@@ -92,11 +91,10 @@ async fn empty_file_writable() -> Result<(), Error> {
 
     let events = poll.results();
 
-    assert_eq!(events.len(), 1);
-    match events[0] {
+    match events.get(0).expect("at least one event") {
         (SubscriptionResult::Write(Ok((0, flags))), ud) => {
-            assert_eq!(flags, RwEventFlags::empty());
-            assert_eq!(ud, Userdata::from(123));
+            assert_eq!(*flags, RwEventFlags::empty());
+            assert_eq!(*ud, Userdata::from(123));
         }
         _ => panic!(""),
     }
@@ -111,7 +109,7 @@ async fn stdio_readable() -> Result<(), Error> {
     let deadline = clocks
         .monotonic
         .now(clocks.monotonic.resolution())
-        .checked_add(Duration::from_millis(5))
+        .checked_add(Duration::from_millis(10))
         .unwrap();
 
     let mut waiting_on: HashMap<u64, Box<dyn WasiFile>> = vec![
