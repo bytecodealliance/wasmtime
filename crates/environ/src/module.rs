@@ -7,6 +7,7 @@ use cranelift_wasm::*;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -86,7 +87,7 @@ pub struct MemoryInitializer {
     /// Optionally, a global variable giving a base index.
     pub base: Option<GlobalIndex>,
     /// The offset to add to the base.
-    pub offset: usize,
+    pub offset: u32,
     /// The data to write into the linear memory.
     pub data: Box<[u8]>,
 }
@@ -168,7 +169,15 @@ impl MemoryInitialization {
                             // Perform a bounds check on the segment
                             // As this segment is referencing a defined memory without a global base, the last byte
                             // written to by the segment cannot exceed the memory's initial minimum size
-                            if (initializer.offset + initializer.data.len())
+                            let offset = usize::try_from(initializer.offset).unwrap();
+                            let end = match offset.checked_add(initializer.data.len()) {
+                                Some(end) => end,
+                                None => {
+                                    out_of_bounds = true;
+                                    continue;
+                                }
+                            };
+                            if end
                                 > ((module.memory_plans[initializer.memory_index].memory.minimum
                                     as usize)
                                     * WASM_PAGE_SIZE)
@@ -178,8 +187,8 @@ impl MemoryInitialization {
                             }
 
                             let pages = &mut map[index];
-                            let mut page_index = initializer.offset / WASM_PAGE_SIZE;
-                            let mut page_offset = initializer.offset % WASM_PAGE_SIZE;
+                            let mut page_index = offset / WASM_PAGE_SIZE;
+                            let mut page_offset = offset % WASM_PAGE_SIZE;
                             let mut data_offset = 0;
                             let mut data_remaining = initializer.data.len();
 
@@ -268,7 +277,7 @@ pub struct TableInitializer {
     /// Optionally, a global variable giving a base index.
     pub base: Option<GlobalIndex>,
     /// The offset to add to the base.
-    pub offset: usize,
+    pub offset: u32,
     /// The values to write into the table elements.
     pub elements: Box<[FuncIndex]>,
 }

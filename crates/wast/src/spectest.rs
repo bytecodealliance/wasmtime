@@ -39,7 +39,7 @@ pub fn link_spectest(linker: &mut Linker) -> Result<()> {
     linker.define("spectest", "table", table)?;
 
     let ty = MemoryType::new(Limits::new(1, Some(2)));
-    let memory = Memory::new(linker.store(), ty);
+    let memory = Memory::new(linker.store(), ty)?;
     linker.define("spectest", "memory", memory)?;
 
     Ok(())

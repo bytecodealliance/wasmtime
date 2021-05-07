@@ -1855,25 +1855,29 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             if ty == types::I64X2 {
-                // This lowering could be a single instruction with AVX512F/VL's VPABSQ instruction.
-                // Instead, we use a separate register, `tmp`, to contain the results of `0 - src`
-                // and then blend in those results with `BLENDVPD` if the MSB of `tmp` was set to 1
-                // (i.e. if `tmp` was negative or, conversely, if `src` was originally positive).
+                if isa_flags.use_avx512f_simd() || isa_flags.use_avx512vl_simd() {
+                    ctx.emit(Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, src, dst));
+                } else {
+                    // If `VPABSQ` from AVX512 is unavailable, we use a separate register, `tmp`, to
+                    // contain the results of `0 - src` and then blend in those results with
+                    // `BLENDVPD` if the MSB of `tmp` was set to 1 (i.e. if `tmp` was negative or,
+                    // conversely, if `src` was originally positive).
 
-                // Emit all 0s into the `tmp` register.
-                let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
-                // Subtract the lanes from 0 and set up `dst`.
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubq, src.clone(), tmp));
-                ctx.emit(Inst::gen_move(dst, tmp.to_reg(), ty));
-                // Choose the subtracted lanes when `tmp` has an MSB of 1. BLENDVPD's semantics
-                // require the "choice" mask to be in XMM0.
-                ctx.emit(Inst::gen_move(
-                    Writable::from_reg(regs::xmm0()),
-                    tmp.to_reg(),
-                    ty,
-                ));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Blendvpd, src, dst));
+                    // Emit all 0s into the `tmp` register.
+                    let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
+                    // Subtract the lanes from 0 and set up `dst`.
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubq, src.clone(), tmp));
+                    ctx.emit(Inst::gen_move(dst, tmp.to_reg(), ty));
+                    // Choose the subtracted lanes when `tmp` has an MSB of 1. BLENDVPD's semantics
+                    // require the "choice" mask to be in XMM0.
+                    ctx.emit(Inst::gen_move(
+                        Writable::from_reg(regs::xmm0()),
+                        tmp.to_reg(),
+                        ty,
+                    ));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Blendvpd, src, dst));
+                }
             } else if ty.is_vector() {
                 let opcode = match ty {
                     types::I8X16 => SseOpcode::Pabsb,

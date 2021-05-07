@@ -121,8 +121,8 @@ pub(crate) fn create_unwind_info(
         fn sp(&self) -> u16 {
             X86_64::RSP.0
         }
-        fn fp(&self) -> u16 {
-            X86_64::RBP.0
+        fn fp(&self) -> Option<u16> {
+            Some(X86_64::RBP.0)
         }
     }
     let map = RegisterMapper(isa);

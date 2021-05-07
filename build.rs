@@ -220,10 +220,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
         },
         "Cranelift" => match (testsuite, testname) {
             ("simd", _) if cfg!(feature = "old-x86-backend") => return true, // skip all SIMD tests on old backend.
-            // These are only implemented on x64.
-            ("simd", "simd_i64x2_arith2") | ("simd", "simd_boolean") => {
-                return !platform_is_x64() || cfg!(feature = "old-x86-backend")
-            }
             // These are new instructions that are not really implemented in any backend.
             ("simd", "simd_i8x16_arith2")
             | ("simd", "simd_conversions")

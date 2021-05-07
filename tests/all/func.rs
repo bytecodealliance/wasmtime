@@ -774,3 +774,30 @@ fn wrap_multiple_results() -> anyhow::Result<()> {
         f64 "f64" F64 f64::from_bits(a),
     }
 }
+
+#[test]
+fn trampoline_for_declared_elem() -> anyhow::Result<()> {
+    let engine = Engine::default();
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (elem declare func $f)
+                (func $f)
+                (func (export "g") (result funcref)
+                  (ref.func $f)
+                )
+            )
+        "#,
+    )?;
+
+    let store = Store::new(&engine);
+    let instance = Instance::new(&store, &module, &[])?;
+
+    let g = instance.get_typed_func::<(), Option<Func>>("g")?;
+
+    let func = g.call(())?;
+    func.unwrap().call(&[])?;
+    Ok(())
+}

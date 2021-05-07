@@ -284,14 +284,6 @@ WASMTIME_CONFIG_PROP(void, static_memory_guard_size, uint64_t)
 WASMTIME_CONFIG_PROP(void, dynamic_memory_guard_size, uint64_t)
 
 /**
- * \brief Configures the maximum number of instances that can be created.
- *
- * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.max_instances.
- */
-WASMTIME_CONFIG_PROP(void, max_instances, size_t)
-
-/**
  * \brief Enables Wasmtime's cache and loads configuration from the specified
  * path.
  *
@@ -1000,9 +992,13 @@ WASM_API_EXTERN own wasmtime_error_t* wasmtime_module_serialize(
 
 /**
  * \brief Build a module from serialized data.
- * *
+ *
  * This function does not take ownership of any of its arguments, but the
  * returned error and module are owned by the caller.
+ *
+ * This function is not safe to receive arbitrary user input. See the Rust
+ * documentation for more information on what inputs are safe to pass in here
+ * (e.g. only that of #wasmtime_module_serialize)
  */
 WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
     wasm_engine_t *engine,

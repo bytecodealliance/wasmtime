@@ -146,7 +146,7 @@ impl StackSlot {
 /// [`VmContext`](super::GlobalValueData::VMContext) using
 /// [`FuncEnvironment::make_global`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_global).
 /// - When compiling to native code, you can use it for objects in static memory with
-/// [`Module::declare_data_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/struct.Module.html#method.declare_data_in_func).
+/// [`Module::declare_data_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/trait.Module.html#method.declare_data_in_func).
 /// - For any compilation target, it can be registered with
 /// [`FunctionBuilder::create_global_value`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.create_global_value).
 ///
@@ -264,9 +264,9 @@ impl JumpTable {
 ///
 /// - [`FunctionBuilder::import_function`](https://docs.rs/cranelift-frontend/*/cranelift_frontend/struct.FunctionBuilder.html#method.import_function)
 /// for external functions
-/// - [`Module::declare_func_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/struct.Module.html#method.declare_func_in_func)
+/// - [`Module::declare_func_in_func`](https://docs.rs/cranelift-module/*/cranelift_module/trait.Module.html#method.declare_func_in_func)
 /// for functions declared elsewhere in the same native
-/// [`Module`](https://docs.rs/cranelift-module/*/cranelift_module/struct.Module.html)
+/// [`Module`](https://docs.rs/cranelift-module/*/cranelift_module/trait.Module.html)
 /// - [`FuncEnvironment::make_direct_func`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_direct_func)
 /// for functions declared in the same WebAssembly
 /// [`FuncEnvironment`](https://docs.rs/cranelift-wasm/*/cranelift_wasm/trait.FuncEnvironment.html#tymethod.make_direct_func)

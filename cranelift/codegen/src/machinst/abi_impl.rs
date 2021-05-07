@@ -444,6 +444,7 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
+        outgoing_args_size: u32,
     ) -> (u64, SmallVec<[Self::I; 16]>);
 
     /// Generate a clobber-restore sequence. This sequence should perform the
@@ -455,6 +456,7 @@ pub trait ABIMachineSpec {
         flags: &settings::Flags,
         clobbers: &Set<Writable<RealReg>>,
         fixed_frame_storage_size: u32,
+        outgoing_args_size: u32,
     ) -> SmallVec<[Self::I; 16]>;
 
     /// Generate a call instruction/sequence. This method is provided one
@@ -576,6 +578,8 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     stackslots: PrimaryMap<StackSlot, u32>,
     /// Total stack size of all stackslots.
     stackslots_size: u32,
+    /// Stack size to be reserved for outgoing arguments.
+    outgoing_args_size: u32,
     /// Clobbered registers, from regalloc.
     clobbered: Set<Writable<RealReg>>,
     /// Total number of spillslots, from regalloc.
@@ -691,6 +695,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             sig,
             stackslots,
             stackslots_size: stack_offset,
+            outgoing_args_size: 0,
             clobbered: Set::empty(),
             spillslots: None,
             fixed_frame_storage_size: 0,
@@ -914,6 +919,12 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         if self.sig.stack_ret_arg.is_some() {
             assert!(maybe_tmp.is_some());
             self.ret_area_ptr = maybe_tmp;
+        }
+    }
+
+    fn accumulate_outgoing_args_size(&mut self, size: u32) {
+        if size > self.outgoing_args_size {
+            self.outgoing_args_size = size;
         }
     }
 
@@ -1198,6 +1209,15 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+
+        // Integer types smaller than word size have been spilled as words below,
+        // and therefore must be reloaded in the same type.
+        let ty = if ty.is_int() && ty.bytes() < M::word_bytes() {
+            M::word_type()
+        } else {
+            ty
+        };
+
         gen_load_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), into_regs, ty)
     }
 
@@ -1213,6 +1233,19 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
         trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+
+        // When reloading from a spill slot, we might have lost information about real integer
+        // types. For instance, on the x64 backend, a zero-extension can become spurious and
+        // optimized into a move, causing vregs of types I32 and I64 to share the same coalescing
+        // equivalency class. As a matter of fact, such a value can be spilled as an I32 and later
+        // reloaded as an I64; to make sure the high bits are always defined, do a word-sized store
+        // all the time, in this case.
+        let ty = if ty.is_int() && ty.bytes() < M::word_bytes() {
+            M::word_type()
+        } else {
+            ty
+        };
+
         gen_store_stack_multi::<M>(StackAMode::NominalSPOffset(sp_off, ty), from_regs, ty)
     }
 
@@ -1285,11 +1318,12 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         }
 
         // Save clobbered registers.
-        let (_, clobber_insts) = M::gen_clobber_save(
+        let (clobber_size, clobber_insts) = M::gen_clobber_save(
             self.call_conv,
             &self.flags,
             &self.clobbered,
             self.fixed_frame_storage_size,
+            self.outgoing_args_size,
         );
         insts.extend(clobber_insts);
 
@@ -1304,7 +1338,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // [crate::machinst::abi_impl](this module) for more details
         // on stackframe layout and nominal SP maintenance.
 
-        self.total_frame_size = Some(total_stacksize);
+        self.total_frame_size = Some(total_stacksize + clobber_size as u32);
         insts
     }
 
@@ -1317,6 +1351,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             &self.flags,
             &self.clobbered,
             self.fixed_frame_storage_size,
+            self.outgoing_args_size,
         ));
 
         // N.B.: we do *not* emit a nominal SP adjustment here, because (i) there will be no
@@ -1517,6 +1552,11 @@ impl<M: ABIMachineSpec> ABICaller for ABICallerImpl<M> {
         } else {
             self.sig.args.len()
         }
+    }
+
+    fn accumulate_outgoing_args_size<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {
+        let off = self.sig.stack_arg_space + self.sig.stack_ret_space;
+        ctx.abi().accumulate_outgoing_args_size(off as u32);
     }
 
     fn emit_stack_pre_adjust<C: LowerCtx<I = Self::I>>(&self, ctx: &mut C) {

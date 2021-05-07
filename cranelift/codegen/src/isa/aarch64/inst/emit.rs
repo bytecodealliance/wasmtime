@@ -427,6 +427,15 @@ fn enc_vec_rr_misc(qu: u32, size: u32, bits_12_16: u32, rd: Writable<Reg>, rn: R
         | machreg_to_vec(rd.to_reg())
 }
 
+fn enc_vec_rr_pair(bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(bits_12_16 & 0b11111, bits_12_16);
+
+    0b010_11110_11_11000_11011_10_00000_00000
+        | bits_12_16 << 12
+        | machreg_to_vec(rn) << 5
+        | machreg_to_vec(rd.to_reg())
+}
+
 fn enc_vec_lanes(q: u32, u: u32, size: u32, opcode: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
     debug_assert_eq!(q & 0b1, q);
     debug_assert_eq!(u & 0b1, u);
@@ -1628,6 +1637,7 @@ impl MachInstEmit for Inst {
                         debug_assert!(size == VectorSize::Size8x8 || size == VectorSize::Size8x16);
                         (0b0, 0b00101, enc_size)
                     }
+                    VecMisc2::Cmeq0 => (0b0, 0b01001, enc_size),
                 };
                 sink.put4(enc_vec_rr_misc((q << 1) | u, size, bits_12_16, rd, rn));
             }
@@ -2053,6 +2063,13 @@ impl MachInstEmit for Inst {
                         | (machreg_to_vec(rn) << 5)
                         | machreg_to_vec(rd.to_reg()),
                 );
+            }
+            &Inst::VecRRPair { op, rd, rn } => {
+                let bits_12_16 = match op {
+                    VecPairOp::Addp => 0b11011,
+                };
+
+                sink.put4(enc_vec_rr_pair(bits_12_16, rd, rn));
             }
             &Inst::VecRRR {
                 rd,

@@ -14,6 +14,7 @@ vulnerability = "deny"
 unmaintained = "deny"
 yanked = "deny"
 ignore = [
+    "RUSTSEC-2021-0064"
 ]
 
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
@@ -23,6 +24,7 @@ allow = [
     "Apache-2.0",
     "BSD-2-Clause",
     "CC0-1.0",
+    "ISC",
     "MIT",
     "MPL-2.0",
     "Zlib",

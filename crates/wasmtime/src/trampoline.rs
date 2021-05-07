@@ -19,8 +19,8 @@ use std::sync::Arc;
 use wasmtime_environ::{entity::PrimaryMap, wasm, Module};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    OnDemandInstanceAllocator, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody,
-    VMFunctionImport, VMSharedSignatureIndex,
+    OnDemandInstanceAllocator, VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport,
+    VMSharedSignatureIndex,
 };
 
 /// A wrapper around `wasmtime_runtime::InstanceHandle` which pairs it with the
@@ -77,7 +77,8 @@ fn create_handle(
                 externref_activations_table: store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
+                module_info_lookup: Some(store.module_info_lookup()),
+                limiter: store.limiter().as_ref(),
             },
         )?;
 

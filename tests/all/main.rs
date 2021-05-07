@@ -13,6 +13,7 @@ mod import_calling_export;
 mod import_indexes;
 mod instance;
 mod invoke_func_via_table;
+mod limits;
 mod linker;
 mod memory_creator;
 mod module;

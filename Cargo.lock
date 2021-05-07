@@ -191,30 +191,6 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.55.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75b13ce559e6433d360c26305643803cb52cfbabbc2b9c47ce04a58493dfb443"
-dependencies = [
- "bitflags",
- "cexpr",
- "cfg-if 0.1.10",
- "clang-sys",
- "clap",
- "env_logger 0.7.1",
- "lazy_static",
- "lazycell",
- "log",
- "peeking_take_while",
- "proc-macro2",
- "quote",
- "regex",
- "rustc-hash",
- "shlex",
- "which",
-]
-
-[[package]]
-name = "bindgen"
 version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd4865004a46a0aafb2a0a5eb19d3c9fc46ee5f063a6cfc605c69ac9ecf5263d"
@@ -293,9 +269,9 @@ checksum = "b700ce4376041dcd0a327fd0097c41095743c4c8af8887265942faf1100bd040"
 
 [[package]]
 name = "cap-fs-ext"
-version = "0.13.7"
+version = "0.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dee87a3a916d6f051fc6809c39c4627f0c3a73b2a803bcfbb5fdf2bdfa1da0cb"
+checksum = "c4a7f9bdd49f3979c659811723041929803c986b3ed5381af726a4082e806c27"
 dependencies = [
  "cap-primitives",
  "cap-std",
@@ -306,9 +282,9 @@ dependencies = [
 
 [[package]]
 name = "cap-primitives"
-version = "0.13.7"
+version = "0.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3c3e3ea29994a34f3bc67b5396a43c87597d302d9e2e5e3b3d5ba952d86c7b41"
+checksum = "0e206e688244a8f8158f91d77d3d8ed5891eb27aef2542bb26ceb98b970d5597"
 dependencies = [
  "errno",
  "fs-set-times",
@@ -326,18 +302,18 @@ dependencies = [
 
 [[package]]
 name = "cap-rand"
-version = "0.13.7"
+version = "0.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0418058b38db7efc6021c5ce012e3a39c57e1a4d7bf2ddcd3789771de505d2f"
+checksum = "0842ea6c9a2e078ab901b3b805608af65e11fcbfb87024d37fb129b2b74cb1ac"
 dependencies = [
  "rand 0.8.3",
 ]
 
 [[package]]
 name = "cap-std"
-version = "0.13.7"
+version = "0.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5f20cbb3055e9c72b16ba45913fe9f92836d2aa7a880e1ffacb8d244f454319"
+checksum = "36d8cb4b761a2fb1ccf0e92d795c717bba9dcb1e54636ee0579fca628abfa305"
 dependencies = [
  "cap-primitives",
  "posish",
@@ -358,9 +334,9 @@ dependencies = [
 
 [[package]]
 name = "cap-time-ext"
-version = "0.13.7"
+version = "0.13.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b684f9db089b0558520076b4eeda2b719a5c4c06f329be96c9497f2b48c3944"
+checksum = "bc5c279d213dfe8f71c02c4cd740bd130d1dce39f45fdcdb745ae3de8a777fbd"
 dependencies = [
  "cap-primitives",
  "once_cell",
@@ -561,7 +537,6 @@ name = "cranelift-codegen"
 version = "0.73.0"
 dependencies = [
  "bincode",
- "byteorder",
  "cranelift-bforest",
  "cranelift-codegen-meta",
  "cranelift-codegen-shared",
@@ -577,7 +552,6 @@ dependencies = [
  "smallvec",
  "souper-ir",
  "target-lexicon",
- "thiserror",
  "wast 35.0.2",
 ]
 
@@ -608,7 +582,6 @@ name = "cranelift-filetests"
 version = "0.73.0"
 dependencies = [
  "anyhow",
- "byteorder",
  "cranelift-codegen",
  "cranelift-frontend",
  "cranelift-interpreter",
@@ -678,7 +651,6 @@ dependencies = [
  "cranelift-entity",
  "hashbrown",
  "log",
- "thiserror",
 ]
 
 [[package]]
@@ -718,7 +690,6 @@ dependencies = [
  "cranelift-codegen",
  "smallvec",
  "target-lexicon",
- "thiserror",
 ]
 
 [[package]]
@@ -1389,9 +1360,9 @@ checksum = "47be2f14c678be2fdcab04ab1171db51b2762ce6f0a8ee87c8dd4a04ed216135"
 
 [[package]]
 name = "iter-enum"
-version = "0.2.7"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cad34f24d3b48ceffdff38af2df5ce1b7d1d9cc113e503d8e86fe8cdb889c871"
+checksum = "4f947f0d9df7e69c4df60a950c0a83741455bb9ebd8fd9b5a87994dda4dbb005"
 dependencies = [
  "derive_utils",
  "quote",
@@ -1784,22 +1755,30 @@ checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
 
 [[package]]
 name = "openvino"
-version = "0.1.8"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43eeb44285b7ce8e2012b92bec32968622e1dad452e812e6edea9e001e5e9410"
+checksum = "0cb74b3d8c653f7a9928bda494d329e6363ea0b428d3a3e5805b45ebb74ace76"
 dependencies = [
  "openvino-sys",
  "thiserror",
 ]
 
 [[package]]
-name = "openvino-sys"
-version = "0.1.8"
+name = "openvino-finder"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fb64bef270a1ff665b0b2e28ebfa213e6205a007ce88223d020730225d6008f"
+checksum = "426587a131841eb1e1111b0fea96cbd4fd0fd5d7b6526fb9c41400587d1c525c"
+
+[[package]]
+name = "openvino-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83d5e5d5e913f4e9aa42b2a7ae9c8719aedb4bc0eb443bf92f07d9ee9a05e7b1"
 dependencies = [
- "bindgen 0.55.1",
  "cmake",
+ "lazy_static",
+ "libloading",
+ "openvino-finder",
 ]
 
 [[package]]
@@ -3066,7 +3045,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ada4f4ae167325015f52cc65f9fb6c251b868d8fb3b6dd0ce2d60e497c4870a"
 dependencies = [
- "bindgen 0.57.0",
+ "bindgen",
  "cc",
  "cfg-if 0.1.10",
 ]
@@ -3449,7 +3428,6 @@ dependencies = [
 name = "wasmtime-environ"
 version = "0.26.0"
 dependencies = [
- "anyhow",
  "cfg-if 1.0.0",
  "cranelift-codegen",
  "cranelift-entity",
@@ -3458,7 +3436,6 @@ dependencies = [
  "indexmap",
  "log",
  "more-asserts",
- "region",
  "serde",
  "thiserror",
  "wasmparser",
@@ -3721,15 +3698,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ec280a739b69173e0ffd12c1658507996836ba4e992ed9bc1e5385a0bd72a02"
 dependencies = [
  "wast 35.0.2",
-]
-
-[[package]]
-name = "which"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d011071ae14a2f6671d0b74080ae0cd8ebf3a6f8c9589a2cd45f23126fe29724"
-dependencies = [
- "libc",
 ]
 
 [[package]]

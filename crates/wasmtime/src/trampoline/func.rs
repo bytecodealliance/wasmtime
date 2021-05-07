@@ -1,6 +1,6 @@
 //! Support for a calling of an imported function.
 
-use crate::{sig_registry::SignatureRegistry, Config, FuncType, Trap};
+use crate::{Config, FuncType, Store, Trap};
 use anyhow::Result;
 use std::any::Any;
 use std::cmp;
@@ -262,15 +262,19 @@ pub fn create_function(
     ft: &FuncType,
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     config: &Config,
-    registry: Option<&mut SignatureRegistry>,
+    store: Option<&Store>,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
     let (module, finished_functions, trampoline, trampoline_state) =
         create_function_trampoline(config, ft, func)?;
 
-    // If there is no signature registry, use the default signature index which is
+    // If there is no store, use the default signature index which is
     // guaranteed to trap if there is ever an indirect call on the function (should not happen)
-    let shared_signature_id = registry
-        .map(|r| r.register(ft.as_wasm_func_type(), trampoline))
+    let shared_signature_id = store
+        .map(|s| {
+            s.signatures()
+                .borrow_mut()
+                .register(ft.as_wasm_func_type(), trampoline)
+        })
         .unwrap_or(VMSharedSignatureIndex::default());
 
     unsafe {
@@ -283,7 +287,8 @@ pub fn create_function(
                 host_state: Box::new(trampoline_state),
                 interrupts: std::ptr::null(),
                 externref_activations_table: std::ptr::null_mut(),
-                stack_map_registry: std::ptr::null_mut(),
+                module_info_lookup: None,
+                limiter: None,
             })?,
             trampoline,
         ))
@@ -315,7 +320,8 @@ pub unsafe fn create_raw_function(
             host_state,
             interrupts: std::ptr::null(),
             externref_activations_table: std::ptr::null_mut(),
-            stack_map_registry: std::ptr::null_mut(),
+            module_info_lookup: None,
+            limiter: None,
         })?,
     )
 }

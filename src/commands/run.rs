@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime run` command.
 
-use crate::CommonOptions;
+use crate::{CommonOptions, WasiModules};
 use anyhow::{bail, Context as _, Result};
 use std::thread;
 use std::time::Duration;
@@ -67,7 +67,7 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 
 lazy_static::lazy_static! {
     static ref AFTER_HELP: String = {
-        crate::WASM_FEATURES.to_string()
+        crate::FLAG_EXPLANATIONS.to_string()
     };
 }
 
@@ -143,7 +143,13 @@ impl RunCommand {
         let argv = self.compute_argv();
 
         let mut linker = Linker::new(&store);
-        populate_with_wasi(&mut linker, preopen_dirs, &argv, &self.vars)?;
+        populate_with_wasi(
+            &mut linker,
+            preopen_dirs,
+            &argv,
+            &self.vars,
+            &self.common.wasi_modules.unwrap_or(WasiModules::default()),
+        )?;
 
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
@@ -348,6 +354,7 @@ fn populate_with_wasi(
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
     vars: &[(String, String)],
+    wasi_modules: &WasiModules,
 ) -> Result<()> {
     // Add the current snapshot to the linker.
     let mut builder = WasiCtxBuilder::new();
@@ -357,25 +364,40 @@ fn populate_with_wasi(
         builder = builder.preopened_dir(dir, name)?;
     }
 
-    Wasi::new(linker.store(), builder.build()?).add_to_linker(linker)?;
-
-    #[cfg(feature = "wasi-nn")]
-    {
-        use std::cell::RefCell;
-        use std::rc::Rc;
-        let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
-        wasi_nn.add_to_linker(linker)?;
+    if wasi_modules.wasi_common {
+        Wasi::new(linker.store(), builder.build()?).add_to_linker(linker)?;
     }
 
-    #[cfg(feature = "wasi-crypto")]
-    {
-        use std::cell::RefCell;
-        use std::rc::Rc;
-        let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
-        WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-        WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-        WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-        WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
+    if wasi_modules.wasi_nn {
+        #[cfg(not(feature = "wasi-nn"))]
+        {
+            bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-nn")]
+        {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
+            wasi_nn.add_to_linker(linker)?;
+        }
+    }
+
+    if wasi_modules.wasi_crypto {
+        #[cfg(not(feature = "wasi-crypto"))]
+        {
+            bail!("Cannot enable wasi-crypto when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-crypto")]
+        {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
+            WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+            WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone())
+                .add_to_linker(linker)?;
+            WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+            WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
+        }
     }
 
     Ok(())

@@ -44,6 +44,21 @@ fn log_wasm(wasm: &[u8]) {
     }
 }
 
+fn create_store(engine: &Engine) -> Store {
+    Store::new_with_limits(
+        &engine,
+        StoreLimitsBuilder::new()
+            // The limits here are chosen based on the default "maximum type size"
+            // configured in wasm-smith, which is 1000. This means that instances
+            // are allowed to, for example, export up to 1000 memories. We bump that
+            // a little bit here to give us some slop.
+            .instances(1100)
+            .tables(1100)
+            .memories(1100)
+            .build(),
+    )
+}
+
 /// Methods of timing out execution of a WebAssembly module
 #[derive(Debug)]
 pub enum Timeout {
@@ -95,7 +110,7 @@ pub fn instantiate_with_config(
         _ => false,
     });
     let engine = Engine::new(&config).unwrap();
-    let store = Store::new(&engine);
+    let store = create_store(&engine);
 
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
@@ -203,7 +218,7 @@ pub fn differential_execution(
         config.wasm_module_linking(false);
 
         let engine = Engine::new(&config).unwrap();
-        let store = Store::new(&engine);
+        let store = create_store(&engine);
 
         let module = Module::new(&engine, &wasm).unwrap();
 
@@ -348,7 +363,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             ApiCall::StoreNew => {
                 log::trace!("creating store");
                 assert!(store.is_none());
-                store = Some(Store::new(engine.as_ref().unwrap()));
+                store = Some(create_store(engine.as_ref().unwrap()));
             }
 
             ApiCall::ModuleNew { id, wasm } => {
@@ -439,7 +454,7 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
     config.wasm_module_linking(false);
-    let store = Store::new(&Engine::new(&config).unwrap());
+    let store = create_store(&Engine::new(&config).unwrap());
     if fuzz_config.consume_fuel {
         store.add_fuel(u64::max_value()).unwrap();
     }
@@ -463,7 +478,7 @@ pub fn table_ops(
         let mut config = fuzz_config.to_wasmtime();
         config.wasm_reference_types(true);
         let engine = Engine::new(&config).unwrap();
-        let store = Store::new(&engine);
+        let store = create_store(&engine);
         if fuzz_config.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
         }
@@ -578,7 +593,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     let mut wasmtime_config = config.to_wasmtime();
     wasmtime_config.cranelift_nan_canonicalization(true);
     let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
-    let wasmtime_store = Store::new(&wasmtime_engine);
+    let wasmtime_store = create_store(&wasmtime_engine);
     if config.consume_fuel {
         wasmtime_store.add_fuel(u64::max_value()).unwrap();
     }

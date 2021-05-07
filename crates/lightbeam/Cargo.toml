@@ -17,7 +17,7 @@ cranelift-codegen = { path = "../../cranelift/codegen", version = "0.73.0" }
 derive_more = "0.99"
 dynasm = "1.0.0"
 dynasmrt = "1.0.0"
-iter-enum = "0.2"
+iter-enum = "1"
 itertools = "0.10.0"
 memoffset = "0.6.0"
 more-asserts = "0.2.1"

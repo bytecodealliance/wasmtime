@@ -705,7 +705,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         table_index: TableIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
         for element in elements.iter() {
@@ -743,6 +743,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             "should never get duplicate element indices, that would be a bug in `cranelift_wasm`'s \
              translation"
         );
+        Ok(())
+    }
+
+    fn declare_elements(&mut self, segments: Box<[FuncIndex]>) -> WasmResult<()> {
+        for element in segments.iter() {
+            self.flag_func_possibly_exported(*element);
+        }
         Ok(())
     }
 
@@ -794,7 +801,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         data: &'data [u8],
     ) -> WasmResult<()> {
         match &mut self.result.module.memory_initialization {

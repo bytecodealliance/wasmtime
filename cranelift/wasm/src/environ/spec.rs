@@ -937,7 +937,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         table_index: TableIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()>;
 
@@ -947,6 +947,13 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         index: ElemIndex,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()>;
+
+    /// Indicates that a declarative element segment was seen in the wasm
+    /// module.
+    fn declare_elements(&mut self, elements: Box<[FuncIndex]>) -> WasmResult<()> {
+        drop(elements);
+        Ok(())
+    }
 
     /// Provides the number of passive data segments up front.
     ///
@@ -984,7 +991,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         data: &'data [u8],
     ) -> WasmResult<()>;
 

@@ -18,7 +18,7 @@ lazy_static::lazy_static! {
             The default is a dummy environment that produces placeholder values.\n\
             \n\
             {}",
-            crate::WASM_FEATURES.as_str()
+            crate::FLAG_EXPLANATIONS.as_str()
         )
     };
 }

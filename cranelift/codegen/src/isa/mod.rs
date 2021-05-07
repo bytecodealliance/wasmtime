@@ -69,7 +69,6 @@ use core::fmt;
 use core::fmt::{Debug, Formatter};
 use core::hash::Hasher;
 use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
-use thiserror::Error;
 
 #[cfg(feature = "riscv")]
 mod riscv;
@@ -178,15 +177,28 @@ pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
 }
 
 /// Describes reason for target lookup failure
-#[derive(Error, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum LookupError {
     /// Support for this target was disabled in the current build.
-    #[error("Support for this target is disabled")]
     SupportDisabled,
 
     /// Support for this target has not yet been implemented.
-    #[error("Support for this target has not been implemented yet")]
     Unsupported,
+}
+
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
+impl std::error::Error for LookupError {}
+
+impl fmt::Display for LookupError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            LookupError::SupportDisabled => write!(f, "Support for this target is disabled"),
+            LookupError::Unsupported => {
+                write!(f, "Support for this target has not been implemented yet")
+            }
+        }
+    }
 }
 
 /// Builder for a `TargetIsa`.

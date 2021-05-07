@@ -319,6 +319,10 @@ impl HostFuncMap {
     fn async_required(&self) -> bool {
         self.funcs.values().any(|f| f.1)
     }
+
+    fn iter(&self) -> impl Iterator<Item = &HostFunc> {
+        self.funcs.values().map(|v| &*v.0)
+    }
 }
 
 macro_rules! generate_wrap_async_host_func {
@@ -379,9 +383,6 @@ pub struct Config {
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
-    pub(crate) max_instances: usize,
-    pub(crate) max_tables: usize,
-    pub(crate) max_memories: usize,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     host_funcs: HostFuncMap,
@@ -418,9 +419,6 @@ impl Config {
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
             features: WasmFeatures::default(),
-            max_instances: 10_000,
-            max_tables: 10_000,
-            max_memories: 10_000,
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             host_funcs: HostFuncMap::new(),
@@ -1192,39 +1190,6 @@ impl Config {
         self
     }
 
-    /// Configures the maximum number of instances which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_instances(&mut self, instances: usize) -> &mut Self {
-        self.max_instances = instances;
-        self
-    }
-
-    /// Configures the maximum number of tables which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_tables(&mut self, tables: usize) -> &mut Self {
-        self.max_tables = tables;
-        self
-    }
-
-    /// Configures the maximum number of memories which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_memories(&mut self, memories: usize) -> &mut Self {
-        self.max_memories = memories;
-        self
-    }
-
     /// Defines a host function for the [`Config`] for the given callback.
     ///
     /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
@@ -1317,6 +1282,10 @@ impl Config {
     }
 
     for_each_function_signature!(generate_wrap_async_host_func);
+
+    pub(crate) fn host_funcs(&self) -> impl Iterator<Item = &HostFunc> {
+        self.host_funcs.iter()
+    }
 
     pub(crate) fn get_host_func(&self, module: &str, name: &str) -> Option<&HostFunc> {
         self.host_funcs.get(module, name)

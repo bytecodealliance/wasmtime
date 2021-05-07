@@ -28,7 +28,7 @@ lazy_static::lazy_static! {
             Compiling for a specific platform (Linux) and CPU preset (Skylake):\n\
             \n  \
             wasmtime compile --target x86_64-unknown-linux --cranelift-enable skylake foo.wasm\n",
-            crate::WASM_FEATURES.as_str()
+            crate::FLAG_EXPLANATIONS.as_str()
         )
     };
 }
@@ -126,7 +126,8 @@ mod test {
         command.execute()?;
 
         let engine = Engine::default();
-        let module = Module::from_file(&engine, output_path)?;
+        let contents = std::fs::read(output_path)?;
+        let module = unsafe { Module::deserialize(&engine, contents)? };
         let store = Store::new(&engine);
         let instance = Instance::new(&store, &module, &[])?;
         let f = instance.get_typed_func::<i32, i32>("f")?;

@@ -13,9 +13,9 @@ use wasmtime_environ::wasm::{
 };
 use wasmtime_environ::Initializer;
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, RuntimeInstance, StackMapRegistry,
-    VMContext, VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMGlobalImport,
-    VMMemoryImport, VMTableImport,
+    Imports, InstanceAllocationRequest, InstantiationError, RuntimeInstance, VMContext,
+    VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport,
+    VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -362,6 +362,7 @@ impl<'a> Instantiator<'a> {
                         let expected_ty =
                             self.cur.module.compiled_module().module().type_of(*index);
                         matching::MatchCx {
+                            signatures: self.cur.module.signatures(),
                             types: self.cur.module.types(),
                             store: self.store,
                         }
@@ -505,29 +506,26 @@ impl<'a> Instantiator<'a> {
     fn instantiate_raw(&self) -> Result<StoreInstanceHandle> {
         let compiled_module = self.cur.module.compiled_module();
 
-        // Register the module just before instantiation to ensure we have a
-        // trampoline registered for every signature and to preserve the module's
-        // compiled JIT code within the `Store`.
-        self.store.register_module(&self.cur.module);
+        // Register the module just before instantiation to ensure we keep the module
+        // properly referenced while in use by the store.
+        self.store.modules().borrow_mut().register(&self.cur.module);
 
         unsafe {
             let engine = self.store.engine();
             let allocator = engine.allocator();
-            let signatures = self.store.signatures().borrow();
-            let signatures = signatures.lookup_table(&self.cur.module);
 
             let instance = allocator.allocate(InstanceAllocationRequest {
                 module: compiled_module.module().clone(),
                 finished_functions: compiled_module.finished_functions(),
                 imports: self.cur.build(),
-                shared_signatures: (&signatures).into(),
+                shared_signatures: self.cur.module.signatures().as_module_map().into(),
                 host_state: Box::new(()),
                 interrupts: self.store.interrupts(),
                 externref_activations_table: self.store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_registry: self.store.stack_map_registry() as *const StackMapRegistry
-                    as *mut _,
+                module_info_lookup: Some(self.store.module_info_lookup()),
+                limiter: self.store.limiter().as_ref(),
             })?;
 
             // After we've created the `InstanceHandle` we still need to run
