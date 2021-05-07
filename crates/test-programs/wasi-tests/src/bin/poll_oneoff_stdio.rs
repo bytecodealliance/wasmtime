@@ -68,6 +68,7 @@ unsafe fn test_stdin_read() {
 }
 
 fn writable_subs(h: &HashMap<u64, wasi::Fd>) -> Vec<wasi::Subscription> {
+    println!("writable subs: {:?}", h);
     h.iter()
         .map(|(ud, fd)| wasi::Subscription {
             userdata: *ud,
