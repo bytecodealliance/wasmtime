@@ -25,12 +25,13 @@ use wasi_common::{
 };
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
-    poll_oneoff_(poll, wasi_file_raw_handle).await
+    poll_oneoff_(poll, wasi_file_is_stdin, wasi_file_raw_handle).await
 }
 
 // For reuse by wasi-tokio, which has a different WasiFile -> RawHandle translator.
 pub async fn poll_oneoff_<'a>(
     poll: &mut Poll<'a>,
+    file_is_stdin: impl Fn(&dyn WasiFile) -> bool,
     file_to_handle: impl Fn(&dyn WasiFile) -> Option<RawHandle>,
 ) -> Result<(), Error> {
     if poll.is_empty() {
@@ -58,7 +59,7 @@ pub async fn poll_oneoff_<'a>(
     for s in poll.rw_subscriptions() {
         match s {
             Subscription::Read(r) => {
-                if r.file.as_any().is::<crate::stdio::Stdin>() {
+                if file_is_stdin(r.file.deref()) {
                     stdin_read_subs.push(r);
                 } else if file_to_handle(r.file.deref()).is_some() {
                     immediate_reads.push(r);
@@ -69,7 +70,7 @@ pub async fn poll_oneoff_<'a>(
                 }
             }
             Subscription::Write(w) => {
-                if wasi_file_raw_handle(w.file.deref()).is_some() {
+                if file_to_handle(w.file.deref()).is_some() {
                     immediate_writes.push(w);
                 } else {
                     return Err(
@@ -133,6 +134,11 @@ pub async fn poll_oneoff_<'a>(
 
     Ok(())
 }
+
+pub fn wasi_file_is_stdin(f: &dyn WasiFile) -> bool {
+    f.as_any().is::<crate::stdio::Stdin>()
+}
+
 pub fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
     let a = f.as_any();
     if a.is::<crate::file::File>() {
