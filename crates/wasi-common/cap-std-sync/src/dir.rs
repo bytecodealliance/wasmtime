@@ -116,9 +116,9 @@ impl WasiDir for Dir {
             },
         ]
         .into_iter()
-        .chain(
+        .chain({
             // Now process the `DirEntry`s:
-            self.0.entries()?.map(|entry| {
+            let entries = self.0.entries()?.map(|entry| {
                 let entry = entry?;
                 let meta = entry.full_metadata()?;
                 let inode = meta.ino();
@@ -128,8 +128,27 @@ impl WasiDir for Dir {
                     .into_string()
                     .map_err(|_| Error::illegal_byte_sequence().context("filename"))?;
                 Ok((filetype, inode, name))
-            }),
-        )
+            });
+
+            // On Windows, filter out files like `C:\DumpStack.log.tmp` which we
+            // can't get a full metadata for.
+            #[cfg(windows)]
+            let entries = entries.filter(|entry: &Result<_, wasi_common::Error>| {
+                use winapi::shared::winerror::{ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION};
+                if let Err(err) = entry {
+                    if let Some(err) = err.downcast_ref::<std::io::Error>() {
+                        if err.raw_os_error() == Some(ERROR_SHARING_VIOLATION as i32)
+                            || err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32)
+                        {
+                            return false;
+                        }
+                    }
+                }
+                true
+            });
+
+            entries
+        })
         // Enumeration of the iterator makes it possible to define the ReaddirCursor
         .enumerate()
         .map(|(ix, r)| match r {
