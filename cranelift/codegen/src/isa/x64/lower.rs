@@ -2046,7 +2046,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 ctx.emit(Inst::shift_r(size, shift_kind, count, dst));
             } else if dst_ty == types::I128 {
-                let amt_src = put_input_in_reg(ctx, inputs[1]);
+                let amt_src = put_input_in_regs(ctx, inputs[1]).regs()[0];
                 let src = put_input_in_regs(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]);
 
