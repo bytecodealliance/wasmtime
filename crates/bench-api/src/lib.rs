@@ -83,9 +83,8 @@ use std::env;
 use std::os::raw::{c_int, c_void};
 use std::path::Path;
 use std::slice;
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::sync::{Wasi, WasiCtxBuilder};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;

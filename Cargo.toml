@@ -54,6 +54,7 @@ tempfile = "3.1.0"
 test-programs = { path = "crates/test-programs" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-runtime = { path = "crates/runtime" }
+tokio = { version = "1.5.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.2.16"
 wast = "35.0.0"
 
@@ -78,8 +79,10 @@ members = [
   "crates/wiggle/wasmtime",
   "crates/wasi-common",
   "crates/wasi-common/cap-std-sync",
+  "crates/wasi-common/tokio",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
+  "examples/tokio/wasm",
   "fuzz",
 ]
 
@@ -106,6 +109,10 @@ maintenance = { status = "actively-developed" }
 [[test]]
 name = "host_segfault"
 harness = false
+
+[[example]]
+name = "tokio"
+required-features = ["wasmtime-wasi/tokio"]
 
 [profile.dev.package.backtrace]
 debug = false # FIXME(#1813)

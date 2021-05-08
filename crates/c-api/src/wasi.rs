@@ -12,9 +12,10 @@ use std::slice;
 use std::str;
 use wasmtime::{Extern, Linker, Trap};
 use wasmtime_wasi::{
-    snapshots::preview_0::Wasi as WasiSnapshot0,
-    snapshots::preview_1::Wasi as WasiPreview1,
-    sync::{Dir, WasiCtxBuilder},
+    sync::{
+        snapshots::preview_0::Wasi as WasiSnapshot0, snapshots::preview_1::Wasi as WasiPreview1,
+        Dir, WasiCtxBuilder,
+    },
     WasiCtx,
 };
 

@@ -7,10 +7,7 @@
 //! Individual snapshots are available through
 //! `wasmtime_wasi::snapshots::preview_{0, 1}::Wasi::new(&Store, Rc<RefCell<WasiCtx>>)`.
 
-use std::cell::RefCell;
-use std::rc::Rc;
 pub use wasi_common::{Error, WasiCtx, WasiCtxBuilder, WasiDir, WasiFile};
-use wasmtime::{Config, Linker, Store};
 
 /// Re-export the commonly used wasi-cap-std-sync crate here. This saves
 /// consumers of this library from having to keep additional dependencies
@@ -18,7 +15,35 @@ use wasmtime::{Config, Linker, Store};
 #[cfg(feature = "sync")]
 pub mod sync {
     pub use wasi_cap_std_sync::*;
+    super::define_wasi!(block_on);
 }
+
+/// Sync mode is the "default" of this crate, so we also export it at the top
+/// level.
+#[cfg(feature = "sync")]
+pub use sync::*;
+
+/// Re-export the wasi-tokio crate here. This saves consumers of this library from having
+/// to keep additional dependencies in sync.
+#[cfg(feature = "tokio")]
+pub mod tokio {
+    pub use wasi_tokio::*;
+    super::define_wasi!(async);
+}
+
+// The only difference between these definitions for sync vs async is whether
+// the wasmtime::Funcs generated are async (& therefore need an async Store and an executor to run)
+// or whether they have an internal "dummy executor" that expects the implementation of all
+// the async funcs to poll to Ready immediately.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! define_wasi {
+    ($async_mode: tt) => {
+
+use std::cell::RefCell;
+use std::rc::Rc;
+use wasmtime::{Config, Linker, Store};
+use wasi_common::WasiCtx;
 
 /// An instantiated instance of all available wasi exports. Presently includes
 /// both the "preview1" snapshot and the "unstable" (preview0) snapshot.
@@ -79,6 +104,7 @@ necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
                 },
             },
+            $async_mode: *
         });
     }
     pub mod preview_0 {
@@ -106,6 +132,9 @@ necessary. Additionally [`Wasi::get_export`] can be used to do name-based
 resolution.",
                 },
             },
+            $async_mode: *
         });
     }
+}
+}
 }

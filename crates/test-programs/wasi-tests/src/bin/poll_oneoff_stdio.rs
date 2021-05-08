@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use wasi_tests::{assert_errno, STDERR_FD, STDIN_FD, STDOUT_FD};
 
@@ -46,7 +47,7 @@ unsafe fn test_stdin_read() {
     let out = poll_oneoff_impl(&r#in).unwrap();
     // The result should be either a timeout, or that stdin is ready for reading.
     // Both are valid behaviors that depend on the test environment.
-    assert!(out.len() >= 1, "should return at least 1 event");
+    assert!(out.len() >= 1, "stdin read should return at least 1 event");
     for event in out {
         if event.r#type == wasi::EVENTTYPE_CLOCK {
             assert_errno!(event.error, wasi::ERRNO_SUCCESS);
@@ -66,55 +67,61 @@ unsafe fn test_stdin_read() {
     }
 }
 
+fn writable_subs(h: &HashMap<u64, wasi::Fd>) -> Vec<wasi::Subscription> {
+    println!("writable subs: {:?}", h);
+    h.iter()
+        .map(|(ud, fd)| wasi::Subscription {
+            userdata: *ud,
+            u: wasi::SubscriptionU {
+                tag: wasi::EVENTTYPE_FD_WRITE,
+                u: wasi::SubscriptionUU {
+                    fd_write: wasi::SubscriptionFdReadwrite {
+                        file_descriptor: *fd,
+                    },
+                },
+            },
+        })
+        .collect()
+}
+
 unsafe fn test_stdout_stderr_write() {
-    let stdout_readwrite = wasi::SubscriptionFdReadwrite {
-        file_descriptor: STDOUT_FD,
-    };
-    let stderr_readwrite = wasi::SubscriptionFdReadwrite {
-        file_descriptor: STDERR_FD,
-    };
-    let r#in = [
-        wasi::Subscription {
-            userdata: 1,
-            u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_WRITE,
-                u: wasi::SubscriptionUU {
-                    fd_write: stdout_readwrite,
+    let mut writable: HashMap<u64, wasi::Fd> =
+        vec![(1, STDOUT_FD), (2, STDERR_FD)].into_iter().collect();
+
+    let clock = wasi::Subscription {
+        userdata: CLOCK_ID,
+        u: wasi::SubscriptionU {
+            tag: wasi::EVENTTYPE_CLOCK,
+            u: wasi::SubscriptionUU {
+                clock: wasi::SubscriptionClock {
+                    id: wasi::CLOCKID_MONOTONIC,
+                    timeout: 10_000_000u64, // 10 milliseconds
+                    precision: 0,
+                    flags: 0,
                 },
             },
         },
-        wasi::Subscription {
-            userdata: 2,
-            u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_WRITE,
-                u: wasi::SubscriptionUU {
-                    fd_write: stderr_readwrite,
-                },
-            },
-        },
-    ];
-    let out = poll_oneoff_impl(&r#in).unwrap();
-    assert_eq!(out.len(), 2, "should return 2 events");
-    assert_eq!(
-        out[0].userdata, 1,
-        "the event.userdata should contain fd userdata specified by the user"
-    );
-    assert_errno!(out[0].error, wasi::ERRNO_SUCCESS);
-    assert_eq!(
-        out[0].r#type,
-        wasi::EVENTTYPE_FD_WRITE,
-        "the event.type should equal FD_WRITE"
-    );
-    assert_eq!(
-        out[1].userdata, 2,
-        "the event.userdata should contain fd userdata specified by the user"
-    );
-    assert_errno!(out[1].error, wasi::ERRNO_SUCCESS);
-    assert_eq!(
-        out[1].r#type,
-        wasi::EVENTTYPE_FD_WRITE,
-        "the event.type should equal FD_WRITE"
-    );
+    };
+    while !writable.is_empty() {
+        let mut subs = writable_subs(&writable);
+        subs.push(clock.clone());
+        let out = poll_oneoff_impl(&subs).unwrap();
+        for event in out {
+            match event.userdata {
+                CLOCK_ID => {
+                    panic!("timed out with the following pending subs: {:?}", writable)
+                }
+                ud => {
+                    if let Some(_) = writable.remove(&ud) {
+                        assert_eq!(event.r#type, wasi::EVENTTYPE_FD_WRITE);
+                        assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+                    } else {
+                        panic!("Unknown userdata {}, pending sub: {:?}", ud, writable)
+                    }
+                }
+            }
+        }
+    }
 }
 
 unsafe fn test_poll_oneoff() {

@@ -47,7 +47,9 @@ impl Parse for ConfigField {
         } else if lookahead.peek(Token![async]) {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
-            Ok(ConfigField::Async(input.parse()?))
+            Ok(ConfigField::Async(AsyncConf {
+                functions: input.parse()?,
+            }))
         } else {
             Err(lookahead.error())
         }
@@ -280,40 +282,64 @@ impl Parse for ErrorConfField {
 }
 
 #[derive(Clone, Default, Debug)]
-/// Modules and funcs that should be async
-pub struct AsyncConf(HashMap<String, Vec<String>>);
+/// Modules and funcs that have async signatures
+pub struct AsyncConf {
+    functions: AsyncFunctions,
+}
 
-impl AsyncConf {
-    pub fn is_async(&self, module: &str, function: &str) -> bool {
-        self.0
-            .get(module)
-            .and_then(|fs| fs.iter().find(|f| *f == function))
-            .is_some()
+#[derive(Clone, Debug)]
+pub enum AsyncFunctions {
+    Some(HashMap<String, Vec<String>>),
+    All,
+}
+impl Default for AsyncFunctions {
+    fn default() -> Self {
+        AsyncFunctions::Some(HashMap::default())
     }
 }
 
-impl Parse for AsyncConf {
+impl AsyncConf {
+    pub fn is_async(&self, module: &str, function: &str) -> bool {
+        match &self.functions {
+            AsyncFunctions::Some(fs) => fs
+                .get(module)
+                .and_then(|fs| fs.iter().find(|f| *f == function))
+                .is_some(),
+            AsyncFunctions::All => true,
+        }
+    }
+}
+
+impl Parse for AsyncFunctions {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
-        let _ = braced!(content in input);
-        let items: Punctuated<AsyncConfField, Token![,]> =
-            content.parse_terminated(Parse::parse)?;
-        let mut m: HashMap<String, Vec<String>> = HashMap::new();
-        use std::collections::hash_map::Entry;
-        for i in items {
-            let function_names = i
-                .function_names
-                .iter()
-                .map(|i| i.to_string())
-                .collect::<Vec<String>>();
-            match m.entry(i.module_name.to_string()) {
-                Entry::Occupied(o) => o.into_mut().extend(function_names),
-                Entry::Vacant(v) => {
-                    v.insert(function_names);
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::token::Brace) {
+            let _ = braced!(content in input);
+            let items: Punctuated<AsyncConfField, Token![,]> =
+                content.parse_terminated(Parse::parse)?;
+            let mut functions: HashMap<String, Vec<String>> = HashMap::new();
+            use std::collections::hash_map::Entry;
+            for i in items {
+                let function_names = i
+                    .function_names
+                    .iter()
+                    .map(|i| i.to_string())
+                    .collect::<Vec<String>>();
+                match functions.entry(i.module_name.to_string()) {
+                    Entry::Occupied(o) => o.into_mut().extend(function_names),
+                    Entry::Vacant(v) => {
+                        v.insert(function_names);
+                    }
                 }
             }
+            Ok(AsyncFunctions::Some(functions))
+        } else if lookahead.peek(Token![*]) {
+            let _: Token![*] = input.parse().unwrap();
+            Ok(AsyncFunctions::All)
+        } else {
+            Err(lookahead.error())
         }
-        Ok(AsyncConf(m))
     }
 }
 

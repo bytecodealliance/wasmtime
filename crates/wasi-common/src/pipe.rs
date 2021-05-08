@@ -105,30 +105,31 @@ impl From<&str> for ReadPipe<io::Cursor<String>> {
     }
 }
 
-impl<R: Read + Any> WasiFile for ReadPipe<R> {
+#[wiggle::async_trait]
+impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn datasync(&self) -> Result<(), Error> {
+    async fn datasync(&self) -> Result<(), Error> {
         Ok(()) // trivial: no implementation needed
     }
-    fn sync(&self) -> Result<(), Error> {
+    async fn sync(&self) -> Result<(), Error> {
         Ok(()) // trivial
     }
-    fn get_filetype(&self) -> Result<FileType, Error> {
+    async fn get_filetype(&self) -> Result<FileType, Error> {
         Ok(FileType::Pipe)
     }
-    fn get_fdflags(&self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
     }
-    fn set_fdflags(&mut self, _fdflags: FdFlags) -> Result<(), Error> {
+    async fn set_fdflags(&mut self, _fdflags: FdFlags) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn get_filestat(&self) -> Result<Filestat, Error> {
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
         Ok(Filestat {
             device_id: 0,
             inode: 0,
-            filetype: self.get_filetype()?,
+            filetype: self.get_filetype().await?,
             nlink: 0,
             size: 0, // XXX no way to get a size out of a Read :(
             atim: None,
@@ -136,43 +137,57 @@ impl<R: Read + Any> WasiFile for ReadPipe<R> {
             ctim: None,
         })
     }
-    fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
+    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         let n = self.borrow().read_vectored(bufs)?;
         Ok(n.try_into()?)
     }
-    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
+    async fn read_vectored_at<'a>(
+        &self,
+        bufs: &mut [io::IoSliceMut<'a>],
+        offset: u64,
+    ) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
+    async fn write_vectored_at<'a>(
+        &self,
+        bufs: &[io::IoSlice<'a>],
+        offset: u64,
+    ) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn set_times(
+    async fn set_times(
         &self,
         atime: Option<SystemTimeSpec>,
         mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn num_ready_bytes(&self) -> Result<u64, Error> {
+    async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
+    }
+    async fn readable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+    async fn writable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
     }
 }
 
@@ -249,30 +264,31 @@ impl WritePipe<io::Cursor<Vec<u8>>> {
     }
 }
 
-impl<W: Write + Any> WasiFile for WritePipe<W> {
+#[wiggle::async_trait]
+impl<W: Write + Any + Send + Sync> WasiFile for WritePipe<W> {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn datasync(&self) -> Result<(), Error> {
+    async fn datasync(&self) -> Result<(), Error> {
         Ok(())
     }
-    fn sync(&self) -> Result<(), Error> {
+    async fn sync(&self) -> Result<(), Error> {
         Ok(())
     }
-    fn get_filetype(&self) -> Result<FileType, Error> {
+    async fn get_filetype(&self) -> Result<FileType, Error> {
         Ok(FileType::Pipe)
     }
-    fn get_fdflags(&self) -> Result<FdFlags, Error> {
+    async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::APPEND)
     }
-    fn set_fdflags(&mut self, _fdflags: FdFlags) -> Result<(), Error> {
+    async fn set_fdflags(&mut self, _fdflags: FdFlags) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn get_filestat(&self) -> Result<Filestat, Error> {
+    async fn get_filestat(&self) -> Result<Filestat, Error> {
         Ok(Filestat {
             device_id: 0,
             inode: 0,
-            filetype: self.get_filetype()?,
+            filetype: self.get_filetype().await?,
             nlink: 0,
             size: 0, // XXX no way to get a size out of a Write :(
             atim: None,
@@ -280,42 +296,56 @@ impl<W: Write + Any> WasiFile for WritePipe<W> {
             ctim: None,
         })
     }
-    fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
+    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
+    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
+    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn read_vectored(&self, bufs: &mut [io::IoSliceMut]) -> Result<u64, Error> {
+    async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn read_vectored_at(&self, bufs: &mut [io::IoSliceMut], offset: u64) -> Result<u64, Error> {
+    async fn read_vectored_at<'a>(
+        &self,
+        bufs: &mut [io::IoSliceMut<'a>],
+        offset: u64,
+    ) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn write_vectored(&self, bufs: &[io::IoSlice]) -> Result<u64, Error> {
+    async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
         let n = self.borrow().write_vectored(bufs)?;
         Ok(n.try_into()?)
     }
-    fn write_vectored_at(&self, bufs: &[io::IoSlice], offset: u64) -> Result<u64, Error> {
+    async fn write_vectored_at<'a>(
+        &self,
+        bufs: &[io::IoSlice<'a>],
+        offset: u64,
+    ) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
+    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
+    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error> {
         Err(Error::badf())
     }
-    fn set_times(
+    async fn set_times(
         &self,
         atime: Option<SystemTimeSpec>,
         mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error> {
         Err(Error::badf())
     }
-    fn num_ready_bytes(&self) -> Result<u64, Error> {
+    async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
+    }
+    async fn readable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
+    }
+    async fn writable(&mut self) -> Result<(), Error> {
+        Err(Error::badf())
     }
 }

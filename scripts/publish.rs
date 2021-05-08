@@ -49,6 +49,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // wasi-common
     "wasi-common",
     "wasi-cap-std-sync",
+    "wasi-tokio",
     // wasmtime
     "lightbeam",
     "wasmtime-fiber",

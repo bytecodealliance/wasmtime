@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use wasmtime::*;
-use wasmtime_wasi::{sync::WasiCtxBuilder, Wasi};
+use wasmtime_wasi::sync::{Wasi, WasiCtxBuilder};
 
 fn main() -> Result<()> {
     let engine = Engine::default();
