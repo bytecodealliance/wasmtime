@@ -2,9 +2,11 @@ use crate::store::{Store, StoreInner};
 use std::ops::{Deref, DerefMut};
 
 /// TODO
+#[repr(transparent)] // here for the C API
 pub struct StoreContext<'a, T>(pub(super) &'a StoreInner<T>);
 
 /// TODO
+#[repr(transparent)] // here for the C API
 pub struct StoreContextMut<'a, T>(pub(super) &'a mut StoreInner<T>);
 
 impl<'a, T> StoreContextMut<'a, T> {

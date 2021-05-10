@@ -19,8 +19,8 @@ impl wasm_memory_t {
         }
     }
 
-    fn memory(&self) -> &Memory {
-        match &self.ext.which {
+    fn memory(&self) -> Memory {
+        match self.ext.which {
             Extern::Memory(m) => m,
             _ => unsafe { std::hint::unreachable_unchecked() },
         }
@@ -28,13 +28,14 @@ impl wasm_memory_t {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_memory_new(
-    store: &wasm_store_t,
+pub unsafe extern "C" fn wasm_memory_new(
+    store: &mut wasm_store_t,
     mt: &wasm_memorytype_t,
 ) -> Option<Box<wasm_memory_t>> {
-    let memory = Memory::new(&store.store, mt.ty().ty.clone()).ok()?;
+    let memory = Memory::new(store.store.context_mut(), mt.ty().ty.clone()).ok()?;
     Some(Box::new(wasm_memory_t {
         ext: wasm_extern_t {
+            store: store.store.clone(),
             which: memory.into(),
         },
     }))
@@ -46,27 +47,32 @@ pub extern "C" fn wasm_memory_as_extern(m: &wasm_memory_t) -> &wasm_extern_t {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_memory_type(m: &wasm_memory_t) -> Box<wasm_memorytype_t> {
-    let ty = m.memory().ty();
+pub unsafe extern "C" fn wasm_memory_type(m: &wasm_memory_t) -> Box<wasm_memorytype_t> {
+    let ty = m.memory().ty(m.ext.store.context());
     Box::new(wasm_memorytype_t::new(ty))
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_memory_data(m: &wasm_memory_t) -> *mut u8 {
-    m.memory().data_ptr()
+pub unsafe extern "C" fn wasm_memory_data(m: &wasm_memory_t) -> *mut u8 {
+    m.memory().data_ptr(m.ext.store.context())
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_memory_data_size(m: &wasm_memory_t) -> usize {
-    m.memory().data_size()
+pub unsafe extern "C" fn wasm_memory_data_size(m: &wasm_memory_t) -> usize {
+    m.memory().data_size(m.ext.store.context())
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_memory_size(m: &wasm_memory_t) -> wasm_memory_pages_t {
-    m.memory().size()
+pub unsafe extern "C" fn wasm_memory_size(m: &wasm_memory_t) -> wasm_memory_pages_t {
+    m.memory().size(m.ext.store.context())
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_memory_grow(m: &wasm_memory_t, delta: wasm_memory_pages_t) -> bool {
-    m.memory().grow(delta).is_ok()
+pub unsafe extern "C" fn wasm_memory_grow(
+    m: &mut wasm_memory_t,
+    delta: wasm_memory_pages_t,
+) -> bool {
+    let memory = m.memory();
+    let mut store = m.ext.store.context_mut();
+    memory.grow(&mut store, delta).is_ok()
 }

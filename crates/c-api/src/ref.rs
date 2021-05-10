@@ -93,6 +93,9 @@ struct CExternRef {
     finalizer: Option<wasmtime_externref_finalizer_t>,
 }
 
+unsafe impl Send for CExternRef {}
+unsafe impl Sync for CExternRef {}
+
 impl Drop for CExternRef {
     fn drop(&mut self) {
         if let Some(f) = self.finalizer {

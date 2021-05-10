@@ -1,11 +1,12 @@
 use crate::{
     wasm_externkind_t, wasm_externtype_t, wasm_func_t, wasm_global_t, wasm_instance_t,
-    wasm_memory_t, wasm_module_t, wasm_table_t,
+    wasm_memory_t, wasm_module_t, wasm_table_t, StoreRef,
 };
 use wasmtime::Extern;
 
 #[derive(Clone)]
 pub struct wasm_extern_t {
+    pub(crate) store: StoreRef,
     pub(crate) which: Extern,
 }
 
@@ -24,8 +25,8 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_extern_type(e: &wasm_extern_t) -> Box<wasm_externtype_t> {
-    Box::new(wasm_externtype_t::new(e.which.ty()))
+pub unsafe extern "C" fn wasm_extern_type(e: &wasm_extern_t) -> Box<wasm_externtype_t> {
+    Box::new(wasm_externtype_t::new(e.which.ty(&e.store.context())))
 }
 
 #[no_mangle]

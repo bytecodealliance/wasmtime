@@ -15,18 +15,17 @@ use wasmtime_runtime::{VMContext, VMFunctionBody};
 ///
 /// This structure is created via [`Func::typed`] or [`TypedFunc::new_unchecked`].
 /// For more documentation about this see those methods.
-#[repr(transparent)]
+#[repr(transparent)] // here for the C API
 pub struct TypedFunc<Params, Results> {
     _a: marker::PhantomData<fn(Params) -> Results>,
     func: Func,
 }
 
+impl<Params, Results> Copy for TypedFunc<Params, Results> {}
+
 impl<Params, Results> Clone for TypedFunc<Params, Results> {
     fn clone(&self) -> TypedFunc<Params, Results> {
-        TypedFunc {
-            _a: marker::PhantomData,
-            func: self.func.clone(),
-        }
+        *self
     }
 }
 

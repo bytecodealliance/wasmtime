@@ -200,7 +200,8 @@ use wasmtime_runtime::{
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
 pub struct Func(Stored<FuncData>);
 
 pub(crate) enum FuncData {

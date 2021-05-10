@@ -206,7 +206,8 @@ impl From<Module> for Extern {
 /// Globals are internally reference counted so you can `clone` a `Global`. The
 /// cloning process only performs a shallow clone, so two cloned `Global`
 /// instances are equivalent in their functionality.
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
 pub struct Global(Stored<wasmtime_runtime::ExportGlobal>);
 
 impl Global {
@@ -347,7 +348,8 @@ impl Global {
 /// Tables are internally reference counted so you can `clone` a `Table`. The
 /// cloning process only performs a shallow clone, so two cloned `Table`
 /// instances are equivalent in their functionality.
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
 pub struct Table(Stored<wasmtime_runtime::ExportTable>);
 
 impl Table {

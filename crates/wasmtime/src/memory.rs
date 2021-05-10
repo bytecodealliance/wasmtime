@@ -245,7 +245,8 @@ impl std::error::Error for MemoryAccessError {}
 ///
 /// [interface types]: https://github.com/webassembly/interface-types
 /// [open an issue]: https://github.com/bytecodealliance/wasmtime/issues/new
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
 pub struct Memory(Stored<wasmtime_runtime::ExportMemory>);
 
 impl Memory {

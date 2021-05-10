@@ -169,6 +169,7 @@ where
     }
 }
 
+#[repr(transparent)]
 pub struct Stored<T> {
     // See documentation below on `INDEX_BITS` for how this is interpreted.
     bits: u64,

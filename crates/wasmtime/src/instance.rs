@@ -33,7 +33,8 @@ use wasmtime_runtime::{
 ///
 /// When interacting with any wasm code you'll want to make an [`Instance`] to
 /// call any code or execute anything!
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
 pub struct Instance(Stored<RuntimeInstance>);
 
 impl Instance {
