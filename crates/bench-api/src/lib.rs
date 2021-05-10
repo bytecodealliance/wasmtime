@@ -79,12 +79,13 @@
 //! ```
 
 use anyhow::{anyhow, Context, Result};
+use std::borrow::{Borrow, BorrowMut};
 use std::env;
 use std::os::raw::{c_int, c_void};
 use std::path::Path;
 use std::slice;
 use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
-use wasmtime_wasi::sync::{Wasi, WasiCtxBuilder};
+use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -190,10 +191,58 @@ fn to_exit_code<T>(result: impl Into<Result<T>>) -> ExitCode {
 /// to manage the Wasmtime engine between calls.
 struct BenchState {
     engine: Engine,
-    linker: Linker,
+    linker: Linker<StoreState>,
     module: Option<Module>,
     instance: Option<Instance>,
     did_execute: bool,
+    store: Store<StoreState>,
+}
+
+struct StoreState {
+    wasi: WasiCtx,
+    #[cfg(feature = "wasi-nn")]
+    wasi_nn: wasmtime_wasi_nn::WasiNnCtx,
+    #[cfg(feature = "wasi-crypto")]
+    wasi_crypto: wasmtime_wasi_crypto::WasiCryptoCtx,
+}
+
+impl Borrow<WasiCtx> for StoreState {
+    fn borrow(&self) -> &WasiCtx {
+        &self.wasi
+    }
+}
+impl BorrowMut<WasiCtx> for StoreState {
+    fn borrow_mut(&mut self) -> &mut WasiCtx {
+        &mut self.wasi
+    }
+}
+
+#[cfg(feature = "wasi-nn")]
+impl Borrow<wasmtime_wasi_nn::WasiNnCtx> for StoreState {
+    fn borrow(&self) -> &wasmtime_wasi_nn::WasiNnCtx {
+        &self.wasi_nn
+    }
+}
+
+#[cfg(feature = "wasi-nn")]
+impl BorrowMut<wasmtime_wasi_nn::WasiNnCtx> for StoreState {
+    fn borrow_mut(&mut self) -> &mut wasmtime_wasi_nn::WasiNnCtx {
+        &mut self.wasi_nn
+    }
+}
+
+#[cfg(feature = "wasi-crypto")]
+impl Borrow<wasmtime_wasi_crypto::WasiCryptoCtx> for StoreState {
+    fn borrow(&self) -> &wasmtime_wasi_crypto::WasiCryptoCtx {
+        &self.wasi_crypto
+    }
+}
+
+#[cfg(feature = "wasi-crypto")]
+impl BorrowMut<wasmtime_wasi_crypto::WasiCryptoCtx> for StoreState {
+    fn borrow_mut(&mut self) -> &mut wasmtime_wasi_crypto::WasiCryptoCtx {
+        &mut self.wasi_crypto
+    }
 }
 
 impl BenchState {
@@ -203,9 +252,7 @@ impl BenchState {
         // NB: do not configure a code cache.
 
         let engine = Engine::new(&config)?;
-        let store = Store::new(&engine);
-
-        let mut linker = Linker::new(&store);
+        let mut linker = Linker::new(&engine);
 
         // Create a WASI environment.
 
@@ -221,39 +268,34 @@ impl BenchState {
         if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
             cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
         }
-
-        Wasi::new(linker.store(), cx.build()?).add_to_linker(&mut linker)?;
+        let wasi = cx.build()?;
+        wasmtime_wasi::add_to_linker(&mut linker)?;
 
         #[cfg(feature = "wasi-nn")]
-        {
-            use std::cell::RefCell;
-            use std::rc::Rc;
-            use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
-
-            let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
-            wasi_nn.add_to_linker(&mut linker)?;
-        }
+        let wasi_nn = {
+            wasmtime_wasi_nn::add_wasi_nn_to_linker(&mut linker)?;
+            wasmtime_wasi_nn::WasiNnCtx::new()?
+        };
 
         #[cfg(feature = "wasi-crypto")]
-        {
-            use std::cell::RefCell;
-            use std::rc::Rc;
-            use wasmtime_wasi_crypto::{
-                WasiCryptoAsymmetricCommon, WasiCryptoCommon, WasiCryptoCtx, WasiCryptoSignatures,
-                WasiCryptoSymmetric,
-            };
-
-            let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
-            WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-            WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone())
-                .add_to_linker(linker)?;
-            WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-            WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
-        }
+        let wasi_crypto = {
+            wasmtime_wasi_crypto::add_to_linker(&mut linker)?;
+            wasmtime_wasi_crypto::WasiCryptoCtx::new()
+        };
 
         Ok(Self {
-            engine,
             linker,
+            store: Store::new(
+                &engine,
+                StoreState {
+                    wasi,
+                    #[cfg(feature = "wasi-nn")]
+                    wasi_nn,
+                    #[cfg(feature = "wasi-crypto")]
+                    wasi_crypto,
+                },
+            ),
+            engine,
             module: None,
             instance: None,
             did_execute: false,
@@ -284,10 +326,11 @@ impl BenchState {
             .expect("compile the module before instantiating it");
 
         // Import the specialized benchmarking functions.
-        self.linker.func("bench", "start", move || bench_start())?;
-        self.linker.func("bench", "end", move || bench_end())?;
+        self.linker
+            .func_wrap("bench", "start", move || bench_start())?;
+        self.linker.func_wrap("bench", "end", move || bench_end())?;
 
-        self.instance = Some(self.linker.instantiate(&module)?);
+        self.instance = Some(self.linker.instantiate(&mut self.store, &module)?);
         Ok(())
     }
 
@@ -300,8 +343,8 @@ impl BenchState {
             .as_ref()
             .expect("instantiate the module before executing it");
 
-        let start_func = instance.get_typed_func::<(), ()>("_start")?;
-        match start_func.call(()) {
+        let start_func = instance.get_typed_func::<(), (), _>(&mut self.store, "_start")?;
+        match start_func.call(&mut self.store, ()) {
             Ok(_) => Ok(()),
             Err(trap) => {
                 // Since _start will likely return by using the system `exit` call, we must
