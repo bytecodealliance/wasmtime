@@ -71,7 +71,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         });
     }
 
-    let store = Store::new(&Engine::new(&cfg)?);
+    let store = Store::new(&Engine::new(&cfg)?, ());
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;
     wast_context.run_file(wast)?;

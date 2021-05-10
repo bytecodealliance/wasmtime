@@ -5,6 +5,7 @@ use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use std::any::Any;
 use std::cell::UnsafeCell;
+use std::marker;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::u32;
@@ -20,6 +21,11 @@ pub struct VMFunctionImport {
     /// A pointer to the `VMContext` that owns the function.
     pub vmctx: *mut VMContext,
 }
+
+// Declare that this type is send/sync, it's the responsibility of users of
+// `VMFunctionImport` to uphold this guarantee.
+unsafe impl Send for VMFunctionImport {}
+unsafe impl Sync for VMFunctionImport {}
 
 #[cfg(test)]
 mod test_vmfunction_import {
@@ -77,6 +83,11 @@ pub struct VMTableImport {
     pub vmctx: *mut VMContext,
 }
 
+// Declare that this type is send/sync, it's the responsibility of users of
+// `VMTableImport` to uphold this guarantee.
+unsafe impl Send for VMTableImport {}
+unsafe impl Sync for VMTableImport {}
+
 #[cfg(test)]
 mod test_vmtable_import {
     use super::VMTableImport;
@@ -115,6 +126,11 @@ pub struct VMMemoryImport {
     pub vmctx: *mut VMContext,
 }
 
+// Declare that this type is send/sync, it's the responsibility of users of
+// `VMMemoryImport` to uphold this guarantee.
+unsafe impl Send for VMMemoryImport {}
+unsafe impl Sync for VMMemoryImport {}
+
 #[cfg(test)]
 mod test_vmmemory_import {
     use super::VMMemoryImport;
@@ -149,6 +165,11 @@ pub struct VMGlobalImport {
     /// A pointer to the imported global variable description.
     pub from: *mut VMGlobalDefinition,
 }
+
+// Declare that this type is send/sync, it's the responsibility of users of
+// `VMGlobalImport` to uphold this guarantee.
+unsafe impl Send for VMGlobalImport {}
+unsafe impl Sync for VMGlobalImport {}
 
 #[cfg(test)]
 mod test_vmglobal_import {
@@ -259,7 +280,7 @@ mod test_vmtable_definition {
 ///
 /// TODO: Pack the globals more densely, rather than using the same size
 /// for every type.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug)]
 #[repr(C, align(16))]
 pub struct VMGlobalDefinition {
     storage: [u8; 16],
@@ -524,6 +545,9 @@ pub struct VMCallerCheckedAnyfunc {
     // If more elements are added here, remember to add offset_of tests below!
 }
 
+unsafe impl Send for VMCallerCheckedAnyfunc {}
+unsafe impl Sync for VMCallerCheckedAnyfunc {}
+
 #[cfg(test)]
 mod test_vmcaller_checked_anyfunc {
     use super::VMCallerCheckedAnyfunc;
@@ -682,6 +706,16 @@ pub struct VMInterrupts {
     pub fuel_consumed: UnsafeCell<i64>,
 }
 
+// The `VMInterrupts` type is a pod-type with no destructor, and we only access
+// `stack_limit` from other threads, so add in these trait impls which are
+// otherwise not available due to the `fuel_consumed` variable in
+// `VMInterrupts`.
+//
+// Note that users of `fuel_consumed` understand that the unsafety encompasses
+// ensuring that it's only mutated/accessed from one thread dynamically.
+unsafe impl Send for VMInterrupts {}
+unsafe impl Sync for VMInterrupts {}
+
 impl VMInterrupts {
     /// Flag that an interrupt should occur
     pub fn interrupt(&self) {
@@ -728,7 +762,17 @@ mod test_vminterrupts {
 /// TODO: We could move the globals into the `vmctx` allocation too.
 #[derive(Debug)]
 #[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
-pub struct VMContext {}
+pub struct VMContext {
+    /// There's some more discussion about this within `wasmtime/src/lib.rs` but
+    /// the idea is that we want to tell the compiler that this contains
+    /// pointers which transitively refers to itself, to suppress some
+    /// optimizations that might otherwise assume this doesn't exist.
+    ///
+    /// The self-referential pointer we care about is the `*mut Store` pointer
+    /// early on in this context, which if you follow through enough levels of
+    /// nesting, eventually can refer back to this `VMContext`
+    pub _marker: marker::PhantomPinned,
+}
 
 impl VMContext {
     /// Return a mutable reference to the associated `Instance`.
@@ -740,6 +784,11 @@ impl VMContext {
     #[inline]
     pub(crate) unsafe fn instance(&self) -> &Instance {
         &*((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *const Instance)
+    }
+
+    #[inline]
+    pub(crate) unsafe fn instance_mut(&mut self) -> &mut Instance {
+        &mut *((self as *const Self as *mut u8).offset(-Instance::vmctx_offset()) as *mut Instance)
     }
 
     /// Return a reference to the host state associated with this `Instance`.

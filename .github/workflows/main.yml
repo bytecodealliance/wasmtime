@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [main]
+    branches: [main, new-api]
     tags-ignore: [dev]
   pull_request:
     branches: [main]

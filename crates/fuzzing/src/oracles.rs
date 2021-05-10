@@ -15,8 +15,6 @@ pub mod dummy;
 use arbitrary::Arbitrary;
 use dummy::dummy_linker;
 use log::debug;
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -44,9 +42,9 @@ fn log_wasm(wasm: &[u8]) {
     }
 }
 
-fn create_store(engine: &Engine) -> Store {
-    Store::new_with_limits(
-        &engine,
+fn create_store(engine: &Engine) -> Store<()> {
+    let mut store = Store::new(&engine, ());
+    store.limiter(
         StoreLimitsBuilder::new()
             // The limits here are chosen based on the default "maximum type size"
             // configured in wasm-smith, which is 1000. This means that instances
@@ -56,7 +54,8 @@ fn create_store(engine: &Engine) -> Store {
             .tables(1100)
             .memories(1100)
             .build(),
-    )
+    );
+    store
 }
 
 /// Methods of timing out execution of a WebAssembly module
@@ -110,7 +109,7 @@ pub fn instantiate_with_config(
         _ => false,
     });
     let engine = Engine::new(&config).unwrap();
-    let store = create_store(&engine);
+    let mut store = create_store(&engine);
 
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
@@ -137,9 +136,9 @@ pub fn instantiate_with_config(
         Err(_) if !known_valid => return,
         Err(e) => panic!("failed to compile module: {:?}", e),
     };
-    let linker = dummy_linker(&store, &module);
+    let linker = dummy_linker(&mut store, &module);
 
-    match linker.instantiate(&module) {
+    match linker.instantiate(&mut store, &module) {
         Ok(_) => {}
         Err(e) => {
             let string = e.to_string();
@@ -218,7 +217,7 @@ pub fn differential_execution(
         config.wasm_module_linking(false);
 
         let engine = Engine::new(&config).unwrap();
-        let store = create_store(&engine);
+        let mut store = create_store(&engine);
 
         let module = Module::new(&engine, &wasm).unwrap();
 
@@ -227,13 +226,13 @@ pub fn differential_execution(
         // in and with what values. Like the results of exported functions,
         // calls to imports should also yield the same values for each
         // configuration, and we should assert that.
-        let linker = dummy_linker(&store, &module);
+        let linker = dummy_linker(&mut store, &module);
 
         // Don't unwrap this: there can be instantiation-/link-time errors that
         // aren't caught during validation or compilation. For example, an imported
         // table might not have room for an element segment that we want to
         // initialize into it.
-        let instance = match linker.instantiate(&module) {
+        let instance = match linker.instantiate(&mut store, &module) {
             Ok(instance) => instance,
             Err(e) => {
                 eprintln!(
@@ -244,30 +243,36 @@ pub fn differential_execution(
             }
         };
 
-        for (name, f) in instance.exports().filter_map(|e| {
-            let name = e.name();
-            e.into_func().map(|f| (name, f))
-        }) {
+        let exports = instance
+            .exports(&mut store)
+            .filter_map(|e| {
+                let name = e.name().to_string();
+                e.into_func().map(|f| (name, f))
+            })
+            .collect::<Vec<_>>();
+        for (name, f) in exports {
             // Always call the hang limit initializer first, so that we don't
             // infinite loop when calling another export.
-            init_hang_limit(&instance);
+            init_hang_limit(&mut store, instance);
 
-            let ty = f.ty();
+            let ty = f.ty(&store);
             let params = dummy::dummy_values(ty.params());
-            let this_result = f.call(&params).map_err(|e| e.downcast::<Trap>().unwrap());
+            let this_result = f
+                .call(&mut store, &params)
+                .map_err(|e| e.downcast::<Trap>().unwrap());
 
             let existing_result = export_func_results
                 .entry(name.to_string())
                 .or_insert_with(|| this_result.clone());
-            assert_same_export_func_result(&existing_result, &this_result, name);
+            assert_same_export_func_result(&existing_result, &this_result, &name);
         }
     }
 
-    fn init_hang_limit(instance: &Instance) {
-        match instance.get_export("hangLimitInitializer") {
+    fn init_hang_limit(store: &mut Store<()>, instance: Instance) {
+        match instance.get_export(&mut *store, "hangLimitInitializer") {
             None => return,
             Some(Extern::Func(f)) => {
-                f.call(&[])
+                f.call(store, &[])
                     .expect("initializing the hang limit should not fail");
             }
             Some(_) => panic!("unexpected hangLimitInitializer export"),
@@ -332,7 +337,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
     let mut config: Option<Config> = None;
     let mut engine: Option<Engine> = None;
-    let mut store: Option<Store> = None;
+    let mut store: Option<Store<()>> = None;
     let mut modules: HashMap<usize, Module> = Default::default();
     let mut instances: HashMap<usize, Instance> = Default::default();
 
@@ -390,14 +395,14 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                     None => continue,
                 };
 
-                let store = store.as_ref().unwrap();
+                let store = store.as_mut().unwrap();
                 let linker = dummy_linker(store, module);
 
                 // Don't unwrap this: there can be instantiation-/link-time errors that
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = linker.instantiate(&module) {
+                if let Ok(instance) = linker.instantiate(store, &module) {
                     instances.insert(id, instance);
                 }
             }
@@ -421,9 +426,10 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                         continue;
                     }
                 };
+                let store = store.as_mut().unwrap();
 
                 let funcs = instance
-                    .exports()
+                    .exports(&mut *store)
                     .filter_map(|e| match e.into_extern() {
                         Extern::Func(f) => Some(f.clone()),
                         _ => None,
@@ -436,9 +442,9 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
                 let nth = nth % funcs.len();
                 let f = &funcs[nth];
-                let ty = f.ty();
+                let ty = f.ty(&store);
                 let params = dummy::dummy_values(ty.params());
-                let _ = f.call(&params);
+                let _ = f.call(store, &params);
             }
         }
     }
@@ -454,7 +460,7 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
     config.wasm_module_linking(false);
-    let store = create_store(&Engine::new(&config).unwrap());
+    let mut store = create_store(&Engine::new(&config).unwrap());
     if fuzz_config.consume_fuel {
         store.add_fuel(u64::max_value()).unwrap();
     }
@@ -472,13 +478,13 @@ pub fn table_ops(
 ) {
     let _ = env_logger::try_init();
 
-    let num_dropped = Rc::new(Cell::new(0));
+    let num_dropped = Arc::new(AtomicUsize::new(0));
 
     {
         let mut config = fuzz_config.to_wasmtime();
         config.wasm_reference_types(true);
         let engine = Engine::new(&config).unwrap();
-        let store = create_store(&engine);
+        let mut store = create_store(&engine);
         if fuzz_config.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
         }
@@ -494,31 +500,30 @@ pub fn table_ops(
         // test case.
         const MAX_GCS: usize = 5;
 
-        let num_gcs = Cell::new(0);
-        let gc = Func::wrap(&store, move |caller: Caller| {
-            if num_gcs.get() < MAX_GCS {
-                caller.store().gc();
-                num_gcs.set(num_gcs.get() + 1);
+        let num_gcs = AtomicUsize::new(0);
+        let gc = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| {
+            if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
+                caller.gc();
             }
         });
 
-        let instance = Instance::new(&store, &module, &[gc.into()]).unwrap();
-        let run = instance.get_func("run").unwrap();
+        let instance = Instance::new(&mut store, &module, &[gc.into()]).unwrap();
+        let run = instance.get_func(&mut store, "run").unwrap();
 
         let args: Vec<_> = (0..ops.num_params())
             .map(|_| Val::ExternRef(Some(ExternRef::new(CountDrops(num_dropped.clone())))))
             .collect();
-        let _ = run.call(&args);
+        let _ = run.call(&mut store, &args);
     }
 
-    assert_eq!(num_dropped.get(), ops.num_params());
+    assert_eq!(num_dropped.load(SeqCst), ops.num_params() as usize);
     return;
 
-    struct CountDrops(Rc<Cell<u8>>);
+    struct CountDrops(Arc<AtomicUsize>);
 
     impl Drop for CountDrops {
         fn drop(&mut self) {
-            self.0.set(self.0.get().checked_add(1).unwrap());
+            self.0.fetch_add(1, SeqCst);
         }
     }
 }
@@ -593,13 +598,13 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     let mut wasmtime_config = config.to_wasmtime();
     wasmtime_config.cranelift_nan_canonicalization(true);
     let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
-    let wasmtime_store = create_store(&wasmtime_engine);
+    let mut wasmtime_store = create_store(&wasmtime_engine);
     if config.consume_fuel {
         wasmtime_store.add_fuel(u64::max_value()).unwrap();
     }
     let wasmtime_module =
         Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
-    let wasmtime_instance = Instance::new(&wasmtime_store, &wasmtime_module, &[])
+    let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
         .expect("Wasmtime can instantiate module");
 
     // Introspect wasmtime module to find name of an exported function and of an
@@ -628,12 +633,12 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     let wasmi_val = wasmi::FuncInstance::invoke(&wasmi_main, &[], &mut wasmi::NopExternals);
 
     let wasmtime_mem = wasmtime_instance
-        .get_memory(&memory_name[..])
+        .get_memory(&mut wasmtime_store, &memory_name[..])
         .expect("memory export is present");
     let wasmtime_main = wasmtime_instance
-        .get_func(&func_name[..])
+        .get_func(&mut wasmtime_store, &func_name[..])
         .expect("function export is present");
-    let wasmtime_vals = wasmtime_main.call(&[]);
+    let wasmtime_vals = wasmtime_main.call(&mut wasmtime_store, &[]);
     let wasmtime_val = wasmtime_vals.map(|v| v.iter().next().cloned());
 
     debug!(
@@ -665,18 +670,18 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
         }
     }
 
-    if wasmi_mem.current_size().0 != wasmtime_mem.size() as usize {
+    if wasmi_mem.current_size().0 != wasmtime_mem.size(&wasmtime_store) as usize {
         show_wat();
         panic!("resulting memories are not the same size");
     }
 
     // Wasmi memory may be stored non-contiguously; copy it out to a contiguous chunk.
-    let mut wasmi_buf: Vec<u8> = vec![0; wasmtime_mem.data_size()];
+    let mut wasmi_buf: Vec<u8> = vec![0; wasmtime_mem.data_size(&wasmtime_store)];
     wasmi_mem
         .get_into(0, &mut wasmi_buf[..])
         .expect("can access wasmi memory");
 
-    let wasmtime_slice = unsafe { wasmtime_mem.data_unchecked() };
+    let wasmtime_slice = wasmtime_mem.data(&wasmtime_store);
 
     if wasmi_buf.len() >= 64 {
         debug!("-> First 64 bytes of wasmi heap: {:?}", &wasmi_buf[0..64]);

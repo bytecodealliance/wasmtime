@@ -1,11 +1,11 @@
 use super::ref_types_module;
-use std::cell::Cell;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use std::sync::Arc;
 use wasmtime::*;
 
 #[test]
 fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
+    let (mut store, module) = ref_types_module(
         r#"
             (module
                 (func (export "func") (param funcref) (result funcref)
@@ -15,22 +15,22 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let instance = Instance::new(&store, &module, &[])?;
-    let func = instance.get_func("func").unwrap();
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_func(&mut store, "func").unwrap();
 
     // Pass in a non-null funcref.
     {
-        let results = func.call(&[Val::FuncRef(Some(func.clone()))])?;
+        let results = func.call(&mut store, &[Val::FuncRef(Some(func.clone()))])?;
         assert_eq!(results.len(), 1);
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();
-        assert_eq!(func.ty(), result_func.ty());
+        assert_eq!(func.ty(&store), result_func.ty(&store));
     }
 
     // Pass in a null funcref.
     {
-        let results = func.call(&[Val::FuncRef(None)])?;
+        let results = func.call(&mut store, &[Val::FuncRef(None)])?;
         assert_eq!(results.len(), 1);
 
         let result_func = results[0].unwrap_funcref();
@@ -39,24 +39,29 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
     // Pass in a `funcref` from another instance.
     {
-        let other_instance = Instance::new(&store, &module, &[])?;
-        let other_instance_func = other_instance.get_func("func").unwrap();
+        let other_instance = Instance::new(&mut store, &module, &[])?;
+        let other_instance_func = other_instance.get_func(&mut store, "func").unwrap();
 
-        let results = func.call(&[Val::FuncRef(Some(other_instance_func.clone()))])?;
+        let results = func.call(
+            &mut store,
+            &[Val::FuncRef(Some(other_instance_func.clone()))],
+        )?;
         assert_eq!(results.len(), 1);
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();
-        assert_eq!(other_instance_func.ty(), result_func.ty());
+        assert_eq!(other_instance_func.ty(&store), result_func.ty(&store));
     }
 
     // Passing in a `funcref` from another store fails.
     {
-        let (other_store, other_module) = ref_types_module(r#"(module (func (export "f")))"#)?;
-        let other_store_instance = Instance::new(&other_store, &other_module, &[])?;
-        let f = other_store_instance.get_func("f").unwrap();
+        let (mut other_store, other_module) = ref_types_module(r#"(module (func (export "f")))"#)?;
+        let other_store_instance = Instance::new(&mut other_store, &other_module, &[])?;
+        let f = other_store_instance
+            .get_func(&mut other_store, "f")
+            .unwrap();
 
-        assert!(func.call(&[Val::FuncRef(Some(f))]).is_err());
+        assert!(func.call(&mut store, &[Val::FuncRef(Some(f))]).is_err());
     }
 
     Ok(())
@@ -64,7 +69,7 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
 #[test]
 fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
+    let (mut store, module) = ref_types_module(
         r#"
             (module
                 (func (export "get-null") (result funcref)
@@ -74,10 +79,10 @@ fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let instance = Instance::new(&store, &module, &[])?;
-    let get_null = instance.get_func("get-null").unwrap();
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let get_null = instance.get_func(&mut store, "get-null").unwrap();
 
-    let results = get_null.call(&[])?;
+    let results = get_null.call(&mut store, &[])?;
     assert_eq!(results.len(), 1);
 
     let result_func = results[0].unwrap_funcref();
@@ -88,57 +93,57 @@ fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
 
 #[test]
 fn wrong_store() -> anyhow::Result<()> {
-    let dropped = Rc::new(Cell::new(false));
+    let dropped = Arc::new(AtomicBool::new(false));
     {
-        let store1 = Store::default();
-        let store2 = Store::default();
+        let mut store1 = Store::<()>::default();
+        let mut store2 = Store::<()>::default();
 
         let set = SetOnDrop(dropped.clone());
-        let f1 = Func::wrap(&store1, move || drop(&set));
-        let f2 = Func::wrap(&store2, move || Some(f1.clone()));
-        assert!(f2.call(&[]).is_err());
+        let f1 = Func::wrap(&mut store1, move || drop(&set));
+        let f2 = Func::wrap(&mut store2, move || Some(f1.clone()));
+        assert!(f2.call(&mut store2, &[]).is_err());
     }
-    assert!(dropped.get());
+    assert!(dropped.load(SeqCst));
 
     return Ok(());
 
-    struct SetOnDrop(Rc<Cell<bool>>);
+    struct SetOnDrop(Arc<AtomicBool>);
 
     impl Drop for SetOnDrop {
         fn drop(&mut self) {
-            self.0.set(true);
+            self.0.store(true, SeqCst);
         }
     }
 }
 
 #[test]
 fn func_new_returns_wrong_store() -> anyhow::Result<()> {
-    let dropped = Rc::new(Cell::new(false));
+    let dropped = Arc::new(AtomicBool::new(false));
     {
-        let store1 = Store::default();
-        let store2 = Store::default();
+        let mut store1 = Store::<()>::default();
+        let mut store2 = Store::<()>::default();
 
         let set = SetOnDrop(dropped.clone());
-        let f1 = Func::wrap(&store1, move || drop(&set));
+        let f1 = Func::wrap(&mut store1, move || drop(&set));
         let f2 = Func::new(
-            &store2,
+            &mut store2,
             FuncType::new(None, Some(ValType::FuncRef)),
             move |_, _, results| {
                 results[0] = f1.clone().into();
                 Ok(())
             },
         );
-        assert!(f2.call(&[]).is_err());
+        assert!(f2.call(&mut store2, &[]).is_err());
     }
-    assert!(dropped.get());
+    assert!(dropped.load(SeqCst));
 
     return Ok(());
 
-    struct SetOnDrop(Rc<Cell<bool>>);
+    struct SetOnDrop(Arc<AtomicBool>);
 
     impl Drop for SetOnDrop {
         fn drop(&mut self) {
-            self.0.set(true);
+            self.0.store(true, SeqCst);
         }
     }
 }

@@ -28,7 +28,7 @@ fn caches_across_engines() {
         .unwrap();
 
     unsafe {
-        let res = Module::deserialize(&Engine::new(&Config::new()).unwrap(), &bytes);
+        let res = Module::deserialize(&Engine::default(), &bytes);
         assert!(res.is_ok());
 
         // differ in shared cranelift flags
@@ -70,11 +70,11 @@ fn aot_compiles() -> Result<()> {
 
     let module = unsafe { Module::deserialize(&engine, &bytes)? };
 
-    let store = Store::new(&engine);
-    let instance = Instance::new(&store, &module, &[])?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
 
-    let f = instance.get_typed_func::<i32, i32>("f")?;
-    assert_eq!(f.call(101).unwrap(), 101);
+    let f = instance.get_typed_func::<i32, i32, _>(&mut store, "f")?;
+    assert_eq!(f.call(&mut store, 101)?, 101);
 
     Ok(())
 }

@@ -270,8 +270,8 @@
 //! ```
 
 #![allow(unknown_lints)]
-#![deny(missing_docs, broken_intra_doc_links)]
-#![doc(test(attr(deny(warnings))))]
+//#![deny(missing_docs, broken_intra_doc_links)]
+//#![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(nightlydoc, feature(doc_cfg))]
 #![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
@@ -305,7 +305,9 @@ pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::{FrameInfo, FrameSymbol, Module};
 pub use crate::r#ref::ExternRef;
-pub use crate::store::*;
+pub use crate::store::{
+    AsContext, AsContextMut, InterruptHandle, Store, StoreContext, StoreContextMut,
+};
 pub use crate::trap::*;
 pub use crate::types::*;
 pub use crate::values::*;
@@ -324,7 +326,30 @@ cfg_if::cfg_if! {
 
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
+    fn _assert_send<T: Send>(_t: T) {}
     _assert::<Engine>();
     _assert::<Config>();
     _assert::<InterruptHandle>();
+    _assert::<(Func, TypedFunc<(), ()>, Global, Table, Memory)>();
+    _assert::<Instance>();
+    _assert::<Module>();
+    _assert::<Store<()>>();
+    _assert::<StoreContext<'_, ()>>();
+    _assert::<StoreContextMut<'_, ()>>();
+    _assert::<Caller<'_, ()>>();
+    _assert::<Linker<()>>();
+    _assert::<ExternRef>();
+
+    #[cfg(feature = "async")]
+    fn _call_async(s: &mut Store<()>, f: Func) {
+        _assert_send(f.call_async(&mut *s, &[]))
+    }
+    #[cfg(feature = "async")]
+    fn _typed_call_async(s: &mut Store<()>, f: TypedFunc<(), ()>) {
+        _assert_send(f.call_async(&mut *s, ()))
+    }
+    #[cfg(feature = "async")]
+    fn _instantiate_async(s: &mut Store<()>, m: &Module) {
+        _assert_send(Instance::new_async(s, m, &[]))
+    }
 }

@@ -16,7 +16,7 @@ wasmtime_wiggle::wasmtime_integration!({
     // This macro will emit a struct to represent the instance, with this name and docs:
     modules: {
         wasi_ephemeral_nn => {
-          name: WasiNn,
+          name: wasi_nn,
           docs: "An instantiated instance of the wasi-nn exports.",
         }
     },

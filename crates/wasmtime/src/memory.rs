@@ -1,6 +1,7 @@
-use crate::trampoline::{generate_memory_export, StoreInstanceHandle};
-use crate::{MemoryType, Store};
-use anyhow::{anyhow, Result};
+use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::trampoline::generate_memory_export;
+use crate::{AsContext, AsContextMut, MemoryType, StoreContext, StoreContextMut};
+use anyhow::{bail, Result};
 use std::slice;
 
 /// Error for out of bounds [`Memory`] access.
@@ -41,6 +42,8 @@ impl std::error::Error for MemoryAccessError {}
 /// implemented though!
 ///
 /// # `Memory` and Safety
+///
+/// TODO
 ///
 /// Linear memory is a lynchpin of safety for WebAssembly, but it turns out
 /// there are very few ways to safely inspect the contents of a memory from the
@@ -212,6 +215,8 @@ impl std::error::Error for MemoryAccessError {}
 ///
 /// ## `Memory` Safety and Threads
 ///
+/// TODO
+///
 /// Currently the `wasmtime` crate does not implement the wasm threads proposal,
 /// but it is planned to do so. It's additionally worthwhile discussing how this
 /// affects memory safety and what was previously just discussed as well.
@@ -241,10 +246,7 @@ impl std::error::Error for MemoryAccessError {}
 /// [interface types]: https://github.com/webassembly/interface-types
 /// [open an issue]: https://github.com/bytecodealliance/wasmtime/issues/new
 #[derive(Clone)]
-pub struct Memory {
-    pub(crate) instance: StoreInstanceHandle,
-    wasmtime_export: wasmtime_runtime::ExportMemory,
-}
+pub struct Memory(Stored<wasmtime_runtime::ExportMemory>);
 
 impl Memory {
     /// Creates a new WebAssembly memory given the configuration of `ty`.
@@ -270,12 +272,15 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(store: &Store, ty: MemoryType) -> Result<Memory> {
-        let (instance, wasmtime_export) = generate_memory_export(store, &ty)?;
-        Ok(Memory {
-            instance,
-            wasmtime_export,
-        })
+    pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
+        Memory::_new(&mut store.as_context_mut().opaque(), ty)
+    }
+
+    fn _new(store: &mut StoreOpaque<'_>, ty: MemoryType) -> Result<Memory> {
+        unsafe {
+            let export = generate_memory_export(store, &ty)?;
+            Ok(Memory::from_wasmtime_memory(export, store))
+        }
     }
 
     /// Returns the underlying type of this memory.
@@ -295,8 +300,10 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn ty(&self) -> MemoryType {
-        MemoryType::from_wasmtime_memory(&self.wasmtime_export.memory.memory)
+    pub fn ty(&self, store: impl AsContext) -> MemoryType {
+        let store = store.as_context();
+        let ty = &store[self.0].memory.memory;
+        MemoryType::from_wasmtime_memory(&ty)
     }
 
     /// Safely reads memory contents at the given offset into a buffer.
@@ -305,16 +312,20 @@ impl Memory {
     ///
     /// If offset + buffer length exceed the current memory capacity, then the
     /// buffer is left untouched and a [`MemoryAccessError`] is returned.
-    pub fn read(&self, offset: usize, buffer: &mut [u8]) -> Result<(), MemoryAccessError> {
-        unsafe {
-            let slice = self
-                .data_unchecked()
-                .get(offset..)
-                .and_then(|s| s.get(..buffer.len()))
-                .ok_or(MemoryAccessError { _private: () })?;
-            buffer.copy_from_slice(slice);
-            Ok(())
-        }
+    pub fn read(
+        &self,
+        store: impl AsContext,
+        offset: usize,
+        buffer: &mut [u8],
+    ) -> Result<(), MemoryAccessError> {
+        let store = store.as_context();
+        let slice = self
+            .data(&store)
+            .get(offset..)
+            .and_then(|s| s.get(..buffer.len()))
+            .ok_or(MemoryAccessError { _private: () })?;
+        buffer.copy_from_slice(slice);
+        Ok(())
     }
 
     /// Safely writes contents of a buffer to this memory at the given offset.
@@ -322,70 +333,44 @@ impl Memory {
     /// If the offset + buffer length exceed current memory capacity, then none
     /// of the buffer is written to memory and a [`MemoryAccessError`] is
     /// returned.
-    pub fn write(&self, offset: usize, buffer: &[u8]) -> Result<(), MemoryAccessError> {
-        unsafe {
-            self.data_unchecked_mut()
-                .get_mut(offset..)
-                .and_then(|s| s.get_mut(..buffer.len()))
-                .ok_or(MemoryAccessError { _private: () })?
-                .copy_from_slice(buffer);
-            Ok(())
-        }
+    pub fn write(
+        &self,
+        mut store: impl AsContextMut,
+        offset: usize,
+        buffer: &[u8],
+    ) -> Result<(), MemoryAccessError> {
+        let mut context = store.as_context_mut();
+        self.data_mut(&mut context)
+            .get_mut(offset..)
+            .and_then(|s| s.get_mut(..buffer.len()))
+            .ok_or(MemoryAccessError { _private: () })?
+            .copy_from_slice(buffer);
+        Ok(())
     }
 
     /// Returns this memory as a slice view that can be read natively in Rust.
-    ///
-    /// # Safety
-    ///
-    /// This is an unsafe operation because there is no guarantee that the
-    /// following operations do not happen concurrently while the slice is in
-    /// use:
-    ///
-    /// * Data could be modified by calling into a wasm module.
-    /// * Memory could be relocated through growth by calling into a wasm
-    ///   module.
-    /// * When threads are supported, non-atomic reads will race with other
-    ///   writes.
-    ///
-    /// Extreme care need be taken when the data of a `Memory` is read. The
-    /// above invariants all need to be upheld at a bare minimum, and in
-    /// general you'll need to ensure that while you're looking at slice you're
-    /// the only one who can possibly look at the slice and read/write it.
-    ///
-    /// Be sure to keep in mind that `Memory` is reference counted, meaning
-    /// that there may be other users of this `Memory` instance elsewhere in
-    /// your program. Additionally `Memory` can be shared and used in any number
-    /// of wasm instances, so calling any wasm code should be considered
-    /// dangerous while you're holding a slice of memory.
-    ///
-    /// For more information and examples see the documentation on the
-    /// [`Memory`] type.
-    pub unsafe fn data_unchecked(&self) -> &[u8] {
-        self.data_unchecked_mut()
+    pub fn data<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
+        unsafe {
+            let store = store.into();
+            let definition = *store[self.0].definition;
+            slice::from_raw_parts(definition.base, definition.current_length)
+        }
     }
 
     /// Returns this memory as a slice view that can be read and written
     /// natively in Rust.
-    ///
-    /// # Safety
-    ///
-    /// All of the same safety caveats of [`Memory::data_unchecked`] apply
-    /// here, doubly so because this is returning a mutable slice! As a
-    /// double-extra reminder, remember that `Memory` is reference counted, so
-    /// you can very easily acquire two mutable slices by simply calling this
-    /// function twice. Extreme caution should be used when using this method,
-    /// and in general you probably want to result to unsafe accessors and the
-    /// `data` methods below.
-    ///
-    /// For more information and examples see the documentation on the
-    /// [`Memory`] type.
-    pub unsafe fn data_unchecked_mut(&self) -> &mut [u8] {
-        let definition = &*self.wasmtime_export.definition;
-        slice::from_raw_parts_mut(definition.base, definition.current_length)
+    pub fn data_mut<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>) -> &'a mut [u8] {
+        unsafe {
+            let store = store.into();
+            let definition = *store[self.0].definition;
+            slice::from_raw_parts_mut(definition.base, definition.current_length)
+        }
     }
 
     /// Returns the base pointer, in the host's address space, that the memory
     /// is located at.
+    ///
+    /// TODO
     ///
     /// When reading and manipulating memory be sure to read up on the caveats
     /// of [`Memory::data_unchecked`] to make sure that you can safely
@@ -393,8 +378,8 @@ impl Memory {
     ///
     /// For more information and examples see the documentation on the
     /// [`Memory`] type.
-    pub fn data_ptr(&self) -> *mut u8 {
-        unsafe { (*self.wasmtime_export.definition).base }
+    pub fn data_ptr(&self, store: impl AsContext) -> *mut u8 {
+        unsafe { (*store.as_context()[self.0].definition).base }
     }
 
     /// Returns the byte length of this memory.
@@ -403,13 +388,13 @@ impl Memory {
     ///
     /// For more information and examples see the documentation on the
     /// [`Memory`] type.
-    pub fn data_size(&self) -> usize {
-        unsafe { (*self.wasmtime_export.definition).current_length }
+    pub fn data_size(&self, store: impl AsContext) -> usize {
+        unsafe { (*store.as_context()[self.0].definition).current_length }
     }
 
     /// Returns the size, in pages, of this wasm memory.
-    pub fn size(&self) -> u32 {
-        (self.data_size() / wasmtime_environ::WASM_PAGE_SIZE as usize) as u32
+    pub fn size(&self, store: impl AsContext) -> u32 {
+        (self.data_size(store) / wasmtime_environ::WASM_PAGE_SIZE as usize) as u32
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
@@ -447,38 +432,54 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn grow(&self, delta: u32) -> Result<u32> {
-        let index = self
-            .instance
-            .memory_index(unsafe { &*self.wasmtime_export.definition });
-        self.instance
-            .memory_grow(index, delta)
-            .ok_or_else(|| anyhow!("failed to grow memory by `{}`", delta))
+    pub fn grow(&self, mut store: impl AsContextMut, delta: u32) -> Result<u32> {
+        let mut store = store.as_context_mut().opaque();
+        let mem = self.wasmtime_memory(&mut store);
+        unsafe {
+            match (*mem).grow(delta, store.limiter()) {
+                Some(size) => {
+                    let vm = (*mem).vmmemory();
+                    *store[self.0].definition = vm;
+                    Ok(size)
+                }
+                None => bail!("failed to grow memory by `{}`", delta),
+            }
+        }
+    }
+
+    fn wasmtime_memory(&self, store: &mut StoreOpaque<'_>) -> *mut wasmtime_runtime::Memory {
+        unsafe {
+            let export = &store[self.0];
+            let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(export.vmctx);
+            let idx = handle.memory_index(&*export.definition);
+            handle.get_defined_memory(idx)
+        }
     }
 
     pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: &wasmtime_runtime::ExportMemory,
-        store: &Store,
+        wasmtime_export: wasmtime_runtime::ExportMemory,
+        store: &mut StoreOpaque,
     ) -> Memory {
-        Memory {
-            instance: store.existing_vmctx(wasmtime_export.vmctx),
-            wasmtime_export: wasmtime_export.clone(),
-        }
+        Memory(store.store_data_mut().insert(wasmtime_export))
     }
 
-    pub(crate) fn wasmtime_ty(&self) -> &wasmtime_environ::wasm::Memory {
-        &self.wasmtime_export.memory.memory
+    pub(crate) fn wasmtime_ty<'a>(
+        &self,
+        store: &'a StoreData,
+    ) -> &'a wasmtime_environ::wasm::Memory {
+        &store[self.0].memory.memory
     }
 
-    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMMemoryImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque<'_>) -> wasmtime_runtime::VMMemoryImport {
+        let export = &store[self.0];
         wasmtime_runtime::VMMemoryImport {
-            from: self.wasmtime_export.definition,
-            vmctx: self.wasmtime_export.vmctx,
+            from: export.definition,
+            vmctx: export.vmctx,
         }
     }
 
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportMemory {
-        &self.wasmtime_export
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
+        store.store_data().contains(self.0)
     }
 }
 
@@ -495,7 +496,7 @@ impl Memory {
 ///
 /// Note that this is a relatively new and experimental feature and it is recommended
 /// to be familiar with wasmtime runtime code to use it.
-pub unsafe trait LinearMemory {
+pub unsafe trait LinearMemory: Send + Sync + 'static {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
 
@@ -507,7 +508,7 @@ pub unsafe trait LinearMemory {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    fn grow(&self, delta: u32) -> Option<u32>;
+    fn grow(&mut self, delta: u32) -> Option<u32>;
 
     /// Return the allocated memory as a mutable pointer to u8.
     fn as_ptr(&self) -> *mut u8;
@@ -569,11 +570,12 @@ mod tests {
         let mut cfg = Config::new();
         cfg.static_memory_maximum_size(0)
             .dynamic_memory_guard_size(0);
-        let store = Store::new(&Engine::new(&cfg).unwrap());
+        let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
         let ty = MemoryType::new(Limits::new(1, None));
-        let mem = Memory::new(&store, ty).unwrap();
-        assert_eq!(mem.wasmtime_export.memory.offset_guard_size, 0);
-        match mem.wasmtime_export.memory.style {
+        let mem = Memory::new(&mut store, ty).unwrap();
+        let store = store.as_context();
+        assert_eq!(store[mem.0].memory.offset_guard_size, 0);
+        match &store[mem.0].memory.style {
             wasmtime_environ::MemoryStyle::Dynamic => {}
             other => panic!("unexpected style {:?}", other),
         }

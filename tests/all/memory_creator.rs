@@ -3,22 +3,20 @@ mod not_for_windows {
     use wasmtime::*;
     use wasmtime_environ::{WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
-    use libc::c_void;
     use libc::MAP_FAILED;
     use libc::{mmap, mprotect, munmap};
     use libc::{sysconf, _SC_PAGESIZE};
     use libc::{MAP_ANON, MAP_PRIVATE, PROT_NONE, PROT_READ, PROT_WRITE};
 
-    use std::cell::RefCell;
     use std::io::Error;
     use std::ptr::null_mut;
     use std::sync::{Arc, Mutex};
 
     struct CustomMemory {
-        mem: *mut c_void,
+        mem: usize,
         size: usize,
         guard_size: usize,
-        used_wasm_pages: RefCell<u32>,
+        used_wasm_pages: u32,
         glob_page_counter: Arc<Mutex<u64>>,
     }
 
@@ -42,10 +40,10 @@ mod not_for_windows {
             *glob_counter.lock().unwrap() += num_wasm_pages as u64;
 
             Self {
-                mem,
+                mem: mem as usize,
                 size,
                 guard_size,
-                used_wasm_pages: RefCell::new(num_wasm_pages),
+                used_wasm_pages: num_wasm_pages,
                 glob_page_counter: glob_counter,
             }
         }
@@ -53,26 +51,26 @@ mod not_for_windows {
 
     impl Drop for CustomMemory {
         fn drop(&mut self) {
-            let n = *self.used_wasm_pages.borrow() as u64;
+            let n = self.used_wasm_pages as u64;
             *self.glob_page_counter.lock().unwrap() -= n;
-            let r = unsafe { munmap(self.mem, self.size) };
+            let r = unsafe { munmap(self.mem as *mut _, self.size) };
             assert_eq!(r, 0, "munmap failed: {}", Error::last_os_error());
         }
     }
 
     unsafe impl LinearMemory for CustomMemory {
         fn size(&self) -> u32 {
-            *self.used_wasm_pages.borrow()
+            self.used_wasm_pages
         }
 
         fn maximum(&self) -> Option<u32> {
             Some((self.size as u32 - self.guard_size as u32) / WASM_PAGE_SIZE)
         }
 
-        fn grow(&self, delta: u32) -> Option<u32> {
+        fn grow(&mut self, delta: u32) -> Option<u32> {
             let delta_size = (delta as usize).checked_mul(WASM_PAGE_SIZE as usize)?;
 
-            let prev_pages = *self.used_wasm_pages.borrow();
+            let prev_pages = self.used_wasm_pages;
             let prev_size = (prev_pages as usize).checked_mul(WASM_PAGE_SIZE as usize)?;
 
             let new_pages = prev_pages.checked_add(delta)?;
@@ -87,7 +85,7 @@ mod not_for_windows {
             }
 
             *self.glob_page_counter.lock().unwrap() += delta as u64;
-            *self.used_wasm_pages.borrow_mut() = new_pages;
+            self.used_wasm_pages = new_pages;
             Some(prev_pages)
         }
 
@@ -132,19 +130,19 @@ mod not_for_windows {
         }
     }
 
-    fn config() -> (Store, Arc<CustomMemoryCreator>) {
+    fn config() -> (Store<()>, Arc<CustomMemoryCreator>) {
         let mem_creator = Arc::new(CustomMemoryCreator::new());
         let mut config = Config::new();
         config
             .with_host_memory(mem_creator.clone())
             .static_memory_maximum_size(0)
             .dynamic_memory_guard_size(0);
-        (Store::new(&Engine::new(&config).unwrap()), mem_creator)
+        (Store::new(&Engine::new(&config).unwrap(), ()), mem_creator)
     }
 
     #[test]
     fn host_memory() -> anyhow::Result<()> {
-        let (store, mem_creator) = config();
+        let (mut store, mem_creator) = config();
         let module = Module::new(
             store.engine(),
             r#"
@@ -153,7 +151,7 @@ mod not_for_windows {
             )
         "#,
         )?;
-        Instance::new(&store, &module, &[])?;
+        Instance::new(&mut store, &module, &[])?;
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 1);
 
@@ -162,7 +160,7 @@ mod not_for_windows {
 
     #[test]
     fn host_memory_grow() -> anyhow::Result<()> {
-        let (store, mem_creator) = config();
+        let (mut store, mem_creator) = config();
         let module = Module::new(
             store.engine(),
             r#"
@@ -174,18 +172,24 @@ mod not_for_windows {
         "#,
         )?;
 
-        let instance1 = Instance::new(&store, &module, &[])?;
-        let instance2 = Instance::new(&store, &module, &[])?;
+        Instance::new(&mut store, &module, &[])?;
+        let instance2 = Instance::new(&mut store, &module, &[])?;
 
         assert_eq!(*mem_creator.num_created_memories.lock().unwrap(), 2);
 
-        assert_eq!(instance2.get_memory("memory").unwrap().size(), 2);
+        assert_eq!(
+            instance2
+                .get_memory(&mut store, "memory")
+                .unwrap()
+                .size(&store),
+            2
+        );
 
         // we take the lock outside the assert, so it won't get poisoned on assert failure
         let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
         assert_eq!(tot_pages, 4);
 
-        drop((instance1, instance2, store, module));
+        drop(store);
         let tot_pages = *mem_creator.num_total_pages.lock().unwrap();
         assert_eq!(tot_pages, 0);
 

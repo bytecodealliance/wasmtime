@@ -11,7 +11,7 @@ impl_errno!(types::Errno);
 
 impl<'a> flags::Flags for WasiCtx<'a> {
     fn configure_car(
-        &self,
+        &mut self,
         old_config: types::CarConfig,
         other_config_ptr: &GuestPtr<types::CarConfig>,
     ) -> Result<types::CarConfig, types::Errno> {
@@ -62,7 +62,7 @@ impl ConfigureCarExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         // Populate input ptr
@@ -72,7 +72,7 @@ impl ConfigureCarExercise {
             .expect("deref ptr mut to CarConfig");
 
         let res = flags::configure_car(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.old_config.bits() as i32,
             self.other_config_by_ptr.ptr as i32,

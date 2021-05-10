@@ -4,8 +4,8 @@ use std::fmt::Write;
 use wasmtime::*;
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_linker<'module>(store: &Store, module: &Module) -> Linker {
-    let mut linker = Linker::new(store);
+pub fn dummy_linker<'module>(store: &mut Store<()>, module: &Module) -> Linker<()> {
+    let mut linker = Linker::new(store.engine());
     linker.allow_shadowing(true);
     for import in module.imports() {
         match import.name() {
@@ -34,19 +34,19 @@ pub fn dummy_linker<'module>(store: &Store, module: &Module) -> Linker {
 }
 
 /// Construct a dummy `Extern` from its type signature
-pub fn dummy_extern(store: &Store, ty: ExternType) -> Extern {
+pub fn dummy_extern(store: &mut Store<()>, ty: ExternType) -> Extern {
     match ty {
         ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
         ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)),
         ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)),
         ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)),
-        ExternType::Module(module_ty) => Extern::Module(dummy_module(store, module_ty)),
+        ExternType::Module(module_ty) => Extern::Module(dummy_module(store.engine(), module_ty)),
     }
 }
 
 /// Construct a dummy function for the given function type
-pub fn dummy_func(store: &Store, ty: FuncType) -> Func {
+pub fn dummy_func(store: &mut Store<()>, ty: FuncType) -> Func {
     Func::new(store, ty.clone(), move |_, _, results| {
         for (ret_ty, result) in ty.results().zip(results) {
             *result = dummy_value(ret_ty);
@@ -74,19 +74,19 @@ pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Vec<Val> {
 }
 
 /// Construct a dummy global for the given global type.
-pub fn dummy_global(store: &Store, ty: GlobalType) -> Global {
+pub fn dummy_global(store: &mut Store<()>, ty: GlobalType) -> Global {
     let val = dummy_value(ty.content().clone());
     Global::new(store, ty, val).unwrap()
 }
 
 /// Construct a dummy table for the given table type.
-pub fn dummy_table(store: &Store, ty: TableType) -> Table {
+pub fn dummy_table(store: &mut Store<()>, ty: TableType) -> Table {
     let init_val = dummy_value(ty.element().clone());
     Table::new(store, ty, init_val).unwrap()
 }
 
 /// Construct a dummy memory for the given memory type.
-pub fn dummy_memory(store: &Store, ty: MemoryType) -> Memory {
+pub fn dummy_memory(store: &mut Store<()>, ty: MemoryType) -> Memory {
     Memory::new(store, ty).unwrap()
 }
 
@@ -94,7 +94,7 @@ pub fn dummy_memory(store: &Store, ty: MemoryType) -> Memory {
 ///
 /// This is done by using the expected type to generate a module on-the-fly
 /// which we the instantiate.
-pub fn dummy_instance(store: &Store, ty: InstanceType) -> Instance {
+pub fn dummy_instance(store: &mut Store<()>, ty: InstanceType) -> Instance {
     let mut wat = WatGenerator::new();
     for ty in ty.exports() {
         wat.export(&ty);
@@ -106,7 +106,7 @@ pub fn dummy_instance(store: &Store, ty: InstanceType) -> Instance {
 /// Construct a dummy module for the given module type.
 ///
 /// This is done by using the expected type to generate a module on-the-fly.
-pub fn dummy_module(store: &Store, ty: ModuleType) -> Module {
+pub fn dummy_module(engine: &Engine, ty: ModuleType) -> Module {
     let mut wat = WatGenerator::new();
     for ty in ty.imports() {
         wat.import(&ty);
@@ -114,7 +114,7 @@ pub fn dummy_module(store: &Store, ty: ModuleType) -> Module {
     for ty in ty.exports() {
         wat.export(&ty);
     }
-    Module::new(store.engine(), &wat.finish()).unwrap()
+    Module::new(engine, &wat.finish()).unwrap()
 }
 
 struct WatGenerator {
@@ -378,12 +378,12 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    fn store() -> Store {
+    fn store() -> Store<()> {
         let mut config = Config::default();
         config.wasm_module_linking(true);
         config.wasm_multi_memory(true);
         let engine = wasmtime::Engine::new(&config).unwrap();
-        Store::new(&engine)
+        Store::new(&engine, ())
     }
 
     #[test]

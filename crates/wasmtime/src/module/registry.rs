@@ -33,24 +33,6 @@ fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u
 pub struct ModuleRegistry(BTreeMap<usize, Arc<RegisteredModule>>);
 
 impl ModuleRegistry {
-    /// Fetches frame information about a program counter in a backtrace.
-    ///
-    /// Returns an object if this `pc` is known to some previously registered
-    /// module, or returns `None` if no information can be found. The boolean
-    /// returned indicates whether the original module has unparsed debug
-    /// information due to the compiler's configuration.
-    pub fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool)> {
-        let module = self.module(pc)?;
-        module
-            .lookup_frame_info(pc)
-            .map(|info| (info, module.has_unparsed_debuginfo()))
-    }
-
-    /// Fetches trap information about a program counter in a backtrace.
-    pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
-        self.module(pc)?.lookup_trap_info(pc)
-    }
-
     /// Fetches information about a registered module given a program counter value.
     pub fn lookup_module(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
         self.module(pc)
@@ -132,87 +114,6 @@ struct RegisteredModule {
 }
 
 impl RegisteredModule {
-    /// Determines if the related module has unparsed debug information.
-    pub fn has_unparsed_debuginfo(&self) -> bool {
-        self.module.has_unparsed_debuginfo()
-    }
-
-    /// Fetches frame information about a program counter in a backtrace.
-    ///
-    /// Returns an object if this `pc` is known to this module, or returns `None`
-    /// if no information can be found.
-    pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
-        let info = self.module.func_info(index);
-        let pos = Self::instr_pos(offset, &info.address_map);
-
-        // In debug mode for now assert that we found a mapping for `pc` within
-        // the function, because otherwise something is buggy along the way and
-        // not accounting for all the instructions. This isn't super critical
-        // though so we can omit this check in release mode.
-        debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
-
-        let instr = match pos {
-            Some(pos) => info.address_map.instructions[pos].srcloc,
-            None => info.address_map.start_srcloc,
-        };
-
-        // Use our wasm-relative pc to symbolize this frame. If there's a
-        // symbolication context (dwarf debug info) available then we can try to
-        // look this up there.
-        //
-        // Note that dwarf pcs are code-section-relative, hence the subtraction
-        // from the location of `instr`. Also note that all errors are ignored
-        // here for now since technically wasm modules can always have any
-        // custom section contents.
-        let mut symbols = Vec::new();
-
-        if let Some(s) = &self.module.symbolize_context().ok().and_then(|c| c) {
-            let to_lookup = (instr.bits() as u64) - s.code_section_offset();
-            if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
-                while let Ok(Some(frame)) = frames.next() {
-                    symbols.push(FrameSymbol {
-                        name: frame
-                            .function
-                            .as_ref()
-                            .and_then(|l| l.raw_name().ok())
-                            .map(|s| s.to_string()),
-                        file: frame
-                            .location
-                            .as_ref()
-                            .and_then(|l| l.file)
-                            .map(|s| s.to_string()),
-                        line: frame.location.as_ref().and_then(|l| l.line),
-                        column: frame.location.as_ref().and_then(|l| l.column),
-                    });
-                }
-            }
-        }
-
-        let module = self.module.module();
-        let index = module.func_index(index);
-
-        Some(FrameInfo {
-            module_name: module.name.clone(),
-            func_index: index.index() as u32,
-            func_name: module.func_names.get(&index).cloned(),
-            instr,
-            func_start: info.address_map.start_srcloc,
-            symbols,
-        })
-    }
-
-    /// Fetches trap information about a program counter in a backtrace.
-    pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
-        let info = self.module.func_info(index);
-        let idx = info
-            .traps
-            .binary_search_by_key(&offset, |info| info.code_offset)
-            .ok()?;
-        Some(&info.traps[idx])
-    }
-
     fn instr_pos(offset: u32, addr_map: &FunctionAddressMap) -> Option<usize> {
         // Use our relative position from the start of the function to find the
         // machine instruction that corresponds to `pc`, which then allows us to
@@ -306,6 +207,7 @@ impl ModuleInfo for RegisteredModule {
 struct GlobalRegisteredModule {
     start: usize,
     module: Arc<CompiledModule>,
+    wasm_backtrace_details_env_used: bool,
     /// Note that modules can be instantiated in many stores, so the purpose of
     /// this field is to keep track of how many stores have registered a
     /// module. Information is only removed from the global registry when this
@@ -335,22 +237,57 @@ impl GlobalModuleRegistry {
     pub(crate) fn is_wasm_pc(pc: usize) -> bool {
         let modules = GLOBAL_MODULES.lock().unwrap();
 
-        match modules.0.range(pc..).next() {
-            Some((end, entry)) => {
-                if pc < entry.start || *end < pc {
-                    return false;
+        match modules.module(pc) {
+            Some(entry) => match func_by_pc(&entry.module, pc) {
+                Some((index, offset)) => {
+                    let info = entry.module.func_info(index);
+                    RegisteredModule::instr_pos(offset, &info.address_map).is_some()
                 }
-
-                match func_by_pc(&entry.module, pc) {
-                    Some((index, offset)) => {
-                        let info = entry.module.func_info(index);
-                        RegisteredModule::instr_pos(offset, &info.address_map).is_some()
-                    }
-                    None => false,
-                }
-            }
+                None => false,
+            },
             None => false,
         }
+    }
+
+    fn module(&self, pc: usize) -> Option<&GlobalRegisteredModule> {
+        let (end, info) = self.0.range(pc..).next()?;
+        if pc < info.start || *end < pc {
+            return None;
+        }
+        Some(info)
+    }
+
+    // Work with the global instance of `GlobalModuleRegistry`. Note that only
+    // shared access is allowed, this isn't intended to mutate the contents.
+    //
+    // (right now we use a `Mutex` but if motivated we could one day use a
+    // `RwLock`)
+    pub(crate) fn with<R>(f: impl FnOnce(&GlobalModuleRegistry) -> R) -> R {
+        f(&GLOBAL_MODULES.lock().unwrap())
+    }
+
+    /// Fetches frame information about a program counter in a backtrace.
+    ///
+    /// Returns an object if this `pc` is known to some previously registered
+    /// module, or returns `None` if no information can be found. The first
+    /// boolean returned indicates whether the original module has unparsed
+    /// debug information due to the compiler's configuration. The second
+    /// boolean indicates whether the engine used to compile this module is
+    /// using environment variables to control debuginfo parsing.
+    pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool, bool)> {
+        let module = self.module(pc)?;
+        module.lookup_frame_info(pc).map(|info| {
+            (
+                info,
+                module.has_unparsed_debuginfo(),
+                module.wasm_backtrace_details_env_used,
+            )
+        })
+    }
+
+    /// Fetches trap information about a program counter in a backtrace.
+    pub(crate) fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
+        self.module(pc)?.lookup_trap_info(pc)
     }
 
     /// Registers a new region of code, described by `(start, end)` and with
@@ -359,6 +296,10 @@ impl GlobalModuleRegistry {
         let info = self.0.entry(end).or_insert_with(|| GlobalRegisteredModule {
             start,
             module: module.compiled_module().clone(),
+            wasm_backtrace_details_env_used: module
+                .engine()
+                .config()
+                .wasm_backtrace_details_env_used,
             references: 0,
         });
 
@@ -377,6 +318,89 @@ impl GlobalModuleRegistry {
         if info.references == 0 {
             self.0.remove(&end);
         }
+    }
+}
+
+impl GlobalRegisteredModule {
+    /// Determines if the related module has unparsed debug information.
+    pub fn has_unparsed_debuginfo(&self) -> bool {
+        self.module.has_unparsed_debuginfo()
+    }
+
+    /// Fetches frame information about a program counter in a backtrace.
+    ///
+    /// Returns an object if this `pc` is known to this module, or returns `None`
+    /// if no information can be found.
+    pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
+        let (index, offset) = func_by_pc(&self.module, pc)?;
+        let info = self.module.func_info(index);
+        let pos = RegisteredModule::instr_pos(offset, &info.address_map);
+
+        // In debug mode for now assert that we found a mapping for `pc` within
+        // the function, because otherwise something is buggy along the way and
+        // not accounting for all the instructions. This isn't super critical
+        // though so we can omit this check in release mode.
+        debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
+
+        let instr = match pos {
+            Some(pos) => info.address_map.instructions[pos].srcloc,
+            None => info.address_map.start_srcloc,
+        };
+
+        // Use our wasm-relative pc to symbolize this frame. If there's a
+        // symbolication context (dwarf debug info) available then we can try to
+        // look this up there.
+        //
+        // Note that dwarf pcs are code-section-relative, hence the subtraction
+        // from the location of `instr`. Also note that all errors are ignored
+        // here for now since technically wasm modules can always have any
+        // custom section contents.
+        let mut symbols = Vec::new();
+
+        if let Some(s) = &self.module.symbolize_context().ok().and_then(|c| c) {
+            let to_lookup = (instr.bits() as u64) - s.code_section_offset();
+            if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
+                while let Ok(Some(frame)) = frames.next() {
+                    symbols.push(FrameSymbol {
+                        name: frame
+                            .function
+                            .as_ref()
+                            .and_then(|l| l.raw_name().ok())
+                            .map(|s| s.to_string()),
+                        file: frame
+                            .location
+                            .as_ref()
+                            .and_then(|l| l.file)
+                            .map(|s| s.to_string()),
+                        line: frame.location.as_ref().and_then(|l| l.line),
+                        column: frame.location.as_ref().and_then(|l| l.column),
+                    });
+                }
+            }
+        }
+
+        let module = self.module.module();
+        let index = module.func_index(index);
+
+        Some(FrameInfo {
+            module_name: module.name.clone(),
+            func_index: index.index() as u32,
+            func_name: module.func_names.get(&index).cloned(),
+            instr,
+            func_start: info.address_map.start_srcloc,
+            symbols,
+        })
+    }
+
+    /// Fetches trap information about a program counter in a backtrace.
+    pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
+        let (index, offset) = func_by_pc(&self.module, pc)?;
+        let info = self.module.func_info(index);
+        let idx = info
+            .traps
+            .binary_search_by_key(&offset, |info| info.code_offset)
+            .ok()?;
+        Some(&info.traps[idx])
     }
 }
 
@@ -522,7 +546,7 @@ impl FrameSymbol {
 #[test]
 fn test_frame_info() -> Result<(), anyhow::Error> {
     use crate::*;
-    let store = Store::default();
+    let mut store = Store::<()>::default();
     let module = Module::new(
         store.engine(),
         r#"
@@ -538,18 +562,20 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
          "#,
     )?;
     // Create an instance to ensure the frame information is registered.
-    Instance::new(&store, &module, &[])?;
-    let modules = store.modules().borrow();
-    for (i, alloc) in module.compiled_module().finished_functions() {
-        let (start, end) = unsafe {
-            let ptr = (**alloc).as_ptr();
-            let len = (**alloc).len();
-            (ptr as usize, ptr as usize + len)
-        };
-        for pc in start..end {
-            let (frame, _) = modules.lookup_frame_info(pc).unwrap();
-            assert!(frame.func_index() == i.as_u32());
+    Instance::new(&mut store, &module, &[])?;
+
+    GlobalModuleRegistry::with(|modules| {
+        for (i, alloc) in module.compiled_module().finished_functions() {
+            let (start, end) = unsafe {
+                let ptr = (**alloc).as_ptr();
+                let len = (**alloc).len();
+                (ptr as usize, ptr as usize + len)
+            };
+            for pc in start..end {
+                let (frame, _, _) = modules.lookup_frame_info(pc).unwrap();
+                assert!(frame.func_index() == i.as_u32());
+            }
         }
-    }
+    });
     Ok(())
 }

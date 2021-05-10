@@ -10,7 +10,7 @@ impl_errno!(types::Errno);
 
 impl<'a> pointers::Pointers for WasiCtx<'a> {
     fn pointers_and_enums<'b>(
-        &self,
+        &mut self,
         input1: types::Excuse,
         input2_ptr: &GuestPtr<'b, types::Excuse>,
         input3_ptr: &GuestPtr<'b, types::Excuse>,
@@ -125,7 +125,7 @@ impl PointersAndEnumsExercise {
             .boxed()
     }
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         host_memory
@@ -149,7 +149,7 @@ impl PointersAndEnumsExercise {
             .expect("input4 ptr ref_mut");
 
         let e = pointers::pointers_and_enums(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input1 as i32,
             self.input2_loc.ptr as i32,

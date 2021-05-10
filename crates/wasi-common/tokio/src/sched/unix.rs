@@ -9,13 +9,13 @@ use wasi_common::{
     Context as _, Error,
 };
 
-struct FirstReady<'a, T>(Vec<Pin<Box<dyn Future<Output = T> + 'a>>>);
+struct FirstReady<'a, T>(Vec<Pin<Box<dyn Future<Output = T> + Send + 'a>>>);
 
 impl<'a, T> FirstReady<'a, T> {
     fn new() -> Self {
         FirstReady(Vec::new())
     }
-    fn push(&mut self, f: impl Future<Output = T> + 'a) {
+    fn push(&mut self, f: impl Future<Output = T> + Send + 'a) {
         self.0.push(Box::pin(f));
     }
 }

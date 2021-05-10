@@ -49,6 +49,9 @@ struct HostBuffer {
     cell: UnsafeCell<[u8; 4096]>,
 }
 
+unsafe impl Send for HostBuffer {}
+unsafe impl Sync for HostBuffer {}
+
 pub struct HostMemory {
     buffer: HostBuffer,
     bc: BorrowChecker,

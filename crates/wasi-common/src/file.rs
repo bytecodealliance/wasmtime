@@ -1,11 +1,9 @@
 use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
-use std::cell::{Ref, RefMut};
-use std::ops::{Deref, DerefMut};
 
 #[wiggle::async_trait]
-pub trait WasiFile: Send {
+pub trait WasiFile: Send + Sync {
     fn as_any(&self) -> &dyn Any;
     async fn datasync(&self) -> Result<(), Error>; // write op
     async fn sync(&self) -> Result<(), Error>; // file op
@@ -37,8 +35,8 @@ pub trait WasiFile: Send {
     async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error>; // read op
     async fn num_ready_bytes(&self) -> Result<u64, Error>; // read op
 
-    async fn readable(&mut self) -> Result<(), Error>;
-    async fn writable(&mut self) -> Result<(), Error>;
+    async fn readable(&self) -> Result<(), Error>;
+    async fn writable(&self) -> Result<(), Error>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -86,14 +84,14 @@ pub struct Filestat {
 }
 
 pub(crate) trait TableFileExt {
-    fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error>;
-    fn get_file_mut(&self, fd: u32) -> Result<RefMut<FileEntry>, Error>;
+    fn get_file(&self, fd: u32) -> Result<&FileEntry, Error>;
+    fn get_file_mut(&mut self, fd: u32) -> Result<&mut FileEntry, Error>;
 }
 impl TableFileExt for crate::table::Table {
-    fn get_file(&self, fd: u32) -> Result<Ref<FileEntry>, Error> {
+    fn get_file(&self, fd: u32) -> Result<&FileEntry, Error> {
         self.get(fd)
     }
-    fn get_file_mut(&self, fd: u32) -> Result<RefMut<FileEntry>, Error> {
+    fn get_file_mut(&mut self, fd: u32) -> Result<&mut FileEntry, Error> {
         self.get_mut(fd)
     }
 }
@@ -131,24 +129,20 @@ impl FileEntry {
     }
 }
 
-pub trait FileEntryExt<'a> {
-    fn get_cap(self, caps: FileCaps) -> Result<Ref<'a, dyn WasiFile>, Error>;
+pub trait FileEntryExt {
+    fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error>;
+    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error>;
 }
 
-impl<'a> FileEntryExt<'a> for Ref<'a, FileEntry> {
-    fn get_cap(self, caps: FileCaps) -> Result<Ref<'a, dyn WasiFile>, Error> {
+impl FileEntryExt for FileEntry {
+    fn get_cap(&self, caps: FileCaps) -> Result<&dyn WasiFile, Error> {
         self.capable_of(caps)?;
-        Ok(Ref::map(self, |r| r.file.deref()))
+        Ok(&*self.file)
     }
-}
-pub trait FileEntryMutExt<'a> {
-    fn get_cap(self, caps: FileCaps) -> Result<RefMut<'a, dyn WasiFile>, Error>;
-}
 
-impl<'a> FileEntryMutExt<'a> for RefMut<'a, FileEntry> {
-    fn get_cap(self, caps: FileCaps) -> Result<RefMut<'a, dyn WasiFile>, Error> {
+    fn get_cap_mut(&mut self, caps: FileCaps) -> Result<&mut dyn WasiFile, Error> {
         self.capable_of(caps)?;
-        Ok(RefMut::map(self, |r| r.file.deref_mut()))
+        Ok(&mut *self.file)
     }
 }
 

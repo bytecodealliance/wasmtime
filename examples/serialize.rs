@@ -27,7 +27,7 @@ fn deserialize(buffer: &[u8]) -> Result<()> {
     // `Store` structure. Note that you can also tweak configuration settings
     // with a `Config` and an `Engine` if desired.
     println!("Initializing...");
-    let store = Store::default();
+    let mut store: Store<()> = Store::default();
 
     // Compile the wasm binary into an in-memory instance of a `Module`. Note
     // that this is `unsafe` because it is our responsibility for guaranteeing
@@ -39,7 +39,7 @@ fn deserialize(buffer: &[u8]) -> Result<()> {
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.
     println!("Creating callback...");
-    let hello_func = Func::wrap(&store, || {
+    let hello_func = Func::wrap(&mut store, || {
         println!("Calling back...");
         println!("> Hello World!");
     });
@@ -49,15 +49,15 @@ fn deserialize(buffer: &[u8]) -> Result<()> {
     // Note that this is where the wasm `start` function, if any, would run.
     println!("Instantiating module...");
     let imports = [hello_func.into()];
-    let instance = Instance::new(&store, &module, &imports)?;
+    let instance = Instance::new(&mut store, &module, &imports)?;
 
     // Next we poke around a bit to extract the `run` function from the module.
     println!("Extracting export...");
-    let run = instance.get_typed_func::<(), ()>("run")?;
+    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
     // And last but not least we can call it!
     println!("Calling export...");
-    run.call(())?;
+    run.call(&mut store, ())?;
 
     println!("Done.");
     Ok(())

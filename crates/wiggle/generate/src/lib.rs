@@ -42,7 +42,7 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
         let abi_typename = names.type_ref(&errtype.abi_type(), anon_lifetime());
         let user_typename = errtype.typename();
         let methodname = names.user_error_conversion_method(&errtype);
-        quote!(fn #methodname(&self, e: super::#user_typename) -> Result<#abi_typename, #rt::Trap>;)
+        quote!(fn #methodname(&mut self, e: super::#user_typename) -> Result<#abi_typename, #rt::Trap>;)
     });
     let user_error_conversion = quote! {
         pub trait UserErrorConversion {

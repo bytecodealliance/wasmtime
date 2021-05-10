@@ -28,7 +28,7 @@ pub use sync::*;
 #[cfg(feature = "tokio")]
 pub mod tokio {
     pub use wasi_tokio::*;
-    super::define_wasi!(async);
+    super::define_wasi!(async + Send);
 }
 
 // The only difference between these definitions for sync vs async is whether
@@ -38,44 +38,18 @@ pub mod tokio {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! define_wasi {
-    ($async_mode: tt) => {
+    ($async_mode: tt $($bounds:tt)*) => {
 
-use std::cell::RefCell;
-use std::rc::Rc;
-use wasmtime::{Config, Linker, Store};
-use wasi_common::WasiCtx;
+use std::borrow::BorrowMut;
+use wasmtime::Linker;
 
-/// An instantiated instance of all available wasi exports. Presently includes
-/// both the "preview1" snapshot and the "unstable" (preview0) snapshot.
-pub struct Wasi {
-    preview_1: snapshots::preview_1::Wasi,
-    preview_0: snapshots::preview_0::Wasi,
-}
-
-impl Wasi {
-    pub fn new(store: &Store, context: WasiCtx) -> Self {
-        let context = Rc::new(RefCell::new(context));
-        let preview_1 = snapshots::preview_1::Wasi::new(store, context.clone());
-        let preview_0 = snapshots::preview_0::Wasi::new(store, context);
-        Self {
-            preview_1,
-            preview_0,
-        }
-    }
-    pub fn add_to_linker(&self, linker: &mut Linker) -> Result<(), anyhow::Error> {
-        self.preview_1.add_to_linker(linker)?;
-        self.preview_0.add_to_linker(linker)?;
-        Ok(())
-    }
-    pub fn add_to_config(config: &mut Config) {
-        snapshots::preview_1::Wasi::add_to_config(config);
-        snapshots::preview_0::Wasi::add_to_config(config);
-    }
-    pub fn set_context(store: &Store, context: WasiCtx) -> Result<(), WasiCtx> {
-        // It doesn't matter which underlying `Wasi` type this gets called on as the
-        // implementations are identical
-        snapshots::preview_1::Wasi::set_context(store, context)
-    }
+pub fn add_to_linker<T>(linker: &mut Linker<T>) -> anyhow::Result<()>
+where
+    T: BorrowMut<crate::WasiCtx> $($bounds)*,
+{
+    snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker)?;
+    snapshots::preview_0::add_wasi_unstable_to_linker(linker)?;
+    Ok(())
 }
 
 pub mod snapshots {
@@ -94,7 +68,7 @@ pub mod snapshots {
             // This macro will emit a struct to represent the instance,
             // with this name and docs:
             modules: { wasi_snapshot_preview1 =>
-                { name: Wasi,
+                { name: wasi_snapshot_preview1,
                   docs: "An instantiated instance of the wasi exports.
 
 This represents a wasi module which can be used to instantiate other wasm
@@ -122,7 +96,7 @@ resolution.",
             // This macro will emit a struct to represent the instance,
             // with this name and docs:
             modules: { wasi_unstable =>
-                { name: Wasi,
+                { name: wasi_unstable,
                   docs: "An instantiated instance of the wasi exports.
 
 This represents a wasi module which can be used to instantiate other wasm

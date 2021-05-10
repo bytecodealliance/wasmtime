@@ -14,12 +14,12 @@ impl_errno!(types::Errno);
 
 #[wiggle::async_trait]
 impl<'a> atoms::Atoms for WasiCtx<'a> {
-    async fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
+    async fn int_float_args(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())
     }
     async fn double_int_return_float(
-        &self,
+        &mut self,
         an_int: u32,
     ) -> Result<types::AliasToFloat, types::Errno> {
         Ok((an_int as f32) * 2.0)
@@ -36,11 +36,11 @@ struct IntFloatExercise {
 
 impl IntFloatExercise {
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         let e = run(atoms::int_float_args(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.an_int as i32,
             self.an_float,
@@ -70,11 +70,11 @@ struct DoubleIntExercise {
 
 impl DoubleIntExercise {
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         let e = run(atoms::double_int_return_float(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input as i32,
             self.return_loc.ptr as i32,

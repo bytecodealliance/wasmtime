@@ -13,7 +13,7 @@ impl ExternRef {
     /// Creates a new instance of `ExternRef` wrapping the given value.
     pub fn new<T>(value: T) -> ExternRef
     where
-        T: 'static + Any,
+        T: 'static + Any + Send + Sync,
     {
         let inner = VMExternRef::new(value);
         ExternRef { inner }

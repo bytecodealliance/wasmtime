@@ -128,10 +128,10 @@ mod test {
         let engine = Engine::default();
         let contents = std::fs::read(output_path)?;
         let module = unsafe { Module::deserialize(&engine, contents)? };
-        let store = Store::new(&engine);
-        let instance = Instance::new(&store, &module, &[])?;
-        let f = instance.get_typed_func::<i32, i32>("f")?;
-        assert_eq!(f.call(1234).unwrap(), 1234);
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let f = instance.get_typed_func::<i32, i32, _>(&mut store, "f")?;
+        assert_eq!(f.call(&mut store, 1234).unwrap(), 1234);
 
         Ok(())
     }

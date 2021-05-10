@@ -97,9 +97,9 @@ fn main() {
             "make instance then segfault",
             || {
                 let engine = Engine::default();
-                let store = Store::new(&engine);
+                let mut store = Store::new(&engine, ());
                 let module = Module::new(&engine, "(module)").unwrap();
-                let _instance = Instance::new(&store, &module, &[]).unwrap();
+                let _instance = Instance::new(&mut store, &module, &[]).unwrap();
                 segfault();
             },
             false,
@@ -108,9 +108,9 @@ fn main() {
             "make instance then overrun the stack",
             || {
                 let engine = Engine::default();
-                let store = Store::new(&engine);
+                let mut store = Store::new(&engine, ());
                 let module = Module::new(&engine, "(module)").unwrap();
-                let _instance = Instance::new(&store, &module, &[]).unwrap();
+                let _instance = Instance::new(&mut store, &module, &[]).unwrap();
                 overrun_the_stack();
             },
             true,
@@ -119,10 +119,10 @@ fn main() {
             "segfault in a host function",
             || {
                 let engine = Engine::default();
-                let store = Store::new(&engine);
+                let mut store = Store::new(&engine, ());
                 let module = Module::new(&engine, r#"(import "" "" (func)) (start 0)"#).unwrap();
-                let segfault = Func::wrap(&store, || segfault());
-                Instance::new(&store, &module, &[segfault.into()]).unwrap();
+                let segfault = Func::wrap(&mut store, || segfault());
+                Instance::new(&mut store, &module, &[segfault.into()]).unwrap();
                 unreachable!();
             },
             false,
@@ -133,13 +133,13 @@ fn main() {
                 let mut config = Config::default();
                 config.async_support(true);
                 let engine = Engine::new(&config).unwrap();
-                let store = Store::new(&engine);
-                let f = Func::wrap0_async(&store, (), |_, _| {
+                let mut store = Store::new(&engine, ());
+                let f = Func::wrap0_async(&mut store, |_| {
                     Box::new(async {
                         overrun_the_stack();
                     })
                 });
-                run_future(f.call_async(&[])).unwrap();
+                run_future(f.call_async(&mut store, &[])).unwrap();
                 unreachable!();
             },
             true,
@@ -151,13 +151,13 @@ fn main() {
                 config.async_support(true);
                 config.allocation_strategy(InstanceAllocationStrategy::pooling());
                 let engine = Engine::new(&config).unwrap();
-                let store = Store::new(&engine);
-                let f = Func::wrap0_async(&store, (), |_, _| {
+                let mut store = Store::new(&engine, ());
+                let f = Func::wrap0_async(&mut store, |_| {
                     Box::new(async {
                         overrun_the_stack();
                     })
                 });
-                run_future(f.call_async(&[])).unwrap();
+                run_future(f.call_async(&mut store, &[])).unwrap();
                 unreachable!();
             },
             true,

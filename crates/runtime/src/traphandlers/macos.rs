@@ -149,7 +149,7 @@ use mach_addons::*;
 pub enum Void {}
 /// For now this is basically unused, we don't expose this any more for
 /// Wasmtime on macOS.
-pub type SignalHandler<'a> = dyn Fn(Void) -> bool + 'a;
+pub type SignalHandler<'a> = dyn Fn(Void) -> bool + Send + Sync + 'a;
 
 /// Process-global port that we use to route thread-level exceptions to.
 static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;

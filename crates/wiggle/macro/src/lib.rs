@@ -95,11 +95,11 @@ use syn::parse_macro_input;
 ///     /// whereas the witx-defined types like `Excuse` and `Errno` come
 ///     /// from the `pub mod types` emitted by the `wiggle::from_witx!`
 ///     /// invocation above.
-///     fn int_float_args(&self, _int: u32, _floats: &GuestPtr<[f32]>)
+///     fn int_float_args(&mut self, _int: u32, _floats: &GuestPtr<[f32]>)
 ///         -> Result<(), YourRichError> {
 ///         unimplemented!()
 ///     }
-///     async fn double_int_return_float(&self, int: u32)
+///     async fn double_int_return_float(&mut self, int: u32)
 ///         -> Result<f32, YourRichError> {
 ///         Ok(int.checked_mul(2).ok_or(YourRichError::Overflow)? as f32)
 ///     }
@@ -121,7 +121,7 @@ use syn::parse_macro_input;
 /// /// to terminate WebAssembly execution by trapping.
 ///
 /// impl types::UserErrorConversion for YourCtxType {
-///     fn errno_from_your_rich_error(&self, e: YourRichError)
+///     fn errno_from_your_rich_error(&mut self, e: YourRichError)
 ///         -> Result<types::Errno, wiggle::Trap>
 ///     {
 ///         println!("Rich error: {:?}", e);
@@ -163,7 +163,7 @@ pub fn async_trait(attr: TokenStream, item: TokenStream) -> TokenStream {
     let _ = parse_macro_input!(attr as syn::parse::Nothing);
     let item = proc_macro2::TokenStream::from(item);
     TokenStream::from(quote! {
-        #[wiggle::async_trait_crate::async_trait(?Send)]
+        #[wiggle::async_trait_crate::async_trait]
         #item
     })
 }

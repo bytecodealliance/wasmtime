@@ -10,7 +10,7 @@ impl_errno!(types::Errno);
 
 impl<'a> lists::Lists for WasiCtx<'a> {
     fn reduce_excuses(
-        &self,
+        &mut self,
         excuses: &types::ConstExcuseArray,
     ) -> Result<types::Excuse, types::Errno> {
         let last = &excuses
@@ -23,7 +23,7 @@ impl<'a> lists::Lists for WasiCtx<'a> {
         Ok(last.read().expect("dereferencing ptr should succeed"))
     }
 
-    fn populate_excuses(&self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
+    fn populate_excuses(&mut self, excuses: &types::ExcuseArray) -> Result<(), types::Errno> {
         for excuse in excuses.iter() {
             let ptr_to_excuse = excuse
                 .expect("valid ptr to ptr")
@@ -74,7 +74,7 @@ impl ReduceExcusesExcercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         // Populate memory with pointers to generated Excuse values
@@ -97,7 +97,7 @@ impl ReduceExcusesExcercise {
         }
 
         let res = lists::reduce_excuses(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.array_ptr_loc.ptr as i32,
             self.excuse_ptr_locs.len() as i32,
@@ -162,7 +162,7 @@ impl PopulateExcusesExcercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         // Populate array with valid pointers to Excuse type in memory
@@ -177,7 +177,7 @@ impl PopulateExcusesExcercise {
         }
 
         let res = lists::populate_excuses(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.array_ptr_loc.ptr as i32,
             self.elements.len() as i32,
@@ -210,7 +210,7 @@ proptest! {
 
 impl<'a> array_traversal::ArrayTraversal for WasiCtx<'a> {
     fn sum_of_element(
-        &self,
+        &mut self,
         elements: &GuestPtr<[types::PairInts]>,
         index: u32,
     ) -> Result<i32, types::Errno> {
@@ -219,7 +219,7 @@ impl<'a> array_traversal::ArrayTraversal for WasiCtx<'a> {
         Ok(pair.first.wrapping_add(pair.second))
     }
     fn sum_of_elements(
-        &self,
+        &mut self,
         elements: &GuestPtr<[types::PairInts]>,
         start: u32,
         end: u32,
@@ -288,7 +288,7 @@ impl SumElementsExercise {
             .boxed()
     }
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         // Populate array
@@ -301,7 +301,7 @@ impl SumElementsExercise {
         }
 
         let res = array_traversal::sum_of_element(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.element_loc.ptr as i32,
             self.elements.len() as i32,
@@ -320,7 +320,7 @@ impl SumElementsExercise {
 
         // Off the end of the array:
         let res = array_traversal::sum_of_element(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.element_loc.ptr as i32,
             self.elements.len() as i32,
@@ -334,7 +334,7 @@ impl SumElementsExercise {
         );
 
         let res = array_traversal::sum_of_elements(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.element_loc.ptr as i32,
             self.elements.len() as i32,
@@ -373,7 +373,7 @@ impl SumElementsExercise {
 
         // Index an array off the end of the array:
         let res = array_traversal::sum_of_elements(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.element_loc.ptr as i32,
             self.elements.len() as i32,

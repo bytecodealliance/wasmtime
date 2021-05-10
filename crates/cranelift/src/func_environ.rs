@@ -394,25 +394,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         debug_assert!(delta == -1 || delta == 1);
 
         let pointer_type = self.pointer_type();
-        let ref_count_offset = ir::immediates::Offset32::new(
-            i32::try_from(VMOffsets::vm_extern_data_ref_count()).unwrap(),
-        );
 
-        let old_ref_count = builder.ins().load(
+        // If this changes that's ok, the `atomic_rmw` below just needs to be
+        // preceded with an add instruction of `externref` and the offset.
+        assert_eq!(VMOffsets::vm_extern_data_ref_count(), 0);
+        let delta = builder.ins().iconst(pointer_type, delta);
+        builder.ins().atomic_rmw(
             pointer_type,
             ir::MemFlags::trusted(),
+            ir::AtomicRmwOp::Add,
             externref,
-            ref_count_offset,
-        );
-        let new_ref_count = builder.ins().iadd_imm(old_ref_count, delta);
-        builder.ins().store(
-            ir::MemFlags::trusted(),
-            new_ref_count,
-            externref,
-            ref_count_offset,
-        );
-
-        new_ref_count
+            delta,
+        )
     }
 
     fn get_global_location(
@@ -1052,8 +1045,11 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 builder.ins().jump(continue_block, &[]);
 
                 builder.switch_to_block(dec_ref_count_block);
-                let ref_count = self.mutate_extenref_ref_count(builder, current_elem, -1);
-                builder.ins().brz(ref_count, drop_block, &[]);
+                let prev_ref_count = self.mutate_extenref_ref_count(builder, current_elem, -1);
+                let one = builder.ins().iconst(pointer_type, 1);
+                builder
+                    .ins()
+                    .br_icmp(IntCC::Equal, one, prev_ref_count, drop_block, &[]);
                 builder.ins().jump(continue_block, &[]);
 
                 // Call the `drop_externref` builtin to (you guessed it) drop

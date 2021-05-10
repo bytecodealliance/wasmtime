@@ -1,6 +1,6 @@
 //! Support for a calling of an imported function.
 
-use crate::{Config, FuncType, Store, Trap};
+use crate::{Engine, FuncType, Trap};
 use anyhow::Result;
 use std::any::Any;
 use std::cmp;
@@ -9,7 +9,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::isa::TargetIsa;
-use wasmtime_environ::wasm::{DefinedFuncIndex, SignatureIndex};
+use wasmtime_environ::wasm::SignatureIndex;
 use wasmtime_environ::{ir, wasm, CompiledFunction, Module, ModuleType};
 use wasmtime_jit::trampoline::ir::{
     ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
@@ -25,7 +25,7 @@ use wasmtime_runtime::{
 };
 
 struct TrampolineState {
-    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
     #[allow(dead_code)]
     code_memory: CodeMemory,
 }
@@ -197,20 +197,15 @@ fn make_trampoline(
         .expect("allocate_for_function")
 }
 
-fn create_function_trampoline(
-    config: &Config,
+pub fn create_function(
     ft: &FuncType,
-    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
-) -> Result<(
-    Module,
-    PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    VMTrampoline,
-    TrampolineState,
-)> {
+    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
+    engine: &Engine,
+) -> Result<(InstanceHandle, VMTrampoline)> {
     // Note that we specifically enable reference types here in our ISA because
     // `Func::new` is intended to be infallible, but our signature may use
     // reference types which requires safepoints.
-    let isa = config.target_isa_with_reference_types();
+    let isa = engine.config().target_isa_with_reference_types();
 
     let mut sig = blank_sig(&*isa, wasmtime_call_conv(&*isa));
     sig.params.extend(
@@ -223,27 +218,15 @@ fn create_function_trampoline(
     );
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
-    let mut module = Module::new();
-    let mut finished_functions = PrimaryMap::new();
     let mut code_memory = CodeMemory::new();
 
-    // First up we manufacture a trampoline which has the ABI specified by `ft`
-    // and calls into `stub_fn`...
-    let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
-    module.types.push(ModuleType::Function(sig_id));
-
-    let func_id = module.functions.push(sig_id);
-    module
-        .exports
-        .insert(String::new(), wasm::EntityIndex::Function(func_id));
-
-    let trampoline = make_trampoline(isa.as_ref(), &mut code_memory, &mut fn_builder_ctx, &sig);
-    finished_functions.push(trampoline);
+    let wasm_trampoline =
+        make_trampoline(isa.as_ref(), &mut code_memory, &mut fn_builder_ctx, &sig);
 
     // ... and then we also need a trampoline with the standard "trampoline ABI"
     // which enters into the ABI specified by `ft`. Note that this is only used
     // if `Func::call` is called on an object created by `Func::new`.
-    let trampoline = trampoline::make_trampoline(
+    let host_trampoline = trampoline::make_trampoline(
         &*isa,
         &mut code_memory,
         &mut fn_builder_ctx,
@@ -253,52 +236,22 @@ fn create_function_trampoline(
 
     code_memory.publish(isa.as_ref());
 
-    let trampoline_state = TrampolineState { func, code_memory };
-
-    Ok((module, finished_functions, trampoline, trampoline_state))
-}
-
-pub fn create_function(
-    ft: &FuncType,
-    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
-    config: &Config,
-    store: Option<&Store>,
-) -> Result<(InstanceHandle, VMTrampoline)> {
-    let (module, finished_functions, trampoline, trampoline_state) =
-        create_function_trampoline(config, ft, func)?;
-
-    // If there is no store, use the default signature index which is
-    // guaranteed to trap if there is ever an indirect call on the function (should not happen)
-    let shared_signature_id = store
-        .map(|s| {
-            s.signatures()
-                .borrow_mut()
-                .register(ft.as_wasm_func_type(), trampoline)
-        })
-        .unwrap_or(VMSharedSignatureIndex::default());
+    let sig = engine.signatures().register(ft.as_wasm_func_type());
 
     unsafe {
-        Ok((
-            OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
-                module: Arc::new(module),
-                finished_functions: &finished_functions,
-                imports: Imports::default(),
-                shared_signatures: shared_signature_id.into(),
-                host_state: Box::new(trampoline_state),
-                interrupts: std::ptr::null(),
-                externref_activations_table: std::ptr::null_mut(),
-                module_info_lookup: None,
-                limiter: None,
-            })?,
-            trampoline,
-        ))
+        let instance = create_raw_function(
+            wasm_trampoline,
+            sig,
+            Box::new(TrampolineState { func, code_memory }),
+        )?;
+        Ok((instance, host_trampoline))
     }
 }
 
 pub unsafe fn create_raw_function(
     func: *mut [VMFunctionBody],
-    host_state: Box<dyn Any>,
-    shared_signature_id: VMSharedSignatureIndex,
+    sig: VMSharedSignatureIndex,
+    host_state: Box<dyn Any + Send + Sync>,
 ) -> Result<InstanceHandle> {
     let mut module = Module::new();
     let mut finished_functions = PrimaryMap::new();
@@ -316,12 +269,9 @@ pub unsafe fn create_raw_function(
             module: Arc::new(module),
             finished_functions: &finished_functions,
             imports: Imports::default(),
-            shared_signatures: shared_signature_id.into(),
+            shared_signatures: sig.into(),
             host_state,
-            interrupts: std::ptr::null(),
-            externref_activations_table: std::ptr::null_mut(),
-            module_info_lookup: None,
-            limiter: None,
+            store: None,
         })?,
     )
 }

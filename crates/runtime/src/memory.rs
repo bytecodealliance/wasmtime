@@ -7,11 +7,7 @@ use crate::vmcontext::VMMemoryDefinition;
 use crate::ResourceLimiter;
 use anyhow::{bail, Result};
 use more_asserts::{assert_ge, assert_le};
-use std::cell::{Cell, RefCell};
-use std::cmp::min;
 use std::convert::TryFrom;
-use std::ptr;
-use std::rc::Rc;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A memory allocator
@@ -31,7 +27,7 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
 }
 
 /// A linear memory
-pub trait RuntimeLinearMemory {
+pub trait RuntimeLinearMemory: Send + Sync {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
 
@@ -43,7 +39,7 @@ pub trait RuntimeLinearMemory {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    fn grow(&self, delta: u32) -> Option<u32>;
+    fn grow(&mut self, delta: u32) -> Option<u32>;
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     fn vmmemory(&self) -> VMMemoryDefinition;
@@ -53,7 +49,7 @@ pub trait RuntimeLinearMemory {
 #[derive(Debug)]
 pub struct MmapMemory {
     // The underlying allocation.
-    mmap: RefCell<WasmMmap>,
+    mmap: WasmMmap,
 
     // The optional maximum size in wasm pages of this linear memory.
     maximum: Option<u32>,
@@ -108,7 +104,7 @@ impl MmapMemory {
 impl RuntimeLinearMemory for MmapMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32 {
-        self.mmap.borrow().size
+        self.mmap.size
     }
 
     /// Returns the maximum number of pages the memory can grow to.
@@ -121,19 +117,18 @@ impl RuntimeLinearMemory for MmapMemory {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    fn grow(&self, delta: u32) -> Option<u32> {
+    fn grow(&mut self, delta: u32) -> Option<u32> {
         // Optimization of memory.grow 0 calls.
-        let mut mmap = self.mmap.borrow_mut();
         if delta == 0 {
-            return Some(mmap.size);
+            return Some(self.mmap.size);
         }
 
-        let new_pages = match mmap.size.checked_add(delta) {
+        let new_pages = match self.mmap.size.checked_add(delta) {
             Some(new_pages) => new_pages,
             // Linear memory size overflow.
             None => return None,
         };
-        let prev_pages = mmap.size;
+        let prev_pages = self.mmap.size;
 
         if let Some(maximum) = self.maximum {
             if new_pages > maximum {
@@ -145,7 +140,7 @@ impl RuntimeLinearMemory for MmapMemory {
         // Wasm linear memories are never allowed to grow beyond what is
         // indexable. If the memory has no maximum, enforce the greatest
         // limit here.
-        if new_pages >= WASM_MAX_PAGES {
+        if new_pages > WASM_MAX_PAGES {
             // Linear memory size would exceed the index range.
             return None;
         }
@@ -154,7 +149,7 @@ impl RuntimeLinearMemory for MmapMemory {
         let prev_bytes = usize::try_from(prev_pages).unwrap() * WASM_PAGE_SIZE as usize;
         let new_bytes = usize::try_from(new_pages).unwrap() * WASM_PAGE_SIZE as usize;
 
-        if new_bytes > mmap.alloc.len() - self.offset_guard_size {
+        if new_bytes > self.mmap.alloc.len() - self.offset_guard_size {
             // If the new size is within the declared maximum, but needs more memory than we
             // have on hand, it's a dynamic heap and it can move.
             let guard_bytes = self.offset_guard_size;
@@ -162,48 +157,59 @@ impl RuntimeLinearMemory for MmapMemory {
 
             let mut new_mmap = Mmap::accessible_reserved(new_bytes, request_bytes).ok()?;
 
-            let copy_len = mmap.alloc.len() - self.offset_guard_size;
-            new_mmap.as_mut_slice()[..copy_len].copy_from_slice(&mmap.alloc.as_slice()[..copy_len]);
+            let copy_len = self.mmap.alloc.len() - self.offset_guard_size;
+            new_mmap.as_mut_slice()[..copy_len]
+                .copy_from_slice(&self.mmap.alloc.as_slice()[..copy_len]);
 
-            mmap.alloc = new_mmap;
+            self.mmap.alloc = new_mmap;
         } else if delta_bytes > 0 {
             // Make the newly allocated pages accessible.
-            mmap.alloc.make_accessible(prev_bytes, delta_bytes).ok()?;
+            self.mmap
+                .alloc
+                .make_accessible(prev_bytes, delta_bytes)
+                .ok()?;
         }
 
-        mmap.size = new_pages;
+        self.mmap.size = new_pages;
 
         Some(prev_pages)
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     fn vmmemory(&self) -> VMMemoryDefinition {
-        let mmap = self.mmap.borrow();
         VMMemoryDefinition {
-            base: mmap.alloc.as_mut_ptr(),
-            current_length: mmap.size as usize * WASM_PAGE_SIZE as usize,
+            base: self.mmap.alloc.as_mut_ptr(),
+            current_length: self.mmap.size as usize * WASM_PAGE_SIZE as usize,
         }
     }
 }
 
-enum MemoryStorage {
+/// Representation of a runtime wasm linear memory.
+pub enum Memory {
+    /// A "static" memory where the lifetime of the backing memory is managed
+    /// elsewhere. Currently used with the pooling allocator.
     Static {
-        base: *mut u8,
-        size: Cell<u32>,
-        maximum: u32,
+        /// The memory in the host for this wasm memory. The length of this
+        /// slice is the maximum size of the memory that can be grown to.
+        base: &'static mut [u8],
+
+        /// The current size, in wasm pages, of this memory.
+        size: u32,
+
+        /// A callback which makes portions of `base` accessible for when memory
+        /// is grown. Otherwise it's expected that accesses to `base` will
+        /// fault.
         make_accessible: fn(*mut u8, usize) -> Result<()>,
+
         /// Stores the pages in the linear memory that have faulted as guard pages when using the `uffd` feature.
         /// These pages need their protection level reset before the memory can grow.
         #[cfg(all(feature = "uffd", target_os = "linux"))]
-        guard_page_faults: RefCell<Vec<(*mut u8, usize, fn(*mut u8, usize) -> Result<()>)>>,
+        guard_page_faults: Vec<(usize, usize, fn(*mut u8, usize) -> Result<()>)>,
     },
-    Dynamic(Box<dyn RuntimeLinearMemory>),
-}
 
-/// Represents an instantiation of a WebAssembly memory.
-pub struct Memory {
-    storage: MemoryStorage,
-    limiter: Option<Rc<dyn ResourceLimiter>>,
+    /// A "dynamic" memory whose data is managed at runtime and lifetime is tied
+    /// to this instance.
+    Dynamic(Box<dyn RuntimeLinearMemory>),
 }
 
 impl Memory {
@@ -211,40 +217,45 @@ impl Memory {
     pub fn new_dynamic(
         plan: &MemoryPlan,
         creator: &dyn RuntimeMemoryCreator,
-        limiter: Option<&Rc<dyn ResourceLimiter>>,
+        limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<Self> {
-        Self::new(
-            plan,
-            MemoryStorage::Dynamic(creator.new_memory(plan)?),
-            limiter,
-        )
+        Self::limit_new(plan, limiter)?;
+        Ok(Memory::Dynamic(creator.new_memory(plan)?))
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
     pub fn new_static(
         plan: &MemoryPlan,
-        base: *mut u8,
-        maximum: u32,
+        base: &'static mut [u8],
         make_accessible: fn(*mut u8, usize) -> Result<()>,
-        limiter: Option<&Rc<dyn ResourceLimiter>>,
+        limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<Self> {
-        let storage = MemoryStorage::Static {
-            base,
-            size: Cell::new(plan.memory.minimum),
-            maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
-            make_accessible,
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            guard_page_faults: RefCell::new(Vec::new()),
+        Self::limit_new(plan, limiter)?;
+
+        let base = match plan.memory.maximum {
+            Some(max) if (max as usize) < base.len() / (WASM_PAGE_SIZE as usize) => {
+                &mut base[..(max * WASM_PAGE_SIZE) as usize]
+            }
+            _ => base,
         };
 
-        Self::new(plan, storage, limiter)
+        if plan.memory.minimum > 0 {
+            make_accessible(
+                base.as_mut_ptr(),
+                plan.memory.minimum as usize * WASM_PAGE_SIZE as usize,
+            )?;
+        }
+
+        Ok(Memory::Static {
+            base,
+            size: plan.memory.minimum,
+            make_accessible,
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            guard_page_faults: Vec::new(),
+        })
     }
 
-    fn new(
-        plan: &MemoryPlan,
-        storage: MemoryStorage,
-        limiter: Option<&Rc<dyn ResourceLimiter>>,
-    ) -> Result<Self> {
+    fn limit_new(plan: &MemoryPlan, limiter: Option<&mut dyn ResourceLimiter>) -> Result<()> {
         if let Some(limiter) = limiter {
             if !limiter.memory_growing(0, plan.memory.minimum, plan.memory.maximum) {
                 bail!(
@@ -253,32 +264,14 @@ impl Memory {
                 );
             }
         }
-
-        if let MemoryStorage::Static {
-            base,
-            make_accessible,
-            ..
-        } = &storage
-        {
-            if plan.memory.minimum > 0 {
-                make_accessible(
-                    *base,
-                    plan.memory.minimum as usize * WASM_PAGE_SIZE as usize,
-                )?;
-            }
-        }
-
-        Ok(Self {
-            storage,
-            limiter: limiter.cloned(),
-        })
+        Ok(())
     }
 
     /// Returns the number of allocated wasm pages.
     pub fn size(&self) -> u32 {
-        match &self.storage {
-            MemoryStorage::Static { size, .. } => size.get(),
-            MemoryStorage::Dynamic(mem) => mem.size(),
+        match self {
+            Memory::Static { size, .. } => *size,
+            Memory::Dynamic(mem) => mem.size(),
         }
     }
 
@@ -289,15 +282,15 @@ impl Memory {
     /// The runtime maximum may not be equal to the maximum from the linear memory's
     /// Wasm type when it is being constrained by an instance allocator.
     pub fn maximum(&self) -> Option<u32> {
-        match &self.storage {
-            MemoryStorage::Static { maximum, .. } => Some(*maximum),
-            MemoryStorage::Dynamic(mem) => mem.maximum(),
+        match self {
+            Memory::Static { base, .. } => Some((base.len() / (WASM_PAGE_SIZE as usize)) as u32),
+            Memory::Dynamic(mem) => mem.maximum(),
         }
     }
 
     /// Returns whether or not the underlying storage of the memory is "static".
     pub(crate) fn is_static(&self) -> bool {
-        if let MemoryStorage::Static { .. } = &self.storage {
+        if let Memory::Static { .. } = self {
             true
         } else {
             false
@@ -317,57 +310,65 @@ impl Memory {
     ///
     /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
     /// this unsafety.
-    pub unsafe fn grow(&self, delta: u32) -> Option<u32> {
+    pub unsafe fn grow(
+        &mut self,
+        delta: u32,
+        limiter: Option<&mut dyn ResourceLimiter>,
+    ) -> Option<u32> {
         let old_size = self.size();
         if delta == 0 {
             return Some(old_size);
         }
 
         let new_size = old_size.checked_add(delta)?;
+        let maximum = self.maximum();
 
-        if let Some(limiter) = &self.limiter {
-            if !limiter.memory_growing(old_size, new_size, self.maximum()) {
+        if let Some(limiter) = limiter {
+            if !limiter.memory_growing(old_size, new_size, maximum) {
                 return None;
             }
         }
 
-        match &self.storage {
-            MemoryStorage::Static {
+        #[cfg(all(feature = "uffd", target_os = "linux"))]
+        {
+            if self.is_static() {
+                // Reset any faulted guard pages before growing the memory.
+                self.reset_guard_pages().ok()?;
+            }
+        }
+
+        match self {
+            Memory::Static {
                 base,
                 size,
-                maximum,
                 make_accessible,
                 ..
             } => {
-                // Reset any faulted guard pages before growing the memory.
-                #[cfg(all(feature = "uffd", target_os = "linux"))]
-                self.reset_guard_pages().ok()?;
-
-                if new_size > *maximum || new_size >= WASM_MAX_PAGES {
+                if new_size > maximum.unwrap_or(WASM_MAX_PAGES) {
                     return None;
                 }
 
                 let start = usize::try_from(old_size).unwrap() * WASM_PAGE_SIZE as usize;
                 let len = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
 
-                make_accessible(base.add(start), len).ok()?;
+                make_accessible(base.as_mut_ptr().add(start), len).ok()?;
 
-                size.set(new_size);
+                *size = new_size;
 
                 Some(old_size)
             }
-            MemoryStorage::Dynamic(mem) => mem.grow(delta),
+            Memory::Dynamic(mem) => mem.grow(delta),
         }
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        match &self.storage {
-            MemoryStorage::Static { base, size, .. } => VMMemoryDefinition {
-                base: *base,
-                current_length: size.get() as usize * WASM_PAGE_SIZE as usize,
+        match self {
+            Memory::Static { base, size, .. } => VMMemoryDefinition {
+                base: base.as_ptr() as *mut _,
+                current_length: *size as usize * WASM_PAGE_SIZE as usize,
             },
-            MemoryStorage::Dynamic(mem) => mem.vmmemory(),
+            Memory::Dynamic(mem) => mem.vmmemory(),
         }
     }
 
@@ -378,20 +379,18 @@ impl Memory {
     /// This function will panic if called on a dynamic memory.
     #[cfg(all(feature = "uffd", target_os = "linux"))]
     pub(crate) fn record_guard_page_fault(
-        &self,
+        &mut self,
         page_addr: *mut u8,
         size: usize,
         reset: fn(*mut u8, usize) -> Result<()>,
     ) {
-        match &self.storage {
-            MemoryStorage::Static {
+        match self {
+            Memory::Static {
                 guard_page_faults, ..
             } => {
-                guard_page_faults
-                    .borrow_mut()
-                    .push((page_addr, size, reset));
+                guard_page_faults.push((page_addr as usize, size, reset));
             }
-            MemoryStorage::Dynamic(_) => {
+            Memory::Dynamic(_) => {
                 unreachable!("dynamic memories should not have guard page faults")
             }
         }
@@ -403,17 +402,16 @@ impl Memory {
     ///
     /// This function will panic if called on a dynamic memory.
     #[cfg(all(feature = "uffd", target_os = "linux"))]
-    pub(crate) fn reset_guard_pages(&self) -> Result<()> {
-        match &self.storage {
-            MemoryStorage::Static {
+    pub(crate) fn reset_guard_pages(&mut self) -> Result<()> {
+        match self {
+            Memory::Static {
                 guard_page_faults, ..
             } => {
-                let mut faults = guard_page_faults.borrow_mut();
-                for (addr, len, reset) in faults.drain(..) {
-                    reset(addr, len)?;
+                for (addr, len, reset) in guard_page_faults.drain(..) {
+                    reset(addr as *mut u8, len)?;
                 }
             }
-            MemoryStorage::Dynamic(_) => {
+            Memory::Dynamic(_) => {
                 unreachable!("dynamic memories should not have guard page faults")
             }
         }
@@ -425,20 +423,12 @@ impl Memory {
 // The default memory representation is an empty memory that cannot grow.
 impl Default for Memory {
     fn default() -> Self {
-        fn make_accessible(_ptr: *mut u8, _len: usize) -> Result<()> {
-            unreachable!()
-        }
-
-        Self {
-            storage: MemoryStorage::Static {
-                base: ptr::null_mut(),
-                size: Cell::new(0),
-                maximum: 0,
-                make_accessible,
-                #[cfg(all(feature = "uffd", target_os = "linux"))]
-                guard_page_faults: RefCell::new(Vec::new()),
-            },
-            limiter: None,
+        Memory::Static {
+            base: &mut [],
+            size: 0,
+            make_accessible: |_, _| unreachable!(),
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            guard_page_faults: Vec::new(),
         }
     }
 }

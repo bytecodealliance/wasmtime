@@ -3,7 +3,7 @@ use wasmtime::*;
 
 #[test]
 fn test_invoke_func_via_table() -> Result<()> {
-    let store = Store::default();
+    let mut store = Store::<()>::default();
 
     let wat = r#"
       (module
@@ -14,18 +14,19 @@ fn test_invoke_func_via_table() -> Result<()> {
       )
     "#;
     let module = Module::new(store.engine(), wat).context("> Error compiling module!")?;
-    let instance = Instance::new(&store, &module, &[]).context("> Error instantiating module!")?;
+    let instance =
+        Instance::new(&mut store, &module, &[]).context("> Error instantiating module!")?;
 
     let f = instance
-        .get_table("table")
+        .get_table(&mut store, "table")
         .unwrap()
-        .get(0)
+        .get(&mut store, 0)
         .unwrap()
         .funcref()
         .unwrap()
         .unwrap()
         .clone();
-    let result = f.call(&[]).unwrap();
+    let result = f.call(&mut store, &[]).unwrap();
     assert_eq!(result[0].unwrap_i64(), 42);
     Ok(())
 }

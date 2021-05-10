@@ -10,14 +10,13 @@ fn main() -> Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(true);
     let engine = Engine::new(&config)?;
-    let store = Store::new(&engine);
+    let mut store = Store::new(&engine, ());
 
     println!("Compiling module...");
     let module = Module::from_file(&engine, "examples/externref.wat")?;
 
     println!("Instantiating module...");
-    let imports = [];
-    let instance = Instance::new(&store, &module, &imports)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
 
     println!("Creating new `externref`...");
     let externref = ExternRef::new("Hello, World!");
@@ -28,20 +27,25 @@ fn main() -> Result<()> {
     );
 
     println!("Touching `externref` table...");
-    let table = instance.get_table("table").unwrap();
-    table.set(3, Some(externref.clone()).into())?;
-    let elem = table.get(3).unwrap().unwrap_externref().unwrap();
+    let table = instance.get_table(&mut store, "table").unwrap();
+    table.set(&mut store, 3, Some(externref.clone()).into())?;
+    let elem = table
+        .get(&mut store, 3)
+        .unwrap() // assert in bounds
+        .unwrap_externref() // assert it's an externref table
+        .unwrap(); // assert the externref isn't null
     assert!(elem.ptr_eq(&externref));
 
     println!("Touching `externref` global...");
-    let global = instance.get_global("global").unwrap();
-    global.set(Some(externref.clone()).into())?;
-    let global_val = global.get().unwrap_externref().unwrap();
+    let global = instance.get_global(&mut store, "global").unwrap();
+    global.set(&mut store, Some(externref.clone()).into())?;
+    let global_val = global.get(&mut store).unwrap_externref().unwrap();
     assert!(global_val.ptr_eq(&externref));
 
     println!("Calling `externref` func...");
-    let func = instance.get_typed_func::<Option<ExternRef>, Option<ExternRef>>("func")?;
-    let ret = func.call(Some(externref.clone()))?;
+    let func =
+        instance.get_typed_func::<Option<ExternRef>, Option<ExternRef>, _>(&mut store, "func")?;
+    let ret = func.call(&mut store, Some(externref.clone()))?;
     assert!(ret.is_some());
     assert!(ret.unwrap().ptr_eq(&externref));
 

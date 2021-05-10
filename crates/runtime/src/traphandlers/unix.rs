@@ -7,7 +7,7 @@ use std::ptr::{self, null_mut};
 
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler<'a> =
-    dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool + 'a;
+    dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool + Send + Sync + 'a;
 
 static mut PREV_SIGSEGV: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();
 static mut PREV_SIGBUS: MaybeUninit<libc::sigaction> = MaybeUninit::uninit();

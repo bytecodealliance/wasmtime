@@ -9,23 +9,31 @@
 //! throughout the `wasmtime` crate with extra functionality that's only
 //! available on Unix.
 
-use crate::Store;
+use crate::{AsContextMut, Store};
 
 /// Extensions for the [`Store`] type only available on Unix.
 pub trait StoreExt {
     // TODO: needs more docs?
     /// The signal handler must be
     /// [async-signal-safe](http://man7.org/linux/man-pages/man7/signal-safety.7.html).
-    unsafe fn set_signal_handler<H>(&self, handler: H)
+    unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
-        H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool;
+        H: 'static
+            + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool
+            + Send
+            + Sync;
 }
 
-impl StoreExt for Store {
-    unsafe fn set_signal_handler<H>(&self, handler: H)
+impl<T> StoreExt for Store<T> {
+    unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
-        H: 'static + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool,
+        H: 'static
+            + Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool
+            + Send
+            + Sync,
     {
-        self.set_signal_handler(Some(Box::new(handler)));
+        self.as_context_mut()
+            .opaque()
+            .set_signal_handler(Some(Box::new(handler)));
     }
 }

@@ -9,14 +9,14 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl<'a> strings::Strings for WasiCtx<'a> {
-    fn hello_string(&self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {
+    fn hello_string(&mut self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {
         let s = a_string.as_str().expect("should be valid string");
         println!("a_string='{}'", &*s);
         Ok(s.len() as u32)
     }
 
     fn multi_string(
-        &self,
+        &mut self,
         a: &GuestPtr<str>,
         b: &GuestPtr<str>,
         c: &GuestPtr<str>,
@@ -69,7 +69,7 @@ impl HelloStringExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         // Populate string in guest's memory
@@ -81,7 +81,7 @@ impl HelloStringExercise {
         }
 
         let res = strings::hello_string(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.string_ptr_loc.ptr as i32,
             self.test_word.len() as i32,
@@ -181,7 +181,7 @@ impl MultiStringExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         let write_string = |val: &str, loc: MemArea| {
@@ -198,7 +198,7 @@ impl MultiStringExercise {
         write_string(&self.c, self.sc_ptr_loc);
 
         let res = strings::multi_string(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.sa_ptr_loc.ptr as i32,
             self.a.len() as i32,
@@ -260,7 +260,7 @@ impl OverlappingStringExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         let write_string = |val: &str, loc: MemArea| {
@@ -276,7 +276,7 @@ impl OverlappingStringExercise {
 
         let a_len = self.a.as_bytes().len() as i32;
         let res = strings::multi_string(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.sa_ptr_loc.ptr as i32,
             a_len,

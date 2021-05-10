@@ -112,7 +112,7 @@ macro_rules! wasi_file_impl {
             }
 
             #[cfg(not(windows))]
-            async fn readable(&mut self) -> Result<(), Error> {
+            async fn readable(&self) -> Result<(), Error> {
                 // The Inner impls OwnsRaw, which asserts exclusive use of the handle by the owned object.
                 // AsyncFd needs to wrap an owned `impl std::os::unix::io::AsRawFd`. Rather than introduce
                 // mutability to let it own the `Inner`, we are depending on the `&mut self` bound on this
@@ -135,14 +135,14 @@ macro_rules! wasi_file_impl {
                 }
             }
             #[cfg(windows)]
-            async fn readable(&mut self) -> Result<(), Error> {
+            async fn readable(&self) -> Result<(), Error> {
                 // Windows uses a rawfd based scheduler :(
                 use wasi_common::ErrorExt;
                 Err(Error::badf())
             }
 
             #[cfg(not(windows))]
-            async fn writable(&mut self) -> Result<(), Error> {
+            async fn writable(&self) -> Result<(), Error> {
                 // The Inner impls OwnsRaw, which asserts exclusive use of the handle by the owned object.
                 // AsyncFd needs to wrap an owned `impl std::os::unix::io::AsRawFd`. Rather than introduce
                 // mutability to let it own the `Inner`, we are depending on the `&mut self` bound on this
@@ -165,7 +165,7 @@ macro_rules! wasi_file_impl {
                 }
             }
             #[cfg(windows)]
-            async fn writable(&mut self) -> Result<(), Error> {
+            async fn writable(&self) -> Result<(), Error> {
                 // Windows uses a rawfd based scheduler :(
                 use wasi_common::ErrorExt;
                 Err(Error::badf())

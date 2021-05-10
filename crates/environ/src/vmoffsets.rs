@@ -6,7 +6,7 @@
 // struct VMContext {
 //      interrupts: *const VMInterrupts,
 //      externref_activations_table: *mut VMExternRefActivationsTable,
-//      module_info_lookup: *const dyn ModuleInfoLookup,
+//      store: *mut dyn Store,
 //      signature_ids: [VMSharedSignatureIndex; module.num_signature_ids],
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
@@ -77,7 +77,7 @@ pub struct VMOffsets {
     // precalculated offsets of various member fields
     interrupts: u32,
     externref_activations_table: u32,
-    module_info_lookup: u32,
+    store: u32,
     signature_ids: u32,
     imported_functions: u32,
     imported_tables: u32,
@@ -149,7 +149,7 @@ impl From<VMOffsetsFields> for VMOffsets {
             num_defined_globals: fields.num_defined_globals,
             interrupts: 0,
             externref_activations_table: 0,
-            module_info_lookup: 0,
+            store: 0,
             signature_ids: 0,
             imported_functions: 0,
             imported_tables: 0,
@@ -168,12 +168,12 @@ impl From<VMOffsetsFields> for VMOffsets {
             .interrupts
             .checked_add(u32::from(fields.pointer_size))
             .unwrap();
-        ret.module_info_lookup = ret
+        ret.store = ret
             .externref_activations_table
             .checked_add(u32::from(fields.pointer_size))
             .unwrap();
         ret.signature_ids = ret
-            .module_info_lookup
+            .store
             .checked_add(u32::from(fields.pointer_size * 2))
             .unwrap();
         ret.imported_functions = ret
@@ -501,16 +501,16 @@ impl VMOffsets {
         self.interrupts
     }
 
-    /// The offset of the `VMExternRefActivationsTable` member.
+    /// The offset of the `*mut VMExternRefActivationsTable` member.
     #[inline]
     pub fn vmctx_externref_activations_table(&self) -> u32 {
         self.externref_activations_table
     }
 
-    /// The offset of the `*const dyn ModuleInfoLookup` member.
+    /// The offset of the `*const dyn Store` member.
     #[inline]
-    pub fn vmctx_module_info_lookup(&self) -> u32 {
-        self.module_info_lookup
+    pub fn vmctx_store(&self) -> u32 {
+        self.store
     }
 
     /// The offset of the `signature_ids` array.

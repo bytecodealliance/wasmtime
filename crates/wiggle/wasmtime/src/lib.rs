@@ -5,13 +5,13 @@ use wiggle_borrow::BorrowChecker;
 
 /// Lightweight `wasmtime::Memory` wrapper so we can implement the
 /// `wiggle::GuestMemory` trait on it.
-pub struct WasmtimeGuestMemory {
-    mem: wasmtime::Memory,
+pub struct WasmtimeGuestMemory<'a> {
+    mem: &'a mut [u8],
     bc: BorrowChecker,
 }
 
-impl WasmtimeGuestMemory {
-    pub fn new(mem: wasmtime::Memory) -> Self {
+impl<'a> WasmtimeGuestMemory<'a> {
+    pub fn new(mem: &'a mut [u8]) -> Self {
         Self {
             mem,
             // Wiggle does not expose any methods for functions to re-enter
@@ -28,9 +28,9 @@ impl WasmtimeGuestMemory {
     }
 }
 
-unsafe impl GuestMemory for WasmtimeGuestMemory {
+unsafe impl GuestMemory for WasmtimeGuestMemory<'_> {
     fn base(&self) -> (*mut u8, u32) {
-        (self.mem.data_ptr(), self.mem.data_size() as _)
+        (self.mem.as_ptr() as *mut u8, self.mem.len() as u32)
     }
     fn has_outstanding_borrows(&self) -> bool {
         self.bc.has_outstanding_borrows()

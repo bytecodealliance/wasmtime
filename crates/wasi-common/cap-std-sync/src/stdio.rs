@@ -22,7 +22,7 @@ pub fn stdin() -> Stdin {
     Stdin(std::io::stdin())
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl WasiFile for Stdin {
     fn as_any(&self) -> &dyn Any {
         self
@@ -103,10 +103,10 @@ impl WasiFile for Stdin {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
-    async fn readable(&mut self) -> Result<(), Error> {
+    async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
-    async fn writable(&mut self) -> Result<(), Error> {
+    async fn writable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
 }
@@ -125,7 +125,7 @@ impl AsRawFd for Stdin {
 
 macro_rules! wasi_file_write_impl {
     ($ty:ty) => {
-        #[async_trait::async_trait(?Send)]
+        #[async_trait::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
                 self
@@ -209,10 +209,10 @@ macro_rules! wasi_file_write_impl {
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 Ok(0)
             }
-            async fn readable(&mut self) -> Result<(), Error> {
+            async fn readable(&self) -> Result<(), Error> {
                 Err(Error::badf())
             }
-            async fn writable(&mut self) -> Result<(), Error> {
+            async fn writable(&self) -> Result<(), Error> {
                 Err(Error::badf())
             }
         }

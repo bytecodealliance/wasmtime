@@ -63,7 +63,7 @@ pub fn define_func(
     quote! {
         #[allow(unreachable_code)] // deals with warnings in noreturn functions
         pub #asyncness fn #ident(
-            ctx: &(impl #(#required_impls)+*),
+            ctx: &mut (impl #(#required_impls)+*),
             memory: &dyn #rt::GuestMemory,
             #(#abi_params),*
         ) -> Result<#abi_ret, #rt::Trap> {

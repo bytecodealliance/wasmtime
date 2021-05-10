@@ -2,8 +2,6 @@ use crate::file::{FdFlags, FileCaps, FileType, Filestat, OFlags, WasiFile};
 use crate::{Error, ErrorExt, SystemTimeSpec};
 use bitflags::bitflags;
 use std::any::Any;
-use std::cell::Ref;
-use std::ops::Deref;
 use std::path::PathBuf;
 
 #[wiggle::async_trait]
@@ -113,14 +111,14 @@ impl DirEntry {
     }
 }
 
-pub trait DirEntryExt<'a> {
-    fn get_cap(self, caps: DirCaps) -> Result<Ref<'a, dyn WasiDir>, Error>;
+pub trait DirEntryExt {
+    fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error>;
 }
 
-impl<'a> DirEntryExt<'a> for Ref<'a, DirEntry> {
-    fn get_cap(self, caps: DirCaps) -> Result<Ref<'a, dyn WasiDir>, Error> {
+impl DirEntryExt for DirEntry {
+    fn get_cap(&self, caps: DirCaps) -> Result<&dyn WasiDir, Error> {
         self.capable_of_dir(caps)?;
-        Ok(Ref::map(self, |r| r.dir.deref()))
+        Ok(&*self.dir)
     }
 }
 
@@ -152,17 +150,17 @@ pub struct DirFdStat {
 }
 
 pub(crate) trait TableDirExt {
-    fn get_dir(&self, fd: u32) -> Result<Ref<DirEntry>, Error>;
+    fn get_dir(&self, fd: u32) -> Result<&DirEntry, Error>;
     fn is_preopen(&self, fd: u32) -> bool;
 }
 
 impl TableDirExt for crate::table::Table {
-    fn get_dir(&self, fd: u32) -> Result<Ref<DirEntry>, Error> {
+    fn get_dir(&self, fd: u32) -> Result<&DirEntry, Error> {
         self.get(fd)
     }
     fn is_preopen(&self, fd: u32) -> bool {
         if self.is::<DirEntry>(fd) {
-            let dir_entry: std::cell::Ref<DirEntry> = self.get(fd).unwrap();
+            let dir_entry: &DirEntry = self.get(fd).unwrap();
             dir_entry.preopen_path.is_some()
         } else {
             false

@@ -1,16 +1,12 @@
 use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
-use crate::{func::HostFunc, Caller, FuncType, IntoFunc, Trap, Val, WasmRet, WasmTy};
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::cmp;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
-use std::future::Future;
 #[cfg(feature = "cache")]
 use std::path::Path;
-use std::pin::Pin;
 use std::sync::Arc;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
@@ -273,97 +269,6 @@ impl Default for InstanceAllocationStrategy {
     }
 }
 
-/// This type is used for storing host functions in a `Config`.
-///
-/// The module and function names are interned for more compact storage.
-#[derive(Clone)]
-struct HostFuncMap {
-    index_map: HashMap<Arc<str>, usize>,
-    strings: Vec<Arc<str>>,
-    funcs: HashMap<(usize, usize), (Arc<HostFunc>, bool)>,
-}
-
-impl HostFuncMap {
-    fn new() -> Self {
-        Self {
-            index_map: HashMap::new(),
-            strings: Vec::new(),
-            funcs: HashMap::new(),
-        }
-    }
-
-    fn insert(&mut self, module: &str, name: &str, async_required: bool, func: HostFunc) {
-        let key = (self.intern_str(module), self.intern_str(name));
-        self.funcs.insert(key, (Arc::new(func), async_required));
-    }
-
-    fn get(&self, module: &str, name: &str) -> Option<&HostFunc> {
-        let key = (
-            self.index_map.get(module).cloned()?,
-            self.index_map.get(name).cloned()?,
-        );
-        self.funcs.get(&key).map(|f| f.0.as_ref())
-    }
-
-    fn intern_str(&mut self, string: &str) -> usize {
-        if let Some(idx) = self.index_map.get(string) {
-            return *idx;
-        }
-        let string: Arc<str> = string.into();
-        let idx = self.strings.len();
-        self.strings.push(string.clone());
-        self.index_map.insert(string, idx);
-        idx
-    }
-
-    fn async_required(&self) -> bool {
-        self.funcs.values().any(|f| f.1)
-    }
-
-    fn iter(&self) -> impl Iterator<Item = &HostFunc> {
-        self.funcs.values().map(|v| &*v.0)
-    }
-}
-
-macro_rules! generate_wrap_async_host_func {
-    ($num:tt $($args:ident)*) => (paste::paste!{
-        /// Same as [`Config::wrap_host_func`], except the closure asynchronously produces
-        /// its result. For more information see the [`Func`](crate::Func) documentation.
-        ///
-        /// Note: creating an engine will fail if an async host function is defined and
-        /// [async support](Config::async_support) is not enabled.
-        #[allow(non_snake_case)]
-        #[cfg(feature = "async")]
-        #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-        pub fn [<wrap $num _host_func_async>]<$($args,)* R>(
-            &mut self,
-            module: &str,
-            name: &str,
-            func: impl for <'a> Fn(Caller<'a>, $($args),*) -> Box<dyn Future<Output = R> + 'a> + Send + Sync + 'static,
-        )
-        where
-            $($args: WasmTy,)*
-            R: WasmRet,
-        {
-            // Defer the check for async support until engine creation time to not introduce an order dependency
-            self.host_funcs.insert(
-                module,
-                name,
-                true,
-                HostFunc::wrap(move |caller: Caller<'_>, $($args: $args),*| {
-                    let store = caller.store().clone();
-                    debug_assert!(store.async_support());
-                    let mut future = Pin::from(func(caller, $($args),*));
-                    match store.block_on(future.as_mut()) {
-                        Ok(ret) => ret.into_fallible(),
-                        Err(e) => R::fallible_from_trap(e),
-                    }
-                })
-            );
-        }
-    })
-}
-
 /// Global configuration options used to create an [`Engine`](crate::Engine)
 /// and customize its behavior.
 ///
@@ -385,7 +290,6 @@ pub struct Config {
     pub(crate) wasm_backtrace_details_env_used: bool,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
-    host_funcs: HostFuncMap,
     pub(crate) async_support: bool,
 }
 
@@ -421,7 +325,6 @@ impl Config {
             features: WasmFeatures::default(),
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
-            host_funcs: HostFuncMap::new(),
             async_support: false,
         };
         ret.cranelift_debug_verifier(false);
@@ -1190,107 +1093,6 @@ impl Config {
         self
     }
 
-    /// Defines a host function for the [`Config`] for the given callback.
-    ///
-    /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
-    ///
-    /// Note that the implementation of `func` must adhere to the `ty`
-    /// signature given, error or traps may occur if it does not respect the
-    /// `ty` signature.
-    ///
-    /// Additionally note that this is quite a dynamic function since signatures
-    /// are not statically known. For performance reasons, it's recommended
-    /// to use [`Config::wrap_host_func`] if you can because with statically known
-    /// signatures the engine can optimize the implementation much more.
-    ///
-    /// The callback must be `Send` and `Sync` as it is shared between all engines created
-    /// from the `Config`.  For more relaxed bounds, use [`Func::new`](crate::Func::new) to define the function.
-    pub fn define_host_func(
-        &mut self,
-        module: &str,
-        name: &str,
-        ty: FuncType,
-        func: impl Fn(Caller<'_>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
-    ) {
-        self.host_funcs
-            .insert(module, name, false, HostFunc::new(self, ty, func));
-    }
-
-    /// Defines an async host function for the [`Config`] for the given callback.
-    ///
-    /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
-    ///
-    /// This function is the asynchronous analogue of [`Config::define_host_func`] and much of
-    /// that documentation applies to this as well.
-    ///
-    /// Additionally note that this is quite a dynamic function since signatures
-    /// are not statically known. For performance reasons, it's recommended
-    /// to use `Config::wrap$N_host_func_async` if you can because with statically known
-    /// signatures the engine can optimize the implementation much more.
-    ///
-    /// The callback must be `Send` and `Sync` as it is shared between all engines created
-    /// from the `Config`.  For more relaxed bounds, use [`Func::new_async`](crate::Func::new_async) to define the function.
-    ///
-    /// Note: creating an engine will fail if an async host function is defined and [async support](Config::async_support)
-    /// is not enabled.
-    #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub fn define_host_func_async<F>(&mut self, module: &str, name: &str, ty: FuncType, func: F)
-    where
-        F: for<'a> Fn(
-                Caller<'a>,
-                &'a [Val],
-                &'a mut [Val],
-            ) -> Box<dyn Future<Output = Result<(), Trap>> + 'a>
-            + Send
-            + Sync
-            + 'static,
-    {
-        // Defer the check for async support until engine creation time to not introduce an order dependency
-        self.host_funcs.insert(
-            module,
-            name,
-            true,
-            HostFunc::new(self, ty, move |caller, params, results| {
-                let store = caller.store().clone();
-                debug_assert!(store.async_support());
-                let mut future = Pin::from(func(caller, params, results));
-                match store.block_on(future.as_mut()) {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(trap)) | Err(trap) => Err(trap),
-                }
-            }),
-        );
-    }
-
-    /// Defines a host function for the [`Config`] from the given Rust closure.
-    ///
-    /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
-    ///
-    /// See [`Func::wrap`](crate::Func::wrap) for information about accepted parameter and result types for the closure.
-    ///
-    /// The closure must be `Send` and `Sync` as it is shared between all engines created
-    /// from the `Config`.  For more relaxed bounds, use [`Func::wrap`](crate::Func::wrap) to wrap the closure.
-    pub fn wrap_host_func<Params, Results>(
-        &mut self,
-        module: &str,
-        name: &str,
-        func: impl IntoFunc<Params, Results> + Send + Sync,
-    ) {
-        self.host_funcs
-            .insert(module, name, false, HostFunc::wrap(func));
-    }
-
-    for_each_function_signature!(generate_wrap_async_host_func);
-
-    pub(crate) fn host_funcs(&self) -> impl Iterator<Item = &HostFunc> {
-        self.host_funcs.iter()
-    }
-
-    pub(crate) fn get_host_func(&self, module: &str, name: &str) -> Option<&HostFunc> {
-        self.host_funcs.get(module, name)
-    }
-
     pub(crate) fn target_isa(&self) -> Box<dyn TargetIsa> {
         self.isa_flags
             .clone()
@@ -1301,18 +1103,6 @@ impl Config {
         let mut flags = self.flags.clone();
         flags.set("enable_safepoints", "true").unwrap();
         self.isa_flags.clone().finish(settings::Flags::new(flags))
-    }
-
-    pub(crate) fn validate(&self) -> Result<()> {
-        // This is used to validate that the config is internally consistent prior to
-        // creating an engine using this config.
-
-        // Check that there isn't a host function defined that requires async support enabled
-        if self.host_funcs.async_required() && !self.async_support {
-            bail!("an async host function cannot be defined without async support enabled in the config");
-        }
-
-        Ok(())
     }
 
     pub(crate) fn build_compiler(&self, allocator: &dyn InstanceAllocator) -> Compiler {

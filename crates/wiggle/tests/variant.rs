@@ -31,7 +31,7 @@ fn mult_zero_nan(a: f32, b: u32) -> f32 {
 }
 
 impl<'a> variant_example::VariantExample for WasiCtx<'a> {
-    fn get_tag(&self, u: &types::Reason) -> Result<types::Excuse, types::Errno> {
+    fn get_tag(&mut self, u: &types::Reason) -> Result<types::Excuse, types::Errno> {
         println!("GET TAG: {:?}", u);
         match u {
             types::Reason::DogAte { .. } => Ok(types::Excuse::DogAte),
@@ -39,7 +39,11 @@ impl<'a> variant_example::VariantExample for WasiCtx<'a> {
             types::Reason::Sleeping { .. } => Ok(types::Excuse::Sleeping),
         }
     }
-    fn reason_mult(&self, u: &types::ReasonMut<'_>, multiply_by: u32) -> Result<(), types::Errno> {
+    fn reason_mult(
+        &mut self,
+        u: &types::ReasonMut<'_>,
+        multiply_by: u32,
+    ) -> Result<(), types::Errno> {
         match u {
             types::ReasonMut::DogAte(fptr) => {
                 let val = fptr.read().expect("valid pointer");
@@ -104,7 +108,7 @@ impl GetTagExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         let discriminant = reason_tag(&self.input) as u8;
@@ -126,7 +130,7 @@ impl GetTagExercise {
             types::Reason::Sleeping => {} // Do nothing
         }
         let e = variant_example::get_tag(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input_loc.ptr as i32,
             self.return_loc.ptr as i32,
@@ -181,7 +185,7 @@ impl ReasonMultExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         let discriminant = reason_tag(&self.input) as u8;
@@ -210,7 +214,7 @@ impl ReasonMultExercise {
             types::Reason::Sleeping => {} // Do nothing
         }
         let e = variant_example::reason_mult(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input_loc.ptr as i32,
             self.multiply_by as i32,

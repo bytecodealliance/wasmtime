@@ -28,7 +28,7 @@ pub enum UsageError {
 
 impl<'a> WasiEphemeralNn for WasiNnCtx {
     fn load<'b>(
-        &self,
+        &mut self,
         builders: &GraphBuilderArray<'_>,
         encoding: GraphEncoding,
         target: ExecutionTarget,
@@ -76,7 +76,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         Ok(id)
     }
 
-    fn init_execution_context(&self, graph: Graph) -> Result<GraphExecutionContext> {
+    fn init_execution_context(&mut self, graph: Graph) -> Result<GraphExecutionContext> {
         let request =
             if let Some((_, executable_graph)) = self.ctx.borrow_mut().graphs.get_mut(graph) {
                 executable_graph.create_infer_request()?
@@ -90,7 +90,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
     }
 
     fn set_input<'b>(
-        &self,
+        &mut self,
         context: GraphExecutionContext,
         index: u32,
         tensor: &Tensor<'b>,
@@ -135,7 +135,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         Ok(())
     }
 
-    fn compute(&self, context: GraphExecutionContext) -> Result<()> {
+    fn compute(&mut self, context: GraphExecutionContext) -> Result<()> {
         if let Some(execution) = self.ctx.borrow_mut().executions.get_mut(context) {
             Ok(execution.request.infer()?)
         } else {
@@ -144,7 +144,7 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
     }
 
     fn get_output<'b>(
-        &self,
+        &mut self,
         context: GraphExecutionContext,
         index: u32,
         out_buffer: &GuestPtr<'_, u8>,

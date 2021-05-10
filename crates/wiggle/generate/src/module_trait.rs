@@ -82,9 +82,9 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
         };
 
         if is_anonymous {
-            quote!(#asyncness fn #funcname(&self, #(#args),*) -> #result; )
+            quote!(#asyncness fn #funcname(&mut self, #(#args),*) -> #result; )
         } else {
-            quote!(#asyncness fn #funcname<#lifetime>(&self, #(#args),*) -> #result;)
+            quote!(#asyncness fn #funcname<#lifetime>(&mut self, #(#args),*) -> #result;)
         }
     });
 

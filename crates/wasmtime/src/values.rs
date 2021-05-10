@@ -1,5 +1,6 @@
 use crate::r#ref::ExternRef;
-use crate::{Func, Store, ValType};
+use crate::store::StoreOpaque;
+use crate::{Func, ValType};
 use anyhow::{bail, Result};
 use std::ptr;
 use wasmtime_runtime::{self as runtime, VMExternRef};
@@ -86,7 +87,7 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn write_value_to(self, store: &Store, p: *mut u128) {
+    pub(crate) unsafe fn write_value_to(self, store: &mut StoreOpaque, p: *mut u128) {
         match self {
             Val::I32(i) => ptr::write(p as *mut i32, i),
             Val::I64(i) => ptr::write(p as *mut i64, i),
@@ -96,15 +97,13 @@ impl Val {
             Val::ExternRef(None) => ptr::write(p, 0),
             Val::ExternRef(Some(x)) => {
                 let externref_ptr = x.inner.as_raw();
-                store
-                    .externref_activations_table()
-                    .insert_with_gc(x.inner, store.module_info_lookup());
+                store.insert_vmexternref(x.inner);
                 ptr::write(p as *mut *mut u8, externref_ptr)
             }
             Val::FuncRef(f) => ptr::write(
                 p as *mut *mut runtime::VMCallerCheckedAnyfunc,
                 if let Some(f) = f {
-                    f.caller_checked_anyfunc().as_ptr()
+                    f.caller_checked_anyfunc(store).as_ptr()
                 } else {
                     ptr::null_mut()
                 },
@@ -112,7 +111,11 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn read_value_from(store: &Store, p: *const u128, ty: ValType) -> Val {
+    pub(crate) unsafe fn read_value_from(
+        store: &mut StoreOpaque,
+        p: *const u128,
+        ty: ValType,
+    ) -> Val {
         match ty {
             ValType::I32 => Val::I32(ptr::read(p as *const i32)),
             ValType::I64 => Val::I64(ptr::read(p as *const i64)),
@@ -174,21 +177,36 @@ impl Val {
         self.externref().expect("expected externref")
     }
 
-    pub(crate) fn into_table_element(self) -> Result<runtime::TableElement> {
-        match self {
-            Val::FuncRef(Some(f)) => Ok(runtime::TableElement::FuncRef(
-                f.caller_checked_anyfunc().as_ptr(),
-            )),
-            Val::FuncRef(None) => Ok(runtime::TableElement::FuncRef(ptr::null_mut())),
-            Val::ExternRef(Some(x)) => Ok(runtime::TableElement::ExternRef(Some(x.inner))),
-            Val::ExternRef(None) => Ok(runtime::TableElement::ExternRef(None)),
+    pub(crate) fn into_table_element(
+        self,
+        store: &mut StoreOpaque<'_>,
+        ty: ValType,
+    ) -> Result<runtime::TableElement> {
+        match (self, ty) {
+            (Val::FuncRef(Some(f)), ValType::FuncRef) => {
+                if !f.comes_from_same_store(store) {
+                    bail!("cross-`Store` values are not supported in tables");
+                }
+                Ok(runtime::TableElement::FuncRef(
+                    f.caller_checked_anyfunc(store).as_ptr(),
+                ))
+            }
+            (Val::FuncRef(None), ValType::FuncRef) => {
+                Ok(runtime::TableElement::FuncRef(ptr::null_mut()))
+            }
+            (Val::ExternRef(Some(x)), ValType::ExternRef) => {
+                Ok(runtime::TableElement::ExternRef(Some(x.inner)))
+            }
+            (Val::ExternRef(None), ValType::ExternRef) => {
+                Ok(runtime::TableElement::ExternRef(None))
+            }
             _ => bail!("value does not match table element type"),
         }
     }
 
-    pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque<'_>) -> bool {
         match self {
-            Val::FuncRef(Some(f)) => Store::same(store, f.store()),
+            Val::FuncRef(Some(f)) => f.comes_from_same_store(store),
             Val::FuncRef(None) => true,
 
             // Integers, floats, vectors, and `externref`s have no association
@@ -254,21 +272,21 @@ impl From<Func> for Val {
 
 pub(crate) fn into_checked_anyfunc(
     val: Val,
-    store: &Store,
+    store: &mut StoreOpaque,
 ) -> Result<*mut wasmtime_runtime::VMCallerCheckedAnyfunc> {
     if !val.comes_from_same_store(store) {
         bail!("cross-`Store` values are not supported");
     }
     Ok(match val {
         Val::FuncRef(None) => ptr::null_mut(),
-        Val::FuncRef(Some(f)) => f.caller_checked_anyfunc().as_ptr(),
+        Val::FuncRef(Some(f)) => f.caller_checked_anyfunc(store).as_ptr(),
         _ => bail!("val is not funcref"),
     })
 }
 
 pub(crate) unsafe fn from_checked_anyfunc(
     anyfunc: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
-    store: &Store,
+    store: &mut StoreOpaque,
 ) -> Val {
     Val::FuncRef(Func::from_caller_checked_anyfunc(store, anyfunc))
 }
