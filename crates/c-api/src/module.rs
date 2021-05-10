@@ -1,6 +1,7 @@
 use crate::{
-    wasm_byte_vec_t, wasm_exporttype_t, wasm_exporttype_vec_t, wasm_extern_t, wasm_importtype_t,
-    wasm_importtype_vec_t, wasm_moduletype_t, wasm_store_t, StoreRef,
+    handle_result, wasm_byte_vec_t, wasm_engine_t, wasm_exporttype_t, wasm_exporttype_vec_t,
+    wasm_extern_t, wasm_importtype_t, wasm_importtype_vec_t, wasm_moduletype_t, wasm_store_t,
+    wasmtime_error_t, StoreRef,
 };
 use wasmtime::{Engine, Extern, Module};
 
@@ -56,19 +57,6 @@ pub unsafe extern "C" fn wasm_module_new(
     }
 }
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_module_new(
-//     engine: &wasm_engine_t,
-//     binary: &wasm_byte_vec_t,
-//     ret: &mut *mut wasm_module_t,
-// ) -> Option<Box<wasmtime_error_t>> {
-//     let binary = binary.as_slice();
-//     handle_result(Module::from_binary(&engine.engine, binary), |module| {
-//         let module = Box::new(wasm_module_t::new(module));
-//         *ret = Box::into_raw(module);
-//     })
-// }
-
 #[no_mangle]
 pub unsafe extern "C" fn wasm_module_validate(
     store: &mut wasm_store_t,
@@ -76,15 +64,6 @@ pub unsafe extern "C" fn wasm_module_validate(
 ) -> bool {
     Module::validate(store.store.context().engine(), binary.as_slice()).is_ok()
 }
-
-// #[no_mangle]
-// pub extern "C" fn wasmtime_module_validate(
-//     store: &wasm_store_t,
-//     binary: &wasm_byte_vec_t,
-// ) -> Option<Box<wasmtime_error_t>> {
-//     let binary = binary.as_slice();
-//     handle_result(Module::validate(store.store.engine(), binary), |()| {})
-// }
 
 #[no_mangle]
 pub extern "C" fn wasm_module_as_extern(m: &wasm_module_t) -> &wasm_extern_t {
@@ -147,7 +126,6 @@ pub extern "C" fn wasm_module_serialize(module: &wasm_module_t, ret: &mut wasm_b
     if let Ok(buf) = module.module().serialize() {
         ret.set_buffer(buf);
     }
-    // drop(wasmtime_module_serialize(module, ret));
 }
 
 #[no_mangle]
@@ -161,32 +139,89 @@ pub unsafe extern "C" fn wasm_module_deserialize(
     }
 }
 
+pub struct wasmtime_module_t {
+    module: Module,
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_new(
+    engine: &wasm_engine_t,
+    binary: &wasm_byte_vec_t,
+    out: &mut *mut wasmtime_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        Module::from_binary(&engine.engine, binary.as_slice()),
+        |module| {
+            *out = Box::into_raw(Box::new(wasmtime_module_t { module }));
+        },
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_delete(_module: Box<wasmtime_module_t>) {}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_validate(
+    engine: &wasm_engine_t,
+    binary: &wasm_byte_vec_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(Module::validate(&engine.engine, binary.as_slice()), |()| {})
+}
+
 // #[no_mangle]
-// pub extern "C" fn wasmtime_module_serialize(
-//     module: &wasm_module_t,
-//     ret: &mut wasm_byte_vec_t,
-// ) -> Option<Box<wasmtime_error_t>> {
-//     handle_result(module.module().serialize(), |buf| {
-//         ret.set_buffer(buf);
-//     })
+// pub extern "C" fn wasm_module_exports(module: &wasm_module_t, out: &mut wasm_exporttype_vec_t) {
+//     let exports = module
+//         .module()
+//         .exports()
+//         .map(|e| {
+//             Some(Box::new(wasm_exporttype_t::new(
+//                 e.name().to_owned(),
+//                 e.ty(),
+//             )))
+//         })
+//         .collect::<Vec<_>>();
+//     out.set_buffer(exports);
 // }
 
 // #[no_mangle]
-// pub extern "C" fn wasmtime_module_deserialize(
-//     engine: &wasm_engine_t,
-//     binary: &wasm_byte_vec_t,
-//     ret: &mut *mut wasm_module_t,
-// ) -> Option<Box<wasmtime_error_t>> {
-//     handle_result(
-//         unsafe { Module::deserialize(&engine.engine, binary.as_slice()) },
-//         |module| {
-//             let module = Box::new(wasm_module_t::new(module));
-//             *ret = Box::into_raw(module);
-//         },
-//     )
+// pub extern "C" fn wasm_module_imports(module: &wasm_module_t, out: &mut wasm_importtype_vec_t) {
+//     let imports = module
+//         .module()
+//         .imports()
+//         .map(|i| {
+//             Some(Box::new(wasm_importtype_t::new(
+//                 i.module().to_owned(),
+//                 i.name().map(|s| s.to_owned()),
+//                 i.ty(),
+//             )))
+//         })
+//         .collect::<Vec<_>>();
+//     out.set_buffer(imports);
 // }
 
 #[no_mangle]
-pub extern "C" fn wasm_module_type(f: &wasm_module_t) -> Box<wasm_moduletype_t> {
-    Box::new(wasm_moduletype_t::new(f.module().ty()))
+pub extern "C" fn wasmtime_module_serialize(
+    module: &wasmtime_module_t,
+    ret: &mut wasm_byte_vec_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(module.module.serialize(), |buf| ret.set_buffer(buf))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_module_deserialize(
+    engine: &wasm_engine_t,
+    binary: &wasm_byte_vec_t,
+    out: &mut *mut wasmtime_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(
+        Module::deserialize(&engine.engine, binary.as_slice()),
+        |module| {
+            *out = Box::into_raw(Box::new(wasmtime_module_t { module }));
+        },
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_type(m: &wasmtime_module_t) -> Box<wasm_moduletype_t> {
+    Box::new(wasm_moduletype_t::new(m.module.ty()))
 }
