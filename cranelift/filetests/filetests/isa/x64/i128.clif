@@ -890,3 +890,219 @@ block0(v0: i8, v1: i128):
 ; nextln: movq    %rbp, %rsp
 ; nextln: popq    %rbp
 ; nextln: ret
+
+function %f30(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = ishl v0, v1
+    return v2
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rdi, %rsi
+; nextln: movq    %rdx, %rcx
+; nextln: shlq    %cl, %rsi
+; nextln: movq    %rdx, %rcx
+; nextln: shlq    %cl, %rax
+; nextln: movl    $$64, %ecx
+; nextln: subq    %rdx, %rcx
+; nextln: shrq    %cl, %rdi
+; nextln: xorq    %rcx, %rcx
+; nextln: testq   $$127, %rdx
+; nextln: cmovzq  %rcx, %rdi
+; nextln: orq     %rax, %rdi
+; nextln: xorq    %rax, %rax
+; nextln: andq    $$64, %rdx
+; nextln: cmovzq  %rdi, %rax
+; nextln: cmovzq  %rsi, %rcx
+; nextln: cmovnzq %rsi, %rax
+; nextln: movq    %rax, %rdx
+; nextln: movq    %rcx, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function %f31(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = ushr v0, v1
+    return v2
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rdi, %rax
+; nextln: movq    %rsi, %rdi
+; nextln: movq    %rdi, %rsi
+; nextln: movq    %rdx, %rcx
+; nextln: shrq    %cl, %rsi
+; nextln: movq    %rdx, %rcx
+; nextln: shrq    %cl, %rax
+; nextln: movl    $$64, %ecx
+; nextln: subq    %rdx, %rcx
+; nextln: shlq    %cl, %rdi
+; nextln: xorq    %rcx, %rcx
+; nextln: testq   $$127, %rdx
+; nextln: cmovzq  %rcx, %rdi
+; nextln: orq     %rax, %rdi
+; nextln: xorq    %rax, %rax
+; nextln: xorq    %rcx, %rcx
+; nextln: andq    $$64, %rdx
+; nextln: cmovzq  %rsi, %rax
+; nextln: cmovzq  %rdi, %rcx
+; nextln: cmovnzq %rsi, %rcx
+; nextln: movq    %rax, %rdx
+; nextln: movq    %rcx, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function %f32(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = sshr v0, v1
+    return v2
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rdi, %r8
+; nextln: movq    %rsi, %rdi
+; nextln: movq    %rdi, %rsi
+; nextln: movq    %rdx, %rcx
+; nextln: sarq    %cl, %rsi
+; nextln: movq    %rdx, %rcx
+; nextln: shrq    %cl, %r8
+; nextln: movl    $$64, %ecx
+; nextln: subq    %rdx, %rcx
+; nextln: movq    %rdi, %rax
+; nextln: shlq    %cl, %rax
+; nextln: xorq    %rcx, %rcx
+; nextln: testq   $$127, %rdx
+; nextln: cmovzq  %rcx, %rax
+; nextln: orq     %r8, %rax
+; nextln: sarq    $$63, %rdi
+; nextln: xorq    %rcx, %rcx
+; nextln: andq    $$64, %rdx
+; nextln: cmovzq  %rsi, %rdi
+; nextln: cmovzq  %rax, %rcx
+; nextln: cmovnzq %rsi, %rcx
+; nextln: movq    %rcx, %rax
+; nextln: movq    %rdi, %rdx
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+function %f33(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = rotl v0, v1
+    return v2
+}
+
+; check: pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rdi, %r8
+; nextln: movq    %r8, %r9
+; nextln: movq    %rdx, %rcx
+; nextln: shlq    %cl, %r9
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rdx, %rcx
+; nextln: shlq    %cl, %rax
+; nextln: movl    $$64, %ecx
+; nextln: subq    %rdx, %rcx
+; nextln: movq    %r8, %r10
+; nextln: shrq    %cl, %r10
+; nextln: xorq    %rdi, %rdi
+; nextln: testq   $$127, %rdx
+; nextln: cmovzq  %rdi, %r10
+; nextln: orq     %rax, %r10
+; nextln: xorq    %rax, %rax
+; nextln: movq    %rdx, %rcx
+; nextln: andq    $$64, %rcx
+; nextln: cmovzq  %r10, %rax
+; nextln: cmovzq  %r9, %rdi
+; nextln: cmovnzq %r9, %rax
+; nextln: movl    $$128, %r9d
+; nextln: subq    %rdx, %r9
+; nextln: movq    %rsi, %rdx
+; nextln: movq    %r9, %rcx
+; nextln: shrq    %cl, %rdx
+; nextln: movq    %r9, %rcx
+; nextln: shrq    %cl, %r8
+; nextln: movl    $$64, %ecx
+; nextln: subq    %r9, %rcx
+; nextln: shlq    %cl, %rsi
+; nextln: xorq    %rcx, %rcx
+; nextln: testq   $$127, %r9
+; nextln: cmovzq  %rcx, %rsi
+; nextln: orq     %r8, %rsi
+; nextln: xorq    %rcx, %rcx
+; nextln: xorq    %r8, %r8
+; nextln: andq    $$64, %r9
+; nextln: cmovzq  %rdx, %rcx
+; nextln: cmovzq  %rsi, %r8
+; nextln: cmovnzq %rdx, %r8
+; nextln: orq     %rdi, %r8
+; nextln: orq     %rax, %rcx
+; nextln: movq    %r8, %rax
+; nextln: movq    %rcx, %rdx
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+
+
+function %f34(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = rotr v0, v1
+    return v2
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rsi, %r9
+; nextln: movq    %rdx, %rcx
+; nextln: shrq    %cl, %r9
+; nextln: movq    %rdi, %rax
+; nextln: movq    %rdx, %rcx
+; nextln: shrq    %cl, %rax
+; nextln: movl    $$64, %ecx
+; nextln: subq    %rdx, %rcx
+; nextln: movq    %rsi, %r10
+; nextln: shlq    %cl, %r10
+; nextln: xorq    %rcx, %rcx
+; nextln: testq   $$127, %rdx
+; nextln: cmovzq  %rcx, %r10
+; nextln: orq     %rax, %r10
+; nextln: xorq    %rax, %rax
+; nextln: xorq    %r8, %r8
+; nextln: movq    %rdx, %rcx
+; nextln: andq    $$64, %rcx
+; nextln: cmovzq  %r9, %rax
+; nextln: cmovzq  %r10, %r8
+; nextln: cmovnzq %r9, %r8
+; nextln: movl    $$128, %r9d
+; nextln: subq    %rdx, %r9
+; nextln: movq    %rdi, %rdx
+; nextln: movq    %r9, %rcx
+; nextln: shlq    %cl, %rdx
+; nextln: movq    %rsi, %r10
+; nextln: movq    %r9, %rcx
+; nextln: shlq    %cl, %r10
+; nextln: movl    $$64, %ecx
+; nextln: subq    %r9, %rcx
+; nextln: shrq    %cl, %rdi
+; nextln: xorq    %rsi, %rsi
+; nextln: testq   $$127, %r9
+; nextln: cmovzq  %rsi, %rdi
+; nextln: orq     %r10, %rdi
+; nextln: xorq    %rcx, %rcx
+; nextln: andq    $$64, %r9
+; nextln: cmovzq  %rdi, %rcx
+; nextln: cmovzq  %rdx, %rsi
+; nextln: cmovnzq %rdx, %rcx
+; nextln: orq     %r8, %rsi
+; nextln: orq     %rax, %rcx
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rcx, %rdx
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
