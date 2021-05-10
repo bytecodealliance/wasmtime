@@ -128,6 +128,7 @@ pub(crate) fn emit(
             InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
             InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
             InstructionSet::AVX512VL => info.isa_flags.has_avx512vl(),
+            InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
         }
     };
 
@@ -1409,6 +1410,7 @@ pub(crate) fn emit(
         Inst::XmmUnaryRmREvex { op, src, dst } => {
             let opcode = match op {
                 Avx512Opcode::Vpabsq => 0x1f,
+                _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             match src {
                 RegMem::Reg { reg: src } => EvexInstruction::new()
@@ -1543,6 +1545,31 @@ pub(crate) fn emit(
                     );
                 }
             }
+        }
+
+        Inst::XmmRmREvex {
+            op,
+            src1,
+            src2,
+            dst,
+        } => {
+            let opcode = match op {
+                Avx512Opcode::Vpmullq => 0x40,
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            match src1 {
+                RegMem::Reg { reg: src } => EvexInstruction::new()
+                    .length(EvexVectorLength::V128)
+                    .prefix(LegacyPrefixes::_66)
+                    .map(OpcodeMap::_0F38)
+                    .w(true)
+                    .opcode(opcode)
+                    .reg(dst.to_reg().get_hw_encoding())
+                    .rm(src.get_hw_encoding())
+                    .vvvvv(src2.get_hw_encoding())
+                    .encode(sink),
+                _ => todo!(),
+            };
         }
 
         Inst::XmmMinMaxSeq {
