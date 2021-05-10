@@ -212,6 +212,13 @@ pub enum Inst {
         dst: Writable<Reg>,
     },
 
+    XmmRmREvex {
+        op: Avx512Opcode,
+        src1: RegMem,
+        src2: Reg,
+        dst: Writable<Reg>,
+    },
+
     /// XMM (scalar or vector) unary op: mov between XMM registers (32 64) (reg addr) reg, sqrt,
     /// etc.
     ///
@@ -577,7 +584,7 @@ impl Inst {
             | Inst::XmmToGpr { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
-            Inst::XmmUnaryRmREvex { op, .. } => op.available_from(),
+            Inst::XmmUnaryRmREvex { op, .. } | Inst::XmmRmREvex { op, .. } => op.available_from(),
         }
     }
 }
@@ -722,6 +729,23 @@ impl Inst {
         src.assert_regclass_is(RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::XmmRmR { op, src, dst }
+    }
+
+    pub(crate) fn xmm_rm_r_evex(
+        op: Avx512Opcode,
+        src1: RegMem,
+        src2: Reg,
+        dst: Writable<Reg>,
+    ) -> Self {
+        src1.assert_regclass_is(RegClass::V128);
+        debug_assert!(src2.get_class() == RegClass::V128);
+        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        Inst::XmmRmREvex {
+            op,
+            src1,
+            src2,
+            dst,
+        }
     }
 
     pub(crate) fn xmm_uninit_value(dst: Writable<Reg>) -> Self {
@@ -1425,6 +1449,20 @@ impl PrettyPrint for Inst {
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),
             ),
 
+            Inst::XmmRmREvex {
+                op,
+                src1,
+                src2,
+                dst,
+                ..
+            } => format!(
+                "{} {}, {}, {}",
+                ljustify(op.to_string()),
+                src1.show_rru_sized(mb_rru, 8),
+                show_ireg_sized(*src2, mb_rru, 8),
+                show_ireg_sized(dst.to_reg(), mb_rru, 8),
+            ),
+
             Inst::XmmMinMaxSeq {
                 lhs,
                 rhs_dst,
@@ -1898,6 +1936,13 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_mod(*dst);
             }
         }
+        Inst::XmmRmREvex {
+            src1, src2, dst, ..
+        } => {
+            src1.get_regs_as_uses(collector);
+            collector.add_use(*src2);
+            collector.add_def(*dst);
+        }
         Inst::XmmRmRImm { op, src, dst, .. } => {
             if inst.produces_const() {
                 // No need to account for src, since src == dst.
@@ -2282,6 +2327,16 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
                 src.map_uses(mapper);
                 map_mod(mapper, dst);
             }
+        }
+        Inst::XmmRmREvex {
+            ref mut src1,
+            ref mut src2,
+            ref mut dst,
+            ..
+        } => {
+            src1.map_uses(mapper);
+            map_use(mapper, src2);
+            map_def(mapper, dst);
         }
         Inst::XmmRmiReg {
             ref mut src,

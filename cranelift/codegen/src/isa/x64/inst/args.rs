@@ -462,6 +462,7 @@ pub(crate) enum InstructionSet {
     BMI2,
     AVX512F,
     AVX512VL,
+    AVX512DQ,
 }
 
 /// Some SSE operations requiring 2 operands r/m and r.
@@ -994,6 +995,7 @@ impl fmt::Display for SseOpcode {
 #[derive(Clone)]
 pub enum Avx512Opcode {
     Vpabsq,
+    Vpmullq,
 }
 
 impl Avx512Opcode {
@@ -1001,6 +1003,7 @@ impl Avx512Opcode {
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
             Avx512Opcode::Vpabsq => smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL],
+            Avx512Opcode::Vpmullq => smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512DQ],
         }
     }
 }
@@ -1009,6 +1012,7 @@ impl fmt::Debug for Avx512Opcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
             Avx512Opcode::Vpabsq => "vpabsq",
+            Avx512Opcode::Vpmullq => "vpmullq",
         };
         write!(fmt, "{}", name)
     }
