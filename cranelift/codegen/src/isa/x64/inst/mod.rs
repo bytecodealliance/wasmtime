@@ -22,7 +22,6 @@ pub mod args;
 mod emit;
 #[cfg(test)]
 mod emit_tests;
-pub(crate) mod encoding;
 pub mod regs;
 pub mod unwind;
 
@@ -2856,7 +2855,7 @@ impl EmitState {
         self.stack_map = None;
     }
 
-    fn cur_srcloc(&self) -> SourceLoc {
+    pub(crate) fn cur_srcloc(&self) -> SourceLoc {
         self.cur_srcloc
     }
 }

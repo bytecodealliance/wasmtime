@@ -208,6 +208,8 @@ impl EvexInstruction {
     }
 }
 
+/// Describe the register index to use. This wrapper is a type-safe way to pass
+/// around the registers defined in `inst/regs.rs`.
 #[derive(Copy, Clone, Default)]
 pub struct Register(u8);
 impl From<u8> for Register {
@@ -216,13 +218,18 @@ impl From<u8> for Register {
         Self(reg)
     }
 }
+impl Into<u8> for Register {
+    fn into(self) -> u8 {
+        self.0
+    }
+}
 
 /// Defines the EVEX context for the `L'`, `L`, and `b` bits (bits 6:4 of EVEX P2 byte). Table 2-36 in
 /// section 2.6.10 (Intel Software Development Manual, volume 2A) describes how these bits can be
 /// used together for certain classes of instructions; i.e., special care should be taken to ensure
 /// that instructions use an applicable correct `EvexContext`. Table 2-39 contains cases where
 /// opcodes can result in an #UD.
-#[allow(dead_code)] // Rounding and broadcast modes are not yet used.
+#[allow(dead_code, missing_docs)] // Rounding and broadcast modes are not yet used.
 pub enum EvexContext {
     RoundingRegToRegFP {
         rc: EvexRoundingControl,
@@ -250,7 +257,7 @@ impl Default for EvexContext {
 
 impl EvexContext {
     /// Encode the `L'`, `L`, and `b` bits (bits 6:4 of EVEX P2 byte) for merging with the P2 byte.
-    fn bits(&self) -> u8 {
+    pub fn bits(&self) -> u8 {
         match self {
             Self::RoundingRegToRegFP { rc } => 0b001 | rc.bits() << 1,
             Self::NoRoundingFP { sae, length } => (*sae as u8) | length.bits() << 1,
@@ -261,7 +268,7 @@ impl EvexContext {
 }
 
 /// The EVEX format allows choosing a vector length in the `L'` and `L` bits; see `EvexContext`.
-#[allow(dead_code)] // Wider-length vectors are not yet used.
+#[allow(dead_code, missing_docs)] // Wider-length vectors are not yet used.
 pub enum EvexVectorLength {
     V128,
     V256,
@@ -287,7 +294,7 @@ impl Default for EvexVectorLength {
 }
 
 /// The EVEX format allows defining rounding control in the `L'` and `L` bits; see `EvexContext`.
-#[allow(dead_code)] // Rounding controls are not yet used.
+#[allow(dead_code, missing_docs)] // Rounding controls are not yet used.
 pub enum EvexRoundingControl {
     RNE,
     RD,
@@ -309,7 +316,7 @@ impl EvexRoundingControl {
 
 /// Defines the EVEX masking behavior; masking support is described in section 2.6.4 of the Intel
 /// Software Development Manual, volume 2A.
-#[allow(dead_code)] // Masking is not yet used.
+#[allow(dead_code, missing_docs)] // Masking is not yet used.
 pub enum EvexMasking {
     None,
     Merging { k: u8 },
@@ -324,7 +331,7 @@ impl Default for EvexMasking {
 
 impl EvexMasking {
     /// Encode the `z` bit for merging with the P2 byte.
-    fn z_bit(&self) -> u8 {
+    pub fn z_bit(&self) -> u8 {
         match self {
             Self::None | Self::Merging { .. } => 0,
             Self::Zeroing { .. } => 1,
@@ -332,7 +339,7 @@ impl EvexMasking {
     }
 
     /// Encode the `aaa` bits for merging with the P2 byte.
-    fn aaa_bits(&self) -> u8 {
+    pub fn aaa_bits(&self) -> u8 {
         match self {
             Self::None => 0b000,
             Self::Merging { k } | Self::Zeroing { k } => {
