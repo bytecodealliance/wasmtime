@@ -104,6 +104,7 @@ pub const WASMTIME_EXTERN_MEMORY: wasmtime_extern_kind_t = 3;
 pub const WASMTIME_EXTERN_INSTANCE: wasmtime_extern_kind_t = 4;
 pub const WASMTIME_EXTERN_MODULE: wasmtime_extern_kind_t = 5;
 
+#[repr(C)]
 pub union wasmtime_extern_union {
     pub func: Func,
     pub table: Table,

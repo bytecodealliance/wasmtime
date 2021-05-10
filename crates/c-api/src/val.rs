@@ -237,6 +237,7 @@ impl Drop for wasmtime_val_t {
     }
 }
 
+#[no_mangle]
 pub unsafe extern "C" fn wasmtime_val_delete(val: &mut ManuallyDrop<wasmtime_val_t>) {
     ManuallyDrop::drop(val)
 }

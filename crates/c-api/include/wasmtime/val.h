@@ -56,15 +56,14 @@ WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_clone(wasmtime_externre
  */
 WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_externref_t *ref);
 
-typedef enum wasmtime_valkind {
-  WASMTIME_I32,
-  WASMTIME_I64,
-  WASMTIME_F32,
-  WASMTIME_F64,
-  WASMTIME_V128,
-  WASMTIME_FUNCREF,
-  WASMTIME_EXTERNREF,
-} wasmtime_valkind_t;
+typedef uint8_t wasmtime_valkind_t;
+#define WASMTIME_I32 0
+#define WASMTIME_I64 1
+#define WASMTIME_F32 2
+#define WASMTIME_F64 3
+#define WASMTIME_V128 4
+#define WASMTIME_FUNCREF 5
+#define WASMTIME_EXTERNREF 6
 
 typedef uint8_t wasmtime_v128[16];
 

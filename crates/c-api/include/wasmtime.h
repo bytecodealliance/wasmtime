@@ -34,7 +34,8 @@ extern "C" {
  * deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_wat2wasm(
-    const wasm_byte_vec_t *wat,
+    const char *wat,
+    size_t wat_len,
     wasm_byte_vec_t *ret
 );
 

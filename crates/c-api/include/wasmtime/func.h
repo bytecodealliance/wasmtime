@@ -33,7 +33,7 @@ typedef struct wasmtime_caller wasmtime_caller_t;
  */
 typedef wasm_trap_t* (*wasmtime_func_callback_t)(
     void *env,
-    const wasmtime_caller_t* caller,
+    wasmtime_caller_t* caller,
     const wasmtime_val_t *args,
     size_t nargs,
     wasmtime_val_t *results,
@@ -48,7 +48,7 @@ typedef wasm_trap_t* (*wasmtime_func_callback_t)(
  * signature #wasmtime_func_callback_t which gives a #wasmtime_caller_t as its
  * first argument.
  */
-WASM_API_EXTERN wasm_func_t wasmtime_func_new(
+WASM_API_EXTERN wasmtime_func_t wasmtime_func_new(
   wasmtime_context_t *store,
   const wasm_functype_t* type,
   wasmtime_func_callback_t callback,

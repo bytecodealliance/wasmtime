@@ -13,14 +13,13 @@ typedef uint64_t wasmtime_memory_t;
 typedef uint64_t wasmtime_instance_t;
 typedef uint64_t wasmtime_global_t;
 
-typedef enum wasmtime_extern_kind {
-    WASMTIME_EXTERN_FUNC,
-    WASMTIME_EXTERN_GLOBAL,
-    WASMTIME_EXTERN_TABLE,
-    WASMTIME_EXTERN_MEMORY,
-    WASMTIME_EXTERN_INSTANCE,
-    WASMTIME_EXTERN_MODULE,
-} wasmtime_extern_kind_t;
+typedef uint8_t wasmtime_extern_kind_t;
+#define WASMTIME_EXTERN_FUNC 0
+#define WASMTIME_EXTERN_GLOBAL 1
+#define WASMTIME_EXTERN_TABLE 2
+#define WASMTIME_EXTERN_MEMORY 3
+#define WASMTIME_EXTERN_INSTANCE 4
+#define WASMTIME_EXTERN_MODULE 5
 
 typedef union wasmtime_extern_union {
     wasmtime_func_t func;

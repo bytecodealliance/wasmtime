@@ -199,7 +199,7 @@ pub struct wasmtime_caller_t<'a> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_func_new_with_env(
+pub unsafe extern "C" fn wasmtime_func_new(
     store: CStoreContextMut<'_>,
     ty: &wasm_functype_t,
     callback: extern "C" fn(
