@@ -1,5 +1,5 @@
 use crate::{wasm_functype_t, wasm_globaltype_t, wasm_memorytype_t, wasm_tabletype_t};
-use crate::{wasm_instancetype_t, wasm_moduletype_t};
+use crate::{wasmtime_instancetype_t, wasmtime_moduletype_t};
 use crate::{CFuncType, CGlobalType, CInstanceType, CMemoryType, CModuleType, CTableType};
 use wasmtime::ExternType;
 
@@ -125,27 +125,13 @@ pub extern "C" fn wasm_externtype_as_memorytype_const(
 #[no_mangle]
 pub extern "C" fn wasm_externtype_as_moduletype(
     et: &wasm_externtype_t,
-) -> Option<&wasm_moduletype_t> {
-    wasm_externtype_as_moduletype_const(et)
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_externtype_as_moduletype_const(
-    et: &wasm_externtype_t,
-) -> Option<&wasm_moduletype_t> {
-    wasm_moduletype_t::try_from(et)
+) -> Option<&wasmtime_moduletype_t> {
+    wasmtime_moduletype_t::try_from(et)
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_externtype_as_instancetype(
     et: &wasm_externtype_t,
-) -> Option<&wasm_instancetype_t> {
-    wasm_externtype_as_instancetype_const(et)
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_externtype_as_instancetype_const(
-    et: &wasm_externtype_t,
-) -> Option<&wasm_instancetype_t> {
-    wasm_instancetype_t::try_from(et)
+) -> Option<&wasmtime_instancetype_t> {
+    wasmtime_instancetype_t::try_from(et)
 }

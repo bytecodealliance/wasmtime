@@ -1,11 +1,15 @@
 use crate::wasm_trap_t;
-use crate::{wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t};
+use crate::{
+    wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t, wasmtime_error_t,
+    wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext, CStoreContextMut,
+};
 use anyhow::anyhow;
 use std::ffi::c_void;
+use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-use wasmtime::{Extern, Func, Trap};
+use wasmtime::{AsContextMut, Caller, Extern, Func, Trap};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -14,11 +18,6 @@ pub struct wasm_func_t {
 }
 
 wasmtime_c_api_macros::declare_ref!(wasm_func_t);
-
-// #[repr(C)]
-// pub struct wasmtime_caller_t<'a> {
-//     caller: Caller<'a>,
-// }
 
 pub type wasm_func_callback_t = extern "C" fn(
     args: *const wasm_val_vec_t,
@@ -30,19 +29,6 @@ pub type wasm_func_callback_with_env_t = extern "C" fn(
     args: *const wasm_val_vec_t,
     results: *mut wasm_val_vec_t,
 ) -> Option<Box<wasm_trap_t>>;
-
-// pub type wasmtime_func_callback_t = extern "C" fn(
-//     caller: *const wasmtime_caller_t,
-//     args: *const wasm_val_vec_t,
-//     results: *mut wasm_val_vec_t,
-// ) -> Option<Box<wasm_trap_t>>;
-
-// pub type wasmtime_func_callback_with_env_t = extern "C" fn(
-//     caller: *const wasmtime_caller_t,
-//     env: *mut std::ffi::c_void,
-//     args: *const wasm_val_vec_t,
-//     results: *mut wasm_val_vec_t,
-// ) -> Option<Box<wasm_trap_t>>;
 
 struct Finalizer {
     env: *mut c_void,
@@ -125,17 +111,6 @@ pub unsafe extern "C" fn wasm_func_new(
     create_function(store, ty, move |params, results| callback(params, results))
 }
 
-// #[no_mangle]
-// pub unsafe extern "C" fn wasmtime_func_new(
-//     store: &wasm_store_t,
-//     ty: &wasm_functype_t,
-//     callback: wasmtime_func_callback_t,
-// ) -> Box<wasm_func_t> {
-//     create_function(store, ty, move |params, results| {
-//         callback(&wasmtime_caller_t { caller }, params, results)
-//     })
-// }
-
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_new_with_env(
     store: &mut wasm_store_t,
@@ -149,25 +124,6 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
         callback(finalizer.env, params, results)
     })
 }
-
-// #[no_mangle]
-// pub extern "C" fn wasmtime_func_new_with_env(
-//     store: &wasm_store_t,
-//     ty: &wasm_functype_t,
-//     callback: wasmtime_func_callback_with_env_t,
-//     env: *mut c_void,
-//     finalizer: Option<extern "C" fn(*mut c_void)>,
-// ) -> Box<wasm_func_t> {
-//     let finalizer = Finalizer { env, finalizer };
-//     create_function(store, ty, move |caller, params, results| {
-//         callback(
-//             &wasmtime_caller_t { caller },
-//             finalizer.env,
-//             params,
-//             results,
-//         )
-//     })
-// }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_call(
@@ -237,30 +193,141 @@ pub extern "C" fn wasm_func_as_extern(f: &mut wasm_func_t) -> &mut wasm_extern_t
     &mut (*f).ext
 }
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_caller_export_get(
-//     caller: &wasmtime_caller_t,
-//     name: &wasm_name_t,
-// ) -> Option<Box<wasm_extern_t>> {
-//     let name = str::from_utf8(name.as_slice()).ok()?;
-//     let which = caller.caller.get_export(name)?;
-//     Some(Box::new(wasm_extern_t { which }))
-// }
+#[repr(C)]
+pub struct wasmtime_caller_t<'a> {
+    caller: Caller<'a, crate::ForeignData>,
+}
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_func_as_funcref(
-//     func: &wasm_func_t,
-//     funcrefp: &mut MaybeUninit<wasm_val_t>,
-// ) {
-//     let funcref = wasm_val_t::from_val(Val::FuncRef(Some(func.func().clone())));
-//     crate::initialize(funcrefp, funcref);
-// }
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_new_with_env(
+    store: CStoreContextMut<'_>,
+    ty: &wasm_functype_t,
+    callback: extern "C" fn(
+        *mut c_void,
+        *mut wasmtime_caller_t,
+        *const wasmtime_val_t,
+        usize,
+        *mut wasmtime_val_t,
+        usize,
+    ) -> Option<Box<wasm_trap_t>>,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
+) -> Func {
+    let foreign = crate::ForeignData { data, finalizer };
+    let ty = ty.ty().ty.clone();
+    Func::new(store, ty, move |caller, params, results| {
+        let params = params
+            .iter()
+            .cloned()
+            .map(|p| wasmtime_val_t::from_val(p))
+            .collect::<Vec<_>>();
+        let mut out_results = (0..results.len())
+            .map(|_| wasmtime_val_t {
+                kind: crate::WASMTIME_I32,
+                of: wasmtime_val_union { i32: 0 },
+            })
+            .collect::<Vec<_>>();
+        let mut caller = wasmtime_caller_t { caller };
+        let out = callback(
+            foreign.data,
+            &mut caller,
+            params.as_ptr(),
+            params.len(),
+            out_results.as_mut_ptr(),
+            out_results.len(),
+        );
+        if let Some(trap) = out {
+            return Err(trap.trap);
+        }
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_funcref_as_func(val: &wasm_val_t) -> Option<Box<wasm_func_t>> {
-//     if let Val::FuncRef(Some(f)) = val.val() {
-//         Some(Box::new(f.into()))
-//     } else {
-//         None
-//     }
-// }
+        for (i, result) in out_results.iter().enumerate() {
+            results[i] = unsafe { result.to_val() };
+        }
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_call(
+    store: CStoreContextMut<'_>,
+    func: Func,
+    args: *const wasmtime_val_t,
+    nargs: usize,
+    results: *mut MaybeUninit<wasmtime_val_t>,
+    nresults: usize,
+    trap_ret: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
+    if nresults != func.ty(&store).results().len() {
+        return Some(Box::new(wasmtime_error_t::from(anyhow!(
+            "wrong number of results provided"
+        ))));
+    }
+    let params = std::slice::from_raw_parts(args, nargs)
+        .iter()
+        .map(|i| i.to_val())
+        .collect::<Vec<_>>();
+
+    // We're calling arbitrary code here most of the time, and we in general
+    // want to try to insulate callers against bugs in wasmtime/wasi/etc if we
+    // can. As a result we catch panics here and transform them to traps to
+    // allow the caller to have any insulation possible against Rust panics.
+    let result = panic::catch_unwind(AssertUnwindSafe(|| func.call(store, &params)));
+    match result {
+        Ok(Ok(out)) => {
+            let results = std::slice::from_raw_parts_mut(results, nresults);
+            for (slot, val) in results.iter_mut().zip(out.into_vec().into_iter()) {
+                crate::initialize(slot, wasmtime_val_t::from_val(val));
+            }
+            None
+        }
+        Ok(Err(trap)) => match trap.downcast::<Trap>() {
+            Ok(trap) => {
+                *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
+                None
+            }
+            Err(err) => Some(Box::new(wasmtime_error_t::from(err))),
+        },
+        Err(panic) => {
+            let trap = if let Some(msg) = panic.downcast_ref::<String>() {
+                Trap::new(msg)
+            } else if let Some(msg) = panic.downcast_ref::<&'static str>() {
+                Trap::new(*msg)
+            } else {
+                Trap::new("rust panic happened")
+            };
+            *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
+            None
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_func_type(store: CStoreContext<'_>, func: Func) -> Box<wasm_functype_t> {
+    Box::new(wasm_functype_t::new(func.ty(store)))
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_caller_context<'a>(
+    caller: &'a mut wasmtime_caller_t,
+) -> CStoreContextMut<'a> {
+    caller.caller.as_context_mut()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_caller_export_get(
+    caller: &mut wasmtime_caller_t,
+    name: *const u8,
+    name_len: usize,
+    item: &mut MaybeUninit<wasmtime_extern_t>,
+) -> bool {
+    let name = match str::from_utf8(std::slice::from_raw_parts(name, name_len)) {
+        Ok(name) => name,
+        Err(_) => return false,
+    };
+    let which = match caller.caller.get_export(name) {
+        Some(item) => item,
+        None => return false,
+    };
+    crate::initialize(item, which.into());
+    true
+}

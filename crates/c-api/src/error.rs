@@ -8,12 +8,6 @@ pub struct wasmtime_error_t {
 
 wasmtime_c_api_macros::declare_own!(wasmtime_error_t);
 
-// impl wasmtime_error_t {
-//     pub(crate) fn to_trap(self) -> Box<wasm_trap_t> {
-//         Box::new(wasm_trap_t::new(Trap::from(self.error)))
-//     }
-// }
-
 impl From<Error> for wasmtime_error_t {
     fn from(error: Error) -> wasmtime_error_t {
         wasmtime_error_t { error }

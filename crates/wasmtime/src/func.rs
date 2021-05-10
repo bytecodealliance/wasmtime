@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, StoreOpaqueSend, Stored};
 use crate::{
-    AsContext, AsContextMut, Engine, Extern, FuncType, StoreContext, StoreContextMut, Trap, Val,
-    ValType,
+    AsContext, AsContextMut, Engine, Extern, FuncType, InterruptHandle, StoreContext,
+    StoreContextMut, Trap, Val, ValType,
 };
 use anyhow::{bail, Context as _, Result};
 use smallvec::{smallvec, SmallVec};
@@ -1498,6 +1498,18 @@ impl<T> Caller<'_, T> {
     /// Same as [`Store::data_mut`].
     pub fn data_mut(&mut self) -> &mut T {
         self.store.data_mut()
+    }
+
+    /// Returns the underlying [`Engine`] this store is connected to.
+    pub fn engine(&self) -> &Engine {
+        self.store.engine()
+    }
+
+    /// Returns an [`InterruptHandle`] to interrupt wasm execution.
+    ///
+    /// See [`Store::interrupt_handle`] for more information.
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        self.store.interrupt_handle()
     }
 
     /// Perform garbage collection of `ExternRef`s.

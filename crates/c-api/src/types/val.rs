@@ -51,3 +51,12 @@ pub(crate) fn from_valtype(ty: &ValType) -> wasm_valkind_t {
         _ => panic!("wasm_valkind_t has no known conversion for {:?}", ty),
     }
 }
+
+pub type wasmtime_valkind_t = u8;
+pub const WASMTIME_I32: wasmtime_valkind_t = 0;
+pub const WASMTIME_I64: wasmtime_valkind_t = 1;
+pub const WASMTIME_F32: wasmtime_valkind_t = 2;
+pub const WASMTIME_F64: wasmtime_valkind_t = 3;
+pub const WASMTIME_V128: wasmtime_valkind_t = 4;
+pub const WASMTIME_FUNCREF: wasmtime_valkind_t = 5;
+pub const WASMTIME_EXTERNREF: wasmtime_valkind_t = 6;

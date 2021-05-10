@@ -5,6 +5,7 @@ use wasmtime_runtime::VMExternRef;
 
 /// Represents an opaque reference to any data within WebAssembly.
 #[derive(Clone, Debug)]
+#[repr(transparent)]
 pub struct ExternRef {
     pub(crate) inner: VMExternRef,
 }

@@ -1,8 +1,4 @@
-use crate::wasm_val_t;
-use std::any::Any;
-use std::mem::MaybeUninit;
 use std::os::raw::c_void;
-use std::ptr;
 use wasmtime::{ExternRef, Func, Val};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
@@ -84,64 +80,4 @@ pub extern "C" fn wasm_ref_set_host_info_with_finalizer(
 ) {
     eprintln!("`wasm_ref_set_host_info_with_finalizer` is not implemented");
     std::process::abort();
-}
-
-type wasmtime_externref_finalizer_t = extern "C" fn(*mut c_void);
-
-struct CExternRef {
-    data: *mut c_void,
-    finalizer: Option<wasmtime_externref_finalizer_t>,
-}
-
-unsafe impl Send for CExternRef {}
-unsafe impl Sync for CExternRef {}
-
-impl Drop for CExternRef {
-    fn drop(&mut self) {
-        if let Some(f) = self.finalizer {
-            f(self.data);
-        }
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_new(data: *mut c_void, valp: &mut MaybeUninit<wasm_val_t>) {
-    wasmtime_externref_new_with_finalizer(data, None, valp)
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_new_with_finalizer(
-    data: *mut c_void,
-    finalizer: Option<wasmtime_externref_finalizer_t>,
-    valp: &mut MaybeUninit<wasm_val_t>,
-) {
-    crate::initialize(
-        valp,
-        wasm_val_t::from_val(Val::ExternRef(Some(ExternRef::new(CExternRef {
-            data,
-            finalizer,
-        })))),
-    );
-}
-
-#[no_mangle]
-pub extern "C" fn wasmtime_externref_data(
-    val: &wasm_val_t,
-    datap: &mut MaybeUninit<*mut c_void>,
-) -> bool {
-    match val.val() {
-        Val::ExternRef(None) => {
-            crate::initialize(datap, ptr::null_mut());
-            true
-        }
-        Val::ExternRef(Some(x)) => {
-            let data = match x.data().downcast_ref::<CExternRef>() {
-                Some(r) => r.data,
-                None => x.data() as *const dyn Any as *mut c_void,
-            };
-            crate::initialize(datap, data);
-            true
-        }
-        _ => false,
-    }
 }

@@ -1,5 +1,7 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
 use once_cell::unsync::OnceCell;
+use std::ffi::CStr;
+use std::os::raw::c_char;
 use wasmtime::Trap;
 
 #[repr(C)]
@@ -39,6 +41,15 @@ pub extern "C" fn wasm_trap_new(
         panic!("wasm_trap_new message stringz expected");
     }
     let message = String::from_utf8_lossy(&message[..message.len() - 1]);
+    Box::new(wasm_trap_t {
+        trap: Trap::new(message),
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_trap_new(message: *const c_char) -> Box<wasm_trap_t> {
+    let bytes = CStr::from_ptr(message).to_bytes();
+    let message = String::from_utf8_lossy(&bytes);
     Box::new(wasm_trap_t {
         trap: Trap::new(message),
     })

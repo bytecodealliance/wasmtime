@@ -405,6 +405,13 @@ impl<'a, T> StoreContext<'a, T> {
         self.0.engine()
     }
 
+    /// Returns an [`InterruptHandle`] to interrupt wasm execution.
+    ///
+    /// See [`Store::interrupt_handle`] for more information.
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        self.0.interrupt_handle()
+    }
+
     /// Access the underlying data owned by this `Store`.
     ///
     /// Same as [`Store::data`].
@@ -433,6 +440,18 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Same as [`Store::data_mut`].
     pub fn data_mut(&mut self) -> &mut T {
         self.0.data_mut()
+    }
+
+    /// Returns the underlying [`Engine`] this store is connected to.
+    pub fn engine(&self) -> &Engine {
+        self.0.engine()
+    }
+
+    /// Returns an [`InterruptHandle`] to interrupt wasm execution.
+    ///
+    /// See [`Store::interrupt_handle`] for more information.
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        self.0.interrupt_handle()
     }
 
     /// Perform garbage collection of `ExternRef`s.

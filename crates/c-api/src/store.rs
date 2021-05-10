@@ -1,7 +1,8 @@
-use crate::wasm_engine_t;
+use crate::{wasm_engine_t, wasmtime_error_t, ForeignData};
 use std::cell::UnsafeCell;
+use std::ffi::c_void;
 use std::sync::Arc;
-use wasmtime::{AsContext, AsContextMut, Store, StoreContext, StoreContextMut};
+use wasmtime::{AsContext, AsContextMut, InterruptHandle, Store, StoreContext, StoreContextMut};
 
 #[derive(Clone)]
 pub struct StoreRef {
@@ -37,47 +38,85 @@ pub extern "C" fn wasm_store_new(engine: &wasm_engine_t) -> Box<wasm_store_t> {
     })
 }
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_store_gc(store: &wasm_store_t) {
-//     store.store.gc();
-// }
+#[repr(C)]
+pub struct wasmtime_store_t {
+    pub(crate) store: Store<crate::ForeignData>,
+}
 
-// #[repr(C)]
-// pub struct wasmtime_interrupt_handle_t {
-//     handle: InterruptHandle,
-// }
+pub type CStoreContext<'a> = StoreContext<'a, crate::ForeignData>;
+pub type CStoreContextMut<'a> = StoreContextMut<'a, crate::ForeignData>;
 
-// wasmtime_c_api_macros::declare_own!(wasmtime_interrupt_handle_t);
+#[no_mangle]
+pub extern "C" fn wasmtime_store_delete(_: Box<wasmtime_store_t>) {}
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_interrupt_handle_new(
-//     store: &wasm_store_t,
-// ) -> Option<Box<wasmtime_interrupt_handle_t>> {
-//     Some(Box::new(wasmtime_interrupt_handle_t {
-//         handle: store.store.interrupt_handle().ok()?,
-//     }))
-// }
+#[no_mangle]
+pub extern "C" fn wasmtime_store_new(
+    engine: &wasm_engine_t,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut c_void)>,
+) -> Box<wasmtime_store_t> {
+    Box::new(wasmtime_store_t {
+        store: Store::new(&engine.engine, ForeignData { data, finalizer }),
+    })
+}
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_interrupt_handle_interrupt(handle: &wasmtime_interrupt_handle_t) {
-//     handle.handle.interrupt();
-// }
+#[no_mangle]
+pub extern "C" fn wasmtime_store_context(store: &mut wasmtime_store_t) -> CStoreContextMut<'_> {
+    store.store.as_context_mut()
+}
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_store_add_fuel(
-//     store: &wasm_store_t,
-//     fuel: u64,
-// ) -> Option<Box<wasmtime_error_t>> {
-//     crate::handle_result(store.store.add_fuel(fuel), |()| {})
-// }
+#[no_mangle]
+pub extern "C" fn wasmtime_context_get_data(store: CStoreContext<'_>) -> *mut c_void {
+    store.data().data
+}
 
-// #[no_mangle]
-// pub extern "C" fn wasmtime_store_fuel_consumed(store: &wasm_store_t, fuel: &mut u64) -> bool {
-//     match store.store.fuel_consumed() {
-//         Some(amt) => {
-//             *fuel = amt;
-//             true
-//         }
-//         None => false,
-//     }
-// }
+#[no_mangle]
+pub extern "C" fn wasmtime_context_set_data(mut store: CStoreContextMut<'_>, data: *mut c_void) {
+    store.data_mut().data = data;
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_context_gc(mut context: CStoreContextMut<'_>) {
+    context.gc();
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_context_add_fuel(
+    mut store: CStoreContextMut<'_>,
+    fuel: u64,
+) -> Option<Box<wasmtime_error_t>> {
+    crate::handle_result(store.add_fuel(fuel), |()| {})
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_context_fuel_consumed(store: CStoreContext<'_>, fuel: &mut u64) -> bool {
+    match store.fuel_consumed() {
+        Some(amt) => {
+            *fuel = amt;
+            true
+        }
+        None => false,
+    }
+}
+
+#[repr(C)]
+pub struct wasmtime_interrupt_handle_t {
+    handle: InterruptHandle,
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_interrupt_handle_new(
+    store: CStoreContext<'_>,
+) -> Option<Box<wasmtime_interrupt_handle_t>> {
+    Some(Box::new(wasmtime_interrupt_handle_t {
+        handle: store.interrupt_handle().ok()?,
+    }))
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_interrupt_handle_interrupt(handle: &wasmtime_interrupt_handle_t) {
+    handle.handle.interrupt();
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_interrupt_handle_delete(_: Box<wasmtime_interrupt_handle_t>) {}
