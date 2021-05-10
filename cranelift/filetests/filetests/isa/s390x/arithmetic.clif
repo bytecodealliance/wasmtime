@@ -1,0 +1,1136 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IADD
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %iadd_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = iadd.i64 v0, v1
+  return v2
+}
+
+; check:  agr %r2, %r3
+; nextln: br %r14
+
+function %iadd_i64_ext32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = iadd.i64 v0, v2
+  return v3
+}
+
+; check:  agfr %r2, %r3
+; nextln: br %r14
+
+function %iadd_i64_imm16(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 1
+  v2 = iadd.i64 v0, v1
+  return v2
+}
+
+; check:  aghi %r2, 1
+; nextln: br %r14
+
+function %iadd_i64_imm32(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 32768
+  v2 = iadd.i64 v0, v1
+  return v2
+}
+
+; check:  agfi %r2, 32768
+; nextln: br %r14
+
+function %iadd_i64_mem(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v1
+  v3 = iadd.i64 v0, v2
+  return v3
+}
+
+; check:  ag %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i64_mem_ext16(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sload16.i64 v1
+  v3 = iadd.i64 v0, v2
+  return v3
+}
+
+; check:  agh %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i64_mem_ext32(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sload32.i64 v1
+  v3 = iadd.i64 v0, v2
+  return v3
+}
+
+; check:  agf %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = iadd.i32 v0, v1
+  return v2
+}
+
+; check:  ar %r2, %r3
+; nextln: br %r14
+
+function %iadd_i32_imm16(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 1
+  v2 = iadd.i32 v0, v1
+  return v2
+}
+
+; check:  ahi %r2, 1
+; nextln: br %r14
+
+function %iadd_i32_imm(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 32768
+  v2 = iadd.i32 v0, v1
+  return v2
+}
+
+; check:  afi %r2, 32768
+; nextln: br %r14
+
+function %iadd_i32_mem(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1
+  v3 = iadd.i32 v0, v2
+  return v3
+}
+
+; check:  a %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i32_memoff(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1+4096
+  v3 = iadd.i32 v0, v2
+  return v3
+}
+
+; check:  ay %r2, 4096(%r3)
+; nextln: br %r14
+
+function %iadd_i32_mem_ext16(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = sload16.i32 v1
+  v3 = iadd.i32 v0, v2
+  return v3
+}
+
+; check:  ah %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i32_memoff_ext16(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = sload16.i32 v1+4096
+  v3 = iadd.i32 v0, v2
+  return v3
+}
+
+; check:  ahy %r2, 4096(%r3)
+; nextln: br %r14
+
+function %iadd_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = iadd.i16 v0, v1
+  return v2
+}
+
+; check:  ar %r2, %r3
+; nextln: br %r14
+
+function %iadd_i16_imm(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 1
+  v2 = iadd.i16 v0, v1
+  return v2
+}
+
+; check:  ahi %r2, 1
+; nextln: br %r14
+
+function %iadd_i16_mem(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+  v2 = load.i16 v1
+  v3 = iadd.i16 v0, v2
+  return v3
+}
+
+; check:  ah %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = iadd.i8 v0, v1
+  return v2
+}
+
+; check:  ar %r2, %r3
+; nextln: br %r14
+
+function %iadd_i8_imm(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 1
+  v2 = iadd.i8 v0, v1
+  return v2
+}
+
+; check:  ahi %r2, 1
+; nextln: br %r14
+
+function %iadd_i8_mem(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+  v2 = load.i8 v1
+  v3 = iadd.i8 v0, v2
+  return v3
+}
+
+; check:  llc %r3, 0(%r3)
+; nextln: ar %r2, %r3
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ISUB
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %isub_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = isub.i64 v0, v1
+  return v2
+}
+
+; check:  sgr %r2, %r3
+; nextln: br %r14
+
+function %isub_i64_ext32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = isub.i64 v0, v2
+  return v3
+}
+
+; check:  sgfr %r2, %r3
+; nextln: br %r14
+
+function %isub_i64_imm16(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 1
+  v2 = isub.i64 v0, v1
+  return v2
+}
+
+; check:  aghi %r2, -1
+; nextln: br %r14
+
+function %isub_i64_imm32(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 32769
+  v2 = isub.i64 v0, v1
+  return v2
+}
+
+; check:  agfi %r2, -32769
+; nextln: br %r14
+
+function %isub_i64_mem(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v1
+  v3 = isub.i64 v0, v2
+  return v3
+}
+
+; check:  sg %r2, 0(%r3)
+; nextln: br %r14
+
+function %isub_i64_mem_ext16(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sload16.i64 v1
+  v3 = isub.i64 v0, v2
+  return v3
+}
+
+; check:  sgh %r2, 0(%r3)
+; nextln: br %r14
+
+function %isub_i64_mem_ext32(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sload32.i64 v1
+  v3 = isub.i64 v0, v2
+  return v3
+}
+
+; check:  sgf %r2, 0(%r3)
+; nextln: br %r14
+
+function %isub_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = isub.i32 v0, v1
+  return v2
+}
+
+; check:  sr %r2, %r3
+; nextln: br %r14
+
+function %isub_i32_imm16(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 1
+  v2 = isub.i32 v0, v1
+  return v2
+}
+
+; check:  ahi %r2, -1
+; nextln: br %r14
+
+function %isub_i32_imm(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 32769
+  v2 = isub.i32 v0, v1
+  return v2
+}
+
+; check:  afi %r2, -32769
+; nextln: br %r14
+
+function %isub_i32_mem(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1
+  v3 = isub.i32 v0, v2
+  return v3
+}
+
+; check:  s %r2, 0(%r3)
+; nextln: br %r14
+
+function %isub_i32_memoff(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1+4096
+  v3 = isub.i32 v0, v2
+  return v3
+}
+
+; check:  sy %r2, 4096(%r3)
+; nextln: br %r14
+
+function %isub_i32_mem_ext16(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = sload16.i32 v1
+  v3 = isub.i32 v0, v2
+  return v3
+}
+
+; check:  sh %r2, 0(%r3)
+; nextln: br %r14
+
+function %isub_i32_memoff_ext16(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = sload16.i32 v1+4096
+  v3 = isub.i32 v0, v2
+  return v3
+}
+
+; check:  shy %r2, 4096(%r3)
+; nextln: br %r14
+
+function %isub_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = isub.i16 v0, v1
+  return v2
+}
+
+; check:  sr %r2, %r3
+; nextln: br %r14
+
+function %isub_i16_imm(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 1
+  v2 = isub.i16 v0, v1
+  return v2
+}
+
+; check:  ahi %r2, -1
+; nextln: br %r14
+
+function %isub_i16_mem(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+  v2 = load.i16 v1
+  v3 = isub.i16 v0, v2
+  return v3
+}
+
+; check:  sh %r2, 0(%r3)
+; nextln: br %r14
+
+function %isub_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = isub.i8 v0, v1
+  return v2
+}
+
+; check:  sr %r2, %r3
+; nextln: br %r14
+
+function %isub_i8_imm(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 1
+  v2 = isub.i8 v0, v1
+  return v2
+}
+
+; check:  ahi %r2, -1
+; nextln: br %r14
+
+function %isub_i8_mem(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+  v2 = load.i8 v1
+  v3 = isub.i8 v0, v2
+  return v3
+}
+
+; check:  llc %r3, 0(%r3)
+; nextln: sr %r2, %r3
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IABS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %iabs_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = iabs.i64 v0
+  return v1
+}
+
+; check:  lpgr %r2, %r2
+; nextln: br %r14
+
+function %iabs_i64_ext32(i32) -> i64 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  v2 = iabs.i64 v1
+  return v2
+}
+
+; check:  lpgfr %r2, %r2
+; nextln: br %r14
+
+function %iabs_i32(i32) -> i32 {
+block0(v0: i32):
+  v1 = iabs.i32 v0
+  return v1
+}
+
+; check:  lpr %r2, %r2
+; nextln: br %r14
+
+function %iabs_i16(i16) -> i16 {
+block0(v0: i16):
+  v1 = iabs.i16 v0
+  return v1
+}
+
+; check:  lhr %r2, %r2
+; nextln: lpr %r2, %r2
+; nextln: br %r14
+
+function %iabs_i8(i8) -> i8 {
+block0(v0: i8):
+  v1 = iabs.i8 v0
+  return v1
+}
+
+; check:  lbr %r2, %r2
+; nextln: lpr %r2, %r2
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; INEG
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; FIXME: neg-abs combination not yet supported
+
+function %ineg_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = ineg.i64 v0
+  return v1
+}
+
+; check:  lcgr %r2, %r2
+; nextln: br %r14
+
+function %ineg_i64_ext32(i32) -> i64 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  v2 = ineg.i64 v1
+  return v2
+}
+
+; check:  lcgfr %r2, %r2
+; nextln: br %r14
+
+function %ineg_i32(i32) -> i32 {
+block0(v0: i32):
+  v1 = ineg.i32 v0
+  return v1
+}
+
+; check:  lcr %r2, %r2
+; nextln: br %r14
+
+function %ineg_i16(i16) -> i16 {
+block0(v0: i16):
+  v1 = ineg.i16 v0
+  return v1
+}
+
+; check:  lcr %r2, %r2
+; nextln: br %r14
+
+function %ineg_i8(i8) -> i8 {
+block0(v0: i8):
+  v1 = ineg.i8 v0
+  return v1
+}
+
+; check:  lcr %r2, %r2
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IMUL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %imul_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = imul.i64 v0, v1
+  return v2
+}
+
+; check:  msgr %r2, %r3
+; nextln: br %r14
+
+function %imul_i64_imm16(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 3
+  v2 = imul.i64 v0, v1
+  return v2
+}
+
+; check:  mghi %r2, 3
+; nextln: br %r14
+
+function %imul_i64_imm32(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 32769
+  v2 = imul.i64 v0, v1
+  return v2
+}
+
+; check:  msgfi %r2, 32769
+; nextln: br %r14
+
+function %imul_i64_mem(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v1
+  v3 = imul.i64 v0, v2
+  return v3
+}
+
+; check:  msg %r2, 0(%r3)
+; nextln: br %r14
+
+function %imul_i64_mem_ext16(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sload16.i64 v1
+  v3 = imul.i64 v0, v2
+  return v3
+}
+
+; check:  mgh %r2, 0(%r3)
+; nextln: br %r14
+
+function %imul_i64_mem_ext32(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sload32.i64 v1
+  v3 = imul.i64 v0, v2
+  return v3
+}
+
+; check:  msgf %r2, 0(%r3)
+; nextln: br %r14
+
+function %imul_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = imul.i32 v0, v1
+  return v2
+}
+
+; check:  msr %r2, %r3
+; nextln: br %r14
+
+function %imul_i32_imm16(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 3
+  v2 = imul.i32 v0, v1
+  return v2
+}
+
+; check:  mhi %r2, 3
+; nextln: br %r14
+
+function %imul_i32_imm32(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 32769
+  v2 = imul.i32 v0, v1
+  return v2
+}
+
+; check:  msfi %r2, 32769
+; nextln: br %r14
+
+function %imul_i32_mem(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1
+  v3 = imul.i32 v0, v2
+  return v3
+}
+
+; check:  ms %r2, 0(%r3)
+; nextln: br %r14
+
+function %imul_i32_memoff(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1+4096
+  v3 = imul.i32 v0, v2
+  return v3
+}
+
+; check:  msy %r2, 4096(%r3)
+; nextln: br %r14
+
+function %imul_i32_mem_ext16(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = sload16.i32 v1
+  v3 = imul.i32 v0, v2
+  return v3
+}
+
+; check:  mh %r2, 0(%r3)
+; nextln: br %r14
+
+function %imul_i32_memoff_ext16(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = sload16.i32 v1+4096
+  v3 = imul.i32 v0, v2
+  return v3
+}
+
+; check:  mhy %r2, 4096(%r3)
+; nextln: br %r14
+
+function %imul_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = imul.i16 v0, v1
+  return v2
+}
+
+; check:  msr %r2, %r3
+; nextln: br %r14
+
+function %imul_i16_imm(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 3
+  v2 = imul.i16 v0, v1
+  return v2
+}
+
+; check:  mhi %r2, 3
+; nextln: br %r14
+
+function %imul_i16_mem(i16, i64) -> i16 {
+block0(v0: i16, v1: i64):
+  v2 = load.i16 v1
+  v3 = imul.i16 v0, v2
+  return v3
+}
+
+; check:  mh %r2, 0(%r3)
+; nextln: br %r14
+
+function %imul_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = imul.i8 v0, v1
+  return v2
+}
+
+; check:  msr %r2, %r3
+; nextln: br %r14
+
+function %imul_i8_imm(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 3
+  v2 = imul.i8 v0, v1
+  return v2
+}
+
+; check:  mhi %r2, 3
+; nextln: br %r14
+
+function %imul_i8_mem(i8, i64) -> i8 {
+block0(v0: i8, v1: i64):
+  v2 = load.i8 v1
+  v3 = imul.i8 v0, v2
+  return v3
+}
+
+; check:  llc %r3, 0(%r3)
+; nextln: msr %r2, %r3
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; UMULHI
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %umulhi_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = umulhi.i64 v0, v1
+  return v2
+}
+
+; check:  lgr %r1, %r3
+; nextln: mlgr %r0, %r2
+; nextln: lgr %r2, %r0
+; nextln: br %r14
+
+function %umulhi_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = umulhi.i32 v0, v1
+  return v2
+}
+
+; check:  llgfr %r2, %r2
+; nextln: llgfr %r3, %r3
+; nextln: msgr %r2, %r3
+; nextln: srlg %r2, %r2, 32
+; nextln: br %r14
+
+function %umulhi_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = umulhi.i16 v0, v1
+  return v2
+}
+
+; check:  llhr %r2, %r2
+; nextln: llhr %r3, %r3
+; nextln: msr %r2, %r3
+; nextln: srlk %r2, %r2, 16
+; nextln: br %r14
+
+function %umulhi_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = umulhi.i8 v0, v1
+  return v2
+}
+
+; check:  llcr %r2, %r2
+; nextln: llcr %r3, %r3
+; nextln: msr %r2, %r3
+; nextln: srlk %r2, %r2, 8
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SMULHI
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %smulhi_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = smulhi.i64 v0, v1
+  return v2
+}
+
+; check:  mgrk %r0, %r2, %r3
+; nextln: lgr %r2, %r0
+; nextln: br %r14
+
+function %smulhi_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = smulhi.i32 v0, v1
+  return v2
+}
+
+; check:  lgfr %r2, %r2
+; nextln: lgfr %r3, %r3
+; nextln: msgr %r2, %r3
+; nextln: srag %r2, %r2, 32
+; nextln: br %r14
+
+function %smulhi_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = smulhi.i16 v0, v1
+  return v2
+}
+
+; check:  lhr %r2, %r2
+; nextln: lhr %r3, %r3
+; nextln: msr %r2, %r3
+; nextln: srak %r2, %r2, 16
+; nextln: br %r14
+
+function %smulhi_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = smulhi.i8 v0, v1
+  return v2
+}
+
+; check:  lbr %r2, %r2
+; nextln: lbr %r3, %r3
+; nextln: msr %r2, %r3
+; nextln: srak %r2, %r2, 8
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SDIV
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %sdiv_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = sdiv.i64 v0, v1
+  return v2
+}
+
+; check:  lgr %r1, %r2
+; nextln: llihf %r2, 2147483647
+; nextln: iilf %r2, 4294967295
+; nextln: xgr %r2, %r1
+; nextln: ngr %r2, %r3
+; nextln: cgite %r2, -1
+; nextln: dsgr %r0, %r3
+; nextln: lgr %r2, %r1
+; nextln: br %r14
+
+function %sdiv_i64_imm(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = sdiv.i64 v0, v1
+  return v2
+}
+
+; check:  lgr %r1, %r2
+; nextln: lghi %r2, 2
+; nextln: dsgr %r0, %r2
+; nextln: lgr %r2, %r1
+; nextln: br %r14
+
+function %sdiv_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = sdiv.i32 v0, v1
+  return v2
+}
+
+; check:  lgfr %r1, %r2
+; nextln: iilf %r2, 2147483647
+; nextln: xr %r2, %r1
+; nextln: nr %r2, %r3
+; nextln: cite %r2, -1
+; nextln: dsgfr %r0, %r3
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %sdiv_i32_imm(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 2
+  v2 = sdiv.i32 v0, v1
+  return v2
+}
+
+; check:  lgfr %r1, %r2
+; nextln: lhi %r2, 2
+; nextln: dsgfr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %sdiv_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = sdiv.i16 v0, v1
+  return v2
+}
+
+; check:  lghr %r1, %r2
+; nextln: lhr %r2, %r3
+; nextln: lhi %r3, 32767
+; nextln: xr %r3, %r1
+; nextln: nr %r3, %r2
+; nextln: cite %r3, -1
+; nextln: dsgfr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %sdiv_i16_imm(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 2
+  v2 = sdiv.i16 v0, v1
+  return v2
+}
+
+; check:  lghr %r1, %r2
+; nextln: lhi %r2, 2
+; nextln: dsgfr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %sdiv_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = sdiv.i8 v0, v1
+  return v2
+}
+
+; check:  lgbr %r1, %r2
+; nextln: lbr %r2, %r3
+; nextln: lhi %r3, 127
+; nextln: xr %r3, %r1
+; nextln: nr %r3, %r2
+; nextln: cite %r3, -1
+; nextln: dsgfr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %sdiv_i8_imm(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 2
+  v2 = sdiv.i8 v0, v1
+  return v2
+}
+
+; check:  lgbr %r1, %r2
+; nextln: lhi %r2, 2
+; nextln: dsgfr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; UDIV
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %udiv_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = udiv.i64 v0, v1
+  return v2
+}
+
+; check:  lghi %r0, 0
+; nextln: lgr %r1, %r2
+; nextln: dlgr %r0, %r3
+; nextln: lgr %r2, %r1
+; nextln: br %r14
+
+function %udiv_i64_imm(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = udiv.i64 v0, v1
+  return v2
+}
+
+; check:  lghi %r0, 0
+; nextln: lgr %r1, %r2
+; nextln: lghi %r2, 2
+; nextln: dlgr %r0, %r2
+; nextln: lgr %r2, %r1
+; nextln: br %r14
+
+function %udiv_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = udiv.i32 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; nextln: lr %r1, %r2
+; nextln: dlr %r0, %r3
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %udiv_i32_imm(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 2
+  v2 = udiv.i32 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; nextln: lr %r1, %r2
+; nextln: lhi %r2, 2
+; nextln: dlr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %udiv_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = udiv.i16 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; nextln: llhr %r1, %r2
+; nextln: llhr %r2, %r3
+; nextln: dlr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %udiv_i16_imm(i16) -> i16 {
+block0(v0: i16):
+  v1 = iconst.i16 2
+  v2 = udiv.i16 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; nextln: llhr %r1, %r2
+; nextln: lhi %r2, 2
+; nextln: dlr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %udiv_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = udiv.i8 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; nextln: llcr %r1, %r2
+; nextln: llcr %r2, %r3
+; nextln: dlr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+function %udiv_i8_imm(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 2
+  v2 = udiv.i8 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; nextln: llcr %r1, %r2
+; nextln: lhi %r2, 2
+; nextln: dlr %r0, %r2
+; nextln: lr %r2, %r1
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SREM
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %srem_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = srem.i64 v0, v1
+  return v2
+}
+
+; check:  lgr %r1, %r2
+; nextln: cghi %r3, -1
+; nextln: locghie %r1, 0
+; nextln: dsgr %r0, %r3
+; nextln: lgr %r2, %r0
+; nextln: br %r14
+
+function %srem_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = srem.i32 v0, v1
+  return v2
+}
+
+; check:  lgfr %r1, %r2
+; nextln: dsgfr %r0, %r3
+; nextln: lr %r2, %r0
+; nextln: br %r14
+
+function %srem_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = srem.i16 v0, v1
+  return v2
+}
+
+; check:  lghr %r1, %r2
+; nextln: lhr %r2, %r3
+; nextln: dsgfr %r0, %r2
+; nextln: lr %r2, %r0
+; nextln: br %r14
+
+function %srem_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = srem.i8 v0, v1
+  return v2
+}
+
+; check:  lgbr %r1, %r2
+; nextln: lbr %r2, %r3
+; nextln: dsgfr %r0, %r2
+; nextln: lr %r2, %r0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; UREM
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %urem_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = urem.i64 v0, v1
+  return v2
+}
+
+; check:  lghi %r0, 0
+; nextln: lgr %r1, %r2
+; nextln: dlgr %r0, %r3
+; nextln: lgr %r2, %r0
+; nextln: br %r14
+
+function %urem_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2 = urem.i32 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; nextln: lr %r1, %r2
+; nextln: dlr %r0, %r3
+; nextln: lr %r2, %r0
+; nextln: br %r14
+
+function %urem_i16(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+  v2 = urem.i16 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; check:  llhr %r1, %r2
+; nextln: llhr %r2, %r3
+; nextln: dlr %r0, %r2
+; nextln: lr %r2, %r0
+; nextln: br %r14
+
+function %urem_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+  v2 = urem.i8 v0, v1
+  return v2
+}
+
+; check:  lhi %r0, 0
+; check:  llcr %r1, %r2
+; nextln: llcr %r2, %r3
+; nextln: dlr %r0, %r2
+; nextln: lr %r2, %r0
+; nextln: br %r14
+

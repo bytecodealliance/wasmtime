@@ -1,0 +1,264 @@
+test compile
+target s390x
+
+function %load_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = load.i64 v0
+  return v1
+}
+
+; check:  lg %r2, 0(%r2)
+; nextln: br %r14
+
+function %load_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = load.i64 v0
+  return v1
+}
+
+; check:  lgrl %r2, %sym + 0
+; nextln: br %r14
+
+function %uload8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = uload8.i64 v0
+  return v1
+}
+
+; check:  llgc %r2, 0(%r2)
+; nextln: br %r14
+
+function %sload8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = sload8.i64 v0
+  return v1
+}
+
+; check:  lgb %r2, 0(%r2)
+; nextln: br %r14
+
+function %uload16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = uload16.i64 v0
+  return v1
+}
+
+; check:  llgh %r2, 0(%r2)
+; nextln: br %r14
+
+function %uload16_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = uload16.i64 v0
+  return v1
+}
+
+; check:  llghrl %r2, %sym + 0
+; nextln: br %r14
+
+function %sload16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = sload16.i64 v0
+  return v1
+}
+
+; check:  lgh %r2, 0(%r2)
+; nextln: br %r14
+
+function %sload16_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = sload16.i64 v0
+  return v1
+}
+
+; check:  lghrl %r2, %sym + 0
+; nextln: br %r14
+
+function %uload32_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = uload32.i64 v0
+  return v1
+}
+
+; check:  llgf %r2, 0(%r2)
+; nextln: br %r14
+
+function %uload32_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = uload32.i64 v0
+  return v1
+}
+
+; check:  llgfrl %r2, %sym + 0
+; nextln: br %r14
+
+function %sload32_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = sload32.i64 v0
+  return v1
+}
+
+; check:  lgf %r2, 0(%r2)
+; nextln: br %r14
+
+function %sload32_i64_sym() -> i64 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = sload32.i64 v0
+  return v1
+}
+
+; check:  lgfrl %r2, %sym + 0
+; nextln: br %r14
+
+function %load_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i32 v0
+  return v1
+}
+
+; check:  l %r2, 0(%r2)
+; nextln: br %r14
+
+function %load_i32_sym() -> i32 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = load.i32 v0
+  return v1
+}
+
+; check:  lrl %r2, %sym + 0
+; nextln: br %r14
+
+function %load_i32_off(i64) -> i32 {
+block0(v0: i64):
+  v1 = load.i32 v0+4096
+  return v1
+}
+
+; check:  ly %r2, 4096(%r2)
+; nextln: br %r14
+
+function %uload8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = uload8.i32 v0
+  return v1
+}
+
+; check:  llc %r2, 0(%r2)
+; nextln: br %r14
+
+function %sload8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = sload8.i32 v0
+  return v1
+}
+
+; check:  lb %r2, 0(%r2)
+; nextln: br %r14
+
+function %uload16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = uload16.i32 v0
+  return v1
+}
+
+; check:  llh %r2, 0(%r2)
+; nextln: br %r14
+
+function %uload16_i32_sym() -> i32 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = uload16.i32 v0
+  return v1
+}
+
+; check:  llhrl %r2, %sym + 0
+; nextln: br %r14
+
+function %sload16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = sload16.i32 v0
+  return v1
+}
+
+; check:  lh %r2, 0(%r2)
+; nextln: br %r14
+
+function %sload16_i32_off(i64) -> i32 {
+block0(v0: i64):
+  v1 = sload16.i32 v0+4096
+  return v1
+}
+
+; check:  lhy %r2, 4096(%r2)
+; nextln: br %r14
+
+function %sload16_i32_sym() -> i32 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = sload16.i32 v0
+  return v1
+}
+
+; check:  lhrl %r2, %sym + 0
+; nextln: br %r14
+
+function %load_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = load.i16 v0
+  return v1
+}
+
+; check:  llh %r2, 0(%r2)
+; nextln: br %r14
+
+function %load_i16_sym() -> i16 {
+  gv0 = symbol colocated %sym
+block0:
+  v0 = symbol_value.i64 gv0
+  v1 = load.i16 v0
+  return v1
+}
+
+; check:  llhrl %r2, %sym + 0
+; nextln: br %r14
+
+function %uload8_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = uload8.i16 v0
+  return v1
+}
+
+; check:  llc %r2, 0(%r2)
+; nextln: br %r14
+
+function %sload8_i16(i64) -> i16 {
+block0(v0: i64):
+  v1 = sload8.i16 v0
+  return v1
+}
+
+; check:  lb %r2, 0(%r2)
+; nextln: br %r14
+
+function %load_i8(i64) -> i8 {
+block0(v0: i64):
+  v1 = load.i8 v0
+  return v1
+}
+
+; check:  llc %r2, 0(%r2)
+; nextln: br %r14
+

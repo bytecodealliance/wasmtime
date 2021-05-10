@@ -219,6 +219,9 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
+            // No simd support yet for s390x.
+            ("simd", _) if platform_is_s390x() => return true,
+
             ("simd", _) if cfg!(feature = "old-x86-backend") => return true, // skip all SIMD tests on old backend.
             // These are new instructions that are not really implemented in any backend.
             ("simd", "simd_i8x16_arith2")
@@ -242,4 +245,8 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
 fn platform_is_x64() -> bool {
     env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "x86_64"
+}
+
+fn platform_is_s390x() -> bool {
+    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
 }

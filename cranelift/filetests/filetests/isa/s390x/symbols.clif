@@ -1,0 +1,54 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SYMBOL_VALUE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %symbol_value() -> i64 {
+  gv0 = symbol %my_global
+
+block0:
+  v0 = symbol_value.i64 gv0
+  return v0
+}
+
+; check:  bras %r1, 12 ; data %my_global + 0 ; lg %r2, 0(%r1)
+; nextln: br %r14
+
+function %symbol_value_colocated() -> i64 {
+  gv0 = symbol colocated %my_global_colo
+
+block0:
+  v0 = symbol_value.i64 gv0
+  return v0
+}
+
+; check:  larl %r2, %my_global_colo + 0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FUNC_ADDR
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %func_addr() -> i64 {
+    fn0 = %my_func(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+; check:  bras %r1, 12 ; data %my_func + 0 ; lg %r2, 0(%r1)
+; nextln: br %r14
+
+function %func_addr_colocated() -> i64 {
+    fn0 = colocated %my_func_colo(i64) -> i64
+
+block0:
+    v0 = func_addr.i64 fn0
+    return v0
+}
+
+; check:  larl %r2, %my_func_colo + 0
+; nextln: br %r14

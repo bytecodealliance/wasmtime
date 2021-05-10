@@ -1,0 +1,91 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TRAP/RESUMABLE_TRAP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %trap() {
+block0:
+  trap user0
+}
+
+; check: trap
+
+function %resumable_trap() {
+block0:
+  trap user0
+}
+
+; check: trap
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TRAPZ
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %trapz(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 42
+  v2 = icmp eq v0, v1
+  trapz v2, user0
+  return
+}
+
+; FIXME: Does not use TrapIf internally as trapz is expanded.
+; check: Block 0
+; check:  clgfi %r2, 42
+; nextln: jge label1 ; jg label2
+; check: Block 1:
+; check:  br %r14
+; check: Block 2:
+; check:  trap
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TRAPNZ/RESUMABLE_TRAPNZ
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %trapnz(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 42
+  v2 = icmp eq v0, v1
+  trapnz v2, user0
+  return
+}
+
+; FIXME: Does not use TrapIf internally as trapnz is expanded.
+; check: Block 0
+; check:  clgfi %r2, 42
+; nextln: jgne label1 ; jg label2
+; check: Block 1:
+; check:  br %r14
+; check: Block 2:
+; check:  trap
+
+function %resumable_trapnz(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 42
+  v2 = icmp eq v0, v1
+  trapnz v2, user0
+  return
+}
+
+; FIXME: Does not use TrapIf internally as resumable_trapnz is expanded.
+; check: Block 0
+; check:  clgfi %r2, 42
+; nextln: jgne label1 ; jg label2
+; check: Block 1:
+; check:  br %r14
+; check: Block 2:
+; check:  trap
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; DEBUGTRAP
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %h() {
+block0:
+  debugtrap
+  return
+}
+
+; check: debugtrap
