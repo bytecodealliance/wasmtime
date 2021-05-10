@@ -291,29 +291,21 @@ impl JITModule {
         unsafe { *self.function_got_entries[func_id].unwrap().as_ptr() }
     }
 
-    fn get_got_address(&self, name: &ir::ExternalName) -> *const u8 {
+    fn get_got_address(&self, name: &ir::ExternalName) -> NonNull<*const u8> {
         match *name {
             ir::ExternalName::User { .. } => {
                 if ModuleDeclarations::is_function(name) {
                     let func_id = FuncId::from_name(name);
-                    self.function_got_entries[func_id]
-                        .unwrap()
-                        .as_ptr()
-                        .cast::<u8>()
+                    self.function_got_entries[func_id].unwrap()
                 } else {
                     let data_id = DataId::from_name(name);
-                    self.data_object_got_entries[data_id]
-                        .unwrap()
-                        .as_ptr()
-                        .cast::<u8>()
+                    self.data_object_got_entries[data_id].unwrap()
                 }
             }
-            ir::ExternalName::LibCall(ref libcall) => self
+            ir::ExternalName::LibCall(ref libcall) => *self
                 .libcall_got_entries
                 .get(libcall)
-                .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall))
-                .as_ptr()
-                .cast::<u8>(),
+                .unwrap_or_else(|| panic!("can't resolve libcall {}", libcall)),
             _ => panic!("invalid ExternalName {}", name),
         }
     }
@@ -405,7 +397,7 @@ impl JITModule {
                 .expect("function must be compiled before it can be finalized");
             func.perform_relocations(
                 |name| self.get_address(name),
-                |name| self.get_got_address(name),
+                |name| self.get_got_address(name).as_ptr().cast(),
                 |name| self.get_plt_address(name),
             );
         }
@@ -418,7 +410,7 @@ impl JITModule {
                 .expect("data object must be compiled before it can be finalized");
             data.perform_relocations(
                 |name| self.get_address(name),
-                |name| self.get_got_address(name),
+                |name| self.get_got_address(name).as_ptr().cast(),
                 |name| self.get_plt_address(name),
             );
         }
@@ -683,7 +675,7 @@ impl Module for JITModule {
                             .cast::<u8>(),
                         _ => panic!("invalid ExternalName {}", name),
                     },
-                    |name| self.get_got_address(name),
+                    |name| self.get_got_address(name).as_ptr().cast(),
                     |name| self.get_plt_address(name),
                 );
         } else {
@@ -744,7 +736,7 @@ impl Module for JITModule {
                 .unwrap()
                 .perform_relocations(
                     |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
-                    |name| self.get_got_address(name),
+                    |name| self.get_got_address(name).as_ptr().cast(),
                     |name| self.get_plt_address(name),
                 );
         } else {
