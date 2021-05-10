@@ -23,15 +23,13 @@ use std::sync::{Arc, RwLock};
 /// A variety of `From` impls are provided so that common pipe types are easy to create. For example:
 ///
 /// ```no_run
-/// # use std::rc::Rc;
-/// # use std::cell::RefCell;
 /// use wasi_common::{pipe::ReadPipe, WasiCtx, Table};
 /// let stdin = ReadPipe::from("hello from stdin!");
 /// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
 /// let random = todo!();
 /// let clocks = todo!();
 /// let sched = todo!();
-/// let table = Rc::new(RefCell::new(Table::new()));
+/// let table = Table::new();
 /// let ctx = WasiCtx::builder(random, clocks, sched, table)
 ///             .stdin(Box::new(stdin.clone()))
 ///             .build();
@@ -194,15 +192,13 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
 /// A virtual pipe write end.
 ///
 /// ```no_run
-/// # use std::rc::Rc;
-/// # use std::cell::RefCell;
 /// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
 /// let stdout = WritePipe::new_in_memory();
 /// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
 /// let random = todo!();
 /// let clocks = todo!();
 /// let sched = todo!();
-/// let table = Rc::new(RefCell::new(Table::new()));
+/// let table = Table::new();
 /// let ctx = WasiCtx::builder(random, clocks, sched, table)
 ///             .stdout(Box::new(stdout.clone()))
 ///             .build();
