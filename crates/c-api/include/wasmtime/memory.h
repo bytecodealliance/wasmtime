@@ -25,11 +25,11 @@ WASM_API_EXTERN uint8_t *wasmtime_memory_data(
     const wasmtime_context_t *store,
     wasmtime_memory_t memory
 );
-WASM_API_EXTERN size_t *wasmtime_memory_data_size(
+WASM_API_EXTERN size_t wasmtime_memory_data_size(
     const wasmtime_context_t *store,
     wasmtime_memory_t memory
 );
-WASM_API_EXTERN uint32_t *wasmtime_memory_size(
+WASM_API_EXTERN uint32_t wasmtime_memory_size(
     const wasmtime_context_t *store,
     wasmtime_memory_t memory
 );

@@ -262,7 +262,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
             "wrong number of results provided"
         ))));
     }
-    let params = std::slice::from_raw_parts(args, nargs)
+    let params = crate::slice_from_raw_parts(args, nargs)
         .iter()
         .map(|i| i.to_val())
         .collect::<Vec<_>>();
@@ -274,7 +274,7 @@ pub unsafe extern "C" fn wasmtime_func_call(
     let result = panic::catch_unwind(AssertUnwindSafe(|| func.call(store, &params)));
     match result {
         Ok(Ok(out)) => {
-            let results = std::slice::from_raw_parts_mut(results, nresults);
+            let results = crate::slice_from_raw_parts_mut(results, nresults);
             for (slot, val) in results.iter_mut().zip(out.into_vec().into_iter()) {
                 crate::initialize(slot, wasmtime_val_t::from_val(val));
             }
@@ -320,7 +320,7 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
     name_len: usize,
     item: &mut MaybeUninit<wasmtime_extern_t>,
 ) -> bool {
-    let name = match str::from_utf8(std::slice::from_raw_parts(name, name_len)) {
+    let name = match str::from_utf8(crate::slice_from_raw_parts(name, name_len)) {
         Ok(name) => name,
         Err(_) => return false,
     };

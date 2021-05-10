@@ -102,7 +102,7 @@ pub unsafe extern "C" fn wasmtime_instance_new(
     instance: &mut Instance,
     trap_ptr: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let imports = std::slice::from_raw_parts(imports, nimports)
+    let imports = crate::slice_from_raw_parts(imports, nimports)
         .iter()
         .map(|i| i.to_extern())
         .collect::<Vec<_>>();
@@ -149,7 +149,7 @@ pub unsafe extern "C" fn wasmtime_instance_export_get(
     name_len: usize,
     item: &mut MaybeUninit<wasmtime_extern_t>,
 ) -> bool {
-    let name = std::slice::from_raw_parts(name, name_len);
+    let name = crate::slice_from_raw_parts(name, name_len);
     let name = match std::str::from_utf8(name) {
         Ok(name) => name,
         Err(_) => return false,

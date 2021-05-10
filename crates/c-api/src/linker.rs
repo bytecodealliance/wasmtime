@@ -31,7 +31,7 @@ pub extern "C" fn wasmtime_linker_delete(_linker: Box<wasmtime_linker_t>) {}
 
 macro_rules! to_str {
     ($ptr:expr, $len:expr) => {
-        match str::from_utf8(std::slice::from_raw_parts($ptr, $len)) {
+        match str::from_utf8(crate::slice_from_raw_parts($ptr, $len)) {
             Ok(s) => s,
             Err(_) => return bad_utf8(),
         }

@@ -6,7 +6,7 @@ pub unsafe extern "C" fn wasmtime_wat2wasm(
     wat_len: usize,
     ret: &mut wasm_byte_vec_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let wat = std::slice::from_raw_parts(wat, wat_len);
+    let wat = crate::slice_from_raw_parts(wat, wat_len);
     let wat = match std::str::from_utf8(wat) {
         Ok(s) => s,
         Err(_) => return bad_utf8(),

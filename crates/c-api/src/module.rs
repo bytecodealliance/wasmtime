@@ -151,7 +151,7 @@ pub unsafe extern "C" fn wasmtime_module_new(
     out: &mut *mut wasmtime_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        Module::from_binary(&engine.engine, std::slice::from_raw_parts(wasm, len)),
+        Module::from_binary(&engine.engine, crate::slice_from_raw_parts(wasm, len)),
         |module| {
             *out = Box::into_raw(Box::new(wasmtime_module_t { module }));
         },
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn wasmtime_module_validate(
     wasm: *const u8,
     len: usize,
 ) -> Option<Box<wasmtime_error_t>> {
-    let binary = std::slice::from_raw_parts(wasm, len);
+    let binary = crate::slice_from_raw_parts(wasm, len);
     handle_result(Module::validate(&engine.engine, binary), |()| {})
 }
 
@@ -191,7 +191,7 @@ pub unsafe extern "C" fn wasmtime_module_deserialize(
     len: usize,
     out: &mut *mut wasmtime_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let bytes = std::slice::from_raw_parts(bytes, len);
+    let bytes = crate::slice_from_raw_parts(bytes, len);
     handle_result(Module::deserialize(&engine.engine, bytes), |module| {
         *out = Box::into_raw(Box::new(wasmtime_module_t { module }));
     })

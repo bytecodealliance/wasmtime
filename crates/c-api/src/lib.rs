@@ -74,3 +74,19 @@ impl Drop for ForeignData {
         }
     }
 }
+
+unsafe fn slice_from_raw_parts<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
+    if len == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(ptr, len)
+    }
+}
+
+unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a [T] {
+    if len == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts_mut(ptr, len)
+    }
+}
