@@ -54,15 +54,15 @@ pub unsafe extern "C" fn wasmtime_linker_define(
     handle_result(linker.define(module, name, item), |_linker| ())
 }
 
-#[cfg(feature = "wasi")]
-#[no_mangle]
-pub extern "C" fn wasmtime_linker_define_wasi(
-    linker: &mut wasmtime_linker_t,
-    instance: &crate::wasi_instance_t,
-) -> Option<Box<wasmtime_error_t>> {
-    let linker = &mut linker.linker;
-    handle_result(instance.add_to_linker(linker), |_linker| ())
-}
+// #[cfg(feature = "wasi")]
+// #[no_mangle]
+// pub extern "C" fn wasmtime_linker_define_wasi(
+//     linker: &mut wasmtime_linker_t,
+//     instance: &crate::wasi_instance_t,
+// ) -> Option<Box<wasmtime_error_t>> {
+//     let linker = &mut linker.linker;
+//     handle_result(instance.add_to_linker(linker), |_linker| ())
+// }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_linker_define_instance(
