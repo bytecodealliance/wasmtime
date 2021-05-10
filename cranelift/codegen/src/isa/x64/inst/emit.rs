@@ -2,16 +2,16 @@ use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::ir::LibCall;
 use crate::ir::TrapCode;
-use crate::isa::x64::inst::args::*;
-use crate::isa::x64::inst::*;
-use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel};
-use core::convert::TryInto;
-use encoding::evex::{EvexInstruction, EvexVectorLength};
-use encoding::rex::{
+use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength};
+use crate::isa::x64::encoding::rex::{
     emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
     low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, OpcodeMap,
     RexFlags,
 };
+use crate::isa::x64::inst::args::*;
+use crate::isa::x64::inst::*;
+use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel};
+use core::convert::TryInto;
 use log::debug;
 use regalloc::{Reg, Writable};
 

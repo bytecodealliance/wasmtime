@@ -28,8 +28,9 @@ pub(crate) fn low8_will_sign_extend_to_32(x: u32) -> bool {
     xs == ((xs << 24) >> 24)
 }
 
+/// Encode the ModR/M byte.
 #[inline(always)]
-pub(crate) fn encode_modrm(m0d: u8, enc_reg_g: u8, rm_e: u8) -> u8 {
+pub fn encode_modrm(m0d: u8, enc_reg_g: u8, rm_e: u8) -> u8 {
     debug_assert!(m0d < 4);
     debug_assert!(enc_reg_g < 8);
     debug_assert!(rm_e < 8);
@@ -155,6 +156,7 @@ impl From<(OperandSize, Reg)> for RexFlags {
 
 /// Allows using the same opcode byte in different "opcode maps" to allow for more instruction
 /// encodings. See appendix A in the Intel Software Developer's Manual, volume 2A, for more details.
+#[allow(missing_docs)]
 pub enum OpcodeMap {
     None,
     _0F,

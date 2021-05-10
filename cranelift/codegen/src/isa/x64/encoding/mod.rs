@@ -1,3 +1,4 @@
+//! Contains the encoding machinery for the various x64 instruction formats.
 use crate::{isa::x64, machinst::MachBuffer};
 use std::vec::Vec;
 
@@ -5,6 +6,8 @@ pub mod evex;
 pub mod rex;
 pub mod vex;
 
+/// The encoding formats in this module all require a way of placing bytes into
+/// a buffer.
 pub trait ByteSink {
     /// Add 1 byte to the code section.
     fn put1(&mut self, _: u8);

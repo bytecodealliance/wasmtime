@@ -18,6 +18,7 @@ use target_lexicon::Triple;
 use crate::isa::unwind::systemv;
 
 mod abi;
+pub mod encoding;
 mod inst;
 mod lower;
 mod settings;
