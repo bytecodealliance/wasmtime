@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use wasmtime::{Engine, Linker, Store};
 
 wasmtime_wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
@@ -12,7 +11,7 @@ wasmtime_wiggle::wasmtime_integration!({
     target: crate,
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
     ctx: Ctx,
-    modules: { atoms => { name: Atoms } },
+    modules: { atoms => { name: atoms } },
     block_on: {
         atoms::double_int_return_float
     }
@@ -27,26 +26,31 @@ impl wiggle::GuestErrorType for types::Errno {
 
 #[wasmtime_wiggle::async_trait]
 impl atoms::Atoms for Ctx {
-    fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
+    fn int_float_args(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);
         Ok(())
     }
     async fn double_int_return_float(
-        &self,
+        &mut self,
         an_int: u32,
     ) -> Result<types::AliasToFloat, types::Errno> {
         Ok((an_int as f32) * 2.0)
     }
 }
 
-fn run_int_float_args(linker: &wasmtime::Linker) {
-    let shim_mod = shim_module(linker.store());
-    let shim_inst = linker.instantiate(&shim_mod).unwrap();
+#[test]
+fn test_sync_host_func() {
+    let engine = Engine::default();
+    let mut linker = Linker::new(&engine);
+    add_atoms_to_linker(&mut linker).unwrap();
+    let mut store = store(&engine);
+    let shim_mod = shim_module(&engine);
+    let shim_inst = linker.instantiate(&mut store, &shim_mod).unwrap();
 
     let results = shim_inst
-        .get_func("int_float_args_shim")
+        .get_func(&mut store, "int_float_args_shim")
         .unwrap()
-        .call(&[0i32.into(), 123.45f32.into()])
+        .call(&mut store, &[0i32.into(), 123.45f32.into()])
         .unwrap();
 
     assert_eq!(results.len(), 1, "one return value");
@@ -57,17 +61,23 @@ fn run_int_float_args(linker: &wasmtime::Linker) {
     );
 }
 
-fn run_double_int_return_float(linker: &wasmtime::Linker) {
-    let shim_mod = shim_module(linker.store());
-    let shim_inst = linker.instantiate(&shim_mod).unwrap();
+#[test]
+fn test_async_host_func() {
+    let engine = Engine::default();
+    let mut linker = Linker::new(&engine);
+    add_atoms_to_linker(&mut linker).unwrap();
+    let mut store = store(&engine);
+
+    let shim_mod = shim_module(&engine);
+    let shim_inst = linker.instantiate(&mut store, &shim_mod).unwrap();
 
     let input: i32 = 123;
     let result_location: i32 = 0;
 
     let results = shim_inst
-        .get_func("double_int_return_float_shim")
+        .get_func(&mut store, "double_int_return_float_shim")
         .unwrap()
-        .call(&[input.into(), result_location.into()])
+        .call(&mut store, &[input.into(), result_location.into()])
         .unwrap();
 
     assert_eq!(results.len(), 1, "one return value");
@@ -78,78 +88,24 @@ fn run_double_int_return_float(linker: &wasmtime::Linker) {
     );
 
     // The actual result is in memory:
-    let mem = shim_inst.get_memory("memory").unwrap();
+    let mem = shim_inst.get_memory(&mut store, "memory").unwrap();
     let mut result_bytes: [u8; 4] = [0, 0, 0, 0];
-    mem.read(result_location as usize, &mut result_bytes)
+    mem.read(&store, result_location as usize, &mut result_bytes)
         .unwrap();
     let result = f32::from_le_bytes(result_bytes);
     assert_eq!((input * 2) as f32, result);
 }
 
-#[test]
-fn test_sync_host_func() {
-    let store = store();
-
-    let ctx = Rc::new(RefCell::new(Ctx));
-    let atoms = Atoms::new(&store, ctx.clone());
-
-    let mut linker = wasmtime::Linker::new(&store);
-    atoms.add_to_linker(&mut linker).unwrap();
-
-    run_int_float_args(&linker);
-}
-
-#[test]
-fn test_async_host_func() {
-    let store = store();
-
-    let ctx = Rc::new(RefCell::new(Ctx));
-    let atoms = Atoms::new(&store, ctx.clone());
-
-    let mut linker = wasmtime::Linker::new(&store);
-    atoms.add_to_linker(&mut linker).unwrap();
-
-    run_double_int_return_float(&linker);
-}
-
-#[test]
-fn test_sync_config_host_func() {
-    let mut config = wasmtime::Config::new();
-    Atoms::add_to_config(&mut config);
-
-    let engine = wasmtime::Engine::new(&config).unwrap();
-    let store = wasmtime::Store::new(&engine);
-
-    assert!(Atoms::set_context(&store, Ctx).is_ok());
-
-    let linker = wasmtime::Linker::new(&store);
-    run_int_float_args(&linker);
-}
-
-#[test]
-fn test_async_config_host_func() {
-    let mut config = wasmtime::Config::new();
-    Atoms::add_to_config(&mut config);
-
-    let engine = wasmtime::Engine::new(&config).unwrap();
-    let store = wasmtime::Store::new(&engine);
-
-    assert!(Atoms::set_context(&store, Ctx).is_ok());
-
-    let linker = wasmtime::Linker::new(&store);
-    run_double_int_return_float(&linker);
-}
-
-fn store() -> wasmtime::Store {
-    wasmtime::Store::new(&wasmtime::Engine::new(&wasmtime::Config::new()).unwrap())
+fn store(engine: &Engine) -> Store<Ctx> {
+    Store::new(engine, Ctx)
 }
 
 // Wiggle expects the caller to have an exported memory. Wasmtime can only
 // provide this if the caller is a WebAssembly module, so we need to write
 // a shim module:
-fn shim_module(store: &wasmtime::Store) -> wasmtime::Module {
+fn shim_module(engine: &Engine) -> wasmtime::Module {
     wasmtime::Module::new(
-        store.engine(),
+        engine,
         r#"
         (module
             (memory 1)
