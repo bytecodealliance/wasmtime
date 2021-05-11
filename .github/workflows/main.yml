@@ -96,6 +96,7 @@ jobs:
     - uses: actions/checkout@v2
       with:
         submodules: true
+    - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9
     - run: curl -L https://doxygen.nl/files/doxygen-1.9.1.linux.bin.tar.gz | tar xzf -
     - run: echo "`pwd`/doxygen-1.9.1/bin" >> $GITHUB_PATH
     - run: cd crates/c-api && doxygen doxygen.conf
