@@ -188,6 +188,7 @@ fn many_live_refs() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
 fn drop_externref_via_table_set() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         r#"
@@ -284,6 +285,7 @@ fn global_drops_externref() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
 fn table_drops_externref() -> anyhow::Result<()> {
     test_engine(&Engine::default())?;
     test_engine(&Engine::new(Config::new().allocation_strategy(
@@ -335,6 +337,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
 fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(true);
