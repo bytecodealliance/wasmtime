@@ -8,6 +8,8 @@ use wasi_common::{
 };
 use wasi_tokio::{clocks_ctx, sched::poll_oneoff, Dir};
 
+const TIMEOUT: Duration = Duration::from_millis(20); // Required for slow execution in CI
+
 #[tokio::test(flavor = "multi_thread")]
 async fn empty_file_readable() -> Result<(), Error> {
     let clocks = clocks_ctx();
@@ -40,7 +42,7 @@ async fn empty_file_readable() -> Result<(), Error> {
         clocks
             .monotonic
             .now(clocks.monotonic.resolution())
-            .checked_add(Duration::from_millis(10))
+            .checked_add(TIMEOUT)
             .unwrap(),
         clocks.monotonic.resolution(),
         Userdata::from(0),
@@ -82,7 +84,7 @@ async fn empty_file_writable() -> Result<(), Error> {
         clocks
             .monotonic
             .now(clocks.monotonic.resolution())
-            .checked_add(Duration::from_millis(10))
+            .checked_add(TIMEOUT)
             .unwrap(),
         clocks.monotonic.resolution(),
         Userdata::from(0),
@@ -109,7 +111,7 @@ async fn stdio_readable() -> Result<(), Error> {
     let deadline = clocks
         .monotonic
         .now(clocks.monotonic.resolution())
-        .checked_add(Duration::from_millis(10))
+        .checked_add(TIMEOUT)
         .unwrap();
 
     let mut waiting_on: HashMap<u64, Box<dyn WasiFile>> = vec![

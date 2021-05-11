@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use wasi_tests::{assert_errno, STDERR_FD, STDIN_FD, STDOUT_FD};
 
+const TIMEOUT: u64 = 20_000_000u64; // 20 milliseconds, required to satisfy slow execution in CI
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
 const STDIN_ID: wasi::Userdata = 0x8765_43210;
 
@@ -18,7 +19,7 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Even
 unsafe fn test_stdin_read() {
     let clock = wasi::SubscriptionClock {
         id: wasi::CLOCKID_MONOTONIC,
-        timeout: 5_000_000u64, // 5 milliseconds
+        timeout: TIMEOUT,
         precision: 0,
         flags: 0,
     };
@@ -95,7 +96,7 @@ unsafe fn test_stdout_stderr_write() {
             u: wasi::SubscriptionUU {
                 clock: wasi::SubscriptionClock {
                     id: wasi::CLOCKID_MONOTONIC,
-                    timeout: 10_000_000u64, // 10 milliseconds
+                    timeout: TIMEOUT,
                     precision: 0,
                     flags: 0,
                 },
