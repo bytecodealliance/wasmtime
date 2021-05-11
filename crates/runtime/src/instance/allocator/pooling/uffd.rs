@@ -436,7 +436,6 @@ mod test {
         Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
         PoolingAllocationStrategy, VMSharedSignatureIndex,
     };
-    use std::ptr;
     use std::sync::Arc;
     use wasmtime_environ::{entity::PrimaryMap, wasm::Memory, MemoryPlan, MemoryStyle, Module};
 
