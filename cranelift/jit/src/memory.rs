@@ -42,20 +42,15 @@ impl PtrLen {
     fn with_size(size: usize) -> io::Result<Self> {
         let page_size = region::page::size();
         let alloc_size = round_up_to_page_size(size, page_size);
-        let map = MmapMut::map_anon(alloc_size);
-
-        match map {
-            Ok(mut map) => {
-                // The order here is important; we assign the pointer first to get
-                // around compile time borrow errors.
-                Ok(Self {
-                    ptr: map.as_mut_ptr(),
-                    map: Some(map),
-                    len: alloc_size,
-                })
-            }
-            Err(e) => Err(e),
-        }
+        MmapMut::map_anon(alloc_size).map(|mut mmap| {
+            // The order here is important; we assign the pointer first to get
+            // around compile time borrow errors.
+            Ok(Self {
+                ptr: mmap.as_mut_ptr(),
+                map: Some(mmap),
+                len: alloc_size,
+            })
+        })
     }
 
     #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
