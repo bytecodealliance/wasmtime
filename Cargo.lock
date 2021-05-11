@@ -3599,6 +3599,7 @@ name = "wasmtime-cli"
 version = "0.26.0"
 dependencies = [
  "anyhow",
+ "criterion",
  "env_logger 0.8.3",
  "file-per-thread-logger",
  "filecheck",
@@ -3607,6 +3608,7 @@ dependencies = [
  "libc",
  "log",
  "more-asserts",
+ "num_cpus",
  "object",
  "pretty_env_logger",
  "rayon",

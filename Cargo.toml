@@ -41,7 +41,7 @@ file-per-thread-logger = "0.1.1"
 wat = "1.0.37"
 libc = "0.2.60"
 log = "0.4.8"
-rayon = "1.2.1"
+rayon = "1.5.0"
 humantime = "2.0.0"
 wasmparser = "0.77.0"
 lazy_static = "1.4.0"
@@ -57,6 +57,8 @@ wasmtime-runtime = { path = "crates/runtime" }
 tokio = { version = "1.5.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.2.16"
 wast = "35.0.0"
+criterion = "0.3.4"
+num_cpus = "1.13.0"
 
 [build-dependencies]
 anyhow = "1.0.19"
@@ -116,3 +118,7 @@ required-features = ["wasmtime-wasi/tokio"]
 
 [profile.dev.package.backtrace]
 debug = false # FIXME(#1813)
+
+[[bench]]
+name = "instantiation"
+harness = false

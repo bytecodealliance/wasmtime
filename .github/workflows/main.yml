@@ -363,6 +363,19 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
+  bench:
+    name: Run benchmarks
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - run: rustup target add wasm32-wasi
+    - name: Install Rust
+      run: rustup update stable && rustup default stable
+    - run: cargo bench
+    - run: cargo bench --features uffd
+
   # Verify that cranelift's code generation is deterministic
   meta_determinist_check:
     name: Meta deterministic check
