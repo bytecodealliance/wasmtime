@@ -40,19 +40,6 @@ block0(v0: i32, v1: i32):
 ; nextln: pop {fp, lr}
 ; nextln: bx lr
 
-function %sadd_sat(i32, i32) -> i32 {
-block0(v0: i32, v1: i32):
-    v2 = sadd_sat v0, v1
-    return v2
-}
-
-; check: push {fp, lr}
-; nextln: mov fp, sp
-; nextln: qadd r0, r0, r1
-; nextln: mov sp, fp
-; nextln: pop {fp, lr}
-; nextln: bx lr
-
 function %isub(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
     v2 = isub v0, v1
@@ -62,19 +49,6 @@ block0(v0: i32, v1: i32):
 ; check: push {fp, lr}
 ; nextln: mov fp, sp
 ; nextln: sub r0, r0, r1
-; nextln: mov sp, fp
-; nextln: pop {fp, lr}
-; nextln: bx lr
-
-function %ssub_sat(i32, i32) -> i32 {
-block0(v0: i32, v1: i32):
-    v2 = ssub_sat v0, v1
-    return v2
-}
-
-; check: push {fp, lr}
-; nextln: mov fp, sp
-; nextln: qsub r0, r0, r1
 ; nextln: mov sp, fp
 ; nextln: pop {fp, lr}
 ; nextln: bx lr
