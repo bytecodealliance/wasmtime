@@ -93,6 +93,9 @@ jobs:
     name: Doc - build the C API documentation
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
     - run: curl -L https://doxygen.nl/files/doxygen-1.9.1.linux.bin.tar.gz | tar xzf -
     - run: echo "`pwd`/doxygen-1.9.1/bin" >> $GITHUB_PATH
     - run: cd crates/c-api && doxygen doxygen.conf
