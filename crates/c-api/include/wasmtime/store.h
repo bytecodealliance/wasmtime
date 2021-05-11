@@ -8,6 +8,7 @@
 #define WASMTIME_STORE_H
 
 #include <wasm.h>
+#include <wasi.h>
 #include <wasmtime/error.h>
 
 #ifdef __cplusplus
@@ -89,9 +90,6 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *
  * #wasmtime_context_add_fuel.
  */
 WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *context, uint64_t *fuel);
-
-/// TODO
-typedef struct wasi_config_t wasi_config_t;
 
 /// TODO
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
