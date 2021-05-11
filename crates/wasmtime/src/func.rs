@@ -47,11 +47,11 @@ use wasmtime_runtime::{
 /// might have an `async` function in Rust, however, which you'd like to make
 /// available from WebAssembly. Wasmtime supports asynchronously calling
 /// WebAssembly through native stack switching. You can get some more
-/// information about [asynchronous configs](Config::async_support), but from the
-/// perspective of `Func` it's important to know that whether or not your
-/// [`Store`] is asynchronous will dictate whether you call functions through
-/// [`Func::call`] or [`Func::call_async`] (or the typed wrappers such as
-/// [`TypedFunc::call`] vs [`TypedFunc::call_async`]).
+/// information about [asynchronous configs](crate::Config::async_support), but
+/// from the perspective of `Func` it's important to know that whether or not
+/// your [`Store`](crate::Store) is asynchronous will dictate whether you call
+/// functions through [`Func::call`] or [`Func::call_async`] (or the typed
+/// wrappers such as [`TypedFunc::call`] vs [`TypedFunc::call_async`]).
 ///
 /// Note that asynchronous function APIs here are a bit trickier than their
 /// synchronous brethren. For example [`Func::new_async`] and
@@ -337,7 +337,7 @@ impl Func {
     /// # Panics
     ///
     /// This function will panic if `store` is not associated with an [async
-    /// config](Config::async_support).
+    /// config](crate::Config::async_support).
     ///
     /// # Examples
     ///
@@ -670,7 +670,7 @@ impl Func {
     ///
     /// This function is the same as [`Func::call`] except that it is
     /// asynchronous. This is only compatible with stores associated with an
-    /// [asynchronous config](Config::async_support).
+    /// [asynchronous config](crate::Config::async_support).
     ///
     /// It's important to note that the execution of WebAssembly will happen
     /// synchronously in the `poll` method of the future returned from this
@@ -680,7 +680,7 @@ impl Func {
     /// in a "blocking context".
     ///
     /// For more information see the documentation on [asynchronous
-    /// configs](Config::async_support).
+    /// configs](crate::Config::async_support).
     ///
     /// # Panics
     ///
@@ -1395,7 +1395,7 @@ macro_rules! impl_host_abi {
 for_each_function_signature!(impl_host_abi);
 
 /// Internal trait implemented for all arguments that can be passed to
-/// [`Func::wrap`] and [`Config::wrap_host_func`](crate::Config::wrap_host_func).
+/// [`Func::wrap`] and [`Linker::func_wrap`](crate::Linker::func_wrap).
 ///
 /// This trait should not be implemented by external users, it's only intended
 /// as an implementation detail of this crate.
@@ -1488,14 +1488,14 @@ impl<T> Caller<'_, T> {
 
     /// Access the underlying data owned by this `Store`.
     ///
-    /// Same as [`Store::data`].
+    /// Same as [`Store::data`](crate::Store::data)
     pub fn data(&self) -> &T {
         self.store.data()
     }
 
     /// Access the underlying data owned by this `Store`.
     ///
-    /// Same as [`Store::data_mut`].
+    /// Same as [`Store::data_mut`](crate::Store::data_mut)
     pub fn data_mut(&mut self) -> &mut T {
         self.store.data_mut()
     }
@@ -1507,35 +1507,37 @@ impl<T> Caller<'_, T> {
 
     /// Returns an [`InterruptHandle`] to interrupt wasm execution.
     ///
-    /// See [`Store::interrupt_handle`] for more information.
+    /// See [`Store::interrupt_handle`](crate::Store::interrupt_handle) for more
+    /// information.
     pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
         self.store.interrupt_handle()
     }
 
     /// Perform garbage collection of `ExternRef`s.
     ///
-    /// Same as [`Store::gc`].
+    /// Same as [`Store::gc`](crate::Store::gc).
     pub fn gc(&mut self) {
         self.store.gc()
     }
 
     /// Returns the fuel consumed by this store.
     ///
-    /// For more information see [`Store::fuel_consumed`].
+    /// For more information see [`Store::fuel_consumed`](crate::Store::fuel_consumed)
     pub fn fuel_consumed(&self) -> Option<u64> {
         self.store.fuel_consumed()
     }
 
     /// Inject more fuel into this store to be consumed when executing wasm code.
     ///
-    /// For more information see [`Store::add_fuel`]
+    /// For more information see [`Store::add_fuel`](crate::Store::add_fuel)
     pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
         self.store.add_fuel(fuel)
     }
 
     /// Configures this `Store` to trap whenever fuel runs out.
     ///
-    /// For more information see [`Store::out_of_fuel_trap`]
+    /// For more information see
+    /// [`Store::out_of_fuel_trap`](crate::Store::out_of_fuel_trap)
     pub fn out_of_fuel_trap(&mut self) {
         self.store.out_of_fuel_trap()
     }
@@ -1543,7 +1545,8 @@ impl<T> Caller<'_, T> {
     /// Configures this `Store` to yield while executing futures whenever fuel
     /// runs out.
     ///
-    /// For more information see [`Store::out_of_fuel_async_yield`]
+    /// For more information see
+    /// [`Store::out_of_fuel_async_yield`](crate::Store::out_of_fuel_async_yield)
     pub fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
         self.store
             .out_of_fuel_async_yield(injection_count, fuel_to_inject)

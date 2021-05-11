@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/linker.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_LINKER_H
 #define WASMTIME_LINKER_H
 
@@ -34,6 +40,7 @@ typedef struct wasmtime_linker wasmtime_linker_t;
  */
 WASM_API_EXTERN wasmtime_linker_t* wasmtime_linker_new(wasm_engine_t* engine);
 
+/// TODO
 WASM_API_EXTERN void wasmtime_linker_delete(wasmtime_linker_t* linker);
 
 /**
@@ -49,7 +56,9 @@ WASM_API_EXTERN void wasmtime_linker_allow_shadowing(wasmtime_linker_t* linker, 
  *
  * \param linker the linker the name is being defined in.
  * \param module the module name the item is defined under.
+ * \param module_len the byte length of `module`
  * \param name the field name the item is defined under
+ * \param name_len the byte length of `name`
  * \param item the item that is being defined in this linker.
  *
  * \return On success `NULL` is returned, otherwise an error is returned which
@@ -71,7 +80,6 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define(
  * \brief Defines a WASI instance in this linker.
  *
  * \param linker the linker the name is being defined in.
- * \param instance a previously-created WASI instance.
  *
  * \return On success `NULL` is returned, otherwise an error is returned which
  * describes why the definition failed.
@@ -87,7 +95,9 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_wasi(
  * \brief Defines an instance under the specified name in this linker.
  *
  * \param linker the linker the name is being defined in.
+ * \param store TODO
  * \param name the module name to define `instance` under.
+ * \param name_len the byte length of `name`
  * \param instance a previously-created instance.
  *
  * \return On success `NULL` is returned, otherwise an error is returned which
@@ -112,6 +122,7 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_instance(
  * \brief Instantiates a #wasm_module_t with the items defined in this linker.
  *
  * \param linker the linker used to instantiate the provided module.
+ * \param store TODO
  * \param module the module that is being instantiated.
  * \param instance the returned instance, if successful.
  * \param trap a trap returned, if the start function traps.
@@ -141,7 +152,9 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_instantiate(
  * \brief Defines automatic instantiations of a #wasm_module_t in this linker.
  *
  * \param linker the linker the module is being added to
+ * \param store TODO
  * \param name the name of the module within the linker
+ * \param name_len TODO
  * \param module the module that's being instantiated
  *
  * \return An error if the module could not be instantiated or added or `NULL`
@@ -166,7 +179,9 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_module(
  * \brief Acquires the "default export" of the named module in this linker.
  *
  * \param linker the linker to load from
+ * \param store TODO
  * \param name the name of the module to get the default export for
+ * \param name_len TODO
  * \param func where to store the extracted default function.
  *
  * \return An error is returned if the default export could not be found, or
@@ -187,8 +202,11 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_get_default(
  * \brief Loads an item by name from this linker.
  *
  * \param linker the linker to load from
+ * \param store TODO
  * \param module the name of the module to get
+ * \param module_len TODO
  * \param name the name of the field to get
+ * \param name_len TODO
  * \param item where to store the extracted item
  *
  * \return An error is returned if the item isn't defined or has more than one

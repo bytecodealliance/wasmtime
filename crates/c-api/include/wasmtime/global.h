@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/global.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_GLOBAL_H
 #define WASMTIME_GLOBAL_H
 
@@ -30,11 +36,13 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_global_new(
     wasmtime_global_t *ret
 );
 
+/// TODO
 WASM_API_EXTERN wasm_globaltype_t* wasmtime_global_type(
     const wasmtime_context_t *store,
     wasmtime_global_t global
 );
 
+/// TODO
 WASM_API_EXTERN void wasmtime_global_get(
     wasmtime_context_t *store,
     wasmtime_global_t global,

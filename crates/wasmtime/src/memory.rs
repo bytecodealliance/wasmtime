@@ -372,13 +372,6 @@ impl Memory {
     /// is located at.
     ///
     /// TODO
-    ///
-    /// When reading and manipulating memory be sure to read up on the caveats
-    /// of [`Memory::data_unchecked`] to make sure that you can safely
-    /// read/write the memory.
-    ///
-    /// For more information and examples see the documentation on the
-    /// [`Memory`] type.
     pub fn data_ptr(&self, store: impl AsContext) -> *mut u8 {
         unsafe { (*store.as_context()[self.0].definition).base }
     }

@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/instance.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_INSTANCE_H
 #define WASMTIME_INSTANCE_H
 
@@ -71,11 +77,13 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_new(
     wasm_trap_t **trap
 );
 
+/// TODO
 WASM_API_EXTERN wasmtime_instancetype_t *wasmtime_instance_type(
     const wasmtime_context_t *store,
     wasmtime_instance_t instance
 );
 
+/// TODO
 WASM_API_EXTERN bool wasmtime_instance_export_get(
     wasmtime_context_t *store,
     wasmtime_instance_t instance,
@@ -84,6 +92,7 @@ WASM_API_EXTERN bool wasmtime_instance_export_get(
     wasmtime_extern_t *item
 );
 
+/// TODO
 WASM_API_EXTERN bool wasmtime_instance_export_nth(
     wasmtime_context_t *store,
     wasmtime_instance_t instance,

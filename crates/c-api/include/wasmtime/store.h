@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/store.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_STORE_H
 #define WASMTIME_STORE_H
 
@@ -19,22 +25,28 @@ extern "C" {
  */
 typedef struct wasmtime_store wasmtime_store_t;
 
+/// TODO
 typedef struct wasmtime_context wasmtime_context_t;
 
+/// TODO
 WASM_API_EXTERN wasmtime_store_t *wasmtime_store_new(
     wasm_engine_t *engine,
     void *data,
     void(*finalizer)(void*)
 );
 
+/// TODO
 WASM_API_EXTERN wasmtime_context_t *wasmtime_store_context(wasmtime_store_t *store);
 
-/*
+/**
  * \brief Deletes a store.
  */
 WASM_API_EXTERN void wasmtime_store_delete(wasmtime_store_t *store);
 
+/// TODO
 WASM_API_EXTERN void *wasmtime_context_get_data(const wasmtime_context_t* context);
+
+/// TODO
 WASM_API_EXTERN void wasmtime_context_set_data(wasmtime_context_t* context, void *data);
 
 /**
@@ -74,12 +86,14 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *
  * fuel parameter is filled in with fuel consuemd so far.
  *
  * Also note that fuel, if enabled, must be originally configured via
- * #wasmtime_store_add_fuel.
+ * #wasmtime_context_add_fuel.
  */
 WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *context, uint64_t *fuel);
 
+/// TODO
 typedef struct wasi_config_t wasi_config_t;
 
+/// TODO
 WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 
 /**
@@ -120,7 +134,7 @@ WASM_API_EXTERN wasmtime_interrupt_handle_t *wasmtime_interrupt_handle_new(wasmt
  */
 WASM_API_EXTERN void wasmtime_interrupt_handle_interrupt(wasmtime_interrupt_handle_t *handle);
 
-/*
+/**
  * \brief Deletes an interrupt handle.
  */
 WASM_API_EXTERN void wasmtime_interrupt_handle_delete(wasmtime_interrupt_handle_t *handle);

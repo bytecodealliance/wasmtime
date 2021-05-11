@@ -92,12 +92,9 @@ jobs:
   doc_capi:
     name: Doc - build the C API documentation
     runs-on: ubuntu-latest
-    container: ubuntu:20.04
     steps:
-    - run: apt-get update && apt-get install -y doxygen git
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
+    - run: curl -L https://doxygen.nl/files/doxygen-1.9.1.linux.bin.tar.gz | tar xzf -
+    - run: echo "`pwd`/doxygen-1.9.1/bin" >> $GITHUB_PATH
     - run: cd crates/c-api && doxygen doxygen.conf
     - uses: actions/upload-artifact@v1
       with:

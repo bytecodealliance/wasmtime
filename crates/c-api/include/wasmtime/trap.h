@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/trap.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_TRAP_H
 #define WASMTIME_TRAP_H
 
@@ -7,6 +13,7 @@
 extern "C" {
 #endif
 
+/// TODO
 WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(char *msg);
 
 /**

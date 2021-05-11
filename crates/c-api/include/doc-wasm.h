@@ -217,14 +217,14 @@
  * at
  * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html.
  *
- * \fn own wasm_config_t *wasm_config_new(void);
+ * \fn wasm_config_t *wasm_config_new(void);
  * \brief Creates a new empty configuration object.
  *
  * The object returned is owned by the caller and will need to be deleted with
  * #wasm_config_delete. May return `NULL` if a configuration object could not be
  * allocated.
  *
- * \fn void wasm_config_delete(own wasm_config_t*);
+ * \fn void wasm_config_delete(wasm_config_t*);
  * \brief Deletes a configuration object.
  */
 
@@ -244,14 +244,14 @@
  * within the same engine with each store living on a separate thread. Typically
  * you'll create one #wasm_engine_t for the lifetime of your program.
  *
- * \fn own wasm_engine_t *wasm_engine_new(void);
+ * \fn wasm_engine_t *wasm_engine_new(void);
  * \brief Creates a new engine with the default configuration.
  *
  * The object returned is owned by the caller and will need to be deleted with
  * #wasm_engine_delete. This may return `NULL` if the engine could not be
  * allocated.
  *
- * \fn own wasm_engine_t *wasm_engine_new_with_config(wasm_config_t *);
+ * \fn wasm_engine_t *wasm_engine_new_with_config(wasm_config_t *);
  * \brief Creates a new engine with the specified configuration.
  *
  * This function will take ownership of the configuration specified regardless
@@ -260,7 +260,7 @@
  * be deleted with #wasm_engine_delete. This may return `NULL` if the engine
  * could not be allocated.
  *
- * \fn void wasm_engine_delete(own wasm_engine_t*);
+ * \fn void wasm_engine_delete(wasm_engine_t*);
  * \brief Deletes an engine.
  */
 
@@ -274,14 +274,14 @@
  * A #wasm_store_t corresponds to the concept of an [embedding
  * store](https://webassembly.github.io/spec/core/exec/runtime.html#store)
  *
- * \fn own wasm_store_t *wasm_store_new(wasm_engine_t *);
+ * \fn wasm_store_t *wasm_store_new(wasm_engine_t *);
  * \brief Creates a new store within the specified engine.
  *
  * The object returned is owned by the caller and will need to be deleted with
  * #wasm_store_delete. This may return `NULL` if the store could not be
  * allocated.
  *
- * \fn void wasm_store_delete(own wasm_store_t *);
+ * \fn void wasm_store_delete(wasm_store_t *);
  * \brief Deletes the specified store.
  */
 
@@ -316,10 +316,10 @@
  *
  * \fn wasm_name_new_new_uninitialized
  * \brief Convenience alias
- * 
+ *
  * \fn wasm_name_new_from_string
  * \brief Create a new name from a C string.
- * 
+ *
  * \fn wasm_name_new_from_string_nt
  * \brief Create a new name from a C string with null terminator.
  *
@@ -329,10 +329,10 @@
  * \fn wasm_name_delete
  * \brief Convenience alias
  *
- * \fn void wasm_byte_vec_new_empty(own wasm_byte_vec_t *out);
+ * \fn void wasm_byte_vec_new_empty(wasm_byte_vec_t *out);
  * \brief Initializes an empty byte vector.
  *
- * \fn void wasm_byte_vec_new_uninitialized(own wasm_byte_vec_t *out, size_t);
+ * \fn void wasm_byte_vec_new_uninitialized(wasm_byte_vec_t *out, size_t);
  * \brief Initializes an byte vector with the specified capacity.
  *
  * This function will initialize the provided vector with capacity to hold the
@@ -340,7 +340,7 @@
  * initialized and after this function is called you are then responsible for
  * ensuring #wasm_byte_vec_delete is called.
  *
- * \fn void wasm_byte_vec_new(own wasm_byte_vec_t *out, size_t, own wasm_byte_t const[]);
+ * \fn void wasm_byte_vec_new(wasm_byte_vec_t *out, size_t, wasm_byte_t const[]);
  * \brief Copies the specified data into a new byte vector.
  *
  * This function will copy the provided data into this byte vector. The byte
@@ -351,14 +351,14 @@
  * must be managed externally. This function will copy the contents to the
  * output vector, but it's up to the caller to properly deallocate the memory.
  *
- * \fn void wasm_byte_vec_copy(own wasm_byte_vec_t *out, const wasm_byte_vec_t *);
+ * \fn void wasm_byte_vec_copy(wasm_byte_vec_t *out, const wasm_byte_vec_t *);
  * \brief Copies one vector into a new vector.
  *
  * Copies the second argument's data into the first argument. The `out` vector
  * should not be previously initialized and after this function returns you're
  * responsible for calling #wasm_byte_vec_delete.
  *
- * \fn void wasm_byte_vec_delete(own wasm_byte_vec_t *);
+ * \fn void wasm_byte_vec_delete(wasm_byte_vec_t *);
  * \brief Deletes a byte vector.
  *
  * This function will deallocate the data referenced by the argument provided.
@@ -385,40 +385,40 @@
  * \typedef wasm_valtype_vec_t
  * \brief Convenience alias for #wasm_valtype_vec_t
  *
- * \fn void wasm_valtype_delete(own wasm_valtype_t *);
+ * \fn void wasm_valtype_delete(wasm_valtype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_valtype_vec_new_empty(own wasm_valtype_vec_t *out);
+ * \fn void wasm_valtype_vec_new_empty(wasm_valtype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_valtype_vec_new_uninitialized(own wasm_valtype_vec_t *out, size_t);
+ * \fn void wasm_valtype_vec_new_uninitialized(wasm_valtype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_valtype_vec_new(own wasm_valtype_vec_t *out, size_t, own wasm_valtype_t *const[]);
+ * \fn void wasm_valtype_vec_new(wasm_valtype_vec_t *out, size_t, wasm_valtype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_valtype_vec_copy(own wasm_valtype_vec_t *out, const wasm_valtype_vec_t *)
+ * \fn void wasm_valtype_vec_copy(wasm_valtype_vec_t *out, const wasm_valtype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_valtype_vec_delete(own wasm_valtype_vec_t *out)
+ * \fn void wasm_valtype_vec_delete(wasm_valtype_vec_t *out)
  * \brief Deallocates memory for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_valtype_t* wasm_valtype_copy(const wasm_valtype_t *)
+ * \fn wasm_valtype_t* wasm_valtype_copy(const wasm_valtype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn own wasm_valtype_t* wasm_valtype_new(wasm_valkind_t);
+ * \fn wasm_valtype_t* wasm_valtype_new(wasm_valkind_t);
  * \brief Creates a new value type from the specified kind.
  *
  * The caller is responsible for deleting the returned value.
@@ -429,10 +429,6 @@
 
 /**
  * \typedef wasm_valkind_t
- * \brief Indicator for the kind of a type, with values defined by
- * #wasm_valkind_enum
- *
- * \enum wasm_valkind_enum
  * \brief Different kinds of types supported in wasm.
  */
 
@@ -455,40 +451,40 @@
  * \typedef wasm_functype_vec_t
  * \brief Convenience alias for #wasm_functype_vec_t
  *
- * \fn void wasm_functype_delete(own wasm_functype_t *);
+ * \fn void wasm_functype_delete(wasm_functype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_functype_vec_new_empty(own wasm_functype_vec_t *out);
+ * \fn void wasm_functype_vec_new_empty(wasm_functype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_functype_vec_new_uninitialized(own wasm_functype_vec_t *out, size_t);
+ * \fn void wasm_functype_vec_new_uninitialized(wasm_functype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_functype_vec_new(own wasm_functype_vec_t *out, size_t, own wasm_functype_t *const[]);
+ * \fn void wasm_functype_vec_new(wasm_functype_vec_t *out, size_t, wasm_functype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_functype_vec_copy(own wasm_functype_vec_t *out, const wasm_functype_vec_t *)
+ * \fn void wasm_functype_vec_copy(wasm_functype_vec_t *out, const wasm_functype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_functype_vec_delete(own wasm_functype_vec_t *out)
+ * \fn void wasm_functype_vec_delete(wasm_functype_vec_t *out)
  * \brief Deallocates memory for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_functype_t* wasm_functype_copy(const wasm_functype_t *)
+ * \fn wasm_functype_t* wasm_functype_copy(const wasm_functype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn own wasm_functype_t* wasm_functype_new(wasm_valtype_vec_t *params, wasm_valtype_vec_t *results);
+ * \fn wasm_functype_t* wasm_functype_new(wasm_valtype_vec_t *params, wasm_valtype_vec_t *results);
  * \brief Creates a new function type with the provided parameter and result
  * types.
  *
@@ -526,40 +522,40 @@
  * \typedef wasm_globaltype_vec_t
  * \brief Convenience alias for #wasm_globaltype_vec_t
  *
- * \fn void wasm_globaltype_delete(own wasm_globaltype_t *);
+ * \fn void wasm_globaltype_delete(wasm_globaltype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_globaltype_vec_new_empty(own wasm_globaltype_vec_t *out);
+ * \fn void wasm_globaltype_vec_new_empty(wasm_globaltype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_globaltype_vec_new_uninitialized(own wasm_globaltype_vec_t *out, size_t);
+ * \fn void wasm_globaltype_vec_new_uninitialized(wasm_globaltype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_globaltype_vec_new(own wasm_globaltype_vec_t *out, size_t, own wasm_globaltype_t *const[]);
+ * \fn void wasm_globaltype_vec_new(wasm_globaltype_vec_t *out, size_t, wasm_globaltype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_globaltype_vec_copy(own wasm_globaltype_vec_t *out, const wasm_globaltype_vec_t *)
+ * \fn void wasm_globaltype_vec_copy(wasm_globaltype_vec_t *out, const wasm_globaltype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_globaltype_vec_delete(own wasm_globaltype_vec_t *out)
+ * \fn void wasm_globaltype_vec_delete(wasm_globaltype_vec_t *out)
  * \brief Deallocates memory for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_globaltype_t* wasm_globaltype_copy(const wasm_globaltype_t *)
+ * \fn wasm_globaltype_t* wasm_globaltype_copy(const wasm_globaltype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn own wasm_globaltype_t* wasm_globaltype_new(wasm_valtype_t *, wasm_mutability_t)
+ * \fn wasm_globaltype_t* wasm_globaltype_new(wasm_valtype_t *, wasm_mutability_t)
  * \brief Creates a new global type.
  *
  * This function takes ownership of the #wasm_valtype_t argument.
@@ -578,9 +574,6 @@
 
 /**
  * \typedef wasm_mutability_t
- * \brief Typedef for the #wasm_mutability_enum values.
- *
- * \enum wasm_mutability_enum
  * \brief Boolean flag for whether a global is mutable or not.
  */
 
@@ -603,40 +596,40 @@
  * \typedef wasm_tabletype_vec_t
  * \brief Convenience alias for #wasm_tabletype_vec_t
  *
- * \fn void wasm_tabletype_delete(own wasm_tabletype_t *);
+ * \fn void wasm_tabletype_delete(wasm_tabletype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_tabletype_vec_new_empty(own wasm_tabletype_vec_t *out);
+ * \fn void wasm_tabletype_vec_new_empty(wasm_tabletype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_tabletype_vec_new_uninitialized(own wasm_tabletype_vec_t *out, size_t);
+ * \fn void wasm_tabletype_vec_new_uninitialized(wasm_tabletype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_tabletype_vec_new(own wasm_tabletype_vec_t *out, size_t, own wasm_tabletype_t *const[]);
+ * \fn void wasm_tabletype_vec_new(wasm_tabletype_vec_t *out, size_t, wasm_tabletype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_tabletype_vec_copy(own wasm_tabletype_vec_t *out, const wasm_tabletype_vec_t *)
+ * \fn void wasm_tabletype_vec_copy(wasm_tabletype_vec_t *out, const wasm_tabletype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_tabletype_vec_delete(own wasm_tabletype_vec_t *out)
+ * \fn void wasm_tabletype_vec_delete(wasm_tabletype_vec_t *out)
  * \brief Deallocates memory for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_tabletype_t* wasm_tabletype_copy(const wasm_tabletype_t *)
+ * \fn wasm_tabletype_t* wasm_tabletype_copy(const wasm_tabletype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn own wasm_tabletype_t* wasm_tabletype_new(wasm_valtype_t *, const wasm_limits_t *)h
+ * \fn wasm_tabletype_t* wasm_tabletype_new(wasm_valtype_t *, const wasm_limits_t *)h
  * \brief Creates a new table type.
  *
  * This function takes ownership of the #wasm_valtype_t argument, but does not
@@ -689,40 +682,40 @@
  * \typedef wasm_memorytype_vec_t
  * \brief Convenience alias for #wasm_memorytype_vec_t
  *
- * \fn void wasm_memorytype_delete(own wasm_memorytype_t *);
+ * \fn void wasm_memorytype_delete(wasm_memorytype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_memorytype_vec_new_empty(own wasm_memorytype_vec_t *out);
+ * \fn void wasm_memorytype_vec_new_empty(wasm_memorytype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_memorytype_vec_new_uninitialized(own wasm_memorytype_vec_t *out, size_t);
+ * \fn void wasm_memorytype_vec_new_uninitialized(wasm_memorytype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_memorytype_vec_new(own wasm_memorytype_vec_t *out, size_t, own wasm_memorytype_t *const[]);
+ * \fn void wasm_memorytype_vec_new(wasm_memorytype_vec_t *out, size_t, wasm_memorytype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_memorytype_vec_copy(own wasm_memorytype_vec_t *out, const wasm_memorytype_vec_t *)
+ * \fn void wasm_memorytype_vec_copy(wasm_memorytype_vec_t *out, const wasm_memorytype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_memorytype_vec_delete(own wasm_memorytype_vec_t *out)
+ * \fn void wasm_memorytype_vec_delete(wasm_memorytype_vec_t *out)
  * \brief Deallocates memory for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_memorytype_t* wasm_memorytype_copy(const wasm_memorytype_t *)
+ * \fn wasm_memorytype_t* wasm_memorytype_copy(const wasm_memorytype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn own wasm_memorytype_t* wasm_memorytype_new(const wasm_limits_t *)h
+ * \fn wasm_memorytype_t* wasm_memorytype_new(const wasm_limits_t *)h
  * \brief Creates a new memory type.
  *
  * This function takes ownership of the #wasm_valtype_t argument, but does not
@@ -758,35 +751,35 @@
  * \typedef wasm_externtype_vec_t
  * \brief Convenience alias for #wasm_externtype_vec_t
  *
- * \fn void wasm_externtype_delete(own wasm_externtype_t *);
+ * \fn void wasm_externtype_delete(wasm_externtype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_externtype_vec_new_empty(own wasm_externtype_vec_t *out);
+ * \fn void wasm_externtype_vec_new_empty(wasm_externtype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_externtype_vec_new_uninitialized(own wasm_externtype_vec_t *out, size_t);
+ * \fn void wasm_externtype_vec_new_uninitialized(wasm_externtype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_externtype_vec_new(own wasm_externtype_vec_t *out, size_t, own wasm_externtype_t *const[]);
+ * \fn void wasm_externtype_vec_new(wasm_externtype_vec_t *out, size_t, wasm_externtype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_externtype_vec_copy(own wasm_externtype_vec_t *out, const wasm_externtype_vec_t *)
+ * \fn void wasm_externtype_vec_copy(wasm_externtype_vec_t *out, const wasm_externtype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_externtype_vec_delete(own wasm_externtype_vec_t *out)
+ * \fn void wasm_externtype_vec_delete(wasm_externtype_vec_t *out)
  * \brief Deallocates extern for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_externtype_t* wasm_externtype_copy(const wasm_externtype_t *)
+ * \fn wasm_externtype_t* wasm_externtype_copy(const wasm_externtype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
@@ -797,17 +790,10 @@
 
 /**
  * \typedef wasm_externkind_t
- * \brief Classifier for #wasm_externtype_t, defined by #wasm_externkind_enum
+ * \brief Classifier for #wasm_externtype_t
  *
  * This is returned from #wasm_extern_kind and #wasm_externtype_kind to
  * determine what kind of type is wrapped.
- *
- * \enum wasm_externkind_enum
- * \brief Kinds of external items for a wasm module.
- *
- * Note that this also includes #WASM_EXTERN_INSTANCE as well as
- * #WASM_EXTERN_MODULE and is intended to be used when #wasm_externkind_t is
- * used.
  */
 
 /**
@@ -935,40 +921,40 @@
  * \typedef wasm_importtype_vec_t
  * \brief Convenience alias for #wasm_importtype_vec_t
  *
- * \fn void wasm_importtype_delete(own wasm_importtype_t *);
+ * \fn void wasm_importtype_delete(wasm_importtype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_importtype_vec_new_empty(own wasm_importtype_vec_t *out);
+ * \fn void wasm_importtype_vec_new_empty(wasm_importtype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_importtype_vec_new_uninitialized(own wasm_importtype_vec_t *out, size_t);
+ * \fn void wasm_importtype_vec_new_uninitialized(wasm_importtype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_importtype_vec_new(own wasm_importtype_vec_t *out, size_t, own wasm_importtype_t *const[]);
+ * \fn void wasm_importtype_vec_new(wasm_importtype_vec_t *out, size_t, wasm_importtype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_importtype_vec_copy(own wasm_importtype_vec_t *out, const wasm_importtype_vec_t *)
+ * \fn void wasm_importtype_vec_copy(wasm_importtype_vec_t *out, const wasm_importtype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_importtype_vec_delete(own wasm_importtype_vec_t *out)
+ * \fn void wasm_importtype_vec_delete(wasm_importtype_vec_t *out)
  * \brief Deallocates import for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_importtype_t* wasm_importtype_copy(const wasm_importtype_t *)
+ * \fn wasm_importtype_t* wasm_importtype_copy(const wasm_importtype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn own wasm_importtype_t* wasm_importtype_new(wasm_name_t *module, wasm_name_t *name, wasm_externtype_t *)
+ * \fn wasm_importtype_t* wasm_importtype_new(wasm_name_t *module, wasm_name_t *name, wasm_externtype_t *)
  * \brief Creates a new import type.
  *
  * This function takes ownership of the `module`, `name`, and
@@ -1016,40 +1002,40 @@
  * \typedef wasm_exporttype_vec_t
  * \brief Convenience alias for #wasm_exporttype_vec_t
  *
- * \fn void wasm_exporttype_delete(own wasm_exporttype_t *);
+ * \fn void wasm_exporttype_delete(wasm_exporttype_t *);
  * \brief Deletes a type.
  *
- * \fn void wasm_exporttype_vec_new_empty(own wasm_exporttype_vec_t *out);
+ * \fn void wasm_exporttype_vec_new_empty(wasm_exporttype_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_exporttype_vec_new_uninitialized(own wasm_exporttype_vec_t *out, size_t);
+ * \fn void wasm_exporttype_vec_new_uninitialized(wasm_exporttype_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_exporttype_vec_new(own wasm_exporttype_vec_t *out, size_t, own wasm_exporttype_t *const[]);
+ * \fn void wasm_exporttype_vec_new(wasm_exporttype_vec_t *out, size_t, wasm_exporttype_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_exporttype_vec_copy(own wasm_exporttype_vec_t *out, const wasm_exporttype_vec_t *)
+ * \fn void wasm_exporttype_vec_copy(wasm_exporttype_vec_t *out, const wasm_exporttype_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_exporttype_vec_delete(own wasm_exporttype_vec_t *out)
+ * \fn void wasm_exporttype_vec_delete(wasm_exporttype_vec_t *out)
  * \brief Deallocates export for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_exporttype_t* wasm_exporttype_copy(const wasm_exporttype_t *)
+ * \fn wasm_exporttype_t* wasm_exporttype_copy(const wasm_exporttype_t *)
  * \brief Creates a new value which matches the provided one.
  *
  * The caller is responsible for deleting the returned value.
  *
- * \fn own wasm_exporttype_t* wasm_exporttype_new(wasm_name_t *name, wasm_externtype_t *)
+ * \fn wasm_exporttype_t* wasm_exporttype_new(wasm_name_t *name, wasm_externtype_t *)
  * \brief Creates a new export type.
  *
  * This function takes ownership of the `name` and
@@ -1127,27 +1113,27 @@
  * reside on the stack. Instead this only deletes the memory referenced by `v`,
  * such as the `ref` variant of #wasm_val_t.
  *
- * \fn void wasm_val_vec_new_empty(own wasm_val_vec_t *out);
+ * \fn void wasm_val_vec_new_empty(wasm_val_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_val_vec_new_uninitialized(own wasm_val_vec_t *out, size_t);
+ * \fn void wasm_val_vec_new_uninitialized(wasm_val_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_val_vec_new(own wasm_val_vec_t *out, size_t, own wasm_val_t const[]);
+ * \fn void wasm_val_vec_new(wasm_val_vec_t *out, size_t, wasm_val_t const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_val_vec_copy(own wasm_val_vec_t *out, const wasm_val_vec_t *)
+ * \fn void wasm_val_vec_copy(wasm_val_vec_t *out, const wasm_val_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_val_vec_delete(own wasm_val_vec_t *out)
+ * \fn void wasm_val_vec_delete(wasm_val_vec_t *out)
  * \brief Deallocates export for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
@@ -1168,10 +1154,10 @@
  * \typedef wasm_ref_t
  * \brief Convenience alias for #wasm_ref_t
  *
- * \fn void wasm_ref_delete(own wasm_ref_t *v);
+ * \fn void wasm_ref_delete(wasm_ref_t *v);
  * \brief Delete a reference.
  *
- * \fn own wasm_ref_t *wasm_ref_copy(const wasm_ref_t *)
+ * \fn wasm_ref_t *wasm_ref_copy(const wasm_ref_t *)
  * \brief Copy a reference.
  *
  * \fn bool wasm_ref_same(const wasm_ref_t *, const wasm_ref_t *)
@@ -1209,35 +1195,35 @@
  * \typedef wasm_frame_vec_t
  * \brief Convenience alias for #wasm_frame_vec_t
  *
- * \fn void wasm_frame_delete(own wasm_frame_t *v);
+ * \fn void wasm_frame_delete(wasm_frame_t *v);
  * \brief Deletes a frame.
  *
- * \fn void wasm_frame_vec_new_empty(own wasm_frame_vec_t *out);
+ * \fn void wasm_frame_vec_new_empty(wasm_frame_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_frame_vec_new_uninitialized(own wasm_frame_vec_t *out, size_t);
+ * \fn void wasm_frame_vec_new_uninitialized(wasm_frame_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_frame_vec_new(own wasm_frame_vec_t *out, size_t, own wasm_frame_t *const[]);
+ * \fn void wasm_frame_vec_new(wasm_frame_vec_t *out, size_t, wasm_frame_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_frame_vec_copy(own wasm_frame_vec_t *out, const wasm_frame_vec_t *)
+ * \fn void wasm_frame_vec_copy(wasm_frame_vec_t *out, const wasm_frame_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_frame_vec_delete(own wasm_frame_vec_t *out)
+ * \fn void wasm_frame_vec_delete(wasm_frame_vec_t *out)
  * \brief Deallocates export for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_frame_t *wasm_frame_copy(const wasm_frame_t *)
+ * \fn wasm_frame_t *wasm_frame_copy(const wasm_frame_t *)
  * \brief Copies a #wasm_frame_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_frame_t.
@@ -1265,10 +1251,10 @@
  * \typedef wasm_trap_t
  * \brief Convenience alias for #wasm_trap_t
  *
- * \fn void wasm_trap_delete(own wasm_trap_t *v);
+ * \fn void wasm_trap_delete(wasm_trap_t *v);
  * \brief Deletes a trap.
  *
- * \fn own wasm_trap_t *wasm_trap_copy(const wasm_trap_t *)
+ * \fn wasm_trap_t *wasm_trap_copy(const wasm_trap_t *)
  * \brief Copies a #wasm_trap_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_trap_t.
@@ -1317,7 +1303,7 @@
  * The caller takes ownership of the returned `out` value and is responsible for
  * calling #wasm_byte_vec_delete on it.
  *
- * \fn own wasm_frame_t* wasm_trap_origin(const wasm_trap_t *);
+ * \fn wasm_frame_t* wasm_trap_origin(const wasm_trap_t *);
  * \brief Returns the top frame of the wasm stack responsible for this trap.
  *
  * The caller is responsible for deallocating the returned frame. This function
@@ -1340,10 +1326,10 @@
  * \typedef wasm_foreign_t
  * \brief Convenience alias for #wasm_foreign_t
  *
- * \fn void wasm_foreign_delete(own wasm_foreign_t *v);
+ * \fn void wasm_foreign_delete(wasm_foreign_t *v);
  * \brief Unimplemented in Wasmtime, aborts the process if called
  *
- * \fn own wasm_foreign_t *wasm_foreign_copy(const wasm_foreign_t *)
+ * \fn wasm_foreign_t *wasm_foreign_copy(const wasm_foreign_t *)
  * \brief Unimplemented in Wasmtime, aborts the process if called
  *
  * \fn void wasm_foreign_same(const wasm_foreign_t *, const wasm_foreign_t *)
@@ -1392,10 +1378,10 @@
  * \typedef wasm_shared_module_t
  * \brief Convenience alias for #wasm_shared_module_t
  *
- * \fn void wasm_module_delete(own wasm_module_t *v);
+ * \fn void wasm_module_delete(wasm_module_t *v);
  * \brief Deletes a module.
  *
- * \fn own wasm_module_t *wasm_module_copy(const wasm_module_t *)
+ * \fn wasm_module_t *wasm_module_copy(const wasm_module_t *)
  * \brief Copies a #wasm_module_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_module_t.
@@ -1427,10 +1413,10 @@
  * \fn wasm_ref_as_module_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn void wasm_shared_module_delete(own wasm_shared_module_t *);
+ * \fn void wasm_shared_module_delete(wasm_shared_module_t *);
  * \brief Deletes the provided module.
  *
- * \fn own wasm_shared_module_t *wasm_module_share(const wasm_module_t *);
+ * \fn wasm_shared_module_t *wasm_module_share(const wasm_module_t *);
  * \brief Creates a shareable module from the provided module.
  *
  * > Note that this API is not necessary in Wasmtime because #wasm_module_t can
@@ -1439,7 +1425,7 @@
  * This function does not take ownership of the argument, but the caller is
  * expected to deallocate the returned #wasm_shared_module_t.
  *
- * \fn own wasm_module_t *wasm_module_obtain(wasm_store_t *, const wasm_shared_module_t *);
+ * \fn wasm_module_t *wasm_module_obtain(wasm_store_t *, const wasm_shared_module_t *);
  * \brief Attempts to create a #wasm_module_t from the shareable module.
  *
  * > Note that this API is not necessary in Wasmtime because #wasm_module_t can
@@ -1451,7 +1437,7 @@
  * This function may fail if the engines associated with the #wasm_store_t or
  * #wasm_shared_module_t are different.
  *
- * \fn own wasm_module_t *wasm_module_new(wasm_store_t *, const wasm_byte_vec_t *binary)
+ * \fn wasm_module_t *wasm_module_new(wasm_store_t *, const wasm_byte_vec_t *binary)
  * \brief Compiles a raw WebAssembly binary to a #wasm_module_t.
  *
  * This function will validate and compile the provided binary. The returned
@@ -1463,9 +1449,6 @@
  * This function may fail if the provided binary is not a WebAssembly binary or
  * if it does not pass validation. In these cases this function returns `NULL`.
  *
- * > Note: for a richer error message it's recommended to use
- * > #wasmtime_module_new.
- *
  * \fn bool wasm_module_validate(wasm_store_t *, const wasm_byte_vec_t *binary);
  * \brief Validates whether a provided byte sequence is a valid wasm binary.
  *
@@ -1473,15 +1456,12 @@
  * `binary` is a valid WebAssembly binary according to the configuration of the
  * #wasm_store_t provided.
  *
- * > Note: for a richer error message for invalid binaries you can use
- * #wasmtime_module_validate.
- *
  * \fn void wasm_module_imports(const wasm_module_t *, wasm_importtype_vec_t *out);
  * \brief Returns the list of imports that this module expects.
  *
  * The list of imports returned are the types of items expected to be passed to
- * #wasm_instance_new (or #wasmtime_instance_new). You can use
- * #wasm_importtype_type to learn about the expected type of each import.
+ * #wasm_instance_new. You can use #wasm_importtype_type to learn about the
+ * expected type of each import.
  *
  * This function does not take ownership of the provided module but ownership of
  * `out` is passed to the caller. Note that `out` is treated as uninitialized
@@ -1536,10 +1516,10 @@
  * #wasm_func_callback_t, except the first argument is the same `void*` argument
  * passed to #wasm_func_new_with_env.
  *
- * \fn void wasm_func_delete(own wasm_func_t *v);
+ * \fn void wasm_func_delete(wasm_func_t *v);
  * \brief Deletes a func.
  *
- * \fn own wasm_func_t *wasm_func_copy(const wasm_func_t *)
+ * \fn wasm_func_t *wasm_func_copy(const wasm_func_t *)
  * \brief Copies a #wasm_func_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_func_t.
@@ -1612,7 +1592,7 @@
  * \fn size_t wasm_func_result_arity(const wasm_func_t *);
  * \brief Returns the number of results returned by this function.
  *
-* \fn own wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
+* \fn wasm_trap_t *wasm_func_call(const wasm_func_t *, const wasm_val_vec_t *args, wasm_val_vec_t *results);
  * \brief Calls the provided function with the arguments given.
  *
  * This function is used to call WebAssembly from the host. The parameter array
@@ -1633,10 +1613,6 @@
  *
  * Does not take ownership of `wasm_val_t` arguments. Gives ownership of
  * `wasm_val_t` results.
- *
- * > Note: to avoid the UB associated with passing the wrong number of results
- * > or parameters by accident, or to distinguish between traps and other
- * > errors, it's recommended to use #wasmtime_func_call.
  */
 
 /**
@@ -1646,10 +1622,10 @@
  * \typedef wasm_global_t
  * \brief Convenience alias for #wasm_global_t
  *
- * \fn void wasm_global_delete(own wasm_global_t *v);
+ * \fn void wasm_global_delete(wasm_global_t *v);
  * \brief Deletes a global.
  *
- * \fn own wasm_global_t *wasm_global_copy(const wasm_global_t *)
+ * \fn wasm_global_t *wasm_global_copy(const wasm_global_t *)
  * \brief Copies a #wasm_global_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_global_t.
@@ -1693,9 +1669,6 @@
  * * The type of the global doesn't match the type of the value specified.
  * * The initialization value does not come from the provided #wasm_store_t.
  *
- * > Note: to get richer information on errors it's recommended to call
- * > #wasmtime_global_new.
- *
  * This function does not take ownership of any of its arguments. The caller is
  * expected to deallocate the returned value.
  *
@@ -1718,9 +1691,6 @@
  * the wrong type, or if the provided value comes from a different store as the
  * #wasm_global_t.
  *
- * > Note: to get an error and detect erroneous cases, it's recommended to call
- * > #wasmtime_global_set
- *
  * This function does not take ownership of its arguments.
  */
 
@@ -1734,10 +1704,10 @@
  * \typedef wasm_table_size_t
  * \brief Typedef for indices and sizes of wasm tables.
  *
- * \fn void wasm_table_delete(own wasm_table_t *v);
+ * \fn void wasm_table_delete(wasm_table_t *v);
  * \brief Deletes a table.
  *
- * \fn own wasm_table_t *wasm_table_copy(const wasm_table_t *)
+ * \fn wasm_table_t *wasm_table_copy(const wasm_table_t *)
  * \brief Copies a #wasm_table_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_table_t.
@@ -1780,8 +1750,6 @@
  *
  * Does not take ownship of the `init` value.
  *
- * > Note: for funcref tables you can use #wasmtime_funcref_table_new as well.
- *
  * \fn wasm_tabletype_t *wasm_table_type(const wasm_table_t *);
  * \brief Returns the type of this table.
  *
@@ -1795,9 +1763,6 @@
  *
  * Gives ownership of the resulting `wasm_ref_t*`.
  *
- * > Note: for funcref tables you can use #wasmtime_funcref_table_get to learn
- * > about out-of-bounds errors.
- *
  * \fn void wasm_table_set(wasm_table_t *, wasm_table_size_t index, wasm_ref_t *);
  * \brief Sets an element in this table.
  *
@@ -1809,9 +1774,6 @@
  * * The #wasm_ref_t does not have an appropriate type to store in this table.
  *
  * Does not take ownership of the given `wasm_ref_t*`.
- *
- * > Note: for funcref tables you can use #wasmtime_funcref_table_set to learn
- * > about errors.
  *
  * \fn wasm_table_size_t wasm_table_size(const wasm_table_t *);
  * \brief Gets the current size, in elements, of this table.
@@ -1829,9 +1791,7 @@
  * * The #wasm_ref_t comes from a different store than the table provided.
  * * The #wasm_ref_t does not have an appropriate type to store in this table.
  *
- * Does not take ownership of the givein `init` value.
- *
- * > Note: for funcref tables you can use #wasmtime_funcref_table_grow as well.
+ * Does not take ownership of the given `init` value.
  */
 
 /**
@@ -1844,10 +1804,10 @@
  * \typedef wasm_memory_pages_t
  * \brief Unsigned integer to hold the number of pages a memory has.
  *
- * \fn void wasm_memory_delete(own wasm_memory_t *v);
+ * \fn void wasm_memory_delete(wasm_memory_t *v);
  * \brief Deletes a memory.
  *
- * \fn own wasm_memory_t *wasm_memory_copy(const wasm_memory_t *)
+ * \fn wasm_memory_t *wasm_memory_copy(const wasm_memory_t *)
  * \brief Copies a #wasm_memory_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_memory_t.
@@ -1927,35 +1887,35 @@
  * \typedef wasm_extern_vec_t
  * \brief Convenience alias for #wasm_extern_vec_t
  *
- * \fn void wasm_extern_delete(own wasm_extern_t *v);
+ * \fn void wasm_extern_delete(wasm_extern_t *v);
  * \brief Deletes a extern.
  *
- * \fn void wasm_extern_vec_new_empty(own wasm_extern_vec_t *out);
+ * \fn void wasm_extern_vec_new_empty(wasm_extern_vec_t *out);
  * \brief Creates an empty vector.
  *
  * See #wasm_byte_vec_new_empty for more information.
  *
- * \fn void wasm_extern_vec_new_uninitialized(own wasm_extern_vec_t *out, size_t);
+ * \fn void wasm_extern_vec_new_uninitialized(wasm_extern_vec_t *out, size_t);
  * \brief Creates a vector with the given capacity.
  *
  * See #wasm_byte_vec_new_uninitialized for more information.
  *
- * \fn void wasm_extern_vec_new(own wasm_extern_vec_t *out, size_t, own wasm_extern_t *const[]);
+ * \fn void wasm_extern_vec_new(wasm_extern_vec_t *out, size_t, wasm_extern_t *const[]);
  * \brief Creates a vector with the provided contents.
  *
  * See #wasm_byte_vec_new for more information.
  *
- * \fn void wasm_extern_vec_copy(own wasm_extern_vec_t *out, const wasm_extern_vec_t *)
+ * \fn void wasm_extern_vec_copy(wasm_extern_vec_t *out, const wasm_extern_vec_t *)
  * \brief Copies one vector to another
  *
  * See #wasm_byte_vec_copy for more information.
  *
- * \fn void wasm_extern_vec_delete(own wasm_extern_vec_t *out)
+ * \fn void wasm_extern_vec_delete(wasm_extern_vec_t *out)
  * \brief Deallocates import for a vector.
  *
  * See #wasm_byte_vec_delete for more information.
  *
- * \fn own wasm_extern_t *wasm_extern_copy(const wasm_extern_t *)
+ * \fn wasm_extern_t *wasm_extern_copy(const wasm_extern_t *)
  * \brief Copies a #wasm_extern_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_extern_t.
@@ -2133,10 +2093,10 @@
  * \typedef wasm_instance_t
  * \brief Convenience alias for #wasm_instance_t
  *
- * \fn void wasm_instance_delete(own wasm_instance_t *v);
+ * \fn void wasm_instance_delete(wasm_instance_t *v);
  * \brief Deletes a instance.
  *
- * \fn own wasm_instance_t *wasm_instance_copy(const wasm_instance_t *)
+ * \fn wasm_instance_t *wasm_instance_copy(const wasm_instance_t *)
  * \brief Copies a #wasm_instance_t to a new one.
  *
  * The caller is responsible for deleting the returned #wasm_instance_t.
@@ -2168,7 +2128,7 @@
  * \fn wasm_ref_as_instance_const(const wasm_ref_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
  *
- * \fn own wasm_instance_t *wasm_instance_new(wasm_store_t *, const wasm_module_t *, const wasm_extern_vec_t *, wasm_trap_t **);
+ * \fn wasm_instance_t *wasm_instance_new(wasm_store_t *, const wasm_module_t *, const wasm_extern_vec_t *, wasm_trap_t **);
  * \brief Instantiates a module with the provided imports.
  *
  * This function will instantiate the provided #wasm_module_t into the provided
@@ -2177,9 +2137,6 @@
  *
  * This function must provide exactly the same number of imports as returned by
  * #wasm_module_imports or this results in undefined behavior.
- *
- * > Note: to avoid the undefined behavior here related to the number of imports
- * > it's recommended to use #wasmtime_instance_new instead.
  *
  * Imports provided are expected to be 1:1 matches against the list returned by
  * #wasm_module_imports.

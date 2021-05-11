@@ -1,3 +1,7 @@
+/**
+ * \file wasmtime.h
+ */
+
 #ifndef WASMTIME_API_H
 #define WASMTIME_API_H
 
@@ -22,8 +26,9 @@ extern "C" {
 /**
  * \brief Converts from the text format of WebAssembly to to the binary format.
  *
- * \param wat this it the input buffer with the WebAssembly Text Format inside of
+ * \param wat this it the input pointer with the WebAssembly Text Format inside of
  *   it. This will be parsed and converted to the binary format.
+ * \param wat_len this it the length of `wat`, in bytes.
  * \param ret if the conversion is successful, this byte vector is filled in with
  *   the WebAssembly binary format.
  *

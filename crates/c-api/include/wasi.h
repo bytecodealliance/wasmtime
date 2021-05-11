@@ -32,9 +32,9 @@ extern "C" {
  * \brief Convenience alias for #wasi_config_t
  *
  * \struct wasi_config_t
- * \brief Opaque type used to create a #wasi_instance_t.
+ * \brief TODO
  *
- * \fn void wasi_config_delete(own wasi_config_t *);
+ * \fn void wasi_config_delete(wasi_config_t *);
  * \brief Deletes a configuration object.
  */
 WASI_DECLARE_OWN(config)

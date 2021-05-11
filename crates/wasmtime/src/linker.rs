@@ -340,8 +340,9 @@ impl<T> Linker<T> {
     ///
     /// Returns an error if the any item is redefined twice in this linker (for
     /// example the same `module_name` was already defined) and shadowing is
-    /// disallowed, or if `instance` comes from a different [`Store`] than this
-    /// [`Linker`] originally was created with.
+    /// disallowed, or if `instance` comes from a different
+    /// [`Store`](crate::Store) than this [`Linker`] originally was created
+    /// with.
     ///
     /// # Examples
     ///
@@ -411,9 +412,9 @@ impl<T> Linker<T> {
     ///
     /// Returns an error if the any item is redefined twice in this linker (for
     /// example the same `module_name` was already defined) and shadowing is
-    /// disallowed, if `instance` comes from a different [`Store`] than this
-    /// [`Linker`] originally was created with, or if a Reactor initialization
-    /// function traps.
+    /// disallowed, if `instance` comes from a different
+    /// [`Store`](crate::Store) than this [`Linker`] originally was created
+    /// with, or if a Reactor initialization function traps.
     ///
     /// # Examples
     ///

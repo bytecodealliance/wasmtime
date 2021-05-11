@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/func.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_FUNC_H
 #define WASMTIME_FUNC_H
 
@@ -11,7 +17,12 @@ extern "C" {
 #endif
 
 /**
+ * \typedef wasmtime_caller_t
+ * \brief Alias to #wasmtime_caller
+ *
  * \brief Structure used to learn about the caller of a host-defined function.
+ * \struct wasmtime_caller
+ * \headerfile wasmtime/func.h
  *
  * This structure is the first argument of #wasmtime_func_callback_t and
  * wasmtime_func_callback_with_env_t. The main purpose of this structure is for
@@ -56,6 +67,7 @@ WASM_API_EXTERN wasmtime_func_t wasmtime_func_new(
   void (*finalizer)(void*)
 );
 
+/// TODO
 WASM_API_EXTERN wasm_functype_t* wasmtime_func_type(
     const wasmtime_context_t *store,
     wasmtime_func_t func
@@ -118,6 +130,7 @@ WASM_API_EXTERN bool wasmtime_caller_export_get(
     wasmtime_extern_t *item
 );
 
+/// TODO
 WASM_API_EXTERN wasmtime_context_t* wasmtime_caller_context(wasmtime_caller_t* caller);
 
 #ifdef __cplusplus

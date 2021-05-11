@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/module.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_MODULE_H
 #define WASMTIME_MODULE_H
 
@@ -37,19 +43,19 @@ WASM_API_EXTERN void wasmtime_moduletype_imports(const wasmtime_moduletype_t*, w
 WASM_API_EXTERN void wasmtime_moduletype_exports(const wasmtime_moduletype_t*, wasm_exporttype_vec_t* out);
 
 /**
- * \brief Converts a #wasm_moduletype_t to a #wasm_externtype_t
+ * \brief Converts a #wasmtime_moduletype_t to a #wasm_externtype_t
  *
- * The returned value is owned by the #wasm_moduletype_t argument and should not
+ * The returned value is owned by the #wasmtime_moduletype_t argument and should not
  * be deleted.
  */
 WASM_API_EXTERN wasm_externtype_t* wasmtime_moduletype_as_externtype(wasmtime_moduletype_t*);
 
 /**
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_moduletype_t
+ * \brief Attempts to convert a #wasm_externtype_t to a #wasmtime_moduletype_t
  *
- * The returned value is owned by the #wasm_moduletype_t argument and should not
- * be deleted. Returns `NULL` if the provided argument is not a
- * #wasm_moduletype_t.
+ * The returned value is owned by the #wasmtime_moduletype_t argument and
+ * should not be deleted. Returns `NULL` if the provided argument is not a
+ * #wasmtime_moduletype_t.
  */
 WASM_API_EXTERN wasmtime_moduletype_t* wasm_externtype_as_moduletype(wasm_externtype_t*);
 
@@ -62,7 +68,7 @@ WASM_API_EXTERN wasmtime_moduletype_t* wasm_externtype_as_moduletype(wasm_extern
  *
  * This type represents a compiled WebAssembly module. The compiled module is
  * ready to be instantiated and can be inspected for imports/exports. It is safe
- * to use a #wasmtime_module_t across multiple threads simultaneously.
+ * to use a module across multiple threads simultaneously.
  */
 typedef struct wasmtime_module wasmtime_module_t;
 
@@ -87,7 +93,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_new(
     wasmtime_module_t **ret
 );
 
-/*
+/**
  * \brief Deletes a module.
  */
 WASM_API_EXTERN void wasmtime_module_delete(wasmtime_module_t *m);

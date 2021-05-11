@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/table.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_TABLE_H
 #define WASMTIME_TABLE_H
 
@@ -28,6 +34,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_table_new(
     wasmtime_table_t *table
 );
 
+/// TODO
 WASM_API_EXTERN wasm_tabletype_t* wasmtime_table_type(
     const wasmtime_context_t *store,
     wasmtime_table_t table
@@ -69,6 +76,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_table_set(
     const wasmtime_val_t *value
 );
 
+/// TODO
 WASM_API_EXTERN uint32_t wasmtime_table_size(
     const wasmtime_context_t *store,
     wasmtime_table_t table

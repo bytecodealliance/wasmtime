@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/memory.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_MEMORY_H
 #define WASMTIME_MEMORY_H
 
@@ -10,29 +16,35 @@
 extern "C" {
 #endif
 
+/// TODO
 WASM_API_EXTERN wasmtime_error_t *wasmtime_memory_new(
     wasmtime_context_t *store,
     const wasm_memorytype_t* ty,
     wasmtime_memory_t *ret
 );
 
+/// TODO
 WASM_API_EXTERN wasm_memorytype_t* wasmtime_memory_type(
     const wasmtime_context_t *store,
     wasmtime_memory_t memory
 );
 
+/// TODO
 WASM_API_EXTERN uint8_t *wasmtime_memory_data(
     const wasmtime_context_t *store,
     wasmtime_memory_t memory
 );
+/// TODO
 WASM_API_EXTERN size_t wasmtime_memory_data_size(
     const wasmtime_context_t *store,
     wasmtime_memory_t memory
 );
+/// TODO
 WASM_API_EXTERN uint32_t wasmtime_memory_size(
     const wasmtime_context_t *store,
     wasmtime_memory_t memory
 );
+/// TODO
 WASM_API_EXTERN wasmtime_error_t *wasmtime_memory_grow(
     wasmtime_context_t *store,
     wasmtime_memory_t memory,

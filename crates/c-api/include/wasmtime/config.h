@@ -1,3 +1,9 @@
+/**
+ * \file wasmtime/config.h
+ *
+ * TODO
+ */
+
 #ifndef WASMTIME_CONFIG_H
 #define WASMTIME_CONFIG_H
 
