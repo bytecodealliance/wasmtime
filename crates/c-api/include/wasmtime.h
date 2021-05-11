@@ -5,6 +5,7 @@
 #ifndef WASMTIME_API_H
 #define WASMTIME_API_H
 
+#include <wasi.h>
 #include <wasmtime/config.h>
 #include <wasmtime/error.h>
 #include <wasmtime/extern.h>
