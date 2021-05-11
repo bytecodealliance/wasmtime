@@ -57,7 +57,7 @@ WASM_API_EXTERN wasm_externtype_t* wasmtime_moduletype_as_externtype(wasmtime_mo
  * should not be deleted. Returns `NULL` if the provided argument is not a
  * #wasmtime_moduletype_t.
  */
-WASM_API_EXTERN wasmtime_moduletype_t* wasm_externtype_as_moduletype(wasm_externtype_t*);
+WASM_API_EXTERN wasmtime_moduletype_t* wasmtime_externtype_as_moduletype(wasm_externtype_t*);
 
 /**
  * \typedef wasmtime_module_t

@@ -123,14 +123,14 @@ pub extern "C" fn wasm_externtype_as_memorytype_const(
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_externtype_as_moduletype(
+pub extern "C" fn wasmtime_externtype_as_moduletype(
     et: &wasm_externtype_t,
 ) -> Option<&wasmtime_moduletype_t> {
     wasmtime_moduletype_t::try_from(et)
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_externtype_as_instancetype(
+pub extern "C" fn wasmtime_externtype_as_instancetype(
     et: &wasm_externtype_t,
 ) -> Option<&wasmtime_instancetype_t> {
     wasmtime_instancetype_t::try_from(et)

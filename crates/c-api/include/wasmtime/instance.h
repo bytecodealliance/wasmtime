@@ -46,7 +46,7 @@ WASM_API_EXTERN wasm_externtype_t* wasmtime_instancetype_as_externtype(wasmtime_
  * be deleted. Returns `NULL` if the provided argument is not a
  * #wasmtime_instancetype_t.
  */
-WASM_API_EXTERN wasmtime_instancetype_t* wasm_externtype_as_instancetype(wasm_externtype_t*);
+WASM_API_EXTERN wasmtime_instancetype_t* wasmtime_externtype_as_instancetype(wasm_externtype_t*);
 
 /**
  * \brief Wasmtime-specific function to instantiate a module.
