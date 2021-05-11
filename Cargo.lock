@@ -633,7 +633,6 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "cranelift-native",
- "errno",
  "libc",
  "log",
  "memmap2",

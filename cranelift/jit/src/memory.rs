@@ -1,6 +1,3 @@
-#[cfg(not(feature = "selinux-fix"))]
-use errno;
-
 #[cfg(not(any(feature = "selinux-fix", windows)))]
 use libc;
 
@@ -9,6 +6,7 @@ use memmap2::MmapMut;
 
 use region;
 use std::convert::TryFrom;
+use std::io;
 use std::mem;
 use std::ptr;
 
@@ -41,7 +39,7 @@ impl PtrLen {
     /// Create a new `PtrLen` pointing to at least `size` bytes of memory,
     /// suitably sized and aligned for memory protection.
     #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
-    fn with_size(size: usize) -> Result<Self, String> {
+    fn with_size(size: usize) -> io::Result<Self> {
         let page_size = region::page::size();
         let alloc_size = round_up_to_page_size(size, page_size);
         let map = MmapMut::map_anon(alloc_size);
@@ -56,12 +54,12 @@ impl PtrLen {
                     len: alloc_size,
                 })
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(e),
         }
     }
 
     #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
-    fn with_size(size: usize) -> Result<Self, String> {
+    fn with_size(size: usize) -> io::Result<Self> {
         let mut ptr = ptr::null_mut();
         let page_size = region::page::size();
         let alloc_size = round_up_to_page_size(size, page_size);
@@ -74,13 +72,13 @@ impl PtrLen {
                     len: alloc_size,
                 })
             } else {
-                Err(errno::Errno(err).to_string())
+                Err(io::Error::from_raw_os_error(err))
             }
         }
     }
 
     #[cfg(target_os = "windows")]
-    fn with_size(size: usize) -> Result<Self, String> {
+    fn with_size(size: usize) -> io::Result<Self> {
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
 
@@ -101,7 +99,7 @@ impl PtrLen {
                 len: round_up_to_page_size(size, page_size),
             })
         } else {
-            Err(errno::errno().to_string())
+            Err(io::Error::last_os_error())
         }
     }
 }
@@ -149,8 +147,7 @@ impl Memory {
         self.position = 0;
     }
 
-    /// TODO: Use a proper error type.
-    pub(crate) fn allocate(&mut self, size: usize, align: u64) -> Result<*mut u8, String> {
+    pub(crate) fn allocate(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
         let align = usize::try_from(align).expect("alignment too big");
         if self.position % align != 0 {
             self.position += align - self.position % align;
