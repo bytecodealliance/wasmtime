@@ -34,6 +34,11 @@ fn initializes_linear_memory() -> Result<()> {
 
 #[test]
 fn linear_memory_limits() -> Result<()> {
+    // this test will allocate 4GB of virtual memory space, and may not work in
+    // situations like CI QEMU emulation where it triggers SIGKILL.
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        return Ok(());
+    }
     test(&Engine::default())?;
     test(&Engine::new(Config::new().allocation_strategy(
         InstanceAllocationStrategy::Pooling {
