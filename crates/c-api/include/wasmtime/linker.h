@@ -79,10 +79,9 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define(
  * For more information about name resolution consult the [Rust
  * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
  */
-/* WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_wasi( */
-/*     wasmtime_linker_t *linker, */
-/*     const wasi_instance_t *instance */
-/* ); */
+WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_wasi(
+    wasmtime_linker_t *linker
+);
 
 /**
  * \brief Defines an instance under the specified name in this linker.

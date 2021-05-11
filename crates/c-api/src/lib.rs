@@ -38,10 +38,10 @@ pub use crate::types::*;
 pub use crate::val::*;
 pub use crate::vec::*;
 
-// #[cfg(feature = "wasi")]
-// mod wasi;
-// #[cfg(feature = "wasi")]
-// pub use crate::wasi::*;
+#[cfg(feature = "wasi")]
+mod wasi;
+#[cfg(feature = "wasi")]
+pub use crate::wasi::*;
 
 #[cfg(feature = "wat")]
 mod wat2wasm;

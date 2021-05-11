@@ -78,6 +78,10 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *
  */
 WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *context, uint64_t *fuel);
 
+typedef struct wasi_config_t wasi_config_t;
+
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
+
 /**
  * \typedef wasmtime_interrupt_handle_t
  * \brief Convenience alias for #wasmtime_interrupt_handle_t

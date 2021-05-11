@@ -40,11 +40,35 @@ pub extern "C" fn wasm_store_new(engine: &wasm_engine_t) -> Box<wasm_store_t> {
 
 #[repr(C)]
 pub struct wasmtime_store_t {
-    pub(crate) store: Store<crate::ForeignData>,
+    pub(crate) store: Store<StoreData>,
 }
 
-pub type CStoreContext<'a> = StoreContext<'a, crate::ForeignData>;
-pub type CStoreContextMut<'a> = StoreContextMut<'a, crate::ForeignData>;
+pub type CStoreContext<'a> = StoreContext<'a, StoreData>;
+pub type CStoreContextMut<'a> = StoreContextMut<'a, StoreData>;
+
+pub struct StoreData {
+    foreign: crate::ForeignData,
+    #[cfg(feature = "wasi")]
+    wasi: Option<wasmtime_wasi::WasiCtx>,
+}
+
+#[cfg(feature = "wasi")]
+impl std::borrow::Borrow<wasmtime_wasi::WasiCtx> for StoreData {
+    fn borrow(&self) -> &wasmtime_wasi::WasiCtx {
+        self.wasi
+            .as_ref()
+            .expect("wasi not configured via `wasmtime_context_set_wasi` yet")
+    }
+}
+
+#[cfg(feature = "wasi")]
+impl std::borrow::BorrowMut<wasmtime_wasi::WasiCtx> for StoreData {
+    fn borrow_mut(&mut self) -> &mut wasmtime_wasi::WasiCtx {
+        self.wasi
+            .as_mut()
+            .expect("wasi not configured via `wasmtime_context_set_wasi` yet")
+    }
+}
 
 #[no_mangle]
 pub extern "C" fn wasmtime_store_delete(_: Box<wasmtime_store_t>) {}
@@ -56,7 +80,14 @@ pub extern "C" fn wasmtime_store_new(
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) -> Box<wasmtime_store_t> {
     Box::new(wasmtime_store_t {
-        store: Store::new(&engine.engine, ForeignData { data, finalizer }),
+        store: Store::new(
+            &engine.engine,
+            StoreData {
+                foreign: ForeignData { data, finalizer },
+                #[cfg(feature = "wasi")]
+                wasi: None,
+            },
+        ),
     })
 }
 
@@ -67,12 +98,23 @@ pub extern "C" fn wasmtime_store_context(store: &mut wasmtime_store_t) -> CStore
 
 #[no_mangle]
 pub extern "C" fn wasmtime_context_get_data(store: CStoreContext<'_>) -> *mut c_void {
-    store.data().data
+    store.data().foreign.data
 }
 
 #[no_mangle]
 pub extern "C" fn wasmtime_context_set_data(mut store: CStoreContextMut<'_>, data: *mut c_void) {
-    store.data_mut().data = data;
+    store.data_mut().foreign.data = data;
+}
+
+#[cfg(feature = "wasi")]
+#[no_mangle]
+pub extern "C" fn wasmtime_context_set_wasi(
+    mut context: CStoreContextMut<'_>,
+    wasi: Box<crate::wasi_config_t>,
+) -> Option<Box<wasmtime_error_t>> {
+    crate::handle_result(wasi.into_wasi_ctx(), |wasi| {
+        context.data_mut().wasi = Some(wasi);
+    })
 }
 
 #[no_mangle]

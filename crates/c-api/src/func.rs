@@ -195,7 +195,7 @@ pub extern "C" fn wasm_func_as_extern(f: &mut wasm_func_t) -> &mut wasm_extern_t
 
 #[repr(C)]
 pub struct wasmtime_caller_t<'a> {
-    caller: Caller<'a, crate::ForeignData>,
+    caller: Caller<'a, crate::StoreData>,
 }
 
 #[no_mangle]
