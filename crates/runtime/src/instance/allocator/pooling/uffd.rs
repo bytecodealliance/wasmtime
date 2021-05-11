@@ -521,10 +521,7 @@ mod test {
                                 },
                                 shared_signatures: VMSharedSignatureIndex::default().into(),
                                 host_state: Box::new(()),
-                                interrupts: ptr::null(),
-                                externref_activations_table: ptr::null_mut(),
-                                module_info_lookup: None,
-                                limiter: None,
+                                store: None,
                             },
                         )
                         .expect("instance should allocate"),
