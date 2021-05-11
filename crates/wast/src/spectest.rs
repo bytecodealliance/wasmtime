@@ -18,31 +18,28 @@ pub fn link_spectest(linker: &mut Linker<()>, store: &mut Store<()>) -> Result<(
         println!("{}: f64", f2);
     })?;
 
-    // TODO: this is a bummer
-    let mut store = store;
-
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
-    let g = Global::new(&mut store, ty, Val::I32(666))?;
+    let g = Global::new(&mut *store, ty, Val::I32(666))?;
     linker.define("spectest", "global_i32", g)?;
 
     let ty = GlobalType::new(ValType::I64, Mutability::Const);
-    let g = Global::new(&mut store, ty, Val::I64(666))?;
+    let g = Global::new(&mut *store, ty, Val::I64(666))?;
     linker.define("spectest", "global_i64", g)?;
 
     let ty = GlobalType::new(ValType::F32, Mutability::Const);
-    let g = Global::new(&mut store, ty, Val::F32(0x4426_8000))?;
+    let g = Global::new(&mut *store, ty, Val::F32(0x4426_8000))?;
     linker.define("spectest", "global_f32", g)?;
 
     let ty = GlobalType::new(ValType::F64, Mutability::Const);
-    let g = Global::new(&mut store, ty, Val::F64(0x4084_d000_0000_0000))?;
+    let g = Global::new(&mut *store, ty, Val::F64(0x4084_d000_0000_0000))?;
     linker.define("spectest", "global_f64", g)?;
 
     let ty = TableType::new(ValType::FuncRef, Limits::new(10, Some(20)));
-    let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
+    let table = Table::new(&mut *store, ty, Val::FuncRef(None))?;
     linker.define("spectest", "table", table)?;
 
     let ty = MemoryType::new(Limits::new(1, Some(2)));
-    let memory = Memory::new(&mut store, ty)?;
+    let memory = Memory::new(&mut *store, ty)?;
     linker.define("spectest", "memory", memory)?;
 
     Ok(())

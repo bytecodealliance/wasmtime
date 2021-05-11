@@ -841,7 +841,67 @@ impl StoreOpaqueSend<'_> {
             engine: Engine,
         }
 
-        // TODO
+        // This is surely the most dangerous `unsafe impl Send` in the entire
+        // crate. There are two members in `FiberFuture` which cause it to not
+        // be `Send`. One is `current_poll_cx` and is entirely uninteresting.
+        // This is just used to manage `Context` pointers across `await` points
+        // in the future, and requires raw pointers to get it to happen easily.
+        // Nothing too weird about the `Send`-ness, values aren't actually
+        // crossing threads.
+        //
+        // The really interesting piece is `fiber`. Now the "fiber" here is
+        // actual honest-to-god Rust code which we're moving around. What we're
+        // doing is the equivalent of moving our thread's stack to another OS
+        // thread. Turns out we, in general, have no idea what's on the stack
+        // and would generally have no way to verify that this is actually safe
+        // to do!
+        //
+        // Thankfully, though, Wasmtime has the power. Without being glib it's
+        // actually worth examining what's on the stack. It's unfortunately not
+        // super-local to this function itself. Our closure to `Fiber::new` runs
+        // `func`, which is given to us from the outside. Thankfully, though, we
+        // have tight control over this. Usage of `on_fiber` is typically done
+        // *just* before entering WebAssembly itself, so we'll have a few stack
+        // frames of Rust code (all in Wasmtime itself) before we enter wasm.
+        //
+        // Once we've entered wasm, well then we have a whole bunch of wasm
+        // frames on the stack. We've got this nifty thing called Cranelift,
+        // though, which allows us to also have complete control over everything
+        // on the stack!
+        //
+        // Finally, when wasm switches back to the fiber's starting pointer
+        // (this future we're returning) then it means wasm has reentered Rust.
+        // Suspension can only happen via the `block_on` function of an
+        // `AsyncCx`. This, conveniently, also happens entirely in Wasmtime
+        // controlled code!
+        //
+        // There's an extremely important point that should be called out here.
+        // User-provided futures **are not on the stack** during suspension
+        // points. This is extremely crucial because we in general cannot reason
+        // about Send/Sync for stack-local variables since rustc doesn't analyze
+        // them at all. With our construction, though, we are guaranteed that
+        // Wasmtime owns all stack frames between the stack of a fiber and when
+        // the fiber suspends (and it could move across threads). At this time
+        // the only user-provided piece of data on the stack is the future
+        // itself given to us. Lo-and-behold as you might notice the future is
+        // required to be `Send`!
+        //
+        // What this all boils down to is that we, as the authors of Wasmtime,
+        // need to be extremely careful that on the async fiber stack we only
+        // store Send things. For example we can't start using `Rc` willy nilly
+        // by accident and leave a copy in TLS somewhere. (similarly we have to
+        // be ready for TLS to change while we're executing wasm code between
+        // suspension points).
+        //
+        // While somewhat onerous it shouldn't be too too hard (the TLS bit is
+        // the hardest bit so far). This does mean, though, that no user should
+        // ever hae to worry about the `Send`-ness of Wasmtime. If rustc says
+        // it's ok, then it's ok.
+        //
+        // With all that in mind we unsafely assert here that wasmtime is
+        // correct. We declare the fiber as only containing Send data on its
+        // stack, despite not knowing for sure at compile time that this is
+        // correct. That's what `unsafe` in Rust is all about, though, right?
         unsafe impl Send for FiberFuture<'_> {}
 
         impl Future for FiberFuture<'_> {
