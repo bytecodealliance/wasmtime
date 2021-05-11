@@ -693,6 +693,72 @@ fn define_simd_arithmetic(
         .operands_in(vec![x, y])
         .operands_out(vec![a]),
     );
+
+    ig.push(
+        Inst::new(
+            "uadd_sat",
+            r#"
+        Add with unsigned saturation.
+
+        This is similar to `iadd` but the operands are interpreted as unsigned integers and their
+        summed result, instead of wrapping, will be saturated to the highest unsigned integer for
+        the controlling type (e.g. `0xFF` for i8).
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "sadd_sat",
+            r#"
+        Add with signed saturation.
+
+        This is similar to `iadd` but the operands are interpreted as signed integers and their
+        summed result, instead of wrapping, will be saturated to the lowest or highest
+        signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8). For example,
+        since an `sadd_sat.i8` of `0x70` and `0x70` is greater than `0x7F`, the result will be
+        clamped to `0x7F`.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "usub_sat",
+            r#"
+        Subtract with unsigned saturation.
+
+        This is similar to `isub` but the operands are interpreted as unsigned integers and their
+        difference, instead of wrapping, will be saturated to the lowest unsigned integer for
+        the controlling type (e.g. `0x00` for i8).
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "ssub_sat",
+            r#"
+        Subtract with signed saturation.
+
+        This is similar to `isub` but the operands are interpreted as signed integers and their
+        difference, instead of wrapping, will be saturated to the lowest or highest
+        signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8).
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
 }
 
 #[allow(clippy::many_single_char_names)]
@@ -2327,78 +2393,12 @@ pub(crate) fn define(
 
     ig.push(
         Inst::new(
-            "uadd_sat",
-            r#"
-        Add with unsigned saturation.
-
-        This is similar to `iadd` but the operands are interpreted as unsigned integers and their
-        summed result, instead of wrapping, will be saturated to the highest unsigned integer for
-        the controlling type (e.g. `0xFF` for i8).
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "sadd_sat",
-            r#"
-        Add with signed saturation.
-
-        This is similar to `iadd` but the operands are interpreted as signed integers and their
-        summed result, instead of wrapping, will be saturated to the lowest or highest
-        signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8). For example,
-        since an `sadd_sat.i8` of `0x70` and `0x70` is greater than `0x7F`, the result will be
-        clamped to `0x7F`.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
             "isub",
             r#"
         Wrapping integer subtraction: `a := x - y \pmod{2^B}`.
 
         This instruction does not depend on the signed/unsigned interpretation
         of the operands.
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "usub_sat",
-            r#"
-        Subtract with unsigned saturation.
-
-        This is similar to `isub` but the operands are interpreted as unsigned integers and their
-        difference, instead of wrapping, will be saturated to the lowest unsigned integer for
-        the controlling type (e.g. `0x00` for i8).
-        "#,
-            &formats.binary,
-        )
-        .operands_in(vec![x, y])
-        .operands_out(vec![a]),
-    );
-
-    ig.push(
-        Inst::new(
-            "ssub_sat",
-            r#"
-        Subtract with signed saturation.
-
-        This is similar to `isub` but the operands are interpreted as signed integers and their
-        difference, instead of wrapping, will be saturated to the lowest or highest
-        signed integer for the controlling type (e.g. `0x80` or `0x7F` for i8).
         "#,
             &formats.binary,
         )
