@@ -250,3 +250,113 @@ block0:
 ; nextln:  add sp, sp, #32
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
+
+
+; i128 tests
+function %f11(i128, i64) -> i64 {
+block0(v0: i128, v1: i64):
+    v2, v3 = isplit v0
+    return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x0, x1
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %f11_call(i64) -> i64 {
+    fn0 = %f11(i128, i64) -> i64
+
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iconcat v1, v0
+    v3 = call fn0(v2, v1)
+    return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x1, x0
+; nextln: movz x0, #42
+; nextln: movz x2, #42
+; nextln: ldr x3, 8 ; b 12 ; data
+; nextln: blr x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+; The aarch64 abi requires that the i128 argument be aligned
+; and to be passed in x2 and x3
+function %f12(i64, i128) -> i64 {
+block0(v0: i64, v1: i128):
+    v2, v3 = isplit v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x0, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+
+function %f12_call(i64) -> i64 {
+    fn0 = %f12(i64, i128) -> i64
+
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iconcat v0, v1
+    v3 = call fn0(v1, v2)
+    return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x3, #42
+; nextln: mov x2, x0
+; nextln: movz x0, #42
+; nextln: ldr x1, 8 ; b 12 ; data
+; nextln: blr x1
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+
+; aarch64 allows the i128 argument to not be aligned
+; and to be passed in x1 and x2
+function %f13(i64, i128) -> i64 apple_aarch64 {
+block0(v0: i64, v1: i128):
+    v2, v3 = isplit v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x0, x1
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %f13_call(i64) -> i64 apple_aarch64 {
+    fn0 = %f13(i64, i128) -> i64 apple_aarch64
+
+block0(v0: i64):
+    v1 = iconst.i64 42
+    v2 = iconcat v0, v1
+    v3 = call fn0(v1, v2)
+    return v3
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x2, #42
+; nextln: mov x1, x0
+; nextln: movz x0, #42
+; nextln: ldr x3, 8 ; b 12 ; data
+; nextln: blr x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
