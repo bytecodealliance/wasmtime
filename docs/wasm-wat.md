@@ -37,8 +37,7 @@ You can also see how this works in the Rust API like so:
 use wasmtime::*;
 
 # fn main() -> anyhow::Result<()> {
-let engine = Engine::default();
-let store = Store::new(&engine);
+let mut store = Store::<()>::default();
 let wat = r#"
   (module
     (func (export "add") (param i32 i32) (result i32)
@@ -46,10 +45,10 @@ let wat = r#"
       local.get 1
       i32.add))
 "#;
-let module = Module::new(&engine, wat)?;
-let instance = Instance::new(&store, &module, &[])?;
-let add = instance.get_typed_func::<(i32, i32), i32>("add")?;
-println!("1 + 2 = {}", add.call((1, 2))?);
+let module = Module::new(store.engine(), wat)?;
+let instance = Instance::new(&mut store, &module, &[])?;
+let add = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "add")?;
+println!("1 + 2 = {}", add.call(&mut store, (1, 2))?);
 # Ok(())
 # }
 ```
