@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use wasi_tests::{assert_errno, STDERR_FD, STDIN_FD, STDOUT_FD};
 
-const TIMEOUT: u64 = 20_000_000u64; // 20 milliseconds, required to satisfy slow execution in CI
+const TIMEOUT: u64 = 50_000_000u64; // 50 milliseconds, required to satisfy slow execution in CI
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;
 const STDIN_ID: wasi::Userdata = 0x8765_43210;
 
