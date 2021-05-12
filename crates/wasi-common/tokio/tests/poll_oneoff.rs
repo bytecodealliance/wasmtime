@@ -8,7 +8,7 @@ use wasi_common::{
 };
 use wasi_tokio::{clocks_ctx, sched::poll_oneoff, Dir};
 
-const TIMEOUT: Duration = Duration::from_millis(20); // Required for slow execution in CI
+const TIMEOUT: Duration = Duration::from_millis(50); // Required for slow execution in CI
 
 #[tokio::test(flavor = "multi_thread")]
 async fn empty_file_readable() -> Result<(), Error> {
