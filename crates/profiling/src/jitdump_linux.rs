@@ -371,7 +371,7 @@ impl State {
         pid: u32,
         tid: u32,
     ) -> Result<()> {
-        let file = object::File::parse(&dbg_image).unwrap();
+        let file = object::File::parse(dbg_image).unwrap();
         let endian = if file.is_little_endian() {
             gimli::RunTimeEndian::Little
         } else {
@@ -386,8 +386,7 @@ impl State {
             }
         };
 
-        let load_section_sup = |_| Ok(borrow::Cow::Borrowed(&[][..]));
-        let dwarf_cow = gimli::Dwarf::load(&load_section, &load_section_sup)?;
+        let dwarf_cow = gimli::Dwarf::load(&load_section)?;
         let borrow_section: &dyn for<'a> Fn(
             &'a borrow::Cow<[u8]>,
         )
@@ -599,9 +598,9 @@ impl State {
                 header: RecordHeader {
                     id: RecordId::JitCodeDebugInfo as u32,
                     record_size: 0,
-                    timestamp: timestamp,
+                    timestamp,
                 },
-                address: address,
+                address,
                 count: 0,
             };
 
@@ -617,9 +616,9 @@ impl State {
                     )
                     .unwrap();
                 let filename = myfile.to_string_lossy()?;
-                let line = row.line().unwrap_or(0);
+                let line = row.line().map(|nonzero| nonzero.get()).unwrap_or(0);
                 let column = match row.column() {
-                    gimli::ColumnType::Column(column) => column,
+                    gimli::ColumnType::Column(column) => column.get(),
                     gimli::ColumnType::LeftEdge => 0,
                 };
 
