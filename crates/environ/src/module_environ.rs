@@ -205,19 +205,28 @@ impl<'data> ModuleEnvironment<'data> {
         let slice = gimli::EndianSlice::new(data, endian);
 
         match name {
-            ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),
+            // Dwarf fields.
             ".debug_abbrev" => dwarf.debug_abbrev = gimli::DebugAbbrev::new(data, endian),
+            ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
+            // TODO aranges?
             ".debug_info" => dwarf.debug_info = gimli::DebugInfo::new(data, endian),
             ".debug_line" => dwarf.debug_line = gimli::DebugLine::new(data, endian),
-            ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
             ".debug_line_str" => dwarf.debug_line_str = gimli::DebugLineStr::from(slice),
-            ".debug_str_sup" => dwarf.debug_str_sup = gimli::DebugStr::from(slice),
-            ".debug_ranges" => info.debug_ranges = gimli::DebugRanges::new(data, endian),
-            ".debug_rnglists" => info.debug_rnglists = gimli::DebugRngLists::new(data, endian),
+            ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),
+            ".debug_str_offsets" => dwarf.debug_str_offsets = gimli::DebugStrOffsets::from(slice),
+            ".debug_str_sup" => {
+                let mut dwarf_sup: Dwarf<'data> = Default::default();
+                dwarf_sup.debug_str = gimli::DebugStr::from(slice);
+                dwarf.sup = Some(Arc::new(dwarf_sup));
+            }
+            ".debug_types" => dwarf.debug_types = gimli::DebugTypes::from(slice),
+
+            // Additional fields.
             ".debug_loc" => info.debug_loc = gimli::DebugLoc::from(slice),
             ".debug_loclists" => info.debug_loclists = gimli::DebugLocLists::from(slice),
-            ".debug_str_offsets" => dwarf.debug_str_offsets = gimli::DebugStrOffsets::from(slice),
-            ".debug_types" => dwarf.debug_types = gimli::DebugTypes::from(slice),
+            ".debug_ranges" => info.debug_ranges = gimli::DebugRanges::new(data, endian),
+            ".debug_rnglists" => info.debug_rnglists = gimli::DebugRngLists::new(data, endian),
+
             other => {
                 log::warn!("unknown debug section `{}`", other);
                 return;

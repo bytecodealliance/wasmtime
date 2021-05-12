@@ -12,9 +12,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-gimli = "0.23.0"
+gimli = "0.24.0"
 wasmparser = "0.77"
-object = { version = "0.23.0", default-features = false, features = ["read_core", "elf", "write"] }
+object = { version = "0.24.0", default-features = false, features = ["read_core", "elf", "write"] }
 wasmtime-environ = { path = "../environ", version = "0.26.0" }
 target-lexicon = { version = "0.12.0", default-features = false }
 anyhow = "1.0"
