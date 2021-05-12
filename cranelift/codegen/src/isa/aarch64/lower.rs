@@ -158,18 +158,18 @@ impl NarrowValueMode {
     }
 }
 
-/// Emits instruction(s) to generate the given 64-bit constant value into a newly-allocated
-/// temporary register, returning that register.
-fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> ValueRegs<Reg> {
+/// Emits instruction(s) to generate the given constant value into newly-allocated
+/// temporary registers, returning these registers.
+fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u128) -> ValueRegs<Reg> {
     let from_bits = ty_bits(ty);
-    let masked = if from_bits < 64 {
-        c & ((1u64 << from_bits) - 1)
+    let masked = if from_bits < 128 {
+        c & ((1u128 << from_bits) - 1)
     } else {
         c
     };
 
     let cst_copy = ctx.alloc_tmp(ty);
-    for inst in Inst::gen_constant(cst_copy, masked as u128, ty, |ty| {
+    for inst in Inst::gen_constant(cst_copy, masked, ty, |ty| {
         ctx.alloc_tmp(ty).only_reg().unwrap()
     })
     .into_iter()
@@ -181,7 +181,7 @@ fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u64) -> Va
 
 /// Extends a register according to `narrow_mode`.
 /// If extended, the value is always extended to 64 bits, for simplicity.
-fn narrow_reg<C: LowerCtx<I = Inst>>(
+fn extend_reg<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     ty: Type,
     in_reg: Reg,
@@ -252,6 +252,26 @@ fn narrow_reg<C: LowerCtx<I = Inst>>(
     }
 }
 
+/// Lowers an instruction input to multiple regs
+fn lower_input_to_regs<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    input: InsnInput,
+) -> (ValueRegs<Reg>, Type, bool) {
+    debug!("lower_input_to_regs: input {:?}", input);
+    let ty = ctx.input_ty(input.insn, input.input);
+    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
+    let is_const = inputs.constant.is_some();
+
+    let in_regs = if let Some(c) = inputs.constant {
+        // Generate constants fresh at each use to minimize long-range register pressure.
+        generate_constant(ctx, ty, c as u128)
+    } else {
+        ctx.put_input_in_regs(input.insn, input.input)
+    };
+
+    (in_regs, ty, is_const)
+}
+
 /// Lower an instruction input to a register
 ///
 /// The given register will be extended appropriately, according to
@@ -262,17 +282,12 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     narrow_mode: NarrowValueMode,
 ) -> Reg {
-    let reg = put_input_in_regs(ctx, input)
+    let (in_regs, ty, is_const) = lower_input_to_regs(ctx, input);
+    let reg = in_regs
         .only_reg()
         .expect("Multi-register value not expected");
 
-    let is_const = ctx
-        .get_input_as_source_or_const(input.insn, input.input)
-        .constant
-        .is_some();
-
-    let ty = ctx.input_ty(input.insn, input.input);
-    narrow_reg(ctx, ty, reg, is_const, narrow_mode)
+    extend_reg(ctx, ty, reg, is_const, narrow_mode)
 }
 
 /// Lower an instruction input to multiple regs
@@ -280,17 +295,7 @@ pub(crate) fn put_input_in_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
 ) -> ValueRegs<Reg> {
-    debug!("put_input_in_reg: input {:?}", input);
-    let ty = ctx.input_ty(input.insn, input.input);
-    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-
-    let in_regs = if let Some(c) = inputs.constant {
-        // Generate constants fresh at each use to minimize long-range register pressure.
-        generate_constant(ctx, ty, c)
-    } else {
-        ctx.put_input_in_regs(input.insn, input.input)
-    };
-
+    let (in_regs, _, _) = lower_input_to_regs(ctx, input);
     in_regs
 }
 

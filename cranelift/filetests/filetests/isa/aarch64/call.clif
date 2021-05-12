@@ -287,7 +287,7 @@ block0(v0: i64):
 ; nextln: ret
 
 
-; The aarch64 abi requires that the i128 argument be aligned
+; The AArch64 ABI requires that the i128 argument be aligned
 ; and to be passed in x2 and x3
 function %f12(i64, i128) -> i64 {
 block0(v0: i64, v1: i128):
@@ -325,7 +325,7 @@ block0(v0: i64):
 
 
 
-; aarch64 allows the i128 argument to not be aligned
+; The Apple AArch64 ABI allows the i128 argument to not be aligned
 ; and to be passed in x1 and x2
 function %f13(i64, i128) -> i64 apple_aarch64 {
 block0(v0: i64, v1: i128):
@@ -357,6 +357,125 @@ block0(v0: i64):
 ; nextln: movz x0, #42
 ; nextln: ldr x3, 8 ; b 12 ; data
 ; nextln: blr x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+
+; We only have 8 registers to pass data in
+; make sure we spill the last argument even though there is one slot available
+function %f14(i128, i128, i128, i64, i128) -> i128 {
+block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
+    return v4
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldur x0, [fp, #16]
+; nextln: ldur x1, [fp, #24]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f14_call(i128, i64) -> i128 {
+    fn0 = %f14(i128, i128, i128, i64, i128) -> i128
+
+block0(v0: i128, v1: i64):
+    v2 = call fn0(v0, v0, v0, v1, v0)
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+
+; TODO: Some codegen optimization possible here with x0,x1 moving to x7,x8 and then moving back
+; nextln: mov x7, x0
+; nextln: mov x8, x1
+; nextln: mov x6, x2
+; nextln: sub sp, sp, #16
+; nextln: virtual_sp_offset_adjust 16
+; nextln: mov x0, x7
+; nextln: mov x1, x8
+; nextln: mov x2, x7
+; nextln: mov x3, x8
+; nextln: mov x4, x7
+; nextln: mov x5, x8
+; nextln: stur x7, [sp]
+; nextln: stur x8, [sp, #8]
+
+; nextln: ldr x7, 8 ; b 12 ; data
+; nextln: blr x7
+; nextln: add sp, sp, #16
+; nextln: virtual_sp_offset_adjust -16
+
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+
+; We have one register slot available (Similar to %f14), however apple
+; allows us to start i128 on non even numbered registers (x7 in this case).
+;
+; It is unspecified if we can split the i128 into x7 + the stack.
+; In practice LLVM does not do this, so we are going to go with that.
+function %f15(i128, i128, i128, i64, i128) -> i128 apple_aarch64{
+block0(v0: i128, v1: i128, v2: i128, v3: i64, v4: i128):
+    return v4
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: ldur x0, [fp, #16]
+; nextln: ldur x1, [fp, #24]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %f15_call(i128, i64) -> i128 apple_aarch64 {
+    fn0 = %f15(i128, i128, i128, i64, i128) -> i128 apple_aarch64
+
+block0(v0: i128, v1: i64):
+    v2 = call fn0(v0, v0, v0, v1, v0)
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+
+; nextln: mov x7, x0
+; nextln: mov x8, x1
+; nextln: mov x6, x2
+; nextln: sub sp, sp, #16
+; nextln: virtual_sp_offset_adjust 16
+; nextln: mov x0, x7
+; nextln: mov x1, x8
+; nextln: mov x2, x7
+; nextln: mov x3, x8
+; nextln: mov x4, x7
+; nextln: mov x5, x8
+; nextln: stur x7, [sp]
+; nextln: stur x8, [sp, #8]
+
+; nextln: ldr x7, 8 ; b 12 ; data
+; nextln: blr x7
+; nextln: add sp, sp, #16
+; nextln: virtual_sp_offset_adjust -16
+
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %f16() -> i32, i32 wasmtime_system_v {
+block0:
+    v0 = iconst.i32 0
+    v1 = iconst.i32 1
+    return v0, v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x1, x0
+; nextln: movz x0, #0
+; nextln: movz x2, #1
+; nextln: stur w2, [x1]
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 

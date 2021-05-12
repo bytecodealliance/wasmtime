@@ -187,7 +187,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let is_baldrdash = call_conv.extends_baldrdash();
         let has_baldrdash_tls = call_conv == isa::CallConv::Baldrdash2020;
 
-        // See AArch64 ABI (https://c9x.me/compile/bib/abi-arm64.pdf), sections 5.4.
+        // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
         //
         // MacOS aarch64 is slightly different, see also
         // https://developer.apple.com/documentation/xcode/writing_arm64_code_for_apple_platforms.
@@ -265,7 +265,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 param.value_type
             );
 
-            let (rcs, _) = Inst::rc_for_type(param.value_type)?;
+            let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
 
             if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
                 assert!(rcs[0] == RegClass::I64);
@@ -288,7 +288,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
             // Handle multi register params
             //
-            // See AArch64 ABI (https://c9x.me/compile/bib/abi-arm64.pdf), (Section 5.4 Stage C).
+            // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#642parameter-passing-rules), (Section 6.4.2 Stage C).
             //
             // For arguments with alignment of 16 we round up the the register number
             // to the next even value. So we can never allocate for example an i128
@@ -301,7 +301,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // restriction of passing the lower half in Xn and the upper half in Xn+1
             // (Stage C.9)
             //
-            // For examples of how llvm handles this: https://godbolt.org/z/bhd3vvEfh
+            // For examples of how LLVM handles this: https://godbolt.org/z/bhd3vvEfh
+            //
+            // On the Apple ABI it is unspecified if we can spill half the value into the stack
+            // i.e load the lower half into x7 and the upper half into the stack
+            // LLVM does not seem to do this, so we are going to replicate that behaviour
             let is_multi_reg = rcs.len() >= 2;
             if is_multi_reg {
                 assert!(
@@ -348,10 +352,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     remaining_reg_vals -= 2;
                     continue;
                 }
-            }
-
-            // Single Register parameters
-            if !is_multi_reg {
+            } else {
+                // Single Register parameters
                 let rc = rcs[0];
                 let next_reg = match rc {
                     RegClass::I64 => &mut next_xreg,
@@ -400,12 +402,28 @@ impl ABIMachineSpec for AArch64MachineDeps {
             debug_assert!(size.is_power_of_two());
             next_stack = align_to(next_stack, size);
 
-            ret.push(ABIArg::stack(
-                next_stack as i64,
-                param.value_type,
-                param.extension,
-                param.purpose,
-            ));
+            let slots = reg_types
+                .iter()
+                .copied()
+                // Build the stack locations from each slot
+                .scan(next_stack, |next_stack, ty| {
+                    let slot_offset = *next_stack as i64;
+                    *next_stack += (ty_bits(ty) / 8) as u64;
+
+                    Some((ty, slot_offset))
+                })
+                .map(|(ty, offset)| ABIArgSlot::Stack {
+                    offset,
+                    ty,
+                    extension: param.extension,
+                })
+                .collect();
+
+            ret.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
+
             next_stack += size;
         }
 
