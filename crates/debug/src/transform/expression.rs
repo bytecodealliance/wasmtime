@@ -632,6 +632,15 @@ where
                 // Don't re-enter the loop here (i.e. continue), because the
                 // DW_OP_deref still needs to be kept.
             }
+            Operation::WasmLocal { index } => {
+                flush_code_chunk!();
+                let label = ValueLabel::from_u32(index as u32);
+                push!(CompiledExpressionPart::Local {
+                    label,
+                    trailing: false,
+                });
+                continue;
+            }
             Operation::Shr { .. } | Operation::Shra { .. } => {
                 // Insert value normalisation part.
                 // The semantic value is 32 bits (TODO: check unit)
@@ -663,14 +672,6 @@ where
             | Operation::EntryValue { .. }
             | Operation::ParameterRef { .. } => {
                 return Ok(None);
-            }
-            Operation::WasmLocal { index } => {
-                flush_code_chunk!();
-                let label = ValueLabel::from_u32(index as u32);
-                push!(CompiledExpressionPart::Local {
-                    label,
-                    trailing: false,
-                });
             }
             Operation::WasmGlobal { index: _ } | Operation::WasmStack { index: _ } => {
                 // TODO support those two
