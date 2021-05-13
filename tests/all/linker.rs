@@ -174,18 +174,18 @@ fn module_interposition() -> Result<()> {
 
 #[test]
 fn allow_unknown_exports() -> Result<()> {
-    let store = Store::default();
-    let mut linker = Linker::new(&store);
+    let mut store = Store::<()>::default();
+    let mut linker = Linker::new(store.engine());
     let module = Module::new(
         store.engine(),
         r#"(module (func (export "_start")) (global (export "g") i32 (i32.const 0)))"#,
     )?;
 
-    assert!(linker.module("module", &module).is_err());
+    assert!(linker.module(&mut store, "module", &module).is_err());
 
-    let mut linker = Linker::new(&store);
+    let mut linker = Linker::new(store.engine());
     linker.allow_unknown_exports(true);
-    linker.module("module", &module)?;
+    linker.module(&mut store, "module", &module)?;
 
     Ok(())
 }
