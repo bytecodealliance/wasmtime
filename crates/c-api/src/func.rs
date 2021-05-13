@@ -30,22 +30,6 @@ pub type wasm_func_callback_with_env_t = extern "C" fn(
     results: *mut wasm_val_vec_t,
 ) -> Option<Box<wasm_trap_t>>;
 
-struct Finalizer {
-    env: *mut c_void,
-    finalizer: Option<extern "C" fn(*mut c_void)>,
-}
-
-unsafe impl Send for Finalizer {}
-unsafe impl Sync for Finalizer {}
-
-impl Drop for Finalizer {
-    fn drop(&mut self) {
-        if let Some(f) = self.finalizer {
-            f(self.env);
-        }
-    }
-}
-
 impl wasm_func_t {
     pub(crate) fn try_from(e: &wasm_extern_t) -> Option<&wasm_func_t> {
         match &e.which {
@@ -116,12 +100,12 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     store: &mut wasm_store_t,
     ty: &wasm_functype_t,
     callback: wasm_func_callback_with_env_t,
-    env: *mut c_void,
+    data: *mut c_void,
     finalizer: Option<extern "C" fn(arg1: *mut std::ffi::c_void)>,
 ) -> Box<wasm_func_t> {
-    let finalizer = Finalizer { env, finalizer };
+    let finalizer = crate::ForeignData { data, finalizer };
     create_function(store, ty, move |params, results| {
-        callback(finalizer.env, params, results)
+        callback(finalizer.data, params, results)
     })
 }
 
