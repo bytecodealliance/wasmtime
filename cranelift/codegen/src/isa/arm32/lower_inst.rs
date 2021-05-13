@@ -85,14 +85,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 shift: None,
             });
         }
-        Opcode::SaddSat | Opcode::SsubSat | Opcode::Imul | Opcode::Udiv | Opcode::Sdiv => {
+        Opcode::Imul | Opcode::Udiv | Opcode::Sdiv => {
             let rd = output_to_reg(ctx, outputs[0]);
             let rn = input_to_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = input_to_reg(ctx, inputs[1], NarrowValueMode::None);
 
             let alu_op = match op {
-                Opcode::SaddSat => ALUOp::Qadd,
-                Opcode::SsubSat => ALUOp::Qsub,
                 Opcode::Imul => ALUOp::Mul,
                 Opcode::Udiv => ALUOp::Udiv,
                 Opcode::Sdiv => ALUOp::Sdiv,
