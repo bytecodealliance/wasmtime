@@ -80,11 +80,6 @@ pub unsafe extern "C" fn wasm_memory_grow(
     memory.grow(&mut store, delta).is_ok()
 }
 
-// WASM_API_EXTERN wasmtime_error_t *wasmtime_memory_new(
-//     wasmtime_context_t *store,
-//     const wasm_memorytype_t*
-// );
-
 #[no_mangle]
 pub extern "C" fn wasmtime_memory_new(
     store: CStoreContextMut<'_>,

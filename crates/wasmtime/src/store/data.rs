@@ -169,6 +169,8 @@ where
     }
 }
 
+// NB the repre(transparent) here is for the usage of this throughout the C API.
+// If the representation here changes then the C API will need changing as well.
 #[repr(transparent)]
 pub struct Stored<T> {
     // See documentation below on `INDEX_BITS` for how this is interpreted.

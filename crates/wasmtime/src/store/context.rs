@@ -2,11 +2,15 @@ use crate::store::{Store, StoreInner};
 use std::ops::{Deref, DerefMut};
 
 /// TODO
-#[repr(transparent)] // here for the C API
+// NB the repr(transparent) here is for the C API and it's important that the
+// representation of this `struct` is a pointer for now. If the representation
+// changes then the C API will need to be updated
+#[repr(transparent)]
 pub struct StoreContext<'a, T>(pub(super) &'a StoreInner<T>);
 
 /// TODO
-#[repr(transparent)] // here for the C API
+// NB the repr(transparent) here is for the same reason as above.
+#[repr(transparent)]
 pub struct StoreContextMut<'a, T>(pub(super) &'a mut StoreInner<T>);
 
 impl<'a, T> StoreContextMut<'a, T> {

@@ -204,12 +204,31 @@ use wasmtime_runtime::{
 #[repr(transparent)] // here for the C API
 pub struct Func(Stored<FuncData>);
 
+/// The three ways that a function can be created and referenced from within a
+/// store.
 pub(crate) enum FuncData {
+    /// A function already owned by the store via some other means. This is
+    /// used, for example, when creating a `Func` from an instance's exported
+    /// function. The instance's `InstanceHandle` is already owned by the store
+    /// and we just have some pointers into that which represent how to call the
+    /// function.
     StoreOwned {
         trampoline: VMTrampoline,
         export: ExportFunction,
     },
+
+    /// A function is shared across possibly other stores, hence the `Arc`. This
+    /// variant happens when a `Linker`-defined function is instantiated within
+    /// a `Store` (e.g. via `Linker::get` or similar APIs). The `Arc` here
+    /// indicates that there's some number of other stores holding this function
+    /// too, so dropping this may not deallocate the underlying
+    /// `InstanceHandle`.
     SharedHost(Arc<HostFunc>),
+
+    /// A uniquely-owned host function within a `Store`. This comes about with
+    /// `Func::new` or similar APIs. The `HostFunc` internally owns the
+    /// `InstanceHandle` and that will get dropped when this `HostFunc` itself
+    /// is dropped.
     Host(HostFunc),
 }
 

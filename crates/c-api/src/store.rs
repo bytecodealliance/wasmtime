@@ -4,6 +4,16 @@ use std::ffi::c_void;
 use std::sync::Arc;
 use wasmtime::{AsContext, AsContextMut, InterruptHandle, Store, StoreContext, StoreContextMut};
 
+/// This representation of a `Store` is used to implement the `wasm.h` API.
+///
+/// This is stored alongside `Func` and such for `wasm.h` so each object is
+/// independently owned. The usage of `Arc` here is mostly to just get it to be
+/// safe to drop across multiple threads, but otherwise acquiring the `context`
+/// values from this struct is considered unsafe due to it being unknown how the
+/// aliasing is working on the C side of things.
+///
+/// The aliasing requirements are documented in the C API `wasm.h` itself (at
+/// least Wasmtime's implementation).
 #[derive(Clone)]
 pub struct StoreRef {
     store: Arc<UnsafeCell<Store<()>>>,
@@ -38,6 +48,13 @@ pub extern "C" fn wasm_store_new(engine: &wasm_engine_t) -> Box<wasm_store_t> {
     })
 }
 
+/// Representation of a `Store` for `wasmtime.h` This notably tries to move more
+/// burden of aliasing on the caller rather than internally, allowing for a more
+/// raw representation of contexts and such that requires less `unsafe` in the
+/// implementation.
+///
+/// Note that this notably carries `StoreData` as a payload which allows storing
+/// foreign data and configuring WASI as well.
 #[repr(C)]
 pub struct wasmtime_store_t {
     pub(crate) store: Store<StoreData>,

@@ -64,27 +64,6 @@ impl SignatureCollection {
             .get(&index)
             .map(|(_, trampoline)| *trampoline)
     }
-
-    ///// Registers a single function with the collection.
-    /////
-    ///// Returns the shared signature index for the function.
-    //pub fn register(
-    //    &mut self,
-    //    ty: &WasmFuncType,
-    //    trampoline: VMTrampoline,
-    //) -> VMSharedSignatureIndex {
-    //    let index = self.registry.write().unwrap().register(ty);
-
-    //    let entry = match self.trampolines.entry(index) {
-    //        Entry::Occupied(e) => e.into_mut(),
-    //        Entry::Vacant(e) => e.insert((0, trampoline)),
-    //    };
-
-    //    // Increment the ref count
-    //    entry.0 += 1;
-
-    //    index
-    //}
 }
 
 impl Drop for SignatureCollection {

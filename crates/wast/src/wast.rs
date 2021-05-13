@@ -230,8 +230,6 @@ impl WastContext {
 
         for directive in ast.directives {
             let sp = directive.span();
-            let (line, col) = sp.linecol_in(wast);
-            println!("run directive on {}:{}:{}", filename, line + 1, col);
             self.run_directive(directive, &adjust_wast)
                 .with_context(|| {
                     let (line, col) = sp.linecol_in(wast);

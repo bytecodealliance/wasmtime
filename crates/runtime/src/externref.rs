@@ -325,19 +325,14 @@ impl VMExternRef {
             let value_ptr = alloc_ptr.cast::<T>();
             ptr::write(value_ptr.as_ptr(), make_value());
 
-            let value_ref: &T = value_ptr.as_ref();
-            let value_ref: &(dyn Any + Send + Sync) = value_ref as _;
-            let value_ptr: *const (dyn Any + Send + Sync) = value_ref as _;
-            let value_ptr: *mut (dyn Any + Send + Sync) = value_ptr as _;
-            let value_ptr = NonNull::new_unchecked(value_ptr);
-
             let extern_data_ptr =
                 alloc_ptr.cast::<u8>().as_ptr().add(footer_offset) as *mut VMExternData;
             ptr::write(
                 extern_data_ptr,
                 VMExternData {
                     ref_count: AtomicUsize::new(1),
-                    value_ptr,
+                    // cast from `*mut T` to `*mut dyn Any` here
+                    value_ptr: NonNull::new_unchecked(value_ptr.as_ptr()),
                 },
             );
 
@@ -496,10 +491,12 @@ type TableElem = UnsafeCell<Option<VMExternRef>>;
 ///
 /// Under the covers, this is a simple bump allocator that allows duplicate
 /// entries. Deduplication happens at GC time.
-#[repr(C)]
+#[repr(C)] // `alloc` must be the first member, it's accessed from JIT code
 pub struct VMExternRefActivationsTable {
     /// Structures used to perform fast bump allocation of storage of externref
     /// values.
+    ///
+    /// This is the only member of this structure accessed from JIT code.
     alloc: VMExternRefTableAlloc,
 
     /// When unioned with `chunk`, this is an over-approximation of the GC roots
@@ -528,7 +525,7 @@ pub struct VMExternRefActivationsTable {
     stack_canary: Option<usize>,
 }
 
-#[repr(C)]
+#[repr(C)] // this is accessed from JTI code
 struct VMExternRefTableAlloc {
     /// Bump-allocation finger within the `chunk`.
     ///
@@ -543,6 +540,8 @@ struct VMExternRefTableAlloc {
     end: NonNull<TableElem>,
 
     /// Bump allocation chunk that stores fast-path insertions.
+    ///
+    /// This is not accessed from JIT code.
     chunk: Box<[TableElem]>,
 }
 
