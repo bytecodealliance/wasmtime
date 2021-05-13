@@ -270,8 +270,8 @@
 //! ```
 
 #![allow(unknown_lints)]
-//#![deny(missing_docs, broken_intra_doc_links)]
-//#![doc(test(attr(deny(warnings))))]
+//#![deny(missing_docs, broken_intra_doc_links)] TODO
+//#![doc(test(attr(deny(warnings))))] TODO
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(nightlydoc, feature(doc_cfg))]
 #![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
