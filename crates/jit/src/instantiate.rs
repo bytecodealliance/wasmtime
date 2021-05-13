@@ -83,6 +83,7 @@ struct DebugInfo {
     code_section_offset: u64,
     debug_abbrev: Range<usize>,
     debug_addr: Range<usize>,
+    debug_aranges: Range<usize>,
     debug_info: Range<usize>,
     debug_line: Range<usize>,
     debug_line_str: Range<usize>,
@@ -400,6 +401,7 @@ impl CompiledModule {
         let cx = addr2line::Context::from_sections(
             EndianSlice::new(&data[info.debug_abbrev.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_addr.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_aranges.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_info.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_line.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_line_str.clone()], endian).into(),
@@ -546,6 +548,7 @@ impl From<DebugInfoData<'_>> for DebugInfo {
         };
         let debug_abbrev = push(raw.dwarf.debug_abbrev.reader().slice());
         let debug_addr = push(raw.dwarf.debug_addr.reader().slice());
+        let debug_aranges = push(raw.dwarf.debug_aranges.reader().slice());
         let debug_info = push(raw.dwarf.debug_info.reader().slice());
         let debug_line = push(raw.dwarf.debug_line.reader().slice());
         let debug_line_str = push(raw.dwarf.debug_line_str.reader().slice());
@@ -557,6 +560,7 @@ impl From<DebugInfoData<'_>> for DebugInfo {
             data: data.into(),
             debug_abbrev,
             debug_addr,
+            debug_aranges,
             debug_info,
             debug_line,
             debug_line_str,

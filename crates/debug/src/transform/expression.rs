@@ -541,150 +541,145 @@ where
             parts.push(CompiledExpressionPart::LandingPad(marker.clone()));
         }
 
-        let next = buf[pc.offset_from(&expr.0).into_u64() as usize];
         need_deref = true;
-        if next == 0xED {
-            // WebAssembly DWARF extension
-            pc.read_u8()?;
-            let ty = pc.read_uleb128()?;
-            // Supporting only wasm locals.
-            if ty != 0 {
-                // TODO support wasm globals?
+
+        let pos = pc.offset_from(&expr.0).into_u64() as usize;
+        let op = Operation::parse(&mut pc, encoding)?;
+        match op {
+            Operation::FrameOffset { offset } => {
+                // Expand DW_OP_fbreg into frame location and DW_OP_plus_uconst.
+                if frame_base.is_some() {
+                    // Add frame base expressions.
+                    flush_code_chunk!();
+                    parts.extend_from_slice(&frame_base.unwrap().parts);
+                }
+                if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
+                    // Reset local trailing flag.
+                    *trailing = false;
+                }
+                // Append DW_OP_plus_uconst part.
+                let mut writer = ExpressionWriter::new();
+                writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
+                writer.write_uleb128(offset as u64)?;
+                code_chunk.extend(writer.into_vec());
+                continue;
+            }
+            Operation::Drop { .. }
+            | Operation::Pick { .. }
+            | Operation::Swap { .. }
+            | Operation::Rot { .. }
+            | Operation::Nop { .. }
+            | Operation::UnsignedConstant { .. }
+            | Operation::SignedConstant { .. }
+            | Operation::ConstantIndex { .. }
+            | Operation::PlusConstant { .. }
+            | Operation::Abs { .. }
+            | Operation::And { .. }
+            | Operation::Or { .. }
+            | Operation::Xor { .. }
+            | Operation::Shl { .. }
+            | Operation::Plus { .. }
+            | Operation::Minus { .. }
+            | Operation::Div { .. }
+            | Operation::Mod { .. }
+            | Operation::Mul { .. }
+            | Operation::Neg { .. }
+            | Operation::Not { .. }
+            | Operation::Lt { .. }
+            | Operation::Gt { .. }
+            | Operation::Le { .. }
+            | Operation::Ge { .. }
+            | Operation::Eq { .. }
+            | Operation::Ne { .. }
+            | Operation::TypedLiteral { .. }
+            | Operation::Convert { .. }
+            | Operation::Reinterpret { .. }
+            | Operation::Piece { .. } => (),
+            Operation::Bra { target } | Operation::Skip { target } => {
+                flush_code_chunk!();
+                let arc_to = (pc.len().into_u64() as isize - target as isize) as u64;
+                let marker = match jump_targets.get(&arc_to) {
+                    Some(m) => m.clone(),
+                    None => {
+                        // Marker not found: probably out of bounds.
+                        return Ok(None);
+                    }
+                };
+                push!(CompiledExpressionPart::Jump {
+                    conditionally: match op {
+                        Operation::Bra { .. } => true,
+                        _ => false,
+                    },
+                    target: marker,
+                });
+                continue;
+            }
+            Operation::StackValue => {
+                need_deref = false;
+
+                // Find extra stack_value, that follow wasm-local operators,
+                // and mark such locals with special flag.
+                if let (Some(CompiledExpressionPart::Local { trailing, .. }), true) =
+                    (parts.last_mut(), code_chunk.is_empty())
+                {
+                    *trailing = true;
+                    continue;
+                }
+            }
+            Operation::Deref { .. } => {
+                flush_code_chunk!();
+                push!(CompiledExpressionPart::Deref);
+                // Don't re-enter the loop here (i.e. continue), because the
+                // DW_OP_deref still needs to be kept.
+            }
+            Operation::WasmLocal { index } => {
+                flush_code_chunk!();
+                let label = ValueLabel::from_u32(index as u32);
+                push!(CompiledExpressionPart::Local {
+                    label,
+                    trailing: false,
+                });
+                continue;
+            }
+            Operation::Shr { .. } | Operation::Shra { .. } => {
+                // Insert value normalisation part.
+                // The semantic value is 32 bits (TODO: check unit)
+                // but the target architecture is 64-bits. So we'll
+                // clean out the upper 32 bits (in a sign-correct way)
+                // to avoid contamination of the result with randomness.
+                let mut writer = ExpressionWriter::new();
+                writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
+                writer.write_uleb128(32)?; // increase shift amount
+                writer.write_op(gimli::constants::DW_OP_swap)?;
+                writer.write_op(gimli::constants::DW_OP_const1u)?;
+                writer.write_u8(32)?;
+                writer.write_op(gimli::constants::DW_OP_shl)?;
+                writer.write_op(gimli::constants::DW_OP_swap)?;
+                code_chunk.extend(writer.into_vec());
+                // Don't re-enter the loop here (i.e. continue), because the
+                // DW_OP_shr* still needs to be kept.
+            }
+            Operation::Address { .. }
+            | Operation::AddressIndex { .. }
+            | Operation::Call { .. }
+            | Operation::Register { .. }
+            | Operation::RegisterOffset { .. }
+            | Operation::CallFrameCFA
+            | Operation::PushObjectAddress
+            | Operation::TLS
+            | Operation::ImplicitValue { .. }
+            | Operation::ImplicitPointer { .. }
+            | Operation::EntryValue { .. }
+            | Operation::ParameterRef { .. } => {
                 return Ok(None);
             }
-            let index = pc.read_sleb128()?;
-            flush_code_chunk!();
-            let label = ValueLabel::from_u32(index as u32);
-            push!(CompiledExpressionPart::Local {
-                label,
-                trailing: false,
-            });
-        } else {
-            let pos = pc.offset_from(&expr.0).into_u64() as usize;
-            let op = Operation::parse(&mut pc, encoding)?;
-            match op {
-                Operation::FrameOffset { offset } => {
-                    // Expand DW_OP_fbreg into frame location and DW_OP_plus_uconst.
-                    if frame_base.is_some() {
-                        // Add frame base expressions.
-                        flush_code_chunk!();
-                        parts.extend_from_slice(&frame_base.unwrap().parts);
-                    }
-                    if let Some(CompiledExpressionPart::Local { trailing, .. }) = parts.last_mut() {
-                        // Reset local trailing flag.
-                        *trailing = false;
-                    }
-                    // Append DW_OP_plus_uconst part.
-                    let mut writer = ExpressionWriter::new();
-                    writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
-                    writer.write_uleb128(offset as u64)?;
-                    code_chunk.extend(writer.into_vec());
-                    continue;
-                }
-                Operation::Drop { .. }
-                | Operation::Pick { .. }
-                | Operation::Swap { .. }
-                | Operation::Rot { .. }
-                | Operation::Nop { .. }
-                | Operation::UnsignedConstant { .. }
-                | Operation::SignedConstant { .. }
-                | Operation::ConstantIndex { .. }
-                | Operation::PlusConstant { .. }
-                | Operation::Abs { .. }
-                | Operation::And { .. }
-                | Operation::Or { .. }
-                | Operation::Xor { .. }
-                | Operation::Shl { .. }
-                | Operation::Plus { .. }
-                | Operation::Minus { .. }
-                | Operation::Div { .. }
-                | Operation::Mod { .. }
-                | Operation::Mul { .. }
-                | Operation::Neg { .. }
-                | Operation::Not { .. }
-                | Operation::Lt { .. }
-                | Operation::Gt { .. }
-                | Operation::Le { .. }
-                | Operation::Ge { .. }
-                | Operation::Eq { .. }
-                | Operation::Ne { .. }
-                | Operation::TypedLiteral { .. }
-                | Operation::Convert { .. }
-                | Operation::Reinterpret { .. }
-                | Operation::Piece { .. } => (),
-                Operation::Bra { target } | Operation::Skip { target } => {
-                    flush_code_chunk!();
-                    let arc_to = (pc.len().into_u64() as isize - target as isize) as u64;
-                    let marker = match jump_targets.get(&arc_to) {
-                        Some(m) => m.clone(),
-                        None => {
-                            // Marker not found: probably out of bounds.
-                            return Ok(None);
-                        }
-                    };
-                    push!(CompiledExpressionPart::Jump {
-                        conditionally: match op {
-                            Operation::Bra { .. } => true,
-                            _ => false,
-                        },
-                        target: marker,
-                    });
-                    continue;
-                }
-                Operation::StackValue => {
-                    need_deref = false;
-
-                    // Find extra stack_value, that follow wasm-local operators,
-                    // and mark such locals with special flag.
-                    if let (Some(CompiledExpressionPart::Local { trailing, .. }), true) =
-                        (parts.last_mut(), code_chunk.is_empty())
-                    {
-                        *trailing = true;
-                        continue;
-                    }
-                }
-                Operation::Deref { .. } => {
-                    flush_code_chunk!();
-                    push!(CompiledExpressionPart::Deref);
-                    // Don't re-enter the loop here (i.e. continue), because the
-                    // DW_OP_deref still needs to be kept.
-                }
-                Operation::Shr { .. } | Operation::Shra { .. } => {
-                    // Insert value normalisation part.
-                    // The semantic value is 32 bits (TODO: check unit)
-                    // but the target architecture is 64-bits. So we'll
-                    // clean out the upper 32 bits (in a sign-correct way)
-                    // to avoid contamination of the result with randomness.
-                    let mut writer = ExpressionWriter::new();
-                    writer.write_op(gimli::constants::DW_OP_plus_uconst)?;
-                    writer.write_uleb128(32)?; // increase shift amount
-                    writer.write_op(gimli::constants::DW_OP_swap)?;
-                    writer.write_op(gimli::constants::DW_OP_const1u)?;
-                    writer.write_u8(32)?;
-                    writer.write_op(gimli::constants::DW_OP_shl)?;
-                    writer.write_op(gimli::constants::DW_OP_swap)?;
-                    code_chunk.extend(writer.into_vec());
-                    // Don't re-enter the loop here (i.e. continue), because the
-                    // DW_OP_shr* still needs to be kept.
-                }
-                Operation::Address { .. }
-                | Operation::AddressIndex { .. }
-                | Operation::Call { .. }
-                | Operation::Register { .. }
-                | Operation::RegisterOffset { .. }
-                | Operation::CallFrameCFA
-                | Operation::PushObjectAddress
-                | Operation::TLS
-                | Operation::ImplicitValue { .. }
-                | Operation::ImplicitPointer { .. }
-                | Operation::EntryValue { .. }
-                | Operation::ParameterRef { .. } => {
-                    return Ok(None);
-                }
+            Operation::WasmGlobal { index: _ } | Operation::WasmStack { index: _ } => {
+                // TODO support those two
+                return Ok(None);
             }
-            let chunk = &buf[pos..pc.offset_from(&expr.0).into_u64() as usize];
-            code_chunk.extend_from_slice(chunk);
         }
+        let chunk = &buf[pos..pc.offset_from(&expr.0).into_u64() as usize];
+        code_chunk.extend_from_slice(chunk);
     }
 
     flush_code_chunk!();

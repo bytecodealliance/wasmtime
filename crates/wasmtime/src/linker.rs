@@ -44,6 +44,7 @@ pub struct Linker<T> {
     strings: Vec<Arc<str>>,
     map: HashMap<ImportKey, Definition<T>>,
     allow_shadowing: bool,
+    allow_unknown_exports: bool,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -121,6 +122,7 @@ impl<T> Linker<T> {
             string2idx: HashMap::new(),
             strings: Vec::new(),
             allow_shadowing: false,
+            allow_unknown_exports: false,
             _marker: marker::PhantomData,
         }
     }
@@ -157,6 +159,32 @@ impl<T> Linker<T> {
     /// ```
     pub fn allow_shadowing(&mut self, allow: bool) -> &mut Self {
         self.allow_shadowing = allow;
+        self
+    }
+
+    /// Configures whether this [`Linker`] will allow unknown exports from
+    /// command modules.
+    ///
+    /// By default a [`Linker`] will error when unknown exports are encountered
+    /// in a command module while using [`Linker::module`].
+    ///
+    /// This method can be used to allow unknown exports from command modules.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// # let module = Module::new(store.engine(), "(module)")?;
+    /// let mut linker = Linker::new(&store);
+    /// linker.allow_unknown_exports(true);
+    /// linker.module("mod", &module)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn allow_unknown_exports(&mut self, allow: bool) -> &mut Linker {
+        self.allow_unknown_exports = allow;
         self
     }
 
@@ -585,7 +613,7 @@ impl<T> Linker<T> {
                 // Allow an exported "__rtti_base" memory for compatibility with
                 // AssemblyScript.
                 warn!("command module exporting '__rtti_base' is deprecated; pass `--runtime half` to the AssemblyScript compiler");
-            } else {
+            } else if !self.allow_unknown_exports {
                 bail!("command export '{}' is not a function", export.name());
             }
         }

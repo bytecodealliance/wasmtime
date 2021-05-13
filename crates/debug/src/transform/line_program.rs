@@ -189,10 +189,10 @@ where
                     address: row.address(),
                     op_index: row.op_index(),
                     file_index: row.file_index(),
-                    line: row.line().unwrap_or(0),
+                    line: row.line().map(|nonzero| nonzero.get()).unwrap_or(0),
                     column: match row.column() {
                         gimli::ColumnType::LeftEdge => 0,
-                        gimli::ColumnType::Column(val) => val,
+                        gimli::ColumnType::Column(val) => val.get(),
                     },
                     discriminator: row.discriminator(),
                     is_stmt: row.is_stmt(),

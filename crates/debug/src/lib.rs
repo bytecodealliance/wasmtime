@@ -19,10 +19,10 @@ pub fn create_gdbjit_image(
     defined_funcs_offset: usize,
     funcs: &[*const u8],
 ) -> Result<Vec<u8>, Error> {
-    let e = ensure_supported_elf_format(&mut bytes)?;
+    let e = ensure_supported_elf_format(&bytes)?;
 
     // patch relocs
-    relocate_dwarf_sections(&mut bytes, defined_funcs_offset, funcs)?;
+    relocate_dwarf_sections(&bytes, defined_funcs_offset, funcs)?;
 
     // elf is still missing details...
     match e {
@@ -41,7 +41,7 @@ pub fn create_gdbjit_image(
 }
 
 fn relocate_dwarf_sections(
-    bytes: &mut [u8],
+    bytes: &[u8],
     defined_funcs_offset: usize,
     funcs: &[*const u8],
 ) -> Result<(), Error> {
@@ -91,10 +91,9 @@ fn relocate_dwarf_sections(
     Ok(())
 }
 
-fn ensure_supported_elf_format(bytes: &mut Vec<u8>) -> Result<Endianness, Error> {
+fn ensure_supported_elf_format(bytes: &[u8]) -> Result<Endianness, Error> {
     use object::elf::*;
     use object::read::elf::*;
-    use object::Bytes;
     use std::mem::size_of;
 
     let kind = match object::FileKind::parse(bytes) {
@@ -104,14 +103,12 @@ fn ensure_supported_elf_format(bytes: &mut Vec<u8>) -> Result<Endianness, Error>
         }
     };
     let header = match kind {
-        object::FileKind::Elf64 => {
-            match object::elf::FileHeader64::<Endianness>::parse(Bytes(bytes)) {
-                Ok(header) => header,
-                Err(err) => {
-                    bail!("Unsupported ELF file: {}", err);
-                }
+        object::FileKind::Elf64 => match object::elf::FileHeader64::<Endianness>::parse(bytes) {
+            Ok(header) => header,
+            Err(err) => {
+                bail!("Unsupported ELF file: {}", err);
             }
-        }
+        },
         _ => {
             bail!("only 64-bit ELF files currently supported")
         }

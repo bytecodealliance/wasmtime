@@ -76,6 +76,10 @@ pub struct RunCommand {
     #[structopt(flatten)]
     common: CommonOptions,
 
+    /// Allow unknown exports when running commands.
+    #[structopt(long = "allow-unknown-exports")]
+    allow_unknown_exports: bool,
+
     /// Grant access to the given host directory
     #[structopt(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
     dirs: Vec<String>,
@@ -141,6 +145,8 @@ impl RunCommand {
         let argv = self.compute_argv();
 
         let mut linker = Linker::new(&engine);
+        linker.allow_unknown_exports(self.allow_unknown_exports);
+
         populate_with_wasi(
             &mut store,
             &mut linker,
