@@ -14,7 +14,7 @@ extern "C" {
 #endif
 
 /// TODO
-WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(char *msg);
+WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(char *msg, size_t msg_len);
 
 /**
  * \brief Attempts to extract a WASI-specific exit status from this trap.

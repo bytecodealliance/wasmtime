@@ -8,6 +8,7 @@
 #define WASMTIME_EXTERN_H
 
 #include <wasmtime/module.h>
+#include <wasmtime/store.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -85,6 +86,9 @@ typedef struct wasmtime_extern {
 
 /// TODO
 void wasmtime_extern_delete(wasmtime_extern_t *val);
+
+/// TODO
+wasm_externtype_t *wasmtime_extern_type(wasmtime_context_t *context, wasmtime_extern_t *val);
 
 #ifdef __cplusplus
 }  // extern "C"

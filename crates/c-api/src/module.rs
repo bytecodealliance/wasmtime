@@ -139,6 +139,7 @@ pub unsafe extern "C" fn wasm_module_deserialize(
     }
 }
 
+#[derive(Clone)]
 pub struct wasmtime_module_t {
     pub(crate) module: Module,
 }
@@ -160,6 +161,11 @@ pub unsafe extern "C" fn wasmtime_module_new(
 
 #[no_mangle]
 pub extern "C" fn wasmtime_module_delete(_module: Box<wasmtime_module_t>) {}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_module_clone(module: &wasmtime_module_t) -> Box<wasmtime_module_t> {
+    Box::new(module.clone())
+}
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_module_validate(

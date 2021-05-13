@@ -1,7 +1,5 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
 use once_cell::unsync::OnceCell;
-use std::ffi::CStr;
-use std::os::raw::c_char;
 use wasmtime::Trap;
 
 #[repr(C)]
@@ -47,8 +45,8 @@ pub extern "C" fn wasm_trap_new(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_trap_new(message: *const c_char) -> Box<wasm_trap_t> {
-    let bytes = CStr::from_ptr(message).to_bytes();
+pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Box<wasm_trap_t> {
+    let bytes = crate::slice_from_raw_parts(message, len);
     let message = String::from_utf8_lossy(&bytes);
     Box::new(wasm_trap_t {
         trap: Trap::new(message),

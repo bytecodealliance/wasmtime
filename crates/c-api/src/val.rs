@@ -243,6 +243,14 @@ pub unsafe extern "C" fn wasmtime_val_delete(val: &mut ManuallyDrop<wasmtime_val
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasmtime_val_copy(
+    dst: &mut MaybeUninit<wasmtime_val_t>,
+    src: &wasmtime_val_t,
+) {
+    crate::initialize(dst, wasmtime_val_t::from_val(src.to_val()))
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_externref_new(
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut c_void)>,

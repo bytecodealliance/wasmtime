@@ -99,6 +99,11 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_new(
 WASM_API_EXTERN void wasmtime_module_delete(wasmtime_module_t *m);
 
 /**
+ * TODO
+ */
+WASM_API_EXTERN wasmtime_module_t *wasmtime_module_clone(wasmtime_module_t *m);
+
+/**
  * \brief Validate a WebAssembly binary.
  *
  * This function will validate the provided byte sequence to determine if it is

@@ -133,12 +133,17 @@ typedef struct wasmtime_val {
 } wasmtime_val_t;
 
 /// TODO
-#define WASMTIME_FUNCREF_NULL ((uint64_t) -1)
+#define WASMTIME_FUNCREF_NULL ((uint64_t) 0xffffffffffffffff)
 
 /**
  * TODO
  */
 WASM_API_EXTERN void wasmtime_val_delete(wasmtime_val_t *val);
+
+/**
+ * TODO
+ */
+WASM_API_EXTERN void wasmtime_val_copy(wasmtime_val_t *dst, const wasmtime_val_t *src);
 
 #ifdef __cplusplus
 }  // extern "C"

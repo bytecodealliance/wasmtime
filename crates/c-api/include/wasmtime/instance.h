@@ -21,6 +21,8 @@ extern "C" {
  */
 typedef struct wasmtime_instancetype wasmtime_instancetype_t;
 
+/// TODO
+WASM_API_EXTERN void wasmtime_instancetype_delete(wasmtime_instancetype_t *ty);
 
 /**
  * \brief Returns the list of exports that this instance type provides.
