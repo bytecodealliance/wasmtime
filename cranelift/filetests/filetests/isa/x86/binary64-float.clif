@@ -1,7 +1,7 @@
 ; Binary emission of 64-bit floating point code.
 test binemit
 set opt_level=speed_and_size
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; The binary encodings can be verified with the command:
 ;

@@ -1,0 +1,113 @@
+test compile
+target s390x
+
+function %f() -> b8 {
+block0:
+  v0 = bconst.b8 true
+  return v0
+}
+
+; check:  lhi %r2, 255
+; nextln: br %r14
+
+function %f() -> b16 {
+block0:
+  v0 = bconst.b16 false
+  return v0
+}
+
+; check:  lhi %r2, 0
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0
+  return v0
+}
+
+; check:  lghi %r2, 0
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff
+  return v0
+}
+
+; check:  lgfi %r2, 65535
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff0000
+  return v0
+}
+
+; check:  llilh %r2, 65535
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff00000000
+  return v0
+}
+
+; check:  llihl %r2, 65535
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffff000000000000
+  return v0
+}
+
+; check:  llihh %r2, 65535
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffffffff
+  return v0
+}
+
+; check:  lghi %r2, -1
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xffffffffffff0000
+  return v0
+}
+
+; check:  lgfi %r2, -65536
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0xf34bf0a31212003a ; random digits
+  return v0
+}
+
+; check:  llihf %r2, 4081840291
+; nextln: iilf %r2, 303169594
+; nextln: br %r14
+
+function %f() -> i64 {
+block0:
+  v0 = iconst.i64 0x12e900001ef40000 ; random digits with 2 clear half words
+  return v0
+}
+
+; check:  llihh %r2, 4841
+; nextln: iilh %r2, 7924
+; nextln: br %r14
+
+function %f() -> i32 {
+block0:
+  v0 = iconst.i32 -1
+  return v0
+}
+
+; check:  lhi %r2, -1
+; nextln: br %r14
+

@@ -1,5 +1,5 @@
 test regalloc
-target x86_64
+target x86_64 legacy
 
 ; Test case found by the Binaryen fuzzer.
 ;

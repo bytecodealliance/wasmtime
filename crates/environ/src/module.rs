@@ -2,12 +2,12 @@
 
 use crate::tunables::Tunables;
 use crate::WASM_MAX_PAGES;
-use cranelift_codegen::ir;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::*;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -87,7 +87,7 @@ pub struct MemoryInitializer {
     /// Optionally, a global variable giving a base index.
     pub base: Option<GlobalIndex>,
     /// The offset to add to the base.
-    pub offset: usize,
+    pub offset: u32,
     /// The data to write into the linear memory.
     pub data: Box<[u8]>,
 }
@@ -169,7 +169,15 @@ impl MemoryInitialization {
                             // Perform a bounds check on the segment
                             // As this segment is referencing a defined memory without a global base, the last byte
                             // written to by the segment cannot exceed the memory's initial minimum size
-                            if (initializer.offset + initializer.data.len())
+                            let offset = usize::try_from(initializer.offset).unwrap();
+                            let end = match offset.checked_add(initializer.data.len()) {
+                                Some(end) => end,
+                                None => {
+                                    out_of_bounds = true;
+                                    continue;
+                                }
+                            };
+                            if end
                                 > ((module.memory_plans[initializer.memory_index].memory.minimum
                                     as usize)
                                     * WASM_PAGE_SIZE)
@@ -179,8 +187,8 @@ impl MemoryInitialization {
                             }
 
                             let pages = &mut map[index];
-                            let mut page_index = initializer.offset / WASM_PAGE_SIZE;
-                            let mut page_offset = initializer.offset % WASM_PAGE_SIZE;
+                            let mut page_index = offset / WASM_PAGE_SIZE;
+                            let mut page_offset = offset % WASM_PAGE_SIZE;
                             let mut data_offset = 0;
                             let mut data_remaining = initializer.data.len();
 
@@ -269,7 +277,7 @@ pub struct TableInitializer {
     /// Optionally, a global variable giving a base index.
     pub base: Option<GlobalIndex>,
     /// The offset to add to the base.
-    pub offset: usize,
+    pub offset: u32,
     /// The values to write into the table elements.
     pub elements: Box<[FuncIndex]>,
 }
@@ -367,6 +375,10 @@ pub struct Module {
 
     /// The type of each nested wasm module this module contains.
     pub modules: PrimaryMap<ModuleIndex, ModuleTypeIndex>,
+
+    /// The set of defined functions within this module which are located in
+    /// element segments.
+    pub possibly_exported_funcs: HashSet<DefinedFuncIndex>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
@@ -445,12 +457,14 @@ impl Module {
     }
 
     /// Convert a `DefinedFuncIndex` into a `FuncIndex`.
+    #[inline]
     pub fn func_index(&self, defined_func: DefinedFuncIndex) -> FuncIndex {
         FuncIndex::new(self.num_imported_funcs + defined_func.index())
     }
 
     /// Convert a `FuncIndex` into a `DefinedFuncIndex`. Returns None if the
     /// index is an imported function.
+    #[inline]
     pub fn defined_func_index(&self, func: FuncIndex) -> Option<DefinedFuncIndex> {
         if func.index() < self.num_imported_funcs {
             None
@@ -462,17 +476,20 @@ impl Module {
     }
 
     /// Test whether the given function index is for an imported function.
+    #[inline]
     pub fn is_imported_function(&self, index: FuncIndex) -> bool {
         index.index() < self.num_imported_funcs
     }
 
     /// Convert a `DefinedTableIndex` into a `TableIndex`.
+    #[inline]
     pub fn table_index(&self, defined_table: DefinedTableIndex) -> TableIndex {
         TableIndex::new(self.num_imported_tables + defined_table.index())
     }
 
     /// Convert a `TableIndex` into a `DefinedTableIndex`. Returns None if the
     /// index is an imported table.
+    #[inline]
     pub fn defined_table_index(&self, table: TableIndex) -> Option<DefinedTableIndex> {
         if table.index() < self.num_imported_tables {
             None
@@ -484,17 +501,20 @@ impl Module {
     }
 
     /// Test whether the given table index is for an imported table.
+    #[inline]
     pub fn is_imported_table(&self, index: TableIndex) -> bool {
         index.index() < self.num_imported_tables
     }
 
     /// Convert a `DefinedMemoryIndex` into a `MemoryIndex`.
+    #[inline]
     pub fn memory_index(&self, defined_memory: DefinedMemoryIndex) -> MemoryIndex {
         MemoryIndex::new(self.num_imported_memories + defined_memory.index())
     }
 
     /// Convert a `MemoryIndex` into a `DefinedMemoryIndex`. Returns None if the
     /// index is an imported memory.
+    #[inline]
     pub fn defined_memory_index(&self, memory: MemoryIndex) -> Option<DefinedMemoryIndex> {
         if memory.index() < self.num_imported_memories {
             None
@@ -506,17 +526,20 @@ impl Module {
     }
 
     /// Test whether the given memory index is for an imported memory.
+    #[inline]
     pub fn is_imported_memory(&self, index: MemoryIndex) -> bool {
         index.index() < self.num_imported_memories
     }
 
     /// Convert a `DefinedGlobalIndex` into a `GlobalIndex`.
+    #[inline]
     pub fn global_index(&self, defined_global: DefinedGlobalIndex) -> GlobalIndex {
         GlobalIndex::new(self.num_imported_globals + defined_global.index())
     }
 
     /// Convert a `GlobalIndex` into a `DefinedGlobalIndex`. Returns None if the
     /// index is an imported global.
+    #[inline]
     pub fn defined_global_index(&self, global: GlobalIndex) -> Option<DefinedGlobalIndex> {
         if global.index() < self.num_imported_globals {
             None
@@ -528,6 +551,7 @@ impl Module {
     }
 
     /// Test whether the given global index is for an imported global.
+    #[inline]
     pub fn is_imported_global(&self, index: GlobalIndex) -> bool {
         index.index() < self.num_imported_globals
     }
@@ -564,7 +588,6 @@ impl Module {
 #[allow(missing_docs)]
 pub struct TypeTables {
     pub wasm_signatures: PrimaryMap<SignatureIndex, WasmFuncType>,
-    pub native_signatures: PrimaryMap<SignatureIndex, ir::Signature>,
     pub module_signatures: PrimaryMap<ModuleTypeIndex, ModuleSignature>,
     pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
 }

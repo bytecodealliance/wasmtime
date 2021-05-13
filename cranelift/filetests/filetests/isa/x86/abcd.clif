@@ -1,5 +1,5 @@
 test regalloc
-target i686
+target i686 legacy
 
 ; %rdi can't be used in a movsbl instruction, so test that the register
 ; allocator can move it to a register that can be.

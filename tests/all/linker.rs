@@ -27,46 +27,45 @@ fn link_twice_bad() -> Result<()> {
     let mut linker = Linker::new(&store);
 
     // functions
-    linker.func("", "", || {})?;
-    assert!(linker.func("", "", || {}).is_err());
+    linker.func("f", "", || {})?;
+    assert!(linker.func("f", "", || {}).is_err());
     assert!(linker
-        .func("", "", || -> Result<(), Trap> { loop {} })
+        .func("f", "", || -> Result<(), Trap> { loop {} })
         .is_err());
-    linker.func("", "", |_: i32| {})?;
 
     // globals
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
     let global = Global::new(&store, ty, Val::I32(0))?;
-    linker.define("", "", global.clone())?;
-    assert!(linker.define("", "", global.clone()).is_err());
+    linker.define("g", "1", global.clone())?;
+    assert!(linker.define("g", "1", global.clone()).is_err());
 
     let ty = GlobalType::new(ValType::I32, Mutability::Var);
     let global = Global::new(&store, ty, Val::I32(0))?;
-    linker.define("", "", global.clone())?;
-    assert!(linker.define("", "", global.clone()).is_err());
+    linker.define("g", "2", global.clone())?;
+    assert!(linker.define("g", "2", global.clone()).is_err());
 
     let ty = GlobalType::new(ValType::I64, Mutability::Const);
     let global = Global::new(&store, ty, Val::I64(0))?;
-    linker.define("", "", global.clone())?;
-    assert!(linker.define("", "", global.clone()).is_err());
+    linker.define("g", "3", global.clone())?;
+    assert!(linker.define("g", "3", global.clone()).is_err());
 
     // memories
     let ty = MemoryType::new(Limits::new(1, None));
-    let memory = Memory::new(&store, ty);
-    linker.define("", "", memory.clone())?;
-    assert!(linker.define("", "", memory.clone()).is_err());
+    let memory = Memory::new(&store, ty)?;
+    linker.define("m", "", memory.clone())?;
+    assert!(linker.define("m", "", memory.clone()).is_err());
     let ty = MemoryType::new(Limits::new(2, None));
-    let memory = Memory::new(&store, ty);
-    assert!(linker.define("", "", memory.clone()).is_err());
+    let memory = Memory::new(&store, ty)?;
+    assert!(linker.define("m", "", memory.clone()).is_err());
 
     // tables
     let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
     let table = Table::new(&store, ty, Val::FuncRef(None))?;
-    linker.define("", "", table.clone())?;
-    assert!(linker.define("", "", table.clone()).is_err());
+    linker.define("t", "", table.clone())?;
+    assert!(linker.define("t", "", table.clone()).is_err());
     let ty = TableType::new(ValType::FuncRef, Limits::new(2, None));
     let table = Table::new(&store, ty, Val::FuncRef(None))?;
-    assert!(linker.define("", "", table.clone()).is_err());
+    assert!(linker.define("t", "", table.clone()).is_err());
     Ok(())
 }
 
@@ -160,6 +159,24 @@ fn module_interposition() -> Result<()> {
     let func = instance.get_export("export").unwrap().into_func().unwrap();
     let func = func.typed::<(), i32>()?;
     assert_eq!(func.call(())?, 112);
+    Ok(())
+}
+
+#[test]
+fn allow_unknown_exports() -> Result<()> {
+    let store = Store::default();
+    let mut linker = Linker::new(&store);
+    let module = Module::new(
+        store.engine(),
+        r#"(module (func (export "_start")) (global (export "g") i32 (i32.const 0)))"#,
+    )?;
+
+    assert!(linker.module("module", &module).is_err());
+
+    let mut linker = Linker::new(&store);
+    linker.allow_unknown_exports(true);
+    linker.module("module", &module)?;
+
     Ok(())
 }
 

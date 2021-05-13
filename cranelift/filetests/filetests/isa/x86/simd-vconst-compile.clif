@@ -1,7 +1,7 @@
 test compile
 set enable_simd=true
 set enable_probestack=false
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; use baldrdash calling convention here for simplicity (avoids prologue, epilogue)
 function %vconst_i32() -> i32x4 baldrdash_system_v {

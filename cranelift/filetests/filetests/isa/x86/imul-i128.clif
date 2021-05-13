@@ -1,5 +1,5 @@
 test run
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %test_imul_i128() -> b1 {
 block0:

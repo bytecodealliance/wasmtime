@@ -13,7 +13,7 @@
 pub mod dummy;
 
 use arbitrary::Arbitrary;
-use dummy::dummy_imports;
+use dummy::dummy_linker;
 use log::debug;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -34,10 +34,29 @@ fn log_wasm(wasm: &[u8]) {
     let name = format!("testcase{}.wasm", i);
     std::fs::write(&name, wasm).expect("failed to write wasm file");
     log::debug!("wrote wasm file to `{}`", name);
-    if let Ok(s) = wasmprinter::print_bytes(wasm) {
-        let name = format!("testcase{}.wat", i);
-        std::fs::write(&name, s).expect("failed to write wat file");
+    let wat = format!("testcase{}.wat", i);
+    match wasmprinter::print_bytes(wasm) {
+        Ok(s) => std::fs::write(&wat, s).expect("failed to write wat file"),
+        // If wasmprinter failed remove a `*.wat` file, if any, to avoid
+        // confusing a preexisting one with this wasm which failed to get
+        // printed.
+        Err(_) => drop(std::fs::remove_file(&wat)),
     }
+}
+
+fn create_store(engine: &Engine) -> Store {
+    Store::new_with_limits(
+        &engine,
+        StoreLimitsBuilder::new()
+            // The limits here are chosen based on the default "maximum type size"
+            // configured in wasm-smith, which is 1000. This means that instances
+            // are allowed to, for example, export up to 1000 memories. We bump that
+            // a little bit here to give us some slop.
+            .instances(1100)
+            .tables(1100)
+            .memories(1100)
+            .build(),
+    )
 }
 
 /// Methods of timing out execution of a WebAssembly module
@@ -91,7 +110,7 @@ pub fn instantiate_with_config(
         _ => false,
     });
     let engine = Engine::new(&config).unwrap();
-    let store = Store::new(&engine);
+    let store = create_store(&engine);
 
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
@@ -118,19 +137,31 @@ pub fn instantiate_with_config(
         Err(_) if !known_valid => return,
         Err(e) => panic!("failed to compile module: {:?}", e),
     };
-    let imports = dummy_imports(&store, module.imports());
+    let linker = dummy_linker(&store, &module);
 
-    match Instance::new(&store, &module, &imports) {
+    match linker.instantiate(&module) {
         Ok(_) => {}
-        // Allow traps which can happen normally with `unreachable` or a timeout
-        Err(e) if e.downcast_ref::<Trap>().is_some() => {}
-        // Allow resource exhaustion since this is something that our wasm-smith
-        // generator doesn't guarantee is forbidden.
-        Err(e) if e.to_string().contains("resource limit exceeded") => {}
-        // Also allow errors related to fuel consumption
-        Err(e) if e.to_string().contains("all fuel consumed") => {}
-        // Everything else should be a bug in the fuzzer
-        Err(e) => panic!("failed to instantiate {}", e),
+        Err(e) => {
+            let string = e.to_string();
+            // Allow traps which can happen normally with `unreachable` or a
+            // timeout
+            if e.downcast_ref::<Trap>().is_some()
+                // Allow resource exhaustion since this is something that
+                // our wasm-smith generator doesn't guarantee is forbidden.
+                || string.contains("resource limit exceeded")
+                // Also allow errors related to fuel consumption
+                || string.contains("all fuel consumed")
+                // Currently we instantiate with a `Linker` which can't instantiate
+                // every single module under the sun due to using name-based resolution
+                // rather than positional-based resolution
+                || string.contains("incompatible import type")
+            {
+                return;
+            }
+
+            // Everything else should be a bug in the fuzzer
+            panic!("failed to instantiate {:?}", e);
+        }
     }
 }
 
@@ -179,9 +210,15 @@ pub fn differential_execution(
     let wasm = module.to_bytes();
     log_wasm(&wasm);
 
-    for config in &configs {
-        let engine = Engine::new(config).unwrap();
-        let store = Store::new(&engine);
+    for mut config in configs {
+        // Disable module linking since it isn't enabled by default for
+        // `wasm_smith::Module` but is enabled by default for our fuzz config.
+        // Since module linking is currently a breaking change this is required
+        // to accept modules that would otherwise be broken by module linking.
+        config.wasm_module_linking(false);
+
+        let engine = Engine::new(&config).unwrap();
+        let store = create_store(&engine);
 
         let module = Module::new(&engine, &wasm).unwrap();
 
@@ -190,13 +227,13 @@ pub fn differential_execution(
         // in and with what values. Like the results of exported functions,
         // calls to imports should also yield the same values for each
         // configuration, and we should assert that.
-        let imports = dummy_imports(&store, module.imports());
+        let linker = dummy_linker(&store, &module);
 
         // Don't unwrap this: there can be instantiation-/link-time errors that
         // aren't caught during validation or compilation. For example, an imported
         // table might not have room for an element segment that we want to
         // initialize into it.
-        let instance = match Instance::new(&store, &module, &imports) {
+        let instance = match linker.instantiate(&module) {
             Ok(instance) => instance,
             Err(e) => {
                 eprintln!(
@@ -326,7 +363,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
             ApiCall::StoreNew => {
                 log::trace!("creating store");
                 assert!(store.is_none());
-                store = Some(Store::new(engine.as_ref().unwrap()));
+                store = Some(create_store(engine.as_ref().unwrap()));
             }
 
             ApiCall::ModuleNew { id, wasm } => {
@@ -354,13 +391,13 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 };
 
                 let store = store.as_ref().unwrap();
-                let imports = dummy_imports(store, module.imports());
+                let linker = dummy_linker(store, module);
 
                 // Don't unwrap this: there can be instantiation-/link-time errors that
                 // aren't caught during validation or compilation. For example, an imported
                 // table might not have room for an element segment that we want to
                 // initialize into it.
-                if let Ok(instance) = Instance::new(store, &module, &imports) {
+                if let Ok(instance) = linker.instantiate(&module) {
                     instances.insert(id, instance);
                 }
             }
@@ -416,7 +453,8 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     let mut config = fuzz_config.to_wasmtime();
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
-    let store = Store::new(&Engine::new(&config).unwrap());
+    config.wasm_module_linking(false);
+    let store = create_store(&Engine::new(&config).unwrap());
     if fuzz_config.consume_fuel {
         store.add_fuel(u64::max_value()).unwrap();
     }
@@ -440,7 +478,7 @@ pub fn table_ops(
         let mut config = fuzz_config.to_wasmtime();
         config.wasm_reference_types(true);
         let engine = Engine::new(&config).unwrap();
-        let store = Store::new(&engine);
+        let store = create_store(&engine);
         if fuzz_config.consume_fuel {
             store.add_fuel(u64::max_value()).unwrap();
         }
@@ -555,7 +593,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     let mut wasmtime_config = config.to_wasmtime();
     wasmtime_config.cranelift_nan_canonicalization(true);
     let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
-    let wasmtime_store = Store::new(&wasmtime_engine);
+    let wasmtime_store = create_store(&wasmtime_engine);
     if config.consume_fuel {
         wasmtime_store.add_fuel(u64::max_value()).unwrap();
     }

@@ -1,8 +1,7 @@
 use anyhow::Result;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::*;
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::{sync::WasiCtxBuilder, Wasi};
 
 #[test]
 fn async_required() {
@@ -219,9 +218,6 @@ fn signatures_match() -> Result<()> {
 }
 
 #[test]
-// Note: Cranelift only supports refrerence types (used in the wasm in this
-// test) on x64.
-#[cfg(target_arch = "x86_64")]
 fn import_works() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
@@ -324,6 +320,141 @@ fn import_works() -> Result<()> {
     ])?;
 
     assert_eq!(HITS.load(SeqCst), 4);
+
+    Ok(())
+}
+
+#[test]
+fn call_import_many_args() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+            (import "" "host" (func (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)))
+            (func (export "run")
+                i32.const 1
+                i32.const 2
+                i32.const 3
+                i32.const 4
+                i32.const 5
+                i32.const 6
+                i32.const 7
+                i32.const 8
+                i32.const 9
+                i32.const 10
+                call 0
+            )
+        "#,
+    )?;
+
+    let mut config = Config::new();
+
+    config.wrap_host_func(
+        "",
+        "host",
+        |x1: i32,
+         x2: i32,
+         x3: i32,
+         x4: i32,
+         x5: i32,
+         x6: i32,
+         x7: i32,
+         x8: i32,
+         x9: i32,
+         x10: i32| {
+            assert_eq!(x1, 1);
+            assert_eq!(x2, 2);
+            assert_eq!(x3, 3);
+            assert_eq!(x4, 4);
+            assert_eq!(x5, 5);
+            assert_eq!(x6, 6);
+            assert_eq!(x7, 7);
+            assert_eq!(x8, 8);
+            assert_eq!(x9, 9);
+            assert_eq!(x10, 10);
+        },
+    );
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, &wasm)?;
+
+    let store = Store::new(&engine);
+    let instance = Instance::new(
+        &store,
+        &module,
+        &[store
+            .get_host_func("", "host")
+            .expect("should be defined")
+            .into()],
+    )?;
+
+    let run = instance.get_func("run").unwrap();
+    run.call(&[])?;
+
+    Ok(())
+}
+
+#[test]
+fn call_wasm_many_args() -> Result<()> {
+    let wasm = wat::parse_str(
+        r#"
+            (func (export "run") (param i32 i32 i32 i32 i32 i32 i32 i32 i32 i32)
+                i32.const 1
+                get_local 0
+                i32.ne
+                if
+                    unreachable
+                end
+
+                i32.const 10
+                get_local 9
+                i32.ne
+                if
+                    unreachable
+                end
+            )
+
+            (func (export "test")
+                i32.const 1
+                i32.const 2
+                i32.const 3
+                i32.const 4
+                i32.const 5
+                i32.const 6
+                i32.const 7
+                i32.const 8
+                i32.const 9
+                i32.const 10
+                call 0
+            )
+        "#,
+    )?;
+
+    let config = Config::new();
+    let engine = Engine::new(&config)?;
+    let module = Module::new(&engine, &wasm)?;
+
+    let store = Store::new(&engine);
+    let instance = Instance::new(&store, &module, &[])?;
+
+    let run = instance.get_func("run").unwrap();
+    run.call(&[
+        1.into(),
+        2.into(),
+        3.into(),
+        4.into(),
+        5.into(),
+        6.into(),
+        7.into(),
+        8.into(),
+        9.into(),
+        10.into(),
+    ])?;
+
+    let typed_run =
+        instance.get_typed_func::<(i32, i32, i32, i32, i32, i32, i32, i32, i32, i32), ()>("run")?;
+    typed_run.call((1, 2, 3, 4, 5, 6, 7, 8, 9, 10))?;
+
+    let test = instance.get_func("test").unwrap();
+    test.call(&[])?;
 
     Ok(())
 }

@@ -14,7 +14,7 @@ use regalloc::{
     PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
     RegUsageMapper, SpillSlot, VirtualReg, Writable,
 };
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::{String, ToString};
 
@@ -220,6 +220,12 @@ pub enum Inst {
     /// value. This is characteristic of mov instructions.
     XmmUnaryRmR {
         op: SseOpcode,
+        src: RegMem,
+        dst: Writable<Reg>,
+    },
+
+    XmmUnaryRmREvex {
+        op: Avx512Opcode,
         src: RegMem,
         dst: Writable<Reg>,
     },
@@ -501,7 +507,11 @@ pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
 }
 
 impl Inst {
-    fn isa_requirement(&self) -> Option<InstructionSet> {
+    /// Retrieve a list of ISA feature sets in which the instruction is available. An empty list
+    /// indicates that the instruction is available in the baseline feature set (i.e. SSE2 and
+    /// below); more than one `InstructionSet` in the list indicates that the instruction is present
+    /// *any* of the included ISA feature sets.
+    fn available_in_any_isa(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
             // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
             // don't have to be checked.
@@ -554,7 +564,7 @@ impl Inst {
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
             | Inst::ValueLabelMarker { .. }
-            | Inst::Unwind { .. } => None,
+            | Inst::Unwind { .. } => smallvec![],
 
             Inst::UnaryRmR { op, .. } => op.available_from(),
 
@@ -565,7 +575,9 @@ impl Inst {
             | Inst::XmmRmR { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmToGpr { op, .. }
-            | Inst::XmmUnaryRmR { op, .. } => Some(op.available_from()),
+            | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
+
+            Inst::XmmUnaryRmREvex { op, .. } => op.available_from(),
         }
     }
 }
@@ -698,6 +710,12 @@ impl Inst {
         src.assert_regclass_is(RegClass::V128);
         debug_assert!(dst.to_reg().get_class() == RegClass::V128);
         Inst::XmmUnaryRmR { op, src, dst }
+    }
+
+    pub(crate) fn xmm_unary_rm_r_evex(op: Avx512Opcode, src: RegMem, dst: Writable<Reg>) -> Inst {
+        src.assert_regclass_is(RegClass::V128);
+        debug_assert!(dst.to_reg().get_class() == RegClass::V128);
+        Inst::XmmUnaryRmREvex { op, src, dst }
     }
 
     pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
@@ -1121,11 +1139,7 @@ impl Inst {
     pub(crate) fn store(ty: Type, from_reg: Reg, to_addr: impl Into<SyntheticAmode>) -> Inst {
         let rc = from_reg.get_class();
         match rc {
-            RegClass::I64 => {
-                // Always store the full register, to ensure that the high bits are properly set
-                // when doing a full reload.
-                Inst::mov_r_m(OperandSize::Size64, from_reg, to_addr)
-            }
+            RegClass::I64 => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
             RegClass::V128 => {
                 let opcode = match ty {
                     types::F32 => SseOpcode::Movss,
@@ -1387,6 +1401,13 @@ impl PrettyPrint for Inst {
                 "{} {}, {}",
                 ljustify(op.to_string()),
                 src.show_rru_sized(mb_rru, op.src_size()),
+                show_ireg_sized(dst.to_reg(), mb_rru, 8),
+            ),
+
+            Inst::XmmUnaryRmREvex { op, src, dst, .. } => format!(
+                "{} {}, {}",
+                ljustify(op.to_string()),
+                src.show_rru_sized(mb_rru, 8),
                 show_ireg_sized(dst.to_reg(), mb_rru, 8),
             ),
 
@@ -1862,7 +1883,9 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
                 collector.add_def(Writable::from_reg(regs::rdx()));
             }
         },
-        Inst::UnaryRmR { src, dst, .. } | Inst::XmmUnaryRmR { src, dst, .. } => {
+        Inst::UnaryRmR { src, dst, .. }
+        | Inst::XmmUnaryRmR { src, dst, .. }
+        | Inst::XmmUnaryRmREvex { src, dst, .. } => {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
@@ -2205,6 +2228,11 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
         Inst::SignExtendData { .. } => {}
         Inst::XmmUnaryRmR {
+            ref mut src,
+            ref mut dst,
+            ..
+        }
+        | Inst::XmmUnaryRmREvex {
             ref mut src,
             ref mut dst,
             ..
@@ -2827,7 +2855,7 @@ impl EmitState {
         self.stack_map = None;
     }
 
-    fn cur_srcloc(&self) -> SourceLoc {
+    pub(crate) fn cur_srcloc(&self) -> SourceLoc {
         self.cur_srcloc
     }
 }

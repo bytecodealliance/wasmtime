@@ -8,8 +8,8 @@
 //! when modules can be constrained based on configurable limits.
 
 use super::{
-    initialize_instance, initialize_vmcontext, FiberStackError, InstanceAllocationRequest,
-    InstanceAllocator, InstanceHandle, InstantiationError,
+    initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
+    InstanceHandle, InstantiationError, ResourceLimiter,
 };
 use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
@@ -18,10 +18,11 @@ use std::cell::RefCell;
 use std::cmp::min;
 use std::convert::TryFrom;
 use std::mem;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
     entity::{EntitySet, PrimaryMap},
-    MemoryStyle, Module, Tunables, VMOffsets, WASM_PAGE_SIZE,
+    MemoryStyle, Module, Tunables, VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
 };
 
 cfg_if::cfg_if! {
@@ -41,10 +42,13 @@ cfg_if::cfg_if! {
     }
 }
 
-use imp::{
-    commit_memory_pages, commit_stack_pages, commit_table_pages, decommit_memory_pages,
-    decommit_stack_pages, decommit_table_pages,
-};
+use imp::{commit_memory_pages, commit_table_pages, decommit_memory_pages, decommit_table_pages};
+
+#[cfg(all(feature = "async", unix))]
+use imp::{commit_stack_pages, decommit_stack_pages};
+
+#[cfg(feature = "async")]
+use super::FiberStackError;
 
 fn round_up_to_pow2(n: usize, to: usize) -> usize {
     debug_assert!(to > 0);
@@ -299,7 +303,7 @@ impl InstancePool {
         let page_size = region::page::size();
 
         // Calculate the maximum size of an Instance structure given the limits
-        let offsets = VMOffsets {
+        let offsets = VMOffsets::from(VMOffsetsFields {
             pointer_size: std::mem::size_of::<*const u8>() as u8,
             num_signature_ids: module_limits.types,
             num_imported_functions: module_limits.imported_functions,
@@ -310,7 +314,7 @@ impl InstancePool {
             num_defined_tables: module_limits.tables,
             num_defined_memories: module_limits.memories,
             num_defined_globals: module_limits.globals,
-        };
+        });
 
         let instance_size = round_up_to_pow2(
             mem::size_of::<Instance>()
@@ -373,10 +377,45 @@ impl InstancePool {
         }
     }
 
+    unsafe fn setup_instance(
+        &self,
+        index: usize,
+        mut req: InstanceAllocationRequest,
+    ) -> Result<InstanceHandle, InstantiationError> {
+        let instance = self.instance(index);
+
+        instance.module = req.module.clone();
+        instance.offsets = VMOffsets::new(
+            std::mem::size_of::<*const u8>() as u8,
+            instance.module.as_ref(),
+        );
+        instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+
+        Self::set_instance_memories(
+            instance,
+            self.memories.get(index),
+            self.memories.max_wasm_pages,
+            req.limiter,
+        )?;
+
+        Self::set_instance_tables(
+            instance,
+            self.tables.get(index),
+            self.tables.max_elements,
+            req.limiter,
+        )?;
+
+        initialize_vmcontext(instance, req);
+
+        Ok(InstanceHandle {
+            instance: instance as _,
+        })
+    }
+
     fn allocate(
         &self,
         strategy: PoolingAllocationStrategy,
-        mut req: InstanceAllocationRequest,
+        req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
         let index = {
             let mut free_list = self.free_list.lock().unwrap();
@@ -387,28 +426,15 @@ impl InstancePool {
             free_list.swap_remove(free_index)
         };
 
-        let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
-
         unsafe {
-            let instance = self.instance(index);
-
-            instance.module = req.module.clone();
-            instance.offsets = VMOffsets::new(
-                std::mem::size_of::<*const u8>() as u8,
-                instance.module.as_ref(),
-            );
-            instance.host_state = host_state;
-
-            Self::set_instance_memories(
-                instance,
-                self.memories.get(index),
-                self.memories.max_wasm_pages,
-            )?;
-            Self::set_instance_tables(instance, self.tables.get(index), self.tables.max_elements)?;
-
-            initialize_vmcontext(instance, req);
-
-            Ok(InstanceHandle::new(instance as _))
+            self.setup_instance(index, req).or_else(|e| {
+                // Deallocate the allocated instance on error
+                let instance = self.instance(index);
+                self.deallocate(&InstanceHandle {
+                    instance: instance as _,
+                });
+                Err(e)
+            })
         }
     }
 
@@ -470,6 +496,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
         max_pages: u32,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -484,6 +511,7 @@ impl InstancePool {
                     memories.next().unwrap(),
                     max_pages,
                     commit_memory_pages,
+                    limiter,
                 )
                 .map_err(InstantiationError::Resource)?,
             );
@@ -500,6 +528,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut tables: impl Iterator<Item = *mut u8>,
         max_elements: u32,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -511,9 +540,10 @@ impl InstancePool {
             commit_table_pages(base, max_elements as usize * mem::size_of::<*mut u8>())
                 .map_err(InstantiationError::Resource)?;
 
-            instance
-                .tables
-                .push(Table::new_static(plan, base as _, max_elements));
+            instance.tables.push(
+                Table::new_static(plan, base as _, max_elements, limiter)
+                    .map_err(InstantiationError::Resource)?,
+            );
         }
 
         let mut dropped_elements = instance.dropped_elements.borrow_mut();
@@ -705,6 +735,7 @@ impl TablePool {
 ///
 /// The top of the stack (starting stack pointer) is returned when a stack is allocated
 /// from the pool.
+#[cfg(all(feature = "async", unix))]
 #[derive(Debug)]
 struct StackPool {
     mapping: Mmap,
@@ -714,13 +745,13 @@ struct StackPool {
     free_list: Mutex<Vec<usize>>,
 }
 
+#[cfg(all(feature = "async", unix))]
 impl StackPool {
     fn new(instance_limits: &InstanceLimits, stack_size: usize) -> Result<Self> {
         let page_size = region::page::size();
 
-        // On Windows, don't allocate any fiber stacks as native fibers are always used
         // Add a page to the stack size for the guard page when using fiber stacks
-        let stack_size = if cfg!(windows) || stack_size == 0 {
+        let stack_size = if stack_size == 0 {
             0
         } else {
             round_up_to_pow2(stack_size, page_size)
@@ -758,8 +789,10 @@ impl StackPool {
         })
     }
 
-    fn allocate(&self, strategy: PoolingAllocationStrategy) -> Result<*mut u8, FiberStackError> {
-        // Stacks are not supported if nothing was allocated
+    fn allocate(
+        &self,
+        strategy: PoolingAllocationStrategy,
+    ) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
         if self.stack_size == 0 {
             return Err(FiberStackError::NotSupported);
         }
@@ -787,32 +820,36 @@ impl StackPool {
             commit_stack_pages(bottom_of_stack, size_without_guard)
                 .map_err(FiberStackError::Resource)?;
 
-            // The top of the stack should be returned
-            Ok(bottom_of_stack.add(size_without_guard))
+            wasmtime_fiber::FiberStack::from_top_ptr(bottom_of_stack.add(size_without_guard))
+                .map_err(|e| FiberStackError::Resource(e.into()))
         }
     }
 
-    fn deallocate(&self, top_of_stack: *mut u8) {
-        debug_assert!(!top_of_stack.is_null());
+    fn deallocate(&self, stack: &wasmtime_fiber::FiberStack) {
+        let top = stack
+            .top()
+            .expect("fiber stack not allocated from the pool") as usize;
 
-        unsafe {
-            // Remove the guard page from the size
-            let stack_size = self.stack_size - self.page_size;
-            let bottom_of_stack = top_of_stack.sub(stack_size);
+        let base = self.mapping.as_ptr() as usize;
+        let len = self.mapping.len();
+        assert!(
+            top > base && top <= (base + len),
+            "fiber stack top pointer not in range"
+        );
 
-            let base = self.mapping.as_ptr() as usize;
-            let start_of_stack = (bottom_of_stack as usize) - self.page_size;
+        // Remove the guard page from the size
+        let stack_size = self.stack_size - self.page_size;
+        let bottom_of_stack = top - stack_size;
+        let start_of_stack = bottom_of_stack - self.page_size;
+        debug_assert!(start_of_stack >= base && start_of_stack < (base + len));
+        debug_assert!((start_of_stack - base) % self.stack_size == 0);
 
-            debug_assert!(start_of_stack >= base && start_of_stack < (base + self.mapping.len()));
-            debug_assert!((start_of_stack - base) % self.stack_size == 0);
+        let index = (start_of_stack - base) / self.stack_size;
+        debug_assert!(index < self.max_instances);
 
-            let index = (start_of_stack - base) / self.stack_size;
-            debug_assert!(index < self.max_instances);
+        decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
 
-            decommit_stack_pages(bottom_of_stack, stack_size).unwrap();
-
-            self.free_list.lock().unwrap().push(index);
-        }
+        self.free_list.lock().unwrap().push(index);
     }
 }
 
@@ -828,7 +865,9 @@ pub struct PoolingInstanceAllocator {
     instance_limits: InstanceLimits,
     // This is manually drop so that the pools unmap their memory before the page fault handler drops.
     instances: mem::ManuallyDrop<InstancePool>,
+    #[cfg(all(feature = "async", unix))]
     stacks: StackPool,
+    stack_size: usize,
     #[cfg(all(feature = "uffd", target_os = "linux"))]
     _fault_handler: imp::PageFaultHandler,
 }
@@ -857,7 +896,6 @@ impl PoolingInstanceAllocator {
             min(instance_limits.memory_reservation_size, 0x200000000);
 
         let instances = InstancePool::new(&module_limits, &instance_limits)?;
-        let stacks = StackPool::new(&instance_limits, stack_size)?;
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         let _fault_handler = imp::PageFaultHandler::new(&instances)?;
@@ -867,7 +905,9 @@ impl PoolingInstanceAllocator {
             module_limits,
             instance_limits,
             instances: mem::ManuallyDrop::new(instances),
-            stacks,
+            #[cfg(all(feature = "async", unix))]
+            stacks: StackPool::new(&instance_limits, stack_size)?,
+            stack_size,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             _fault_handler,
         })
@@ -956,12 +996,30 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         self.instances.deallocate(handle);
     }
 
-    fn allocate_fiber_stack(&self) -> Result<*mut u8, FiberStackError> {
+    #[cfg(all(feature = "async", unix))]
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
         self.stacks.allocate(self.strategy)
     }
 
-    unsafe fn deallocate_fiber_stack(&self, stack: *mut u8) {
+    #[cfg(all(feature = "async", unix))]
+    unsafe fn deallocate_fiber_stack(&self, stack: &wasmtime_fiber::FiberStack) {
         self.stacks.deallocate(stack);
+    }
+
+    #[cfg(all(feature = "async", windows))]
+    fn allocate_fiber_stack(&self) -> Result<wasmtime_fiber::FiberStack, FiberStackError> {
+        if self.stack_size == 0 {
+            return Err(FiberStackError::NotSupported);
+        }
+
+        // On windows, we don't use a stack pool as we use the native fiber implementation
+        wasmtime_fiber::FiberStack::new(self.stack_size)
+            .map_err(|e| FiberStackError::Resource(e.into()))
+    }
+
+    #[cfg(all(feature = "async", windows))]
+    unsafe fn deallocate_fiber_stack(&self, _stack: &wasmtime_fiber::FiberStack) {
+        // A no-op as we don't own the fiber stack on Windows
     }
 }
 
@@ -1310,7 +1368,9 @@ mod test {
         assert_eq!(instances.offsets.num_defined_tables, 1);
         assert_eq!(instances.offsets.num_defined_memories, 1);
         assert_eq!(instances.offsets.num_defined_globals, 0);
-        assert_eq!(instances.instance_size, 4096);
+        // As of April 2021, the instance struct's size is largely below the size of a single page,
+        // so it's safe to assume it's been rounded to the size of a single memory page here.
+        assert_eq!(instances.instance_size, region::page::size());
         assert_eq!(instances.max_instances, 3);
 
         assert_eq!(&*instances.free_list.lock().unwrap(), &[0, 1, 2]);
@@ -1333,11 +1393,12 @@ mod test {
                                 memories: &[],
                                 globals: &[],
                             },
-                            lookup_shared_signature: &|_| VMSharedSignatureIndex::default(),
+                            shared_signatures: VMSharedSignatureIndex::default().into(),
                             host_state: Box::new(()),
                             interrupts: std::ptr::null(),
                             externref_activations_table: std::ptr::null_mut(),
-                            stack_map_registry: std::ptr::null_mut(),
+                            module_info_lookup: None,
+                            limiter: None,
                         },
                     )
                     .expect("allocation should succeed"),
@@ -1357,11 +1418,12 @@ mod test {
                     memories: &[],
                     globals: &[],
                 },
-                lookup_shared_signature: &|_| VMSharedSignatureIndex::default(),
+                shared_signatures: VMSharedSignatureIndex::default().into(),
                 host_state: Box::new(()),
                 interrupts: std::ptr::null(),
                 externref_activations_table: std::ptr::null_mut(),
-                stack_map_registry: std::ptr::null_mut(),
+                module_info_lookup: None,
+                limiter: None,
             },
         ) {
             Err(InstantiationError::Limit(3)) => {}
@@ -1446,10 +1508,12 @@ mod test {
             },
         )?;
 
-        assert_eq!(pool.table_size, 4096);
+        let host_page_size = region::page::size();
+
+        assert_eq!(pool.table_size, host_page_size);
         assert_eq!(pool.max_tables, 4);
         assert_eq!(pool.max_instances, 7);
-        assert_eq!(pool.page_size, 4096);
+        assert_eq!(pool.page_size, host_page_size);
         assert_eq!(pool.max_elements, 100);
 
         let base = pool.mapping.as_ptr() as usize;
@@ -1470,7 +1534,7 @@ mod test {
         Ok(())
     }
 
-    #[cfg(all(unix, target_pointer_width = "64"))]
+    #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_pool() -> Result<()> {
         let pool = StackPool::new(
@@ -1481,9 +1545,10 @@ mod test {
             1,
         )?;
 
-        assert_eq!(pool.stack_size, 8192);
+        let native_page_size = region::page::size();
+        assert_eq!(pool.stack_size, 2 * native_page_size);
         assert_eq!(pool.max_instances, 10);
-        assert_eq!(pool.page_size, 4096);
+        assert_eq!(pool.page_size, native_page_size);
 
         assert_eq!(
             &*pool.free_list.lock().unwrap(),
@@ -1497,7 +1562,10 @@ mod test {
             let stack = pool
                 .allocate(PoolingAllocationStrategy::NextAvailable)
                 .expect("allocation should succeed");
-            assert_eq!(((stack as usize - base) / pool.stack_size) - 1, i);
+            assert_eq!(
+                ((stack.top().unwrap() as usize - base) / pool.stack_size) - 1,
+                i
+            );
             stacks.push(stack);
         }
 
@@ -1512,7 +1580,7 @@ mod test {
         };
 
         for stack in stacks {
-            pool.deallocate(stack);
+            pool.deallocate(&stack);
         }
 
         assert_eq!(
@@ -1584,7 +1652,7 @@ mod test {
     }
 
     #[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
-    #[cfg(all(unix, target_pointer_width = "64"))]
+    #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
         let allocator = PoolingInstanceAllocator::new(
@@ -1611,13 +1679,13 @@ mod test {
             for _ in 0..10 {
                 let stack = allocator.allocate_fiber_stack()?;
 
-                // The stack pointer is at the top, so decerement it first
-                let addr = stack.sub(1);
+                // The stack pointer is at the top, so decrement it first
+                let addr = stack.top().unwrap().sub(1);
 
                 assert_eq!(*addr, 0);
                 *addr = 1;
 
-                allocator.deallocate_fiber_stack(stack);
+                allocator.deallocate_fiber_stack(&stack);
             }
         }
 

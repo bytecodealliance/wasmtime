@@ -89,8 +89,8 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
     fn sp(&self) -> u16 {
         X86_64::RSP.0
     }
-    fn fp(&self) -> u16 {
-        X86_64::RBP.0
+    fn fp(&self) -> Option<u16> {
+        Some(X86_64::RBP.0)
     }
 }
 
@@ -109,6 +109,7 @@ mod tests {
     use target_lexicon::triple;
 
     #[test]
+    #[cfg_attr(feature = "old-x86-backend", ignore)]
     fn test_simple_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")
@@ -151,6 +152,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "old-x86-backend", ignore)]
     fn test_multi_return_func() {
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86 ISA")

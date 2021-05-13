@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; for insertlane, floats are legalized differently than integers and booleans; integers and
 ; booleans use x86_pinsr which is manually placed in the IR so that it can be binemit-tested

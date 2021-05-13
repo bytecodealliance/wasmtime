@@ -5,7 +5,6 @@ use crate::ir::{types, ConstantData, Type};
 use core::convert::TryInto;
 use core::fmt::{self, Display, Formatter};
 use core::ptr;
-use thiserror::Error;
 
 /// Represent a data value. Where [Value] is an SSA reference, [DataValue] is the type + value
 /// that would be referred to by a [Value].
@@ -97,13 +96,36 @@ impl DataValue {
 }
 
 /// Record failures to cast [DataValue].
-#[derive(Error, Debug, PartialEq)]
+#[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub enum DataValueCastFailure {
-    #[error("unable to cast data value of type {0} to type {1}")]
     TryInto(Type, Type),
-    #[error("unable to cast i64({0}) to a data value of type {1}")]
     FromInteger(i64, Type),
+}
+
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
+impl std::error::Error for DataValueCastFailure {}
+
+impl Display for DataValueCastFailure {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            DataValueCastFailure::TryInto(from, to) => {
+                write!(
+                    f,
+                    "unable to cast data value of type {} to type {}",
+                    from, to
+                )
+            }
+            DataValueCastFailure::FromInteger(val, to) => {
+                write!(
+                    f,
+                    "unable to cast i64({}) to a data value of type {}",
+                    val, to
+                )
+            }
+        }
+    }
 }
 
 /// Helper for creating conversion implementations for [DataValue].

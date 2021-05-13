@@ -1,6 +1,7 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::ir::Function;
+use crate::log::DeferredDisplay;
 use crate::machinst::*;
 use crate::settings;
 use crate::timing;
@@ -29,9 +30,11 @@ where
         lower.lower(b)?
     };
 
+    // Creating the vcode string representation may be costly for large functions, so defer its
+    // rendering.
     debug!(
         "vcode from lowering: \n{}",
-        vcode.show_rru(Some(b.reg_universe()))
+        DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
     );
 
     // Perform register allocation.
@@ -103,7 +106,7 @@ where
 
     debug!(
         "vcode after regalloc: final version:\n{}",
-        vcode.show_rru(Some(b.reg_universe()))
+        DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
     );
 
     Ok(vcode)

@@ -2,7 +2,7 @@ test compile
 set opt_level=speed_and_size
 set is_pic
 set enable_probestack=false
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; An empty function.
 

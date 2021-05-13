@@ -3,7 +3,7 @@
 use crate::ir::Function;
 use crate::isa::{
     unwind::systemv::{RegisterMappingError, UnwindInfo},
-    CallConv, RegUnit, TargetIsa,
+    RegUnit, TargetIsa,
 };
 use crate::result::CodegenResult;
 use gimli::{write::CommonInformationEntry, Encoding, Format, Register, X86_64};
@@ -97,8 +97,8 @@ pub(crate) fn create_unwind_info(
     isa: &dyn TargetIsa,
 ) -> CodegenResult<Option<UnwindInfo>> {
     // Only System V-like calling conventions are supported
-    match func.signature.call_conv {
-        CallConv::Fast | CallConv::Cold | CallConv::SystemV => {}
+    match isa.unwind_info_kind() {
+        crate::machinst::UnwindInfoKind::SystemV => {}
         _ => return Ok(None),
     }
 
@@ -121,8 +121,8 @@ pub(crate) fn create_unwind_info(
         fn sp(&self) -> u16 {
             X86_64::RSP.0
         }
-        fn fp(&self) -> u16 {
-            X86_64::RBP.0
+        fn fp(&self) -> Option<u16> {
+            Some(X86_64::RBP.0)
         }
     }
     let map = RegisterMapper(isa);

@@ -6,7 +6,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/strings.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> strings::Strings for WasiCtx<'a> {
     fn hello_string(&self, a_string: &GuestPtr<str>) -> Result<u32, types::Errno> {

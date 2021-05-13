@@ -137,18 +137,20 @@ mod tests {
         if let Ok(isa_builder) = builder() {
             let flag_builder = settings::builder();
             let isa = isa_builder.finish(settings::Flags::new(flag_builder));
-            if cfg!(any(unix, target_os = "nebulet")) {
+
+            if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+                assert_eq!(isa.default_call_conv(), CallConv::AppleAarch64);
+            } else if cfg!(any(unix, target_os = "nebulet")) {
                 assert_eq!(isa.default_call_conv(), CallConv::SystemV);
             } else if cfg!(windows) {
                 assert_eq!(isa.default_call_conv(), CallConv::WindowsFastcall);
             }
+
             if cfg!(target_pointer_width = "64") {
                 assert_eq!(isa.pointer_bits(), 64);
-            }
-            if cfg!(target_pointer_width = "32") {
+            } else if cfg!(target_pointer_width = "32") {
                 assert_eq!(isa.pointer_bits(), 32);
-            }
-            if cfg!(target_pointer_width = "16") {
+            } else if cfg!(target_pointer_width = "16") {
                 assert_eq!(isa.pointer_bits(), 16);
             }
         }

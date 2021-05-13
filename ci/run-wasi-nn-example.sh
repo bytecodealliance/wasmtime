@@ -7,7 +7,7 @@
 # executed with the Wasmtime CLI.
 set -e
 WASMTIME_DIR=$(dirname "$0" | xargs dirname)
-FIXTURE=https://github.com/intel/openvino-rs/raw/main/crates/openvino/tests/fixtures/alexnet
+FIXTURE=https://github.com/intel/openvino-rs/raw/main/crates/openvino/tests/fixtures/mobilenet
 if [ -z "${1+x}" ]; then
     # If no temporary directory is specified, create one.
     TMP_DIR=$(mktemp -d -t ci-XXXXXXXXXX)
@@ -26,9 +26,9 @@ source /opt/intel/openvino/bin/setupvars.sh
 OPENVINO_INSTALL_DIR=/opt/intel/openvino cargo build -p wasmtime-cli --features wasi-nn
 
 # Download all necessary test fixtures to the temporary directory.
-wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/alexnet.bin
-wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/alexnet.xml
-wget --no-clobber --directory-prefix=$TMP_DIR $FIXTURE/tensor-1x3x227x227-f32.bgr
+wget --no-clobber $FIXTURE/mobilenet.bin --output-document=$TMP_DIR/model.bin
+wget --no-clobber $FIXTURE/mobilenet.xml --output-document=$TMP_DIR/model.xml
+wget --no-clobber $FIXTURE/tensor-1x224x224x3-f32.bgr --output-document=$TMP_DIR/tensor.bgr
 
 # Now build an example that uses the wasi-nn API.
 pushd $WASMTIME_DIR/crates/wasi-nn/examples/classification-example
@@ -37,7 +37,7 @@ cp target/wasm32-wasi/release/wasi-nn-example.wasm $TMP_DIR
 popd
 
 # Run the example in Wasmtime (note that the example uses `fixture` as the expected location of the model/tensor files).
-OPENVINO_INSTALL_DIR=/opt/intel/openvino cargo run --features wasi-nn -- run --mapdir fixture::$TMP_DIR $TMP_DIR/wasi-nn-example.wasm
+cargo run -- run --mapdir fixture::$TMP_DIR $TMP_DIR/wasi-nn-example.wasm --wasi-modules=experimental-wasi-nn
 
 # Clean up the temporary directory only if it was not specified (users may want to keep the directory around).
 if [[ $REMOVE_TMP_DIR -eq 1 ]]; then

@@ -1,6 +1,6 @@
 test safepoint
 set enable_safepoints=true
-target x86_64
+target x86_64 legacy
 
 function %direct() -> r64 {
     fn0 = %none()

@@ -18,7 +18,6 @@ use crate::wasm_unsupported;
 use core::convert::TryFrom;
 use core::convert::TryInto;
 use cranelift_codegen::ir::immediates::V128Imm;
-use cranelift_codegen::ir::{self, AbiParam, Signature};
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
 use std::boxed::Box;
@@ -110,19 +109,7 @@ pub fn parse_type_section<'a>(
     for entry in types {
         match entry? {
             TypeDef::Func(wasm_func_ty) => {
-                let mut sig =
-                    Signature::new(ModuleEnvironment::target_config(environ).default_call_conv);
-                sig.params.extend(wasm_func_ty.params.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty, environ)
-                        .expect("only numeric types are supported in function signatures");
-                    AbiParam::new(cret_arg)
-                }));
-                sig.returns.extend(wasm_func_ty.returns.iter().map(|ty| {
-                    let cret_arg: ir::Type = type_to_type(*ty, environ)
-                        .expect("only numeric types are supported in function signatures");
-                    AbiParam::new(cret_arg)
-                }));
-                environ.declare_type_func(wasm_func_ty.clone().try_into()?, sig)?;
+                environ.declare_type_func(wasm_func_ty.clone().try_into()?)?;
                 module_translation_state
                     .wasm_types
                     .push((wasm_func_ty.params, wasm_func_ty.returns));
@@ -390,7 +377,7 @@ pub fn parse_element_section<'data>(
             } => {
                 let mut init_expr_reader = init_expr.get_binary_reader();
                 let (base, offset) = match init_expr_reader.read_operator()? {
-                    Operator::I32Const { value } => (None, value as u32 as usize),
+                    Operator::I32Const { value } => (None, value as u32),
                     Operator::GlobalGet { global_index } => {
                         (Some(GlobalIndex::from_u32(global_index)), 0)
                     }
@@ -401,12 +388,6 @@ pub fn parse_element_section<'data>(
                         ));
                     }
                 };
-                // Check for offset + len overflow
-                if offset.checked_add(segments.len()).is_none() {
-                    return Err(wasm_unsupported!(
-                        "element segment offset and length overflows"
-                    ));
-                }
                 environ.declare_table_elements(
                     TableIndex::from_u32(table_index),
                     base,
@@ -419,7 +400,7 @@ pub fn parse_element_section<'data>(
                 environ.declare_passive_element(index, segments)?;
             }
             ElementKind::Declared => {
-                // Nothing to do here.
+                environ.declare_elements(segments)?;
             }
         }
     }
@@ -442,7 +423,7 @@ pub fn parse_data_section<'data>(
             } => {
                 let mut init_expr_reader = init_expr.get_binary_reader();
                 let (base, offset) = match init_expr_reader.read_operator()? {
-                    Operator::I32Const { value } => (None, value as u32 as usize),
+                    Operator::I32Const { value } => (None, value as u32),
                     Operator::GlobalGet { global_index } => {
                         (Some(GlobalIndex::from_u32(global_index)), 0)
                     }
@@ -453,12 +434,6 @@ pub fn parse_data_section<'data>(
                         ))
                     }
                 };
-                // Check for offset + len overflow
-                if offset.checked_add(data.len()).is_none() {
-                    return Err(wasm_unsupported!(
-                        "data segment offset and length overflows"
-                    ));
-                }
                 environ.declare_data_initialization(
                     MemoryIndex::from_u32(memory_index),
                     base,

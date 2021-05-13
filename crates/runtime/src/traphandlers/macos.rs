@@ -13,19 +13,19 @@
 //! here may not be super well documented. This file is 100% lifted from
 //! SpiderMonkey and then adapted for Wasmtime's purposes. Credit for almost
 //! all of this file goes to SpiderMonkey for figuring out all the fiddly bits.
-//! See also https://searchfox.org/mozilla-central/source/js/src/wasm/WasmSignalHandlers.cpp for
-//! the original code.
+//! See also
+//! <https://searchfox.org/mozilla-central/source/js/src/wasm/WasmSignalHandlers.cpp>
+//! for the original code.
 //!
 //! The high-level overview is that when using mach ports a thread is blocked
 //! when it generates an exception and then a message can be read from the
 //! port. This means that, unlike signals, threads can't fix their own traps.
 //! Instead a helper thread is spun up to service exception messages. This is
 //! also in conflict with Wasmtime's exception handling currently which is to
-//! use a thread-local to figure out whether a pc is a wasm pc or not on a
-//! trap. To work around this we have a global map from mach thread numbers to
-//! the state for that thread, updated on entry/exit from wasm. This is likely
-//! slower than signals which do less updating on wasm entry/exit, but hopefully
-//! by the time this is a problem we can figure out a better solution.
+//! use a thread-local to store information about how to unwind. Additionally
+//! this requires that the check of whether a pc is a wasm trap or not is a
+//! global check rather than a per-thread check. This necessitates the existence
+//! of `GlobalModuleRegistry` in the `wasmtime` crate.
 //!
 //! Otherwise this file heavily uses the `mach` Rust crate for type and
 //! function declarations. Many bits and pieces are copied or translated from
@@ -33,7 +33,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::traphandlers::{tls, CallThreadState, Trap, Unwind};
+use crate::traphandlers::{tls, Trap, Unwind};
 use mach::exception_types::*;
 use mach::kern_return::*;
 use mach::mach_init::*;
@@ -42,14 +42,11 @@ use mach::message::*;
 use mach::port::*;
 use mach::thread_act::*;
 use mach::traps::*;
-use std::cell::Cell;
-use std::collections::HashMap;
 use std::mem;
-use std::ptr;
-use std::sync::Mutex;
 use std::thread;
 
-/// Other `mach` declarations awaiting https://github.com/fitzgen/mach/pull/64 to be merged.
+/// Other `mach` declarations awaiting <https://github.com/fitzgen/mach/pull/64>
+/// to be merged.
 mod mach_addons {
     #![allow(non_camel_case_types)]
     #![allow(non_upper_case_globals)]
@@ -154,20 +151,10 @@ pub enum Void {}
 /// Wasmtime on macOS.
 pub type SignalHandler<'a> = dyn Fn(Void) -> bool + 'a;
 
-/// Process-global map for mapping thread names to their state to figure out
-/// whether a thread's trap is related to wasm or not. This is extremely
-/// unsafe and caution must be used when accessing. Be sure to read
-/// documentation below on this.
-static mut MAP: *mut Mutex<HashMap<mach_port_name_t, *const CallThreadState<'static>>> =
-    ptr::null_mut();
-
 /// Process-global port that we use to route thread-level exceptions to.
 static mut WASMTIME_PORT: mach_port_name_t = MACH_PORT_NULL;
 
 pub unsafe fn platform_init() {
-    // Initialize the process global map
-    MAP = Box::into_raw(Default::default());
-
     // Allocate our WASMTIME_PORT and make sure that it can be sent to so we
     // can receive exceptions.
     let me = mach_task_self();
@@ -289,7 +276,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 
             let get_pc = |state: &ThreadState| state.__rip as *const u8;
 
-            let resume = |state: &mut ThreadState, pc: usize, jmp_buf: usize| {
+            let resume = |state: &mut ThreadState, pc: usize| {
                 // The x86_64 ABI requires a 16-byte stack alignment for
                 // functions, so typically we'll be 16-byte aligned. In this
                 // case we simulate a `call` instruction by decrementing the
@@ -315,7 +302,6 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 }
                 state.__rip = unwind as u64;
                 state.__rdi = pc as u64;
-                state.__rsi = jmp_buf as u64;
             };
             let mut thread_state = ThreadState::new();
         } else if #[cfg(target_arch = "aarch64")] {
@@ -325,18 +311,17 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 
             let get_pc = |state: &ThreadState| state.__pc as *const u8;
 
-            let resume = |state: &mut ThreadState, pc: usize, jmp_buf: usize| {
+            let resume = |state: &mut ThreadState, pc: usize| {
                 // Clobber LR with the faulting PC, so unwinding resumes at the
                 // faulting instruction. The previous value of LR has been saved
                 // by the callee (in Cranelift generated code), so no need to
                 // stash it.
                 state.__lr = pc as u64;
 
-                // Fill in the 2 arguments to unwind here, and set PC to it, so
+                // Fill in the argument to unwind here, and set PC to it, so
                 // it looks like a call to unwind.
-                state.__pc = unwind as u64;
                 state.__x[0] = pc as u64;
-                state.__x[1] = jmp_buf as u64;
+                state.__pc = unwind as u64;
             };
             let mut thread_state = mem::zeroed::<ThreadState>();
         } else {
@@ -372,19 +357,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // pointer value and if `MAP` changes happen after we read our entry that's
     // ok since they won't invalidate our entry.
     let pc = get_pc(&thread_state);
-    let state = (*MAP)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(&origin_thread)
-        .copied();
-    let jmp_buf = match state {
-        Some(state) => (*state).jmp_buf_if_trap(pc, |_| false),
-        None => ptr::null(),
-    };
-    if jmp_buf.is_null() {
-        return false;
-    }
-    if jmp_buf as usize == 1 {
+    if !super::IS_WASM_PC(pc as usize) {
         return false;
     }
 
@@ -392,7 +365,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // force the thread itself to trap. The thread's register state is
     // configured to resume in the `unwind` function below, we update the
     // thread's register state, and then we're off to the races.
-    resume(&mut thread_state, pc as usize, jmp_buf as usize);
+    resume(&mut thread_state, pc as usize);
     let kret = thread_set_state(
         origin_thread,
         thread_state_flavor,
@@ -409,13 +382,13 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 /// a native backtrace once we've switched back to the thread itself. After
 /// the backtrace is captured we can do the usual `longjmp` back to the source
 /// of the wasm code.
-unsafe extern "C" fn unwind(wasm_pc: *const u8, jmp_buf: *const u8) -> ! {
-    tls::with(|state| {
-        if let Some(state) = state {
-            state.capture_backtrace(wasm_pc);
-        }
+unsafe extern "C" fn unwind(wasm_pc: *const u8) -> ! {
+    let jmp_buf = tls::with(|state| {
+        let state = state.unwrap();
+        state.capture_backtrace(wasm_pc);
+        state.jmp_buf.get()
     });
-
+    debug_assert!(!jmp_buf.is_null());
     Unwind(jmp_buf);
 }
 
@@ -451,46 +424,16 @@ impl Drop for ClosePort {
 /// task-level port which is where we'd expected things like breakpad/crashpad
 /// exception handlers to get registered.
 pub fn lazy_per_thread_init() -> Result<(), Trap> {
-    thread_local! {
-        static PORTS_SET: Cell<bool> = Cell::new(false);
-    }
-
-    PORTS_SET.with(|ports| {
-        if ports.replace(true) {
-            return;
-        }
-
-        unsafe {
-            assert!(WASMTIME_PORT != MACH_PORT_NULL);
-            let kret = thread_set_exception_ports(
-                MY_PORT.with(|p| p.0),
-                EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
-                WASMTIME_PORT,
-                EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
-                mach_addons::THREAD_STATE_NONE,
-            );
-            assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
-        }
-    });
-    Ok(())
-}
-
-/// This hook is invoked whenever TLS state for the current thread is updated
-/// to the `ptr` specified.
-///
-/// The purpose for hooking this on macOS is we register in a process-global map
-/// that our mach thread's state is `ptr` at this time. This allows the
-/// exception handling thread to lookup in this map later if our thread
-/// generates an exception.
-///
-/// Note that in general this is quite unsafe since we're moving non-Send state
-/// (`ptr`) which is also only valid for a short portion of the program (it
-/// lives on the stack) into a global portion of the program. This needs to be
-/// kept tightly in sync with `handle_exception` above where it's accessed in a
-/// very limited fashion.
-pub fn register_tls(ptr: *const CallThreadState<'static>) {
     unsafe {
-        let me = MY_PORT.with(|p| p.0);
-        (*MAP).lock().unwrap().insert(me, ptr);
+        assert!(WASMTIME_PORT != MACH_PORT_NULL);
+        let kret = thread_set_exception_ports(
+            MY_PORT.with(|p| p.0),
+            EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
+            WASMTIME_PORT,
+            EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
+            mach_addons::THREAD_STATE_NONE,
+        );
+        assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
     }
+    Ok(())
 }

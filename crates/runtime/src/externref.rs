@@ -99,18 +99,16 @@
 //! Examination of Deferred Reference Counting and Cycle Detection* by Quinane:
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
-use std::alloc::Layout;
 use std::any::Any;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::cmp::Ordering;
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use std::ops::Deref;
 use std::ptr::{self, NonNull};
-use std::rc::Rc;
-use wasmtime_environ::{ir::StackMap, StackMapInformation};
+use std::{alloc::Layout, sync::Arc};
+use wasmtime_environ::ir::StackMap;
 
 /// An external reference to some opaque data.
 ///
@@ -522,13 +520,13 @@ pub struct VMExternRefActivationsTable {
     /// than create a new hash set every GC.
     precise_stack_roots: RefCell<HashSet<VMExternRefWithTraits>>,
 
-    /// A pointer to a `u8` on the youngest host stack frame before we called
+    /// A pointer to the youngest host stack frame before we called
     /// into Wasm for the first time. When walking the stack in garbage
     /// collection, if we don't find this frame, then we failed to walk every
     /// Wasm stack frame, which means we failed to find all on-stack,
     /// inside-a-Wasm-frame roots, and doing a GC could lead to freeing one of
     /// those missed roots, and use after free.
-    stack_canary: Cell<Option<NonNull<u8>>>,
+    stack_canary: Cell<Option<usize>>,
 }
 
 impl VMExternRefActivationsTable {
@@ -596,10 +594,10 @@ impl VMExternRefActivationsTable {
     pub unsafe fn insert_with_gc(
         &self,
         externref: VMExternRef,
-        stack_maps_registry: &StackMapRegistry,
+        module_info_lookup: &dyn ModuleInfoLookup,
     ) {
         if let Err(externref) = self.try_insert(externref) {
-            self.gc_and_insert_slow(externref, stack_maps_registry);
+            self.gc_and_insert_slow(externref, module_info_lookup);
         }
     }
 
@@ -607,9 +605,9 @@ impl VMExternRefActivationsTable {
     unsafe fn gc_and_insert_slow(
         &self,
         externref: VMExternRef,
-        stack_maps_registry: &StackMapRegistry,
+        module_info_lookup: &dyn ModuleInfoLookup,
     ) {
-        gc(stack_maps_registry, self);
+        gc(module_info_lookup, self);
 
         // Might as well insert right into the hash set, rather than the bump
         // chunk, since we are already on a slow path and we get de-duplication
@@ -717,260 +715,54 @@ impl VMExternRefActivationsTable {
         }
     }
 
-    /// Set the stack canary around a call into Wasm.
+    /// Fetches the current value of this table's stack canary.
     ///
-    /// The return value should not be dropped until after the Wasm call has
-    /// returned.
+    /// This should only be used in conjunction with setting the stack canary
+    /// below if the return value is `None` typically. This is called from RAII
+    /// guards in `wasmtime::func::invoke_wasm_and_catch_traps`.
     ///
-    /// While this method is always safe to call (or not call), it is unsafe to
-    /// call the `wasmtime_runtime::gc` function unless this method is called at
-    /// the proper times and its return value properly outlives its Wasm call.
-    ///
-    /// For `gc` to be safe, this is only *strictly required* to surround the
-    /// oldest host-->Wasm stack frame transition on this thread, but repeatedly
-    /// calling it is idempotent and cheap, so it is recommended to call this
-    /// for every host-->Wasm call.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use wasmtime_runtime::*;
-    ///
-    /// # let get_table_from_somewhere = || unimplemented!();
-    /// let table: &VMExternRefActivationsTable = get_table_from_somewhere();
-    ///
-    /// // Set the canary before a Wasm call. The canary should always be a
-    /// // local on the stack.
-    /// let canary = 0;
-    /// let auto_reset_canary = table.set_stack_canary(&canary);
-    ///
-    /// // Do the call into Wasm.
-    /// # let call_into_wasm = || unimplemented!();
-    /// call_into_wasm();
-    ///
-    /// // Only drop the value returned by `set_stack_canary` after the Wasm
-    /// // call has returned.
-    /// drop(auto_reset_canary);
-    /// ```
-    pub fn set_stack_canary<'a>(&'a self, canary: &u8) -> impl Drop + 'a {
-        let should_reset = if self.stack_canary.get().is_none() {
-            let canary = canary as *const u8 as *mut u8;
-            self.stack_canary.set(Some(unsafe {
-                debug_assert!(!canary.is_null());
-                NonNull::new_unchecked(canary)
-            }));
-            true
-        } else {
-            false
-        };
+    /// For more information on canaries see the gc functions below.
+    #[inline]
+    pub fn stack_canary(&self) -> Option<usize> {
+        self.stack_canary.get()
+    }
 
-        return AutoResetCanary {
-            table: self,
-            should_reset,
-        };
-
-        struct AutoResetCanary<'a> {
-            table: &'a VMExternRefActivationsTable,
-            should_reset: bool,
-        }
-
-        impl Drop for AutoResetCanary<'_> {
-            fn drop(&mut self) {
-                if self.should_reset {
-                    debug_assert!(self.table.stack_canary.get().is_some());
-                    self.table.stack_canary.set(None);
-                }
-            }
-        }
+    /// Sets the current value of the stack canary.
+    ///
+    /// This is called from RAII guards in
+    /// `wasmtime::func::invoke_wasm_and_catch_traps`. This is used to update
+    /// the stack canary to a concrete value and then reset it back to `None`
+    /// when wasm is finished.
+    ///
+    /// For more information on canaries see the gc functions below.
+    #[inline]
+    pub fn set_stack_canary(&self, canary: Option<usize>) {
+        self.stack_canary.set(canary);
     }
 }
 
-/// A registry of stack maps for currently active Wasm modules.
-#[derive(Default)]
-pub struct StackMapRegistry {
-    inner: RefCell<StackMapRegistryInner>,
+/// Used by the runtime to lookup information about a module given a
+/// program counter value.
+pub trait ModuleInfoLookup: 'static {
+    /// Lookup the module information from a program counter value.
+    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>>;
 }
 
-#[derive(Default)]
-struct StackMapRegistryInner {
-    /// A map from the highest pc in a module, to its stack maps.
-    ///
-    /// For details, see the comment above `GlobalFrameInfo::ranges`.
-    ranges: BTreeMap<usize, ModuleStackMaps>,
+/// Used by the runtime to query module information.
+pub trait ModuleInfo {
+    /// Lookup the stack map at a program counter value.
+    fn lookup_stack_map(&self, pc: usize) -> Option<&StackMap>;
 }
 
-#[derive(Debug)]
-struct ModuleStackMaps {
-    /// The range of PCs that this module covers. Different modules must always
-    /// have distinct ranges.
-    range: std::ops::Range<usize>,
+pub(crate) struct EmptyModuleInfoLookup;
 
-    /// A map from a PC in this module (that is a GC safepoint) to its
-    /// associated stack map. If `None` then it means that the PC is the start
-    /// of a range which has no stack map.
-    pc_to_stack_map: Vec<(usize, Option<Rc<StackMap>>)>,
-}
-
-impl StackMapRegistry {
-    /// Register the stack maps for a given module.
-    ///
-    /// The stack maps should be given as an iterator over a function's PC range
-    /// in memory (that is, where the JIT actually allocated and emitted the
-    /// function's code at), and the stack maps and code offsets within that
-    /// range for each of its GC safepoints.
-    pub fn register_stack_maps<'a>(
-        &self,
-        stack_maps: impl IntoIterator<Item = (std::ops::Range<usize>, &'a [StackMapInformation])>,
-    ) {
-        let mut min = usize::max_value();
-        let mut max = 0;
-        let mut pc_to_stack_map = vec![];
-        let mut last_is_none_marker = true;
-
-        for (range, infos) in stack_maps {
-            let len = range.end - range.start;
-
-            min = std::cmp::min(min, range.start);
-            max = std::cmp::max(max, range.end);
-
-            // Add a marker between functions indicating that this function's pc
-            // starts with no stack map so when our binary search later on finds
-            // a pc between the start of the function and the function's first
-            // stack map it doesn't think the previous stack map is our stack
-            // map.
-            //
-            // We skip this if the previous entry pushed was also a `None`
-            // marker, in which case the starting pc already has no stack map.
-            // This is also skipped if the first `code_offset` is zero since
-            // what we'll push applies for the first pc anyway.
-            if !last_is_none_marker && (infos.is_empty() || infos[0].code_offset > 0) {
-                pc_to_stack_map.push((range.start, None));
-                last_is_none_marker = true;
-            }
-
-            for info in infos {
-                assert!((info.code_offset as usize) < len);
-                pc_to_stack_map.push((
-                    range.start + (info.code_offset as usize),
-                    Some(Rc::new(info.stack_map.clone())),
-                ));
-                last_is_none_marker = false;
-            }
-        }
-
-        if pc_to_stack_map.is_empty() {
-            // Nothing to register.
-            return;
-        }
-
-        let module_stack_maps = ModuleStackMaps {
-            range: min..max,
-            pc_to_stack_map,
-        };
-
-        let mut inner = self.inner.borrow_mut();
-
-        // Check if we've already registered this module.
-        if let Some(existing_module) = inner.ranges.get(&max) {
-            assert_eq!(existing_module.range, module_stack_maps.range);
-            debug_assert_eq!(
-                existing_module.pc_to_stack_map,
-                module_stack_maps.pc_to_stack_map,
-            );
-            return;
-        }
-
-        // Assert that this chunk of ranges doesn't collide with any other known
-        // chunks.
-        if let Some((_, prev)) = inner.ranges.range(max..).next() {
-            assert!(prev.range.start > max);
-        }
-        if let Some((prev_end, _)) = inner.ranges.range(..=min).next_back() {
-            assert!(*prev_end < min);
-        }
-
-        let old = inner.ranges.insert(max, module_stack_maps);
-        assert!(old.is_none());
-    }
-
-    /// Lookup the stack map for the given PC, if any.
-    pub fn lookup_stack_map(&self, pc: usize) -> Option<Rc<StackMap>> {
-        let inner = self.inner.borrow();
-        let stack_maps = inner.module_stack_maps(pc)?;
-
-        // Do a binary search to find the stack map for the given PC.
-        //
-        // Because GC safepoints are technically only associated with a single
-        // PC, we should ideally only care about `Ok(index)` values returned
-        // from the binary search. However, safepoints are inserted right before
-        // calls, and there are two things that can disturb the PC/offset
-        // associated with the safepoint versus the PC we actually use to query
-        // for the stack map:
-        //
-        // 1. The `backtrace` crate gives us the PC in a frame that will be
-        //    *returned to*, and where execution will continue from, rather than
-        //    the PC of the call we are currently at. So we would need to
-        //    disassemble one instruction backwards to query the actual PC for
-        //    the stack map.
-        //
-        //    TODO: One thing we *could* do to make this a little less error
-        //    prone, would be to assert/check that the nearest GC safepoint
-        //    found is within `max_encoded_size(any kind of call instruction)`
-        //    our queried PC for the target architecture.
-        //
-        // 2. Cranelift's stack maps only handle the stack, not
-        //    registers. However, some references that are arguments to a call
-        //    may need to be in registers. In these cases, what Cranelift will
-        //    do is:
-        //
-        //      a. spill all the live references,
-        //      b. insert a GC safepoint for those references,
-        //      c. reload the references into registers, and finally
-        //      d. make the call.
-        //
-        //    Step (c) adds drift between the GC safepoint and the location of
-        //    the call, which is where we actually walk the stack frame and
-        //    collect its live references.
-        //
-        //    Luckily, the spill stack slots for the live references are still
-        //    up to date, so we can still find all the on-stack roots.
-        //    Furthermore, we do not have a moving GC, so we don't need to worry
-        //    whether the following code will reuse the references in registers
-        //    (which would not have been updated to point to the moved objects)
-        //    or reload from the stack slots (which would have been updated to
-        //    point to the moved objects).
-        let index = match stack_maps
-            .pc_to_stack_map
-            .binary_search_by_key(&pc, |(pc, _stack_map)| *pc)
-        {
-            // Exact hit.
-            Ok(i) => i,
-
-            // `Err(0)` means that the associated stack map would have been the
-            // first element in the array if this pc had an associated stack
-            // map, but this pc does not have an associated stack map. This can
-            // only happen inside a Wasm frame if there are no live refs at this
-            // pc.
-            Err(0) => return None,
-
-            Err(n) => n - 1,
-        };
-
-        let stack_map = stack_maps.pc_to_stack_map[index].1.as_ref()?.clone();
-        Some(stack_map)
+impl ModuleInfoLookup for EmptyModuleInfoLookup {
+    fn lookup(&self, _pc: usize) -> Option<Arc<dyn ModuleInfo>> {
+        None
     }
 }
 
-impl StackMapRegistryInner {
-    fn module_stack_maps(&self, pc: usize) -> Option<&ModuleStackMaps> {
-        let (end, stack_maps) = self.ranges.range(pc..).next()?;
-        if pc < stack_maps.range.start || *end < pc {
-            None
-        } else {
-            Some(stack_maps)
-        }
-    }
-}
+pub(crate) const EMPTY_MODULE_LOOKUP: EmptyModuleInfoLookup = EmptyModuleInfoLookup;
 
 #[derive(Debug, Default)]
 struct DebugOnly<T> {
@@ -1017,7 +809,7 @@ impl<T> std::ops::DerefMut for DebugOnly<T> {
 /// Additionally, you must have registered the stack maps for every Wasm module
 /// that has frames on the stack with the given `stack_maps_registry`.
 pub unsafe fn gc(
-    stack_maps_registry: &StackMapRegistry,
+    module_info_lookup: &dyn ModuleInfoLookup,
     externref_activations_table: &VMExternRefActivationsTable,
 ) {
     // We borrow the precise stack roots `RefCell` for the whole duration of
@@ -1055,8 +847,7 @@ pub unsafe fn gc(
             if cfg!(debug_assertions) {
                 // Assert that there aren't any Wasm frames on the stack.
                 backtrace::trace(|frame| {
-                    let stack_map = stack_maps_registry.lookup_stack_map(frame.ip() as usize);
-                    assert!(stack_map.is_none());
+                    assert!(module_info_lookup.lookup(frame.ip() as usize).is_none());
                     true
                 });
             }
@@ -1064,7 +855,7 @@ pub unsafe fn gc(
             log::debug!("end GC");
             return;
         }
-        Some(canary) => canary.as_ptr() as usize,
+        Some(canary) => canary,
     };
 
     // There is a stack canary, so there must be Wasm frames on the stack. The
@@ -1100,28 +891,30 @@ pub unsafe fn gc(
         let pc = frame.ip() as usize;
         let sp = frame.sp() as usize;
 
-        if let Some(stack_map) = stack_maps_registry.lookup_stack_map(pc) {
-            debug_assert!(sp != 0, "we should always get a valid SP for Wasm frames");
+        if let Some(module_info) = module_info_lookup.lookup(pc) {
+            if let Some(stack_map) = module_info.lookup_stack_map(pc) {
+                debug_assert!(sp != 0, "we should always get a valid SP for Wasm frames");
 
-            for i in 0..(stack_map.mapped_words() as usize) {
-                if stack_map.get_bit(i) {
-                    // Stack maps have one bit per word in the frame, and the
-                    // zero^th bit is the *lowest* addressed word in the frame,
-                    // i.e. the closest to the SP. So to get the `i`^th word in
-                    // this frame, we add `i * sizeof(word)` to the SP.
-                    let ptr_to_ref = sp + i * mem::size_of::<usize>();
+                for i in 0..(stack_map.mapped_words() as usize) {
+                    if stack_map.get_bit(i) {
+                        // Stack maps have one bit per word in the frame, and the
+                        // zero^th bit is the *lowest* addressed word in the frame,
+                        // i.e. the closest to the SP. So to get the `i`^th word in
+                        // this frame, we add `i * sizeof(word)` to the SP.
+                        let ptr_to_ref = sp + i * mem::size_of::<usize>();
 
-                    let r = std::ptr::read(ptr_to_ref as *const *mut VMExternData);
-                    debug_assert!(
-                        r.is_null() || activations_table_set.contains(&r),
-                        "every on-stack externref inside a Wasm frame should \
-                         have an entry in the VMExternRefActivationsTable"
-                    );
-                    if let Some(r) = NonNull::new(r) {
-                        VMExternRefActivationsTable::insert_precise_stack_root(
-                            &mut precise_stack_roots,
-                            r,
+                        let r = std::ptr::read(ptr_to_ref as *const *mut VMExternData);
+                        debug_assert!(
+                            r.is_null() || activations_table_set.contains(&r),
+                            "every on-stack externref inside a Wasm frame should \
+                            have an entry in the VMExternRefActivationsTable"
                         );
+                        if let Some(r) = NonNull::new(r) {
+                            VMExternRefActivationsTable::insert_precise_stack_root(
+                                &mut precise_stack_roots,
+                                r,
+                            );
+                        }
                     }
                 }
             }
@@ -1208,7 +1001,7 @@ mod tests {
 
         let actual_offset = (next_ptr as usize) - (table_ptr as usize);
 
-        let offsets = wasmtime_environ::VMOffsets {
+        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             pointer_size: 8,
             num_signature_ids: 0,
             num_imported_functions: 0,
@@ -1219,7 +1012,7 @@ mod tests {
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
-        };
+        });
         assert_eq!(
             offsets.vm_extern_ref_activation_table_next() as usize,
             actual_offset
@@ -1235,7 +1028,7 @@ mod tests {
 
         let actual_offset = (end_ptr as usize) - (table_ptr as usize);
 
-        let offsets = wasmtime_environ::VMOffsets {
+        let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
             pointer_size: 8,
             num_signature_ids: 0,
             num_imported_functions: 0,
@@ -1246,7 +1039,7 @@ mod tests {
             num_defined_tables: 0,
             num_defined_memories: 0,
             num_defined_globals: 0,
-        };
+        });
         assert_eq!(
             offsets.vm_extern_ref_activation_table_end() as usize,
             actual_offset

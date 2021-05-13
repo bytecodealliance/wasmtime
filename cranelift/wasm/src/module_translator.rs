@@ -131,6 +131,7 @@ pub fn translate_module<'data>(
                 name: "name",
                 data,
                 data_offset,
+                range: _,
             } => {
                 let result = NameSectionReader::new(data, data_offset)
                     .map_err(|e| e.into())

@@ -1,7 +1,6 @@
 use crate::instance::InstanceBuilder;
 use crate::{
-    Extern, ExternType, Func, FuncType, GlobalType, ImportType, Instance, IntoFunc, Module, Store,
-    Trap,
+    Extern, ExternType, Func, FuncType, ImportType, Instance, IntoFunc, Module, Store, Trap,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use log::warn;
@@ -29,38 +28,22 @@ use std::rc::Rc;
 /// module and then has its own name. This basically follows the wasm standard
 /// for modularization.
 ///
-/// Names in a `Linker` can be defined twice, but only for different signatures
-/// of items. This means that every item defined in a `Linker` has a unique
-/// name/type pair. For example you can define two functions with the module
-/// name `foo` and item name `bar`, so long as they have different function
-/// signatures. Currently duplicate memories and tables are not allowed, only
-/// one-per-name is allowed.
-///
-/// Note that allowing duplicates by shadowing the previous definition can be
-/// controlled with the [`Linker::allow_shadowing`] method as well.
+/// Names in a `Linker` cannot be defined twice, but allowing duplicates by
+/// shadowing the previous definition can be controlled with the
+/// [`Linker::allow_shadowing`] method.
 pub struct Linker {
     store: Store,
     string2idx: HashMap<Rc<str>, usize>,
     strings: Vec<Rc<str>>,
     map: HashMap<ImportKey, Extern>,
     allow_shadowing: bool,
+    allow_unknown_exports: bool,
 }
 
 #[derive(Hash, PartialEq, Eq)]
 struct ImportKey {
     name: usize,
     module: usize,
-    kind: ImportKind,
-}
-
-#[derive(Hash, PartialEq, Eq, Debug)]
-enum ImportKind {
-    Func(FuncType),
-    Global(GlobalType),
-    Memory,
-    Table,
-    Module,
-    Instance,
 }
 
 impl Linker {
@@ -87,6 +70,7 @@ impl Linker {
             string2idx: HashMap::new(),
             strings: Vec::new(),
             allow_shadowing: false,
+            allow_unknown_exports: false,
         }
     }
 
@@ -117,6 +101,32 @@ impl Linker {
     /// ```
     pub fn allow_shadowing(&mut self, allow: bool) -> &mut Linker {
         self.allow_shadowing = allow;
+        self
+    }
+
+    /// Configures whether this [`Linker`] will allow unknown exports from
+    /// command modules.
+    ///
+    /// By default a [`Linker`] will error when unknown exports are encountered
+    /// in a command module while using [`Linker::module`].
+    ///
+    /// This method can be used to allow unknown exports from command modules.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let store = Store::default();
+    /// # let module = Module::new(store.engine(), "(module)")?;
+    /// let mut linker = Linker::new(&store);
+    /// linker.allow_unknown_exports(true);
+    /// linker.module("mod", &module)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn allow_unknown_exports(&mut self, allow: bool) -> &mut Linker {
+        self.allow_unknown_exports = allow;
         self
     }
 
@@ -164,10 +174,20 @@ impl Linker {
         name: &str,
         item: impl Into<Extern>,
     ) -> Result<&mut Self> {
-        self._define(module, name, item.into())
+        self._define(module, Some(name), item.into())
     }
 
-    fn _define(&mut self, module: &str, name: &str, item: Extern) -> Result<&mut Self> {
+    /// Same as [`Linker::define`], except only the name of the import is
+    /// provided, not a module name as well.
+    ///
+    /// This is only relevant when working with the module linking proposal
+    /// where one-level names are allowed (in addition to two-level names).
+    /// Otherwise this method need not be used.
+    pub fn define_name(&mut self, name: &str, item: impl Into<Extern>) -> Result<&mut Self> {
+        self._define(name, None, item.into())
+    }
+
+    fn _define(&mut self, module: &str, name: Option<&str>, item: Extern) -> Result<&mut Self> {
         if !item.comes_from_same_store(&self.store) {
             bail!("all linker items must be from the same store");
         }
@@ -217,7 +237,7 @@ impl Linker {
         name: &str,
         func: impl IntoFunc<Params, Args>,
     ) -> Result<&mut Self> {
-        self._define(module, name, Func::wrap(&self.store, func).into())
+        self._define(module, Some(name), Func::wrap(&self.store, func).into())
     }
 
     /// Convenience wrapper to define an entire [`Instance`] in this linker.
@@ -270,7 +290,7 @@ impl Linker {
             bail!("all linker items must be from the same store");
         }
         for export in instance.exports() {
-            self.insert(module_name, export.name(), export.into_extern())?;
+            self.insert(module_name, Some(export.name()), export.into_extern())?;
         }
         Ok(self)
     }
@@ -450,7 +470,7 @@ impl Linker {
                         Ok(())
                     },
                 );
-                self.insert(module_name, export.name(), func.into())?;
+                self.insert(module_name, Some(export.name()), func.into())?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
                 // Allow an exported "memory" memory for now.
             } else if export.name() == "__indirect_function_table" && export.ty().table().is_some()
@@ -477,7 +497,7 @@ impl Linker {
                 // Allow an exported "__rtti_base" memory for compatibility with
                 // AssemblyScript.
                 warn!("command module exporting '__rtti_base' is deprecated; pass `--runtime half` to the AssemblyScript compiler");
-            } else {
+            } else if !self.allow_unknown_exports {
                 bail!("command export '{}' is not a function", export.name());
             }
         }
@@ -506,15 +526,16 @@ impl Linker {
         Ok(())
     }
 
-    fn insert(&mut self, module: &str, name: &str, item: Extern) -> Result<()> {
-        let key = self.import_key(module, name, item.ty());
+    fn insert(&mut self, module: &str, name: Option<&str>, item: Extern) -> Result<()> {
+        let key = self.import_key(module, name);
+        let desc = || match name {
+            Some(name) => format!("{}::{}", module, name),
+            None => module.to_string(),
+        };
         match self.map.entry(key) {
-            Entry::Occupied(o) if !self.allow_shadowing => bail!(
-                "import of `{}::{}` with kind {:?} defined twice",
-                module,
-                name,
-                o.key().kind,
-            ),
+            Entry::Occupied(_) if !self.allow_shadowing => {
+                bail!("import of `{}` defined twice", desc(),)
+            }
             Entry::Occupied(mut o) => {
                 o.insert(item);
             }
@@ -522,13 +543,10 @@ impl Linker {
                 // If shadowing is not allowed, check for an existing host function
                 if !self.allow_shadowing {
                     if let Extern::Func(_) = &item {
-                        if self.store.get_host_func(module, name).is_some() {
-                            bail!(
-                                "import of `{}::{}` with kind {:?} defined twice",
-                                module,
-                                name,
-                                v.key().kind,
-                            )
+                        if let Some(name) = name {
+                            if self.store.get_host_func(module, name).is_some() {
+                                bail!("import of `{}` defined twice", desc(),)
+                            }
                         }
                     }
                 }
@@ -538,22 +556,12 @@ impl Linker {
         Ok(())
     }
 
-    fn import_key(&mut self, module: &str, name: &str, ty: ExternType) -> ImportKey {
+    fn import_key(&mut self, module: &str, name: Option<&str>) -> ImportKey {
         ImportKey {
             module: self.intern_str(module),
-            name: self.intern_str(name),
-            kind: self.import_kind(ty),
-        }
-    }
-
-    fn import_kind(&self, ty: ExternType) -> ImportKind {
-        match ty {
-            ExternType::Func(f) => ImportKind::Func(f),
-            ExternType::Global(f) => ImportKind::Global(f),
-            ExternType::Memory(_) => ImportKind::Memory,
-            ExternType::Table(_) => ImportKind::Table,
-            ExternType::Module(_) => ImportKind::Module,
-            ExternType::Instance(_) => ImportKind::Instance,
+            name: name
+                .map(|name| self.intern_str(name))
+                .unwrap_or(usize::max_value()),
         }
     }
 
@@ -633,33 +641,11 @@ impl Linker {
     }
 
     fn link_error(&self, import: &ImportType) -> Error {
-        let mut options = Vec::new();
-        for i in self.map.keys() {
-            if &*self.strings[i.module] != import.module()
-                || self.strings.get(i.name).map(|s| &**s) != import.name()
-            {
-                continue;
-            }
-            options.push(format!("  * {:?}\n", i.kind));
-        }
         let desc = match import.name() {
             Some(name) => format!("{}::{}", import.module(), name),
             None => import.module().to_string(),
         };
-        if options.is_empty() {
-            return anyhow!("unknown import: `{}` has not been defined", desc);
-        }
-
-        options.sort();
-
-        anyhow!(
-            "incompatible import type for `{}` specified\n\
-             desired signature was: {:?}\n\
-             signatures available:\n\n{}",
-            desc,
-            import.ty(),
-            options.concat(),
-        )
+        anyhow!("unknown import: `{}` has not been defined", desc)
     }
 
     /// Returns the [`Store`] that this linker is connected to.
@@ -813,7 +799,6 @@ impl Linker {
                 Some(name) => *self.string2idx.get(name)?,
                 None => usize::max_value(),
             },
-            kind: self.import_kind(import.ty()),
         };
         self.map.get(&key).cloned()
     }

@@ -1,6 +1,6 @@
 ; Check that floating-point constants equal to zero are optimized correctly.
 test binemit
-target x86_64
+target x86_64 legacy
 
 function %zero_const_32bit_no_rex() -> f32 fast {
 block0:

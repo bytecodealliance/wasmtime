@@ -1,4 +1,4 @@
-use crate::{Extern, Store};
+use crate::{signatures::SignatureCollection, Extern, Store};
 use anyhow::{bail, Context, Result};
 use wasmtime_environ::wasm::{
     EntityType, Global, InstanceTypeIndex, Memory, ModuleTypeIndex, SignatureIndex, Table,
@@ -6,6 +6,7 @@ use wasmtime_environ::wasm::{
 use wasmtime_jit::TypeTables;
 
 pub struct MatchCx<'a> {
+    pub signatures: &'a SignatureCollection,
     pub types: &'a TypeTables,
     pub store: &'a Store,
 }
@@ -70,12 +71,7 @@ impl MatchCx<'_> {
     }
 
     pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
-        let matches = match self
-            .store
-            .signatures()
-            .borrow()
-            .lookup(&self.types.wasm_signatures[expected])
-        {
+        let matches = match self.signatures.shared_signature(expected) {
             Some(idx) => actual.sig_index() == idx,
             // If our expected signature isn't registered, then there's no way
             // that `actual` can match it.
@@ -114,15 +110,19 @@ impl MatchCx<'_> {
         let module = actual.compiled_module().module();
         self.imports_match(
             expected,
+            actual.signatures(),
             actual.types(),
             module.imports().map(|(name, field, ty)| {
                 assert!(field.is_none()); // should be true if module linking is enabled
                 (name, ty)
             }),
         )?;
-        self.exports_match(expected_sig.exports, actual.types(), |name| {
-            module.exports.get(name).map(|idx| module.type_of(*idx))
-        })?;
+        self.exports_match(
+            expected_sig.exports,
+            actual.signatures(),
+            actual.types(),
+            |name| module.exports.get(name).map(|idx| module.type_of(*idx)),
+        )?;
         Ok(())
     }
 
@@ -133,6 +133,7 @@ impl MatchCx<'_> {
     fn imports_match<'a>(
         &self,
         expected: ModuleTypeIndex,
+        actual_signatures: &SignatureCollection,
         actual_types: &TypeTables,
         actual_imports: impl Iterator<Item = (&'a str, EntityType)>,
     ) -> Result<()> {
@@ -146,10 +147,11 @@ impl MatchCx<'_> {
                 None => bail!("expected type doesn't import {:?}", name),
             };
             MatchCx {
+                signatures: actual_signatures,
                 types: actual_types,
                 store: self.store,
             }
-            .extern_ty_matches(&actual_ty, expected_ty, self.types)
+            .extern_ty_matches(&actual_ty, expected_ty, self.signatures, self.types)
             .with_context(|| format!("module import {:?} incompatible", name))?;
         }
         Ok(())
@@ -160,6 +162,7 @@ impl MatchCx<'_> {
     fn exports_match(
         &self,
         expected: InstanceTypeIndex,
+        actual_signatures: &SignatureCollection,
         actual_types: &TypeTables,
         lookup: impl Fn(&str) -> Option<EntityType>,
     ) -> Result<()> {
@@ -169,7 +172,7 @@ impl MatchCx<'_> {
         for (name, expected) in self.types.instance_signatures[expected].exports.iter() {
             match lookup(name) {
                 Some(ty) => self
-                    .extern_ty_matches(expected, &ty, actual_types)
+                    .extern_ty_matches(expected, &ty, actual_signatures, actual_types)
                     .with_context(|| format!("export {:?} incompatible", name))?,
                 None => bail!("failed to find export {:?}", name),
             }
@@ -183,6 +186,7 @@ impl MatchCx<'_> {
         &self,
         expected: &EntityType,
         actual_ty: &EntityType,
+        actual_signatures: &SignatureCollection,
         actual_types: &TypeTables,
     ) -> Result<()> {
         let actual_desc = match actual_ty {
@@ -221,7 +225,7 @@ impl MatchCx<'_> {
             EntityType::Instance(expected) => match actual_ty {
                 EntityType::Instance(actual) => {
                     let sig = &actual_types.instance_signatures[*actual];
-                    self.exports_match(*expected, actual_types, |name| {
+                    self.exports_match(*expected, actual_signatures, actual_types, |name| {
                         sig.exports.get(name).cloned()
                     })?;
                     Ok(())
@@ -237,15 +241,19 @@ impl MatchCx<'_> {
 
                     self.imports_match(
                         *expected,
+                        actual_signatures,
                         actual_types,
                         actual_module_sig
                             .imports
                             .iter()
                             .map(|(module, ty)| (module.as_str(), ty.clone())),
                     )?;
-                    self.exports_match(expected_module_sig.exports, actual_types, |name| {
-                        actual_instance_sig.exports.get(name).cloned()
-                    })?;
+                    self.exports_match(
+                        expected_module_sig.exports,
+                        actual_signatures,
+                        actual_types,
+                        |name| actual_instance_sig.exports.get(name).cloned(),
+                    )?;
                     Ok(())
                 }
                 _ => bail!("expected module, but found {}", actual_desc),

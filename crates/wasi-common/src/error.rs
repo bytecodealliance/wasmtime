@@ -23,7 +23,7 @@
 //! The real value of using `anyhow::Error` here is being able to use
 //! `anyhow::Result::context` to aid in debugging of errors.
 
-pub use anyhow::Error;
+pub use anyhow::{Context, Error};
 
 /// Internal error type for the `wasi-common` crate.
 /// Contains variants of the WASI `$errno` type are added according to what is actually used internally by

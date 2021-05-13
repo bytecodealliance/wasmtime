@@ -1,5 +1,5 @@
 test regalloc
-target riscv32 enable_e
+target riscv32 legacy enable_e
 
 ; regex: V=v\d+
 

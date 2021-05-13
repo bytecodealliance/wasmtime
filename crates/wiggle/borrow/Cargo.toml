@@ -1,6 +1,6 @@
 [package]
 name = "wiggle-borrow"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["Pat Hickey <phickey@fastly.com>", "Jakub Konka <kubkonk@jakubkonka.com>", "Alex Crichton <alex@alexcrichton.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,7 +11,7 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 include = ["src/**/*", "LICENSE"]
 
 [dependencies]
-wiggle = { path = "..", version = "0.25.0" }
+wiggle = { path = "..", version = "0.26.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }

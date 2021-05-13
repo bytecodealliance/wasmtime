@@ -26,9 +26,7 @@ mod convert_just_errno {
         errors: { errno => RichError },
     });
 
-    // The impl of GuestErrorConversion works just like in every other test where
-    // we have a single error type with witx `$errno` with the success called `$ok`
-    impl_errno!(types::Errno, types::GuestErrorConversion);
+    impl_errno!(types::Errno);
 
     /// When the `errors` mapping in witx is non-empty, we need to impl the
     /// types::UserErrorConversion trait that wiggle generates from that mapping.
@@ -104,7 +102,7 @@ mod convert_just_errno {
 /// we use two distinct error types.
 mod convert_multiple_error_types {
     pub use super::convert_just_errno::RichError;
-    use wiggle_test::WasiCtx;
+    use wiggle_test::{impl_errno, WasiCtx};
 
     /// Test that we can map multiple types of errors.
     #[derive(Debug, thiserror::Error)]
@@ -135,27 +133,8 @@ mod convert_multiple_error_types {
         errors: { errno => RichError, errno2 => AnotherRichError },
     });
 
-    // Can't use the impl_errno! macro as usual here because the conversion
-    // trait ends up having two methods.
-    // We aren't going to execute this code, so the bodies are elided.
-    impl<'a> types::GuestErrorConversion for WasiCtx<'a> {
-        fn into_errno(&self, _e: wiggle::GuestError) -> types::Errno {
-            unimplemented!()
-        }
-        fn into_errno2(&self, _e: wiggle::GuestError) -> types::Errno2 {
-            unimplemented!()
-        }
-    }
-    impl wiggle::GuestErrorType for types::Errno {
-        fn success() -> types::Errno {
-            <types::Errno>::Ok
-        }
-    }
-    impl wiggle::GuestErrorType for types::Errno2 {
-        fn success() -> types::Errno2 {
-            <types::Errno2>::Ok
-        }
-    }
+    impl_errno!(types::Errno);
+    impl_errno!(types::Errno2);
 
     // The UserErrorConversion trait will also have two methods for this test. They correspond to
     // each member of the `errors` mapping.

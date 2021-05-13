@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-debug"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Debug utils for WebAsssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,11 +12,11 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-gimli = "0.23.0"
-wasmparser = "0.76"
-object = { version = "0.23.0", default-features = false, features = ["read_core", "elf", "write"] }
-wasmtime-environ = { path = "../environ", version = "0.25.0" }
-target-lexicon = { version = "0.11.0", default-features = false }
+gimli = "0.24.0"
+wasmparser = "0.77"
+object = { version = "0.24.0", default-features = false, features = ["read_core", "elf", "write"] }
+wasmtime-environ = { path = "../environ", version = "0.26.0" }
+target-lexicon = { version = "0.12.0", default-features = false }
 anyhow = "1.0"
 thiserror = "1.0.4"
 more-asserts = "0.2.1"

@@ -6,7 +6,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/variant.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 // Avoid panics on overflow
 fn mult_lose_overflow(a: i32, b: u32) -> i32 {

@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-jit"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["The Wasmtime Project Developers"]
 description = "JIT-style execution for WebAsssembly code in Cranelift"
 documentation = "https://docs.rs/wasmtime-jit"
@@ -12,31 +12,31 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.72.0", features = ["enable-serde"] }
-cranelift-entity = { path = "../../cranelift/entity", version = "0.72.0", features = ["enable-serde"] }
-cranelift-wasm = { path = "../../cranelift/wasm", version = "0.72.0", features = ["enable-serde"] }
-cranelift-native = { path = "../../cranelift/native", version = "0.72.0" }
-cranelift-frontend = { path = "../../cranelift/frontend", version = "0.72.0" }
-wasmtime-environ = { path = "../environ", version = "0.25.0" }
-wasmtime-runtime = { path = "../runtime", version = "0.25.0" }
-wasmtime-cranelift = { path = "../cranelift", version = "0.25.0" }
-wasmtime-lightbeam = { path = "../lightbeam/wasmtime", version = "0.25.0", optional = true }
-wasmtime-debug = { path = "../debug", version = "0.25.0" }
-wasmtime-profiling = { path = "../profiling", version = "0.25.0" }
-wasmtime-obj = { path = "../obj", version = "0.25.0" }
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.73.0", features = ["enable-serde"] }
+cranelift-entity = { path = "../../cranelift/entity", version = "0.73.0", features = ["enable-serde"] }
+cranelift-wasm = { path = "../../cranelift/wasm", version = "0.73.0", features = ["enable-serde"] }
+cranelift-native = { path = "../../cranelift/native", version = "0.73.0" }
+cranelift-frontend = { path = "../../cranelift/frontend", version = "0.73.0" }
+wasmtime-environ = { path = "../environ", version = "0.26.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.26.0" }
+wasmtime-cranelift = { path = "../cranelift", version = "0.26.0" }
+wasmtime-lightbeam = { path = "../lightbeam/wasmtime", version = "0.26.0", optional = true }
+wasmtime-debug = { path = "../debug", version = "0.26.0" }
+wasmtime-profiling = { path = "../profiling", version = "0.26.0" }
+wasmtime-obj = { path = "../obj", version = "0.26.0" }
 rayon = { version = "1.0", optional = true }
 region = "2.2.0"
 thiserror = "1.0.4"
-target-lexicon = { version = "0.11.0", default-features = false }
-wasmparser = "0.76"
+target-lexicon = { version = "0.12.0", default-features = false }
+wasmparser = "0.77"
 more-asserts = "0.2.1"
 anyhow = "1.0"
 cfg-if = "1.0"
 log = "0.4"
-gimli = { version = "0.23.0", default-features = false, features = ["write"] }
-object = { version = "0.23.0", default-features = false, features = ["write"] }
+gimli = { version = "0.24.0", default-features = false, features = ["write"] }
+object = { version = "0.24.0", default-features = false, features = ["write"] }
 serde = { version = "1.0.94", features = ["derive"] }
-addr2line = { version = "0.14", default-features = false }
+addr2line = { version = "0.15", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
@@ -46,10 +46,10 @@ lightbeam = ["wasmtime-lightbeam"]
 jitdump = ["wasmtime-profiling/jitdump"]
 vtune = ["wasmtime-profiling/vtune"]
 parallel-compilation = ["rayon"]
+all-arch = ["cranelift-codegen/all-arch"]
 
-# Try the experimental, work-in-progress new x86_64 backend. This is not stable
-# as of June 2020.
-experimental_x64 = ["cranelift-codegen/x64"]
+# Use the old x86 backend.
+old-x86-backend = ["cranelift-codegen/old-x86-backend"]
 
 [badges]
 maintenance = { status = "actively-developed" }

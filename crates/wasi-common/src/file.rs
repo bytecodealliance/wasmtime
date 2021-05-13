@@ -4,30 +4,41 @@ use std::any::Any;
 use std::cell::{Ref, RefMut};
 use std::ops::{Deref, DerefMut};
 
-pub trait WasiFile {
+#[wiggle::async_trait]
+pub trait WasiFile: Send {
     fn as_any(&self) -> &dyn Any;
-    fn datasync(&self) -> Result<(), Error>; // write op
-    fn sync(&self) -> Result<(), Error>; // file op
-    fn get_filetype(&self) -> Result<FileType, Error>; // file op
-    fn get_fdflags(&self) -> Result<FdFlags, Error>; // file op
-    fn set_fdflags(&mut self, flags: FdFlags) -> Result<(), Error>; // file op
-    fn get_filestat(&self) -> Result<Filestat, Error>; // split out get_length as a read & write op, rest is a file op
-    fn set_filestat_size(&self, _size: u64) -> Result<(), Error>; // write op
-    fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error>; // file op
-    fn allocate(&self, offset: u64, len: u64) -> Result<(), Error>; // write op
-    fn set_times(
+    async fn datasync(&self) -> Result<(), Error>; // write op
+    async fn sync(&self) -> Result<(), Error>; // file op
+    async fn get_filetype(&self) -> Result<FileType, Error>; // file op
+    async fn get_fdflags(&self) -> Result<FdFlags, Error>; // file op
+    async fn set_fdflags(&mut self, flags: FdFlags) -> Result<(), Error>; // file op
+    async fn get_filestat(&self) -> Result<Filestat, Error>; // split out get_length as a read & write op, rest is a file op
+    async fn set_filestat_size(&self, _size: u64) -> Result<(), Error>; // write op
+    async fn advise(&self, offset: u64, len: u64, advice: Advice) -> Result<(), Error>; // file op
+    async fn allocate(&self, offset: u64, len: u64) -> Result<(), Error>; // write op
+    async fn set_times(
         &self,
         atime: Option<SystemTimeSpec>,
         mtime: Option<SystemTimeSpec>,
     ) -> Result<(), Error>;
-    fn read_vectored(&self, bufs: &mut [std::io::IoSliceMut]) -> Result<u64, Error>; // read op
-    fn read_vectored_at(&self, bufs: &mut [std::io::IoSliceMut], offset: u64)
-        -> Result<u64, Error>; // file op
-    fn write_vectored(&self, bufs: &[std::io::IoSlice]) -> Result<u64, Error>; // write op
-    fn write_vectored_at(&self, bufs: &[std::io::IoSlice], offset: u64) -> Result<u64, Error>; // file op
-    fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error>; // file op that generates a new stream from a file will supercede this
-    fn peek(&self, buf: &mut [u8]) -> Result<u64, Error>; // read op
-    fn num_ready_bytes(&self) -> Result<u64, Error>; // read op
+    async fn read_vectored<'a>(&self, bufs: &mut [std::io::IoSliceMut<'a>]) -> Result<u64, Error>; // read op
+    async fn read_vectored_at<'a>(
+        &self,
+        bufs: &mut [std::io::IoSliceMut<'a>],
+        offset: u64,
+    ) -> Result<u64, Error>; // file op
+    async fn write_vectored<'a>(&self, bufs: &[std::io::IoSlice<'a>]) -> Result<u64, Error>; // write op
+    async fn write_vectored_at<'a>(
+        &self,
+        bufs: &[std::io::IoSlice<'a>],
+        offset: u64,
+    ) -> Result<u64, Error>; // file op
+    async fn seek(&self, pos: std::io::SeekFrom) -> Result<u64, Error>; // file op that generates a new stream from a file will supercede this
+    async fn peek(&self, buf: &mut [u8]) -> Result<u64, Error>; // read op
+    async fn num_ready_bytes(&self) -> Result<u64, Error>; // read op
+
+    async fn readable(&mut self) -> Result<(), Error>;
+    async fn writable(&mut self) -> Result<(), Error>;
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -111,11 +122,11 @@ impl FileEntry {
         Ok(())
     }
 
-    pub fn get_fdstat(&self) -> Result<FdStat, Error> {
+    pub async fn get_fdstat(&self) -> Result<FdStat, Error> {
         Ok(FdStat {
-            filetype: self.file.get_filetype()?,
+            filetype: self.file.get_filetype().await?,
             caps: self.caps,
-            flags: self.file.get_fdflags()?,
+            flags: self.file.get_fdflags().await?,
         })
     }
 }

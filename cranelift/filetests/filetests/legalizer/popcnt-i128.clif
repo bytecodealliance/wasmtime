@@ -1,5 +1,5 @@
 test legalizer
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %foo() -> i128 {
 block0:

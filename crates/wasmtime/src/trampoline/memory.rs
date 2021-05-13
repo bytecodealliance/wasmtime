@@ -37,6 +37,10 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         self.mem.size()
     }
 
+    fn maximum(&self) -> Option<u32> {
+        self.mem.maximum()
+    }
+
     fn grow(&self, delta: u32) -> Option<u32> {
         self.mem.grow(delta)
     }

@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %vselect_i8x16(b8x16, i8x16, i8x16) {
 block0(v0: b8x16 [%xmm0], v1: i8x16 [%xmm3], v2: i8x16 [%xmm5]):

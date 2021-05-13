@@ -7,14 +7,12 @@ use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
-    async: {
-        atoms::{int_float_args, double_int_return_float}
-    }
+    async: *,
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
-#[wiggle::async_trait(?Send)]
+#[wiggle::async_trait]
 impl<'a> atoms::Atoms for WasiCtx<'a> {
     async fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
         println!("INT FLOAT ARGS: {} {}", an_int, an_float);

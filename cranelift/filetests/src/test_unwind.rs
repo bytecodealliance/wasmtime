@@ -72,7 +72,6 @@ impl SubTest for TestUnwind {
 }
 
 mod windowsx64 {
-    use byteorder::{ByteOrder, LittleEndian};
     use std::fmt::Write;
 
     pub fn dump<W: Write>(text: &mut W, mem: &[u8]) {
@@ -165,23 +164,24 @@ mod windowsx64 {
             let op_and_info = mem[1];
             let op = UnwindOperation::from(op_and_info & 0xF);
             let info = (op_and_info & 0xF0) >> 4;
+            let unwind_le_bytes = |bytes| match (bytes, &mem[2..]) {
+                (2, &[b0, b1, ..]) => UnwindValue::U16(u16::from_le_bytes([b0, b1])),
+                (4, &[b0, b1, b2, b3, ..]) => {
+                    UnwindValue::U32(u32::from_le_bytes([b0, b1, b2, b3]))
+                }
+                (_, _) => panic!("not enough bytes to unwind value"),
+            };
 
-            let value = match op {
-                UnwindOperation::LargeStackAlloc => match info {
-                    0 => UnwindValue::U16(LittleEndian::read_u16(&mem[2..])),
-                    1 => UnwindValue::U32(LittleEndian::read_u32(&mem[2..])),
-                    _ => panic!("unexpected stack alloc info value"),
-                },
-                UnwindOperation::SaveNonvolatileRegister => {
-                    UnwindValue::U16(LittleEndian::read_u16(&mem[2..]))
+            let value = match (&op, info) {
+                (UnwindOperation::LargeStackAlloc, 0) => unwind_le_bytes(2),
+                (UnwindOperation::LargeStackAlloc, 1) => unwind_le_bytes(4),
+                (UnwindOperation::LargeStackAlloc, _) => {
+                    panic!("unexpected stack alloc info value")
                 }
-                UnwindOperation::SaveNonvolatileRegisterFar => {
-                    UnwindValue::U32(LittleEndian::read_u32(&mem[2..]))
-                }
-                UnwindOperation::SaveXmm128 => UnwindValue::U16(LittleEndian::read_u16(&mem[2..])),
-                UnwindOperation::SaveXmm128Far => {
-                    UnwindValue::U32(LittleEndian::read_u32(&mem[2..]))
-                }
+                (UnwindOperation::SaveNonvolatileRegister, _) => unwind_le_bytes(2),
+                (UnwindOperation::SaveNonvolatileRegisterFar, _) => unwind_le_bytes(4),
+                (UnwindOperation::SaveXmm128, _) => unwind_le_bytes(2),
+                (UnwindOperation::SaveXmm128Far, _) => unwind_le_bytes(4),
                 _ => UnwindValue::None,
             };
 

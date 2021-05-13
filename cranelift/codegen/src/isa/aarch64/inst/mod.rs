@@ -334,6 +334,8 @@ pub enum VecMisc2 {
     Frintp,
     /// Population count per byte
     Cnt,
+    /// Compare bitwise equal to 0
+    Cmeq0,
 }
 
 /// A Vector narrowing operation with two registers.
@@ -345,6 +347,13 @@ pub enum VecMiscNarrowOp {
     Sqxtn,
     /// Signed saturating extract unsigned narrow
     Sqxtun,
+}
+
+/// A vector operation on a pair of elements with one register.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecPairOp {
+    /// Add pair of elements
+    Addp,
 }
 
 /// An operation across the lanes of vectors.
@@ -848,7 +857,34 @@ pub enum Inst {
         mem: AMode,
         flags: MemFlags,
     },
-
+    /// A load of a pair of floating-point registers, double precision (64-bit).
+    FpuLoadP64 {
+        rt: Writable<Reg>,
+        rt2: Writable<Reg>,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
+    /// A store of a pair of floating-point registers, double precision (64-bit).
+    FpuStoreP64 {
+        rt: Reg,
+        rt2: Reg,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
+    /// A load of a pair of floating-point registers, 128-bit.
+    FpuLoadP128 {
+        rt: Writable<Reg>,
+        rt2: Writable<Reg>,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
+    /// A store of a pair of floating-point registers, 128-bit.
+    FpuStoreP128 {
+        rt: Reg,
+        rt2: Reg,
+        mem: PairAMode,
+        flags: MemFlags,
+    },
     LoadFpuConst64 {
         rd: Writable<Reg>,
         const_data: u64,
@@ -982,6 +1018,13 @@ pub enum Inst {
         rn: Reg,
         size: VectorSize,
         high_half: bool,
+    },
+
+    /// 1-operand vector instruction that operates on a pair of elements.
+    VecRRPair {
+        op: VecPairOp,
+        rd: Writable<Reg>,
+        rn: Reg,
     },
 
     /// A vector ALU op.
@@ -1908,6 +1951,34 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rd);
             memarg_regs(mem, collector);
         }
+        &Inst::FpuLoadP64 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_def(rt);
+            collector.add_def(rt2);
+            pairmemarg_regs(mem, collector);
+        }
+        &Inst::FpuStoreP64 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_use(rt);
+            collector.add_use(rt2);
+            pairmemarg_regs(mem, collector);
+        }
+        &Inst::FpuLoadP128 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_def(rt);
+            collector.add_def(rt2);
+            pairmemarg_regs(mem, collector);
+        }
+        &Inst::FpuStoreP128 {
+            rt, rt2, ref mem, ..
+        } => {
+            collector.add_use(rt);
+            collector.add_use(rt2);
+            pairmemarg_regs(mem, collector);
+        }
         &Inst::LoadFpuConst64 { rd, .. } | &Inst::LoadFpuConst128 { rd, .. } => {
             collector.add_def(rd);
         }
@@ -1972,6 +2043,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             } else {
                 collector.add_def(rd);
             }
+        }
+        &Inst::VecRRPair { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
         }
         &Inst::VecRRR {
             alu_op, rd, rn, rm, ..
@@ -2590,6 +2665,46 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_use(mapper, rd);
             map_mem(mapper, mem);
         }
+        &mut Inst::FpuLoadP64 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_def(mapper, rt);
+            map_def(mapper, rt2);
+            map_pairmem(mapper, mem);
+        }
+        &mut Inst::FpuStoreP64 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_use(mapper, rt);
+            map_use(mapper, rt2);
+            map_pairmem(mapper, mem);
+        }
+        &mut Inst::FpuLoadP128 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_def(mapper, rt);
+            map_def(mapper, rt2);
+            map_pairmem(mapper, mem);
+        }
+        &mut Inst::FpuStoreP128 {
+            ref mut rt,
+            ref mut rt2,
+            ref mut mem,
+            ..
+        } => {
+            map_use(mapper, rt);
+            map_use(mapper, rt2);
+            map_pairmem(mapper, mem);
+        }
         &mut Inst::LoadFpuConst64 { ref mut rd, .. } => {
             map_def(mapper, rd);
         }
@@ -2720,6 +2835,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             } else {
                 map_def(mapper, rd);
             }
+        }
+        &mut Inst::VecRRPair {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::VecRRR {
             alu_op,
@@ -3508,6 +3631,42 @@ impl Inst {
                 let mem = mem.show_rru(mb_rru);
                 format!("{}str {}, {}", mem_str, rd, mem)
             }
+            &Inst::FpuLoadP64 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt.to_reg(), mb_rru, ScalarSize::Size64);
+                let rt2 = show_vreg_scalar(rt2.to_reg(), mb_rru, ScalarSize::Size64);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("ldp {}, {}, {}", rt, rt2, mem)
+            }
+            &Inst::FpuStoreP64 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt, mb_rru, ScalarSize::Size64);
+                let rt2 = show_vreg_scalar(rt2, mb_rru, ScalarSize::Size64);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("stp {}, {}, {}", rt, rt2, mem)
+            }
+            &Inst::FpuLoadP128 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt.to_reg(), mb_rru, ScalarSize::Size128);
+                let rt2 = show_vreg_scalar(rt2.to_reg(), mb_rru, ScalarSize::Size128);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("ldp {}, {}, {}", rt, rt2, mem)
+            }
+            &Inst::FpuStoreP128 {
+                rt, rt2, ref mem, ..
+            } => {
+                let rt = show_vreg_scalar(rt, mb_rru, ScalarSize::Size128);
+                let rt2 = show_vreg_scalar(rt2, mb_rru, ScalarSize::Size128);
+                let mem = mem.show_rru(mb_rru);
+
+                format!("stp {}, {}, {}", rt, rt2, mem)
+            }
             &Inst::LoadFpuConst64 { rd, const_data } => {
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
                 format!(
@@ -3725,6 +3884,15 @@ impl Inst {
                 };
                 format!("{} {}, {}", op, rd, rn)
             }
+            &Inst::VecRRPair { op, rd, rn } => {
+                let op = match op {
+                    VecPairOp::Addp => "addp",
+                };
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
+                let rn = show_vreg_vector(rn, mb_rru, VectorSize::Size64x2);
+
+                format!("{} {}, {}", op, rd, rn)
+            }
             &Inst::VecRRR {
                 rd,
                 rn,
@@ -3788,43 +3956,44 @@ impl Inst {
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::VecMisc { op, rd, rn, size } => {
-                let is_shll = op == VecMisc2::Shll;
-                let suffix = match (is_shll, size) {
-                    (true, VectorSize::Size8x8) => ", #8",
-                    (true, VectorSize::Size16x4) => ", #16",
-                    (true, VectorSize::Size32x2) => ", #32",
-                    _ => "",
-                };
-
-                let (op, size) = match op {
-                    VecMisc2::Not => (
-                        "mvn",
-                        if size.is_128bits() {
+                let (op, rd_size, size, suffix) = match op {
+                    VecMisc2::Not => {
+                        let size = if size.is_128bits() {
                             VectorSize::Size8x16
                         } else {
                             VectorSize::Size8x8
+                        };
+
+                        ("mvn", size, size, "")
+                    }
+                    VecMisc2::Neg => ("neg", size, size, ""),
+                    VecMisc2::Abs => ("abs", size, size, ""),
+                    VecMisc2::Fabs => ("fabs", size, size, ""),
+                    VecMisc2::Fneg => ("fneg", size, size, ""),
+                    VecMisc2::Fsqrt => ("fsqrt", size, size, ""),
+                    VecMisc2::Rev64 => ("rev64", size, size, ""),
+                    VecMisc2::Shll => (
+                        "shll",
+                        size.widen(),
+                        size,
+                        match size {
+                            VectorSize::Size8x8 => ", #8",
+                            VectorSize::Size16x4 => ", #16",
+                            VectorSize::Size32x2 => ", #32",
+                            _ => panic!("Unexpected vector size: {:?}", size),
                         },
                     ),
-                    VecMisc2::Neg => ("neg", size),
-                    VecMisc2::Abs => ("abs", size),
-                    VecMisc2::Fabs => ("fabs", size),
-                    VecMisc2::Fneg => ("fneg", size),
-                    VecMisc2::Fsqrt => ("fsqrt", size),
-                    VecMisc2::Rev64 => ("rev64", size),
-                    VecMisc2::Shll => ("shll", size),
-                    VecMisc2::Fcvtzs => ("fcvtzs", size),
-                    VecMisc2::Fcvtzu => ("fcvtzu", size),
-                    VecMisc2::Scvtf => ("scvtf", size),
-                    VecMisc2::Ucvtf => ("ucvtf", size),
-                    VecMisc2::Frintn => ("frintn", size),
-                    VecMisc2::Frintz => ("frintz", size),
-                    VecMisc2::Frintm => ("frintm", size),
-                    VecMisc2::Frintp => ("frintp", size),
-                    VecMisc2::Cnt => ("cnt", size),
+                    VecMisc2::Fcvtzs => ("fcvtzs", size, size, ""),
+                    VecMisc2::Fcvtzu => ("fcvtzu", size, size, ""),
+                    VecMisc2::Scvtf => ("scvtf", size, size, ""),
+                    VecMisc2::Ucvtf => ("ucvtf", size, size, ""),
+                    VecMisc2::Frintn => ("frintn", size, size, ""),
+                    VecMisc2::Frintz => ("frintz", size, size, ""),
+                    VecMisc2::Frintm => ("frintm", size, size, ""),
+                    VecMisc2::Frintp => ("frintp", size, size, ""),
+                    VecMisc2::Cnt => ("cnt", size, size, ""),
+                    VecMisc2::Cmeq0 => ("cmeq", size, size, ", #0"),
                 };
-
-                let rd_size = if is_shll { size.widen() } else { size };
-
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
                 let rn = show_vreg_vector(rn, mb_rru, size);
                 format!("{} {}, {}{}", op, rd, rn, suffix)

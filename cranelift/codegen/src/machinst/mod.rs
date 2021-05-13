@@ -64,18 +64,18 @@ use crate::binemit::{CodeInfo, CodeOffset, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, SourceLoc, StackSlot, Type, ValueLabel};
 use crate::result::CodegenResult;
-use crate::settings::Flags;
+use crate::settings::{self, Flags};
 use crate::value_label::ValueLabelsRanges;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
+use core::hash::Hasher;
 use cranelift_entity::PrimaryMap;
 use regalloc::RegUsageCollector;
 use regalloc::{
     RealReg, RealRegUniverse, Reg, RegClass, RegUsageMapper, SpillSlot, VirtualReg, Writable,
 };
 use smallvec::{smallvec, SmallVec};
-use std::hash::Hasher;
 use std::string::String;
 use target_lexicon::Triple;
 
@@ -368,8 +368,10 @@ pub trait MachBackend {
     /// Return flags for this backend.
     fn flags(&self) -> &Flags;
 
-    /// Hashes all flags, both ISA-independent and ISA-specific, into the
-    /// specified hasher.
+    /// Get the ISA-dependent flag values that were used to make this trait object.
+    fn isa_flags(&self) -> Vec<settings::Value>;
+
+    /// Hashes all flags, both ISA-independent and ISA-dependent, into the specified hasher.
     fn hash_all_flags(&self, hasher: &mut dyn Hasher);
 
     /// Return triple for this backend.

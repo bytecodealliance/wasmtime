@@ -83,6 +83,7 @@ struct DebugInfo {
     code_section_offset: u64,
     debug_abbrev: Range<usize>,
     debug_addr: Range<usize>,
+    debug_aranges: Range<usize>,
     debug_info: Range<usize>,
     debug_line: Range<usize>,
     debug_line_str: Range<usize>,
@@ -176,11 +177,13 @@ struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
 
+/// Information about a function, such as trap information, address map,
+/// and stack maps.
 #[derive(Serialize, Deserialize, Clone)]
-struct FunctionInfo {
-    traps: Vec<TrapInformation>,
-    address_map: FunctionAddressMap,
-    stack_maps: Vec<StackMapInformation>,
+pub struct FunctionInfo {
+    pub traps: Vec<TrapInformation>,
+    pub address_map: FunctionAddressMap,
+    pub stack_maps: Vec<StackMapInformation>,
 }
 
 /// This is intended to mirror the type tables in `wasmtime_environ`, except that
@@ -195,9 +198,17 @@ pub struct TypeTables {
 
 /// Container for data needed for an Instance function to exist.
 pub struct ModuleCode {
+    range: (usize, usize),
     code_memory: CodeMemory,
     #[allow(dead_code)]
     dbg_jit_registration: Option<GdbJitImageRegistration>,
+}
+
+impl ModuleCode {
+    /// Gets the [begin, end) range of the module's code.
+    pub fn range(&self) -> (usize, usize) {
+        self.range
+    }
 }
 
 /// A compiled wasm module, ready to be instantiated.
@@ -205,7 +216,7 @@ pub struct CompiledModule {
     artifacts: CompilationArtifacts,
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
-    trampolines: PrimaryMap<SignatureIndex, VMTrampoline>,
+    trampolines: Vec<(SignatureIndex, VMTrampoline)>,
 }
 
 impl CompiledModule {
@@ -259,10 +270,13 @@ impl CompiledModule {
         };
 
         let finished_functions = FinishedFunctions(finished_functions);
+        let start = code_range.0 as usize;
+        let end = start + code_range.1;
 
         Ok(Arc::new(Self {
             artifacts,
             code: Arc::new(ModuleCode {
+                range: (start, end),
                 code_memory,
                 dbg_jit_registration,
             }),
@@ -287,12 +301,13 @@ impl CompiledModule {
     }
 
     /// Returns the map of all finished JIT functions compiled for this module
+    #[inline]
     pub fn finished_functions(&self) -> &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]> {
         &self.finished_functions.0
     }
 
     /// Returns the per-signature trampolines for this module.
-    pub fn trampolines(&self) -> &PrimaryMap<SignatureIndex, VMTrampoline> {
+    pub fn trampolines(&self) -> &[(SignatureIndex, VMTrampoline)] {
         &self.trampolines
     }
 
@@ -312,25 +327,52 @@ impl CompiledModule {
         )
     }
 
-    /// Iterates over all functions in this module, returning information about
-    /// how to decode traps which happen in the function.
-    pub fn trap_information(
-        &self,
-    ) -> impl Iterator<
-        Item = (
-            DefinedFuncIndex,
-            *mut [VMFunctionBody],
-            &[TrapInformation],
-            &FunctionAddressMap,
-        ),
-    > {
-        self.finished_functions()
-            .iter()
-            .zip(self.artifacts.funcs.values())
-            .map(|((i, alloc), func)| (i, *alloc, func.traps.as_slice(), &func.address_map))
+    /// Lookups a defined function by a program counter value.
+    ///
+    /// Returns the defined function index, the start address, and the end address (exclusive).
+    pub fn func_by_pc(&self, pc: usize) -> Option<(DefinedFuncIndex, usize, usize)> {
+        let functions = self.finished_functions();
+
+        let index = match functions.binary_search_values_by_key(&pc, |body| unsafe {
+            debug_assert!(!(**body).is_empty());
+            // Return the inclusive "end" of the function
+            (**body).as_ptr() as usize + (**body).len() - 1
+        }) {
+            Ok(k) => {
+                // Exact match, pc is at the end of this function
+                k
+            }
+            Err(k) => {
+                // Not an exact match, k is where `pc` would be "inserted"
+                // Since we key based on the end, function `k` might contain `pc`,
+                // so we'll validate on the range check below
+                k
+            }
+        };
+
+        let body = functions.get(index)?;
+        let (start, end) = unsafe {
+            let ptr = (**body).as_ptr();
+            let len = (**body).len();
+            (ptr as usize, ptr as usize + len)
+        };
+
+        if pc < start || end < pc {
+            return None;
+        }
+
+        Some((index, start, end))
     }
 
-    /// Returns all ranges convered by JIT code.
+    /// Gets the function information for a given function index.
+    pub fn func_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
+        self.artifacts
+            .funcs
+            .get(index)
+            .expect("defined function should be present")
+    }
+
+    /// Returns all ranges covered by JIT code.
     pub fn jit_code_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
         self.code.code_memory.published_ranges()
     }
@@ -359,6 +401,7 @@ impl CompiledModule {
         let cx = addr2line::Context::from_sections(
             EndianSlice::new(&data[info.debug_abbrev.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_addr.clone()], endian).into(),
+            EndianSlice::new(&data[info.debug_aranges.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_info.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_line.clone()], endian).into(),
             EndianSlice::new(&data[info.debug_line_str.clone()], endian).into(),
@@ -438,13 +481,13 @@ fn build_code_memory(
     isa: &dyn TargetIsa,
     obj: &[u8],
     module: &Module,
-    unwind_info: &Box<[ObjectUnwindInfo]>,
+    unwind_info: &[ObjectUnwindInfo],
 ) -> Result<
     (
         CodeMemory,
         (*const u8, usize),
         PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        PrimaryMap<SignatureIndex, VMTrampoline>,
+        Vec<(SignatureIndex, VMTrampoline)>,
     ),
     String,
 > {
@@ -454,21 +497,32 @@ fn build_code_memory(
 
     let allocation = code_memory.allocate_for_object(&obj, unwind_info)?;
 
-    // Second, create a PrimaryMap from result vector of pointers.
-    let mut finished_functions = PrimaryMap::new();
+    // Populate the finished functions from the allocation
+    let mut finished_functions = PrimaryMap::with_capacity(allocation.funcs_len());
     for (i, fat_ptr) in allocation.funcs() {
+        let start = fat_ptr.as_ptr() as usize;
         let fat_ptr: *mut [VMFunctionBody] = fat_ptr;
+        // Assert that the function bodies are pushed in sort order
+        // This property is relied upon to search for functions by PC values
+        assert!(
+            start
+                > finished_functions
+                    .last()
+                    .map(|f: &*mut [VMFunctionBody]| unsafe { (**f).as_ptr() as usize })
+                    .unwrap_or(0)
+        );
         assert_eq!(
             Some(finished_functions.push(fat_ptr)),
             module.defined_func_index(i)
         );
     }
 
-    let mut trampolines = PrimaryMap::new();
+    // Populate the trampolines from the allocation
+    let mut trampolines = Vec::with_capacity(allocation.trampolines_len());
     for (i, fat_ptr) in allocation.trampolines() {
-        let fat_ptr =
+        let fnptr =
             unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr()) };
-        assert_eq!(trampolines.push(fat_ptr), i);
+        trampolines.push((i, fnptr));
     }
 
     let code_range = allocation.code_range();
@@ -494,6 +548,7 @@ impl From<DebugInfoData<'_>> for DebugInfo {
         };
         let debug_abbrev = push(raw.dwarf.debug_abbrev.reader().slice());
         let debug_addr = push(raw.dwarf.debug_addr.reader().slice());
+        let debug_aranges = push(raw.dwarf.debug_aranges.reader().slice());
         let debug_info = push(raw.dwarf.debug_info.reader().slice());
         let debug_line = push(raw.dwarf.debug_line.reader().slice());
         let debug_line_str = push(raw.dwarf.debug_line_str.reader().slice());
@@ -505,6 +560,7 @@ impl From<DebugInfoData<'_>> for DebugInfo {
             data: data.into(),
             debug_abbrev,
             debug_addr,
+            debug_aranges,
             debug_info,
             debug_line,
             debug_line_str,

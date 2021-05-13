@@ -80,3 +80,29 @@ with:
 ```sh
 $ wasmtime wasm2obj foo.wasm foo.o
 ```
+
+## `compile`
+
+This subcommand is used to Ahead-Of-Time (AOT) compile a WebAssembly module to produce
+a "compiled wasm" (.cwasm) file.
+
+The `wasmtime run` subcommand can then be used to run a AOT-compiled WebAssembly module:
+
+```sh
+$ wasmtime compile foo.wasm
+$ wasmtime foo.cwasm
+```
+
+AOT-compiled modules can be run from hosts that are compatible with the target
+environment of the AOT-completed module.
+
+## `settings`
+
+This subcommand is used to print the available Cranelift settings for a given target.
+
+When run without options, it will print the settings for the host target and also
+display what Cranelift settings are inferred for the host:
+
+```sh
+$ wasmtime settings
+```

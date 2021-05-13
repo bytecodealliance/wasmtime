@@ -5,12 +5,12 @@ pub enum SystemTimeSpec {
     Absolute(SystemTime),
 }
 
-pub trait WasiSystemClock {
+pub trait WasiSystemClock: Send + Sync {
     fn resolution(&self) -> Duration;
     fn now(&self, precision: Duration) -> SystemTime;
 }
 
-pub trait WasiMonotonicClock {
+pub trait WasiMonotonicClock: Send + Sync {
     fn resolution(&self) -> Duration;
     fn now(&self, precision: Duration) -> Instant;
 }

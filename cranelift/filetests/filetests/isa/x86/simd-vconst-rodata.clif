@@ -1,6 +1,6 @@
 test rodata
 set enable_simd=true
-target x86_64 haswell
+target x86_64 legacy haswell
 
 function %vconst_i32() -> i32x4 {
 block0:

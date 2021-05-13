@@ -1,0 +1,12 @@
+test compile
+target s390x
+
+; FIXME: not yet supported
+
+function %uaddsat64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+;  v2 = uadd_sat.i64 v0, v1
+  v2 = iconst.i64 0
+  return v2
+}
+

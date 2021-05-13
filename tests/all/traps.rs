@@ -27,8 +27,7 @@ fn test_trap_return() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn test_trap_trace() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -66,8 +65,7 @@ fn test_trap_trace() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn test_trap_trace_cb() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -99,8 +97,7 @@ fn test_trap_trace_cb() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn test_trap_stack_overflow() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -128,8 +125,7 @@ fn test_trap_stack_overflow() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn trap_display_pretty() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -161,8 +157,7 @@ wasm backtrace:
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn trap_display_multi_module() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -207,8 +202,6 @@ wasm backtrace:
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn trap_start_function_import() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -235,8 +228,6 @@ fn trap_start_function_import() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn rust_panic_import() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -278,8 +269,6 @@ fn rust_panic_import() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn rust_panic_start_function() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -313,8 +302,6 @@ fn rust_panic_start_function() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn mismatched_arguments() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -346,8 +333,6 @@ fn mismatched_arguments() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
 fn call_signature_mismatch() -> Result<()> {
     let store = Store::default();
     let binary = wat::parse_str(
@@ -378,8 +363,7 @@ fn call_signature_mismatch() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(all(target_os = "windows", target_arch = "aarch64"), ignore)] // FIXME(#1642)
-#[cfg_attr(all(target_os = "windows", feature = "experimental_x64"), ignore)] // FIXME(#2079)
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn start_trap_pretty() -> Result<()> {
     let store = Store::default();
     let wat = r#"
@@ -413,6 +397,7 @@ wasm backtrace:
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn present_after_module_drop() -> Result<()> {
     let store = Store::default();
     let module = Module::new(store.engine(), r#"(func (export "foo") unreachable)"#)?;
@@ -496,6 +481,7 @@ fn rustc(src: &str) -> Vec<u8> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn parse_dwarf_info() -> Result<()> {
     let wasm = rustc(
         "
@@ -512,7 +498,7 @@ fn parse_dwarf_info() -> Result<()> {
     let mut linker = Linker::new(&store);
     wasmtime_wasi::Wasi::new(
         &store,
-        wasi_cap_std_sync::WasiCtxBuilder::new()
+        wasmtime_wasi::sync::WasiCtxBuilder::new()
             .inherit_stdio()
             .build()?,
     )
@@ -538,6 +524,7 @@ fn parse_dwarf_info() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn no_hint_even_with_dwarf_info() -> Result<()> {
     let mut config = Config::new();
     config.wasm_backtrace_details(WasmBacktraceDetails::Disable);
@@ -570,6 +557,7 @@ wasm backtrace:
 }
 
 #[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
 fn hint_with_dwarf_info() -> Result<()> {
     // Skip this test if the env var is already configure, but in CI we're sure
     // to run tests without this env var configured.
@@ -601,5 +589,41 @@ wasm backtrace:
 note: run with `WASMTIME_BACKTRACE_DETAILS=1` environment variable to display more information
 "
     );
+    Ok(())
+}
+
+#[test]
+fn multithreaded_traps() -> Result<()> {
+    // Compile and run unreachable on a thread, then moves over the whole store to another thread,
+    // and make sure traps are still correctly caught after notifying the store of the move.
+    let instance = {
+        let store = Store::default();
+        let module = Module::new(
+            store.engine(),
+            r#"(module (func (export "run") unreachable))"#,
+        )?;
+        Instance::new(&store, &module, &[])?
+    };
+
+    assert!(instance.get_typed_func::<(), ()>("run")?.call(()).is_err());
+
+    struct SendInstance {
+        inner: Instance,
+    }
+    unsafe impl Send for SendInstance {}
+
+    let instance = SendInstance { inner: instance };
+
+    let handle = std::thread::spawn(move || {
+        let instance = instance.inner;
+        assert!(instance
+            .get_typed_func::<(), ()>("run")
+            .unwrap()
+            .call(())
+            .is_err());
+    });
+
+    handle.join().expect("couldn't join thread");
+
     Ok(())
 }

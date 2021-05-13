@@ -167,7 +167,7 @@ impl JITModule {
     /// corresponding module, it should only be used when none of the functions
     /// from that module are currently executing and none of the `fn` pointers
     /// are called afterwards.
-    pub unsafe fn free_memory(&mut self) {
+    pub unsafe fn free_memory(mut self) {
         self.memory.code.free_memory();
         self.memory.readonly.free_memory();
         self.memory.writable.free_memory();
@@ -178,6 +178,53 @@ impl JITModule {
             .get(name)
             .copied()
             .or_else(|| lookup_with_dlsym(name))
+    }
+
+    fn new_func_plt_entry(&mut self, id: FuncId, val: *const u8) {
+        let got_entry = self
+            .memory
+            .writable
+            .allocate(
+                std::mem::size_of::<*const u8>(),
+                std::mem::align_of::<*const u8>().try_into().unwrap(),
+            )
+            .unwrap()
+            .cast::<*const u8>();
+        self.function_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
+        unsafe {
+            std::ptr::write(got_entry, val);
+        }
+        let plt_entry = self
+            .memory
+            .code
+            .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
+            .unwrap()
+            .cast::<[u8; 16]>();
+        self.record_function_for_perf(
+            plt_entry as *mut _,
+            std::mem::size_of::<[u8; 16]>(),
+            &format!("{}@plt", self.declarations.get_function_decl(id).name),
+        );
+        self.function_plt_entries[id] = Some(NonNull::new(plt_entry).unwrap());
+        unsafe {
+            Self::write_plt_entry_bytes(plt_entry, got_entry);
+        }
+    }
+
+    fn new_data_got_entry(&mut self, id: DataId, val: *const u8) {
+        let got_entry = self
+            .memory
+            .writable
+            .allocate(
+                std::mem::size_of::<*const u8>(),
+                std::mem::align_of::<*const u8>().try_into().unwrap(),
+            )
+            .unwrap()
+            .cast::<*const u8>();
+        self.data_object_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
+        unsafe {
+            std::ptr::write(got_entry, val);
+        }
     }
 
     unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: *mut *const u8) {
@@ -238,6 +285,13 @@ impl JITModule {
         }
     }
 
+    /// Returns the given function's entry in the Global Offset Table.
+    ///
+    /// Panics if there's no entry in the table for the given function.
+    pub fn read_got_entry(&self, func_id: FuncId) -> *const u8 {
+        unsafe { *self.function_got_entries[func_id].unwrap().as_ptr() }
+    }
+
     fn get_got_address(&self, name: &ir::ExternalName) -> *const u8 {
         match *name {
             ir::ExternalName::User { .. } => {
@@ -289,6 +343,9 @@ impl JITModule {
     }
 
     /// Returns the address of a finalized function.
+    ///
+    /// The pointer remains valid until either [`JITModule::free_memory`] is called or in the future
+    /// some way of deallocating this individual function is used.
     pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
         let info = &self.compiled_functions[func_id];
         assert!(
@@ -301,6 +358,9 @@ impl JITModule {
     }
 
     /// Returns the address and size of a finalized data object.
+    ///
+    /// The pointer remains valid until either [`JITModule::free_memory`] is called or in the future
+    /// some way of deallocating this individual data object is used.
     pub fn get_finalized_data(&self, data_id: DataId) -> (*const u8, usize) {
         let info = &self.compiled_data_objects[data_id];
         assert!(
@@ -488,40 +548,25 @@ impl Module for JITModule {
         linkage: Linkage,
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
-        let (id, _decl) = self
+        let (id, linkage) = self
             .declarations
             .declare_function(name, linkage, signature)?;
         if self.function_got_entries[id].is_none() && self.isa.flags().is_pic() {
-            let got_entry = self
-                .memory
-                .writable
-                .allocate(
-                    std::mem::size_of::<*const u8>(),
-                    std::mem::align_of::<*const u8>().try_into().unwrap(),
-                )
-                .unwrap()
-                .cast::<*const u8>();
-            self.function_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
             // FIXME populate got entries with a null pointer when defined
-            let val = self.lookup_symbol(name).unwrap_or(std::ptr::null());
-            unsafe {
-                std::ptr::write(got_entry, val);
-            }
-            let plt_entry = self
-                .memory
-                .code
-                .allocate(std::mem::size_of::<[u8; 16]>(), EXECUTABLE_DATA_ALIGNMENT)
-                .unwrap()
-                .cast::<[u8; 16]>();
-            self.record_function_for_perf(
-                plt_entry as *mut _,
-                std::mem::size_of::<[u8; 16]>(),
-                &format!("{}@plt", name),
-            );
-            self.function_plt_entries[id] = Some(NonNull::new(plt_entry).unwrap());
-            unsafe {
-                Self::write_plt_entry_bytes(plt_entry, got_entry);
-            }
+            let val = if linkage == Linkage::Import {
+                self.lookup_symbol(name).unwrap_or(std::ptr::null())
+            } else {
+                std::ptr::null()
+            };
+            self.new_func_plt_entry(id, val);
+        }
+        Ok(id)
+    }
+
+    fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId> {
+        let id = self.declarations.declare_anonymous_function(signature)?;
+        if self.isa.flags().is_pic() {
+            self.new_func_plt_entry(id, std::ptr::null());
         }
         Ok(id)
     }
@@ -534,25 +579,26 @@ impl Module for JITModule {
         tls: bool,
     ) -> ModuleResult<DataId> {
         assert!(!tls, "JIT doesn't yet support TLS");
-        let (id, _decl) = self
+        let (id, linkage) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
         if self.data_object_got_entries[id].is_none() && self.isa.flags().is_pic() {
-            let got_entry = self
-                .memory
-                .writable
-                .allocate(
-                    std::mem::size_of::<*const u8>(),
-                    std::mem::align_of::<*const u8>().try_into().unwrap(),
-                )
-                .unwrap()
-                .cast::<*const u8>();
-            self.data_object_got_entries[id] = Some(NonNull::new(got_entry).unwrap());
             // FIXME populate got entries with a null pointer when defined
-            let val = self.lookup_symbol(name).unwrap_or(std::ptr::null());
-            unsafe {
-                std::ptr::write(got_entry, val);
-            }
+            let val = if linkage == Linkage::Import {
+                self.lookup_symbol(name).unwrap_or(std::ptr::null())
+            } else {
+                std::ptr::null()
+            };
+            self.new_data_got_entry(id, val);
+        }
+        Ok(id)
+    }
+
+    fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
+        assert!(!tls, "JIT doesn't yet support TLS");
+        let id = self.declarations.declare_anonymous_data(writable, tls)?;
+        if self.isa.flags().is_pic() {
+            self.new_data_got_entry(id, std::ptr::null());
         }
         Ok(id)
     }

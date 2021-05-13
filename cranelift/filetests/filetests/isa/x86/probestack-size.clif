@@ -1,7 +1,7 @@
 test compile
 set use_colocated_libcalls=1
 set probestack_size_log2=13
-target x86_64
+target x86_64 legacy
 
 ; Like %big in probestack.clif, but now the probestack size is bigger
 ; and it no longer needs a probe.

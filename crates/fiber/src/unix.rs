@@ -34,16 +34,80 @@ use std::cell::Cell;
 use std::io;
 use std::ptr;
 
-pub struct Fiber {
+#[derive(Debug)]
+pub struct FiberStack {
     // The top of the stack; for stacks allocated by the fiber implementation itself,
-    // the base address of the allocation will be `top_of_stack.sub(alloc_len.unwrap())`
-    top_of_stack: *mut u8,
-    alloc_len: Option<usize>,
+    // the base address of the allocation will be `top.sub(len.unwrap())`
+    top: *mut u8,
+    // The length of the stack; `None` when the stack was not created by this implementation.
+    len: Option<usize>,
 }
 
-pub struct Suspend {
-    top_of_stack: *mut u8,
+impl FiberStack {
+    pub fn new(size: usize) -> io::Result<Self> {
+        unsafe {
+            // Round up our stack size request to the nearest multiple of the
+            // page size.
+            let page_size = libc::sysconf(libc::_SC_PAGESIZE) as usize;
+            let size = if size == 0 {
+                page_size
+            } else {
+                (size + (page_size - 1)) & (!(page_size - 1))
+            };
+
+            // Add in one page for a guard page and then ask for some memory.
+            let mmap_len = size + page_size;
+            let mmap = libc::mmap(
+                ptr::null_mut(),
+                mmap_len,
+                libc::PROT_NONE,
+                libc::MAP_ANON | libc::MAP_PRIVATE,
+                -1,
+                0,
+            );
+            if mmap == libc::MAP_FAILED {
+                return Err(io::Error::last_os_error());
+            }
+
+            if libc::mprotect(
+                mmap.cast::<u8>().add(page_size).cast(),
+                size,
+                libc::PROT_READ | libc::PROT_WRITE,
+            ) != 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+
+            Ok(Self {
+                top: mmap.cast::<u8>().add(mmap_len),
+                len: Some(mmap_len),
+            })
+        }
+    }
+
+    pub unsafe fn from_top_ptr(top: *mut u8) -> io::Result<Self> {
+        Ok(Self { top, len: None })
+    }
+
+    pub fn top(&self) -> Option<*mut u8> {
+        Some(self.top)
+    }
 }
+
+impl Drop for FiberStack {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(len) = self.len {
+                let ret = libc::munmap(self.top.sub(len) as _, len);
+                debug_assert!(ret == 0);
+            }
+        }
+    }
+}
+
+pub struct Fiber;
+
+pub struct Suspend(*mut u8);
 
 extern "C" {
     fn wasmtime_fiber_init(
@@ -59,111 +123,38 @@ where
     F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
 {
     unsafe {
-        let inner = Suspend { top_of_stack };
+        let inner = Suspend(top_of_stack);
         let initial = inner.take_resume::<A, B, C>();
         super::Suspend::<A, B, C>::execute(inner, initial, Box::from_raw(arg0.cast::<F>()))
     }
 }
 
 impl Fiber {
-    pub fn new<F, A, B, C>(stack_size: usize, func: F) -> io::Result<Self>
-    where
-        F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
-    {
-        let fiber = Self::alloc_with_stack(stack_size)?;
-        fiber.init(func);
-        Ok(fiber)
-    }
-
-    pub fn new_with_stack<F, A, B, C>(top_of_stack: *mut u8, func: F) -> io::Result<Self>
-    where
-        F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
-    {
-        let fiber = Self {
-            top_of_stack,
-            alloc_len: None,
-        };
-
-        fiber.init(func);
-
-        Ok(fiber)
-    }
-
-    fn init<F, A, B, C>(&self, func: F)
+    pub fn new<F, A, B, C>(stack: &FiberStack, func: F) -> io::Result<Self>
     where
         F: FnOnce(A, &super::Suspend<A, B, C>) -> C,
     {
         unsafe {
             let data = Box::into_raw(Box::new(func)).cast();
-            wasmtime_fiber_init(self.top_of_stack, fiber_start::<F, A, B, C>, data);
+            wasmtime_fiber_init(stack.top, fiber_start::<F, A, B, C>, data);
         }
+
+        Ok(Self)
     }
 
-    fn alloc_with_stack(stack_size: usize) -> io::Result<Self> {
-        unsafe {
-            // Round up our stack size request to the nearest multiple of the
-            // page size.
-            let page_size = libc::sysconf(libc::_SC_PAGESIZE) as usize;
-            let stack_size = if stack_size == 0 {
-                page_size
-            } else {
-                (stack_size + (page_size - 1)) & (!(page_size - 1))
-            };
-
-            // Add in one page for a guard page and then ask for some memory.
-            let mmap_len = stack_size + page_size;
-            let mmap = libc::mmap(
-                ptr::null_mut(),
-                mmap_len,
-                libc::PROT_NONE,
-                libc::MAP_ANON | libc::MAP_PRIVATE,
-                -1,
-                0,
-            );
-            if mmap == libc::MAP_FAILED {
-                return Err(io::Error::last_os_error());
-            }
-            let ret = Self {
-                top_of_stack: mmap.cast::<u8>().add(mmap_len),
-                alloc_len: Some(mmap_len),
-            };
-            let res = libc::mprotect(
-                mmap.cast::<u8>().add(page_size).cast(),
-                stack_size,
-                libc::PROT_READ | libc::PROT_WRITE,
-            );
-            if res != 0 {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(ret)
-            }
-        }
-    }
-
-    pub(crate) fn resume<A, B, C>(&self, result: &Cell<RunResult<A, B, C>>) {
+    pub(crate) fn resume<A, B, C>(&self, stack: &FiberStack, result: &Cell<RunResult<A, B, C>>) {
         unsafe {
             // Store where our result is going at the very tip-top of the
             // stack, otherwise known as our reserved slot for this information.
             //
             // In the diagram above this is updating address 0xAff8
-            let addr = self.top_of_stack.cast::<usize>().offset(-1);
+            let addr = stack.top.cast::<usize>().offset(-1);
             addr.write(result as *const _ as usize);
 
-            wasmtime_fiber_switch(self.top_of_stack);
+            wasmtime_fiber_switch(stack.top);
 
             // null this out to help catch use-after-free
             addr.write(0);
-        }
-    }
-}
-
-impl Drop for Fiber {
-    fn drop(&mut self) {
-        unsafe {
-            if let Some(alloc_len) = self.alloc_len {
-                let ret = libc::munmap(self.top_of_stack.sub(alloc_len) as _, alloc_len);
-                debug_assert!(ret == 0);
-            }
         }
     }
 }
@@ -173,7 +164,7 @@ impl Suspend {
         unsafe {
             // Calculate 0xAff8 and then write to it
             (*self.result_location::<A, B, C>()).set(result);
-            wasmtime_fiber_switch(self.top_of_stack);
+            wasmtime_fiber_switch(self.0);
             self.take_resume::<A, B, C>()
         }
     }
@@ -186,8 +177,8 @@ impl Suspend {
     }
 
     unsafe fn result_location<A, B, C>(&self) -> *const Cell<RunResult<A, B, C>> {
-        let ret = self.top_of_stack.cast::<*const u8>().offset(-1).read();
+        let ret = self.0.cast::<*const u8>().offset(-1).read();
         assert!(!ret.is_null());
-        return ret.cast();
+        ret.cast()
     }
 }

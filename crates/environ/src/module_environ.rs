@@ -4,14 +4,14 @@ use crate::module::{
 };
 use crate::tunables::Tunables;
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::{AbiParam, ArgumentPurpose};
 use cranelift_codegen::isa::TargetFrontendConfig;
+use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, Alias, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType,
-    FuncIndex, Global, GlobalIndex, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex,
-    ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex, TargetEnvironment, TypeIndex,
-    WasmError, WasmFuncType, WasmResult,
+    FuncIndex, Global, GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, Memory,
+    MemoryIndex, ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex,
+    TargetEnvironment, TypeIndex, WasmError, WasmFuncType, WasmResult,
 };
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
@@ -40,6 +40,8 @@ pub struct ModuleEnvironment<'data> {
 
     /// Intern'd types for this entire translation, shared by all modules.
     types: TypeTables,
+
+    interned_func_types: HashMap<WasmFuncType, SignatureIndex>,
 
     // Various bits and pieces of configuration
     features: WasmFeatures,
@@ -147,6 +149,7 @@ impl<'data> ModuleEnvironment<'data> {
             tunables: tunables.clone(),
             features: *features,
             first_module: true,
+            interned_func_types: Default::default(),
         }
     }
 
@@ -202,19 +205,28 @@ impl<'data> ModuleEnvironment<'data> {
         let slice = gimli::EndianSlice::new(data, endian);
 
         match name {
-            ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),
+            // Dwarf fields.
             ".debug_abbrev" => dwarf.debug_abbrev = gimli::DebugAbbrev::new(data, endian),
+            ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
+            // TODO aranges?
             ".debug_info" => dwarf.debug_info = gimli::DebugInfo::new(data, endian),
             ".debug_line" => dwarf.debug_line = gimli::DebugLine::new(data, endian),
-            ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
             ".debug_line_str" => dwarf.debug_line_str = gimli::DebugLineStr::from(slice),
-            ".debug_str_sup" => dwarf.debug_str_sup = gimli::DebugStr::from(slice),
-            ".debug_ranges" => info.debug_ranges = gimli::DebugRanges::new(data, endian),
-            ".debug_rnglists" => info.debug_rnglists = gimli::DebugRngLists::new(data, endian),
+            ".debug_str" => dwarf.debug_str = gimli::DebugStr::new(data, endian),
+            ".debug_str_offsets" => dwarf.debug_str_offsets = gimli::DebugStrOffsets::from(slice),
+            ".debug_str_sup" => {
+                let mut dwarf_sup: Dwarf<'data> = Default::default();
+                dwarf_sup.debug_str = gimli::DebugStr::from(slice);
+                dwarf.sup = Some(Arc::new(dwarf_sup));
+            }
+            ".debug_types" => dwarf.debug_types = gimli::DebugTypes::from(slice),
+
+            // Additional fields.
             ".debug_loc" => info.debug_loc = gimli::DebugLoc::from(slice),
             ".debug_loclists" => info.debug_loclists = gimli::DebugLocLists::from(slice),
-            ".debug_str_offsets" => dwarf.debug_str_offsets = gimli::DebugStrOffsets::from(slice),
-            ".debug_types" => dwarf.debug_types = gimli::DebugTypes::from(slice),
+            ".debug_ranges" => info.debug_ranges = gimli::DebugRanges::new(data, endian),
+            ".debug_rnglists" => info.debug_rnglists = gimli::DebugRngLists::new(data, endian),
+
             other => {
                 log::warn!("unknown debug section `{}`", other);
                 return;
@@ -354,6 +366,15 @@ impl<'data> ModuleEnvironment<'data> {
             .module_signatures
             .push(ModuleSignature { imports, exports })
     }
+
+    fn flag_func_possibly_exported(&mut self, func: FuncIndex) {
+        if func.is_reserved_value() {
+            return;
+        }
+        if let Some(idx) = self.result.module.defined_func_index(func) {
+            self.result.module.possibly_exported_funcs.insert(idx);
+        }
+    }
 }
 
 impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
@@ -372,22 +393,21 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn reserve_types(&mut self, num: u32) -> WasmResult<()> {
         let num = usize::try_from(num).unwrap();
         self.result.module.types.reserve(num);
-        self.types.native_signatures.reserve(num);
         self.types.wasm_signatures.reserve(num);
         Ok(())
     }
 
-    fn declare_type_func(&mut self, wasm: WasmFuncType, sig: ir::Signature) -> WasmResult<()> {
-        let sig = translate_signature(sig, self.pointer_type());
-
-        // FIXME(#2469): Signatures should be deduplicated in these two tables
-        // since `SignatureIndex` is already a index space separate from the
-        // module's index space. Note that this may get more urgent with
-        // module-linking modules where types are more likely to get repeated
-        // (across modules).
-        let sig_index = self.types.native_signatures.push(sig);
-        let sig_index2 = self.types.wasm_signatures.push(wasm);
-        debug_assert_eq!(sig_index, sig_index2);
+    fn declare_type_func(&mut self, wasm: WasmFuncType) -> WasmResult<()> {
+        // Deduplicate wasm function signatures through `interned_func_types`,
+        // which also deduplicates across wasm modules with module linking.
+        let sig_index = match self.interned_func_types.get(&wasm) {
+            Some(idx) => *idx,
+            None => {
+                let sig_index = self.types.wasm_signatures.push(wasm.clone());
+                self.interned_func_types.insert(wasm, sig_index);
+                sig_index
+            }
+        };
         self.result
             .module
             .types
@@ -635,6 +655,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_global(&mut self, global: Global) -> WasmResult<()> {
+        if let GlobalInit::RefFunc(index) = global.initializer {
+            self.flag_func_possibly_exported(index);
+        }
         self.result.module.globals.push(global);
         Ok(())
     }
@@ -648,6 +671,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_func_export(&mut self, func_index: FuncIndex, name: &str) -> WasmResult<()> {
+        self.flag_func_possibly_exported(func_index);
         self.declare_export(EntityIndex::Function(func_index), name)
     }
 
@@ -672,6 +696,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     }
 
     fn declare_start_func(&mut self, func_index: FuncIndex) -> WasmResult<()> {
+        self.flag_func_possibly_exported(func_index);
         debug_assert!(self.result.module.start_func.is_none());
         self.result.module.start_func = Some(func_index);
         Ok(())
@@ -689,9 +714,12 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         table_index: TableIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         elements: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
+        for element in elements.iter() {
+            self.flag_func_possibly_exported(*element);
+        }
         self.result
             .module
             .table_initializers
@@ -709,6 +737,9 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         elem_index: ElemIndex,
         segments: Box<[FuncIndex]>,
     ) -> WasmResult<()> {
+        for element in segments.iter() {
+            self.flag_func_possibly_exported(*element);
+        }
         let index = self.result.module.passive_elements.len();
         self.result.module.passive_elements.push(segments);
         let old = self
@@ -721,6 +752,13 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
             "should never get duplicate element indices, that would be a bug in `cranelift_wasm`'s \
              translation"
         );
+        Ok(())
+    }
+
+    fn declare_elements(&mut self, segments: Box<[FuncIndex]>) -> WasmResult<()> {
+        for element in segments.iter() {
+            self.flag_func_possibly_exported(*element);
+        }
         Ok(())
     }
 
@@ -772,7 +810,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
-        offset: usize,
+        offset: u32,
         data: &'data [u8],
     ) -> WasmResult<()> {
         match &mut self.result.module.memory_initialization {
@@ -1063,16 +1101,4 @@ and for re-adding support for interface types you can see this issue:
 
         Ok(())
     }
-}
-
-/// Add environment-specific function parameters.
-pub fn translate_signature(mut sig: ir::Signature, pointer_type: ir::Type) -> ir::Signature {
-    // Prepend the vmctx argument.
-    sig.params.insert(
-        0,
-        AbiParam::special(pointer_type, ArgumentPurpose::VMContext),
-    );
-    // Prepend the caller vmctx argument.
-    sig.params.insert(1, AbiParam::new(pointer_type));
-    sig
 }

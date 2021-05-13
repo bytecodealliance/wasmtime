@@ -267,13 +267,7 @@ impl Context {
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
         if let Some(backend) = isa.get_mach_backend() {
-            use crate::isa::CallConv;
-            use crate::machinst::UnwindInfoKind;
-            let unwind_info_kind = match self.func.signature.call_conv {
-                CallConv::Fast | CallConv::Cold | CallConv::SystemV => UnwindInfoKind::SystemV,
-                CallConv::WindowsFastcall => UnwindInfoKind::Windows,
-                _ => UnwindInfoKind::None,
-            };
+            let unwind_info_kind = isa.unwind_info_kind();
             let result = self.mach_compile_result.as_ref().unwrap();
             return backend.emit_unwind_info(result, unwind_info_kind);
         }

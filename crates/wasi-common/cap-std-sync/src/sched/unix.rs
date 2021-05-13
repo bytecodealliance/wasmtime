@@ -1,113 +1,97 @@
 use cap_std::time::Duration;
 use std::convert::TryInto;
-use std::ops::Deref;
 use std::os::unix::io::{AsRawFd, RawFd};
 use wasi_common::{
     file::WasiFile,
     sched::{
         subscription::{RwEventFlags, Subscription},
-        Poll, WasiSched,
+        Poll,
     },
     Error, ErrorExt,
 };
 
 use poll::{PollFd, PollFlags};
 
-pub struct SyncSched;
-
-impl SyncSched {
-    pub fn new() -> Self {
-        SyncSched
+pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
+    if poll.is_empty() {
+        return Ok(());
     }
-}
+    let mut pollfds = Vec::new();
+    for s in poll.rw_subscriptions() {
+        match s {
+            Subscription::Read(f) => {
+                let raw_fd = wasi_file_raw_fd(f.file).ok_or(
+                    Error::invalid_argument().context("read subscription fd downcast failed"),
+                )?;
+                pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLIN) });
+            }
 
-impl WasiSched for SyncSched {
-    fn poll_oneoff<'a>(&self, poll: &'a Poll<'a>) -> Result<(), Error> {
-        if poll.is_empty() {
-            return Ok(());
+            Subscription::Write(f) => {
+                let raw_fd = wasi_file_raw_fd(f.file).ok_or(
+                    Error::invalid_argument().context("write subscription fd downcast failed"),
+                )?;
+                pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLOUT) });
+            }
+            Subscription::MonotonicClock { .. } => unreachable!(),
         }
-        let mut pollfds = Vec::new();
-        let timeout = poll.earliest_clock_deadline();
-        for s in poll.rw_subscriptions() {
-            match s {
-                Subscription::Read(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(
-                        Error::invalid_argument().context("read subscription fd downcast failed"),
-                    )?;
-                    pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLIN) });
-                }
+    }
 
-                Subscription::Write(f) => {
-                    let raw_fd = wasi_file_raw_fd(f.file.deref()).ok_or(
-                        Error::invalid_argument().context("write subscription fd downcast failed"),
-                    )?;
-                    pollfds.push(unsafe { PollFd::new(raw_fd, PollFlags::POLLOUT) });
-                }
-                Subscription::MonotonicClock { .. } => unreachable!(),
-            }
-        }
-
-        let ready = loop {
-            let poll_timeout = if let Some(t) = timeout {
-                let duration = t.duration_until().unwrap_or(Duration::from_secs(0));
-                (duration.as_millis() + 1) // XXX try always rounding up?
-                    .try_into()
-                    .map_err(|_| Error::overflow().context("poll timeout"))?
-            } else {
-                libc::c_int::max_value()
-            };
-            tracing::debug!(
-                poll_timeout = tracing::field::debug(poll_timeout),
-                poll_fds = tracing::field::debug(&pollfds),
-                "poll"
-            );
-            match poll::poll(&mut pollfds, poll_timeout) {
-                Ok(ready) => break ready,
-                Err(_) => {
-                    let last_err = std::io::Error::last_os_error();
-                    if last_err.raw_os_error().unwrap() == libc::EINTR {
-                        continue;
-                    } else {
-                        return Err(last_err.into());
-                    }
-                }
-            }
-        };
-        if ready > 0 {
-            for (rwsub, pollfd) in poll.rw_subscriptions().zip(pollfds.into_iter()) {
-                if let Some(revents) = pollfd.revents() {
-                    let (nbytes, rwsub) = match rwsub {
-                        Subscription::Read(sub) => {
-                            let ready = sub.file.num_ready_bytes()?;
-                            (std::cmp::max(ready, 1), sub)
-                        }
-                        Subscription::Write(sub) => (0, sub),
-                        _ => unreachable!(),
-                    };
-                    if revents.contains(PollFlags::POLLNVAL) {
-                        rwsub.error(Error::badf());
-                    } else if revents.contains(PollFlags::POLLERR) {
-                        rwsub.error(Error::io());
-                    } else if revents.contains(PollFlags::POLLHUP) {
-                        rwsub.complete(nbytes, RwEventFlags::HANGUP);
-                    } else {
-                        rwsub.complete(nbytes, RwEventFlags::empty());
-                    };
-                }
-            }
+    let ready = loop {
+        let poll_timeout = if let Some(t) = poll.earliest_clock_deadline() {
+            let duration = t.duration_until().unwrap_or(Duration::from_secs(0));
+            (duration.as_millis() + 1) // XXX try always rounding up?
+                .try_into()
+                .map_err(|_| Error::overflow().context("poll timeout"))?
         } else {
-            timeout
-                .expect("timed out")
-                .result()
-                .expect("timer deadline is past")
-                .unwrap()
+            libc::c_int::max_value()
+        };
+        tracing::debug!(
+            poll_timeout = tracing::field::debug(poll_timeout),
+            poll_fds = tracing::field::debug(&pollfds),
+            "poll"
+        );
+        match poll::poll(&mut pollfds, poll_timeout) {
+            Ok(ready) => break ready,
+            Err(_) => {
+                let last_err = std::io::Error::last_os_error();
+                if last_err.raw_os_error().unwrap() == libc::EINTR {
+                    continue;
+                } else {
+                    return Err(last_err.into());
+                }
+            }
         }
-        Ok(())
+    };
+    if ready > 0 {
+        for (rwsub, pollfd) in poll.rw_subscriptions().zip(pollfds.into_iter()) {
+            if let Some(revents) = pollfd.revents() {
+                let (nbytes, rwsub) = match rwsub {
+                    Subscription::Read(sub) => {
+                        let ready = sub.file.num_ready_bytes().await?;
+                        (std::cmp::max(ready, 1), sub)
+                    }
+                    Subscription::Write(sub) => (0, sub),
+                    _ => unreachable!(),
+                };
+                if revents.contains(PollFlags::POLLNVAL) {
+                    rwsub.error(Error::badf());
+                } else if revents.contains(PollFlags::POLLERR) {
+                    rwsub.error(Error::io());
+                } else if revents.contains(PollFlags::POLLHUP) {
+                    rwsub.complete(nbytes, RwEventFlags::HANGUP);
+                } else {
+                    rwsub.complete(nbytes, RwEventFlags::empty());
+                };
+            }
+        }
+    } else {
+        poll.earliest_clock_deadline()
+            .expect("timed out")
+            .result()
+            .expect("timer deadline is past")
+            .unwrap()
     }
-    fn sched_yield(&self) -> Result<(), Error> {
-        std::thread::yield_now();
-        Ok(())
-    }
+    Ok(())
 }
 
 fn wasi_file_raw_fd(f: &dyn WasiFile) -> Option<RawFd> {

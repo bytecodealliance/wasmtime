@@ -14,6 +14,10 @@
 //! `cap_std::fs::Dir`, and provides convenience methods for inheriting the
 //! parent process's stdio, args, and env.
 //!
+//! For the convenience of consumers, `cap_std::fs::Dir` is re-exported from
+//! this crate. This saves consumers tracking an additional dep on the exact
+//! version of cap_std used by this crate, if they want to avoid it.
+//!
 //! The only place we expect to run into long-term compatibility issues
 //! between `wasi-cap-std-sync` and the other impl crates that will come later
 //! is in the `Sched` abstraction. Once we can build an async scheduler based
@@ -33,6 +37,7 @@ pub mod file;
 pub mod sched;
 pub mod stdio;
 
+pub use cap_std::fs::Dir;
 pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
@@ -110,13 +115,9 @@ impl WasiCtxBuilder {
     pub fn inherit_stdio(self) -> Self {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
     }
-    pub fn preopened_dir(
-        self,
-        dir: cap_std::fs::Dir,
-        path: impl AsRef<Path>,
-    ) -> Result<Self, Error> {
+    pub fn preopened_dir(self, dir: Dir, guest_path: impl AsRef<Path>) -> Result<Self, Error> {
         let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
-        Ok(WasiCtxBuilder(self.0.preopened_dir(dir, path)?))
+        Ok(WasiCtxBuilder(self.0.preopened_dir(dir, guest_path)?))
     }
     pub fn build(self) -> Result<WasiCtx, Error> {
         self.0.build()

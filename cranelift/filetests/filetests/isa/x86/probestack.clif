@@ -1,6 +1,6 @@
 test compile
 set use_colocated_libcalls=1
-target x86_64
+target x86_64 legacy
 
 ; A function with a big stack frame. This should have a stack probe.
 

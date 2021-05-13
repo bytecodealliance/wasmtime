@@ -1,4 +1,4 @@
-use super::{guest_types, WasiCryptoCtx};
+use super::guest_types;
 
 use std::num::TryFromIntError;
 use wasi_crypto::CryptoError;
@@ -49,13 +49,6 @@ impl From<TryFromIntError> for guest_types::CryptoErrno {
 impl<'a> wiggle::GuestErrorType for guest_types::CryptoErrno {
     fn success() -> Self {
         guest_types::CryptoErrno::Success
-    }
-}
-
-impl guest_types::GuestErrorConversion for WasiCryptoCtx {
-    fn into_crypto_errno(&self, e: wiggle::GuestError) -> guest_types::CryptoErrno {
-        eprintln!("GuestError (witx) {:?}", e);
-        guest_types::CryptoErrno::GuestError
     }
 }
 

@@ -3859,6 +3859,18 @@ fn test_x64_emit() {
         "pabsd   %xmm10, %xmm11",
     ));
 
+    insns.push((
+        Inst::xmm_unary_rm_r(SseOpcode::Cvtdq2pd, RegMem::reg(xmm2), w_xmm8),
+        "F3440FE6C2",
+        "cvtdq2pd %xmm2, %xmm8",
+    ));
+
+    insns.push((
+        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, RegMem::reg(xmm2), w_xmm8),
+        "6272FD081FC2",
+        "vpabsq  %xmm2, %xmm8",
+    ));
+
     // Xmm to int conversions, and conversely.
 
     insns.push((
@@ -4270,6 +4282,7 @@ fn test_x64_emit() {
     let mut isa_flag_builder = x64::settings::builder();
     isa_flag_builder.enable("has_ssse3").unwrap();
     isa_flag_builder.enable("has_sse41").unwrap();
+    isa_flag_builder.enable("has_avx512f").unwrap();
     let isa_flags = x64::settings::Flags::new(&flags, isa_flag_builder);
 
     let rru = regs::create_reg_universe_systemv(&flags);

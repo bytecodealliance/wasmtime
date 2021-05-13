@@ -1,6 +1,6 @@
 test binemit
 set enable_simd
-target x86_64
+target x86_64 legacy
 
 function %vconst_optimizations() {
 block0:

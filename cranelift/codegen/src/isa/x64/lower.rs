@@ -204,6 +204,7 @@ enum ExtSpec {
     ZeroExtendTo32,
     ZeroExtendTo64,
     SignExtendTo32,
+    #[allow(dead_code)] // not used just yet but may be used in the future!
     SignExtendTo64,
 }
 
@@ -1854,25 +1855,29 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             if ty == types::I64X2 {
-                // This lowering could be a single instruction with AVX512F/VL's VPABSQ instruction.
-                // Instead, we use a separate register, `tmp`, to contain the results of `0 - src`
-                // and then blend in those results with `BLENDVPD` if the MSB of `tmp` was set to 1
-                // (i.e. if `tmp` was negative or, conversely, if `src` was originally positive).
+                if isa_flags.use_avx512f_simd() || isa_flags.use_avx512vl_simd() {
+                    ctx.emit(Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, src, dst));
+                } else {
+                    // If `VPABSQ` from AVX512 is unavailable, we use a separate register, `tmp`, to
+                    // contain the results of `0 - src` and then blend in those results with
+                    // `BLENDVPD` if the MSB of `tmp` was set to 1 (i.e. if `tmp` was negative or,
+                    // conversely, if `src` was originally positive).
 
-                // Emit all 0s into the `tmp` register.
-                let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
-                // Subtract the lanes from 0 and set up `dst`.
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubq, src.clone(), tmp));
-                ctx.emit(Inst::gen_move(dst, tmp.to_reg(), ty));
-                // Choose the subtracted lanes when `tmp` has an MSB of 1. BLENDVPD's semantics
-                // require the "choice" mask to be in XMM0.
-                ctx.emit(Inst::gen_move(
-                    Writable::from_reg(regs::xmm0()),
-                    tmp.to_reg(),
-                    ty,
-                ));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Blendvpd, src, dst));
+                    // Emit all 0s into the `tmp` register.
+                    let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::from(tmp), tmp));
+                    // Subtract the lanes from 0 and set up `dst`.
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubq, src.clone(), tmp));
+                    ctx.emit(Inst::gen_move(dst, tmp.to_reg(), ty));
+                    // Choose the subtracted lanes when `tmp` has an MSB of 1. BLENDVPD's semantics
+                    // require the "choice" mask to be in XMM0.
+                    ctx.emit(Inst::gen_move(
+                        Writable::from_reg(regs::xmm0()),
+                        tmp.to_reg(),
+                        ty,
+                    ));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Blendvpd, src, dst));
+                }
             } else if ty.is_vector() {
                 let opcode = match ty {
                     types::I8X16 => SseOpcode::Pabsb,
@@ -2041,7 +2046,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
                 ctx.emit(Inst::shift_r(size, shift_kind, count, dst));
             } else if dst_ty == types::I128 {
-                let amt_src = put_input_in_reg(ctx, inputs[1]);
+                let amt_src = put_input_in_regs(ctx, inputs[1]).regs()[0];
                 let src = put_input_in_regs(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]);
 
@@ -3914,7 +3919,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::xmm_rm_r(opcode, RegMem::from(dst), dst));
             }
         }
-
+        Opcode::FcvtLowFromSint => {
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            ctx.emit(Inst::xmm_unary_rm_r(
+                SseOpcode::Cvtdq2pd,
+                RegMem::from(src),
+                dst,
+            ));
+        }
         Opcode::FcvtFromUint => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
@@ -4813,28 +4826,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             if elem_ty == types::I128 {
                 let srcs = put_input_in_regs(ctx, inputs[0]);
-                ctx.emit(Inst::mov_r_m(
-                    OperandSize::Size64,
-                    srcs.regs()[0],
-                    addr.clone(),
-                ));
-                ctx.emit(Inst::mov_r_m(
-                    OperandSize::Size64,
-                    srcs.regs()[1],
-                    addr.offset(8),
-                ));
+                ctx.emit(Inst::store(types::I64, srcs.regs()[0], addr.clone()));
+                ctx.emit(Inst::store(types::I64, srcs.regs()[1], addr.offset(8)));
             } else {
                 let src = put_input_in_reg(ctx, inputs[0]);
-
-                ctx.emit(match elem_ty {
-                    types::F32 => Inst::xmm_mov_r_m(SseOpcode::Movss, src, addr),
-                    types::F64 => Inst::xmm_mov_r_m(SseOpcode::Movsd, src, addr),
-                    _ if elem_ty.is_vector() && elem_ty.bits() == 128 => {
-                        // TODO Specialize for different types: MOVUPD, MOVDQU, etc.
-                        Inst::xmm_mov_r_m(SseOpcode::Movups, src, addr)
-                    }
-                    _ => Inst::mov_r_m(OperandSize::from_ty(elem_ty), src, addr),
-                });
+                ctx.emit(Inst::store(elem_ty, src, addr));
             }
         }
 
@@ -4938,7 +4934,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty_access = ctx.input_ty(insn, 0);
             assert!(is_valid_atomic_transaction_ty(ty_access));
 
-            ctx.emit(Inst::mov_r_m(OperandSize::from_ty(ty_access), data, addr));
+            ctx.emit(Inst::store(ty_access, data, addr));
             ctx.emit(Inst::Fence {
                 kind: FenceKind::MFence,
             });
@@ -5181,7 +5177,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 input_ty,
             ));
 
-            if flags.avoid_div_traps() {
+            // Always do explicit checks for `srem`: otherwise, INT_MIN % -1 is not handled properly.
+            if flags.avoid_div_traps() || op == Opcode::Srem {
                 // A vcode meta-instruction is used to lower the inline checks, since they embed
                 // pc-relative offsets that must not change, thus requiring regalloc to not
                 // interfere by introducing spills and reloads.

@@ -83,11 +83,12 @@ use syn::parse_macro_input;
 ///
 /// /// The above witx text contains one module called `$example`. So, we must
 /// /// implement this one method trait for our ctx type.
-/// #[wiggle::async_trait(?Send)]
+/// #[wiggle::async_trait]
 /// /// We specified in the `async_` field that `example::double_int_return_float`
 /// /// is an asynchronous method. Therefore, we use the `async_trait` proc macro
-/// /// (re-exported by wiggle from the crate of the same name) to define this
-/// /// trait, so that `double_int_return_float` can be an `async fn`.
+/// /// to define this trait, so that `double_int_return_float` can be an `async fn`.
+/// /// `wiggle::async_trait` is defined as `#[async_trait::async_trait(?Send)]` -
+/// /// in wiggle, async methods do not have the Send constaint.
 /// impl example::Example for YourCtxType {
 ///     /// The arrays module has two methods, shown here.
 ///     /// Note that the `GuestPtr` type comes from `wiggle`,
@@ -109,17 +110,6 @@ use syn::parse_macro_input;
 /// /// code what value to return when the method returns Ok(...).
 /// impl wiggle::GuestErrorType for types::Errno {
 ///     fn success() -> Self {
-///         unimplemented!()
-///     }
-/// }
-///
-/// /// The `types::GuestErrorConversion` trait is also generated with a method for
-/// /// each type used in the `error` position. This trait allows wiggle-generated
-/// /// code to convert a `wiggle::GuestError` into the right error type. The trait
-/// /// must be implemented for the user's ctx type.
-///
-/// impl types::GuestErrorConversion for YourCtxType {
-///     fn into_errno(&self, _e: wiggle::GuestError) -> types::Errno {
 ///         unimplemented!()
 ///     }
 /// }
@@ -166,4 +156,14 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(quote! { #code #metadata })
+}
+
+#[proc_macro_attribute]
+pub fn async_trait(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let _ = parse_macro_input!(attr as syn::parse::Nothing);
+    let item = proc_macro2::TokenStream::from(item);
+    TokenStream::from(quote! {
+        #[wiggle::async_trait_crate::async_trait(?Send)]
+        #item
+    })
 }

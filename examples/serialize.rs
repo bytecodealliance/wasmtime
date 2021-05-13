@@ -29,9 +29,12 @@ fn deserialize(buffer: &[u8]) -> Result<()> {
     println!("Initializing...");
     let store = Store::default();
 
-    // Compile the wasm binary into an in-memory instance of a `Module`.
+    // Compile the wasm binary into an in-memory instance of a `Module`. Note
+    // that this is `unsafe` because it is our responsibility for guaranteeing
+    // that these bytes are valid precompiled module bytes. We know that from
+    // the structure of this example program.
     println!("Deserialize module...");
-    let module = Module::deserialize(store.engine(), buffer)?;
+    let module = unsafe { Module::deserialize(store.engine(), buffer)? };
 
     // Here we handle the imports of the module, which in this case is our
     // `HelloCallback` type and its associated implementation of `Callback.

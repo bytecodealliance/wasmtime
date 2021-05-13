@@ -1,5 +1,5 @@
 test compile
-target x86_64
+target x86_64 legacy
 
 ; Filed as https://github.com/bytecodealliance/cranelift/issues/779
 ;

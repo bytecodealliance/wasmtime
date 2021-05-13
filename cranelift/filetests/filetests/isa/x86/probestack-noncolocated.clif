@@ -1,5 +1,5 @@
 test compile
-target x86_64
+target x86_64 legacy
 
 ; Like %big in probestack.clif, but without a colocated libcall.
 

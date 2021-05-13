@@ -9,7 +9,7 @@ use wasmtime_runtime::{InstantiationError, VMFunctionBody, VMTrampoline};
 
 pub mod ir {
     pub(super) use cranelift_codegen::ir::{
-        AbiParam, ArgumentPurpose, ConstantOffset, JumpTable, Signature, SourceLoc,
+        AbiParam, ConstantOffset, JumpTable, Signature, SourceLoc,
     };
     pub use cranelift_codegen::ir::{
         ExternalName, Function, InstBuilder, MemFlags, StackSlotData, StackSlotKind,
@@ -52,16 +52,8 @@ pub(crate) fn build_trampoline(
     value_size: usize,
 ) -> Result<CompiledFunction, SetupError> {
     let pointer_type = isa.pointer_type();
-    let mut wrapper_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
-
-    // Add the callee `vmctx` parameter.
-    wrapper_sig.params.push(ir::AbiParam::special(
-        pointer_type,
-        ir::ArgumentPurpose::VMContext,
-    ));
-
-    // Add the caller `vmctx` parameter.
-    wrapper_sig.params.push(ir::AbiParam::new(pointer_type));
+    let mut wrapper_sig =
+        wasmtime_cranelift::blank_sig(isa, wasmtime_cranelift::wasmtime_call_conv(isa));
 
     // Add the `callee_address` parameter.
     wrapper_sig.params.push(ir::AbiParam::new(pointer_type));

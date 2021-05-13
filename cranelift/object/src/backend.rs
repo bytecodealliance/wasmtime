@@ -123,6 +123,8 @@ pub struct ObjectModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     function_alignment: u64,
     per_function_section: bool,
+    anon_func_number: u64,
+    anon_data_number: u64,
 }
 
 impl ObjectModule {
@@ -141,6 +143,8 @@ impl ObjectModule {
             libcall_names: builder.libcall_names,
             function_alignment: builder.function_alignment,
             per_function_section: builder.per_function_section,
+            anon_func_number: 0,
+            anon_data_number: 0,
         }
     }
 }
@@ -174,11 +178,11 @@ impl Module for ObjectModule {
     ) -> ModuleResult<FuncId> {
         validate_symbol(name)?;
 
-        let (id, decl) = self
+        let (id, linkage) = self
             .declarations
             .declare_function(name, linkage, signature)?;
 
-        let (scope, weak) = translate_linkage(decl.linkage);
+        let (scope, weak) = translate_linkage(linkage);
 
         if let Some((function, _defined)) = self.functions[id] {
             let symbol = self.object.symbol_mut(function);
@@ -201,6 +205,30 @@ impl Module for ObjectModule {
         Ok(id)
     }
 
+    fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId> {
+        // Symbols starting with .L are completely omitted from the symbol table after linking.
+        // Using hexadecimal instead of decimal for slightly smaller symbol names and often slightly
+        // faster linking.
+        let name = format!(".Lfn{:x}", self.anon_func_number);
+        self.anon_func_number += 1;
+
+        let id = self.declarations.declare_anonymous_function(signature)?;
+
+        let symbol_id = self.object.add_symbol(Symbol {
+            name: name.as_bytes().to_vec(),
+            value: 0,
+            size: 0,
+            kind: SymbolKind::Text,
+            scope: SymbolScope::Compilation,
+            weak: false,
+            section: SymbolSection::Undefined,
+            flags: SymbolFlags::None,
+        });
+        self.functions[id] = Some((symbol_id, false));
+
+        Ok(id)
+    }
+
     fn declare_data(
         &mut self,
         name: &str,
@@ -210,16 +238,18 @@ impl Module for ObjectModule {
     ) -> ModuleResult<DataId> {
         validate_symbol(name)?;
 
-        let (id, decl) = self
+        let (id, linkage) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
 
-        let kind = if decl.tls {
+        // Merging declarations with conflicting values for tls is not allowed, so it is safe to use
+        // the passed in tls value here.
+        let kind = if tls {
             SymbolKind::Tls
         } else {
             SymbolKind::Data
         };
-        let (scope, weak) = translate_linkage(decl.linkage);
+        let (scope, weak) = translate_linkage(linkage);
 
         if let Some((data, _defined)) = self.data_objects[id] {
             let symbol = self.object.symbol_mut(data);
@@ -239,6 +269,36 @@ impl Module for ObjectModule {
             });
             self.data_objects[id] = Some((symbol_id, false));
         }
+
+        Ok(id)
+    }
+
+    fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
+        // Symbols starting with .L are completely omitted from the symbol table after linking.
+        // Using hexadecimal instead of decimal for slightly smaller symbol names and often slightly
+        // faster linking.
+        let name = format!(".Ldata{:x}", self.anon_data_number);
+        self.anon_data_number += 1;
+
+        let id = self.declarations.declare_anonymous_data(writable, tls)?;
+
+        let kind = if tls {
+            SymbolKind::Tls
+        } else {
+            SymbolKind::Data
+        };
+
+        let symbol_id = self.object.add_symbol(Symbol {
+            name: name.as_bytes().to_vec(),
+            value: 0,
+            size: 0,
+            kind,
+            scope: SymbolScope::Compilation,
+            weak: false,
+            section: SymbolSection::Undefined,
+            flags: SymbolFlags::None,
+        });
+        self.data_objects[id] = Some((symbol_id, false));
 
         Ok(id)
     }
@@ -579,8 +639,8 @@ fn translate_linkage(linkage: Linkage) -> (SymbolScope, bool) {
     (scope, weak)
 }
 
-/// This is the output of `Module`'s
-/// [`finish`](../cranelift_module/struct.Module.html#method.finish) function.
+/// This is the output of `ObjectModule`'s
+/// [`finish`](../struct.ObjectModule.html#method.finish) function.
 /// It contains the generated `Object` and other information produced during
 /// compilation.
 pub struct ObjectProduct {

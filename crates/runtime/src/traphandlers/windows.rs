@@ -1,4 +1,4 @@
-use crate::traphandlers::{tls, CallThreadState, Trap, Unwind};
+use crate::traphandlers::{tls, Trap, Unwind};
 use std::io;
 use winapi::um::errhandlingapi::*;
 use winapi::um::minwinbase::*;
@@ -76,8 +76,4 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
 pub fn lazy_per_thread_init() -> Result<(), Trap> {
     // Unused on Windows
     Ok(())
-}
-
-pub fn register_tls(_: *const CallThreadState<'static>) {
-    // Unused on Windows
 }

@@ -258,6 +258,28 @@ fn enc_ldst_vec(q: u32, size: u32, rn: Reg, rt: Writable<Reg>) -> u32 {
         | machreg_to_vec(rt.to_reg())
 }
 
+fn enc_ldst_vec_pair(
+    opc: u32,
+    amode: u32,
+    is_load: bool,
+    simm7: SImm7Scaled,
+    rn: Reg,
+    rt: Reg,
+    rt2: Reg,
+) -> u32 {
+    debug_assert_eq!(opc & 0b11, opc);
+    debug_assert_eq!(amode & 0b11, amode);
+
+    0b00_10110_00_0_0000000_00000_00000_00000
+        | opc << 30
+        | amode << 23
+        | (is_load as u32) << 22
+        | simm7.bits() << 15
+        | machreg_to_vec(rt2) << 10
+        | machreg_to_gpr(rn) << 5
+        | machreg_to_vec(rt)
+}
+
 fn enc_vec_rrr(top11: u32, rm: Reg, bit15_10: u32, rn: Reg, rd: Writable<Reg>) -> u32 {
     (top11 << 21)
         | (machreg_to_vec(rm) << 16)
@@ -400,6 +422,15 @@ fn enc_vec_rr_misc(qu: u32, size: u32, bits_12_16: u32, rd: Writable<Reg>, rn: R
     let bits = 0b0_00_01110_00_10000_00000_10_00000_00000;
     bits | qu << 29
         | size << 22
+        | bits_12_16 << 12
+        | machreg_to_vec(rn) << 5
+        | machreg_to_vec(rd.to_reg())
+}
+
+fn enc_vec_rr_pair(bits_12_16: u32, rd: Writable<Reg>, rn: Reg) -> u32 {
+    debug_assert_eq!(bits_12_16 & 0b11111, bits_12_16);
+
+    0b010_11110_11_11000_11011_10_00000_00000
         | bits_12_16 << 12
         | machreg_to_vec(rn) << 5
         | machreg_to_vec(rd.to_reg())
@@ -923,7 +954,7 @@ impl MachInstEmit for Inst {
 
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
+                    // Register the offset at which the actual store instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
 
@@ -987,7 +1018,7 @@ impl MachInstEmit for Inst {
             } => {
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() && !flags.notrap() {
-                    // Register the offset at which the actual load instruction starts.
+                    // Register the offset at which the actual store instruction starts.
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
                 match mem {
@@ -1031,6 +1062,120 @@ impl MachInstEmit for Inst {
                     &PairAMode::PostIndexed(reg, simm7) => {
                         assert_eq!(simm7.scale_ty, I64);
                         sink.put4(enc_ldst_pair(0b1010100011, simm7, reg.to_reg(), rt, rt2));
+                    }
+                }
+            }
+            &Inst::FpuLoadP64 {
+                rt,
+                rt2,
+                ref mem,
+                flags,
+            }
+            | &Inst::FpuLoadP128 {
+                rt,
+                rt2,
+                ref mem,
+                flags,
+            } => {
+                let srcloc = state.cur_srcloc();
+
+                if srcloc != SourceLoc::default() && !flags.notrap() {
+                    // Register the offset at which the actual load instruction starts.
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+
+                let opc = match self {
+                    &Inst::FpuLoadP64 { .. } => 0b01,
+                    &Inst::FpuLoadP128 { .. } => 0b10,
+                    _ => unreachable!(),
+                };
+                let rt = rt.to_reg();
+                let rt2 = rt2.to_reg();
+
+                match mem {
+                    &PairAMode::SignedOffset(reg, simm7) => {
+                        assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        sink.put4(enc_ldst_vec_pair(opc, 0b10, true, simm7, reg, rt, rt2));
+                    }
+                    &PairAMode::PreIndexed(reg, simm7) => {
+                        assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        sink.put4(enc_ldst_vec_pair(
+                            opc,
+                            0b11,
+                            true,
+                            simm7,
+                            reg.to_reg(),
+                            rt,
+                            rt2,
+                        ));
+                    }
+                    &PairAMode::PostIndexed(reg, simm7) => {
+                        assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        sink.put4(enc_ldst_vec_pair(
+                            opc,
+                            0b01,
+                            true,
+                            simm7,
+                            reg.to_reg(),
+                            rt,
+                            rt2,
+                        ));
+                    }
+                }
+            }
+            &Inst::FpuStoreP64 {
+                rt,
+                rt2,
+                ref mem,
+                flags,
+            }
+            | &Inst::FpuStoreP128 {
+                rt,
+                rt2,
+                ref mem,
+                flags,
+            } => {
+                let srcloc = state.cur_srcloc();
+
+                if srcloc != SourceLoc::default() && !flags.notrap() {
+                    // Register the offset at which the actual store instruction starts.
+                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+                }
+
+                let opc = match self {
+                    &Inst::FpuStoreP64 { .. } => 0b01,
+                    &Inst::FpuStoreP128 { .. } => 0b10,
+                    _ => unreachable!(),
+                };
+
+                match mem {
+                    &PairAMode::SignedOffset(reg, simm7) => {
+                        assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        sink.put4(enc_ldst_vec_pair(opc, 0b10, false, simm7, reg, rt, rt2));
+                    }
+                    &PairAMode::PreIndexed(reg, simm7) => {
+                        assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        sink.put4(enc_ldst_vec_pair(
+                            opc,
+                            0b11,
+                            false,
+                            simm7,
+                            reg.to_reg(),
+                            rt,
+                            rt2,
+                        ));
+                    }
+                    &PairAMode::PostIndexed(reg, simm7) => {
+                        assert!(simm7.scale_ty == F64 || simm7.scale_ty == I8X16);
+                        sink.put4(enc_ldst_vec_pair(
+                            opc,
+                            0b01,
+                            false,
+                            simm7,
+                            reg.to_reg(),
+                            rt,
+                            rt2,
+                        ));
                     }
                 }
             }
@@ -1492,6 +1637,7 @@ impl MachInstEmit for Inst {
                         debug_assert!(size == VectorSize::Size8x8 || size == VectorSize::Size8x16);
                         (0b0, 0b00101, enc_size)
                     }
+                    VecMisc2::Cmeq0 => (0b0, 0b01001, enc_size),
                 };
                 sink.put4(enc_vec_rr_misc((q << 1) | u, size, bits_12_16, rd, rn));
             }
@@ -1917,6 +2063,13 @@ impl MachInstEmit for Inst {
                         | (machreg_to_vec(rn) << 5)
                         | machreg_to_vec(rd.to_reg()),
                 );
+            }
+            &Inst::VecRRPair { op, rd, rn } => {
+                let bits_12_16 = match op {
+                    VecPairOp::Addp => 0b11011,
+                };
+
+                sink.put4(enc_vec_rr_pair(bits_12_16, rd, rn));
             }
             &Inst::VecRRR {
                 rd,

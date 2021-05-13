@@ -1950,6 +1950,40 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
+        Opcode::VallTrue if ctx.input_ty(insn, 0) == I64X2 => {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let tmp = ctx.alloc_tmp(I64X2).only_reg().unwrap();
+
+            // cmeq vtmp.2d, vm.2d, #0
+            // addp dtmp, vtmp.2d
+            // fcmp dtmp, dtmp
+            // cset xd, eq
+            //
+            // Note that after the ADDP the value of the temporary register will
+            // be either 0 when all input elements are true, i.e. non-zero, or a
+            // NaN otherwise (either -1 or -2 when represented as an integer);
+            // NaNs are the only floating-point numbers that compare unequal to
+            // themselves.
+
+            ctx.emit(Inst::VecMisc {
+                op: VecMisc2::Cmeq0,
+                rd: tmp,
+                rn: rm,
+                size: VectorSize::Size64x2,
+            });
+            ctx.emit(Inst::VecRRPair {
+                op: VecPairOp::Addp,
+                rd: tmp,
+                rn: tmp.to_reg(),
+            });
+            ctx.emit(Inst::FpuCmp64 {
+                rn: tmp.to_reg(),
+                rm: tmp.to_reg(),
+            });
+            materialize_bool_result(ctx, insn, rd, Cond::Eq);
+        }
+
         Opcode::VanyTrue | Opcode::VallTrue => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -2178,6 +2212,47 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rn: tmp_v0.to_reg(),
                         idx: 0,
                         size: VectorSize::Size32x4,
+                    });
+                }
+                I64X2 => {
+                    // mov dst_r, src_v.d[0]
+                    // mov tmp_r0, src_v.d[1]
+                    // lsr dst_r, dst_r, #63
+                    // lsr tmp_r0, tmp_r0, #63
+                    // add dst_r, dst_r, tmp_r0, lsl #1
+                    ctx.emit(Inst::MovFromVec {
+                        rd: dst_r,
+                        rn: src_v,
+                        idx: 0,
+                        size: VectorSize::Size64x2,
+                    });
+                    ctx.emit(Inst::MovFromVec {
+                        rd: tmp_r0,
+                        rn: src_v,
+                        idx: 1,
+                        size: VectorSize::Size64x2,
+                    });
+                    ctx.emit(Inst::AluRRImmShift {
+                        alu_op: ALUOp::Lsr64,
+                        rd: dst_r,
+                        rn: dst_r.to_reg(),
+                        immshift: ImmShift::maybe_from_u64(63).unwrap(),
+                    });
+                    ctx.emit(Inst::AluRRImmShift {
+                        alu_op: ALUOp::Lsr64,
+                        rd: tmp_r0,
+                        rn: tmp_r0.to_reg(),
+                        immshift: ImmShift::maybe_from_u64(63).unwrap(),
+                    });
+                    ctx.emit(Inst::AluRRRShift {
+                        alu_op: ALUOp::Add32,
+                        rd: dst_r,
+                        rn: dst_r.to_reg(),
+                        rm: tmp_r0.to_reg(),
+                        shiftop: ShiftOpAndAmt::new(
+                            ShiftOp::LSL,
+                            ShiftOpShiftImm::maybe_from_shift(1).unwrap(),
+                        ),
                     });
                 }
                 _ => panic!("arm64 isel: VhighBits unhandled, ty = {:?}", ty),
@@ -3013,6 +3088,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::TlsValue => unimplemented!("tls_value"),
+        Opcode::FcvtLowFromSint => unimplemented!("FcvtLowFromSint"),
     }
 
     Ok(())

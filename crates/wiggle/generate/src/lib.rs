@@ -38,17 +38,6 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
         }
     });
 
-    let guest_error_methods = doc.error_types().map(|t| {
-        let typename = names.type_ref(&t, anon_lifetime());
-        let err_method = names.guest_error_conversion_method(&t);
-        quote!(fn #err_method(&self, e: #rt::GuestError) -> #typename;)
-    });
-    let guest_error_conversion = quote! {
-        pub trait GuestErrorConversion {
-            #(#guest_error_methods)*
-        }
-    };
-
     let user_error_methods = settings.errors.iter().map(|errtype| {
         let abi_typename = names.type_ref(&errtype.abi_type(), anon_lifetime());
         let user_typename = errtype.typename();
@@ -82,7 +71,6 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
 
             #(#types)*
             #(#constants)*
-            #guest_error_conversion
             #user_error_conversion
         }
         #(#modules)*

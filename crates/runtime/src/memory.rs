@@ -4,12 +4,14 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
-use anyhow::Result;
+use crate::ResourceLimiter;
+use anyhow::{bail, Result};
 use more_asserts::{assert_ge, assert_le};
 use std::cell::{Cell, RefCell};
 use std::cmp::min;
 use std::convert::TryFrom;
 use std::ptr;
+use std::rc::Rc;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM_MAX_PAGES, WASM_PAGE_SIZE};
 
 /// A memory allocator
@@ -32,6 +34,10 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
 pub trait RuntimeLinearMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
+
+    /// Returns the maximum number of pages the memory can grow to.
+    /// Returns `None` if the memory is unbounded.
+    fn maximum(&self) -> Option<u32>;
 
     /// Grow memory by the specified amount of wasm pages.
     ///
@@ -103,6 +109,12 @@ impl RuntimeLinearMemory for MmapMemory {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32 {
         self.mmap.borrow().size
+    }
+
+    /// Returns the maximum number of pages the memory can grow to.
+    /// Returns `None` if the memory is unbounded.
+    fn maximum(&self) -> Option<u32> {
+        self.maximum
     }
 
     /// Grow memory by the specified amount of wasm pages.
@@ -189,12 +201,23 @@ enum MemoryStorage {
 }
 
 /// Represents an instantiation of a WebAssembly memory.
-pub struct Memory(MemoryStorage);
+pub struct Memory {
+    storage: MemoryStorage,
+    limiter: Option<Rc<dyn ResourceLimiter>>,
+}
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
-    pub fn new_dynamic(plan: &MemoryPlan, creator: &dyn RuntimeMemoryCreator) -> Result<Self> {
-        Ok(Self(MemoryStorage::Dynamic(creator.new_memory(plan)?)))
+    pub fn new_dynamic(
+        plan: &MemoryPlan,
+        creator: &dyn RuntimeMemoryCreator,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<Self> {
+        Self::new(
+            plan,
+            MemoryStorage::Dynamic(creator.new_memory(plan)?),
+            limiter,
+        )
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
@@ -203,32 +226,78 @@ impl Memory {
         base: *mut u8,
         maximum: u32,
         make_accessible: fn(*mut u8, usize) -> Result<()>,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
     ) -> Result<Self> {
-        if plan.memory.minimum > 0 {
-            make_accessible(base, plan.memory.minimum as usize * WASM_PAGE_SIZE as usize)?;
-        }
-
-        Ok(Self(MemoryStorage::Static {
+        let storage = MemoryStorage::Static {
             base,
             size: Cell::new(plan.memory.minimum),
             maximum: min(plan.memory.maximum.unwrap_or(maximum), maximum),
             make_accessible,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             guard_page_faults: RefCell::new(Vec::new()),
-        }))
+        };
+
+        Self::new(plan, storage, limiter)
+    }
+
+    fn new(
+        plan: &MemoryPlan,
+        storage: MemoryStorage,
+        limiter: Option<&Rc<dyn ResourceLimiter>>,
+    ) -> Result<Self> {
+        if let Some(limiter) = limiter {
+            if !limiter.memory_growing(0, plan.memory.minimum, plan.memory.maximum) {
+                bail!(
+                    "memory minimum size of {} pages exceeds memory limits",
+                    plan.memory.minimum
+                );
+            }
+        }
+
+        if let MemoryStorage::Static {
+            base,
+            make_accessible,
+            ..
+        } = &storage
+        {
+            if plan.memory.minimum > 0 {
+                make_accessible(
+                    *base,
+                    plan.memory.minimum as usize * WASM_PAGE_SIZE as usize,
+                )?;
+            }
+        }
+
+        Ok(Self {
+            storage,
+            limiter: limiter.cloned(),
+        })
     }
 
     /// Returns the number of allocated wasm pages.
     pub fn size(&self) -> u32 {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static { size, .. } => size.get(),
             MemoryStorage::Dynamic(mem) => mem.size(),
         }
     }
 
+    /// Returns the maximum number of pages the memory can grow to at runtime.
+    ///
+    /// Returns `None` if the memory is unbounded.
+    ///
+    /// The runtime maximum may not be equal to the maximum from the linear memory's
+    /// Wasm type when it is being constrained by an instance allocator.
+    pub fn maximum(&self) -> Option<u32> {
+        match &self.storage {
+            MemoryStorage::Static { maximum, .. } => Some(*maximum),
+            MemoryStorage::Dynamic(mem) => mem.maximum(),
+        }
+    }
+
     /// Returns whether or not the underlying storage of the memory is "static".
     pub(crate) fn is_static(&self) -> bool {
-        if let MemoryStorage::Static { .. } = &self.0 {
+        if let MemoryStorage::Static { .. } = &self.storage {
             true
         } else {
             false
@@ -239,8 +308,30 @@ impl Memory {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    pub fn grow(&self, delta: u32) -> Option<u32> {
-        match &self.0 {
+    ///
+    /// # Safety
+    ///
+    /// Resizing the memory can reallocate the memory buffer for dynamic memories.
+    /// An instance's `VMContext` may have pointers to the memory's base and will
+    /// need to be fixed up after growing the memory.
+    ///
+    /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
+    /// this unsafety.
+    pub unsafe fn grow(&self, delta: u32) -> Option<u32> {
+        let old_size = self.size();
+        if delta == 0 {
+            return Some(old_size);
+        }
+
+        let new_size = old_size.checked_add(delta)?;
+
+        if let Some(limiter) = &self.limiter {
+            if !limiter.memory_growing(old_size, new_size, self.maximum()) {
+                return None;
+            }
+        }
+
+        match &self.storage {
             MemoryStorage::Static {
                 base,
                 size,
@@ -252,13 +343,6 @@ impl Memory {
                 #[cfg(all(feature = "uffd", target_os = "linux"))]
                 self.reset_guard_pages().ok()?;
 
-                let old_size = size.get();
-                if delta == 0 {
-                    return Some(old_size);
-                }
-
-                let new_size = old_size.checked_add(delta)?;
-
                 if new_size > *maximum || new_size >= WASM_MAX_PAGES {
                     return None;
                 }
@@ -266,7 +350,7 @@ impl Memory {
                 let start = usize::try_from(old_size).unwrap() * WASM_PAGE_SIZE as usize;
                 let len = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
 
-                make_accessible(unsafe { base.add(start) }, len).ok()?;
+                make_accessible(base.add(start), len).ok()?;
 
                 size.set(new_size);
 
@@ -278,7 +362,7 @@ impl Memory {
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static { base, size, .. } => VMMemoryDefinition {
                 base: *base,
                 current_length: size.get() as usize * WASM_PAGE_SIZE as usize,
@@ -299,7 +383,7 @@ impl Memory {
         size: usize,
         reset: fn(*mut u8, usize) -> Result<()>,
     ) {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static {
                 guard_page_faults, ..
             } => {
@@ -320,7 +404,7 @@ impl Memory {
     /// This function will panic if called on a dynamic memory.
     #[cfg(all(feature = "uffd", target_os = "linux"))]
     pub(crate) fn reset_guard_pages(&self) -> Result<()> {
-        match &self.0 {
+        match &self.storage {
             MemoryStorage::Static {
                 guard_page_faults, ..
             } => {
@@ -345,13 +429,16 @@ impl Default for Memory {
             unreachable!()
         }
 
-        Self(MemoryStorage::Static {
-            base: ptr::null_mut(),
-            size: Cell::new(0),
-            maximum: 0,
-            make_accessible,
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            guard_page_faults: RefCell::new(Vec::new()),
-        })
+        Self {
+            storage: MemoryStorage::Static {
+                base: ptr::null_mut(),
+                size: Cell::new(0),
+                maximum: 0,
+                make_accessible,
+                #[cfg(all(feature = "uffd", target_os = "linux"))]
+                guard_page_faults: RefCell::new(Vec::new()),
+            },
+            limiter: None,
+        }
     }
 }

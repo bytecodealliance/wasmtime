@@ -1,5 +1,5 @@
 test compile
-target x86_64
+target x86_64 legacy
 
 function u0:0(i8) -> i8 fast {
 block0(v0: i8):

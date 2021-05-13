@@ -2,7 +2,7 @@
 test legalizer
 ; See also legalize-div-traps.clif.
 set avoid_div_traps=0
-target x86_64
+target x86_64 legacy
 
 ; regex: V=v\d+
 ; regex: BB=block\d+

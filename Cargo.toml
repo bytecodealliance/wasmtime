@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-cli"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Command-line interface for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -22,31 +22,29 @@ doc = false
 
 [dependencies]
 # Enable all supported architectures by default.
-wasmtime = { path = "crates/wasmtime", version = "0.25.0", default-features = false, features = ['cache'] }
-wasmtime-cache = { path = "crates/cache", version = "0.25.0" }
-wasmtime-debug = { path = "crates/debug", version = "0.25.0" }
-wasmtime-environ = { path = "crates/environ", version = "0.25.0" }
-wasmtime-jit = { path = "crates/jit", version = "0.25.0" }
-wasmtime-obj = { path = "crates/obj", version = "0.25.0" }
-wasmtime-wast = { path = "crates/wast", version = "0.25.0" }
-wasmtime-wasi = { path = "crates/wasi", version = "0.25.0" }
-wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "0.25.0", optional = true }
-wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "0.25.0", optional = true }
-wasi-common = { path = "crates/wasi-common", version = "0.25.0" }
-wasi-cap-std-sync = { path = "crates/wasi-common/cap-std-sync", version = "0.25.0" }
+wasmtime = { path = "crates/wasmtime", version = "0.26.0", default-features = false, features = ['cache'] }
+wasmtime-cache = { path = "crates/cache", version = "0.26.0" }
+wasmtime-debug = { path = "crates/debug", version = "0.26.0" }
+wasmtime-environ = { path = "crates/environ", version = "0.26.0" }
+wasmtime-jit = { path = "crates/jit", version = "0.26.0" }
+wasmtime-obj = { path = "crates/obj", version = "0.26.0" }
+wasmtime-wast = { path = "crates/wast", version = "0.26.0" }
+wasmtime-wasi = { path = "crates/wasi", version = "0.26.0" }
+wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "0.26.0", optional = true }
+wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "0.26.0", optional = true }
 structopt = { version = "0.3.5", features = ["color", "suggestions"] }
-object = { version = "0.23.0", default-features = false, features = ["write"] }
+object = { version = "0.24.0", default-features = false, features = ["write"] }
 anyhow = "1.0.19"
-target-lexicon = { version = "0.11.0", default-features = false }
+target-lexicon = { version = "0.12.0", default-features = false }
 pretty_env_logger = "0.4.0"
 file-per-thread-logger = "0.1.1"
-wat = "1.0.36"
+wat = "1.0.37"
 libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.2.1"
 humantime = "2.0.0"
-wasmparser = "0.76.0"
-cap-std = "0.13"
+wasmparser = "0.77.0"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 env_logger = "0.8.1"
@@ -56,6 +54,7 @@ tempfile = "3.1.0"
 test-programs = { path = "crates/test-programs" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-runtime = { path = "crates/runtime" }
+tokio = { version = "1.5.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.2.16"
 wast = "35.0.0"
 
@@ -66,6 +65,7 @@ anyhow = "1.0.19"
 opt-level = 0
 
 [workspace]
+resolver = '2'
 members = [
   "cranelift",
   "crates/bench-api",
@@ -79,23 +79,29 @@ members = [
   "crates/wiggle/wasmtime",
   "crates/wasi-common",
   "crates/wasi-common/cap-std-sync",
+  "crates/wasi-common/tokio",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
+  "examples/tokio/wasm",
   "fuzz",
 ]
 
 [features]
-default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation"]
+default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation", "wasi-nn"]
 lightbeam = ["wasmtime/lightbeam"]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
+all-arch = ["wasmtime/all-arch"]
 
-# Try the experimental, work-in-progress new x86_64 backend. This is not stable
-# as of June 2020.
-experimental_x64 = ["wasmtime-jit/experimental_x64"]
+# Stub feature that does nothing, for Cargo-features compatibility: the new
+# backend is the default now.
+experimental_x64 = []
+
+# Use the old x86 backend.
+old-x86-backend = ["wasmtime/old-x86-backend"]
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -103,6 +109,10 @@ maintenance = { status = "actively-developed" }
 [[test]]
 name = "host_segfault"
 harness = false
+
+[[example]]
+name = "tokio"
+required-features = ["wasmtime-wasi/tokio"]
 
 [profile.dev.package.backtrace]
 debug = false # FIXME(#1813)

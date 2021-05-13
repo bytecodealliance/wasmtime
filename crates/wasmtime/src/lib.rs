@@ -175,6 +175,10 @@
 //!   lock contention is hampering multithreading throughput. This feature is only
 //!   supported on Linux and requires a Linux kernel version 4.11 or higher.
 //!
+//! * `all-arch` - Not enabled by default. This feature compiles in support for
+//!   all architectures for both the JIT compiler and the `wasmtime compile` CLI
+//!   command.
+//!
 //! ## Examples
 //!
 //! In addition to the examples below be sure to check out the [online embedding
@@ -278,13 +282,13 @@ mod func;
 mod config;
 mod engine;
 mod externals;
-mod frame_info;
 mod instance;
+mod limits;
 mod linker;
 mod memory;
 mod module;
 mod r#ref;
-mod sig_registry;
+mod signatures;
 mod store;
 mod trampoline;
 mod trap;
@@ -294,12 +298,12 @@ mod values;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
-pub use crate::frame_info::{FrameInfo, FrameSymbol};
 pub use crate::func::*;
 pub use crate::instance::Instance;
+pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
-pub use crate::module::Module;
+pub use crate::module::{FrameInfo, FrameSymbol, Module};
 pub use crate::r#ref::ExternRef;
 pub use crate::store::*;
 pub use crate::trap::*;

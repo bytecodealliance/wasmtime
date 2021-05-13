@@ -7,7 +7,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/ints.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> ints::Ints for WasiCtx<'a> {
     fn cookie_cutter(&self, init_cookie: types::Cookie) -> Result<types::Bool, types::Errno> {

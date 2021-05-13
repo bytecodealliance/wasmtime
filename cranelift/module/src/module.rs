@@ -12,7 +12,6 @@ use cranelift_codegen::entity::{entity_impl, PrimaryMap};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
 use std::borrow::ToOwned;
 use std::string::String;
-use thiserror::Error;
 
 /// A function identifier for use in the `Module` interface.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -168,30 +167,85 @@ impl FunctionDeclaration {
 }
 
 /// Error messages for all `Module` methods
-#[derive(Error, Debug)]
+#[derive(Debug)]
 pub enum ModuleError {
     /// Indicates an identifier was used before it was declared
-    #[error("Undeclared identifier: {0}")]
     Undeclared(String),
+
     /// Indicates an identifier was used as data/function first, but then used as the other
-    #[error("Incompatible declaration of identifier: {0}")]
     IncompatibleDeclaration(String),
+
     /// Indicates a function identifier was declared with a
     /// different signature than declared previously
-    #[error("Function {0} signature {2:?} is incompatible with previous declaration {1:?}")]
     IncompatibleSignature(String, ir::Signature, ir::Signature),
+
     /// Indicates an identifier was defined more than once
-    #[error("Duplicate definition of identifier: {0}")]
     DuplicateDefinition(String),
+
     /// Indicates an identifier was defined, but was declared as an import
-    #[error("Invalid to define identifier declared as an import: {0}")]
     InvalidImportDefinition(String),
+
     /// Wraps a `cranelift-codegen` error
-    #[error("Compilation error: {0}")]
-    Compilation(#[from] CodegenError),
+    Compilation(CodegenError),
+
     /// Wraps a generic error from a backend
-    #[error("Backend error: {0}")]
-    Backend(#[source] anyhow::Error),
+    Backend(anyhow::Error),
+}
+
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
+impl std::error::Error for ModuleError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Undeclared { .. }
+            | Self::IncompatibleDeclaration { .. }
+            | Self::IncompatibleSignature { .. }
+            | Self::DuplicateDefinition { .. }
+            | Self::InvalidImportDefinition { .. } => None,
+            Self::Compilation(source) => Some(source),
+            Self::Backend(source) => Some(&**source),
+        }
+    }
+}
+
+impl std::fmt::Display for ModuleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Undeclared(name) => {
+                write!(f, "Undeclared identifier: {}", name)
+            }
+            Self::IncompatibleDeclaration(name) => {
+                write!(f, "Incompatible declaration of identifier: {}", name,)
+            }
+            Self::IncompatibleSignature(name, prev_sig, new_sig) => {
+                write!(
+                    f,
+                    "Function {} signature {:?} is incompatible with previous declaration {:?}",
+                    name, new_sig, prev_sig,
+                )
+            }
+            Self::DuplicateDefinition(name) => {
+                write!(f, "Duplicate definition of identifier: {}", name)
+            }
+            Self::InvalidImportDefinition(name) => {
+                write!(
+                    f,
+                    "Invalid to define identifier declared as an import: {}",
+                    name,
+                )
+            }
+            Self::Compilation(err) => {
+                write!(f, "Compilation error: {}", err)
+            }
+            Self::Backend(err) => write!(f, "Backend error: {}", err),
+        }
+    }
+}
+
+impl std::convert::From<CodegenError> for ModuleError {
+    fn from(source: CodegenError) -> Self {
+        Self::Compilation { 0: source }
+    }
 }
 
 /// A convenient alias for a `Result` that uses `ModuleError` as the error type.
@@ -268,7 +322,7 @@ impl ModuleDeclarations {
         name: &str,
         linkage: Linkage,
         signature: &ir::Signature,
-    ) -> ModuleResult<(FuncId, &FunctionDeclaration)> {
+    ) -> ModuleResult<(FuncId, Linkage)> {
         // TODO: Can we avoid allocating names so often?
         use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -276,7 +330,7 @@ impl ModuleDeclarations {
                 FuncOrDataId::Func(id) => {
                     let existing = &mut self.functions[id];
                     existing.merge(linkage, signature)?;
-                    Ok((id, existing))
+                    Ok((id, existing.linkage))
                 }
                 FuncOrDataId::Data(..) => {
                     Err(ModuleError::IncompatibleDeclaration(name.to_owned()))
@@ -289,9 +343,23 @@ impl ModuleDeclarations {
                     signature: signature.clone(),
                 });
                 entry.insert(FuncOrDataId::Func(id));
-                Ok((id, &self.functions[id]))
+                Ok((id, self.functions[id].linkage))
             }
         }
+    }
+
+    /// Declare an anonymous function in this module.
+    pub fn declare_anonymous_function(
+        &mut self,
+        signature: &ir::Signature,
+    ) -> ModuleResult<FuncId> {
+        let id = self.functions.push(FunctionDeclaration {
+            name: String::new(),
+            linkage: Linkage::Local,
+            signature: signature.clone(),
+        });
+        self.functions[id].name = format!(".L{:?}", id);
+        Ok(id)
     }
 
     /// Declare a data object in this module.
@@ -301,7 +369,7 @@ impl ModuleDeclarations {
         linkage: Linkage,
         writable: bool,
         tls: bool,
-    ) -> ModuleResult<(DataId, &DataDeclaration)> {
+    ) -> ModuleResult<(DataId, Linkage)> {
         // TODO: Can we avoid allocating names so often?
         use super::hash_map::Entry::*;
         match self.names.entry(name.to_owned()) {
@@ -309,7 +377,7 @@ impl ModuleDeclarations {
                 FuncOrDataId::Data(id) => {
                     let existing = &mut self.data_objects[id];
                     existing.merge(linkage, writable, tls);
-                    Ok((id, existing))
+                    Ok((id, existing.linkage))
                 }
 
                 FuncOrDataId::Func(..) => {
@@ -324,9 +392,21 @@ impl ModuleDeclarations {
                     tls,
                 });
                 entry.insert(FuncOrDataId::Data(id));
-                Ok((id, &self.data_objects[id]))
+                Ok((id, self.data_objects[id].linkage))
             }
         }
+    }
+
+    /// Declare an anonymous data object in this module.
+    pub fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
+        let id = self.data_objects.push(DataDeclaration {
+            name: String::new(),
+            linkage: Linkage::Local,
+            writable,
+            tls,
+        });
+        self.data_objects[id].name = format!(".L{:?}", id);
+        Ok(id)
     }
 }
 
@@ -411,6 +491,9 @@ pub trait Module {
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId>;
 
+    /// Declare an anonymous function in this module.
+    fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId>;
+
     /// Declare a data object in this module.
     fn declare_data(
         &mut self,
@@ -419,6 +502,9 @@ pub trait Module {
         writable: bool,
         tls: bool,
     ) -> ModuleResult<DataId>;
+
+    /// Declare an anonymous data object in this module.
+    fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId>;
 
     /// Use this when you're building the IR of a function to reference a function.
     ///
@@ -532,6 +618,10 @@ impl<M: Module> Module for &mut M {
         (**self).declare_function(name, linkage, signature)
     }
 
+    fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId> {
+        (**self).declare_anonymous_function(signature)
+    }
+
     fn declare_data(
         &mut self,
         name: &str,
@@ -540,6 +630,10 @@ impl<M: Module> Module for &mut M {
         tls: bool,
     ) -> ModuleResult<DataId> {
         (**self).declare_data(name, linkage, writable, tls)
+    }
+
+    fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
+        (**self).declare_anonymous_data(writable, tls)
     }
 
     fn declare_func_in_func(&self, func: FuncId, in_func: &mut ir::Function) -> ir::FuncRef {

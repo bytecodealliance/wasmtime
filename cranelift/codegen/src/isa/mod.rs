@@ -57,41 +57,43 @@ use crate::flowgraph;
 use crate::ir;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::MachBackend;
+use crate::machinst::{MachBackend, UnwindInfoKind};
 use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use crate::timing;
-use alloc::borrow::Cow;
-use alloc::boxed::Box;
+use alloc::{borrow::Cow, boxed::Box, vec::Vec};
 use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use core::hash::Hasher;
-use target_lexicon::{triple, Architecture, PointerWidth, Triple};
-use thiserror::Error;
+use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
 
 #[cfg(feature = "riscv")]
 mod riscv;
 
-// N.B.: the old x86-64 backend (`x86`) and the new one (`x64`) can both be
-// included; if the new backend is included, then it is the default backend
-// returned for an x86-64 triple, but a specific option can request the old
-// backend. It is important to have the ability to instantiate *both* backends
-// in the same build so that we can do things like differential fuzzing between
-// backends, or perhaps offer a runtime configuration flag in the future.
+// N.B.: the old x86-64 backend (`x86`) and the new one (`x64`) are both
+// included whenever building with x86 support. The new backend is the default,
+// but the old can be requested with `BackendVariant::Legacy`. However, if this
+// crate is built with the `old-x86-backend` feature, then the old backend is
+// default instead.
 #[cfg(feature = "x86")]
 mod x86;
 
-#[cfg(feature = "x64")]
-mod x64;
+// This module is made public here for benchmarking purposes. No guarantees are
+// made regarding API stability.
+#[cfg(feature = "x86")]
+pub mod x64;
 
 #[cfg(feature = "arm32")]
 mod arm32;
 
 #[cfg(feature = "arm64")]
 pub(crate) mod aarch64;
+
+#[cfg(feature = "s390x")]
+mod s390x;
 
 pub mod unwind;
 
@@ -123,7 +125,7 @@ macro_rules! isa_builder {
 /// The "variant" for a given target. On one platform (x86-64), we have two
 /// backends, the "old" and "new" one; the new one is the default if included
 /// in the build configuration and not otherwise specified.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum BackendVariant {
     /// Any backend available.
     Any,
@@ -150,18 +152,19 @@ pub fn lookup_variant(triple: Triple, variant: BackendVariant) -> Result<Builder
             isa_builder!(x86, (feature = "x86"), triple)
         }
         (Architecture::X86_64, BackendVariant::MachInst) => {
-            isa_builder!(x64, (feature = "x64"), triple)
+            isa_builder!(x64, (feature = "x86"), triple)
         }
-        #[cfg(feature = "x64")]
+        #[cfg(not(feature = "old-x86-backend"))]
         (Architecture::X86_64, BackendVariant::Any) => {
-            isa_builder!(x64, (feature = "x64"), triple)
+            isa_builder!(x64, (feature = "x86"), triple)
         }
-        #[cfg(not(feature = "x64"))]
+        #[cfg(feature = "old-x86-backend")]
         (Architecture::X86_64, BackendVariant::Any) => {
             isa_builder!(x86, (feature = "x86"), triple)
         }
         (Architecture::Arm { .. }, _) => isa_builder!(arm32, (feature = "arm32"), triple),
         (Architecture::Aarch64 { .. }, _) => isa_builder!(aarch64, (feature = "arm64"), triple),
+        (Architecture::S390x { .. }, _) => isa_builder!(s390x, (feature = "s390x"), triple),
         _ => Err(LookupError::Unsupported),
     }
 }
@@ -180,15 +183,28 @@ pub fn lookup_by_name(name: &str) -> Result<Builder, LookupError> {
 }
 
 /// Describes reason for target lookup failure
-#[derive(Error, PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum LookupError {
     /// Support for this target was disabled in the current build.
-    #[error("Support for this target is disabled")]
     SupportDisabled,
 
     /// Support for this target has not yet been implemented.
-    #[error("Support for this target has not been implemented yet")]
     Unsupported,
+}
+
+// This is manually implementing Error and Display instead of using thiserror to reduce the amount
+// of dependencies used by Cranelift.
+impl std::error::Error for LookupError {}
+
+impl fmt::Display for LookupError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            LookupError::SupportDisabled => write!(f, "Support for this target is disabled"),
+            LookupError::Unsupported => {
+                write!(f, "Support for this target has not been implemented yet")
+            }
+        }
+    }
 }
 
 /// Builder for a `TargetIsa`.
@@ -201,6 +217,16 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Gets the triple for the builder.
+    pub fn triple(&self) -> &Triple {
+        &self.triple
+    }
+
+    /// Iterates the available settings in the builder.
+    pub fn iter(&self) -> impl Iterator<Item = settings::Setting> {
+        self.setup.iter()
+    }
+
     /// Combine the ISA-specific settings with the provided ISA-independent settings and allocate a
     /// fully configured `TargetIsa` trait object.
     pub fn finish(self, shared_flags: settings::Flags) -> Box<dyn TargetIsa> {
@@ -264,6 +290,14 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Get the ISA-independent flags that were used to make this trait object.
     fn flags(&self) -> &settings::Flags;
+
+    /// Get the ISA-dependent flag values that were used to make this trait object.
+    fn isa_flags(&self) -> Vec<settings::Value>;
+
+    /// Get the variant of this ISA (Legacy or MachInst).
+    fn variant(&self) -> BackendVariant {
+        BackendVariant::Legacy
+    }
 
     /// Hashes all flags, both ISA-independent and ISA-specific, into the
     /// specified hasher.
@@ -459,6 +493,18 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// IntCC condition for Unsigned Subtraction Overflow (Borrow/Carry).
     fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC;
+
+    /// Returns the flavor of unwind information emitted for this target.
+    fn unwind_info_kind(&self) -> UnwindInfoKind {
+        match self.triple().operating_system {
+            #[cfg(feature = "unwind")]
+            OperatingSystem::Windows => UnwindInfoKind::Windows,
+            #[cfg(feature = "unwind")]
+            _ => UnwindInfoKind::SystemV,
+            #[cfg(not(feature = "unwind"))]
+            _ => UnwindInfoKind::None,
+        }
+    }
 
     /// Creates unwind information for the function.
     ///

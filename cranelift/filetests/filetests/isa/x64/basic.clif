@@ -1,6 +1,5 @@
 test compile
-target x86_64
-feature "experimental_x64"
+target x86_64 machinst
 
 function %f(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):

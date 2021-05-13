@@ -2,7 +2,7 @@
 //! wasi-nn API.
 use crate::r#impl::UsageError;
 use crate::witx::types::{Graph, GraphExecutionContext};
-use openvino::InferenceError;
+use openvino::{InferenceError, SetupError};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -14,8 +14,10 @@ use wiggle::GuestError;
 pub enum WasiNnError {
     #[error("guest error")]
     GuestError(#[from] GuestError),
-    #[error("openvino error")]
-    OpenvinoError(#[from] InferenceError),
+    #[error("openvino inference error")]
+    OpenvinoInferenceError(#[from] InferenceError),
+    #[error("openvino setup error")]
+    OpenvinoSetupError(#[from] SetupError),
     #[error("usage error")]
     UsageError(#[from] UsageError),
 }
@@ -74,7 +76,7 @@ impl ExecutionContext {
 
 /// Capture the state necessary for calling into `openvino`.
 pub struct Ctx {
-    pub(crate) core: openvino::Core,
+    pub(crate) core: Option<openvino::Core>,
     pub(crate) graphs: Table<Graph, (openvino::CNNNetwork, openvino::ExecutableNetwork)>,
     pub(crate) executions: Table<GraphExecutionContext, ExecutionContext>,
 }
@@ -83,7 +85,7 @@ impl Ctx {
     /// Make a new `WasiNnCtx` with the default settings.
     pub fn new() -> WasiNnResult<Self> {
         Ok(Self {
-            core: openvino::Core::new(None)?,
+            core: Option::default(),
             graphs: Table::default(),
             executions: Table::default(),
         })

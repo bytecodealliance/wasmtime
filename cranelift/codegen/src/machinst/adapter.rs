@@ -2,10 +2,12 @@
 
 use crate::binemit;
 use crate::ir;
-use crate::isa::{EncInfo, Encoding, Encodings, Legalize, RegClass, RegInfo, TargetIsa};
+use crate::isa::{
+    BackendVariant, EncInfo, Encoding, Encodings, Legalize, RegClass, RegInfo, TargetIsa,
+};
 use crate::machinst::*;
 use crate::regalloc::RegisterSet;
-use crate::settings::Flags;
+use crate::settings::{self, Flags};
 
 #[cfg(feature = "testing_hooks")]
 use crate::regalloc::RegDiversions;
@@ -14,7 +16,6 @@ use crate::regalloc::RegDiversions;
 use crate::isa::unwind::systemv::RegisterMappingError;
 
 use core::any::Any;
-use core::hash::Hasher;
 use std::borrow::Cow;
 use std::fmt;
 use target_lexicon::Triple;
@@ -59,8 +60,16 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.flags()
     }
 
+    fn isa_flags(&self) -> Vec<settings::Value> {
+        self.backend.isa_flags()
+    }
+
+    fn variant(&self) -> BackendVariant {
+        BackendVariant::MachInst
+    }
+
     fn hash_all_flags(&self, hasher: &mut dyn Hasher) {
-        self.backend.hash_all_flags(hasher)
+        self.backend.hash_all_flags(hasher);
     }
 
     fn register_info(&self) -> RegInfo {

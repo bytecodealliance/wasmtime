@@ -1,0 +1,296 @@
+test compile
+target s390x
+
+function %store_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  store.i64 v0, v1
+  return
+}
+
+; check:  stg %r2, 0(%r3)
+; nextln: br %r14
+
+function %store_i64_sym(i64) {
+  gv0 = symbol colocated %sym
+block0(v0: i64):
+  v1 = symbol_value.i64 gv0
+  store.i64 v0, v1
+  return
+}
+
+; check:  stgrl %r2, %sym + 0
+; nextln: br %r14
+
+function %store_imm_i64(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 12345
+  store.i64 v1, v0
+  return
+}
+
+; check:  mvghi 0(%r2), 12345
+; nextln: br %r14
+
+function %istore8_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  istore8.i64 v0, v1
+  return
+}
+
+; check:  stc %r2, 0(%r3)
+; nextln: br %r14
+
+function %istore8_imm_i64(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 123
+  istore8.i64 v1, v0
+  return
+}
+
+; check:  mvi 0(%r2), 123
+; nextln: br %r14
+
+function %istore16_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  istore16.i64 v0, v1
+  return
+}
+
+; check:  sth %r2, 0(%r3)
+; nextln: br %r14
+
+function %istore16_i64_sym(i64) {
+  gv0 = symbol colocated %sym
+block0(v0: i64):
+  v1 = symbol_value.i64 gv0
+  istore16.i64 v0, v1
+  return
+}
+
+; check:  sthrl %r2, %sym + 0
+; nextln: br %r14
+
+function %istore16_imm_i64(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 12345
+  istore16.i64 v1, v0
+  return
+}
+
+; check:  mvhhi 0(%r2), 12345
+; nextln: br %r14
+
+function %istore32_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  istore32.i64 v0, v1
+  return
+}
+
+; check:  st %r2, 0(%r3)
+; nextln: br %r14
+
+function %istore32_i64_sym(i64) {
+  gv0 = symbol colocated %sym
+block0(v0: i64):
+  v1 = symbol_value.i64 gv0
+  istore32.i64 v0, v1
+  return
+}
+
+; check:  strl %r2, %sym + 0
+; nextln: br %r14
+
+function %istore32_imm_i64(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 12345
+  istore32.i64 v1, v0
+  return
+}
+
+; check:  mvhi 0(%r2), 12345
+; nextln: br %r14
+
+function %store_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  store.i32 v0, v1
+  return
+}
+
+; check:  st %r2, 0(%r3)
+; nextln: br %r14
+
+function %store_i32_sym(i32) {
+  gv0 = symbol colocated %sym
+block0(v0: i32):
+  v1 = symbol_value.i64 gv0
+  store.i32 v0, v1
+  return
+}
+
+; check:  strl %r2, %sym + 0
+; nextln: br %r14
+
+function %store_i32_off(i32, i64) {
+block0(v0: i32, v1: i64):
+  store.i32 v0, v1+4096
+  return
+}
+
+; check:  sty %r2, 4096(%r3)
+; nextln: br %r14
+
+function %store_imm_i32(i64) {
+block0(v0: i64):
+  v1 = iconst.i32 12345
+  store.i32 v1, v0
+  return
+}
+
+; check:  mvhi 0(%r2), 12345
+; nextln: br %r14
+
+function %istore8_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  istore8.i32 v0, v1
+  return
+}
+
+; check:  stc %r2, 0(%r3)
+; nextln: br %r14
+
+function %istore8_imm_i32(i64) {
+block0(v0: i64):
+  v1 = iconst.i32 123
+  istore8.i32 v1, v0
+  return
+}
+
+; check:  mvi 0(%r2), 123
+; nextln: br %r14
+
+function %istore16_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  istore16.i32 v0, v1
+  return
+}
+
+; check:  sth %r2, 0(%r3)
+; nextln: br %r14
+
+function %istore16_i32_sym(i32) {
+  gv0 = symbol colocated %sym
+block0(v0: i32):
+  v1 = symbol_value.i64 gv0
+  istore16.i32 v0, v1
+  return
+}
+
+; check:  sthrl %r2, %sym + 0
+; nextln: br %r14
+
+function %istore16_imm_i32(i64) {
+block0(v0: i64):
+  v1 = iconst.i32 12345
+  istore16.i32 v1, v0
+  return
+}
+
+; check:  mvhhi 0(%r2), 12345
+; nextln: br %r14
+
+function %store_i16(i16, i64) {
+block0(v0: i16, v1: i64):
+  store.i16 v0, v1
+  return
+}
+
+; check:  sth %r2, 0(%r3)
+; nextln: br %r14
+
+function %store_i16_sym(i16) {
+  gv0 = symbol colocated %sym
+block0(v0: i16):
+  v1 = symbol_value.i64 gv0
+  store.i16 v0, v1
+  return
+}
+
+; check:  sthrl %r2, %sym + 0
+; nextln: br %r14
+
+function %store_i16_off(i16, i64) {
+block0(v0: i16, v1: i64):
+  store.i16 v0, v1+4096
+  return
+}
+
+; check:  sthy %r2, 4096(%r3)
+; nextln: br %r14
+
+function %store_imm_i16(i64) {
+block0(v0: i64):
+  v1 = iconst.i16 12345
+  store.i16 v1, v0
+  return
+}
+
+; check:  mvhhi 0(%r2), 12345
+; nextln: br %r14
+
+function %istore8_i16(i16, i64) {
+block0(v0: i16, v1: i64):
+  istore8.i16 v0, v1
+  return
+}
+
+; check:  stc %r2, 0(%r3)
+; nextln: br %r14
+
+function %istore8_imm_i16(i64) {
+block0(v0: i64):
+  v1 = iconst.i16 123
+  istore8.i16 v1, v0
+  return
+}
+
+; check:  mvi 0(%r2), 123
+; nextln: br %r14
+
+function %store_i8(i8, i64) {
+block0(v0: i8, v1: i64):
+  store.i8 v0, v1
+  return
+}
+
+; check:  stc %r2, 0(%r3)
+; nextln: br %r14
+
+function %store_i8_off(i8, i64) {
+block0(v0: i8, v1: i64):
+  store.i8 v0, v1+4096
+  return
+}
+
+; check:  stcy %r2, 4096(%r3)
+; nextln: br %r14
+
+function %store_imm_i8(i64) {
+block0(v0: i64):
+  v1 = iconst.i8 123
+  store.i8 v1, v0
+  return
+}
+
+; check:  mvi 0(%r2), 123
+; nextln: br %r14
+
+function %store_imm_i8_off(i64) {
+block0(v0: i64):
+  v1 = iconst.i8 123
+  store.i8 v1, v0+4096
+  return
+}
+
+; check:  mviy 4096(%r2), 123
+; nextln: br %r14
+

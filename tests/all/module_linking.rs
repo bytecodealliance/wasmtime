@@ -39,7 +39,9 @@ fn compile() -> Result<()> {
     assert_eq!(m.imports().len(), 0);
     assert_eq!(m.exports().len(), 0);
     let bytes = m.serialize()?;
-    Module::deserialize(&engine, &bytes)?;
+    unsafe {
+        Module::deserialize(&engine, &bytes)?;
+    }
     assert_eq!(m.imports().len(), 0);
     assert_eq!(m.exports().len(), 0);
     Ok(())
@@ -190,7 +192,6 @@ fn imports_exports() -> Result<()> {
 fn limit_instances() -> Result<()> {
     let mut config = Config::new();
     config.wasm_module_linking(true);
-    config.max_instances(10);
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -216,7 +217,7 @@ fn limit_instances() -> Result<()> {
             )
         "#,
     )?;
-    let store = Store::new(&engine);
+    let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().instances(10).build());
     let err = Instance::new(&store, &module, &[]).err().unwrap();
     assert!(
         err.to_string().contains("resource limit exceeded"),
@@ -231,7 +232,6 @@ fn limit_memories() -> Result<()> {
     let mut config = Config::new();
     config.wasm_module_linking(true);
     config.wasm_multi_memory(true);
-    config.max_memories(10);
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -252,7 +252,7 @@ fn limit_memories() -> Result<()> {
             )
         "#,
     )?;
-    let store = Store::new(&engine);
+    let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().memories(10).build());
     let err = Instance::new(&store, &module, &[]).err().unwrap();
     assert!(
         err.to_string().contains("resource limit exceeded"),
@@ -266,7 +266,6 @@ fn limit_memories() -> Result<()> {
 fn limit_tables() -> Result<()> {
     let mut config = Config::new();
     config.wasm_module_linking(true);
-    config.max_tables(10);
     let engine = Engine::new(&config)?;
     let module = Module::new(
         &engine,
@@ -287,7 +286,7 @@ fn limit_tables() -> Result<()> {
             )
         "#,
     )?;
-    let store = Store::new(&engine);
+    let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().tables(10).build());
     let err = Instance::new(&store, &module, &[]).err().unwrap();
     assert!(
         err.to_string().contains("resource limit exceeded"),

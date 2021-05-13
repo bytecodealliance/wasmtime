@@ -2,6 +2,7 @@ use crate::memory::MemoryCreator;
 use crate::trampoline::MemoryCreatorProxy;
 use crate::{func::HostFunc, Caller, FuncType, IntoFunc, Trap, Val, WasmRet, WasmTy};
 use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -318,6 +319,10 @@ impl HostFuncMap {
     fn async_required(&self) -> bool {
         self.funcs.values().any(|f| f.1)
     }
+
+    fn iter(&self) -> impl Iterator<Item = &HostFunc> {
+        self.funcs.values().map(|v| &*v.0)
+    }
 }
 
 macro_rules! generate_wrap_async_host_func {
@@ -378,9 +383,6 @@ pub struct Config {
     pub(crate) max_wasm_stack: usize,
     pub(crate) features: WasmFeatures,
     pub(crate) wasm_backtrace_details_env_used: bool,
-    pub(crate) max_instances: usize,
-    pub(crate) max_tables: usize,
-    pub(crate) max_memories: usize,
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     host_funcs: HostFuncMap,
@@ -397,16 +399,6 @@ impl Config {
         // we get the proper one if code traps.
         flags
             .enable("avoid_div_traps")
-            .expect("should be valid flag");
-
-        // Invert cranelift's default-on verification to instead default off.
-        flags
-            .set("enable_verifier", "false")
-            .expect("should be valid flag");
-
-        // Turn on cranelift speed optimizations by default
-        flags
-            .set("opt_level", "speed")
             .expect("should be valid flag");
 
         // We don't use probestack as a stack limit mechanism
@@ -426,22 +418,40 @@ impl Config {
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
             max_wasm_stack: 1 << 20,
             wasm_backtrace_details_env_used: false,
-            features: WasmFeatures {
-                reference_types: true,
-                bulk_memory: true,
-                multi_value: true,
-                ..WasmFeatures::default()
-            },
-            max_instances: 10_000,
-            max_tables: 10_000,
-            max_memories: 10_000,
+            features: WasmFeatures::default(),
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             host_funcs: HostFuncMap::new(),
             async_support: false,
         };
+        ret.cranelift_debug_verifier(false);
+        ret.cranelift_opt_level(OptLevel::Speed);
+        ret.wasm_reference_types(true);
+        ret.wasm_multi_value(true);
+        ret.wasm_bulk_memory(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         ret
+    }
+
+    /// Sets the target triple for the [`Config`].
+    ///
+    /// By default, the host target triple is used for the [`Config`].
+    ///
+    /// This method can be used to change the target triple.
+    ///
+    /// Cranelift flags will not be inferred for the given target and any
+    /// existing target-specific Cranelift flags will be cleared.
+    ///
+    /// # Errors
+    ///
+    /// This method will error if the given target triple is not supported.
+    pub fn target(&mut self, target: &str) -> Result<&mut Self> {
+        use std::str::FromStr;
+        self.isa_flags = native::lookup(
+            target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?,
+        )?;
+
+        Ok(self)
     }
 
     /// Whether or not to enable support for asynchronous functions in Wasmtime.
@@ -884,18 +894,31 @@ impl Config {
         self
     }
 
-    /// Clears native CPU flags inferred from the host.
+    /// Allows setting a Cranelift boolean flag or preset. This allows
+    /// fine-tuning of Cranelift settings.
     ///
-    /// By default Wasmtime will tune generated code for the host that Wasmtime
-    /// itself is running on. If you're compiling on one host, however, and
-    /// shipping artifacts to another host then this behavior may not be
-    /// desired. This function will clear all inferred native CPU features.
+    /// Since Cranelift flags may be unstable, this method should not be considered to be stable
+    /// either; other `Config` functions should be preferred for stability.
     ///
-    /// To enable CPU features afterwards it's recommended to use the
-    /// [`Config::cranelift_other_flag`] method.
-    pub fn cranelift_clear_cpu_flags(&mut self) -> &mut Self {
-        self.isa_flags = native::builder_without_flags();
-        self
+    /// # Safety
+    ///
+    /// This is marked as unsafe, because setting the wrong flag might break invariants,
+    /// resulting in execution hazards.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail if the flag's name does not exist.
+    pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> Result<&mut Self> {
+        if let Err(err) = self.flags.enable(flag) {
+            match err {
+                SetError::BadName(_) => {
+                    // Try the target-specific flags.
+                    self.isa_flags.enable(flag)?;
+                }
+                _ => bail!(err),
+            }
+        }
+        Ok(self)
     }
 
     /// Allows settings another Cranelift flag defined by a flag name and value. This allows
@@ -911,7 +934,7 @@ impl Config {
     ///
     /// This method can fail if the flag's name does not exist, or the value is not appropriate for
     /// the flag type.
-    pub unsafe fn cranelift_other_flag(&mut self, name: &str, value: &str) -> Result<&mut Self> {
+    pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> Result<&mut Self> {
         if let Err(err) = self.flags.set(name, value) {
             match err {
                 SetError::BadName(_) => {
@@ -1167,39 +1190,6 @@ impl Config {
         self
     }
 
-    /// Configures the maximum number of instances which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_instances(&mut self, instances: usize) -> &mut Self {
-        self.max_instances = instances;
-        self
-    }
-
-    /// Configures the maximum number of tables which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_tables(&mut self, tables: usize) -> &mut Self {
-        self.max_tables = tables;
-        self
-    }
-
-    /// Configures the maximum number of memories which can be created within
-    /// this `Store`.
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    pub fn max_memories(&mut self, memories: usize) -> &mut Self {
-        self.max_memories = memories;
-        self
-    }
-
     /// Defines a host function for the [`Config`] for the given callback.
     ///
     /// Use [`Store::get_host_func`](crate::Store::get_host_func) to get a [`Func`](crate::Func) representing the function.
@@ -1293,6 +1283,10 @@ impl Config {
 
     for_each_function_signature!(generate_wrap_async_host_func);
 
+    pub(crate) fn host_funcs(&self) -> impl Iterator<Item = &HostFunc> {
+        self.host_funcs.iter()
+    }
+
     pub(crate) fn get_host_func(&self, module: &str, name: &str) -> Option<&HostFunc> {
         self.host_funcs.get(module, name)
     }
@@ -1329,28 +1323,27 @@ impl Config {
     }
 
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
+        #[cfg(feature = "async")]
+        let stack_size = self.async_stack_size;
+
+        #[cfg(not(feature = "async"))]
+        let stack_size = 0;
+
         match self.allocation_strategy {
             InstanceAllocationStrategy::OnDemand => Ok(Box::new(OnDemandInstanceAllocator::new(
                 self.mem_creator.clone(),
+                stack_size,
             ))),
             InstanceAllocationStrategy::Pooling {
                 strategy,
                 module_limits,
                 instance_limits,
-            } => {
-                #[cfg(feature = "async")]
-                let stack_size = self.async_stack_size;
-
-                #[cfg(not(feature = "async"))]
-                let stack_size = 0;
-
-                Ok(Box::new(PoolingInstanceAllocator::new(
-                    strategy.into(),
-                    module_limits.into(),
-                    instance_limits.into(),
-                    stack_size,
-                )?))
-            }
+            } => Ok(Box::new(PoolingInstanceAllocator::new(
+                strategy.into(),
+                module_limits.into(),
+                instance_limits.into(),
+                stack_size,
+            )?)),
         }
     }
 }
@@ -1420,7 +1413,7 @@ pub enum Strategy {
 
 /// Possible optimization levels for the Cranelift codegen backend.
 #[non_exhaustive]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum OptLevel {
     /// No optimizations performed, minimizes compilation time by disabling most
     /// optimizations.

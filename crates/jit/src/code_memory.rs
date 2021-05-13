@@ -61,6 +61,15 @@ impl<'a> CodeMemoryObjectAllocation<'a> {
     pub fn code_range(self) -> &'a mut [u8] {
         self.buf
     }
+
+    pub fn funcs_len(&self) -> usize {
+        self.funcs.len()
+    }
+
+    pub fn trampolines_len(&self) -> usize {
+        self.trampolines.len()
+    }
+
     pub fn funcs(&'a self) -> impl Iterator<Item = (FuncIndex, &'a mut [VMFunctionBody])> + 'a {
         let buf = self.buf as *const _ as *mut [u8];
         self.funcs.iter().map(move |(i, (start, len))| {
@@ -69,6 +78,7 @@ impl<'a> CodeMemoryObjectAllocation<'a> {
             })
         })
     }
+
     pub fn trampolines(
         &'a self,
     ) -> impl Iterator<Item = (SignatureIndex, &'a mut [VMFunctionBody])> + 'a {
@@ -312,7 +322,7 @@ impl CodeMemory {
             }
         }
 
-        // Register all unwind entiries for functions and trampolines.
+        // Register all unwind entries for functions and trampolines.
         // TODO will `u32` type for start/len be enough for large code base.
         for i in unwind_info {
             match i {

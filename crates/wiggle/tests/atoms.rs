@@ -6,7 +6,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> atoms::Atoms for WasiCtx<'a> {
     fn int_float_args(&self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {

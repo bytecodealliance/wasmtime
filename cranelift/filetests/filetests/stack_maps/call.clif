@@ -1,6 +1,6 @@
 test stack_maps
 set enable_safepoints=true
-target x86_64
+target x86_64 legacy
 
 function %icall_fast(r64) -> r64 fast {
 ; check:  function %icall_fast

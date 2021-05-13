@@ -3,7 +3,7 @@
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
 use crate::export::Export;
-use crate::externref::{StackMapRegistry, VMExternRefActivationsTable};
+use crate::externref::{ModuleInfoLookup, VMExternRefActivationsTable};
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
@@ -36,6 +36,52 @@ use wasmtime_environ::{ir, Module, VMOffsets};
 mod allocator;
 
 pub use allocator::*;
+
+/// Used by hosts to limit resource consumption of instances.
+///
+/// An instance can be created with a resource limiter so that hosts can take into account
+/// non-WebAssembly resource usage to determine if a linear memory or table should grow.
+pub trait ResourceLimiter {
+    /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
+    ///
+    /// * `current` is the current size of the linear memory in WebAssembly page units.
+    /// * `desired` is the desired size of the linear memory in WebAssembly page units.
+    /// * `maximum` is either the linear memory's maximum or a maximum from an instance allocator,
+    ///   also in WebAssembly page units. A value of `None` indicates that the linear memory is
+    ///   unbounded.
+    ///
+    /// This function should return `true` to indicate that the growing operation is permitted or
+    /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
+    /// effect as the linear memory will not grow.
+    fn memory_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+
+    /// Notifies the resource limiter that an instance's table has been requested to grow.
+    ///
+    /// * `current` is the current number of elements in the table.
+    /// * `desired` is the desired number of elements in the table.
+    /// * `maximum` is either the table's maximum or a maximum from an instance allocator.
+    ///   A value of `None` indicates that the table is unbounded.
+    ///
+    /// This function should return `true` to indicate that the growing operation is permitted or
+    /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
+    /// effect as the table will not grow.
+    fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+
+    /// The maximum number of instances that can be created for a `Store`.
+    ///
+    /// Module instantiation will fail if this limit is exceeded.
+    fn instances(&self) -> usize;
+
+    /// The maximum number of tables that can be created for a `Store`.
+    ///
+    /// Module instantiation will fail if this limit is exceeded.
+    fn tables(&self) -> usize;
+
+    /// The maximum number of tables that can be created for a `Store`.
+    ///
+    /// Module instantiation will fail if this limit is exceeded.
+    fn memories(&self) -> usize;
+}
 
 /// Runtime representation of an instance value, which erases all `Instance`
 /// information since instances are just a collection of values.
@@ -249,9 +295,9 @@ impl Instance {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_externref_activations_table()) }
     }
 
-    /// Return a pointer to the `StackMapRegistry`.
-    pub fn stack_map_registry(&self) -> *mut *mut StackMapRegistry {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_stack_map_registry()) }
+    /// Return a pointer to the `ModuleInfoLookup`.
+    pub fn module_info_lookup(&self) -> *mut *const dyn ModuleInfoLookup {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_module_info_lookup()) }
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
@@ -378,11 +424,12 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
     pub(crate) fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
-        let result = self
+        let memory = self
             .memories
             .get(memory_index)
-            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
-            .grow(delta);
+            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()));
+
+        let result = unsafe { memory.grow(delta) };
 
         // Keep current the VMContext pointers used by compiled wasm code.
         self.set_memory(memory_index, self.memories[memory_index].vmmemory());
@@ -460,19 +507,18 @@ impl Instance {
         delta: u32,
         init_value: TableElement,
     ) -> Option<u32> {
-        unsafe {
-            let orig_size = self
-                .tables
-                .get(table_index)
-                .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-                .grow(delta, init_value)?;
+        let table = self
+            .tables
+            .get(table_index)
+            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()));
 
-            // Keep the `VMContext` pointers used by compiled Wasm code up to
-            // date.
-            self.set_table(table_index, self.tables[table_index].vmtable());
+        let result = unsafe { table.grow(delta, init_value) };
 
-            Some(orig_size)
-        }
+        // Keep the `VMContext` pointers used by compiled Wasm code up to
+        // date.
+        self.set_table(table_index, self.tables[table_index].vmtable());
+
+        result
     }
 
     pub(crate) fn defined_table_fill(
@@ -527,11 +573,11 @@ impl Instance {
             return None;
         }
 
-        Some(unsafe { &*self.anyfunc_ptr(index) })
+        unsafe { Some(&*self.vmctx_plus_offset(self.offsets.vmctx_anyfunc(index))) }
     }
 
-    unsafe fn anyfunc_ptr(&self, index: FuncIndex) -> *mut VMCallerCheckedAnyfunc {
-        self.vmctx_plus_offset(self.offsets.vmctx_anyfunc(index))
+    unsafe fn anyfunc_base(&self) -> *mut VMCallerCheckedAnyfunc {
+        self.vmctx_plus_offset(self.offsets.vmctx_anyfuncs_begin())
     }
 
     fn find_passive_segment<'a, I, D, T>(
@@ -565,38 +611,56 @@ impl Instance {
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
-
-        let table = self.get_table(table_index);
-
         let elements = Self::find_passive_segment(
             elem_index,
             &self.module.passive_elements_map,
             &self.module.passive_elements,
             &self.dropped_elements,
         );
+        self.table_init_segment(table_index, elements, dst, src, len)
+    }
 
-        if src
-            .checked_add(len)
-            .map_or(true, |n| n as usize > elements.len())
-            || dst.checked_add(len).map_or(true, |m| m > table.size())
+    pub(crate) fn table_init_segment(
+        &self,
+        table_index: TableIndex,
+        elements: &[FuncIndex],
+        dst: u32,
+        src: u32,
+        len: u32,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
+
+        let table = self.get_table(table_index);
+
+        let elements = match elements
+            .get(usize::try_from(src).unwrap()..)
+            .and_then(|s| s.get(..usize::try_from(len).unwrap()))
         {
-            return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
+            Some(elements) => elements,
+            None => return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds)),
+        };
+
+        match table.element_type() {
+            TableElementType::Func => unsafe {
+                let base = self.anyfunc_base();
+                table.init_funcs(
+                    dst,
+                    elements.iter().map(|idx| {
+                        if *idx == FuncIndex::reserved_value() {
+                            ptr::null_mut()
+                        } else {
+                            debug_assert!(idx.as_u32() < self.offsets.num_defined_functions);
+                            base.add(usize::try_from(idx.as_u32()).unwrap())
+                        }
+                    }),
+                )?;
+            },
+
+            TableElementType::Val(_) => {
+                debug_assert!(elements.iter().all(|e| *e == FuncIndex::reserved_value()));
+                table.fill(dst, TableElement::ExternRef(None), len)?;
+            }
         }
-
-        // TODO(#983): investigate replacing this get/set loop with a `memcpy`.
-        for (dst, src) in (dst..dst + len).zip(src..src + len) {
-            let elem = self
-                .get_caller_checked_anyfunc(elements[src as usize])
-                .map_or(ptr::null_mut(), |f: &VMCallerCheckedAnyfunc| {
-                    f as *const VMCallerCheckedAnyfunc as *mut _
-                });
-
-            table
-                .set(dst, TableElement::FuncRef(elem))
-                .expect("should never panic because we already did the bounds check above");
-        }
-
         Ok(())
     }
 
@@ -727,16 +791,26 @@ impl Instance {
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
-
-        let memory = self.get_memory(memory_index);
-
         let data = Self::find_passive_segment(
             data_index,
             &self.module.passive_data_map,
             &self.module.passive_data,
             &self.dropped_data,
         );
+        self.memory_init_segment(memory_index, &data, dst, src, len)
+    }
+
+    pub(crate) fn memory_init_segment(
+        &self,
+        memory_index: MemoryIndex,
+        data: &[u8],
+        dst: u32,
+        src: u32,
+        len: u32,
+    ) -> Result<(), Trap> {
+        // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
+
+        let memory = self.get_memory(memory_index);
 
         if src
             .checked_add(len)
@@ -818,10 +892,6 @@ pub struct InstanceHandle {
 }
 
 impl InstanceHandle {
-    pub(crate) unsafe fn new(instance: *mut Instance) -> Self {
-        Self { instance }
-    }
-
     /// Create a new `InstanceHandle` pointing at the instance
     /// pointed to by the given `VMContext` pointer.
     ///
@@ -970,6 +1040,7 @@ impl InstanceHandle {
     /// of the internals, there's no lifetime tracking around its validity.
     /// You'll need to ensure that the returned handles all go out of scope at
     /// the same time.
+    #[inline]
     pub unsafe fn clone(&self) -> InstanceHandle {
         InstanceHandle {
             instance: self.instance,

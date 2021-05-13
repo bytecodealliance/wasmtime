@@ -7,7 +7,7 @@ wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/flags.witx"],
 });
 
-impl_errno!(types::Errno, types::GuestErrorConversion);
+impl_errno!(types::Errno);
 
 impl<'a> flags::Flags for WasiCtx<'a> {
     fn configure_car(

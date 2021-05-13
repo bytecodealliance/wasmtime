@@ -4,10 +4,11 @@
 use crate::VMInterrupts;
 use backtrace::Backtrace;
 use std::any::Any;
-use std::cell::Cell;
+use std::cell::{Cell, UnsafeCell};
 use std::error::Error;
+use std::mem::MaybeUninit;
 use std::ptr;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
 use wasmtime_environ::ir;
 
@@ -37,19 +38,32 @@ cfg_if::cfg_if! {
 
 pub use sys::SignalHandler;
 
-/// This function performs the low-overhead platform-specific initialization
-/// that we want to do eagerly to ensure a more-deterministic global process
-/// state.
+/// Globally-set callback to determine whether a program counter is actually a
+/// wasm trap.
 ///
-/// This is especially relevant for signal handlers since handler ordering
-/// depends on installation order: the wasm signal handler must run *before*
-/// the other crash handlers and since POSIX signal handlers work LIFO, this
-/// function needs to be called at the end of the startup process, after other
-/// handlers have been installed. This function can thus be called multiple
-/// times, having no effect after the first call.
-pub fn init_traps() {
+/// This is initialized during `init_traps` below. The definition lives within
+/// `wasmtime` currently.
+static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
+
+/// This function is required to be called before any WebAssembly is entered.
+/// This will configure global state such as signal handlers to prepare the
+/// process to receive wasm traps.
+///
+/// This function must not only be called globally once before entering
+/// WebAssembly but it must also be called once-per-thread that enters
+/// WebAssembly. Currently in wasmtime's integration this function is called on
+/// creation of a `Store`.
+///
+/// The `is_wasm_pc` argument is used when a trap happens to determine if a
+/// program counter is the pc of an actual wasm trap or not. This is then used
+/// to disambiguate faults that happen due to wasm and faults that happen due to
+/// bugs in Rust or elsewhere.
+pub fn init_traps(is_wasm_pc: fn(usize) -> bool) {
     static INIT: Once = Once::new();
-    INIT.call_once(|| unsafe { sys::platform_init() });
+    INIT.call_once(|| unsafe {
+        IS_WASM_PC = is_wasm_pc;
+        sys::platform_init();
+    });
 }
 
 /// Raises a user-defined trap immediately.
@@ -155,8 +169,6 @@ pub unsafe fn catch_traps<F>(trap_info: &impl TrapInfo, mut closure: F) -> Resul
 where
     F: FnMut(),
 {
-    sys::lazy_per_thread_init()?;
-
     return CallThreadState::new(trap_info).with(|cx| {
         RegisterSetjmp(
             cx.jmp_buf.as_ptr(),
@@ -191,7 +203,7 @@ pub fn out_of_gas() {
 /// Temporary state stored on the stack which is registered in the `tls` module
 /// below for calls into wasm.
 pub struct CallThreadState<'a> {
-    unwind: Cell<UnwindReason>,
+    unwind: UnsafeCell<MaybeUninit<UnwindReason>>,
     jmp_buf: Cell<*const u8>,
     handling_trap: Cell<bool>,
     trap_info: &'a (dyn TrapInfo + 'a),
@@ -208,18 +220,10 @@ pub unsafe trait TrapInfo {
     /// Converts this object into an `Any` to dynamically check its type.
     fn as_any(&self) -> &dyn Any;
 
-    /// Returns whether the given program counter lies within wasm code,
-    /// indicating whether we should handle a trap or not.
-    fn is_wasm_trap(&self, pc: usize) -> bool;
-
     /// Uses `call` to call a custom signal handler, if one is specified.
     ///
     /// Returns `true` if `call` returns true, otherwise returns `false`.
     fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool;
-
-    /// Returns the maximum size, in bytes, the wasm native stack is allowed to
-    /// grow to.
-    fn max_wasm_stack(&self) -> usize;
 
     /// Callback invoked whenever WebAssembly has entirely consumed the fuel
     /// that it was allotted.
@@ -232,7 +236,6 @@ pub unsafe trait TrapInfo {
 }
 
 enum UnwindReason {
-    None,
     Panic(Box<dyn Any + Send>),
     UserTrap(Box<dyn Error + Send + Sync>),
     LibTrap(Trap),
@@ -240,9 +243,10 @@ enum UnwindReason {
 }
 
 impl<'a> CallThreadState<'a> {
+    #[inline]
     fn new(trap_info: &'a (dyn TrapInfo + 'a)) -> CallThreadState<'a> {
         CallThreadState {
-            unwind: Cell::new(UnwindReason::None),
+            unwind: UnsafeCell::new(MaybeUninit::uninit()),
             jmp_buf: Cell::new(ptr::null()),
             handling_trap: Cell::new(false),
             trap_info,
@@ -251,20 +255,14 @@ impl<'a> CallThreadState<'a> {
     }
 
     fn with(self, closure: impl FnOnce(&CallThreadState) -> i32) -> Result<(), Trap> {
-        let _reset = self.update_stack_limit()?;
-        let ret = tls::set(&self, || closure(&self));
-        match self.unwind.replace(UnwindReason::None) {
-            UnwindReason::None => {
-                debug_assert_eq!(ret, 1);
-                Ok(())
-            }
-            UnwindReason::UserTrap(data) => {
-                debug_assert_eq!(ret, 0);
-                Err(Trap::User(data))
-            }
+        let ret = tls::set(&self, || closure(&self))?;
+        if ret != 0 {
+            return Ok(());
+        }
+        match unsafe { (*self.unwind.get()).as_ptr().read() } {
+            UnwindReason::UserTrap(data) => Err(Trap::User(data)),
             UnwindReason::LibTrap(trap) => Err(trap),
             UnwindReason::JitTrap { backtrace, pc } => {
-                debug_assert_eq!(ret, 0);
                 let interrupts = self.trap_info.interrupts();
                 let maybe_interrupted =
                     interrupts.stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED;
@@ -274,106 +272,13 @@ impl<'a> CallThreadState<'a> {
                     maybe_interrupted,
                 })
             }
-            UnwindReason::Panic(panic) => {
-                debug_assert_eq!(ret, 0);
-                std::panic::resume_unwind(panic)
-            }
+            UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
         }
-    }
-
-    /// Checks and/or initializes the wasm native call stack limit.
-    ///
-    /// This function will inspect the current state of the stack and calling
-    /// context to determine which of three buckets we're in:
-    ///
-    /// 1. We are the first wasm call on the stack. This means that we need to
-    ///    set up a stack limit where beyond which if the native wasm stack
-    ///    pointer goes beyond forces a trap. For now we simply reserve an
-    ///    arbitrary chunk of bytes (1 MB from roughly the current native stack
-    ///    pointer). This logic will likely get tweaked over time.
-    ///
-    /// 2. We aren't the first wasm call on the stack. In this scenario the wasm
-    ///    stack limit is already configured. This case of wasm -> host -> wasm
-    ///    we assume that the native stack consumed by the host is accounted for
-    ///    in the initial stack limit calculation. That means that in this
-    ///    scenario we do nothing.
-    ///
-    /// 3. We were previously interrupted. In this case we consume the interrupt
-    ///    here and return a trap, clearing the interrupt and allowing the next
-    ///    wasm call to proceed.
-    ///
-    /// The return value here is a trap for case 3, a noop destructor in case 2,
-    /// and a meaningful destructor in case 1
-    ///
-    /// For more information about interrupts and stack limits see
-    /// `crates/environ/src/cranelift.rs`.
-    ///
-    /// Note that this function must be called with `self` on the stack, not the
-    /// heap/etc.
-    fn update_stack_limit(&self) -> Result<impl Drop + '_, Trap> {
-        // Determine the stack pointer where, after which, any wasm code will
-        // immediately trap. This is checked on the entry to all wasm functions.
-        //
-        // Note that this isn't 100% precise. We are requested to give wasm
-        // `max_wasm_stack` bytes, but what we're actually doing is giving wasm
-        // probably a little less than `max_wasm_stack` because we're
-        // calculating the limit relative to this function's approximate stack
-        // pointer. Wasm will be executed on a frame beneath this one (or next
-        // to it). In any case it's expected to be at most a few hundred bytes
-        // of slop one way or another. When wasm is typically given a MB or so
-        // (a million bytes) the slop shouldn't matter too much.
-        let wasm_stack_limit = psm::stack_pointer() as usize - self.trap_info.max_wasm_stack();
-
-        let interrupts = self.trap_info.interrupts();
-        let reset_stack_limit = match interrupts.stack_limit.compare_exchange(
-            usize::max_value(),
-            wasm_stack_limit,
-            SeqCst,
-            SeqCst,
-        ) {
-            Ok(_) => {
-                // We're the first wasm on the stack so we've now reserved the
-                // `max_wasm_stack` bytes of native stack space for wasm.
-                // Nothing left to do here now except reset back when we're
-                // done.
-                true
-            }
-            Err(n) if n == wasmtime_environ::INTERRUPTED => {
-                // This means that an interrupt happened before we actually
-                // called this function, which means that we're now
-                // considered interrupted. Be sure to consume this interrupt
-                // as part of this process too.
-                interrupts.stack_limit.store(usize::max_value(), SeqCst);
-                return Err(Trap::Wasm {
-                    trap_code: ir::TrapCode::Interrupt,
-                    backtrace: Backtrace::new_unresolved(),
-                });
-            }
-            Err(_) => {
-                // The stack limit was previously set by a previous wasm
-                // call on the stack. We leave the original stack limit for
-                // wasm in place in that case, and don't reset the stack
-                // limit when we're done.
-                false
-            }
-        };
-
-        struct Reset<'a>(bool, &'a AtomicUsize);
-
-        impl Drop for Reset<'_> {
-            fn drop(&mut self) {
-                if self.0 {
-                    self.1.store(usize::max_value(), SeqCst);
-                }
-            }
-        }
-
-        Ok(Reset(reset_stack_limit, &interrupts.stack_limit))
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
-        self.unwind.replace(reason);
         unsafe {
+            (*self.unwind.get()).as_mut_ptr().write(reason);
             Unwind(self.jmp_buf.get());
         }
     }
@@ -393,6 +298,7 @@ impl<'a> CallThreadState<'a> {
     ///   instance, and the trap handler should quickly return.
     /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
     ///   the wasm trap was succesfully handled.
+    #[cfg_attr(target_os = "macos", allow(dead_code))] // macOS is more raw and doesn't use this
     fn jmp_buf_if_trap(
         &self,
         pc: *const u8,
@@ -421,7 +327,7 @@ impl<'a> CallThreadState<'a> {
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
-        if !self.trap_info.is_wasm_trap(pc as usize) {
+        if unsafe { !IS_WASM_PC(pc as usize) } {
             return ptr::null();
         }
 
@@ -432,16 +338,21 @@ impl<'a> CallThreadState<'a> {
 
     fn capture_backtrace(&self, pc: *const u8) {
         let backtrace = Backtrace::new_unresolved();
-        self.unwind.replace(UnwindReason::JitTrap {
-            backtrace,
-            pc: pc as usize,
-        });
+        unsafe {
+            (*self.unwind.get())
+                .as_mut_ptr()
+                .write(UnwindReason::JitTrap {
+                    backtrace,
+                    pc: pc as usize,
+                });
+        }
     }
 }
 
 struct ResetCell<'a, T: Copy>(&'a Cell<T>, T);
 
 impl<T: Copy> Drop for ResetCell<'_, T> {
+    #[inline]
     fn drop(&mut self) {
         self.0.set(self.1);
     }
@@ -454,6 +365,7 @@ impl<T: Copy> Drop for ResetCell<'_, T> {
 // the caller to the trap site.
 mod tls {
     use super::CallThreadState;
+    use crate::Trap;
     use std::mem;
     use std::ptr;
 
@@ -472,25 +384,38 @@ mod tls {
     // these TLS values when the runtime may have crossed threads.
     mod raw {
         use super::CallThreadState;
+        use crate::Trap;
         use std::cell::Cell;
         use std::ptr;
 
         pub type Ptr = *const CallThreadState<'static>;
 
-        thread_local!(static PTR: Cell<Ptr> = Cell::new(ptr::null()));
+        // The first entry here is the `Ptr` which is what's used as part of the
+        // public interface of this module. The second entry is a boolean which
+        // allows the runtime to perform per-thread initialization if necessary
+        // for handling traps (e.g. setting up ports on macOS and sigaltstack on
+        // Unix).
+        thread_local!(static PTR: Cell<(Ptr, bool)> = Cell::new((ptr::null(), false)));
 
         #[inline(never)] // see module docs for why this is here
-        pub fn replace(val: Ptr) -> Ptr {
-            // Mark the current thread as handling interrupts for this specific
-            // CallThreadState: may clobber the previous entry.
-            super::super::sys::register_tls(val);
-
-            PTR.with(|p| p.replace(val))
+        pub fn replace(val: Ptr) -> Result<Ptr, Trap> {
+            PTR.with(|p| {
+                // When a new value is configured that means that we may be
+                // entering WebAssembly so check to see if this thread has
+                // performed per-thread initialization for traps.
+                let (prev, mut initialized) = p.get();
+                if !initialized {
+                    super::super::sys::lazy_per_thread_init()?;
+                    initialized = true;
+                }
+                p.set((val, initialized));
+                Ok(prev)
+            })
         }
 
         #[inline(never)] // see module docs for why this is here
         pub fn get() -> Ptr {
-            PTR.with(|p| p.get())
+            PTR.with(|p| p.get().0)
         }
     }
 
@@ -504,7 +429,7 @@ mod tls {
         ///
         /// This is not a safe operation since it's intended to only be used
         /// with stack switching found with fibers and async wasmtime.
-        pub unsafe fn take() -> TlsRestore {
+        pub unsafe fn take() -> Result<TlsRestore, Trap> {
             // Our tls pointer must be set at this time, and it must not be
             // null. We need to restore the previous pointer since we're
             // removing ourselves from the call-stack, and in the process we
@@ -513,8 +438,8 @@ mod tls {
             let raw = raw::get();
             assert!(!raw.is_null());
             let prev = (*raw).prev.replace(ptr::null());
-            raw::replace(prev);
-            TlsRestore(raw)
+            raw::replace(prev)?;
+            Ok(TlsRestore(raw))
         }
 
         /// Restores a previous tls state back into this thread's TLS.
@@ -522,17 +447,12 @@ mod tls {
         /// This is unsafe because it's intended to only be used within the
         /// context of stack switching within wasmtime.
         pub unsafe fn replace(self) -> Result<(), super::Trap> {
-            // When replacing to the previous value of TLS, we might have
-            // crossed a thread: make sure the trap-handling lazy initializer
-            // runs.
-            super::sys::lazy_per_thread_init()?;
-
             // We need to configure our previous TLS pointer to whatever is in
             // TLS at this time, and then we set the current state to ourselves.
             let prev = raw::get();
             assert!((*self.0).prev.get().is_null());
             (*self.0).prev.set(prev);
-            raw::replace(self.0);
+            raw::replace(self.0)?;
             Ok(())
         }
     }
@@ -540,12 +460,14 @@ mod tls {
     /// Configures thread local state such that for the duration of the
     /// execution of `closure` any call to `with` will yield `ptr`, unless this
     /// is recursively called again.
-    pub fn set<R>(state: &CallThreadState<'_>, closure: impl FnOnce() -> R) -> R {
+    pub fn set<R>(state: &CallThreadState<'_>, closure: impl FnOnce() -> R) -> Result<R, Trap> {
         struct Reset<'a, 'b>(&'a CallThreadState<'b>);
 
         impl Drop for Reset<'_, '_> {
+            #[inline]
             fn drop(&mut self) {
-                raw::replace(self.0.prev.replace(ptr::null()));
+                raw::replace(self.0.prev.replace(ptr::null()))
+                    .expect("tls should be previously initialized");
             }
         }
 
@@ -555,10 +477,10 @@ mod tls {
         let ptr = unsafe {
             mem::transmute::<*const CallThreadState<'_>, *const CallThreadState<'static>>(state)
         };
-        let prev = raw::replace(ptr);
+        let prev = raw::replace(ptr)?;
         state.prev.set(prev);
         let _reset = Reset(state);
-        closure()
+        Ok(closure())
     }
 
     /// Returns the last pointer configured with `set` above. Panics if `set`

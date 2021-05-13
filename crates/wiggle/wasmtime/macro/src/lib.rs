@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::{AsyncConf, ModuleConf, TargetConf};
+use config::{AsyncConf, Asyncness, ModuleConf, TargetConf};
 
 /// Define the structs required to integrate a Wiggle implementation with Wasmtime.
 ///
@@ -48,11 +48,6 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = Names::new(quote!(wasmtime_wiggle));
 
-    #[cfg(feature = "async")]
-    let async_config = config.async_.clone();
-    #[cfg(not(feature = "async"))]
-    let async_config = AsyncConf::default();
-
     let modules = config.modules.iter().map(|(name, module_conf)| {
         let module = doc
             .module(&witx::Id::new(name))
@@ -63,7 +58,7 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
             &names,
             &config.target,
             &config.ctx.name,
-            &async_config,
+            &config.async_,
         )
     });
     quote!( #(#modules)* ).into()
@@ -107,13 +102,24 @@ fn generate_module(
     let mut host_funcs = Vec::new();
 
     for f in module.funcs() {
+        let asyncness = async_conf.is_async(module.name.as_str(), f.name.as_str());
+        match asyncness {
+            Asyncness::Blocking => {}
+            Asyncness::Async => {
+                assert!(
+                    cfg!(feature = "async"),
+                    "generating async wasmtime Funcs requires cargo feature \"async\""
+                );
+            }
+            _ => {}
+        }
         generate_func(
             &module_id,
             &f,
             names,
             &target_module,
             ctx_type,
-            async_conf.is_async(module.name.as_str(), f.name.as_str()),
+            asyncness,
             &mut fns,
             &mut ctor_externs,
             &mut host_funcs,
@@ -135,6 +141,28 @@ contained in the `cx` parameter.",
         module_conf.name.to_string()
     );
 
+    let config_adder_definitions = host_funcs.iter().map(|(func_name, body)| {
+        let adder_func = format_ident!("add_{}_to_config", names.func(&func_name));
+        let docs = format!(
+            "Add the host function for `{}` to a config under a given module and field name.",
+            func_name.as_str()
+        );
+        quote! {
+            #[doc = #docs]
+            pub fn #adder_func(config: &mut wasmtime::Config, module: &str, field: &str) {
+                #body
+            }
+        }
+    });
+    let config_adder_invocations = host_funcs.iter().map(|(func_name, _body)| {
+        let adder_func = format_ident!("add_{}_to_config", names.func(&func_name));
+        let module = module.name.as_str();
+        let field = func_name.as_str();
+        quote! {
+            Self::#adder_func(config, #module, #field);
+        }
+    });
+
     quote! {
         #type_docs
         pub struct #type_name {
@@ -150,6 +178,7 @@ contained in the `cx` parameter.",
                     #(#ctor_fields,)*
                 }
             }
+
 
             /// Looks up a field called `name` in this structure, returning it
             /// if found.
@@ -175,8 +204,10 @@ contained in the `cx` parameter.",
             ///
             /// Host functions will trap if the context is not set in the calling [`wasmtime::Store`].
             pub fn add_to_config(config: &mut wasmtime::Config) {
-                #(#host_funcs)*
+                #(#config_adder_invocations)*
             }
+
+            #(#config_adder_definitions)*
 
             /// Sets the context in the given store.
             ///
@@ -204,11 +235,12 @@ fn generate_func(
     names: &Names,
     target_module: &TokenStream2,
     ctx_type: &syn::Type,
-    is_async: bool,
+    asyncness: Asyncness,
     fns: &mut Vec<TokenStream2>,
     ctors: &mut Vec<TokenStream2>,
-    host_funcs: &mut Vec<TokenStream2>,
+    host_funcs: &mut Vec<(witx::Id, TokenStream2)>,
 ) {
+    let rt = names.runtime_mod();
     let name_ident = names.func(&func.name);
 
     let (params, results) = func.wasm_signature();
@@ -232,8 +264,16 @@ fn generate_func(
         _ => unimplemented!(),
     };
 
-    let async_ = if is_async { quote!(async) } else { quote!() };
-    let await_ = if is_async { quote!(.await) } else { quote!() };
+    let async_ = if asyncness.is_sync() {
+        quote!()
+    } else {
+        quote!(async)
+    };
+    let await_ = if asyncness.is_sync() {
+        quote!()
+    } else {
+        quote!(.await)
+    };
 
     let runtime = names.runtime_mod();
     let fn_ident = format_ident!("{}_{}", module_ident, name_ident);
@@ -257,20 +297,36 @@ fn generate_func(
         }
     });
 
-    if is_async {
-        let wrapper = format_ident!("wrap{}_async", params.len());
-        ctors.push(quote! {
+    match asyncness {
+        Asyncness::Async => {
+            let wrapper = format_ident!("wrap{}_async", params.len());
+            ctors.push(quote! {
             let #name_ident = wasmtime::Func::#wrapper(
                 store,
                 ctx.clone(),
-                move |caller: wasmtime::Caller<'_>, my_ctx: &Rc<RefCell<_>> #(,#arg_decls)*|
+                move |caller: wasmtime::Caller<'_>, my_ctx: &std::rc::Rc<std::cell::RefCell<_>> #(,#arg_decls)*|
                     -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
                     Box::new(async move { Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*).await })
                 }
             );
-        });
-    } else {
-        ctors.push(quote! {
+            });
+        }
+        Asyncness::Blocking => {
+            // Emit a synchronous function. Self::#fn_ident returns a Future, so we need to
+            // use a dummy executor to let any synchronous code inside there execute correctly. If
+            // the future ends up Pending, this func will Trap.
+            ctors.push(quote! {
+                let my_ctx = ctx.clone();
+                let #name_ident = wasmtime::Func::wrap(
+                    store,
+                    move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                        #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut my_ctx.borrow_mut() #(, #arg_names)*))
+                    }
+                );
+            });
+        }
+        Asyncness::Sync => {
+            ctors.push(quote! {
             let my_ctx = ctx.clone();
             let #name_ident = wasmtime::Func::wrap(
                 store,
@@ -279,40 +335,63 @@ fn generate_func(
                 }
             );
         });
+        }
     }
 
-    if is_async {
-        let wrapper = format_ident!("wrap{}_host_func_async", params.len());
-        host_funcs.push(quote! {
-            config.#wrapper(
-                stringify!(#module_ident),
-                stringify!(#name_ident),
-                move |caller #(,#arg_decls)*|
-                    -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
-                    Box::new(async move {
-                        let ctx = caller.store()
+    let host_wrapper = match asyncness {
+        Asyncness::Async => {
+            let wrapper = format_ident!("wrap{}_host_func_async", params.len());
+            quote! {
+                config.#wrapper(
+                    module,
+                    field,
+                    move |caller #(,#arg_decls)*|
+                        -> Box<dyn std::future::Future<Output = Result<#ret_ty, wasmtime::Trap>>> {
+                        Box::new(async move {
+                            let ctx = caller.store()
+                                .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
+                                .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
+                            let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut() #(, #arg_names)*).await;
+                            result
+                        })
+                    }
+                );
+            }
+        }
+
+        Asyncness::Blocking => {
+            // Emit a synchronous host function. Self::#fn_ident returns a Future, so we need to
+            // use a dummy executor to let any synchronous code inside there execute correctly. If
+            // the future ends up Pending, this func will Trap.
+            quote! {
+                config.wrap_host_func(
+                    module,
+                    field,
+                    move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                        let ctx = caller
+                            .store()
                             .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
                             .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
-                        let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut() #(, #arg_names)*).await;
-                        result
-                    })
-                }
-            );
-        });
-    } else {
-        host_funcs.push(quote! {
-            config.wrap_host_func(
-                stringify!(#module_ident),
-                stringify!(#name_ident),
-                move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
-                    let ctx = caller
-                        .store()
-                        .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
-                        .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
-                    let result = Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*);
-                    result
-                },
-            );
-        });
-    }
+                        #rt::run_in_dummy_executor(Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*))
+                    },
+                );
+            }
+        }
+        Asyncness::Sync => {
+            quote! {
+                config.wrap_host_func(
+                    module,
+                    field,
+                    move |caller: wasmtime::Caller #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                        let ctx = caller
+                            .store()
+                            .get::<std::rc::Rc<std::cell::RefCell<#ctx_type>>>()
+                            .ok_or_else(|| wasmtime::Trap::new("context is missing in the store"))?;
+                        Self::#fn_ident(&caller, &mut ctx.borrow_mut()  #(, #arg_names)*)
+                    },
+                );
+            }
+        }
+    };
+    host_funcs.push((func.name.clone(), host_wrapper));
 }

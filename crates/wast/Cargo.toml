@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-wast"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["The Wasmtime Project Developers"]
 description = "wast testing support for wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,8 +12,8 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.19"
-wasmtime = { path = "../wasmtime", version = "0.25.0", default-features = false }
-wast = "35.0.0"
+wasmtime = { path = "../wasmtime", version = "0.26.0", default-features = false }
+wast = "35.0.1"
 
 [badges]
 maintenance = { status = "actively-developed" }

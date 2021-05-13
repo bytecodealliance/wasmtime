@@ -17,6 +17,7 @@ mod not_for_windows {
     struct CustomMemory {
         mem: *mut c_void,
         size: usize,
+        guard_size: usize,
         used_wasm_pages: RefCell<u32>,
         glob_page_counter: Arc<Mutex<u64>>,
     }
@@ -43,6 +44,7 @@ mod not_for_windows {
             Self {
                 mem,
                 size,
+                guard_size,
                 used_wasm_pages: RefCell::new(num_wasm_pages),
                 glob_page_counter: glob_counter,
             }
@@ -63,6 +65,10 @@ mod not_for_windows {
             *self.used_wasm_pages.borrow()
         }
 
+        fn maximum(&self) -> Option<u32> {
+            Some((self.size as u32 - self.guard_size as u32) / WASM_PAGE_SIZE)
+        }
+
         fn grow(&self, delta: u32) -> Option<u32> {
             let delta_size = (delta as usize).checked_mul(WASM_PAGE_SIZE as usize)?;
 
@@ -70,11 +76,8 @@ mod not_for_windows {
             let prev_size = (prev_pages as usize).checked_mul(WASM_PAGE_SIZE as usize)?;
 
             let new_pages = prev_pages.checked_add(delta)?;
-            let new_size = (new_pages as usize).checked_mul(WASM_PAGE_SIZE as usize)?;
 
-            let guard_size = unsafe { sysconf(_SC_PAGESIZE) as usize };
-
-            if new_size > self.size - guard_size {
+            if new_pages > self.maximum().unwrap() {
                 return None;
             }
             unsafe {

@@ -186,7 +186,7 @@ pub extern "C" fn wasmtime_module_deserialize(
     ret: &mut *mut wasm_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(
-        Module::deserialize(&engine.engine, binary.as_slice()),
+        unsafe { Module::deserialize(&engine.engine, binary.as_slice()) },
         |module| {
             let module = Box::new(wasm_module_t::new(module));
             *ret = Box::into_raw(module);

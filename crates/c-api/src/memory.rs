@@ -31,13 +31,13 @@ impl wasm_memory_t {
 pub extern "C" fn wasm_memory_new(
     store: &wasm_store_t,
     mt: &wasm_memorytype_t,
-) -> Box<wasm_memory_t> {
-    let memory = Memory::new(&store.store, mt.ty().ty.clone());
-    Box::new(wasm_memory_t {
+) -> Option<Box<wasm_memory_t>> {
+    let memory = Memory::new(&store.store, mt.ty().ty.clone()).ok()?;
+    Some(Box::new(wasm_memory_t {
         ext: wasm_extern_t {
             which: memory.into(),
         },
-    })
+    }))
 }
 
 #[no_mangle]

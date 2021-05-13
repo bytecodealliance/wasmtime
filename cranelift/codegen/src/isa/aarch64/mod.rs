@@ -7,10 +7,8 @@ use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
-
-use alloc::boxed::Box;
+use alloc::{boxed::Box, vec::Vec};
 use core::hash::{Hash, Hasher};
-
 use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Aarch64Architecture, Architecture, Triple};
 
@@ -102,6 +100,10 @@ impl MachBackend for AArch64Backend {
 
     fn flags(&self) -> &shared_settings::Flags {
         &self.flags
+    }
+
+    fn isa_flags(&self) -> Vec<shared_settings::Value> {
+        self.isa_flags.iter().collect()
     }
 
     fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {

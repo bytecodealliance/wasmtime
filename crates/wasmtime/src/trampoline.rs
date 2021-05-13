@@ -19,8 +19,8 @@ use std::sync::Arc;
 use wasmtime_environ::{entity::PrimaryMap, wasm, Module};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    OnDemandInstanceAllocator, StackMapRegistry, VMExternRefActivationsTable, VMFunctionBody,
-    VMFunctionImport, VMSharedSignatureIndex,
+    OnDemandInstanceAllocator, VMExternRefActivationsTable, VMFunctionBody, VMFunctionImport,
+    VMSharedSignatureIndex,
 };
 
 /// A wrapper around `wasmtime_runtime::InstanceHandle` which pairs it with the
@@ -62,22 +62,25 @@ fn create_handle(
     imports.functions = func_imports;
 
     unsafe {
+        let config = store.engine().config();
         // Use the on-demand allocator when creating handles associated with host objects
         // The configured instance allocator should only be used when creating module instances
         // as we don't want host objects to count towards instance limits.
-        let handle = OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone())
-            .allocate(InstanceAllocationRequest {
+        let handle = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0).allocate(
+            InstanceAllocationRequest {
                 module: Arc::new(module),
                 finished_functions: &finished_functions,
                 imports,
-                lookup_shared_signature: &|_| shared_signature_id.unwrap(),
+                shared_signatures: shared_signature_id.into(),
                 host_state,
                 interrupts: store.interrupts(),
                 externref_activations_table: store.externref_activations_table()
                     as *const VMExternRefActivationsTable
                     as *mut _,
-                stack_map_registry: store.stack_map_registry() as *const StackMapRegistry as *mut _,
-            })?;
+                module_info_lookup: Some(store.module_info_lookup()),
+                limiter: store.limiter().as_ref(),
+            },
+        )?;
 
         Ok(store.add_instance(handle, true))
     }

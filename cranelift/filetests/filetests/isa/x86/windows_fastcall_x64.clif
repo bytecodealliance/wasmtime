@@ -1,7 +1,7 @@
 test compile
 set opt_level=speed_and_size
 set is_pic
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; check if for one arg we use the right register
 function %one_arg(i64) windows_fastcall {

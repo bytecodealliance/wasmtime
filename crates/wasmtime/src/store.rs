@@ -1,11 +1,12 @@
-use crate::frame_info::StoreFrameInfo;
-use crate::sig_registry::SignatureRegistry;
-use crate::trampoline::StoreInstanceHandle;
-use crate::{Engine, Func, FuncType, Module, Trap};
+use crate::{
+    module::ModuleRegistry, signatures::SignatureCollection, trampoline::StoreInstanceHandle,
+    Engine, Func, Module, ResourceLimiter, ResourceLimiterProxy, Trap, DEFAULT_INSTANCE_LIMIT,
+    DEFAULT_MEMORY_LIMIT, DEFAULT_TABLE_LIMIT,
+};
 use anyhow::{bail, Result};
 use std::any::{Any, TypeId};
 use std::cell::{Cell, RefCell};
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
 use std::fmt;
 use std::future::Future;
@@ -15,12 +16,10 @@ use std::ptr;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use wasmtime_environ::wasm;
-use wasmtime_jit::{CompiledModule, ModuleCode, TypeTables};
 use wasmtime_runtime::{
-    Export, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator, SignalHandler,
-    StackMapRegistry, TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
+    InstanceAllocator, InstanceHandle, ModuleInfo, OnDemandInstanceAllocator, SignalHandler,
+    TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable,
+    VMInterrupts, VMTrampoline,
 };
 
 /// Used to associate instances with the store.
@@ -71,20 +70,13 @@ pub struct Store {
 
 pub(crate) struct StoreInner {
     engine: Engine,
-    /// The map of all host functions registered with this store's signature registry
-    host_funcs: RefCell<HashMap<InstanceHandle, Box<VMCallerCheckedAnyfunc>>>,
     interrupts: Arc<VMInterrupts>,
-    signatures: RefCell<SignatureRegistry>,
     instances: RefCell<Vec<StoreInstance>>,
     signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
     externref_activations_table: VMExternRefActivationsTable,
-    stack_map_registry: StackMapRegistry,
-    /// Information about JIT code which allows us to test if a program counter
-    /// is in JIT code, lookup trap information, etc.
-    frame_info: RefCell<StoreFrameInfo>,
-    /// Set of all compiled modules that we're holding a strong reference to
-    /// the module's code for. This includes JIT functions, trampolines, etc.
-    modules: RefCell<HashSet<ArcModuleCode>>,
+    modules: RefCell<ModuleRegistry>,
+    // The signatures and trampolines for `Func` objects
+    signatures: RefCell<SignatureCollection>,
     // Numbers of resources instantiated in this store.
     instance_count: Cell<usize>,
     memory_count: Cell<usize>,
@@ -98,6 +90,7 @@ pub(crate) struct StoreInner {
     current_poll_cx: Cell<*mut Context<'static>>,
     out_of_gas_behavior: Cell<OutOfGas>,
     context_values: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>,
 }
 
 #[derive(Copy, Clone)]
@@ -129,27 +122,57 @@ impl Hash for HostInfoKey {
 }
 
 impl Store {
-    /// Creates a new store to be associated with the given [`Engine`].
-    pub fn new(engine: &Engine) -> Store {
-        // Ensure that wasmtime_runtime's signal handlers are configured. Note
-        // that at the `Store` level it means we should perform this
-        // once-per-thread. Platforms like Unix, however, only require this
-        // once-per-program. In any case this is safe to call many times and
-        // each one that's not relevant just won't do anything.
-        wasmtime_runtime::init_traps();
+    /// Creates a new [`Store`] to be associated with the given [`Engine`].
+    ///
+    /// The created [`Store`] will place no additional limits on the size of linear
+    /// memories or tables at runtime. Linear memories and tables will be allowed to
+    /// grow to any upper limit specified in their definitions.
+    ///
+    /// The store will limit the number of instances, linear memories, and tables created to 10,000.
+    ///
+    /// Use [`Store::new_with_limits`] with a [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) to
+    /// specify different limits for the store.
+    pub fn new(engine: &Engine) -> Self {
+        Self::new_(engine, None)
+    }
 
-        Store {
+    /// Creates a new [`Store`] to be associated with the given [`Engine`] and using the supplied
+    /// resource limiter.
+    ///
+    /// A [`ResourceLimiter`] can be implemented by hosts to control the size of WebAssembly
+    /// linear memories and tables when a request is made to grow them.
+    ///
+    /// [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) can be used to create a
+    /// [`StoreLimits`](crate::StoreLimits) that implements [`ResourceLimiter`] using
+    /// static limit values.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use wasmtime::{Engine, Store, StoreLimitsBuilder};
+    /// // Place a limit on linear memories so they cannot grow beyond 1 MiB
+    /// let engine = Engine::default();
+    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().memory_pages(16).build());
+    /// ```
+    pub fn new_with_limits(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
+        Self::new_(engine, Some(Rc::new(ResourceLimiterProxy(limiter))))
+    }
+
+    fn new_(engine: &Engine, limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>) -> Self {
+        // Ensure that wasmtime_runtime's signal handlers are configured. This
+        // is the per-program initialization required for handling traps, such
+        // as configuring signals, vectored exception handlers, etc.
+        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc);
+
+        Self {
             inner: Rc::new(StoreInner {
                 engine: engine.clone(),
-                host_funcs: RefCell::new(HashMap::new()),
                 interrupts: Arc::new(Default::default()),
-                signatures: RefCell::new(Default::default()),
                 instances: RefCell::new(Vec::new()),
                 signal_handler: RefCell::new(None),
                 externref_activations_table: VMExternRefActivationsTable::new(),
-                stack_map_registry: StackMapRegistry::default(),
-                frame_info: Default::default(),
-                modules: Default::default(),
+                modules: RefCell::new(ModuleRegistry::default()),
+                signatures: RefCell::new(SignatureCollection::new(engine.signatures())),
                 instance_count: Default::default(),
                 memory_count: Default::default(),
                 table_count: Default::default(),
@@ -160,6 +183,7 @@ impl Store {
                 current_poll_cx: Cell::new(ptr::null_mut()),
                 out_of_gas_behavior: Cell::new(OutOfGas::Trap),
                 context_values: RefCell::new(HashMap::new()),
+                limiter,
             }),
         }
     }
@@ -179,36 +203,8 @@ impl Store {
             })
     }
 
-    pub(crate) fn get_host_anyfunc(
-        &self,
-        instance: &InstanceHandle,
-        ty: &FuncType,
-        trampoline: VMTrampoline,
-    ) -> *mut VMCallerCheckedAnyfunc {
-        let mut funcs = self.inner.host_funcs.borrow_mut();
-
-        let anyfunc = funcs.entry(unsafe { instance.clone() }).or_insert_with(|| {
-            let mut anyfunc = match instance
-                .lookup_by_declaration(&wasm::EntityIndex::Function(wasm::FuncIndex::from_u32(0)))
-            {
-                Export::Function(f) => unsafe { f.anyfunc.as_ref() }.clone(),
-                _ => unreachable!(),
-            };
-
-            // Register the function with this store's signature registry
-            anyfunc.type_index = self
-                .inner
-                .signatures
-                .borrow_mut()
-                .register(ty.as_wasm_func_type(), trampoline);
-
-            Box::new(anyfunc)
-        });
-
-        &mut **anyfunc
-    }
-
     /// Returns the [`Engine`] that this store is associated with.
+    #[inline]
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
     }
@@ -219,7 +215,7 @@ impl Store {
     pub fn get<T: Any>(&self) -> Option<&T> {
         let values = self.inner.context_values.borrow();
 
-        // Safety: a context value cannot be removed once added and therefore the addres is
+        // Safety: a context value cannot be removed once added and therefore the address is
         // stable for the life of the store
         values
             .get(&TypeId::of::<T>())
@@ -241,92 +237,39 @@ impl Store {
         }
     }
 
-    pub(crate) fn signatures(&self) -> &RefCell<SignatureRegistry> {
+    pub(crate) fn limiter(&self) -> &Option<Rc<dyn wasmtime_runtime::ResourceLimiter>> {
+        &self.inner.limiter
+    }
+
+    pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
         &self.inner.signatures
     }
 
-    pub(crate) fn lookup_shared_signature<'a>(
-        &'a self,
-        types: &'a TypeTables,
-    ) -> impl Fn(wasm::SignatureIndex) -> VMSharedSignatureIndex + 'a {
-        move |index| {
-            self.signatures()
-                .borrow()
-                .lookup(&types.wasm_signatures[index])
-                .expect("signature not previously registered")
+    pub(crate) fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
+        // Look up the trampoline with the store's trampolines (from `Func`).
+        if let Some(trampoline) = self
+            .inner
+            .signatures
+            .borrow()
+            .trampoline(anyfunc.type_index)
+        {
+            return trampoline;
         }
-    }
 
-    pub(crate) fn register_module(&self, module: &Module) {
-        // All modules register their JIT code in a store for two reasons
-        // currently:
-        //
-        // * First we only catch signals/traps if the program counter falls
-        //   within the jit code of an instantiated wasm module. This ensures
-        //   we don't catch accidental Rust/host segfaults.
-        //
-        // * Second when generating a backtrace we'll use this mapping to
-        //   only generate wasm frames for instruction pointers that fall
-        //   within jit code.
-        self.register_jit_code(module.compiled_module());
+        // Look up the trampoline with the registered modules
+        if let Some(trampoline) = self.inner.modules.borrow().lookup_trampoline(anyfunc) {
+            return trampoline;
+        }
 
-        // We need to know about all the stack maps of all instantiated modules
-        // so when performing a GC we know about all wasm frames that we find
-        // on the stack.
-        self.register_stack_maps(module.compiled_module());
-
-        // Signatures are loaded into our `SignatureRegistry` here
-        // once-per-module (and once-per-signature). This allows us to create
-        // a `Func` wrapper for any function in the module, which requires that
-        // we know about the signature and trampoline for all instances.
-        self.register_signatures(module);
-
-        // And finally with a module being instantiated into this `Store` we
-        // need to preserve its jit-code. References to this module's code and
-        // trampolines are not owning-references so it's our responsibility to
-        // keep it all alive within the `Store`.
+        // Lastly, check with the engine (for `HostFunc`)
         self.inner
-            .modules
-            .borrow_mut()
-            .insert(ArcModuleCode(module.compiled_module().code().clone()));
-    }
-
-    fn register_jit_code(&self, module: &CompiledModule) {
-        let functions = module.finished_functions();
-        let first_pc = match functions.values().next() {
-            Some(f) => unsafe { (**f).as_ptr() as usize },
-            None => return,
-        };
-        // Only register this module if it hasn't already been registered.
-        let mut info = self.inner.frame_info.borrow_mut();
-        if !info.contains_pc(first_pc) {
-            info.register(module);
-        }
-    }
-
-    fn register_stack_maps(&self, module: &CompiledModule) {
-        self.stack_map_registry()
-            .register_stack_maps(module.stack_maps().map(|(func, stack_maps)| unsafe {
-                let ptr = (*func).as_ptr();
-                let len = (*func).len();
-                let start = ptr as usize;
-                let end = ptr as usize + len;
-                let range = start..end;
-                (range, stack_maps)
-            }));
-    }
-
-    fn register_signatures(&self, module: &Module) {
-        let trampolines = module.compiled_module().trampolines();
-        let mut signatures = self.signatures().borrow_mut();
-        for (index, wasm) in module.types().wasm_signatures.iter() {
-            signatures.register(wasm, trampolines[index]);
-        }
+            .engine
+            .host_func_signatures()
+            .trampoline(anyfunc.type_index)
+            .expect("trampoline missing")
     }
 
     pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
-        let config = self.engine().config();
-
         fn bump(slot: &Cell<usize>, max: usize, amt: usize, desc: &str) -> Result<()> {
             let new = slot.get().saturating_add(amt);
             if new > max {
@@ -343,20 +286,11 @@ impl Store {
         let module = module.env_module();
         let memories = module.memory_plans.len() - module.num_imported_memories;
         let tables = module.table_plans.len() - module.num_imported_tables;
+        let (max_instances, max_memories, max_tables) = self.limits();
 
-        bump(
-            &self.inner.instance_count,
-            config.max_instances,
-            1,
-            "instance",
-        )?;
-        bump(
-            &self.inner.memory_count,
-            config.max_memories,
-            memories,
-            "memory",
-        )?;
-        bump(&self.inner.table_count, config.max_tables, tables, "table")?;
+        bump(&self.inner.instance_count, max_instances, 1, "instance")?;
+        bump(&self.inner.memory_count, max_memories, memories, "memory")?;
+        bump(&self.inner.table_count, max_tables, tables, "table")?;
 
         Ok(())
     }
@@ -383,7 +317,7 @@ impl Store {
                 .borrow()
                 .iter()
                 .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr())
-                || self.inner.host_funcs.borrow().get(&handle).is_some()
+                || self.inner.engine.host_func_anyfunc(&handle).is_some()
         );
         StoreInstanceHandle {
             store: self.clone(),
@@ -400,6 +334,7 @@ impl Store {
         *self.inner.signal_handler.borrow_mut() = handler;
     }
 
+    #[inline]
     pub(crate) fn interrupts(&self) -> &VMInterrupts {
         &self.inner.interrupts
     }
@@ -503,28 +438,27 @@ impl Store {
         }
     }
 
+    #[inline]
     pub(crate) fn externref_activations_table(&self) -> &VMExternRefActivationsTable {
         &self.inner.externref_activations_table
     }
 
-    pub(crate) fn stack_map_registry(&self) -> &StackMapRegistry {
-        &self.inner.stack_map_registry
+    #[inline]
+    pub(crate) fn modules(&self) -> &RefCell<ModuleRegistry> {
+        &self.inner.modules
     }
 
-    pub(crate) fn frame_info(&self) -> &RefCell<StoreFrameInfo> {
-        &self.inner.frame_info
+    #[inline]
+    pub(crate) fn module_info_lookup(&self) -> &dyn wasmtime_runtime::ModuleInfoLookup {
+        self.inner.as_ref()
     }
 
     /// Perform garbage collection of `ExternRef`s.
     pub fn gc(&self) {
         // For this crate's API, we ensure that `set_stack_canary` invariants
-        // are upheld for all host-->Wasm calls, and we register every module
-        // used with this store in `self.inner.stack_map_registry`.
+        // are upheld for all host-->Wasm calls.
         unsafe {
-            wasmtime_runtime::gc(
-                &self.inner.stack_map_registry,
-                &self.inner.externref_activations_table,
-            );
+            wasmtime_runtime::gc(self.inner.as_ref(), &self.inner.externref_activations_table);
         }
     }
 
@@ -655,6 +589,7 @@ impl Store {
         });
     }
 
+    #[inline]
     pub(crate) fn async_support(&self) -> bool {
         self.inner.engine.config().async_support
     }
@@ -716,7 +651,8 @@ impl Store {
             }
 
             unsafe {
-                let before = wasmtime_runtime::TlsRestore::take();
+                let before = wasmtime_runtime::TlsRestore::take()
+                    .map_err(|e| Trap::from_runtime(self, e))?;
                 let res = (*suspend).suspend(());
                 before.replace().map_err(|e| Trap::from_runtime(self, e))?;
                 res?;
@@ -740,9 +676,15 @@ impl Store {
         debug_assert!(self.async_support());
         debug_assert!(config.async_stack_size > 0);
 
-        type SuspendType = wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>;
+        let stack = self
+            .inner
+            .engine
+            .allocator()
+            .allocate_fiber_stack()
+            .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
+
         let mut slot = None;
-        let func = |keep_going, suspend: &SuspendType| {
+        let fiber = wasmtime_fiber::Fiber::new(stack, |keep_going, suspend| {
             // First check and see if we were interrupted/dropped, and only
             // continue if we haven't been.
             keep_going?;
@@ -760,46 +702,19 @@ impl Store {
 
             slot = Some(func());
             Ok(())
-        };
-
-        let (fiber, stack) = match self.inner.engine.allocator().allocate_fiber_stack() {
-            Ok(stack) => {
-                // Use the returned stack and deallocate it when finished
-                (
-                    unsafe {
-                        wasmtime_fiber::Fiber::new_with_stack(stack, func)
-                            .map_err(|e| Trap::from(anyhow::Error::from(e)))?
-                    },
-                    stack,
-                )
-            }
-            Err(wasmtime_runtime::FiberStackError::NotSupported) => {
-                // The allocator doesn't support custom fiber stacks for the current platform
-                // Request that the fiber itself allocate the stack
-                (
-                    wasmtime_fiber::Fiber::new(config.async_stack_size, func)
-                        .map_err(|e| Trap::from(anyhow::Error::from(e)))?,
-                    std::ptr::null_mut(),
-                )
-            }
-            Err(e) => return Err(Trap::from(anyhow::Error::from(e))),
-        };
+        })
+        .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
 
         // Once we have the fiber representing our synchronous computation, we
         // wrap that in a custom future implementation which does the
         // translation from the future protocol to our fiber API.
-        FiberFuture {
-            fiber,
-            store: self,
-            stack,
-        }
-        .await?;
+        FiberFuture { fiber, store: self }.await?;
+
         return Ok(slot.unwrap());
 
         struct FiberFuture<'a> {
             fiber: wasmtime_fiber::Fiber<'a, Result<(), Trap>, (), Result<(), Trap>>,
             store: &'a Store,
-            stack: *mut u8,
         }
 
         impl Future for FiberFuture<'_> {
@@ -807,7 +722,7 @@ impl Store {
 
             fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
                 // We need to carry over this `cx` into our fiber's runtime
-                // for when it trys to poll sub-futures that are created. Doing
+                // for when it tries to poll sub-futures that are created. Doing
                 // this must be done unsafely, however, since `cx` is only alive
                 // for this one singular function call. Here we do a `transmute`
                 // to extend the lifetime of `Context` so it can be stored in
@@ -864,13 +779,12 @@ impl Store {
                     // callers that they shouldn't be doing that.
                     debug_assert!(result.is_ok());
                 }
-                if !self.stack.is_null() {
-                    unsafe {
-                        self.store
-                            .engine()
-                            .allocator()
-                            .deallocate_fiber_stack(self.stack)
-                    };
+
+                unsafe {
+                    self.store
+                        .engine()
+                        .allocator()
+                        .deallocate_fiber_stack(self.fiber.stack());
                 }
             }
         }
@@ -934,15 +848,24 @@ impl Store {
             Err(trap) => unsafe { wasmtime_runtime::raise_user_trap(trap.into()) },
         }
     }
+
+    fn limits(&self) -> (usize, usize, usize) {
+        self.inner
+            .limiter
+            .as_ref()
+            .map(|l| (l.instances(), l.memories(), l.tables()))
+            .unwrap_or((
+                DEFAULT_INSTANCE_LIMIT,
+                DEFAULT_MEMORY_LIMIT,
+                DEFAULT_TABLE_LIMIT,
+            ))
+    }
 }
 
 unsafe impl TrapInfo for Store {
+    #[inline]
     fn as_any(&self) -> &dyn Any {
         self
-    }
-
-    fn is_wasm_trap(&self, addr: usize) -> bool {
-        self.frame_info().borrow().lookup_trap_info(addr).is_some()
     }
 
     fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool {
@@ -950,10 +873,6 @@ unsafe impl TrapInfo for Store {
             return call(handler);
         }
         false
-    }
-
-    fn max_wasm_stack(&self) -> usize {
-        self.engine().config().max_wasm_stack
     }
 
     fn out_of_gas(&self) {
@@ -978,6 +897,7 @@ unsafe impl TrapInfo for Store {
         }
     }
 
+    #[inline]
     fn interrupts(&self) -> &VMInterrupts {
         &self.inner.interrupts
     }
@@ -999,7 +919,7 @@ impl fmt::Debug for Store {
 impl Drop for StoreInner {
     fn drop(&mut self) {
         let allocator = self.engine.allocator();
-        let ondemand = OnDemandInstanceAllocator::new(self.engine.config().mem_creator.clone());
+        let ondemand = OnDemandInstanceAllocator::default();
         for instance in self.instances.borrow().iter() {
             unsafe {
                 if instance.ondemand {
@@ -1009,6 +929,12 @@ impl Drop for StoreInner {
                 }
             }
         }
+    }
+}
+
+impl wasmtime_runtime::ModuleInfoLookup for StoreInner {
+    fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
+        self.modules.borrow().lookup_module(pc)
     }
 }
 
@@ -1037,24 +963,6 @@ impl InterruptHandle {
     /// [`Store::interrupt_handle`].
     pub fn interrupt(&self) {
         self.interrupts.interrupt()
-    }
-}
-
-// Wrapper struct to implement hash/equality based on the pointer value of the
-// `Arc` in question.
-struct ArcModuleCode(Arc<ModuleCode>);
-
-impl PartialEq for ArcModuleCode {
-    fn eq(&self, other: &ArcModuleCode) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-
-impl Eq for ArcModuleCode {}
-
-impl Hash for ArcModuleCode {
-    fn hash<H: Hasher>(&self, hasher: &mut H) {
-        Arc::as_ptr(&self.0).hash(hasher)
     }
 }
 

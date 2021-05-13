@@ -1,7 +1,7 @@
 ; binary emission of stack address instructions on i686.
 test binemit
 set opt_level=none
-target i686 haswell
+target i686 legacy haswell
 
 ; The binary encodings can be verified with the command:
 ;

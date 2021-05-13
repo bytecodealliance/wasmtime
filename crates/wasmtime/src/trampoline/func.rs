@@ -1,6 +1,6 @@
 //! Support for a calling of an imported function.
 
-use crate::{sig_registry::SignatureRegistry, Config, FuncType, Trap};
+use crate::{Config, FuncType, Store, Trap};
 use anyhow::Result;
 use std::any::Any;
 use std::cmp;
@@ -18,6 +18,7 @@ use wasmtime_jit::trampoline::{
     self, binemit, pretty_error, Context, FunctionBuilder, FunctionBuilderContext,
 };
 use wasmtime_jit::CodeMemory;
+use wasmtime_jit::{blank_sig, wasmtime_call_conv};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     OnDemandInstanceAllocator, VMContext, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
@@ -91,16 +92,7 @@ fn make_trampoline(
     // Mostly reverse copy of the similar method from wasmtime's
     // wasmtime-jit/src/compiler.rs.
     let pointer_type = isa.pointer_type();
-    let mut stub_sig = ir::Signature::new(isa.frontend_config().default_call_conv);
-
-    // Add the caller/callee `vmctx` parameters.
-    stub_sig.params.push(ir::AbiParam::special(
-        pointer_type,
-        ir::ArgumentPurpose::VMContext,
-    ));
-
-    // Add the caller `vmctx` parameter.
-    stub_sig.params.push(ir::AbiParam::new(pointer_type));
+    let mut stub_sig = blank_sig(isa, wasmtime_call_conv(isa));
 
     // Add the `values_vec` parameter.
     stub_sig.params.push(ir::AbiParam::new(pointer_type));
@@ -220,8 +212,15 @@ fn create_function_trampoline(
     // reference types which requires safepoints.
     let isa = config.target_isa_with_reference_types();
 
-    let pointer_type = isa.pointer_type();
-    let sig = ft.get_wasmtime_signature(pointer_type);
+    let mut sig = blank_sig(&*isa, wasmtime_call_conv(&*isa));
+    sig.params.extend(
+        ft.params()
+            .map(|p| ir::AbiParam::new(p.get_wasmtime_type())),
+    );
+    sig.returns.extend(
+        ft.results()
+            .map(|p| ir::AbiParam::new(p.get_wasmtime_type())),
+    );
 
     let mut fn_builder_ctx = FunctionBuilderContext::new();
     let mut module = Module::new();
@@ -263,28 +262,33 @@ pub fn create_function(
     ft: &FuncType,
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap>>,
     config: &Config,
-    registry: Option<&mut SignatureRegistry>,
+    store: Option<&Store>,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
     let (module, finished_functions, trampoline, trampoline_state) =
         create_function_trampoline(config, ft, func)?;
 
-    // If there is no signature registry, use the default signature index which is
+    // If there is no store, use the default signature index which is
     // guaranteed to trap if there is ever an indirect call on the function (should not happen)
-    let shared_signature_id = registry
-        .map(|r| r.register(ft.as_wasm_func_type(), trampoline))
+    let shared_signature_id = store
+        .map(|s| {
+            s.signatures()
+                .borrow_mut()
+                .register(ft.as_wasm_func_type(), trampoline)
+        })
         .unwrap_or(VMSharedSignatureIndex::default());
 
     unsafe {
         Ok((
-            OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+            OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
                 module: Arc::new(module),
                 finished_functions: &finished_functions,
                 imports: Imports::default(),
-                lookup_shared_signature: &|_| shared_signature_id,
+                shared_signatures: shared_signature_id.into(),
                 host_state: Box::new(trampoline_state),
                 interrupts: std::ptr::null(),
                 externref_activations_table: std::ptr::null_mut(),
-                stack_map_registry: std::ptr::null_mut(),
+                module_info_lookup: None,
+                limiter: None,
             })?,
             trampoline,
         ))
@@ -308,15 +312,16 @@ pub unsafe fn create_raw_function(
     finished_functions.push(func);
 
     Ok(
-        OnDemandInstanceAllocator::new(None).allocate(InstanceAllocationRequest {
+        OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
             module: Arc::new(module),
             finished_functions: &finished_functions,
             imports: Imports::default(),
-            lookup_shared_signature: &|_| shared_signature_id,
+            shared_signatures: shared_signature_id.into(),
             host_state,
             interrupts: std::ptr::null(),
             externref_activations_table: std::ptr::null_mut(),
-            stack_map_registry: std::ptr::null_mut(),
+            module_info_lookup: None,
+            limiter: None,
         })?,
     )
 }

@@ -1,7 +1,7 @@
 test compile
 set opt_level=speed
 set enable_pinned_reg=true
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ;; Test for the issue #1123; https://github.com/bytecodealliance/cranelift/issues/1123
 

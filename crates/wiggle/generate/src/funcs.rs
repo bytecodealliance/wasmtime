@@ -139,10 +139,12 @@ impl witx::Bindgen for Rust<'_> {
     ) {
         let rt = self.rt;
         let wrap_err = |location: &str| {
+            let modulename = self.module.name.as_str();
             let funcname = self.funcname;
             quote! {
                 |e| {
                     #rt::GuestError::InFunc {
+                        modulename: #modulename,
                         funcname: #funcname,
                         location: #location,
                         err: Box::new(#rt::GuestError::from(e)),

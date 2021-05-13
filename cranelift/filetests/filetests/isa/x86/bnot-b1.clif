@@ -1,7 +1,7 @@
 test binemit
 test run
 
-target x86_64
+target x86_64 legacy
 
 function u0:323() -> b1 {
 block0:

@@ -10,6 +10,7 @@ use anyhow::{Context, Error};
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
+use wasmtime_environ::ir::Endianness;
 use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{CompiledFunctions, ModuleMemoryOffset};
@@ -462,6 +463,19 @@ where
             },
             isa,
         )?;
+
+        // Data in WebAssembly memory always uses little-endian byte order.
+        // If the native architecture is big-endian, we need to mark all
+        // base types used to refer to WebAssembly memory as little-endian
+        // using the DW_AT_endianity attribute, so that the debugger will
+        // be able to correctly access them.
+        if entry.tag() == gimli::DW_TAG_base_type && isa.endianness() == Endianness::Big {
+            let current_scope = comp_unit.get_mut(die_id);
+            current_scope.set(
+                gimli::DW_AT_endianity,
+                write::AttributeValue::Endianity(gimli::DW_END_little),
+            );
+        }
 
         if entry.tag() == gimli::DW_TAG_subprogram && !current_scope_ranges.is_empty() {
             append_vmctx_info(

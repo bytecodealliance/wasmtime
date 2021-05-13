@@ -1,7 +1,7 @@
 ; binary emission of stack address instructions on x86-64.
 test binemit
 set opt_level=none
-target x86_64 haswell
+target x86_64 legacy haswell
 
 ; The binary encodings can be verified with the command:
 ;

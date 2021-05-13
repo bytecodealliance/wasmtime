@@ -1,0 +1,711 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; F32CONST/F64CONST
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; FIXME: should use FZERO instruction
+; FIXME: should use out-of-line literal pool
+
+function %f32const_zero() -> f32 {
+block0:
+  v1 = f32const 0x0.0
+  return v1
+}
+
+; check:  bras %r1, 8 ; data.f32 0 ; le %f0, 0(%r1)
+; nextln: br %r14
+
+function %f64const_zero() -> f64 {
+block0:
+  v1 = f64const 0x0.0
+  return v1
+}
+
+; check:  bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
+; nextln: br %r14
+
+function %f32const_one() -> f32 {
+block0:
+  v1 = f32const 0x1.0
+  return v1
+}
+
+; check:  bras %r1, 8 ; data.f32 1 ; le %f0, 0(%r1)
+; nextln: br %r14
+
+function %f64const_one() -> f64 {
+block0:
+  v1 = f64const 0x1.0
+  return v1
+}
+
+; check:  bras %r1, 12 ; data.f64 1 ; ld %f0, 0(%r1)
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FADD
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fadd_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; check:  aebr %f0, %f2
+; nextln: br %r14
+
+function %fadd_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; check:  adbr %f0, %f2
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FSUB
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fsub_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; check:  sebr %f0, %f2
+; nextln: br %r14
+
+function %fsub_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; check:  sdbr %f0, %f2
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FMUL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fmul_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; check:  meebr %f0, %f2
+; nextln: br %r14
+
+function %fmul_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; check:  mdbr %f0, %f2
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FDIV
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fdiv_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; check:  debr %f0, %f2
+; nextln: br %r14
+
+function %fdiv_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; check:  ddbr %f0, %f2
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FMIN
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fmin_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; check:  wfminsb %f0, %f0, %f2, 1
+; nextln: br %r14
+
+function %fmin_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; check:  wfmindb %f0, %f0, %f2, 1
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FMAX
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fmax_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; check:  wfmaxsb %f0, %f0, %f2, 1
+; nextln: br %r14
+
+function %fmax_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; check:  wfmaxdb %f0, %f0, %f2, 1
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SQRT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %sqrt_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = sqrt v0
+  return v1
+}
+
+; check:  sqebr %f0, %f0
+; nextln: br %r14
+
+function %sqrt_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = sqrt v0
+  return v1
+}
+
+; check:  sqdbr %f0, %f0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FABS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fabs_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = fabs v0
+  return v1
+}
+
+; check:  lpebr %f0, %f0
+; nextln: br %r14
+
+function %fabs_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = fabs v0
+  return v1
+}
+
+; check:  lpdbr %f0, %f0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FNEG
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fneg_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = fneg v0
+  return v1
+}
+
+; check:  lcebr %f0, %f0
+; nextln: br %r14
+
+function %fneg_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = fneg v0
+  return v1
+}
+
+; check:  lcdbr %f0, %f0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FPROMOTE/FDEMOTE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fpromote_f32(f32) -> f64 {
+block0(v0: f32):
+  v1 = fpromote.f64 v0
+  return v1
+}
+
+; check:  ldebr %f0, %f0
+; nextln: br %r14
+
+function %fdemote_f64(f64) -> f32 {
+block0(v0: f64):
+  v1 = fdemote.f32 v0
+  return v1
+}
+
+; check:  ledbr %f0, %f0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; CEIL
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %ceil_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = ceil v0
+  return v1
+}
+
+; check:  fiebr %f0, %f0, 6
+; nextln: br %r14
+
+function %ceil_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = ceil v0
+  return v1
+}
+
+; check:  fidbr %f0, %f0, 6
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FLOOR
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %floor_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = floor v0
+  return v1
+}
+
+; check:  fiebr %f0, %f0, 7
+; nextln: br %r14
+
+function %floor_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = floor v0
+  return v1
+}
+
+; check:  fidbr %f0, %f0, 7
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; TRUNC
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %trunc_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = trunc v0
+  return v1
+}
+
+; check:  fiebr %f0, %f0, 5
+; nextln: br %r14
+
+function %trunc_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = trunc v0
+  return v1
+}
+
+; check:  fidbr %f0, %f0, 5
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; NEAREST
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %nearest_f32(f32) -> f32 {
+block0(v0: f32):
+  v1 = nearest v0
+  return v1
+}
+
+; check:  fiebr %f0, %f0, 4
+; nextln: br %r14
+
+function %nearest_f64(f64) -> f64 {
+block0(v0: f64):
+  v1 = nearest v0
+  return v1
+}
+
+; check:  fidbr %f0, %f0, 4
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FMA
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fma_f32(f32, f32, f32) -> f32 {
+block0(v0: f32, v1: f32, v2: f32):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; FIXME: regalloc
+
+; check:  maebr %f4, %f0, %f2
+; nextln: ler %f0, %f4
+; nextln: br %r14
+
+function %fma_f64(f64, f64, f64) -> f64 {
+block0(v0: f64, v1: f64, v2: f64):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; check:  madbr %f4, %f0, %f2
+; nextln: ldr %f0, %f4
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FCOPYSIGN
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fcopysign_f32(f32, f32) -> f32 {
+block0(v0: f32, v1: f32):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; check:  cpsdr %f0, %f2, %f0
+; nextln: br %r14
+
+function %fcopysign_f64(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; check:  cpsdr %f0, %f2, %f0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FCVT_TO_UINT/FCVT_TO_SINT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fcvt_to_uint_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; check:  cebr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: clfebr %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+function %fcvt_to_sint_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; check:  cebr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: cfebra %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+function %fcvt_to_uint_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; check:  cebr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: clgebr %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+function %fcvt_to_sint_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; check:  cebr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: cgebra %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+function %fcvt_to_uint_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; check:  cdbr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: clfdbr %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+function %fcvt_to_sint_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; check:  cdbr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: cfdbra %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+function %fcvt_to_uint_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; check:  cdbr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: clgdbr %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+function %fcvt_to_sint_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; check:  cdbr %f0, %f0
+; nextln: jno 6 ; trap
+; nextln: cgdbra %r2, 5, %f0, 0
+; nextln: jno 6 ; trap
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FCVT_FROM_UINT/FCVT_FROM_SINT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fcvt_from_uint_i32_f32(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; check:  celfbr %f0, 0, %r2, 0
+; nextln: br %r14
+
+function %fcvt_from_sint_i32_f32(i32) -> f32 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; check:  cefbra %f0, 0, %r2, 0
+; nextln: br %r14
+
+function %fcvt_from_uint_i64_f32(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f32 v0
+  return v1
+}
+
+; check:  celgbr %f0, 0, %r2, 0
+; nextln: br %r14
+
+function %fcvt_from_sint_i64_f32(i64) -> f32 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f32 v0
+  return v1
+}
+
+; check:  cegbra %f0, 0, %r2, 0
+; nextln: br %r14
+
+function %fcvt_from_uint_i32_f64(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; check:  cdlfbr %f0, 0, %r2, 0
+; nextln: br %r14
+
+function %fcvt_from_sint_i32_f64(i32) -> f64 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; check:  cdfbra %f0, 0, %r2, 0
+; nextln: br %r14
+
+function %fcvt_from_uint_i64_f64(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f64 v0
+  return v1
+}
+
+; check:  cdlgbr %f0, 0, %r2, 0
+; nextln: br %r14
+
+function %fcvt_from_sint_i64_f64(i64) -> f64 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f64 v0
+  return v1
+}
+
+; check:  cdgbra %f0, 0, %r2, 0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FCVT_TO_UINT_SAT/FCVT_TO_SINT_SAT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fcvt_to_uint_sat_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; check:  clfebr %r2, 5, %f0, 0
+; nextln: cebr %f0, %f0
+; nextln: lochio %r2, 0
+; nextln: br %r14
+
+function %fcvt_to_sint_sat_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; check:  cfebra %r2, 5, %f0, 0
+; nextln: cebr %f0, %f0
+; nextln: lochio %r2, 0
+; nextln: br %r14
+
+function %fcvt_to_uint_sat_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; check:  clgebr %r2, 5, %f0, 0
+; nextln: cebr %f0, %f0
+; nextln: locghio %r2, 0
+; nextln: br %r14
+
+function %fcvt_to_sint_sat_f32_i64(f32) -> i64 {
+block0(v0: f32):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; check:  cgebra %r2, 5, %f0, 0
+; nextln: cebr %f0, %f0
+; nextln: locghio %r2, 0
+; nextln: br %r14
+
+function %fcvt_to_uint_sat_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; check:  clfdbr %r2, 5, %f0, 0
+; nextln: cdbr %f0, %f0
+; nextln: lochio %r2, 0
+; nextln: br %r14
+
+function %fcvt_to_sint_sat_f64_i32(f64) -> i32 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; check:  cfdbra %r2, 5, %f0, 0
+; nextln: cdbr %f0, %f0
+; nextln: lochio %r2, 0
+; nextln: br %r14
+
+function %fcvt_to_uint_sat_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; check:  clgdbr %r2, 5, %f0, 0
+; nextln: cdbr %f0, %f0
+; nextln: locghio %r2, 0
+; nextln: br %r14
+
+function %fcvt_to_sint_sat_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; check:  cgdbra %r2, 5, %f0, 0
+; nextln: cdbr %f0, %f0
+; nextln: locghio %r2, 0
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; BITCAST
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %bitcast_i64_f64(i64) -> f64 {
+block0(v0: i64):
+  v1 = bitcast.f64 v0
+  return v1
+}
+
+; check:  ldgr %f0, %r2
+; nextln: br %r14
+
+function %bitcast_f64_i64(f64) -> i64 {
+block0(v0: f64):
+  v1 = bitcast.i64 v0
+  return v1
+}
+
+; check:  lgdr %r2, %f0
+; nextln: br %r14
+
+function %bitcast_i32_f32(i32) -> f32 {
+block0(v0: i32):
+  v1 = bitcast.f32 v0
+  return v1
+}
+
+; check:  sllg %r2, %r2, 32
+; nextln: ldgr %f0, %r2
+; nextln: br %r14
+
+function %bitcast_f32_i32(f32) -> i32 {
+block0(v0: f32):
+  v1 = bitcast.i32 v0
+  return v1
+}
+
+; check:  lgdr %r2, %f0
+; nextln: srlg %r2, %r2, 32
+; nextln: br %r14

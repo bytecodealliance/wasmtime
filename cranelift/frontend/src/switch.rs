@@ -273,6 +273,7 @@ impl Switch {
                         .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::max_value() as i64);
                 bx.ins().brnz(bigger_than_u32, otherwise, &[]);
                 bx.ins().jump(new_block, &[]);
+                bx.seal_block(new_block);
                 bx.switch_to_block(new_block);
 
                 // Cast to u32, as br_table is not implemented for integers bigger than 32bits.
@@ -542,38 +543,47 @@ block4:
 
     #[test]
     fn switch_seal_generated_blocks() {
-        let keys = [0, 1, 2, 10, 11, 12, 20, 30, 40, 50];
+        let cases = &[vec![0, 1, 2], vec![0, 1, 2, 10, 11, 12, 20, 30, 40, 50]];
 
-        let mut func = Function::new();
-        let mut builder_ctx = FunctionBuilderContext::new();
-        let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
-
-        let root_block = builder.create_block();
-        let default_block = builder.create_block();
-        let mut switch = Switch::new();
-
-        let case_blocks = keys
-            .iter()
-            .map(|key| {
-                let block = builder.create_block();
-                switch.set_entry(*key, block);
-                block
-            })
-            .collect::<Vec<_>>();
-
-        builder.seal_block(root_block);
-        builder.switch_to_block(root_block);
-
-        let val = builder.ins().iconst(types::I32, 1);
-        switch.emit(&mut builder, val, default_block);
-
-        for &block in case_blocks.iter().chain(std::iter::once(&default_block)) {
-            builder.seal_block(block);
-            builder.switch_to_block(block);
-            builder.ins().return_(&[]);
+        for case in cases {
+            for typ in &[types::I8, types::I16, types::I32, types::I64, types::I128] {
+                eprintln!("Testing {:?} with keys: {:?}", typ, case);
+                do_case(case, *typ);
+            }
         }
 
-        builder.finalize(); // Will panic if some blocks are not sealed
+        fn do_case(keys: &[u128], typ: Type) {
+            let mut func = Function::new();
+            let mut builder_ctx = FunctionBuilderContext::new();
+            let mut builder = FunctionBuilder::new(&mut func, &mut builder_ctx);
+
+            let root_block = builder.create_block();
+            let default_block = builder.create_block();
+            let mut switch = Switch::new();
+
+            let case_blocks = keys
+                .iter()
+                .map(|key| {
+                    let block = builder.create_block();
+                    switch.set_entry(*key, block);
+                    block
+                })
+                .collect::<Vec<_>>();
+
+            builder.seal_block(root_block);
+            builder.switch_to_block(root_block);
+
+            let val = builder.ins().iconst(typ, 1);
+            switch.emit(&mut builder, val, default_block);
+
+            for &block in case_blocks.iter().chain(std::iter::once(&default_block)) {
+                builder.seal_block(block);
+                builder.switch_to_block(block);
+                builder.ins().return_(&[]);
+            }
+
+            builder.finalize(); // Will panic if some blocks are not sealed
+        }
     }
 
     #[test]

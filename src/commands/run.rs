@@ -1,8 +1,7 @@
 //! The module that implements the `wasmtime run` command.
 
-use crate::{init_file_per_thread_logger, CommonOptions};
+use crate::{CommonOptions, WasiModules};
 use anyhow::{bail, Context as _, Result};
-use cap_std::fs::Dir;
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -11,9 +10,8 @@ use std::{
     process,
 };
 use structopt::{clap::AppSettings, StructOpt};
-use wasi_cap_std_sync::WasiCtxBuilder;
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::Wasi;
+use wasmtime_wasi::sync::{Dir, Wasi, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
@@ -27,9 +25,8 @@ use wasmtime_wasi_crypto::{
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
-        Some("help") | Some("config") | Some("run") | Some("wasm2obj") | Some("wast") => {
-            Err("module name cannot be the same as a subcommand".into())
-        }
+        Some("help") | Some("config") | Some("run") | Some("wasm2obj") | Some("wast")
+        | Some("compile") => Err("module name cannot be the same as a subcommand".into()),
         _ => Ok(s.into()),
     }
 }
@@ -68,12 +65,22 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     Ok((parts[0].into(), parts[1].into()))
 }
 
+lazy_static::lazy_static! {
+    static ref AFTER_HELP: String = {
+        crate::FLAG_EXPLANATIONS.to_string()
+    };
+}
+
 /// Runs a WebAssembly module
 #[derive(StructOpt)]
-#[structopt(name = "run", setting = AppSettings::TrailingVarArg)]
+#[structopt(name = "run", setting = AppSettings::TrailingVarArg, after_help = AFTER_HELP.as_str())]
 pub struct RunCommand {
     #[structopt(flatten)]
     common: CommonOptions,
+
+    /// Allow unknown exports when running commands.
+    #[structopt(long = "allow-unknown-exports")]
+    allow_unknown_exports: bool,
 
     /// Grant access to the given host directory
     #[structopt(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
@@ -95,7 +102,7 @@ pub struct RunCommand {
     #[structopt(
         index = 1,
         required = true,
-        value_name = "WASM_MODULE",
+        value_name = "MODULE",
         parse(try_from_os_str = parse_module),
     )]
     module: PathBuf,
@@ -126,14 +133,9 @@ pub struct RunCommand {
 impl RunCommand {
     /// Executes the command.
     pub fn execute(&self) -> Result<()> {
-        if self.common.log_to_files {
-            let prefix = "wasmtime.dbg.";
-            init_file_per_thread_logger(prefix);
-        } else {
-            pretty_env_logger::init();
-        }
+        self.common.init_logging();
 
-        let mut config = self.common.config()?;
+        let mut config = self.common.config(None)?;
         if self.wasm_timeout.is_some() {
             config.interruptable(true);
         }
@@ -145,7 +147,15 @@ impl RunCommand {
         let argv = self.compute_argv();
 
         let mut linker = Linker::new(&store);
-        populate_with_wasi(&mut linker, preopen_dirs, &argv, &self.vars)?;
+        linker.allow_unknown_exports(self.allow_unknown_exports);
+
+        populate_with_wasi(
+            &mut linker,
+            preopen_dirs,
+            &argv,
+            &self.vars,
+            &self.common.wasi_modules.unwrap_or(WasiModules::default()),
+        )?;
 
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
@@ -332,10 +342,10 @@ impl RunCommand {
             match result {
                 Val::I32(i) => println!("{}", i),
                 Val::I64(i) => println!("{}", i),
-                Val::F32(f) => println!("{}", f),
-                Val::F64(f) => println!("{}", f),
+                Val::F32(f) => println!("{}", f32::from_bits(f)),
+                Val::F64(f) => println!("{}", f64::from_bits(f)),
                 Val::ExternRef(_) => println!("<externref>"),
-                Val::FuncRef(_) => println!("<externref>"),
+                Val::FuncRef(_) => println!("<funcref>"),
                 Val::V128(i) => println!("{}", i),
             }
         }
@@ -350,6 +360,7 @@ fn populate_with_wasi(
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
     vars: &[(String, String)],
+    wasi_modules: &WasiModules,
 ) -> Result<()> {
     // Add the current snapshot to the linker.
     let mut builder = WasiCtxBuilder::new();
@@ -359,25 +370,40 @@ fn populate_with_wasi(
         builder = builder.preopened_dir(dir, name)?;
     }
 
-    Wasi::new(linker.store(), builder.build()?).add_to_linker(linker)?;
-
-    #[cfg(feature = "wasi-nn")]
-    {
-        use std::cell::RefCell;
-        use std::rc::Rc;
-        let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
-        wasi_nn.add_to_linker(linker)?;
+    if wasi_modules.wasi_common {
+        Wasi::new(linker.store(), builder.build()?).add_to_linker(linker)?;
     }
 
-    #[cfg(feature = "wasi-crypto")]
-    {
-        use std::cell::RefCell;
-        use std::rc::Rc;
-        let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
-        WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-        WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-        WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-        WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
+    if wasi_modules.wasi_nn {
+        #[cfg(not(feature = "wasi-nn"))]
+        {
+            bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-nn")]
+        {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
+            wasi_nn.add_to_linker(linker)?;
+        }
+    }
+
+    if wasi_modules.wasi_crypto {
+        #[cfg(not(feature = "wasi-crypto"))]
+        {
+            bail!("Cannot enable wasi-crypto when the binary is not compiled with this feature.");
+        }
+        #[cfg(feature = "wasi-crypto")]
+        {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
+            WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+            WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone())
+                .add_to_linker(linker)?;
+            WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
+            WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
+        }
     }
 
     Ok(())

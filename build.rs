@@ -155,11 +155,8 @@ fn write_testsuite_tests(
     let testname = extract_name(path);
 
     writeln!(out, "#[test]")?;
-    if experimental_x64_should_panic(testsuite, &testname, strategy) {
-        writeln!(
-            out,
-            r#"#[cfg_attr(feature = "experimental_x64", should_panic)]"#
-        )?;
+    if x64_should_panic(testsuite, &testname, strategy) {
+        writeln!(out, r#"#[should_panic]"#)?;
     } else if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
     } else if pooling {
@@ -186,10 +183,10 @@ fn write_testsuite_tests(
     Ok(())
 }
 
-/// For experimental_x64 backend features that are not supported yet, mark tests as panicking, so
+/// For x64 backend features that are not supported yet, mark tests as panicking, so
 /// they stop "passing" once the features are properly implemented.
-fn experimental_x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    if !cfg!(feature = "experimental_x64") || strategy != "Cranelift" {
+fn x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
+    if !platform_is_x64() || strategy != "Cranelift" {
         return false;
     }
 
@@ -222,12 +219,10 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             _ => (),
         },
         "Cranelift" => match (testsuite, testname) {
-            // TODO(#1886): Ignore reference types tests if this isn't x64,
-            // because Cranelift only supports reference types on x64.
-            ("reference_types", _) => {
-                return env::var("CARGO_CFG_TARGET_ARCH").unwrap() != "x86_64";
-            }
+            // No simd support yet for s390x.
+            ("simd", _) if platform_is_s390x() => return true,
 
+            ("simd", _) if cfg!(feature = "old-x86-backend") => return true, // skip all SIMD tests on old backend.
             // These are new instructions that are not really implemented in any backend.
             ("simd", "simd_i8x16_arith2")
             | ("simd", "simd_conversions")
@@ -240,26 +235,18 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("simd", "simd_i64x2_extmul_i32x4")
             | ("simd", "simd_int_to_int_extend") => return true,
 
-            // These are only implemented on x64.
-            ("simd", "simd_i64x2_arith2") | ("simd", "simd_boolean") => {
-                return !cfg!(feature = "experimental_x64")
-            }
-
-            // These are only implemented on aarch64 and x64.
-            ("simd", "simd_i64x2_cmp")
-            | ("simd", "simd_f32x4_pmin_pmax")
-            | ("simd", "simd_f64x2_pmin_pmax")
-            | ("simd", "simd_f32x4_rounding")
-            | ("simd", "simd_f64x2_rounding")
-            | ("simd", "simd_i32x4_dot_i16x8") => {
-                return !(cfg!(feature = "experimental_x64")
-                    || env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "aarch64")
-            }
-
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
     }
 
     false
+}
+
+fn platform_is_x64() -> bool {
+    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "x86_64"
+}
+
+fn platform_is_s390x() -> bool {
+    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
 }

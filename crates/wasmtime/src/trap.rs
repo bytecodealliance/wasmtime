@@ -161,7 +161,7 @@ impl Trap {
                 maybe_interrupted,
             } => {
                 let mut code = store
-                    .frame_info()
+                    .modules()
                     .borrow()
                     .lookup_trap_info(pc)
                     .map(|info| info.trap_code)
@@ -182,7 +182,7 @@ impl Trap {
         }
     }
 
-    fn new_wasm(
+    pub(crate) fn new_wasm(
         store: Option<&Store>,
         trap_pc: Option<usize>,
         code: ir::TrapCode,
@@ -239,7 +239,7 @@ impl Trap {
                     // (the call instruction) so we subtract one as the lookup.
                     let pc_to_lookup = if Some(pc) == trap_pc { pc } else { pc - 1 };
                     if let Some((info, has_unparsed_debuginfo)) =
-                        store.frame_info().borrow().lookup_frame_info(pc_to_lookup)
+                        store.modules().borrow().lookup_frame_info(pc_to_lookup)
                     {
                         wasm_trace.push(info);
 

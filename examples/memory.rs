@@ -75,7 +75,7 @@ fn main() -> Result<()> {
 
     println!("Creating stand-alone memory...");
     let memorytype = MemoryType::new(Limits::new(5, Some(5)));
-    let memory2 = Memory::new(&wasmtime_store, memorytype);
+    let memory2 = Memory::new(&wasmtime_store, memorytype)?;
     assert_eq!(memory2.size(), 5);
     assert!(memory2.grow(1).is_err());
     assert!(memory2.grow(0).is_ok());
