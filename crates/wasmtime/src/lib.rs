@@ -338,6 +338,7 @@ fn _assert_send_sync() {
     _assert::<StoreContextMut<'_, ()>>();
     _assert::<Caller<'_, ()>>();
     _assert::<Linker<()>>();
+    _assert::<Linker<*mut u8>>();
     _assert::<ExternRef>();
 
     #[cfg(feature = "async")]
