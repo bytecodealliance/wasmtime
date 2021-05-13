@@ -183,7 +183,7 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn allow_unknown_exports(&mut self, allow: bool) -> &mut Linker {
+    pub fn allow_unknown_exports(&mut self, allow: bool) -> &mut Self {
         self.allow_unknown_exports = allow;
         self
     }
