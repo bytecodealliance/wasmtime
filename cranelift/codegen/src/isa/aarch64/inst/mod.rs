@@ -30,6 +30,8 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
+use crate::data_value::DataValue;
+
 pub mod unwind;
 
 #[cfg(test)]
@@ -1397,10 +1399,10 @@ impl Inst {
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
-    pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
+    pub fn load_fp_constant32<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
         rd: Writable<Reg>,
         value: u32,
-        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         // Note that we must make sure that all bits outside the lowest 32 are set to 0
         // because this function is also used to load wider constants (that have zeros
@@ -1415,7 +1417,7 @@ impl Inst {
         } else {
             // TODO: use FMOV immediate form when `value` has sufficiently few mantissa/exponent
             // bits.
-            let tmp = alloc_tmp(I32);
+            let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
             let mut insts = Inst::load_constant(tmp, value as u64);
 
             insts.push(Inst::MovToFpu {
@@ -1429,21 +1431,21 @@ impl Inst {
     }
 
     /// Create instructions that load a 64-bit floating-point constant.
-    pub fn load_fp_constant64<F: FnMut(Type) -> Writable<Reg>>(
+    pub fn load_fp_constant64<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
         rd: Writable<Reg>,
         const_data: u64,
-        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         // Note that we must make sure that all bits outside the lowest 64 are set to 0
         // because this function is also used to load wider constants (that have zeros
         // in their most significant bits).
         if let Ok(const_data) = u32::try_from(const_data) {
-            Inst::load_fp_constant32(rd, const_data, alloc_tmp)
+            Inst::load_fp_constant32(ctx, rd, const_data)
         // TODO: use FMOV immediate form when `const_data` has sufficiently few mantissa/exponent
         // bits.  Also, treat it as half of a 128-bit vector and consider replicated
         // patterns. Scalar MOVI might also be an option.
         } else if const_data & (u32::MAX as u64) == 0 {
-            let tmp = alloc_tmp(I64);
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
             let mut insts = Inst::load_constant(tmp, const_data);
 
             insts.push(Inst::MovToFpu {
@@ -1459,21 +1461,30 @@ impl Inst {
     }
 
     /// Create instructions that load a 128-bit vector constant.
-    pub fn load_fp_constant128<F: FnMut(Type) -> Writable<Reg>>(
+    pub fn load_fp_constant128<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
         rd: Writable<Reg>,
         const_data: u128,
-        alloc_tmp: F,
     ) -> SmallVec<[Inst; 5]> {
+        if const_data == 0 {
+            return smallvec![Inst::VecDupImm {
+                rd,
+                imm: ASIMDMovModImm::zero(ScalarSize::Size8),
+                invert: false,
+                size: VectorSize::Size8x16,
+            }];
+        }
+
         if let Ok(const_data) = u64::try_from(const_data) {
-            SmallVec::from(&Inst::load_fp_constant64(rd, const_data, alloc_tmp)[..])
+            SmallVec::from(&Inst::load_fp_constant64(ctx, rd, const_data)[..])
         } else if let Some((pattern, size)) =
             Inst::get_replicated_vector_pattern(const_data, ScalarSize::Size64)
         {
             Inst::load_replicated_vector_pattern(
+                ctx,
                 rd,
                 pattern,
                 VectorSize::from_lane_size(size, true),
-                alloc_tmp,
             )
         } else {
             smallvec![Inst::LoadFpuConst128 { rd, const_data }]
@@ -1509,11 +1520,11 @@ impl Inst {
 
     /// Create instructions that load a vector constant consisting of elements with
     /// the same value.
-    pub fn load_replicated_vector_pattern<F: FnMut(Type) -> Writable<Reg>>(
+    pub fn load_replicated_vector_pattern<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
         rd: Writable<Reg>,
         pattern: u64,
         size: VectorSize,
-        mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 5]> {
         let lane_size = size.lane_size();
         let widen_32_bit_pattern = |pattern, lane_size| {
@@ -1565,9 +1576,10 @@ impl Inst {
         } else if let Some(imm) = ASIMDFPModImm::maybe_from_u64(pattern, lane_size) {
             smallvec![Inst::VecDupFPImm { rd, imm, size }]
         } else {
-            let tmp = alloc_tmp(I64);
-            let mut insts = SmallVec::from(&Inst::load_constant(tmp, pattern)[..]);
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let mut insts = SmallVec::new();
 
+            insts.extend(Inst::load_constant(tmp, pattern));
             insts.push(Inst::VecDup {
                 rd,
                 rn: tmp.to_reg(),
@@ -3058,24 +3070,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs.only_reg();
-        match ty {
-            F64 => Inst::load_fp_constant64(to_reg.unwrap(), value as u64, alloc_tmp),
-            F32 => Inst::load_fp_constant32(to_reg.unwrap(), value as u32, alloc_tmp),
-            B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
-                Inst::load_constant(to_reg.unwrap(), value as u64)
-            }
-            I128 => Inst::load_constant128(to_regs, value),
-            _ => panic!("Cannot generate constant for type: {}", ty),
-        }
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
         if preferred_size == 0 {
             return Inst::Nop0;
@@ -3151,6 +3145,34 @@ impl MachInst for Inst {
         match self {
             Inst::ValueLabelMarker { label, reg } => Some((*label, *reg)),
             _ => None,
+        }
+    }
+}
+
+//=============================================================================
+// Instructions: Const Gen
+// TODO: Implement PooledConstantGenerator
+impl ConstantGenerator for Inst {
+    fn gen_constant<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]> {
+        let to_reg = to_regs.only_reg();
+        match value {
+            DataValue::V128(_) => {
+                let insts = Inst::load_fp_constant128(ctx, to_reg.unwrap(), value.bits());
+                SmallVec::from(&insts[..])
+            }
+            DataValue::F64(f) => Inst::load_fp_constant64(ctx, to_reg.unwrap(), f.bits()),
+            DataValue::F32(f) => Inst::load_fp_constant32(ctx, to_reg.unwrap(), f.bits()),
+            DataValue::I128(value) => Inst::load_constant128(to_regs, value as u128),
+            value if value.size() <= 64 && (value.is_integer() || value.is_bool()) => {
+                let size_mask = (1 << value.size()) - 1;
+                let bits = (value.bits() & size_mask) as u64;
+                Inst::load_constant(to_reg.unwrap(), bits)
+            }
+            _ => panic!("Cannot generate constant value: {:?}", value),
         }
     }
 }
@@ -4314,7 +4336,8 @@ impl Inst {
                     ret.push_str(&add.show_rru(mb_rru));
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    for inst in Inst::load_constant(tmp, abs_offset).into_iter() {
+                    let insts = Inst::load_constant(tmp, abs_offset);
+                    for inst in insts.into_iter() {
                         ret.push_str(&inst.show_rru(mb_rru));
                     }
                     let add = Inst::AluRRR {

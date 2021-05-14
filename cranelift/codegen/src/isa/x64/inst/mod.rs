@@ -1,7 +1,7 @@
 //! This module defines x86_64-specific machine instruction types.
 
 use crate::binemit::{CodeOffset, StackMap};
-use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
+use crate::ir::{types, ConstantData, ExternalName, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
 use crate::isa::unwind::UnwindInst;
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::settings as x64_settings;
@@ -25,6 +25,7 @@ mod emit_tests;
 pub mod regs;
 pub mod unwind;
 
+use crate::data_value::DataValue;
 use args::*;
 use regs::{create_reg_universe_systemv, show_ireg_sized};
 
@@ -1213,7 +1214,10 @@ impl Inst {
                 op, src, dst, imm, ..
             } => {
                 src.to_reg() == Some(dst.to_reg())
-                    && (*op == SseOpcode::Cmppd || *op == SseOpcode::Cmpps)
+                    && (*op == SseOpcode::Cmppd
+                        || *op == SseOpcode::Cmpps
+                        || *op == SseOpcode::Cmpsd
+                        || *op == SseOpcode::Cmpss)
                     && *imm == FcmpImm::Equal.encode()
             }
 
@@ -1284,6 +1288,145 @@ impl Inst {
             _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Pxor, from, to),
             _ => unimplemented!("unimplemented type for Inst::xor: {}", ty),
         }
+    }
+}
+
+//=============================================================================
+// Instructions: Const Gen
+impl PooledConstantGenerator for Inst {
+    fn gen_constant_in_place<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]> {
+        let mut ret = SmallVec::new();
+
+        if value.is_integer() && value.size() == 128 {
+            ret.push(Inst::imm(
+                OperandSize::Size64,
+                value.bits() as u64,
+                to_regs.regs()[0],
+            ));
+            ret.push(Inst::imm(
+                OperandSize::Size64,
+                (value.bits() >> 64) as u64,
+                to_regs.regs()[1],
+            ));
+            return ret;
+        }
+
+        let to_reg = to_regs.only_reg().expect("unexpected multi reg value");
+        match value {
+            DataValue::F32(value) => match value.bits() {
+                0 => ret.push(Inst::xmm_rm_r(
+                    SseOpcode::Xorps,
+                    RegMem::from(to_reg),
+                    to_reg,
+                )),
+                0xffff_ffff => ret.push(Inst::xmm_rm_r_imm(
+                    SseOpcode::Cmpss,
+                    RegMem::from(to_reg),
+                    to_reg,
+                    FcmpImm::Equal.encode(),
+                    OperandSize::Size32,
+                )),
+                bits => {
+                    let tmp = ctx.alloc_tmp(types::I32).only_reg().unwrap();
+                    ret.push(Inst::imm(OperandSize::Size32, bits as u64, tmp));
+                    ret.push(Inst::gpr_to_xmm(
+                        SseOpcode::Movd,
+                        RegMem::from(tmp),
+                        OperandSize::Size32,
+                        to_reg,
+                    ));
+                }
+            },
+            DataValue::F64(value) => match value.bits() {
+                0 => ret.push(Inst::xmm_rm_r(
+                    SseOpcode::Xorpd,
+                    RegMem::from(to_reg),
+                    to_reg,
+                )),
+                0xffff_ffff_ffff_ffff => ret.push(Inst::xmm_rm_r_imm(
+                    SseOpcode::Cmpsd,
+                    RegMem::from(to_reg),
+                    to_reg,
+                    FcmpImm::Equal.encode(),
+                    OperandSize::Size64,
+                )),
+                bits => {
+                    let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                    ret.push(Inst::imm(OperandSize::Size64, bits, tmp));
+                    ret.push(Inst::gpr_to_xmm(
+                        SseOpcode::Movq,
+                        RegMem::from(tmp),
+                        OperandSize::Size64,
+                        to_reg,
+                    ));
+                }
+            },
+            value if value.is_integer() || value.is_bool() => {
+                debug_assert!(value.size() <= 64);
+                // Immediates must be 32 or 64 bits.
+                // Smaller types are widened.
+                let size = match OperandSize::from_ty(value.ty()) {
+                    OperandSize::Size64 => OperandSize::Size64,
+                    _ => OperandSize::Size32,
+                };
+
+                match value.bits() {
+                    0 => ret.push(Inst::alu_rmi_r(
+                        size,
+                        AluRmiROpcode::Xor,
+                        RegMemImm::reg(to_reg.to_reg()),
+                        to_reg,
+                    )),
+                    _ => ret.push(Inst::imm(size, value.bits() as u64, to_reg)),
+                }
+            }
+            _ => unimplemented!(),
+        };
+        ret
+    }
+
+    fn gen_constant_in_pool<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]> {
+        match value {
+            DataValue::V128(v) => {
+                let to_reg = to_regs.only_reg().unwrap();
+                let inst = match v {
+                    v if v == [0; 16] => {
+                        Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::from(to_reg), to_reg)
+                    }
+                    v if v == [0xff; 16] => {
+                        Inst::xmm_rm_r(SseOpcode::Pcmpeqw, RegMem::from(to_reg), to_reg)
+                    }
+                    _ => {
+                        let wrapped_value = ConstantData::from(v.to_vec());
+                        let handle = ctx.use_constant(VCodeConstantData::Generated(wrapped_value));
+                        // TODO It would be good to inform xmm_load_const that the constant will be
+                        // stored at an aligned location so the aligned MOV variants can be used.
+                        // Also, here we pass the default V128 type, I8X16, instead of the more
+                        // specific type.
+                        Inst::xmm_load_const(handle, to_reg, value.ty())
+                    }
+                };
+                smallvec![inst]
+            }
+
+            // There is no technical reason why constants of various types cannot now be loaded from
+            // memory; this is left unimplemented until the feature is needed.
+            //
+            // If you do implement something else here, make sure to update `must_generate_in_pool`
+            _ => unimplemented!("only vectors are implemented"),
+        }
+    }
+
+    fn must_generate_in_pool<C: LowerCtx<I = Self>>(_ctx: &C, value: &DataValue) -> bool {
+        value.is_vector()
     }
 }
 
@@ -2732,101 +2875,6 @@ impl MachInst for Inst {
 
     fn gen_jump(label: MachLabel) -> Inst {
         Inst::jmp_known(label)
-    }
-
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        mut alloc_tmp: F,
-    ) -> SmallVec<[Self; 4]> {
-        let mut ret = SmallVec::new();
-        if ty == types::I128 {
-            ret.push(Inst::imm(
-                OperandSize::Size64,
-                value as u64,
-                to_regs.regs()[0],
-            ));
-            ret.push(Inst::imm(
-                OperandSize::Size64,
-                (value >> 64) as u64,
-                to_regs.regs()[1],
-            ));
-        } else {
-            let to_reg = to_regs
-                .only_reg()
-                .expect("multi-reg values not supported on x64");
-            if ty == types::F32 {
-                if value == 0 {
-                    ret.push(Inst::xmm_rm_r(
-                        SseOpcode::Xorps,
-                        RegMem::reg(to_reg.to_reg()),
-                        to_reg,
-                    ));
-                } else {
-                    let tmp = alloc_tmp(types::I32);
-                    ret.push(Inst::imm(OperandSize::Size32, value as u64, tmp));
-
-                    ret.push(Inst::gpr_to_xmm(
-                        SseOpcode::Movd,
-                        RegMem::reg(tmp.to_reg()),
-                        OperandSize::Size32,
-                        to_reg,
-                    ));
-                }
-            } else if ty == types::F64 {
-                if value == 0 {
-                    ret.push(Inst::xmm_rm_r(
-                        SseOpcode::Xorpd,
-                        RegMem::reg(to_reg.to_reg()),
-                        to_reg,
-                    ));
-                } else {
-                    let tmp = alloc_tmp(types::I64);
-                    ret.push(Inst::imm(OperandSize::Size64, value as u64, tmp));
-
-                    ret.push(Inst::gpr_to_xmm(
-                        SseOpcode::Movq,
-                        RegMem::reg(tmp.to_reg()),
-                        OperandSize::Size64,
-                        to_reg,
-                    ));
-                }
-            } else {
-                // Must be an integer type.
-                debug_assert!(
-                    ty == types::B1
-                        || ty == types::I8
-                        || ty == types::B8
-                        || ty == types::I16
-                        || ty == types::B16
-                        || ty == types::I32
-                        || ty == types::B32
-                        || ty == types::I64
-                        || ty == types::B64
-                        || ty == types::R32
-                        || ty == types::R64
-                );
-                // Immediates must be 32 or 64 bits.
-                // Smaller types are widened.
-                let size = match OperandSize::from_ty(ty) {
-                    OperandSize::Size64 => OperandSize::Size64,
-                    _ => OperandSize::Size32,
-                };
-                if value == 0 {
-                    ret.push(Inst::alu_rmi_r(
-                        size,
-                        AluRmiROpcode::Xor,
-                        RegMemImm::reg(to_reg.to_reg()),
-                        to_reg,
-                    ));
-                } else {
-                    let value = value as u64;
-                    ret.push(Inst::imm(size, value.into(), to_reg));
-                }
-            }
-        }
-        ret
     }
 
     fn reg_universe(flags: &Flags) -> RealRegUniverse {

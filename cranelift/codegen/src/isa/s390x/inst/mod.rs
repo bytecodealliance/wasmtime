@@ -26,6 +26,8 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
+use crate::data_value::DataValue;
+
 pub mod unwind;
 
 #[cfg(test)]
@@ -2195,42 +2197,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        _alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs
-            .only_reg()
-            .expect("multi-reg values not supported yet");
-        let value = value as u64;
-        match ty {
-            types::F64 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_fp_constant64(to_reg, f64::from_bits(value)));
-                ret
-            }
-            types::F32 => {
-                let mut ret = SmallVec::new();
-                ret.push(Inst::load_fp_constant32(
-                    to_reg,
-                    f32::from_bits(value as u32),
-                ));
-                ret
-            }
-            types::I64 | types::B64 | types::R64 => Inst::load_constant64(to_reg, value),
-            types::B1
-            | types::I8
-            | types::B8
-            | types::I16
-            | types::B16
-            | types::I32
-            | types::B32 => Inst::load_constant32(to_reg, value as u32),
-            _ => unreachable!(),
-        }
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
         if preferred_size == 0 {
             Inst::Nop0
@@ -2305,6 +2271,46 @@ impl MachInst for Inst {
         match self {
             Inst::ValueLabelMarker { label, reg } => Some((*label, *reg)),
             _ => None,
+        }
+    }
+}
+
+//=============================================================================
+// Instructions: Const Gen
+// TODO: Implement PooledConstantGenerator
+impl ConstantGenerator for Inst {
+    fn gen_constant<C: LowerCtx<I = Self>>(
+        _ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]> {
+        let to_reg = to_regs
+            .only_reg()
+            .expect("multi-reg values not supported yet");
+        match value {
+            DataValue::F64(value) => {
+                let mut ret = SmallVec::new();
+                ret.push(Inst::load_fp_constant64(
+                    to_reg,
+                    f64::from_bits(value.bits()),
+                ));
+                ret
+            }
+            DataValue::F32(value) => {
+                let mut ret = SmallVec::new();
+                ret.push(Inst::load_fp_constant32(
+                    to_reg,
+                    f32::from_bits(value.bits()),
+                ));
+                ret
+            }
+            value if value.size() == 64 => Inst::load_constant64(to_reg, value.bits() as u64),
+            value if value.size() <= 32 => {
+                let size_mask = (1 << value.size()) - 1;
+                let bits = (value.bits() & size_mask) as u32;
+                Inst::load_constant32(to_reg, bits)
+            }
+            _ => unimplemented!(),
         }
     }
 }

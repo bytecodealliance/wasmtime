@@ -30,15 +30,39 @@ pub enum DataValue {
 }
 
 impl DataValue {
-    /// Try to cast an immediate integer (a wrapped `i64` on most Cranelift instructions) to the
-    /// given Cranelift [Type].
-    pub fn from_integer(imm: i64, ty: Type) -> Result<DataValue, DataValueCastFailure> {
+    /// Attempts to create a `DataValue` from an immediate and a Cranelift [Type].   
+    pub fn from_value(imm: u128, ty: Type) -> Result<DataValue, DataValueCastFailure> {
         match ty {
+            types::F32 => Ok(DataValue::F32(Ieee32::with_bits(imm as u32))),
+            types::F64 => Ok(DataValue::F64(Ieee64::with_bits(imm as u64))),
             types::I8 => Ok(DataValue::I8(imm as i8)),
             types::I16 => Ok(DataValue::I16(imm as i16)),
-            types::I32 => Ok(DataValue::I32(imm as i32)),
-            types::I64 => Ok(DataValue::I64(imm)),
-            _ => Err(DataValueCastFailure::FromInteger(imm, ty)),
+            types::I32 | types::R32 => Ok(DataValue::I32(imm as i32)),
+            types::I64 | types::R64 => Ok(DataValue::I64(imm as i64)),
+            types::I128 => Ok(DataValue::I128(imm as i128)),
+            ty if ty.is_bool() => Ok(DataValue::B(imm != 0)),
+            _ => Err(DataValueCastFailure::FromInteger(imm as i128, ty)),
+        }
+    }
+
+    /// Return a bitwise representation of this type.
+    pub fn bits(&self) -> u128 {
+        match self {
+            DataValue::B(true) => u128::MAX,
+            DataValue::B(false) => 0u128,
+            DataValue::I8(v) => *v as u128,
+            DataValue::U8(v) => *v as u128,
+            DataValue::I16(v) => *v as u128,
+            DataValue::U16(v) => *v as u128,
+            DataValue::I32(v) => *v as u128,
+            DataValue::U32(v) => *v as u128,
+            DataValue::F32(v) => v.bits() as u128,
+            DataValue::I64(v) => *v as u128,
+            DataValue::U64(v) => *v as u128,
+            DataValue::F64(v) => v.bits() as u128,
+            DataValue::I128(v) => *v as u128,
+            DataValue::U128(v) => *v,
+            DataValue::V128(v) => u128::from_le_bytes(*v),
         }
     }
 
@@ -54,6 +78,51 @@ impl DataValue {
             DataValue::F32(_) => types::F32,
             DataValue::F64(_) => types::F64,
             DataValue::V128(_) => types::I8X16, // A default type.
+        }
+    }
+
+    /// Returns the size of this type in bits
+    pub fn size(&self) -> usize {
+        match self {
+            DataValue::B(_) => 1,
+            DataValue::I8(_) => 8,
+            DataValue::U8(_) => 8,
+            DataValue::I16(_) => 16,
+            DataValue::U16(_) => 16,
+            DataValue::I32(_) => 32,
+            DataValue::U32(_) => 32,
+            DataValue::F32(_) => 32,
+            DataValue::I64(_) => 64,
+            DataValue::U64(_) => 64,
+            DataValue::F64(_) => 64,
+            DataValue::I128(_) => 128,
+            DataValue::U128(_) => 128,
+            DataValue::V128(_) => 128,
+        }
+    }
+
+    /// Return true if the value is an boolean (i.e. `DataValue::B`).
+    pub fn is_bool(&self) -> bool {
+        match self {
+            DataValue::B(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Return true if the value is an integer (i.e. `DataValue::I32`).
+    pub fn is_integer(&self) -> bool {
+        match self {
+            DataValue::I8(_)
+            | DataValue::U8(_)
+            | DataValue::I16(_)
+            | DataValue::U16(_)
+            | DataValue::I32(_)
+            | DataValue::U32(_)
+            | DataValue::I64(_)
+            | DataValue::U64(_)
+            | DataValue::I128(_)
+            | DataValue::U128(_) => true,
+            _ => false,
         }
     }
 
@@ -103,7 +172,7 @@ impl DataValue {
 #[allow(missing_docs)]
 pub enum DataValueCastFailure {
     TryInto(Type, Type),
-    FromInteger(i64, Type),
+    FromInteger(i128, Type),
 }
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount

@@ -13,6 +13,7 @@ use crate::isa::arm32::Arm32Backend;
 
 use super::lower_inst;
 
+use crate::data_value::DataValue;
 use regalloc::{Reg, Writable};
 
 //============================================================================
@@ -71,13 +72,7 @@ pub(crate) fn input_to_reg<C: LowerCtx<I = Inst>>(
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     let in_reg = if let Some(c) = inputs.constant {
         let to_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
-        for inst in Inst::gen_constant(ValueRegs::one(to_reg), c as u128, ty, |ty| {
-            ctx.alloc_tmp(ty).only_reg().unwrap()
-        })
-        .into_iter()
-        {
-            ctx.emit(inst);
-        }
+        ctx.emit_constant(DataValue::U64(c), ValueRegs::one(to_reg));
         to_reg.to_reg()
     } else {
         ctx.put_input_in_regs(input.insn, input.input)

@@ -168,14 +168,19 @@ fn generate_constant<C: LowerCtx<I = Inst>>(ctx: &mut C, ty: Type, c: u128) -> V
         c
     };
 
+    // We expand bools into equivalently sized integers so that we don't lose size info
+    let value_ty = match ty {
+        B8 => I8,
+        B16 => I16,
+        B32 => I32,
+        B64 => I64,
+        B128 => I128,
+        _ => ty,
+    };
+    let value = DataValue::from_value(masked, value_ty).unwrap();
+
     let cst_copy = ctx.alloc_tmp(ty);
-    for inst in Inst::gen_constant(cst_copy, masked, ty, |ty| {
-        ctx.alloc_tmp(ty).only_reg().unwrap()
-    })
-    .into_iter()
-    {
-        ctx.emit(inst);
-    }
+    ctx.emit_constant(value, cst_copy);
     non_writable_value_regs(cst_copy)
 }
 
@@ -868,9 +873,7 @@ pub(crate) fn lower_constant_f32<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: f32,
 ) {
-    let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
-
-    for inst in Inst::load_fp_constant32(rd, value.to_bits(), alloc_tmp) {
+    for inst in Inst::load_fp_constant32(ctx, rd, value.to_bits()) {
         ctx.emit(inst);
     }
 }
@@ -880,9 +883,7 @@ pub(crate) fn lower_constant_f64<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: f64,
 ) {
-    let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
-
-    for inst in Inst::load_fp_constant64(rd, value.to_bits(), alloc_tmp) {
+    for inst in Inst::load_fp_constant64(ctx, rd, value.to_bits()) {
         ctx.emit(inst);
     }
 }
@@ -892,20 +893,8 @@ pub(crate) fn lower_constant_f128<C: LowerCtx<I = Inst>>(
     rd: Writable<Reg>,
     value: u128,
 ) {
-    if value == 0 {
-        // Fast-track a common case.  The general case, viz, calling `Inst::load_fp_constant128`,
-        // is potentially expensive.
-        ctx.emit(Inst::VecDupImm {
-            rd,
-            imm: ASIMDMovModImm::zero(ScalarSize::Size8),
-            invert: false,
-            size: VectorSize::Size8x16,
-        });
-    } else {
-        let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
-        for inst in Inst::load_fp_constant128(rd, value, alloc_tmp) {
-            ctx.emit(inst);
-        }
+    for inst in Inst::load_fp_constant128(ctx, rd, value) {
+        ctx.emit(inst);
     }
 }
 
@@ -929,9 +918,8 @@ pub(crate) fn lower_splat_const<C: LowerCtx<I = Inst>>(
         ),
         None => (value, size),
     };
-    let alloc_tmp = |ty| ctx.alloc_tmp(ty).only_reg().unwrap();
 
-    for inst in Inst::load_replicated_vector_pattern(rd, value, size, alloc_tmp) {
+    for inst in Inst::load_replicated_vector_pattern(ctx, rd, value, size) {
         ctx.emit(inst);
     }
 }

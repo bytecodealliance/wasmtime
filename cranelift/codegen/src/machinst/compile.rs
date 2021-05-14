@@ -18,7 +18,7 @@ pub fn compile<B: LowerBackend + MachBackend>(
     emit_info: <B::MInst as MachInstEmit>::Info,
 ) -> CodegenResult<VCode<B::MInst>>
 where
-    B::MInst: PrettyPrint,
+    B::MInst: PrettyPrint + ConstantGenerator,
 {
     // Compute lowered block order.
     let block_order = BlockLoweringOrder::new(f);

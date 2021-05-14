@@ -174,8 +174,10 @@ pub type ConstantOffset = u32;
 /// because it must be set relative to the function code size (i.e. constants are emitted after the
 /// function body); because the function is not yet compiled when constants are inserted,
 /// [`set_offset`](crate::ir::ConstantPool::set_offset) must be called once a constant's offset
-/// from the beginning of the function is known (see
-/// `relaxation` in `relaxation.rs`).
+/// from the beginning of the function is known (see `relaxation` in `relaxation.rs`).
+///
+/// TODO: The offset part of this can be removed with the x86 backend
+/// See: https://github.com/bytecodealliance/wasmtime/issues/1936
 #[derive(Clone)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ConstantPoolEntry {
@@ -268,6 +270,9 @@ impl ConstantPool {
 
     /// Assign an offset to a given constant, where the offset is the number of bytes from the
     /// beginning of the function to the beginning of the constant data inside the pool.
+    ///
+    /// TODO: This method should be removed with the x86 backend.
+    /// See: https://github.com/bytecodealliance/wasmtime/issues/1936
     pub fn set_offset(&mut self, constant_handle: Constant, constant_offset: ConstantOffset) {
         assert!(
             self.handles_to_values.contains_key(&constant_handle),
@@ -281,6 +286,9 @@ impl ConstantPool {
 
     /// Retrieve the offset of a given constant, where the offset is the number of bytes from the
     /// beginning of the function to the beginning of the constant data inside the pool.
+    ///
+    /// TODO: This method should be removed with the x86 backend.
+    /// See: https://github.com/bytecodealliance/wasmtime/issues/1936
     pub fn get_offset(&self, constant_handle: Constant) -> ConstantOffset {
         self.handles_to_values
             .get(&constant_handle)

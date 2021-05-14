@@ -151,7 +151,7 @@ impl Value for DataValue {
 
     fn int(n: i64, ty: Type) -> ValueResult<Self> {
         if ty.is_int() && !ty.is_vector() {
-            DataValue::from_integer(n, ty).map_err(|_| ValueError::InvalidValue(ty))
+            DataValue::from_value(n as u128, ty).map_err(|_| ValueError::InvalidValue(ty))
         } else {
             Err(ValueError::InvalidType(ValueTypeClass::Integer, ty))
         }

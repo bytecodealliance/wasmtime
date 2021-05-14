@@ -22,6 +22,7 @@ mod emit;
 pub use self::emit::*;
 mod regs;
 pub use self::regs::*;
+use crate::data_value::DataValue;
 
 #[cfg(test)]
 mod emit_tests;
@@ -806,30 +807,6 @@ impl MachInst for Inst {
         Inst::mov(to_reg, from_reg)
     }
 
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        _alloc_tmp: F,
-    ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs
-            .only_reg()
-            .expect("multi-reg values not supported yet");
-        let value = value as u64;
-
-        match ty {
-            B1 | I8 | B8 | I16 | B16 | I32 | B32 => {
-                let v: i64 = value as i64;
-
-                if v >= (1 << 32) || v < -(1 << 32) {
-                    panic!("Cannot load constant value {}", value)
-                }
-                Inst::load_constant(to_reg, value as u32)
-            }
-            _ => unimplemented!(),
-        }
-    }
-
     fn gen_nop(preferred_size: usize) -> Inst {
         if preferred_size == 0 {
             return Inst::Nop0;
@@ -870,6 +847,30 @@ impl MachInst for Inst {
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::I32
+    }
+}
+
+//=============================================================================
+// Instructions: Const Gen
+// TODO: Implement PooledConstantGenerator
+impl ConstantGenerator for Inst {
+    fn gen_constant<C: LowerCtx<I = Self>>(
+        _ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]> {
+        let to_reg = to_regs.only_reg().unwrap();
+        match value.ty() {
+            B1 | I8 | B8 | I16 | B16 | I32 | B32 => {
+                let v = value.bits() as i64;
+
+                if v >= (1 << 32) || v < -(1 << 32) {
+                    panic!("Cannot load constant value {}", value)
+                }
+                Inst::load_constant(to_reg, v as u32)
+            }
+            _ => unimplemented!(),
+        }
     }
 }
 

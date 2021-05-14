@@ -103,7 +103,9 @@ pub use helpers::*;
 pub mod inst_common;
 pub use inst_common::*;
 pub mod valueregs;
+use crate::data_value::DataValue;
 pub use valueregs::*;
+
 pub mod debug;
 
 /// A machine instruction.
@@ -138,14 +140,6 @@ pub trait MachInst: Clone + Debug {
 
     /// Generate a move.
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self;
-
-    /// Generate a constant into a reg.
-    fn gen_constant<F: FnMut(Type) -> Writable<Reg>>(
-        to_regs: ValueRegs<Writable<Reg>>,
-        value: u128,
-        ty: Type,
-        alloc_tmp: F,
-    ) -> SmallVec<[Self; 4]>;
 
     /// Possibly operate on a value directly in a spill-slot rather than a
     /// register. Useful if the machine has register-memory instruction forms
@@ -451,4 +445,57 @@ pub enum MachInstStackOpInfo {
     /// Adjustment of nominal-SP up or down. This value is added to subsequent
     /// offsets in loads/stores above to produce real-SP offsets.
     NomSPAdj(i64),
+}
+
+/// A trait to implement constant generation in backends.
+///
+/// Implementers should generate a sequence of instructions that loads a
+/// [DataValue] into `to_regs`.
+///
+/// See [PooledConstantGenerator] for a similar trait that also allows
+/// for generation into a constant pool.
+pub trait ConstantGenerator: MachInst + MachInstEmit {
+    /// Generate a constant into a reg.
+    fn gen_constant<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]>;
+}
+
+/// A [ConstantGenerator] that may pull values from a constant pool
+pub trait PooledConstantGenerator: MachInst + MachInstEmit {
+    /// Generate a constant `value` into a register
+    fn gen_constant_in_place<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]>;
+
+    /// Load a constant `value` from memory into a register
+    ///
+    /// Implementers *must* call `ctx.use_constant` for any constants that end up being used
+    fn gen_constant_in_pool<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]>;
+
+    /// Checks if `value` should be generated into the constant pool
+    /// or if we should generate it inplace
+    fn must_generate_in_pool<C: LowerCtx<I = Self>>(ctx: &C, value: &DataValue) -> bool;
+}
+
+impl<T: PooledConstantGenerator> ConstantGenerator for T {
+    fn gen_constant<C: LowerCtx<I = Self>>(
+        ctx: &mut C,
+        to_regs: ValueRegs<Writable<Reg>>,
+        value: DataValue,
+    ) -> SmallVec<[Self; 4]> {
+        if T::must_generate_in_pool(ctx, &value) {
+            T::gen_constant_in_pool(ctx, to_regs, value)
+        } else {
+            T::gen_constant_in_place(ctx, to_regs, value)
+        }
+    }
 }

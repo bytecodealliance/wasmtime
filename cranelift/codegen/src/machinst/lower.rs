@@ -16,8 +16,9 @@ use crate::ir::{
     ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
-    writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode,
-    VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs,
+    writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder, ConstantGenerator,
+    LoweredBlock, MachLabel, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants,
+    VCodeInst, ValueRegs,
 };
 use crate::CodegenResult;
 use alloc::boxed::Box;
@@ -145,6 +146,9 @@ pub trait LowerCtx {
     fn emit(&mut self, mach_inst: Self::I);
     /// Emit a machine instruction that is a safepoint.
     fn emit_safepoint(&mut self, mach_inst: Self::I);
+    /// Emit a constant into a register; this may load the constant value from memory to the
+    /// register or generate it directly in the register.
+    fn emit_constant(&mut self, value: DataValue, to: ValueRegs<Writable<Reg>>);
     /// Indicate that the side-effect of an instruction has been sunk to the
     /// current scan location. This should only be done with the instruction's
     /// original results are not used (i.e., `put_input_in_regs` is not invoked
@@ -225,7 +229,7 @@ struct InstTuple<I: VCodeInst> {
 
 /// Machine-independent lowering driver / machine-instruction container. Maintains a correspondence
 /// from original Inst to MachInsts.
-pub struct Lower<'func, I: VCodeInst> {
+pub struct Lower<'func, I: VCodeInst + ConstantGenerator> {
     /// The function to lower.
     f: &'func Function,
 
@@ -336,7 +340,7 @@ enum GenerateReturn {
     No,
 }
 
-impl<'func, I: VCodeInst> Lower<'func, I> {
+impl<'func, I: VCodeInst + ConstantGenerator> Lower<'func, I> {
     /// Prepare a new lowering context for the given IR function.
     pub fn new(
         f: &'func Function,
@@ -563,7 +567,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
             if let Some(c) = input.constant {
                 debug!(" -> constant {}", c);
-                const_bundles.push((ty, writable_value_regs(dst_regs), c));
+                let value = DataValue::from_value(c as u128, ty).unwrap();
+                const_bundles.push((ty, writable_value_regs(dst_regs), value));
             } else {
                 let src_regs = self.put_value_in_regs(src_val);
                 debug!(" -> reg {:?}", src_regs);
@@ -642,14 +647,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
 
         // Now, finally, deal with the moves whose sources are constants.
-        for (ty, dst_reg, const_val) in &const_bundles {
-            for inst in I::gen_constant(*dst_reg, *const_val as u128, *ty, |ty| {
-                self.alloc_tmp(ty).only_reg().unwrap()
-            })
-            .into_iter()
-            {
-                self.emit(inst);
-            }
+        for (_, dst_regs, const_val) in const_bundles {
+            self.emit_constant(const_val, dst_regs);
         }
 
         Ok(())
@@ -1086,7 +1085,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 }
 
-impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
+impl<'func, I: VCodeInst + ConstantGenerator> LowerCtx for Lower<'func, I> {
     type I = I;
 
     fn abi(&mut self) -> &mut dyn ABICallee<I = I> {
@@ -1228,6 +1227,13 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
             is_safepoint: true,
             inst: mach_inst,
         });
+    }
+
+    fn emit_constant(&mut self, value: DataValue, to: ValueRegs<Writable<Reg>>) {
+        let mach_insts = I::gen_constant(self, to, value);
+        for mach_inst in mach_insts {
+            self.emit(mach_inst);
+        }
     }
 
     fn sink_inst(&mut self, ir_inst: Inst) {

@@ -694,15 +694,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let memcpy_addr = get_intreg_for_arg(&call_conv, 3, 3).unwrap();
         insts.push(Inst::gen_move(Writable::from_reg(arg0), dst, I64));
         insts.push(Inst::gen_move(Writable::from_reg(arg1), src, I64));
-        insts.extend(
-            Inst::gen_constant(
-                ValueRegs::one(Writable::from_reg(arg2)),
-                size as u128,
-                I64,
-                |_| panic!("tmp should not be needed"),
-            )
-            .into_iter(),
-        );
+
+        // TODO: We should use `gen_constant` here, but it requires a `LowerCtx` which we don't have
+        insts.push(Inst::imm(
+            OperandSize::Size64,
+            size as u64,
+            Writable::from_reg(arg2),
+        ));
+
         // We use an indirect call and a full LoadExtName because we do not have
         // information about the libcall `RelocDistance` here, so we
         // conservatively use the more flexible calling sequence.

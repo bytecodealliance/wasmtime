@@ -1,5 +1,6 @@
 //! Lowering rules for S390x.
 
+use crate::data_value::DataValue;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::Inst as IRInst;
 use crate::ir::{types, Endianness, InstructionData, MemFlags, Opcode, TrapCode, Type};
@@ -406,15 +407,20 @@ fn put_input_in_reg<C: LowerCtx<I = Inst>>(
         };
         let masked = zero_extend_to_u64(extended, to_bits);
 
+        // We expand bools into equivalently sized integers so that we don't lose size info
+        let value_ty = match ty {
+            types::B8 => types::I8,
+            types::B16 => types::I16,
+            types::B32 => types::I32,
+            types::B64 => types::I64,
+            types::B128 => types::I128,
+            _ => ty,
+        };
+        let value = DataValue::from_value(masked as u128, value_ty).unwrap();
+
         // Generate constants fresh at each use to minimize long-range register pressure.
         let to_reg = ctx.alloc_tmp(ext_ty).only_reg().unwrap();
-        for inst in Inst::gen_constant(ValueRegs::one(to_reg), masked as u128, ext_ty, |ty| {
-            ctx.alloc_tmp(ty).only_reg().unwrap()
-        })
-        .into_iter()
-        {
-            ctx.emit(inst);
-        }
+        ctx.emit_constant(value, ValueRegs::one(to_reg));
         to_reg.to_reg()
     } else if to_bits == from_bits {
         ctx.put_input_in_regs(input.insn, input.input)
