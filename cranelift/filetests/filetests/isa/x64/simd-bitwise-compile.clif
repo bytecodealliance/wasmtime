@@ -15,6 +15,16 @@ block0:
 ; nextln: por     %xmm1, %xmm0
 ; not:    movdqa
 
+function %vselect_i16x8() -> i16x8 {
+block0:
+    v0 = vconst.b16x8 [false true false true false true false true]
+    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; check:  pblendvb %xmm1, %xmm2
+
 
 
 ; 8x16 shifts: these lower to complex sequences of instructions

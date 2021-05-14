@@ -1927,13 +1927,20 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             src.get_regs_as_uses(collector);
             collector.add_def(*dst);
         }
-        Inst::XmmRmR { src, dst, .. } => {
+        Inst::XmmRmR { src, dst, op, .. } => {
             if inst.produces_const() {
                 // No need to account for src, since src == dst.
                 collector.add_def(*dst);
             } else {
                 src.get_regs_as_uses(collector);
                 collector.add_mod(*dst);
+                // Some instructions have an implicit use of XMM0.
+                if *op == SseOpcode::Blendvpd
+                    || *op == SseOpcode::Blendvps
+                    || *op == SseOpcode::Pblendvb
+                {
+                    collector.add_use(regs::xmm0());
+                }
             }
         }
         Inst::XmmRmREvex {

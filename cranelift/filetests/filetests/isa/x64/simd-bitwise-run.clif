@@ -10,6 +10,17 @@ block0(v0: i8x16, v1: i8x16, v2: i8x16):
 ; Remember that bitselect accepts: 1) the selector vector, 2) the "if true" vector, and 3) the "if false" vector.
 ; run: %bitselect_i8x16([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 255], [127 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42], [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127]) == [42 0 0 0 0 0 0 0 0 0 0 0 0 0 0 42]
 
+function %vselect_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v1: i32x4, v2: i32x4):
+    ; `make_trampoline` still does not know how to convert boolean vector types
+    ; so we load the value directly here.
+    v0 = vconst.b32x4 [true true false false]
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; Remember that vselect accepts: 1) the selector vector, 2) the "if true" vector, and 3) the "if false" vector.
+; run: %vselect_i8x16([1 2 -1 -1], [-1 -1 3 4]) == [1 2 3 4]
+
 
 
 ; shift left
