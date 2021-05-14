@@ -3432,6 +3432,18 @@ fn test_x64_emit() {
         "blendvpd %xmm15, %xmm4",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
+        "660F3814DA",
+        "blendvps %xmm2, %xmm3",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
+        "66450F3810EC",
+        "pblendvb %xmm12, %xmm13",
+    ));
+
     // ========================================================
     // XMM_RM_R: Integer Packed
 

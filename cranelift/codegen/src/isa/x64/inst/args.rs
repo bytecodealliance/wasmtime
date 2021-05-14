@@ -478,6 +478,7 @@ pub enum SseOpcode {
     Andnps,
     Andnpd,
     Blendvpd,
+    Blendvps,
     Comiss,
     Comisd,
     Cmpps,
@@ -547,6 +548,7 @@ pub enum SseOpcode {
     Pandn,
     Pavgb,
     Pavgw,
+    Pblendvb,
     Pcmpeqb,
     Pcmpeqw,
     Pcmpeqd,
@@ -769,8 +771,10 @@ impl SseOpcode {
             | SseOpcode::Pshufb => SSSE3,
 
             SseOpcode::Blendvpd
+            | SseOpcode::Blendvps
             | SseOpcode::Insertps
             | SseOpcode::Packusdw
+            | SseOpcode::Pblendvb
             | SseOpcode::Pcmpeqq
             | SseOpcode::Pextrb
             | SseOpcode::Pextrd
@@ -828,6 +832,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Andnps => "andnps",
             SseOpcode::Andnpd => "andnpd",
             SseOpcode::Blendvpd => "blendvpd",
+            SseOpcode::Blendvps => "blendvps",
             SseOpcode::Cmpps => "cmpps",
             SseOpcode::Cmppd => "cmppd",
             SseOpcode::Cmpss => "cmpss",
@@ -897,6 +902,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pandn => "pandn",
             SseOpcode::Pavgb => "pavgb",
             SseOpcode::Pavgw => "pavgw",
+            SseOpcode::Pblendvb => "pblendvb",
             SseOpcode::Pcmpeqb => "pcmpeqb",
             SseOpcode::Pcmpeqw => "pcmpeqw",
             SseOpcode::Pcmpeqd => "pcmpeqd",
