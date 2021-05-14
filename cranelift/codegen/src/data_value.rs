@@ -18,10 +18,12 @@ pub enum DataValue {
     I16(i16),
     I32(i32),
     I64(i64),
+    I128(i128),
     U8(u8),
     U16(u16),
     U32(u32),
     U64(u64),
+    U128(u128),
     F32(Ieee32),
     F64(Ieee64),
     V128([u8; 16]),
@@ -48,6 +50,7 @@ impl DataValue {
             DataValue::I16(_) | DataValue::U16(_) => types::I16,
             DataValue::I32(_) | DataValue::U32(_) => types::I32,
             DataValue::I64(_) | DataValue::U64(_) => types::I64,
+            DataValue::I128(_) | DataValue::U128(_) => types::I128,
             DataValue::F32(_) => types::F32,
             DataValue::F64(_) => types::F64,
             DataValue::V128(_) => types::I8X16, // A default type.
@@ -157,10 +160,12 @@ build_conversion_impl!(i8, I8, I8);
 build_conversion_impl!(i16, I16, I16);
 build_conversion_impl!(i32, I32, I32);
 build_conversion_impl!(i64, I64, I64);
+build_conversion_impl!(i128, I128, I128);
 build_conversion_impl!(u8, U8, I8);
 build_conversion_impl!(u16, U16, I16);
 build_conversion_impl!(u32, U32, I32);
 build_conversion_impl!(u64, U64, I64);
+build_conversion_impl!(u128, U128, I128);
 build_conversion_impl!(Ieee32, F32, F32);
 build_conversion_impl!(Ieee64, F64, F64);
 build_conversion_impl!([u8; 16], V128, I8X16);
@@ -178,10 +183,12 @@ impl Display for DataValue {
             DataValue::I16(dv) => write!(f, "{}", dv),
             DataValue::I32(dv) => write!(f, "{}", dv),
             DataValue::I64(dv) => write!(f, "{}", dv),
+            DataValue::I128(dv) => write!(f, "{}", dv),
             DataValue::U8(dv) => write!(f, "{}", dv),
             DataValue::U16(dv) => write!(f, "{}", dv),
             DataValue::U32(dv) => write!(f, "{}", dv),
             DataValue::U64(dv) => write!(f, "{}", dv),
+            DataValue::U128(dv) => write!(f, "{}", dv),
             // The Ieee* wrappers here print the expected syntax.
             DataValue::F32(dv) => write!(f, "{}", dv),
             DataValue::F64(dv) => write!(f, "{}", dv),
