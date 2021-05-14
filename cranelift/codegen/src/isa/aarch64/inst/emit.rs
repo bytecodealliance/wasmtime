@@ -597,6 +597,8 @@ impl MachInstEmit for Inst {
                 let top11 = match alu_op {
                     ALUOp::Add32 => 0b00001011_000,
                     ALUOp::Add64 => 0b10001011_000,
+                    ALUOp::Adc32 => 0b00011010_000,
+                    ALUOp::Adc64 => 0b10011010_000,
                     ALUOp::Sub32 => 0b01001011_000,
                     ALUOp::Sub64 => 0b11001011_000,
                     ALUOp::Orr32 => 0b00101010_000,

@@ -425,3 +425,18 @@ block0(v0: i8x16):
 ; nextln: ushl v0.16b, v0.16b, v1.16b
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+
+function %add_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = iadd v0, v1
+    return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: adds x0, x0, x2
+; nextln: adc x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
