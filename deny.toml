@@ -45,7 +45,4 @@ skip = [
     { name = "wast" }, # old one pulled in by witx
     { name = "itertools" }, # 0.9 pulled in by zstd-sys
     { name = "quick-error" }, # transitive dependencies
-    { name = "rustc_version" }, # transitive dependencies of criterion's build script (see https://github.com/japaric/cast.rs/pull/26)
-    { name = "semver" }, # transitive dependencies of criterion's build script (see https://github.com/japaric/cast.rs/pull/26)
-    { name = "semver-parser" }, # transitive dependencies of criterion's build script (see https://github.com/japaric/cast.rs/pull/26)
 ]
