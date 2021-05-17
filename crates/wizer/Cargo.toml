@@ -34,7 +34,7 @@ rayon = "1.5.0"
 structopt = { version = "0.3.21", optional = true }
 wasi-cap-std-sync = "0.26.0"
 wasm-encoder = "0.4.0"
-wasmparser = "0.78.0"
+wasmparser = "0.78.2"
 wasmtime = "0.26.0"
 wasmtime-wasi = "0.26.0"
 

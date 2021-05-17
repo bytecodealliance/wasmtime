@@ -1,13 +1,15 @@
 use wasm_encoder::SectionId;
 
-use crate::translate;
+pub mod types_interner;
+
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use types_interner::{EntityType, InstanceType, Type, TypeId, TypesInterner};
 
 /// A collection of info about modules within a module linking bundle.
-#[derive(Default)]
 pub(crate) struct ModuleContext<'a> {
     arena: Vec<ModuleInfo<'a>>,
+    types: TypesInterner<'a>,
 }
 
 impl<'a> ModuleContext<'a> {
@@ -16,12 +18,18 @@ impl<'a> ModuleContext<'a> {
     pub fn new() -> Self {
         Self {
             arena: vec![ModuleInfo::Defined(DefinedModuleInfo::default())],
+            types: TypesInterner::default(),
         }
     }
 
     /// Get the root module.
     pub fn root(&self) -> Module {
         Module { id: 0 }
+    }
+
+    /// Get the interned types set for this module context.
+    pub fn types(&self) -> &TypesInterner<'a> {
+        &self.types
     }
 
     /// Does this context represent a single Wasm module that doesn't use module
@@ -93,7 +101,7 @@ struct DefinedModuleInfo<'a> {
     ///
     /// We keep track of these for determining how many things we need to
     /// re-export for new instantiations and for inner module's aliases.
-    types: Vec<wasmparser::TypeDef<'a>>,
+    types: Vec<TypeId>,
 
     /// Imports made by this module.
     imports: Vec<wasmparser::Import<'a>>,
@@ -109,7 +117,7 @@ struct DefinedModuleInfo<'a> {
 
     /// A map from instance indices to each instance's type for all defined,
     /// imported, and aliased instances.
-    instances: Vec<wasmparser::InstanceType<'a>>,
+    instances: Vec<TypeId>,
 
     /// A map from indices of defined instantiations (as opposed to imported or
     /// aliased instantiations) to the id of the module that was instantiated
@@ -137,7 +145,7 @@ struct DefinedModuleInfo<'a> {
 
     /// Maps from function index to the function's type index for all functions
     /// defined, imported, and aliased in this module.
-    functions: Vec<u32>,
+    functions: Vec<TypeId>,
 
     /// Maps from table index to the table's type for all tables defined,
     /// imported, and aliased in this module.
@@ -189,6 +197,40 @@ impl Module {
         u32::try_from(self.id).unwrap()
     }
 
+    /// Get the defined module that this module is an alias of, if any.
+    ///
+    /// This will see through all aliases.
+    pub fn get_aliased(self, cx: &ModuleContext<'_>) -> Option<Module> {
+        if matches!(cx.arena[self.id], ModuleInfo::Defined(_)) {
+            return None;
+        }
+
+        let mut id = self.id;
+        loop {
+            match &cx.arena[id] {
+                ModuleInfo::Aliased(AliasedModuleInfo { alias_of, .. }) => {
+                    id = *alias_of;
+                }
+                ModuleInfo::Defined(_) => return Some(Module { id }),
+            }
+        }
+    }
+
+    /// Translate the given `wasmparser` entity type into its interned
+    /// representation using this module's types space.
+    pub fn entity_type(
+        self,
+        cx: &ModuleContext<'_>,
+        ty: wasmparser::ImportSectionEntryType,
+    ) -> EntityType {
+        let module = self.get_aliased(cx).unwrap_or(self);
+        let types_space = match &cx.arena[module.id] {
+            ModuleInfo::Aliased(_) => unreachable!(),
+            ModuleInfo::Defined(d) => &d.types,
+        };
+        cx.types().entity_type(ty, types_space)
+    }
+
     /// Add a new raw section to this module info during parsing.
     pub fn add_raw_section<'a>(
         self,
@@ -207,6 +249,16 @@ impl Module {
 
     /// Push a new type into this module's types space.
     pub fn push_type<'a>(self, cx: &mut ModuleContext<'a>, ty: wasmparser::TypeDef<'a>) {
+        let types_space = match &cx.arena[self.id] {
+            ModuleInfo::Aliased(_) => panic!("not a defined module"),
+            ModuleInfo::Defined(d) => &d.types,
+        };
+        let ty = cx.types.insert_wasmparser(ty, types_space);
+        cx.defined_mut(self).types.push(ty);
+    }
+
+    /// Push an aliased type into this module's types space.
+    pub fn push_aliased_type(self, cx: &mut ModuleContext<'_>, ty: TypeId) {
         cx.defined_mut(self).types.push(ty);
     }
 
@@ -216,20 +268,14 @@ impl Module {
     }
 
     /// Push a new, aliased instance into this module's instance index space.
-    pub fn push_aliased_instance<'a>(
-        self,
-        cx: &mut ModuleContext<'a>,
-        instance_type: wasmparser::InstanceType<'a>,
-    ) {
+    pub fn push_aliased_instance<'a>(self, cx: &mut ModuleContext<'a>, instance_type: TypeId) {
+        assert!(cx.types.get(instance_type).is_instance());
         cx.defined_mut(self).instances.push(instance_type);
     }
 
     /// Push a new, imported instance into this module's instance index space.
-    pub fn push_imported_instance<'a>(
-        self,
-        cx: &mut ModuleContext<'a>,
-        instance_type: wasmparser::InstanceType<'a>,
-    ) {
+    pub fn push_imported_instance<'a>(self, cx: &mut ModuleContext<'a>, instance_type: TypeId) {
+        assert!(cx.types.get(instance_type).is_instance());
         cx.defined_mut(self).instances.push(instance_type);
     }
 
@@ -237,10 +283,11 @@ impl Module {
     pub fn push_defined_instance<'a>(
         self,
         cx: &mut ModuleContext<'a>,
-        instance_type: wasmparser::InstanceType<'a>,
+        instance_type: TypeId,
         module: Module,
         args: Vec<wasmparser::InstanceArg<'a>>,
     ) {
+        assert!(cx.types.get(instance_type).is_instance());
         let info = cx.defined_mut(self);
         let index = u32::try_from(info.instances.len()).unwrap();
         info.instances.push(instance_type);
@@ -280,7 +327,8 @@ impl Module {
     }
 
     /// Push a new function into this module's function index space.
-    pub fn push_function(self, cx: &mut ModuleContext, func_type: u32) {
+    pub fn push_function(self, cx: &mut ModuleContext, func_type: TypeId) {
+        assert!(cx.types.get(func_type).is_func());
         cx.defined_mut(self).functions.push(func_type);
     }
 
@@ -305,8 +353,9 @@ impl Module {
                 let ty = self.instance_type_at(cx, ty_idx).clone();
                 self.push_imported_instance(cx, ty);
             }
-            wasmparser::ImportSectionEntryType::Function(func_ty) => {
-                self.push_function(cx, func_ty);
+            wasmparser::ImportSectionEntryType::Function(ty_idx) => {
+                let ty = self.type_id_at(cx, ty_idx);
+                self.push_function(cx, ty);
             }
             wasmparser::ImportSectionEntryType::Table(ty) => {
                 self.push_table(cx, ty);
@@ -319,8 +368,19 @@ impl Module {
     }
 
     /// Push a count of how many instance imports an import section had.
-    pub fn push_instance_import_count(self, cx: &mut ModuleContext, count: u32) {
+    pub fn push_instance_import_count(self, cx: &mut ModuleContext<'_>, count: u32) {
         cx.defined_mut(self).instance_import_counts.push(count);
+    }
+
+    /// Push an instance implicitly created by a two-level import into this
+    /// module.
+    pub fn push_implicit_instance<'a>(
+        self,
+        cx: &mut ModuleContext<'a>,
+        instance_type: InstanceType<'a>,
+    ) {
+        let ty = cx.types.insert(Type::Instance(instance_type));
+        cx.defined_mut(self).instances.push(ty);
     }
 
     /// Push an alias into this module.
@@ -342,84 +402,94 @@ impl Module {
     ///
     /// Returns the index of the type and updates the total count of types in
     /// `num_types`.
-    pub fn define_instance_type(
-        self,
-        cx: &ModuleContext<'_>,
-        num_types: &mut u32,
-        types: &mut wasm_encoder::TypeSection,
-    ) -> u32 {
-        let ty_index = *num_types;
-        let info = cx.resolve(self);
-        types.instance(info.exports.iter().map(|e| {
-            let name = e.field;
-            let index = usize::try_from(e.index).unwrap();
-            let item = match e.kind {
-                wasmparser::ExternalKind::Function => {
-                    let func_ty = info.functions[index];
-                    wasm_encoder::EntityType::Function(func_ty)
+    pub fn define_instance_type(self, cx: &mut ModuleContext<'_>) -> TypeId {
+        // Inline `cx.resolve(self)` to avoid borrowck errors.
+        let info = {
+            let mut id = self.id;
+            loop {
+                match &cx.arena[id] {
+                    ModuleInfo::Aliased(AliasedModuleInfo { alias_of, .. }) => {
+                        id = *alias_of;
+                    }
+                    ModuleInfo::Defined(d) => break d,
                 }
-                wasmparser::ExternalKind::Table => {
-                    let ty = info.tables[index];
-                    wasm_encoder::EntityType::Table(translate::table_type(ty))
-                }
-                wasmparser::ExternalKind::Memory => {
-                    let ty = info.memories[index];
-                    wasm_encoder::EntityType::Memory(translate::memory_type(ty))
-                }
-                wasmparser::ExternalKind::Global => {
-                    let ty = info.globals[index];
-                    wasm_encoder::EntityType::Global(translate::global_type(ty))
-                }
-                wasmparser::ExternalKind::Instance => wasm_encoder::EntityType::Instance(e.index),
-                wasmparser::ExternalKind::Module
-                | wasmparser::ExternalKind::Type
-                | wasmparser::ExternalKind::Event => unreachable!(),
-            };
-            (name, item)
-        }));
-        *num_types += 1;
-        ty_index
-    }
+            }
+        };
 
-    /// Construct an instance type for instances of this module.
-    pub fn instance_type<'a>(self, cx: &ModuleContext<'a>) -> wasmparser::InstanceType<'a> {
-        let info = cx.resolve(self);
-        wasmparser::InstanceType {
+        cx.types.insert(Type::Instance(InstanceType {
             exports: info
                 .exports
                 .iter()
                 .map(|e| {
+                    let name = e.field.into();
                     let index = usize::try_from(e.index).unwrap();
-                    wasmparser::ExportType {
-                        name: e.field,
-                        ty: match e.kind {
-                            wasmparser::ExternalKind::Function => {
-                                let func_ty = info.functions[index];
-                                wasmparser::ImportSectionEntryType::Function(func_ty)
-                            }
-                            wasmparser::ExternalKind::Table => {
-                                let ty = info.tables[index];
-                                wasmparser::ImportSectionEntryType::Table(ty)
-                            }
-                            wasmparser::ExternalKind::Memory => {
-                                let ty = info.memories[index];
-                                wasmparser::ImportSectionEntryType::Memory(ty)
-                            }
-                            wasmparser::ExternalKind::Global => {
-                                let ty = info.globals[index];
-                                wasmparser::ImportSectionEntryType::Global(ty)
-                            }
-                            wasmparser::ExternalKind::Instance => {
-                                wasmparser::ImportSectionEntryType::Instance(e.index)
-                            }
-                            wasmparser::ExternalKind::Module
-                            | wasmparser::ExternalKind::Type
-                            | wasmparser::ExternalKind::Event => unreachable!(),
-                        },
-                    }
+                    let entity = match e.kind {
+                        wasmparser::ExternalKind::Function => {
+                            let func_ty = info.functions[index];
+                            EntityType::Function(func_ty)
+                        }
+                        wasmparser::ExternalKind::Table => {
+                            let ty = info.tables[index];
+                            EntityType::Table(ty)
+                        }
+                        wasmparser::ExternalKind::Memory => {
+                            let ty = info.memories[index];
+                            EntityType::Memory(ty)
+                        }
+                        wasmparser::ExternalKind::Global => {
+                            let ty = info.globals[index];
+                            EntityType::Global(ty)
+                        }
+                        wasmparser::ExternalKind::Instance => {
+                            EntityType::Instance(info.instances[index])
+                        }
+                        wasmparser::ExternalKind::Module
+                        | wasmparser::ExternalKind::Type
+                        | wasmparser::ExternalKind::Event => unreachable!(),
+                    };
+                    (name, entity)
                 })
                 .collect(),
-        }
+        }))
+    }
+
+    /// Define an instance type for this module's state.
+    pub fn define_state_instance_type(self, cx: &mut ModuleContext<'_>) -> TypeId {
+        // Define instance types for each of the instances that we instantiate
+        // locally so that we can refer to these types in the state instance's
+        // type.
+        let instantiated_modules: Vec<_> =
+            self.instantiations(cx).values().map(|(m, _)| *m).collect();
+        let instance_types = instantiated_modules
+            .into_iter()
+            .map(|m| m.define_instance_type(cx))
+            .collect::<Vec<_>>();
+
+        // Define the state instance type.
+        cx.types.insert(Type::Instance(InstanceType {
+            exports: self
+                .defined_globals(cx)
+                .enumerate()
+                .map(|(i, (_, g))| {
+                    (
+                        format!("__wizer_global_{}", i).into(),
+                        EntityType::Global(g),
+                    )
+                })
+                .chain(self.defined_memories(cx).enumerate().map(|(i, (_, m))| {
+                    (
+                        format!("__wizer_memory_{}", i).into(),
+                        EntityType::Memory(m),
+                    )
+                }))
+                .chain(instance_types.iter().enumerate().map(|(i, ty)| {
+                    (
+                        format!("__wizer_instance_{}", i).into(),
+                        EntityType::Instance(*ty),
+                    )
+                }))
+                .collect(),
+        }))
     }
 
     /// Get the count of how many instance imports are in each import section in
@@ -434,30 +504,30 @@ impl Module {
     }
 
     /// Get an export from the `n`th instance by name.
-    pub fn instance_export(
+    pub fn instance_export<'b>(
         self,
-        cx: &ModuleContext<'_>,
+        cx: &'b ModuleContext<'_>,
         instance: u32,
         name: &str,
-    ) -> Option<wasmparser::ImportSectionEntryType> {
+    ) -> Option<&'b EntityType> {
         let instance = usize::try_from(instance).unwrap();
         let info = cx.resolve(self);
-        let instance = &info.instances[instance];
-        instance
-            .exports
-            .iter()
-            .find(|e| e.name == name)
-            .map(|e| e.ty)
+        let type_id = info.instances[instance];
+        let instance = match cx.types.get(type_id) {
+            Type::Instance(i) => i,
+            _ => unreachable!(),
+        };
+        instance.exports.get(name)
     }
 
     /// Do a pre-order traversal over this module tree.
-    pub fn pre_order<F>(self, cx: &ModuleContext<'_>, mut f: F)
+    pub fn pre_order<'a, F>(self, cx: &mut ModuleContext<'a>, mut f: F)
     where
-        F: FnMut(Module),
+        F: FnMut(&mut ModuleContext<'a>, Module),
     {
         let mut stack = vec![self];
         while let Some(module) = stack.pop() {
-            f(module);
+            f(cx, module);
             let info = cx.resolve(module);
             stack.extend(info.modules.iter().copied().rev());
         }
@@ -589,32 +659,32 @@ impl Module {
     }
 
     /// Get the full types index space for this module.
-    pub fn types<'a, 'b>(self, cx: &'b ModuleContext<'a>) -> &'b [wasmparser::TypeDef<'a>] {
+    pub fn types<'a, 'b>(self, cx: &'b ModuleContext<'a>) -> &'b [TypeId] {
         &cx.resolve(self).types
     }
 
     /// Get the type at the given index.
     ///
     /// Panics if the types index space does not contain the given index.
-    pub fn type_at<'a, 'b>(
-        self,
-        cx: &'b ModuleContext<'a>,
-        type_index: u32,
-    ) -> &'b wasmparser::TypeDef<'a> {
-        &cx.resolve(self).types[usize::try_from(type_index).unwrap()]
+    pub fn type_at<'a, 'b>(self, cx: &'b ModuleContext<'a>, type_index: u32) -> &'b Type<'a> {
+        let id = self.type_id_at(cx, type_index);
+        cx.types.get(id)
     }
 
-    /// Get the instance type at the given type index.
+    /// Get the type at the given index.
+    ///
+    /// Panics if the types index space does not contain the given index.
+    pub fn type_id_at(self, cx: &ModuleContext<'_>, type_index: u32) -> TypeId {
+        cx.resolve(self).types[usize::try_from(type_index).unwrap()]
+    }
+
+    /// Get the id for instance type at the given type index.
     ///
     /// Panics if the types index space does not contain the given index or the
     /// type at the index is not an instance type.
-    pub fn instance_type_at<'a, 'b>(
-        self,
-        cx: &'b ModuleContext<'a>,
-        type_index: u32,
-    ) -> &'b wasmparser::InstanceType<'a> {
-        if let wasmparser::TypeDef::Instance(ity) = self.type_at(cx, type_index) {
-            ity
+    pub fn instance_type_at<'a, 'b>(self, cx: &'b ModuleContext<'a>, type_index: u32) -> TypeId {
+        if let Type::Instance(_) = self.type_at(cx, type_index) {
+            self.types(cx)[usize::try_from(type_index).unwrap()]
         } else {
             panic!("not an instance type")
         }

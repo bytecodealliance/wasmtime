@@ -1,4 +1,7 @@
-use crate::info::{Module, ModuleContext};
+use crate::info::{
+    types_interner::{EntityType, InstanceType, Type, TypeId},
+    Module, ModuleContext,
+};
 use crate::stack_ext::StackExt;
 use anyhow::{Context, Result};
 use std::convert::TryFrom;
@@ -221,6 +224,28 @@ fn import_section<'a>(
 
     let mut instance_import_count = 0;
 
+    // Two-level imports implicitly create an instance import. That is, this
+    //
+    //    (import "env" "f" (func))
+    //    (import "env" "g" (func))
+    //
+    // is implicitly translated into roughly
+    //
+    //    (import "env" (instance (export "f" (func))
+    //                            (export "g" (func))))
+    //    (alias 0 "f")
+    //    (alias 0 "g")
+    //
+    // However not that this is _not_ a WAT-level desugaring where we only have
+    // to deal with the expanded form! We have to perform this translation
+    // ourselves as we parse the imports.
+    //
+    // This variable keeps track of the implicit instance import that we are
+    // currently building. Whenever we see a consecutive run of two-level
+    // imports for the same module, we coalesce them into an implicit instance
+    // import.
+    let mut implicit_instance_import: Option<(&str, InstanceType)> = None;
+
     // Check that we can properly handle all imports.
     let count = imports.get_count();
     for _ in 0..count {
@@ -234,10 +259,34 @@ fn import_section<'a>(
             );
         }
 
+        match (implicit_instance_import.as_mut(), imp.field) {
+            (Some((implicit_module, instance_ty)), Some(field))
+                if *implicit_module == imp.module =>
+            {
+                let ty = module.entity_type(cx, imp.ty);
+                let old = instance_ty.exports.insert(field.into(), ty);
+                debug_assert!(old.is_none(), "checked by validation");
+            }
+            _ => {
+                if let Some((_, instance_ty)) = implicit_instance_import.take() {
+                    module.push_implicit_instance(cx, instance_ty);
+                    instance_import_count += 1;
+                }
+                if let Some(field) = imp.field {
+                    let field_ty = module.entity_type(cx, imp.ty);
+                    let instance_ty = InstanceType {
+                        exports: Some((field.into(), field_ty)).into_iter().collect(),
+                    };
+                    implicit_instance_import = Some((imp.module, instance_ty));
+                }
+            }
+        }
+
         check_import_type(
-            &stack.top().module.types(cx),
+            cx,
+            stack.top().module.types(cx),
             stack.top().module.is_root(),
-            &imp.ty,
+            &module.entity_type(cx, imp.ty),
         )?;
         if let wasmparser::ImportSectionEntryType::Instance(_) = imp.ty {
             instance_import_count += 1;
@@ -245,33 +294,37 @@ fn import_section<'a>(
         module.push_import(cx, imp);
     }
 
+    if let Some((_, instance_ty)) = implicit_instance_import.take() {
+        module.push_implicit_instance(cx, instance_ty);
+        instance_import_count += 1;
+    }
+
     module.push_instance_import_count(cx, instance_import_count);
     Ok(())
 }
 
 fn check_import_type(
-    types: &[wasmparser::TypeDef],
+    cx: &ModuleContext,
+    types: &[TypeId],
     is_root: bool,
-    ty: &wasmparser::ImportSectionEntryType,
+    ty: &EntityType,
 ) -> Result<()> {
     match ty {
-        wasmparser::ImportSectionEntryType::Module(_) => {
-            unreachable!();
-        }
-        wasmparser::ImportSectionEntryType::Instance(inst_ty_index) => {
+        EntityType::Function(_) => Ok(()),
+        EntityType::Instance(inst_ty) => {
             // We allow importing instances that only export things that are
             // acceptable imports. This is equivalent to a two-layer import.
-            match &types[usize::try_from(*inst_ty_index).unwrap()] {
-                wasmparser::TypeDef::Instance(inst_ty) => {
-                    for e in inst_ty.exports.iter() {
-                        check_import_type(&types, is_root, &e.ty)?;
+            match cx.types().get(*inst_ty) {
+                Type::Instance(inst_ty) => {
+                    for ty in inst_ty.exports.values() {
+                        check_import_type(cx, types, is_root, ty)?;
                     }
                     Ok(())
                 }
                 _ => unreachable!(),
             }
         }
-        wasmparser::ImportSectionEntryType::Memory(mem_ty) => match mem_ty {
+        EntityType::Memory(mem_ty) => match mem_ty {
             wasmparser::MemoryType::M32 { limits: _, shared } => {
                 anyhow::ensure!(!shared, "shared memories are not supported by Wizer yet");
                 anyhow::ensure!(
@@ -284,17 +337,15 @@ fn check_import_type(
                 anyhow::bail!("the memory64 proposal is not supported by Wizer yet")
             }
         },
-        wasmparser::ImportSectionEntryType::Event(_) => {
-            unreachable!("validation should have rejected the exceptions proposal")
-        }
-        wasmparser::ImportSectionEntryType::Function(_) => Ok(()),
-        wasmparser::ImportSectionEntryType::Table(_)
-        | wasmparser::ImportSectionEntryType::Global(_) => {
+        EntityType::Table(_) | EntityType::Global(_) => {
             anyhow::ensure!(
                 !is_root,
                 "table and global imports are not allowed in the root Wasm module"
             );
             Ok(())
+        }
+        EntityType::Module(_) => {
+            unreachable!();
         }
     }
 }
@@ -322,9 +373,8 @@ fn alias_section<'a>(
                 // parent, not this module itself.
                 let ty = stack[stack.len() - 2 - relative_depth]
                     .module
-                    .type_at(cx, *index)
-                    .clone();
-                module.push_type(cx, ty);
+                    .type_id_at(cx, *index);
+                module.push_aliased_type(cx, ty);
             }
             wasmparser::Alias::OuterModule {
                 relative_depth,
@@ -347,37 +397,36 @@ fn alias_section<'a>(
                     anyhow::bail!("exported modules are not supported yet")
                 }
                 wasmparser::ExternalKind::Instance => {
-                    let inst_ty_idx = match module.instance_export(cx, *instance, export) {
-                        Some(wasmparser::ImportSectionEntryType::Instance(i)) => i,
+                    let inst_ty = match module.instance_export(cx, *instance, export) {
+                        Some(EntityType::Instance(i)) => *i,
                         _ => unreachable!(),
                     };
-                    let inst_ty = module.instance_type_at(cx, inst_ty_idx).clone();
                     module.push_aliased_instance(cx, inst_ty);
                 }
                 wasmparser::ExternalKind::Function => {
-                    let func_ty_idx = match module.instance_export(cx, *instance, export) {
-                        Some(wasmparser::ImportSectionEntryType::Function(i)) => i,
+                    let func_ty = match module.instance_export(cx, *instance, export) {
+                        Some(EntityType::Function(ty)) => *ty,
                         _ => unreachable!(),
                     };
-                    module.push_function(cx, func_ty_idx);
+                    module.push_function(cx, func_ty);
                 }
                 wasmparser::ExternalKind::Table => {
                     let table_ty = match module.instance_export(cx, *instance, export) {
-                        Some(wasmparser::ImportSectionEntryType::Table(ty)) => ty,
+                        Some(EntityType::Table(ty)) => *ty,
                         _ => unreachable!(),
                     };
                     module.push_table(cx, table_ty);
                 }
                 wasmparser::ExternalKind::Memory => {
                     let ty = match module.instance_export(cx, *instance, export) {
-                        Some(wasmparser::ImportSectionEntryType::Memory(ty)) => ty,
+                        Some(EntityType::Memory(ty)) => *ty,
                         _ => unreachable!(),
                     };
                     module.push_imported_memory(cx, ty);
                 }
                 wasmparser::ExternalKind::Global => {
                     let ty = match module.instance_export(cx, *instance, export) {
-                        Some(wasmparser::ImportSectionEntryType::Global(ty)) => ty,
+                        Some(EntityType::Global(ty)) => *ty,
                         _ => unreachable!(),
                     };
                     module.push_imported_global(cx, ty);
@@ -409,7 +458,7 @@ fn instance_section<'a>(
         let inst = instances.read()?;
         let module_index = inst.module();
         let child_module = module.child_module_at(cx, module_index);
-        let inst_ty = child_module.instance_type(cx);
+        let inst_ty = child_module.define_instance_type(cx);
 
         let mut instance_args_reader = inst.args()?;
         let instance_args_count = usize::try_from(instance_args_reader.get_count()).unwrap();
@@ -435,7 +484,8 @@ fn function_section<'a>(
 
     let count = usize::try_from(funcs.get_count()).unwrap();
     for _ in 0..count {
-        let ty = funcs.read()?;
+        let ty_idx = funcs.read()?;
+        let ty = module.type_id_at(cx, ty_idx);
         module.push_function(cx, ty);
     }
     Ok(())

@@ -16,6 +16,12 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     wizer.wasm_multi_memory(true);
     wizer.wasm_module_linking(true);
     let wasm = wizer.run(&wasm)?;
+    log::debug!(
+        "=== Wizened Wasm ==========================================================\n\
+         {}\n\
+         ===========================================================================",
+        wasmprinter::print_bytes(&wasm).unwrap()
+    );
 
     let mut config = wasmtime::Config::new();
     config.cache_config_load_default().unwrap();
@@ -28,7 +34,14 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     let module =
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
+    let dummy_module = wasmtime::Module::new(store.engine(), &wat::parse_str("(module)")?)?;
+    let dummy_instance = wasmtime::Instance::new(&store, &dummy_module, &[])?;
+
     let mut linker = wasmtime::Linker::new(&store);
+    linker
+        .define_name("dummy_func", wasmtime::Func::wrap(&store, || {}))?
+        .define("env", "f", wasmtime::Func::wrap(&store, || {}))?
+        .define_name("dummy_instance", dummy_instance)?;
     let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build()?;
     let wasi = wasmtime_wasi::Wasi::new(&store, ctx);
     wasi.add_to_linker(&mut linker)?;
@@ -505,6 +518,31 @@ fn start_sections_in_nested_modules() -> anyhow::Result<()> {
 }
 
 #[test]
+fn allow_function_imports_module_linking() -> anyhow::Result<()> {
+    // Make sure that the umbrella module passes imports through to its
+    // instantiation of the root, and that the root can pass them along to its
+    // nested instantiations as well.
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (import "dummy_func" (func $dummy))
+  (module $A
+    (import "dummy_func" (func)))
+  (instance (instantiate $A (import "dummy_func" (func $dummy))))
+  (func (export "wizer.initialize")
+    nop
+  )
+  (func (export "run") (result i32)
+    i32.const 42
+  )
+)
+"#,
+    )
+}
+
+#[test]
 fn outer_module_alias() -> anyhow::Result<()> {
     run_wat(
         &[],
@@ -533,6 +571,132 @@ fn outer_module_alias() -> anyhow::Result<()> {
   )
   (func (export "run") (result i32)
     call (func $b "run")
+  )
+)
+"#,
+    )
+}
+
+#[test]
+fn instance_alias_without_entry_in_type_section() -> anyhow::Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (module $CHILD
+    (module $a)
+    (instance $a (instantiate $a))
+    (export "a" (instance $a)))
+  (instance $child (instantiate $CHILD))
+
+  ;; This root module doesn't ever declare an instance type for this alias.
+  (alias $child "a" (instance $no_type_for_this_instance))
+
+  (func (export "wizer.initialize")
+    nop
+  )
+  (func (export "run") (result i32)
+    i32.const 42
+  )
+)
+"#,
+    )
+}
+
+#[test]
+fn two_level_imports_and_implicit_instance_imports() -> anyhow::Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  ;; First, import an instance to make sure that we are accounting for already
+  ;; imported instances when forwarding implicit instances and are getting the
+  ;; index space correct.
+  (import "dummy_instance" (instance))
+
+  ;; This implicitly creates an instance import like:
+  ;;
+  ;;     (import (env (instance (export "f" (func $f)))))
+  ;;
+  ;; We will have to forward this implicit instance from the umbrella to the
+  ;; root instantiation.
+  (import "env" "f" (func $f))
+
+  (module $A
+    (import "env" "f" (func)))
+
+  ;; Pass that implicit instance through when instantiating `$A`.
+  (instance $a (instantiate $A (import "env" (instance 1))))
+
+  (func (export "wizer.initialize")
+    nop
+  )
+  (func (export "run") (result i32)
+    i32.const 42
+  )
+)
+"#,
+    )
+}
+
+#[test]
+fn implicit_instance_imports_and_other_instances() -> anyhow::Result<()> {
+    // Test how implicit instance import injection interacts with explicit
+    // instance imports and explicit instantiations.
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (module $A
+    ;; This implicitly creates an instance import like:
+    ;;
+    ;;     (import (env (instance (export "f" (func $f (result i32))))))
+    (import "env" "f" (func $f (result i32)))
+
+    (import "env2" (instance $env2 (export "g" (func (result i32)))))
+
+    (module $B
+      (func (export "h") (result i32)
+        i32.const 1
+      )
+    )
+    (instance $b (instantiate $B))
+
+    (func (export "run") (result i32)
+      call $f
+      call (func $env2 "g")
+      call (func $b "h")
+      i32.add
+      i32.add
+    )
+  )
+
+  (module $Env
+    (func (export "f") (result i32)
+      i32.const 2
+    )
+  )
+  (instance $env (instantiate $Env))
+
+  (module $Env2
+    (func (export "g") (result i32)
+      i32.const 39
+    )
+  )
+  (instance $env2 (instantiate $Env2))
+
+  (instance $a (instantiate $A
+                 (import "env" (instance $env))
+                 (import "env2" (instance $env2))))
+
+  (func (export "wizer.initialize")
+    nop
+  )
+  (func (export "run") (result i32)
+    call (func $a "run")
   )
 )
 "#,
@@ -585,5 +749,53 @@ fn rename_functions() -> anyhow::Result<()> {
   "#;
 
     assert_eq!(wat.trim(), expected_wat.trim());
+    Ok(())
+}
+
+#[test]
+fn renames_and_module_linking() -> anyhow::Result<()> {
+    let wat = r#"
+(module
+  (module $A
+    (func (export "a") (result i32)
+      i32.const 1)
+    (func (export "b") (result i32)
+      i32.const 2)
+    (func (export "c") (result i32)
+      i32.const 3)
+  )
+  (instance $a (instantiate $A))
+  (func (export "wizer.initialize")
+    nop
+  )
+  (func (export "a") (result i32)
+    call (func $a "a")
+  )
+  (func (export "b") (result i32)
+    call (func $a "b")
+  )
+  (func (export "c") (result i32)
+    call (func $a "c")
+  )
+)
+  "#;
+
+    let wasm = wat_to_wasm(wat)?;
+    let mut wizer = Wizer::new();
+    wizer.wasm_module_linking(true);
+    wizer.allow_wasi(true);
+    wizer.func_rename("a", "b");
+    wizer.func_rename("b", "c");
+    let wasm = wizer.run(&wasm)?;
+    let wat = wasmprinter::print_bytes(&wasm)?;
+
+    let expected_wat = r#"
+  (alias 1 "b" (func (;0;)))
+  (alias 1 "c" (func (;1;)))
+  (export "a" (func 0))
+  (export "b" (func 1)))
+  "#;
+
+    assert!(wat.trim().ends_with(expected_wat.trim()));
     Ok(())
 }

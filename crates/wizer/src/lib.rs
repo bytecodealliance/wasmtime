@@ -302,17 +302,16 @@ impl Wizer {
         // Make sure we're given valid Wasm from the get go.
         self.wasm_validate(&wasm)?;
 
-        let cx = parse::parse(wasm)?;
+        let mut cx = parse::parse(wasm)?;
         let instrumented_wasm = instrument::instrument(&cx);
 
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&instrumented_wasm) {
-                let wat = if cfg!(feature = "wasmprinter") {
-                    wasmprinter::print_bytes(&wasm)
-                        .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e))
-                } else {
-                    "`wasmprinter` cargo feature is not enabled".into()
-                };
+                #[cfg(feature = "wasmprinter")]
+                let wat = wasmprinter::print_bytes(&wasm)
+                    .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
+                #[cfg(not(feature = "wasmprinter"))]
+                let wat = "`wasmprinter` cargo feature is not enabled".to_string();
                 panic!(
                     "instrumented Wasm is not valid: {:?}\n\nWAT:\n{}",
                     error, wat
@@ -329,16 +328,15 @@ impl Wizer {
 
         let instance = self.initialize(&store, &module)?;
         let snapshot = snapshot::snapshot(&store, &instance);
-        let rewritten_wasm = self.rewrite(&cx, &snapshot, &renames);
+        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames);
 
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&rewritten_wasm) {
-                let wat = if cfg!(feature = "wasmprinter") {
-                    wasmprinter::print_bytes(&rewritten_wasm)
-                        .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e))
-                } else {
-                    "`wasmprinter` cargo feature is not enabled".into()
-                };
+                #[cfg(feature = "wasmprinter")]
+                let wat = wasmprinter::print_bytes(&wasm)
+                    .unwrap_or_else(|e| format!("Disassembling to WAT failed: {}", e));
+                #[cfg(not(feature = "wasmprinter"))]
+                let wat = "`wasmprinter` cargo feature is not enabled".to_string();
                 panic!("rewritten Wasm is not valid: {:?}\n\nWAT:\n{}", error, wat);
             }
         }

@@ -3,7 +3,10 @@
 mod renumbering;
 
 use crate::{
-    info::{Module, ModuleContext},
+    info::{
+        types_interner::{EntityType, Type},
+        Module, ModuleContext,
+    },
     snapshot::Snapshot,
     translate, FuncRenames, Wizer,
 };
@@ -15,123 +18,9 @@ impl Wizer {
     /// Given the initialized snapshot, rewrite the Wasm so that it is already
     /// initialized.
     ///
-    /// ## Code Shape
-    ///
-    /// With module linking, we rewrite each nested module into a *code module*
-    /// that doesn't define any internal state (i.e. memories, globals, and
-    /// nested instances) and imports a *state instance* that exports all of
-    /// these things instead. For each instantiation of a nested module, we have
-    /// a *state module* that defines the already-initialized state for that
-    /// instantiation, we instantiate that state module to create one such state
-    /// instance, and then use this as an import argument in the instantiation
-    /// of the original code module. This way, we do not duplicate shared code
-    /// bodies across multiple instantiations of the same module.
-    ///
-    /// Note that the root module is not split into a code module and state
-    /// instance. We can, essentially, assume that there is only one instance of
-    /// the root module, and rewrite it in place, without factoring the state
-    /// out into a separate instance. This is because the root is not allowed to
-    /// import any external state, so even if it were instantiated multiple
-    /// times, it would still end up in the same place anyways. (This is kinda
-    /// the whole reason why Wizer works at all.)
-    ///
-    /// For example, given this input Wasm module:
-    ///
-    /// ```wat
-    /// (module $A
-    ///   (module $B
-    ///     (memory $B_mem)
-    ///     (global $B_glob (mut i32))
-    ///     (func (export "f") ...)
-    ///   )
-    ///
-    ///   (instance $x (instantiate $B))
-    ///   (instance $y (instantiate $B))
-    ///
-    ///   (memory $A_mem)
-    ///   (global $A_glob (mut i32))
-    ///
-    ///   (func (export "g") ...)
-    /// )
-    /// ```
-    ///
-    /// and some post-initialization state, this rewrite pass will produce the
-    /// following pre-initialized module:
-    ///
-    /// ```wat
-    /// (module $A
-    ///   (module $B
-    ///     ;; Locally defined state is replaced by a state instance import.
-    ///     (import "__wizer_state"
-    ///       (instance
-    ///         (export "__wizer_memory_0" (memory $B_mem))
-    ///         (export "__wizer_global_0" (global $B_glob (mut i32)))
-    ///       )
-    ///     )
-    ///     (func (export "f") ...)
-    ///   )
-    ///
-    ///   ;; Instantiations are replaced with specialized state modules that get
-    ///   ;; instantiated exactly once to produce state instances, and finally
-    ///   ;; the original instantiations are rewritten into instantiations of
-    ///   ;; the corresponding code module with the state instance as an import
-    ///   ;; argument.
-    ///
-    ///   ;; State module for `$x`.
-    ///   (module $x_state_module
-    ///     (memory (export "__wizer_memory_0") (memory))
-    ///     ;; Data segments to initialize the memory based on our snapshot
-    ///     ;; would go here...
-    ///
-    ///     (global (export "__wizer_global_0")
-    ///       (global (mut i32) (i32.const (; ...snapshot's initialized value goes here... ;)))
-    ///     )
-    ///   )
-    ///
-    ///   ;; State instance for `$x`.
-    ///   (instance $x_state (instantiate $x_state_module))
-    ///
-    ///   ;; The instantiation of `$x` is now rewritten to use our state
-    ///   ;; instance.
-    ///   (instance $x (instantiate $B (import "__wizer_state" $x_state)))
-    ///
-    ///   ;; Same goes for the `$y` instantiation.
-    ///   (module $y_state_module
-    ///     (memory (export "__wizer_memory_0") (memory))
-    ///     ;; Data segments...
-    ///     (global (export "__wizer_global_0")
-    ///       (global (mut i32) (i32.const (; ...snapshot's initialized value goes here... ;)))
-    ///     )
-    ///   )
-    ///   (instance $y_state (instantiate $y_state_module))
-    ///   (instance $y (instantiate $B (import "__wizer_state" $y_state)))
-    ///
-    ///   (memory $A_mem)
-    ///   (global $A_glob (mut i32))
-    /// )
-    /// ```
-    ///
-    /// ## Implementation
-    ///
-    /// To implement this transformation, we first do a pre-order walk of the
-    /// module tree and emit the code modules as a flat sequence. Why a flat
-    /// sequence? The code modules cannot contain nested instantiations, because
-    /// nested instantiations are state that is not necessarily shared across
-    /// all instantiations of the outer module. And if we are already lifting
-    /// out nested instantiations, we need to also make nested modules available
-    /// for those lifted instantiations, and the easiest way to do that is to
-    /// flatten the code module tree (as opposed to re-exporting the nested
-    /// modules under well-known symbols). The pre-order traversal ensures that
-    /// the `Module::id` we assigned during the instrumentation phase matches
-    /// the module's place in the index space. The state modules, however,
-    /// remain a nested tree, and we emit them in a traversal of the `Snapshot`
-    /// instance tree. This is safe because, unlike code modules, each state
-    /// module is only instantiated exactly once. The instantiations' references
-    /// to nested modules become outer aliases pointing to the module's position
-    /// in the parent's flat sequence of nested modules.
     pub(crate) fn rewrite(
         &self,
-        cx: &ModuleContext,
+        cx: &mut ModuleContext<'_>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
     ) -> Vec<u8> {
@@ -148,7 +37,7 @@ impl Wizer {
     /// linking at all.
     fn rewrite_without_module_linking(
         &self,
-        cx: &ModuleContext,
+        cx: &ModuleContext<'_>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
     ) -> Vec<u8> {
@@ -293,324 +182,344 @@ impl Wizer {
     }
 
     /// Rewrite a module linking bundle.
+    ///
+    /// ## Code Shape
+    ///
+    /// With module linking, we rewrite each module in the original bundle into
+    /// a *code module* that doesn't define any internal state (i.e. memories,
+    /// globals, and nested instances) and instead imports a *state instance*
+    /// that exports all of these things. For each instantiation, we have a
+    /// *state module* that defines the already-initialized state for that
+    /// instantiation, we instantiate that state module to create one such state
+    /// instance, and then use this as an import argument in the instantiation
+    /// of the original code module. This way, we do not duplicate shared code
+    /// bodies across multiple instantiations of the same module.
+    ///
+    /// Note that the root module is also split out into a code module and state
+    /// module, even though it is never explicitly instantiated inside the
+    /// bundle.
+    ///
+    /// The new root is an "umbrella" module that defines all the types used
+    /// within the whole bundle. Each nested module then aliases its types from
+    /// the umbrella module. The umbrella module aliases all exports of the
+    /// original root and re-exports them.
+    ///
+    /// For example, given this input Wasm module:
+    ///
+    /// ```wat
+    /// (module $A
+    ///   (module $B
+    ///     (memory $B_mem)
+    ///     (global $B_glob (mut i32))
+    ///     (func (export "f") ...)
+    ///   )
+    ///
+    ///   (instance $x (instantiate $B))
+    ///   (instance $y (instantiate $B))
+    ///
+    ///   (memory $A_mem)
+    ///   (global $A_glob (mut i32))
+    ///
+    ///   (func (export "g") ...)
+    /// )
+    /// ```
+    ///
+    /// and some post-initialization state, this rewrite pass will produce the
+    /// following pre-initialized module:
+    ///
+    /// ```wat
+    /// (module $Umbrella
+    ///   (module $A
+    ///     ;; Locally defined state is replaced by a state instance import.
+    ///     (import "__wizer_state"
+    ///       (instance
+    ///         (export "__wizer_memory_0" (memory $A_mem))
+    ///         (export "__wizer_global_0" (global $A_glob (mut i32)))
+    ///         (export "__wizer_instance_0" (instance $x (export "f" (func))))
+    ///         (export "__wizer_instance_1" (instance $y (export "f" (func))))
+    ///       )
+    ///     )
+    ///     (func (export "g") ...)
+    ///   )
+    ///
+    ///   (module $B
+    ///     ;; Locally defined state is replaced by a state instance import.
+    ///     (import "__wizer_state"
+    ///       (instance
+    ///         (export "__wizer_memory_0" (memory $B_mem))
+    ///         (export "__wizer_global_0" (global $B_glob (mut i32)))
+    ///       )
+    ///     )
+    ///     (func (export "f") ...)
+    ///   )
+    ///
+    ///   ;; Instantiations are replaced with specialized state modules that get
+    ///   ;; instantiated exactly once to produce state instances, and finally
+    ///   ;; the original instantiations are rewritten into instantiations of
+    ///   ;; the corresponding code module with the state instance as an import
+    ///   ;; argument.
+    ///
+    ///   ;; State module for `$A`.
+    ///   (module $A_state_module
+    ///     ;; State module for `$x`.
+    ///     (module $x_state_module
+    ///       (memory (export "__wizer_memory_0") (memory))
+    ///       ;; Data segments to initialize the memory based on our snapshot
+    ///       ;; would go here...
+    ///
+    ///       (global (export "__wizer_global_0")
+    ///         (global (mut i32) (i32.const (; ...snapshot's initialized value goes here... ;)))
+    ///       )
+    ///     )
+    ///
+    ///     ;; State instance for `$x`.
+    ///     (instance $x_state (instantiate $x_state_module))
+    ///
+    ///     ;; The instantiation of `$x` is now rewritten to use our state
+    ///     ;; instance.
+    ///     (instance $x (instantiate $B (import "__wizer_state" $x_state)))
+    ///
+    ///     ;; Same goes for the `$y` instantiation.
+    ///     (module $y_state_module
+    ///       (memory (export "__wizer_memory_0") (memory))
+    ///       ;; Data segments...
+    ///       (global (export "__wizer_global_0")
+    ///         (global (mut i32) (i32.const (; ...snapshot's initialized value goes here... ;)))
+    ///       )
+    ///     )
+    ///     (instance $y_state (instantiate $y_state_module))
+    ///     (instance $y (instantiate $B (import "__wizer_state" $y_state)))
+    ///
+    ///     (memory $A_mem)
+    ///     (global $A_glob (mut i32))
+    ///   )
+    ///
+    ///   ;; State instance for `$A`.
+    ///   (instance $a_state (instantiate $A_state_module))
+    ///
+    ///   ;; The state is now joined with the code.
+    ///   (instance $a_instance (instantiate $A (import "__wizer_state" $a_state)))
+    ///
+    ///   ;; And finally we re-export all of our old root's exports.
+    ///   (export "g" (func $a_instance "g"))
+    /// )
+    /// ```
+    ///
+    /// ## Implementation
+    ///
+    /// To implement this transformation, we first do a pre-order walk of the
+    /// module tree and emit the code modules as a flat sequence. Why a flat
+    /// sequence? The code modules cannot contain nested instantiations, because
+    /// nested instantiations are state that is not necessarily shared across
+    /// all instantiations of the outer module. And if we are already lifting
+    /// out nested instantiations, we need to also make nested modules available
+    /// for those lifted instantiations, and the easiest way to do that is to
+    /// flatten the code module tree (as opposed to re-exporting the nested
+    /// modules under well-known symbols). The pre-order traversal ensures that
+    /// the `Module::id` we assigned during the instrumentation phase matches
+    /// the module's place in the index space.
+    ///
+    /// The state modules, however, remain a nested tree, and we emit them in a
+    /// traversal of the `Snapshot` instance tree. We can do this because,
+    /// unlike code modules, each state module is only instantiated exactly
+    /// once. The instantiations' references to nested modules become outer
+    /// aliases pointing to the module's position in the parent's flat sequence
+    /// of nested modules.
     fn rewrite_with_module_linking(
         &self,
-        cx: &ModuleContext<'_>,
+        cx: &mut ModuleContext<'_>,
         snapshot: &Snapshot,
         renames: &FuncRenames,
     ) -> Vec<u8> {
-        let root_info = cx.root();
-        let mut root = wasm_encoder::Module::new();
+        let mut umbrella = wasm_encoder::Module::new();
 
-        let types = make_complete_type_section(cx, root_info);
-        root.section(&types);
+        // Counts of various entities defined inside the umbrella module thus
+        // far.
+        let mut umbrella_funcs = 0;
+        let mut umbrella_tables = 0;
+        let mut umbrella_memories = 0;
+        let mut umbrella_globals = 0;
+        let mut umbrella_instances = 0;
 
         let (code_modules, num_code_modules) = rewrite_code_modules(cx);
-        root.section(&code_modules);
 
-        let state_modules = rewrite_state_modules(cx, &snapshot.instantiations);
-        root.section(&state_modules);
+        let root_state_module = rewrite_state_module(cx, cx.root(), &snapshot, 0);
+        let mut modules = wasm_encoder::ModuleSection::new();
+        modules.module(&root_state_module);
+        let root_state_module_index = num_code_modules;
 
-        self.rewrite_root(cx, &mut root, snapshot, renames, num_code_modules);
+        // Imports that we will need to pass through from the umbrella to the
+        // root instance.
+        let import_sections: Vec<_> = cx
+            .root()
+            .initial_sections(cx)
+            .filter(|s| s.id == SectionId::Import.into())
+            .collect();
 
-        root.finish()
-    }
+        // Instantiate the root state module by forwarding imports from the
+        // umbrella to the root instantiation.
+        //
+        // There is some trickery for implicit instance imports. We forward the
+        // implicit instance as an instantiation argument, since we can't
+        // provide two-level instantiation arguments, which means we need to
+        // determine when implicit imports are injected again.
+        let mut instances = wasm_encoder::InstanceSection::new();
+        let mut args = vec![];
+        let mut imports = cx.root().imports(cx).iter().peekable();
+        loop {
+            let (module, is_two_level) = match imports.peek() {
+                Some(imp) => (imp.module, imp.field.is_some()),
+                None => break,
+            };
 
-    fn rewrite_root(
-        &self,
-        cx: &ModuleContext,
-        root: &mut wasm_encoder::Module,
-        snapshot: &Snapshot,
-        renames: &FuncRenames,
-        num_code_modules: u32,
-    ) {
-        let root_info = cx.root();
-
-        // Encode the initialized data segments from the snapshot rather
-        // than the original, uninitialized data segments.
-        let mut data_section = if snapshot.data_segments.is_empty() {
-            None
-        } else {
-            let mut data_section = wasm_encoder::DataSection::new();
-            for seg in &snapshot.data_segments {
-                data_section.active(
-                    seg.memory_index,
-                    wasm_encoder::Instruction::I32Const(seg.offset as i32),
-                    seg.data.iter().copied(),
-                );
+            if is_two_level {
+                args.push((module, wasm_encoder::Export::Instance(umbrella_instances)));
+                umbrella_instances += 1;
             }
-            Some(data_section)
-        };
-
-        // There are multiple places were we potentially need to check whether
-        // we've added the data section already and if we haven't yet, then do
-        // so. For example, the original Wasm might not have a data section at
-        // all, and so we have to potentially add it at the end of iterating
-        // over the original sections. This closure encapsulates all that
-        // add-it-if-we-haven't-already logic in one place.
-        let mut add_data_section = |module: &mut wasm_encoder::Module| {
-            if let Some(data_section) = data_section.take() {
-                module.section(&data_section);
-            }
-        };
-
-        // A map from the original Wasm's instance numbering to the newly rewritten
-        // instance numbering.
-        let mut instance_renumbering = Renumbering::default();
-
-        let mut instance_import_counts = root_info.instance_import_counts(cx).iter().copied();
-        let mut instantiations = root_info.instantiations(cx).values().enumerate();
-        let mut aliases = root_info.aliases(cx).iter();
-
-        for section in root_info.raw_sections(cx) {
-            match section {
-                // Some tools expect the name custom section to come last, even
-                // though custom sections are allowed in any order. Therefore,
-                // make sure we've added our data section by now.
-                s if is_name_section(s) => {
-                    add_data_section(root);
-                    root.section(s);
-                }
-
-                s if s.id == SectionId::Custom.into() => {
-                    root.section(s);
-                }
-
-                // These were already added in `make_complete_type_section`.
-                s if s.id == SectionId::Type.into() => {
-                    continue;
-                }
-
-                // These were already taken care of in `rewrite_code_modules`.
-                s if s.id == SectionId::Module.into() => {
-                    continue;
-                }
-
-                // Import sections are just copied over, but we additionally
-                // must make sure that our count of how many instances are
-                // currently in this module's instance export space and map from
-                // old instance numbering to new instance numbering are
-                // correctly updated for any instances that were imported in
-                // this section.
-                s if s.id == SectionId::Import.into() => {
-                    root.section(s);
-
-                    let instance_import_count = instance_import_counts.next().unwrap();
-                    for _ in 0..instance_import_count {
-                        instance_renumbering.add_import();
+            while imports.peek().map_or(false, |imp| imp.module == module) {
+                let imp = imports.next().unwrap();
+                let export = match imp.ty {
+                    wasmparser::ImportSectionEntryType::Function(_) => {
+                        umbrella_funcs += 1;
+                        wasm_encoder::Export::Function(umbrella_funcs - 1)
                     }
-                }
-
-                // Instantiations from the original Wasm become two
-                // instantiations in the rewritten Wasm:
-                //
-                // 1. First, we instantiate the state module for this instance
-                //    to create the rewritten state instance.
-                //
-                // 2. Then, we instantiate this instance's code module, passing
-                //    it the state instance and any other import arguments it
-                //    originally had. This, finally, is the rewritten version of
-                //    the original instance.
-                //
-                // Because there are two instances, where previously there was
-                // one, we are forced to renumber the instance index space.
-                s if s.id == SectionId::Instance.into() => {
-                    let mut instances = wasm_encoder::InstanceSection::new();
-                    let count = wasmparser::InstanceSectionReader::new(s.data, 0)
-                        .unwrap()
-                        .get_count();
-                    for (nth_defined_inst, (module, instance_args)) in instantiations
-                        .by_ref()
-                        .take(usize::try_from(count).unwrap())
-                    {
-                        // Instantiate the state module.
-                        let args: Vec<_> = instance_args
-                            .iter()
-                            .map(|arg| {
-                                let mut arg = translate::instance_arg(arg);
-                                if let (_name, wasm_encoder::Export::Instance(ref mut index)) = arg
-                                {
-                                    *index = instance_renumbering.lookup(*index);
-                                }
-                                arg
-                            })
-                            .collect();
-                        instances.instantiate(
-                            num_code_modules + u32::try_from(nth_defined_inst).unwrap(),
-                            args,
-                        );
-                        let state_instance_index = instance_renumbering.define_new();
-
-                        // Instantiate the code module with our state instance
-                        // and the original import arguments.
-                        let args: Vec<_> = iter::once((
-                            "__wizer_state",
-                            wasm_encoder::Export::Instance(state_instance_index),
-                        ))
-                        .chain(instance_args.iter().map(|arg| {
-                            let mut arg = translate::instance_arg(arg);
-                            if let (_name, wasm_encoder::Export::Instance(ref mut index)) = arg {
-                                *index = instance_renumbering.lookup(*index);
-                            }
-                            arg
-                        }))
-                        .collect();
-                        instances.instantiate(module.pre_order_index() - 1, args);
-                        instance_renumbering.define_both();
+                    wasmparser::ImportSectionEntryType::Instance(_) => {
+                        umbrella_instances += 1;
+                        wasm_encoder::Export::Instance(umbrella_instances - 1)
                     }
-                    root.section(&instances);
+                    _ => unreachable!(),
+                };
+                if !is_two_level {
+                    args.push((module, export));
                 }
-
-                // For the alias section, we update instance export aliases to
-                // use the new instance numbering.
-                s if s.id == SectionId::Alias.into() => {
-                    let count = wasmparser::AliasSectionReader::new(s.data, 0)
-                        .unwrap()
-                        .get_count();
-                    let mut section = wasm_encoder::AliasSection::new();
-                    for alias in aliases.by_ref().take(usize::try_from(count).unwrap()) {
-                        match alias {
-                            wasmparser::Alias::InstanceExport {
-                                instance,
-                                kind,
-                                export,
-                            } => {
-                                section.instance_export(
-                                    instance_renumbering.lookup(*instance),
-                                    translate::item_kind(*kind),
-                                    export,
-                                );
-                                // If this brought a new instance into our
-                                // instance index space, update our renumbering
-                                // map.
-                                if let wasmparser::ExternalKind::Instance = kind {
-                                    instance_renumbering.add_alias();
-                                }
-                            }
-                            wasmparser::Alias::OuterType { .. }
-                            | wasmparser::Alias::OuterModule { .. } => {
-                                unreachable!(
-                                    "the root can't alias any outer entities because there are \
-                                     no entities outside the root module"
-                                )
-                            }
-                        }
-                    }
-                    root.section(&section);
-                }
-
-                s if s.id == SectionId::Function.into() => {
-                    root.section(s);
-                }
-
-                s if s.id == SectionId::Table.into() => {
-                    root.section(s);
-                }
-
-                // For the memory section, we update the minimum size of each
-                // defined memory to the snapshot's initialized size for that
-                // memory.
-                s if s.id == SectionId::Memory.into() => {
-                    let mut memories = wasm_encoder::MemorySection::new();
-                    assert_eq!(
-                        root_info.defined_memories_len(cx),
-                        snapshot.memory_mins.len()
-                    );
-                    for ((_, mem), new_min) in root_info
-                        .defined_memories(cx)
-                        .zip(snapshot.memory_mins.iter().copied())
-                    {
-                        let mut mem = translate::memory_type(mem);
-                        mem.limits.min = new_min;
-                        memories.memory(mem);
-                    }
-                    root.section(&memories);
-                }
-
-                // Encode the initialized global values from the snapshot,
-                // rather than the original values.
-                s if s.id == SectionId::Global.into() => {
-                    let mut globals = wasm_encoder::GlobalSection::new();
-                    for ((_, glob_ty), val) in
-                        root_info.defined_globals(cx).zip(snapshot.globals.iter())
-                    {
-                        let glob_ty = translate::global_type(glob_ty);
-                        globals.global(
-                            glob_ty,
-                            match val {
-                                wasmtime::Val::I32(x) => wasm_encoder::Instruction::I32Const(*x),
-                                wasmtime::Val::I64(x) => wasm_encoder::Instruction::I64Const(*x),
-                                wasmtime::Val::F32(x) => {
-                                    wasm_encoder::Instruction::F32Const(f32::from_bits(*x))
-                                }
-                                wasmtime::Val::F64(x) => {
-                                    wasm_encoder::Instruction::F64Const(f64::from_bits(*x))
-                                }
-                                _ => unreachable!(),
-                            },
-                        );
-                    }
-                    root.section(&globals);
-                }
-
-                // Remove the initialization function's export and perform any
-                // requested renames.
-                s if s.id == SectionId::Export.into() => {
-                    let mut exports = wasm_encoder::ExportSection::new();
-                    for export in root_info.exports(cx) {
-                        if export.field == self.init_func {
-                            continue;
-                        }
-
-                        if !renames.rename_src_to_dst.contains_key(export.field)
-                            && renames.rename_dsts.contains(export.field)
-                        {
-                            // A rename overwrites this export, and it is not
-                            // renamed to another export, so skip it.
-                            continue;
-                        }
-
-                        let field = renames
-                            .rename_src_to_dst
-                            .get(export.field)
-                            .map_or(export.field, |f| f.as_str());
-
-                        let mut export = translate::export(export.kind, export.index);
-                        if let wasm_encoder::Export::Instance(ref mut index) = export {
-                            *index = instance_renumbering.lookup(*index);
-                        }
-
-                        exports.export(field, export);
-                    }
-                    root.section(&exports);
-                }
-
-                // Skip the `start` function -- it's already been run!
-                s if s.id == SectionId::Start.into() => {
-                    continue;
-                }
-
-                s if s.id == SectionId::Element.into() => {
-                    root.section(s);
-                }
-
-                s if s.id == SectionId::Data.into() => {
-                    // TODO: supporting bulk memory will require copying over
-                    // any passive and declared segments.
-                    add_data_section(root);
-                }
-
-                s if s.id == SectionId::Code.into() => {
-                    root.section(s);
-                }
-
-                _ => unreachable!(),
             }
         }
+        instances.instantiate(root_state_module_index, args.iter().cloned());
+        let root_state_instance_index = umbrella_instances;
+        umbrella_instances += 1;
 
-        // Make sure that we've added our data section to the module.
-        add_data_section(root);
+        // Instantiate the root code module with the root state module.
+        let root_module_index = cx.root().pre_order_index();
+        args.push((
+            "__wizer_state",
+            wasm_encoder::Export::Instance(root_state_instance_index),
+        ));
+        instances.instantiate(root_module_index, args);
+        let root_instance_index = umbrella_instances;
+        umbrella_instances += 1;
+
+        // Alias the root instance's exports and then re-export them.
+        let mut aliases = wasm_encoder::AliasSection::new();
+        let mut exports = wasm_encoder::ExportSection::new();
+        for exp in cx.root().exports(cx) {
+            if exp.field == self.init_func {
+                continue;
+            }
+
+            if !renames.rename_src_to_dst.contains_key(exp.field)
+                && renames.rename_dsts.contains(exp.field)
+            {
+                // A rename overwrites this export, and it is not renamed to
+                // another export, so skip it.
+                continue;
+            }
+
+            let kind = translate::item_kind(exp.kind);
+            aliases.instance_export(root_instance_index, kind, exp.field);
+
+            let field = renames
+                .rename_src_to_dst
+                .get(exp.field)
+                .map_or(exp.field, |f| f.as_str());
+            exports.export(
+                field,
+                match kind {
+                    wasm_encoder::ItemKind::Function => {
+                        umbrella_funcs += 1;
+                        wasm_encoder::Export::Function(umbrella_funcs - 1)
+                    }
+                    wasm_encoder::ItemKind::Table => {
+                        umbrella_tables += 1;
+                        wasm_encoder::Export::Table(umbrella_tables - 1)
+                    }
+                    wasm_encoder::ItemKind::Memory => {
+                        umbrella_memories += 1;
+                        wasm_encoder::Export::Memory(umbrella_memories - 1)
+                    }
+                    wasm_encoder::ItemKind::Global => {
+                        umbrella_globals += 1;
+                        wasm_encoder::Export::Global(umbrella_globals - 1)
+                    }
+                    wasm_encoder::ItemKind::Instance => {
+                        umbrella_instances += 1;
+                        wasm_encoder::Export::Instance(umbrella_instances - 1)
+                    }
+                    wasm_encoder::ItemKind::Module => unreachable!(),
+                },
+            );
+        }
+
+        // NB: We encode the types last, even though it is the first section we
+        // place in the umbrella module, since adding state imports may need to
+        // define new instance types.
+        let types = umbrella_type_section(cx);
+
+        // Now combine all our sections together in the umbrella module.
+        umbrella.section(&types);
+        umbrella.section(&code_modules);
+        umbrella.section(&modules);
+        for s in import_sections {
+            umbrella.section(s);
+        }
+        umbrella.section(&instances);
+        umbrella.section(&aliases);
+        umbrella.section(&exports);
+
+        umbrella.finish()
     }
+}
+
+/// Create a type section with everything in the whole interned types set.
+fn umbrella_type_section(cx: &ModuleContext<'_>) -> wasm_encoder::TypeSection {
+    let mut types = wasm_encoder::TypeSection::new();
+
+    let interned_entity_to_encoder_entity = |ty: &EntityType| match ty {
+        EntityType::Function(ty) => wasm_encoder::EntityType::Function(ty.index()),
+        EntityType::Table(ty) => wasm_encoder::EntityType::Table(translate::table_type(*ty)),
+        EntityType::Memory(ty) => wasm_encoder::EntityType::Memory(translate::memory_type(*ty)),
+        EntityType::Global(ty) => wasm_encoder::EntityType::Global(translate::global_type(*ty)),
+        EntityType::Module(ty) => wasm_encoder::EntityType::Module(ty.index()),
+        EntityType::Instance(ty) => wasm_encoder::EntityType::Instance(ty.index()),
+    };
+
+    for (_index, ty) in cx.types().iter() {
+        match ty {
+            Type::Func(f) => types.function(
+                f.params.iter().copied().map(translate::val_type),
+                f.returns.iter().copied().map(translate::val_type),
+            ),
+            Type::Instance(inst) => types.instance(
+                inst.exports
+                    .iter()
+                    .map(|(name, ty)| (name.as_ref(), interned_entity_to_encoder_entity(ty))),
+            ),
+            Type::Module(module) => types.module(
+                module.imports.iter().map(|((module, name), ty)| {
+                    (
+                        module.as_ref(),
+                        name.as_ref().map(|n| n.as_ref()),
+                        interned_entity_to_encoder_entity(ty),
+                    )
+                }),
+                module
+                    .exports
+                    .iter()
+                    .map(|(name, ty)| (name.as_ref(), interned_entity_to_encoder_entity(ty))),
+            ),
+        };
+    }
+
+    types
 }
 
 fn is_name_section(s: &wasm_encoder::RawSection) -> bool {
@@ -625,14 +534,21 @@ fn is_name_section(s: &wasm_encoder::RawSection) -> bool {
 ///
 /// Returns the modules encoded in a module section and total number of code
 /// modules defined.
-fn rewrite_code_modules(cx: &ModuleContext) -> (wasm_encoder::ModuleSection, u32) {
-    let mut modules = wasm_encoder::ModuleSection::new();
+fn rewrite_code_modules(cx: &mut ModuleContext) -> (wasm_encoder::ModuleSection, u32) {
+    let mut code_modules = wasm_encoder::ModuleSection::new();
     let mut num_code_modules = 0;
 
-    cx.root().pre_order(cx, |info| {
-        // The root module is handled by `rewrite_root`; we are only dealing
-        // with nested children here.
-        if info.is_root() {
+    cx.root().pre_order(cx, |cx, info| {
+        if info.get_aliased(cx).is_some() {
+            // Add a dummy module. This isn't ever actually used, since we will
+            // instead resolve the alias at the use sites and then use the
+            // aliased referent instead. If we had an alias kind like "alias a
+            // module from this index space" we would use that here. But we have
+            // to add an entry to the module index space to preserve our
+            // invariant that a code module is at its pre-order index in the
+            // umbrella's module index space.
+            code_modules.module(&wasm_encoder::Module::new());
+            num_code_modules += 1;
             return;
         }
 
@@ -671,10 +587,12 @@ fn rewrite_code_modules(cx: &ModuleContext) -> (wasm_encoder::ModuleSection, u32
         // avoid renumbering types, we do a first pass over this module's types
         // and build out a full type section with the same numbering as the
         // original module, and then append the state import's type at the end.
-        let mut types = make_complete_type_section(cx, info);
-        let import = make_state_import(cx, info, &mut types);
-        module.section(&types);
-        module.section(&import);
+        let type_aliases = make_aliased_type_section(cx, info, 0);
+        module.section(&type_aliases);
+        let sections = make_state_import(cx, info);
+        for s in sections {
+            module.section(&s);
+        }
 
         // Now rewrite the initial sections one at a time.
         //
@@ -691,7 +609,7 @@ fn rewrite_code_modules(cx: &ModuleContext) -> (wasm_encoder::ModuleSection, u32
         let mut first_non_initial_section = None;
         for section in sections.by_ref() {
             match section {
-                // We handled this in `make_complete_type_section` above.
+                // We handled this above.
                 s if s.id == SectionId::Type.into() => continue,
 
                 // These are handled in subsequent steps of this pre-order
@@ -832,91 +750,45 @@ fn rewrite_code_modules(cx: &ModuleContext) -> (wasm_encoder::ModuleSection, u32
             }
         }
 
-        modules.module(&module);
+        code_modules.module(&module);
         num_code_modules += 1;
     });
 
-    (modules, num_code_modules)
+    (code_modules, num_code_modules)
 }
 
-/// Make a single complete type section for the given module info, regardless of
-/// how many initial type sections these types might have been defined within in
-/// the original module's serialization.
-fn make_complete_type_section(cx: &ModuleContext, info: Module) -> wasm_encoder::TypeSection {
-    let mut types = wasm_encoder::TypeSection::new();
-    for ty in info.types(cx) {
-        match ty {
-            wasmparser::TypeDef::Func(func_ty) => {
-                types.function(
-                    func_ty.params.iter().map(|ty| translate::val_type(*ty)),
-                    func_ty.returns.iter().map(|ty| translate::val_type(*ty)),
-                );
-            }
-            wasmparser::TypeDef::Instance(inst_ty) => {
-                types.instance(
-                    inst_ty
-                        .exports
-                        .iter()
-                        .map(|e| (e.name, translate::entity_type(e.ty))),
-                );
-            }
-            wasmparser::TypeDef::Module(_) => {
-                unreachable!(
-                    "we don't support importing/exporting modules so don't have to deal \
-                     with module types"
-                )
-            }
-        }
+/// Make the equivalent of the given module's type section from outer type
+/// aliases that bring types from the umbrella module's types space into this
+/// code module's types space.
+fn make_aliased_type_section(
+    cx: &ModuleContext<'_>,
+    module: Module,
+    depth: u32,
+) -> wasm_encoder::AliasSection {
+    let mut aliases = wasm_encoder::AliasSection::new();
+    for ty in module.types(cx) {
+        aliases.outer_type(depth, ty.index());
     }
-    types
+    aliases
 }
 
 /// Make an import section that imports a code module's state instance import.
 fn make_state_import(
-    cx: &ModuleContext,
-    info: Module,
-    types: &mut wasm_encoder::TypeSection,
-) -> wasm_encoder::ImportSection {
-    let mut num_types = u32::try_from(info.types(cx).len()).unwrap();
-
-    // Define instance types for each of the instances that we
-    // previously instantiated locally so that we can refer to
-    // these types in the state instance's type.
-    let instance_types = info
-        .instantiations(cx)
-        .values()
-        .map(|(m, _)| m.define_instance_type(cx, &mut num_types, types))
-        .collect::<Vec<_>>();
+    cx: &mut ModuleContext<'_>,
+    module: Module,
+) -> Vec<impl wasm_encoder::Section> {
+    let mut sections = vec![];
 
     // Define the state instance's type.
-    let state_instance_exports = info
-        .defined_globals(cx)
-        .enumerate()
-        .map(|(i, (_, g))| {
-            (
-                format!("__wizer_global_{}", i),
-                wasm_encoder::EntityType::Global(translate::global_type(g)),
-            )
-        })
-        .chain(info.defined_memories(cx).enumerate().map(|(i, (_, m))| {
-            (
-                format!("__wizer_memory_{}", i),
-                wasm_encoder::EntityType::Memory(translate::memory_type(m)),
-            )
-        }))
-        .chain(instance_types.iter().enumerate().map(|(i, type_index)| {
-            (
-                format!("__wizer_instance_{}", i),
-                wasm_encoder::EntityType::Instance(*type_index),
-            )
-        }))
-        .collect::<Vec<_>>();
-    let state_instance_type_index = num_types;
-    types.instance(
-        state_instance_exports
-            .iter()
-            .map(|(name, e)| (name.as_str(), *e)),
-    );
+    let state_instance_ty = module.define_state_instance_type(cx);
+
+    // Alias the state instance type from the umbrella.
+    let mut alias = wasm_encoder::AliasSection::new();
+    alias.outer_type(0, state_instance_ty.index());
+    sections.push(StateImportSection::Alias(alias));
+
+    let state_instance_type_index = u32::try_from(module.types(cx).len()).unwrap();
+    module.push_aliased_type(cx, state_instance_ty);
 
     // Define the import of the state instance, using the type
     // we just defined.
@@ -926,41 +798,39 @@ fn make_state_import(
         None,
         wasm_encoder::EntityType::Instance(state_instance_type_index),
     );
-    imports
-}
+    sections.push(StateImportSection::Import(imports));
 
-/// Define the state modules for each instantiation.
-///
-/// These are modules that just define the memories/globals/nested instances of
-/// a particular instantiation and initialize them to the snapshot's state. They
-/// have no imports and export all of their internal state entities.
-///
-/// This does *not* instantiate the state modules in the resulting module
-/// section, just defines them (although nested state modules within these top
-/// level-state modules are instantiated inside these top-level state
-/// modules). That is because instantiation is handled differently depending on
-/// if the instantiation happens directly inside the root module (see the
-/// handling of instance sections in `rewrite_root`) or in a deeply nested
-/// module (in which case it is instantiated by its parent state module,
-/// i.e. another recursive invocation of this function that is one frame up the
-/// stack).
-fn rewrite_state_modules(
-    cx: &ModuleContext,
-    snapshots: &[Snapshot],
-) -> wasm_encoder::ModuleSection {
-    let mut modules = wasm_encoder::ModuleSection::new();
+    return sections;
 
-    assert_eq!(snapshots.len(), cx.root().instantiations(cx).len());
-    for (snapshot, (module, _)) in snapshots.iter().zip(cx.root().instantiations(cx).values()) {
-        let state_module = rewrite_one_state_module(cx, *module, snapshot, 0);
-        modules.module(&state_module);
+    enum StateImportSection {
+        Alias(wasm_encoder::AliasSection),
+        Import(wasm_encoder::ImportSection),
     }
 
-    modules
+    impl wasm_encoder::Section for StateImportSection {
+        fn id(&self) -> u8 {
+            match self {
+                StateImportSection::Alias(s) => s.id(),
+                StateImportSection::Import(s) => s.id(),
+            }
+        }
+
+        fn encode<S>(&self, sink: &mut S)
+        where
+            S: Extend<u8>,
+        {
+            match self {
+                StateImportSection::Alias(s) => s.encode(sink),
+                StateImportSection::Import(s) => s.encode(sink),
+            }
+        }
+    }
 }
 
-fn rewrite_one_state_module(
-    cx: &ModuleContext,
+/// Create the state module the given module instantiation and recursively do
+/// the same for its nested instantiations.
+fn rewrite_state_module(
+    cx: &ModuleContext<'_>,
     info: Module,
     snapshot: &Snapshot,
     depth: u32,
@@ -989,17 +859,34 @@ fn rewrite_one_state_module(
         // That is, the `i`th nested instantiation's code module is the `i`th
         // module in the index space, and its state module is at index `N+i`.
         //
-        // The instance index space is more complicated because of potential
-        // instance imports and aliasing imported instance's exported nested
-        // instances. These imported/aliased instances can then be used as
-        // arguments to a nested instantiation, and then the resulting instance
-        // can also be used as an argument to further nested instantiations. To
-        // handle all this, we use a `Renumbering` map for tracking instance
-        // indices.
+        // We define all the code module aliases up front. Nested instantiations
+        // may require aliasing instance exports from earlier instantiations, so
+        // we interleave those in the same order that they appeared in the
+        // original Wasm binary below.
+        let mut alias_section = wasm_encoder::AliasSection::new();
+        for (module, _) in info.instantiations(cx).values() {
+            let module = module.get_aliased(cx).unwrap_or(*module);
+
+            // Because we flatten the code modules into the umbrella module with
+            // a pre-order traversal, this instantiation's code module is the
+            // `module.pre_order_index()`th module in the root module's module
+            // index space.
+            let code_module_index_in_root = module.pre_order_index();
+            alias_section.outer_module(depth, code_module_index_in_root);
+        }
+        state_module.section(&alias_section);
+
+        // The instance index space is more complicated than the module index
+        // space because of potential instance imports and aliasing imported
+        // instance's exported nested instances. These imported/aliased
+        // instances can then be used as arguments to a nested instantiation,
+        // and then the resulting instance can also be used as an argument to
+        // further nested instantiations. To handle all this, we use a
+        // `Renumbering` map for tracking instance indices.
         let mut instance_renumbering = Renumbering::default();
 
-        let types = make_complete_type_section(cx, info);
-        state_module.section(&types);
+        let aliased_types = make_aliased_type_section(cx, info, depth);
+        state_module.section(&aliased_types);
 
         let mut instance_import_counts = info.instance_import_counts(cx).iter().copied();
         let mut aliases = info.aliases(cx).iter();
@@ -1007,7 +894,7 @@ fn rewrite_one_state_module(
 
         for section in info.initial_sections(cx) {
             match section {
-                // Handled by `make_complete_type_section` above.
+                // Handled above.
                 s if s.id == SectionId::Type.into() => continue,
 
                 // Copy the imports over and update our renumbering for any
@@ -1070,25 +957,14 @@ fn rewrite_one_state_module(
                     let count = wasmparser::InstanceSectionReader::new(s.data, 0)
                         .unwrap()
                         .get_count();
-                    let mut alias_section = wasm_encoder::AliasSection::new();
                     let mut instance_section = wasm_encoder::InstanceSection::new();
                     let mut module_section = wasm_encoder::ModuleSection::new();
                     for (i, (module, instance_args)) in instantiations
                         .by_ref()
                         .take(usize::try_from(count).unwrap())
                     {
-                        // Alias this instantiation's code module.
-                        //
-                        // Because we flatten the code modules into the root
-                        // with a pre-order traversal, and the root module is
-                        // not in the flattened list, this instantiation's code
-                        // module is the `module.pre_order_index() - 1`th module
-                        // in the root module's module index space.
-                        let code_module_index_in_root = module.pre_order_index() - 1;
-                        alias_section.outer_module(depth, code_module_index_in_root);
-
                         // Define the state module for this instantiation.
-                        let state_module = rewrite_one_state_module(
+                        let state_module = rewrite_state_module(
                             cx,
                             *module,
                             &snapshot.instantiations[i],
@@ -1141,7 +1017,6 @@ fn rewrite_one_state_module(
                             ),
                         );
                     }
-                    state_module.section(&alias_section);
                     state_module.section(&module_section);
                     state_module.section(&instance_section);
                 }
