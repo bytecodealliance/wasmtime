@@ -13,8 +13,8 @@ arbitrary = { version = "1.0.0", features = ["derive"] }
 env_logger = "0.8.1"
 log = "0.4.8"
 rayon = "1.2.1"
-wasmparser = "0.77"
-wasmprinter = "0.2.25"
+wasmparser = "0.78"
+wasmprinter = "0.2.26"
 wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
 wasm-encoder = "0.4.1"

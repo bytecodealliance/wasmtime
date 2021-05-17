@@ -486,6 +486,7 @@ pub fn parse_name_section<'data>(
                     }
                 }
             }
+            wasmparser::Name::Unknown { .. } => {}
         }
     }
     Ok(())

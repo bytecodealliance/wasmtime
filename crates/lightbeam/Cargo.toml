@@ -24,7 +24,7 @@ more-asserts = "0.2.1"
 smallvec = "1.6.1"
 thiserror = "1.0.9"
 typemap = "0.3"
-wasmparser = "0.77"
+wasmparser = "0.78"
 
 [dev-dependencies]
 lazy_static = "1.2"
