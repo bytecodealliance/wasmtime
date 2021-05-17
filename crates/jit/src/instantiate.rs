@@ -35,7 +35,7 @@ pub enum SetupError {
     #[error("Validation error: {0}")]
     Validate(String),
 
-    /// A wasm translation error occured.
+    /// A wasm translation error occurred.
     #[error("WebAssembly failed to compile")]
     Compile(#[from] CompileError),
 
@@ -44,7 +44,7 @@ pub enum SetupError {
     #[error("Instantiation failed during setup")]
     Instantiate(#[from] InstantiationError),
 
-    /// Debug information generation error occured.
+    /// Debug information generation error occurred.
     #[error("Debug information error")]
     DebugInfo(#[from] anyhow::Error),
 }
