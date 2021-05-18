@@ -2,16 +2,16 @@ use crate::binemit::{Addend, Reloc};
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::ir::LibCall;
 use crate::ir::TrapCode;
-use crate::isa::x64::inst::args::*;
-use crate::isa::x64::inst::*;
-use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel};
-use core::convert::TryInto;
-use encoding::evex::{EvexInstruction, EvexVectorLength};
-use encoding::rex::{
+use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength};
+use crate::isa::x64::encoding::rex::{
     emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
     low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, OpcodeMap,
     RexFlags,
 };
+use crate::isa::x64::inst::args::*;
+use crate::isa::x64::inst::*;
+use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel};
+use core::convert::TryInto;
 use log::debug;
 use regalloc::{Reg, Writable};
 
@@ -128,6 +128,7 @@ pub(crate) fn emit(
             InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
             InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
             InstructionSet::AVX512VL => info.isa_flags.has_avx512vl(),
+            InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
         }
     };
 
@@ -1409,6 +1410,7 @@ pub(crate) fn emit(
         Inst::XmmUnaryRmREvex { op, src, dst } => {
             let opcode = match op {
                 Avx512Opcode::Vpabsq => 0x1f,
+                _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             match src {
                 RegMem::Reg { reg: src } => EvexInstruction::new()
@@ -1439,6 +1441,7 @@ pub(crate) fn emit(
                 SseOpcode::Andpd => (LegacyPrefixes::_66, 0x0F54, 2),
                 SseOpcode::Andnps => (LegacyPrefixes::None, 0x0F55, 2),
                 SseOpcode::Andnpd => (LegacyPrefixes::_66, 0x0F55, 2),
+                SseOpcode::Blendvps => (LegacyPrefixes::_66, 0x0F3814, 3),
                 SseOpcode::Blendvpd => (LegacyPrefixes::_66, 0x0F3815, 3),
                 SseOpcode::Cvttps2dq => (LegacyPrefixes::_F3, 0x0F5B, 2),
                 SseOpcode::Cvtdq2ps => (LegacyPrefixes::None, 0x0F5B, 2),
@@ -1478,6 +1481,7 @@ pub(crate) fn emit(
                 SseOpcode::Pandn => (LegacyPrefixes::_66, 0x0FDF, 2),
                 SseOpcode::Pavgb => (LegacyPrefixes::_66, 0x0FE0, 2),
                 SseOpcode::Pavgw => (LegacyPrefixes::_66, 0x0FE3, 2),
+                SseOpcode::Pblendvb => (LegacyPrefixes::_66, 0x0F3810, 3),
                 SseOpcode::Pcmpeqb => (LegacyPrefixes::_66, 0x0F74, 2),
                 SseOpcode::Pcmpeqw => (LegacyPrefixes::_66, 0x0F75, 2),
                 SseOpcode::Pcmpeqd => (LegacyPrefixes::_66, 0x0F76, 2),
@@ -1543,6 +1547,31 @@ pub(crate) fn emit(
                     );
                 }
             }
+        }
+
+        Inst::XmmRmREvex {
+            op,
+            src1,
+            src2,
+            dst,
+        } => {
+            let opcode = match op {
+                Avx512Opcode::Vpmullq => 0x40,
+                _ => unimplemented!("Opcode {:?} not implemented", op),
+            };
+            match src1 {
+                RegMem::Reg { reg: src } => EvexInstruction::new()
+                    .length(EvexVectorLength::V128)
+                    .prefix(LegacyPrefixes::_66)
+                    .map(OpcodeMap::_0F38)
+                    .w(true)
+                    .opcode(opcode)
+                    .reg(dst.to_reg().get_hw_encoding())
+                    .rm(src.get_hw_encoding())
+                    .vvvvv(src2.get_hw_encoding())
+                    .encode(sink),
+                _ => todo!(),
+            };
         }
 
         Inst::XmmMinMaxSeq {

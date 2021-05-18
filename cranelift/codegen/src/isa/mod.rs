@@ -81,8 +81,10 @@ mod riscv;
 #[cfg(feature = "x86")]
 mod x86;
 
+// This module is made public here for benchmarking purposes. No guarantees are
+// made regarding API stability.
 #[cfg(feature = "x86")]
-mod x64;
+pub mod x64;
 
 #[cfg(feature = "arm32")]
 mod arm32;

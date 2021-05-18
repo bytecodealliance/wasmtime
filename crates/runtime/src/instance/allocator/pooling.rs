@@ -1629,7 +1629,7 @@ mod test {
     }
 
     #[test]
-    fn test_pooling_allocator_with_memory_pages_exeeded() {
+    fn test_pooling_allocator_with_memory_pages_exceeded() {
         assert_eq!(
             PoolingInstanceAllocator::new(
                 PoolingAllocationStrategy::Random,
@@ -1650,7 +1650,7 @@ mod test {
     }
 
     #[test]
-    fn test_pooling_allocator_with_reservation_size_exeeded() {
+    fn test_pooling_allocator_with_reservation_size_exceeded() {
         assert_eq!(
             PoolingInstanceAllocator::new(
                 PoolingAllocationStrategy::Random,

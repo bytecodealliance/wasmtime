@@ -3432,6 +3432,18 @@ fn test_x64_emit() {
         "blendvpd %xmm15, %xmm4",
     ));
 
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
+        "660F3814DA",
+        "blendvps %xmm2, %xmm3",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
+        "66450F3810EC",
+        "pblendvb %xmm12, %xmm13",
+    ));
+
     // ========================================================
     // XMM_RM_R: Integer Packed
 
@@ -3553,6 +3565,12 @@ fn test_x64_emit() {
         Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(xmm14), w_xmm1),
         "66410FD5CE",
         "pmullw  %xmm14, %xmm1",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r_evex(Avx512Opcode::Vpmullq, RegMem::reg(xmm14), xmm10, w_xmm1),
+        "62D2AD0840CE",
+        "vpmullq %xmm14, %xmm10, %xmm1",
     ));
 
     insns.push((
@@ -4283,6 +4301,7 @@ fn test_x64_emit() {
     isa_flag_builder.enable("has_ssse3").unwrap();
     isa_flag_builder.enable("has_sse41").unwrap();
     isa_flag_builder.enable("has_avx512f").unwrap();
+    isa_flag_builder.enable("has_avx512dq").unwrap();
     let isa_flags = x64::settings::Flags::new(&flags, isa_flag_builder);
 
     let rru = regs::create_reg_universe_systemv(&flags);

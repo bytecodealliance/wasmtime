@@ -148,70 +148,27 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
         Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat => {
-            // We use the scalar SIMD & FP saturating additions and subtractions
-            // (SQADD / UQADD / SQSUB / UQSUB), which require scalar FP registers.
-            let is_signed = op == Opcode::SaddSat || op == Opcode::SsubSat;
             let ty = ty.unwrap();
+            assert!(ty.is_vector());
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            if !ty.is_vector() {
-                let narrow_mode = if is_signed {
-                    NarrowValueMode::SignExtend64
-                } else {
-                    NarrowValueMode::ZeroExtend64
-                };
-                let fpu_op = match op {
-                    Opcode::UaddSat => FPUOp2::Uqadd64,
-                    Opcode::SaddSat => FPUOp2::Sqadd64,
-                    Opcode::UsubSat => FPUOp2::Uqsub64,
-                    Opcode::SsubSat => FPUOp2::Sqsub64,
-                    _ => unreachable!(),
-                };
-                let va = ctx.alloc_tmp(I8X16).only_reg().unwrap();
-                let vb = ctx.alloc_tmp(I8X16).only_reg().unwrap();
-                let ra = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                let rb = put_input_in_reg(ctx, inputs[1], narrow_mode);
-                ctx.emit(Inst::MovToFpu {
-                    rd: va,
-                    rn: ra,
-                    size: ScalarSize::Size64,
-                });
-                ctx.emit(Inst::MovToFpu {
-                    rd: vb,
-                    rn: rb,
-                    size: ScalarSize::Size64,
-                });
-                ctx.emit(Inst::FpuRRR {
-                    fpu_op,
-                    rd: va,
-                    rn: va.to_reg(),
-                    rm: vb.to_reg(),
-                });
-                ctx.emit(Inst::MovFromVec {
-                    rd,
-                    rn: va.to_reg(),
-                    idx: 0,
-                    size: VectorSize::Size64x2,
-                });
-            } else {
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
 
-                let alu_op = match op {
-                    Opcode::UaddSat => VecALUOp::Uqadd,
-                    Opcode::SaddSat => VecALUOp::Sqadd,
-                    Opcode::UsubSat => VecALUOp::Uqsub,
-                    Opcode::SsubSat => VecALUOp::Sqsub,
-                    _ => unreachable!(),
-                };
+            let alu_op = match op {
+                Opcode::UaddSat => VecALUOp::Uqadd,
+                Opcode::SaddSat => VecALUOp::Sqadd,
+                Opcode::UsubSat => VecALUOp::Uqsub,
+                Opcode::SsubSat => VecALUOp::Sqsub,
+                _ => unreachable!(),
+            };
 
-                ctx.emit(Inst::VecRRR {
-                    rd,
-                    rn,
-                    rm,
-                    alu_op,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
+            ctx.emit(Inst::VecRRR {
+                rd,
+                rn,
+                rm,
+                alu_op,
+                size: VectorSize::from_ty(ty),
+            });
         }
 
         Opcode::Ineg => {
