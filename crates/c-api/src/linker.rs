@@ -125,15 +125,25 @@ pub unsafe extern "C" fn wasmtime_linker_get(
     name: *const u8,
     name_len: usize,
     item_ptr: &mut MaybeUninit<wasmtime_extern_t>,
-) -> Option<Box<wasmtime_error_t>> {
+) -> bool {
     let linker = &linker.linker;
-    let module = to_str!(module, module_len);
+    let module = match str::from_utf8(crate::slice_from_raw_parts(module, module_len)) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
     let name = if name.is_null() {
         None
     } else {
-        Some(to_str!(name, name_len))
+        match str::from_utf8(crate::slice_from_raw_parts(name, name_len)) {
+            Ok(s) => Some(s),
+            Err(_) => return false,
+        }
     };
-    handle_result(linker.get_one_by_name(store, module, name), |which| {
-        crate::initialize(item_ptr, which.into())
-    })
+    match linker.get(store, module, name) {
+        Some(which) => {
+            crate::initialize(item_ptr, which.into());
+            true
+        }
+        None => false,
+    }
 }

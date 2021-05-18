@@ -219,10 +219,10 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_get_default(
  * \param name_len the byte length of `name`
  * \param item where to store the extracted item
  *
- * \return An error is returned if the item isn't defined or has more than one
- * definition, or `NULL` is returned and `item` is filled in otherwise.
+ * \return A nonzero value if the item is defined, in which case `item` is also
+ * filled in. Otherwise zero is returned.
  */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_get(
+WASM_API_EXTERN bool wasmtime_linker_get(
     const wasmtime_linker_t *linker,
     wasmtime_context_t *store,
     const char *module,

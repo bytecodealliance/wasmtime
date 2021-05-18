@@ -165,7 +165,7 @@ use wasmtime_environ::ir::StackMap;
 #[repr(transparent)]
 pub struct VMExternRef(NonNull<VMExternData>);
 
-// data contained is always Send+Sync so these should be safe
+// Data contained is always Send+Sync so these should be safe.
 unsafe impl Send for VMExternRef {}
 unsafe impl Sync for VMExternRef {}
 
@@ -255,7 +255,7 @@ impl VMExternData {
         // resides within after this block.
         let (alloc_ptr, layout) = {
             let data = data.as_mut();
-            debug_assert_eq!(data.get_ref_count(), 0);
+            debug_assert_eq!(data.ref_count.load(Ordering::SeqCst), 0);
 
             // Same thing, but for the dropping the reference to `value` before
             // we drop it itself.
@@ -272,11 +272,6 @@ impl VMExternData {
 
         ptr::drop_in_place(data.as_ptr());
         std::alloc::dealloc(alloc_ptr.as_ptr(), layout);
-    }
-
-    #[inline]
-    fn get_ref_count(&self) -> usize {
-        self.ref_count.load(Ordering::SeqCst)
     }
 
     #[inline]
@@ -331,7 +326,7 @@ impl VMExternRef {
                 extern_data_ptr,
                 VMExternData {
                     ref_count: AtomicUsize::new(1),
-                    // cast from `*mut T` to `*mut dyn Any` here
+                    // Cast from `*mut T` to `*mut dyn Any` here.
                     value_ptr: NonNull::new_unchecked(value_ptr.as_ptr()),
                 },
             );
@@ -400,8 +395,11 @@ impl VMExternRef {
     }
 
     /// Get the strong reference count for this `VMExternRef`.
+    ///
+    /// Note that this loads with a `SeqCst` ordering to synchronize with other
+    /// threads.
     pub fn strong_count(&self) -> usize {
-        self.extern_data().get_ref_count()
+        self.extern_data().ref_count.load(Ordering::SeqCst)
     }
 
     #[inline]

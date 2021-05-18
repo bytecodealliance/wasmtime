@@ -26,6 +26,9 @@ impl ExternRef {
     }
 
     /// Get the strong reference count for this `ExternRef`.
+    ///
+    /// Note that this loads the reference count with a `SeqCst` ordering to
+    /// synchronize with other threads.
     pub fn strong_count(&self) -> usize {
         self.inner.strong_count()
     }
