@@ -38,10 +38,13 @@ looks like:
 [`WasiCtx`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/struct.WasiCtx.html
 
 ```rust
+# extern crate wasmtime;
+# extern crate wasmtime_wasi;
+# extern crate anyhow;
 use anyhow::Result;
 use std::borrow::{Borrow, BorrowMut};
 use wasmtime::*;
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi::{WasiCtx, sync::WasiCtxBuilder};
 
 struct MyState {
     message: String,
@@ -76,6 +79,7 @@ fn main() -> Result<()> {
 
     // ...
 
+# let _linker: Linker<MyState> = linker;
     Ok(())
 }
 ```

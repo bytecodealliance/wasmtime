@@ -42,7 +42,8 @@ impl<'a> Interpreter<'a> {
         self.call_by_index(index, arguments)
     }
 
-    /// Call a function by its index in the [FunctionStore]; this is a proxy for [Interpreter::call].
+    /// Call a function by its index in the [FunctionStore]; this is a proxy for
+    /// `Interpreter::call`.
     pub fn call_by_index(
         &mut self,
         index: FuncIndex,
@@ -287,7 +288,7 @@ mod tests {
             v1 = iadd_imm v0, -1
             return v1
         }
-        
+
         function %parent(i32) -> i32 {
             fn42 = %child(i32) -> i32
         block0(v0: i32):

@@ -64,8 +64,8 @@ pub use self::data::*;
 /// [`StoreContextMut`] and pass that around as well.
 ///
 /// Note that all methods on [`Store`] are mirrored onto [`StoreContext`],
-/// [`StoreContextMut`], and [`Caller`]. This way no matter what form of context
-/// you have you can call various methods, create objects, etc.
+/// [`StoreContextMut`], and [`Caller`](crate::Caller). This way no matter what
+/// form of context you have you can call various methods, create objects, etc.
 ///
 /// ## Stores and `Default`
 ///

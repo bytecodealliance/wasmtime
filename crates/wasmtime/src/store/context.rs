@@ -103,8 +103,8 @@ pub trait AsContext {
 ///
 /// This is notably used for methods that may require some mutation of the
 /// [`Store`] itself. For example calling a wasm function can mutate linear
-/// memory or globals. Creation of a [`Func`] will update internal data
-/// structures. This ends up being quite a common bound in Wasmtime, but
+/// memory or globals. Creation of a [`Func`](crate::Func) will update internal
+/// data structures. This ends up being quite a common bound in Wasmtime, but
 /// typically you can simply pass `&mut store` or `&mut caller` to satisfy it.
 pub trait AsContextMut: AsContext {
     /// Returns the store context that this type provides access to.
