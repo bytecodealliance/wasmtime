@@ -1,7 +1,7 @@
 //! The module that implements the `wasmtime run` command.
 
 use crate::{CommonOptions, WasiModules};
-use anyhow::{bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use std::borrow::{Borrow, BorrowMut};
 use std::thread;
 use std::time::Duration;
@@ -287,7 +287,8 @@ impl RunCommand {
         name: &str,
     ) -> Result<()> {
         let func = match linker
-            .get_one_by_name(&mut *store, "", Some(name))?
+            .get(&mut *store, "", Some(name))
+            .ok_or_else(|| anyhow!("no export named `{}` found", name))?
             .into_func()
         {
             Some(func) => func,

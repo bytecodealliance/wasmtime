@@ -104,7 +104,7 @@ fn drop_delayed() -> Result<()> {
     let module = Module::new(&engine, &wat::parse_str(r#"(import "" "" (func))"#)?)?;
 
     let mut store = Store::new(&engine, ());
-    let func = linker.get_one_by_name(&mut store, "", Some(""))?;
+    let func = linker.get(&mut store, "", Some("")).unwrap();
     Instance::new(&mut store, &module, &[func])?;
 
     drop(store);
@@ -112,7 +112,7 @@ fn drop_delayed() -> Result<()> {
     assert_eq!(HITS.load(SeqCst), 0);
 
     let mut store = Store::new(&engine, ());
-    let func = linker.get_one_by_name(&mut store, "", Some(""))?;
+    let func = linker.get(&mut store, "", Some("")).unwrap();
     Instance::new(&mut store, &module, &[func])?;
 
     drop(store);
@@ -147,42 +147,48 @@ fn signatures_match() -> Result<()> {
     let mut store = Store::new(&engine, ());
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f1"))?
+        .get(&mut store, "", Some("f1"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
     assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[]);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f2"))?
+        .get(&mut store, "", Some("f2"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
     assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I32]);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f3"))?
+        .get(&mut store, "", Some("f3"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
     assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::I64]);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f4"))?
+        .get(&mut store, "", Some("f4"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
     assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F32]);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f5"))?
+        .get(&mut store, "", Some("f5"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert_eq!(f.ty(&store).params().collect::<Vec<_>>(), &[]);
     assert_eq!(f.ty(&store).results().collect::<Vec<_>>(), &[ValType::F64]);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f6"))?
+        .get(&mut store, "", Some("f6"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert_eq!(
@@ -439,7 +445,8 @@ fn trap_smoke() -> Result<()> {
     let mut store = Store::new(&engine, ());
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some(""))?
+        .get(&mut store, "", Some(""))
+        .unwrap()
         .into_func()
         .unwrap();
 
@@ -492,7 +499,8 @@ fn new_from_signature() -> Result<()> {
     let mut store = Store::new(&engine, ());
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f1"))?
+        .get(&mut store, "", Some("f1"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert!(f.typed::<(), (), _>(&store).is_ok());
@@ -500,7 +508,8 @@ fn new_from_signature() -> Result<()> {
     assert!(f.typed::<i32, (), _>(&store).is_err());
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f2"))?
+        .get(&mut store, "", Some("f2"))
+        .unwrap()
         .into_func()
         .unwrap();
     assert!(f.typed::<(), (), _>(&store).is_err());
@@ -534,7 +543,8 @@ fn call_wrapped_func() -> Result<()> {
     let mut store = Store::new(&engine, ());
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f1"))?
+        .get(&mut store, "", Some("f1"))
+        .unwrap()
         .into_func()
         .unwrap();
     f.call(
@@ -545,7 +555,8 @@ fn call_wrapped_func() -> Result<()> {
         .call(&mut store, (1, 2, 3.0, 4.0))?;
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f2"))?
+        .get(&mut store, "", Some("f2"))
+        .unwrap()
         .into_func()
         .unwrap();
     let results = f.call(&mut store, &[])?;
@@ -554,7 +565,8 @@ fn call_wrapped_func() -> Result<()> {
     assert_eq!(f.typed::<(), i32, _>(&store)?.call(&mut store, ())?, 1);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f3"))?
+        .get(&mut store, "", Some("f3"))
+        .unwrap()
         .into_func()
         .unwrap();
     let results = f.call(&mut store, &[])?;
@@ -563,7 +575,8 @@ fn call_wrapped_func() -> Result<()> {
     assert_eq!(f.typed::<(), i64, _>(&store)?.call(&mut store, ())?, 2);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f4"))?
+        .get(&mut store, "", Some("f4"))
+        .unwrap()
         .into_func()
         .unwrap();
     let results = f.call(&mut store, &[])?;
@@ -572,7 +585,8 @@ fn call_wrapped_func() -> Result<()> {
     assert_eq!(f.typed::<(), f32, _>(&store)?.call(&mut store, ())?, 3.0);
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some("f5"))?
+        .get(&mut store, "", Some("f5"))
+        .unwrap()
         .into_func()
         .unwrap();
     let results = f.call(&mut store, &[])?;
@@ -592,7 +606,8 @@ fn func_return_nothing() -> Result<()> {
 
     let mut store = Store::new(&engine, ());
     let f = linker
-        .get_one_by_name(&mut store, "", Some(""))?
+        .get(&mut store, "", Some(""))
+        .unwrap()
         .into_func()
         .unwrap();
     let err = f.call(&mut store, &[]).unwrap_err().downcast::<Trap>()?;
@@ -639,7 +654,8 @@ fn call_via_funcref() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some(""))?
+        .get(&mut store, "", Some(""))
+        .unwrap()
         .into_func()
         .unwrap();
     let results = instance
@@ -686,7 +702,8 @@ fn store_with_context() -> Result<()> {
     let mut store = Store::new(&engine, Ctx { called: false });
 
     let f = linker
-        .get_one_by_name(&mut store, "", Some(""))?
+        .get(&mut store, "", Some(""))
+        .unwrap()
         .into_func()
         .unwrap();
     f.call(&mut store, &[])?;

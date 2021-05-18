@@ -11,7 +11,7 @@ use wasmtime_runtime::{debug_builtins, InstanceAllocator};
 /// modules.
 ///
 /// An engine can be safely shared across threads and is a cheap cloneable
-/// handle to the actual engine. The engine itself will be deallocate once all
+/// handle to the actual engine. The engine itself will be deallocated once all
 /// references to it have gone away.
 ///
 /// Engines store global configuration preferences such as compilation settings,

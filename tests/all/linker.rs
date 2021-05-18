@@ -258,7 +258,7 @@ fn get_host_function() -> Result<()> {
     linker.func_wrap("mod", "f1", || {})?;
     let mut store = Store::<()>::default();
     assert!(linker
-        .get(&mut store, &module.imports().nth(0).unwrap())
+        .get_by_import(&mut store, &module.imports().nth(0).unwrap())
         .is_some());
 
     Ok(())
@@ -284,7 +284,7 @@ fn funcs_live_on_to_fight_another_day() -> Result<()> {
     let get_and_call = || -> Result<()> {
         assert_eq!(flag.load(SeqCst), 0);
         let mut store = Store::new(&engine, ());
-        let func = linker.get_one_by_name(&mut store, "", Some(""))?;
+        let func = linker.get(&mut store, "", Some("")).unwrap();
         func.into_func().unwrap().call(&mut store, &[])?;
         assert_eq!(flag.load(SeqCst), 0);
         Ok(())

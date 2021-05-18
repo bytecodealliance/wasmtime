@@ -73,7 +73,8 @@ impl WastContext {
         match module {
             Some(module) => self
                 .linker
-                .get_one_by_name(&mut self.store, module, Some(name)),
+                .get(&mut self.store, module, Some(name))
+                .ok_or_else(|| anyhow!("no item named `{}::{}` found", module, name)),
             None => self
                 .current
                 .as_ref()

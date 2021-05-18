@@ -17,7 +17,6 @@
     - [Linking Modules](./examples-rust-linking.md)
     - [Debugging](./examples-rust-debugging.md)
     - [Using Multi-Value](./examples-rust-multi-value.md)
-    - [Multi-threading](./examples-rust-multithreading.md)
   - [Embedding in C](./examples-c-embed.md)
     - [Hello, World!](./examples-c-hello-world.md)
     - [Calculating the GCD](./examples-c-gcd.md)

@@ -24,22 +24,16 @@ use wasmtime_runtime::{
 
 /// A WebAssembly function which can be called.
 ///
-/// This type can represent a number of callable items, such as:
-///
-/// * An exported function from a WebAssembly module.
-/// * A user-defined function used to satisfy an import.
-///
-/// These types of callable items are all wrapped up in this `Func` and can be
-/// used to both instantiate an [`Instance`] as well as be extracted from an
-/// [`Instance`].
+/// This type can represent either an exported function from a WebAssembly
+/// module or a host-defined function which can be used to satisfy an import of
+/// a module. [`Func`] and can be used to both instantiate an [`Instance`] as
+/// well as be extracted from an [`Instance`].
 ///
 /// [`Instance`]: crate::Instance
 ///
-/// # `Func` and `Clone`
-///
-/// Functions are internally reference counted so you can `clone` a `Func`. The
-/// cloning process only performs a shallow clone, so two cloned `Func`
-/// instances are equivalent in their functionality.
+/// A [`Func`] "belongs" to the store that it was originally created within.
+/// Operations on a [`Func`] only work with the store it belongs to, and if
+/// another store is passed in by accident then methods will panic.
 ///
 /// # `Func` and `async`
 ///
@@ -53,26 +47,13 @@ use wasmtime_runtime::{
 /// functions through [`Func::call`] or [`Func::call_async`] (or the typed
 /// wrappers such as [`TypedFunc::call`] vs [`TypedFunc::call_async`]).
 ///
-/// Note that asynchronous function APIs here are a bit trickier than their
-/// synchronous brethren. For example [`Func::new_async`] and
-/// [`Func::wrapN_async`](Func::wrap1_async) take explicit state parameters to
-/// allow you to close over the state in the returned future. It's recommended
-/// that you pass state via these parameters instead of through the closure's
-/// environment, which may give Rust lifetime errors. Additionally unlike
-/// synchronous functions which can all get wrapped through [`Func::wrap`]
-/// asynchronous functions need to explicitly wrap based on the number of
-/// parameters that they have (e.g. no wasm parameters gives you
-/// [`Func::wrap0_async`], one wasm parameter you'd use [`Func::wrap1_async`],
-/// etc). Be sure to consult the documentation for [`Func::wrap`] for how the
-/// wasm type signature is inferred from the Rust type signature.
-///
 /// # To `Func::call` or to `Func::typed().call()`
 ///
-/// There's a 2x2 matrix of methods to call `Func`. Invocations can either be
+/// There's a 2x2 matrix of methods to call [`Func`]. Invocations can either be
 /// asynchronous or synchronous. They can also be statically typed or not.
 /// Whether or not an invocation is asynchronous is indicated via the method
-/// being `async` and `call_async` being the entry point. Otherwise for
-/// statically typed or not your options are:
+/// being `async` and [`call_async`](Func::call_async) being the entry point.
+/// Otherwise for statically typed or not your options are:
 ///
 /// * Dynamically typed - if you don't statically know the signature of the
 ///   function that you're calling you'll be using [`Func::call`] or
@@ -103,26 +84,26 @@ use wasmtime_runtime::{
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
 /// let engine = Engine::default();
-/// let store = Store::new(&engine);
 /// let module = Module::new(&engine, r#"(module (func (export "foo")))"#)?;
-/// let instance = Instance::new(&store, &module, &[])?;
-/// let foo = instance.get_func("foo").expect("export wasn't a function");
+/// let mut store = Store::new(&engine, ());
+/// let instance = Instance::new(&mut store, &module, &[])?;
+/// let foo = instance.get_func(&mut store, "foo").expect("export wasn't a function");
 ///
 /// // Work with `foo` as a `Func` at this point, such as calling it
 /// // dynamically...
-/// match foo.call(&[]) {
+/// match foo.call(&mut store, &[]) {
 ///     Ok(result) => { /* ... */ }
 ///     Err(trap) => {
 ///         panic!("execution of `foo` resulted in a wasm trap: {}", trap);
 ///     }
 /// }
-/// foo.call(&[])?;
+/// foo.call(&mut store, &[])?;
 ///
 /// // ... or we can make a static assertion about its signature and call it.
 /// // Our first call here can fail if the signatures don't match, and then the
 /// // second call can fail if the function traps (like the `match` above).
-/// let foo = foo.typed::<(), ()>()?;
-/// foo.call(())?;
+/// let foo = foo.typed::<(), (), _>(&store)?;
+/// foo.call(&mut store, ())?;
 /// # Ok(())
 /// # }
 /// ```
@@ -133,11 +114,11 @@ use wasmtime_runtime::{
 /// ```
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
-/// let store = Store::default();
+/// let mut store = Store::<()>::default();
 ///
 /// // Create a custom `Func` which can execute arbitrary code inside of the
 /// // closure.
-/// let add = Func::wrap(&store, |a: i32, b: i32| -> i32 { a + b });
+/// let add = Func::wrap(&mut store, |a: i32, b: i32| -> i32 { a + b });
 ///
 /// // Next we can hook that up to a wasm module which uses it.
 /// let module = Module::new(
@@ -155,10 +136,10 @@ use wasmtime_runtime::{
 ///                 i32.add))
 ///     "#,
 /// )?;
-/// let instance = Instance::new(&store, &module, &[add.into()])?;
-/// let call_add_twice = instance.get_typed_func::<(), i32>("call_add_twice")?;
+/// let instance = Instance::new(&mut store, &module, &[add.into()])?;
+/// let call_add_twice = instance.get_typed_func::<(), i32, _>(&mut store, "call_add_twice")?;
 ///
-/// assert_eq!(call_add_twice.call(())?, 10);
+/// assert_eq!(call_add_twice.call(&mut store, ())?, 10);
 /// # Ok(())
 /// # }
 /// ```
@@ -168,7 +149,7 @@ use wasmtime_runtime::{
 /// ```
 /// # use wasmtime::*;
 /// # fn main() -> anyhow::Result<()> {
-/// let store = Store::default();
+/// let mut store = Store::<()>::default();
 ///
 /// // Here we need to define the type signature of our `Double` function and
 /// // then wrap it up in a `Func`
@@ -176,7 +157,7 @@ use wasmtime_runtime::{
 ///     [wasmtime::ValType::I32].iter().cloned(),
 ///     [wasmtime::ValType::I32].iter().cloned(),
 /// );
-/// let double = Func::new(&store, double_type, |_, params, results| {
+/// let double = Func::new(&mut store, double_type, |_, params, results| {
 ///     let mut value = params[0].unwrap_i32();
 ///     value *= 2;
 ///     results[0] = value.into();
@@ -195,7 +176,7 @@ use wasmtime_runtime::{
 ///             (start $start))
 ///     "#,
 /// )?;
-/// let instance = Instance::new(&store, &module, &[double.into()])?;
+/// let instance = Instance::new(&mut store, &module, &[double.into()])?;
 /// // .. work with `instance` if necessary
 /// # Ok(())
 /// # }
@@ -291,13 +272,13 @@ macro_rules! generate_wrap_async_func {
 
 impl Func {
     /// Creates a new `Func` with the given arguments, typically to create a
-    /// user-defined function to pass as an import to a module.
+    /// host-defined function to pass as an import to a module.
     ///
-    /// * `store` - a cache of data where information is stored, typically
-    ///   shared with a [`Module`](crate::Module).
+    /// * `store` - the store in which to create this [`Func`], which will own
+    ///   the return value.
     ///
     /// * `ty` - the signature of this function, used to indicate what the
-    ///   inputs and outputs are, which must be WebAssembly types.
+    ///   inputs and outputs are.
     ///
     /// * `func` - the native code invoked whenever this `Func` will be called.
     ///   This closure is provided a [`Caller`] as its first argument to learn
@@ -305,14 +286,20 @@ impl Func {
     ///   parameters as a slice along with a mutable slice of where to write
     ///   results.
     ///
-    /// Note that the implementation of `func` must adhere to the `ty`
-    /// signature given, error or traps may occur if it does not respect the
-    /// `ty` signature.
+    /// Note that the implementation of `func` must adhere to the `ty` signature
+    /// given, error or traps may occur if it does not respect the `ty`
+    /// signature. For example if the function type declares that it returns one
+    /// i32 but the `func` closures does not write anything into the results
+    /// slice then a trap may be generated.
     ///
     /// Additionally note that this is quite a dynamic function since signatures
-    /// are not statically known. For a more performant `Func` it's recommended
-    /// to use [`Func::wrap`] if you can because with statically known
-    /// signatures the engine can optimize the implementation much more.
+    /// are not statically known. For a more performant and ergonomic `Func`
+    /// it's recommended to use [`Func::wrap`] if you can because with
+    /// statically known signatures Wasmtime can optimize the implementation
+    /// much more.
+    ///
+    /// For more information about `Send + Sync + 'static` requirements on the
+    /// `func`, see [`Func::wrap`](#why-send--sync--static).
     pub fn new<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -333,25 +320,15 @@ impl Func {
     /// and then return the result to WebAssembly.
     ///
     /// This function is the asynchronous analogue of [`Func::new`] and much of
-    /// that documentation applies to this as well. There are a few key
-    /// differences (besides being asynchronous) that are worth pointing out:
+    /// that documentation applies to this as well. The key difference is that
+    /// `func` returns a future instead of simply a `Result`. Note that the
+    /// returned future can close over any of the arguments, but it cannot close
+    /// over the state of the closure itself. It's recommended to store any
+    /// necessary async state in the `T` of the [`Store<T>`](crate::Store) which
+    /// can be accessed through [`Caller::data`] or [`Caller::data_mut`].
     ///
-    /// * The state parameter `T` is passed to the provided function `F` on
-    ///   each invocation. This is done so you can use the state in `T` in the
-    ///   computation of the output future (the future can close over this
-    ///   value). Unfortunately due to limitations of async-in-Rust right now
-    ///   you **cannot** close over the captured variables in `F` itself in the
-    ///   returned future. This means that you likely won't close over much
-    ///   state in `F` and will instead use `T`.
-    ///
-    /// * The closure here returns a *boxed* future, not something that simply
-    ///   implements a future. This is also unfortunately due to limitations in
-    ///   Rust right now.
-    ///
-    /// Overall we're not super happy with this API signature and would love to
-    /// change it to make it more ergonomic. Despite this, however, you should
-    /// be able to still hook into asynchronous computations and plug them into
-    /// wasm. Improvements are always welcome with PRs!
+    /// For more information on `Send + Sync + 'static`, see
+    /// [`Func::wrap`](#why-send--sync--static).
     ///
     /// # Panics
     ///
@@ -382,14 +359,17 @@ impl Func {
     ///
     /// // Using `new_async` we can hook up into calling our async
     /// // `get_row_count` function.
-    /// let store = Store::new(&Engine::new(Config::new().async_support(true))?);
+    /// let engine = Engine::new(Config::new().async_support(true))?;
+    /// let mut store = Store::new(&engine, MyDatabase {
+    ///     // ...
+    /// });
     /// let get_row_count_type = wasmtime::FuncType::new(
     ///     None,
     ///     Some(wasmtime::ValType::I32),
     /// );
-    /// let double = Func::new_async(&store, get_row_count_type, my_database, |_, database, params, results| {
+    /// let get = Func::new_async(&mut store, get_row_count_type, |caller, _params, results| {
     ///     Box::new(async move {
-    ///         let count = database.get_row_count().await;
+    ///         let count = caller.data().get_row_count().await;
     ///         results[0] = Val::I32(count as i32);
     ///         Ok(())
     ///     })
@@ -477,6 +457,30 @@ impl Func {
     /// sufficient inlining and optimization the WebAssembly will call straight
     /// into `func` provided, with no extra fluff entailed.
     ///
+    /// # Why `Send + Sync + 'static`?
+    ///
+    /// All host functions defined in a [`Store`](crate::Store) (including
+    /// those from [`Func::new`] and other constructors) require that the
+    /// `func` provided is `Send + Sync + 'static`. Additionally host functions
+    /// always are `Fn` as opposed to `FnMut` or `FnOnce`. This can at-a-glance
+    /// feel restrictive since the closure cannot close over as many types as
+    /// before. The reason for this, though, is to ensure that
+    /// [`Store<T>`](crate::Store) can implement both the `Send` and `Sync`
+    /// traits.
+    ///
+    /// Fear not, however, because this isn't as restrictive as it seems! Host
+    /// functions are provided a [`Caller<'_, T>`](crate::Caller) argument which
+    /// allows access to the host-defined data within the
+    /// [`Store`](crate::Store). The `T` type is not required to be any of
+    /// `Send`, `Sync`, or `'static`! This means that you can store whatever
+    /// you'd like in `T` and have it accessible by all host functions.
+    /// Additionally mutable access to `T` is allowed through
+    /// [`Caller::data_mut`].
+    ///
+    /// Most host-defined [`Func`] values provide closures that end up not
+    /// actually closing over any values. These zero-sized types will use the
+    /// context from [`Caller`] for host-defined information.
+    ///
     /// # Examples
     ///
     /// First up we can see how simple wasm imports can be implemented, such
@@ -485,8 +489,8 @@ impl Func {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let add = Func::wrap(&store, |a: i32, b: i32| a + b);
+    /// # let mut store = Store::<()>::default();
+    /// let add = Func::wrap(&mut store, |a: i32, b: i32| a + b);
     /// let module = Module::new(
     ///     store.engine(),
     ///     r#"
@@ -498,9 +502,9 @@ impl Func {
     ///                 call $add))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&store, &module, &[add.into()])?;
-    /// let foo = instance.get_typed_func::<(i32, i32), i32>("foo")?;
-    /// assert_eq!(foo.call((1, 2))?, 3);
+    /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
+    /// let foo = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "foo")?;
+    /// assert_eq!(foo.call(&mut store, (1, 2))?, 3);
     /// # Ok(())
     /// # }
     /// ```
@@ -511,8 +515,8 @@ impl Func {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let add = Func::wrap(&store, |a: i32, b: i32| {
+    /// # let mut store = Store::<()>::default();
+    /// let add = Func::wrap(&mut store, |a: i32, b: i32| {
     ///     match a.checked_add(b) {
     ///         Some(i) => Ok(i),
     ///         None => Err(Trap::new("overflow")),
@@ -529,10 +533,10 @@ impl Func {
     ///                 call $add))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&store, &module, &[add.into()])?;
-    /// let foo = instance.get_typed_func::<(i32, i32), i32>("foo")?;
-    /// assert_eq!(foo.call((1, 2))?, 3);
-    /// assert!(foo.call((i32::max_value(), 1)).is_err());
+    /// let instance = Instance::new(&mut store, &module, &[add.into()])?;
+    /// let foo = instance.get_typed_func::<(i32, i32), i32, _>(&mut store, "foo")?;
+    /// assert_eq!(foo.call(&mut store, (1, 2))?, 3);
+    /// assert!(foo.call(&mut store, (i32::max_value(), 1)).is_err());
     /// # Ok(())
     /// # }
     /// ```
@@ -542,8 +546,8 @@ impl Func {
     /// ```
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let debug = Func::wrap(&store, |a: i32, b: u32, c: f32, d: i64, e: u64, f: f64| {
+    /// # let mut store = Store::<()>::default();
+    /// let debug = Func::wrap(&mut store, |a: i32, b: u32, c: f32, d: i64, e: u64, f: f64| {
     ///
     ///     println!("a={}", a);
     ///     println!("b={}", b);
@@ -567,9 +571,9 @@ impl Func {
     ///                 call $debug))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&store, &module, &[debug.into()])?;
-    /// let foo = instance.get_typed_func::<(), ()>("foo")?;
-    /// foo.call(())?;
+    /// let instance = Instance::new(&mut store, &module, &[debug.into()])?;
+    /// let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    /// foo.call(&mut store, ())?;
     /// # Ok(())
     /// # }
     /// ```
@@ -582,32 +586,24 @@ impl Func {
     ///
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
-    /// # let store = Store::default();
-    /// let log_str = Func::wrap(&store, |caller: Caller<'_>, ptr: i32, len: i32| {
+    /// # let mut store = Store::default();
+    /// let log_str = Func::wrap(&mut store, |mut caller: Caller<'_, ()>, ptr: i32, len: i32| {
     ///     let mem = match caller.get_export("memory") {
     ///         Some(Extern::Memory(mem)) => mem,
     ///         _ => return Err(Trap::new("failed to find host memory")),
     ///     };
-    ///
-    ///     // We're reading raw wasm memory here so we need `unsafe`. Note
-    ///     // though that this should be safe because we don't reenter wasm
-    ///     // while we're reading wasm memory, nor should we clash with
-    ///     // any other memory accessors (assuming they're well-behaved
-    ///     // too).
-    ///     unsafe {
-    ///         let data = mem.data_unchecked()
-    ///             .get(ptr as u32 as usize..)
-    ///             .and_then(|arr| arr.get(..len as u32 as usize));
-    ///         let string = match data {
-    ///             Some(data) => match str::from_utf8(data) {
-    ///                 Ok(s) => s,
-    ///                 Err(_) => return Err(Trap::new("invalid utf-8")),
-    ///             },
-    ///             None => return Err(Trap::new("pointer/length out of bounds")),
-    ///         };
-    ///         assert_eq!(string, "Hello, world!");
-    ///         println!("{}", string);
-    ///     }
+    ///     let data = mem.data(&caller)
+    ///         .get(ptr as u32 as usize..)
+    ///         .and_then(|arr| arr.get(..len as u32 as usize));
+    ///     let string = match data {
+    ///         Some(data) => match str::from_utf8(data) {
+    ///             Ok(s) => s,
+    ///             Err(_) => return Err(Trap::new("invalid utf-8")),
+    ///         },
+    ///         None => return Err(Trap::new("pointer/length out of bounds")),
+    ///     };
+    ///     assert_eq!(string, "Hello, world!");
+    ///     println!("{}", string);
     ///     Ok(())
     /// });
     /// let module = Module::new(
@@ -623,9 +619,9 @@ impl Func {
     ///             (data (i32.const 4) "Hello, world!"))
     ///     "#,
     /// )?;
-    /// let instance = Instance::new(&store, &module, &[log_str.into()])?;
-    /// let foo = instance.get_typed_func::<(), ()>("foo")?;
-    /// foo.call(())?;
+    /// let instance = Instance::new(&mut store, &module, &[log_str.into()])?;
+    /// let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
+    /// foo.call(&mut store, ())?;
     /// # Ok(())
     /// # }
     /// ```
@@ -645,6 +641,10 @@ impl Func {
     for_each_function_signature!(generate_wrap_async_func);
 
     /// Returns the underlying wasm type that this `Func` has.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this function.
     pub fn ty(&self, store: impl AsContext) -> FuncType {
         // Signatures should always be registered in the engine's registry of
         // shared signatures, so we should be able to unwrap safely here.
@@ -674,7 +674,7 @@ impl Func {
     ///
     /// This function will panic if called on a function belonging to an async
     /// store. Asynchronous stores must always use `call_async`.
-    /// initiates a panic.
+    /// initiates a panic. Also panics if `store` does not own this function.
     pub fn call(&self, mut store: impl AsContextMut, params: &[Val]) -> Result<Box<[Val]>> {
         assert!(
             !cfg!(feature = "async") || !store.as_context().async_support(),
@@ -704,7 +704,8 @@ impl Func {
     /// # Panics
     ///
     /// Panics if this is called on a function in a synchronous store. This
-    /// only works with functions defined within an asynchronous store.
+    /// only works with functions defined within an asynchronous store. Also
+    /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn call_async<T>(
@@ -911,6 +912,10 @@ impl Func {
     /// function. This behaves the same way as `Params`, but just for the
     /// results of the function.
     ///
+    /// The `S` type parameter represents the method of passing in the store
+    /// context, and can typically be specified as simply `_` when calling this
+    /// function.
+    ///
     /// Translation between Rust types and WebAssembly types looks like:
     ///
     /// | WebAssembly | Rust                |
@@ -940,6 +945,10 @@ impl Func {
     /// This function will return an error if `Params` or `Results` does not
     /// match the native type of this WebAssembly function.
     ///
+    /// # Panics
+    ///
+    /// This method will panic if `store` does not own this function.
+    ///
     /// # Examples
     ///
     /// An end-to-end example of calling a function which takes no parameters
@@ -949,18 +958,18 @@ impl Func {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// let engine = Engine::default();
-    /// let store = Store::new(&engine);
+    /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, r#"(module (func (export "foo")))"#)?;
-    /// let instance = Instance::new(&store, &module, &[])?;
-    /// let foo = instance.get_func("foo").expect("export wasn't a function");
+    /// let instance = Instance::new(&mut store, &module, &[])?;
+    /// let foo = instance.get_func(&mut store, "foo").expect("export wasn't a function");
     ///
     /// // Note that this call can fail due to the typecheck not passing, but
     /// // in our case we statically know the module so we know this should
     /// // pass.
-    /// let typed = foo.typed::<(), ()>()?;
+    /// let typed = foo.typed::<(), (), _>(&store)?;
     ///
     /// // Note that this can fail if the wasm traps at runtime.
-    /// typed.call(())?;
+    /// typed.call(&mut store, ())?;
     /// # Ok(())
     /// # }
     /// ```
@@ -969,9 +978,9 @@ impl Func {
     ///
     /// ```
     /// # use wasmtime::*;
-    /// # fn foo(add: &Func) -> anyhow::Result<()> {
-    /// let typed = add.typed::<(i32, i64), f32>()?;
-    /// assert_eq!(typed.call((1, 2))?, 3.0);
+    /// # fn foo(add: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// let typed = add.typed::<(i32, i64), f32, _>(&store)?;
+    /// assert_eq!(typed.call(&mut store, (1, 2))?, 3.0);
     /// # Ok(())
     /// # }
     /// ```
@@ -982,9 +991,9 @@ impl Func {
     /// # #[cfg(not(feature = "old-x86-backend"))]
     /// # use wasmtime::*;
     /// # #[cfg(not(feature = "old-x86-backend"))]
-    /// # fn foo(add_with_overflow: &Func) -> anyhow::Result<()> {
-    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32)>()?;
-    /// let (result, overflow) = typed.call((u32::max_value(), 2))?;
+    /// # fn foo(add_with_overflow: &Func, mut store: Store<()>) -> anyhow::Result<()> {
+    /// let typed = add_with_overflow.typed::<(u32, u32), (u32, i32), _>(&store)?;
+    /// let (result, overflow) = typed.call(&mut store, (u32::max_value(), 2))?;
     /// assert_eq!(result, 1);
     /// assert_eq!(overflow, 1);
     /// # Ok(())
@@ -996,12 +1005,12 @@ impl Func {
         Results: WasmResults,
         S: AsContext,
     {
-        // First type-check that the params/results are all valid...
+        // Type-check that the params/results are all valid
         let ty = self.ty(store);
         Params::typecheck(ty.params()).context("type mismatch with parameters")?;
         Results::typecheck(ty.results()).context("type mismatch with results")?;
 
-        // ... then we can construct the typed version of this function
+        // and then we can construct the typed version of this function
         // (unsafely), which should be safe since we just did the type check above.
         unsafe { Ok(TypedFunc::new_unchecked(*self)) }
     }
@@ -1423,25 +1432,26 @@ pub trait IntoFunc<T, Params, Results>: Send + Sync + 'static {
     fn into_func(self, engine: &Engine) -> (InstanceHandle, VMTrampoline);
 }
 
-/// A structure representing the *caller's* context when creating a function
+/// A structure representing the caller's context when creating a function
 /// via [`Func::wrap`].
 ///
 /// This structure can be taken as the first parameter of a closure passed to
-/// [Func::wrap], and it can be used to learn information about the caller of
-/// the function, such as the calling module's memory, exports, etc.
+/// [`Func::wrap`] or other constructors, and serves two purposes:
 ///
-/// The primary purpose of this structure is to provide access to the
-/// caller's information, namely it's exported memory and exported functions. This
-/// allows functions which take pointers as arguments to easily read the memory the
-/// pointers point into, or if a function is expected to call malloc in the wasm
-/// module to reserve space for the output you can do that.
+/// * First consumers can use [`Caller<'_, T>`](crate::Caller) to get access to
+///   [`StoreContextMut<'_, T>`](crate::StoreContextMut) and/or get access to
+///   `T` itself. This means that the [`Caller`] type can serve as a proxy to
+///   the original [`Store`](crate::Store) itself and is used to satisfy
+///   [`AsContext`] and [`AsContextMut`] bounds.
 ///
-/// Note that this Caller type a pretty temporary mechanism for accessing the
-/// caller's information until interface types has been fully standardized and
-/// implemented. The interface types proposal will obsolete this type and this will
-/// be removed in the future at some point after interface types is implemented. If
-/// you're relying on this Caller type it's recommended to become familiar with
-/// interface types to ensure that your use case is covered by the proposal.
+/// * Second a [`Caller`] can be used as the name implies, learning about the
+///   caller's context, namely it's exported memory and exported functions. This
+///   allows functions which take pointers as arguments to easily read the
+///   memory the pointers point into, or if a function is expected to call
+///   malloc in the wasm module to reserve space for the output you can do that.
+///
+/// Host functions which want access to [`Store`](crate::Store)-level state are
+/// recommended to use this type.
 pub struct Caller<'a, T> {
     pub(crate) store: StoreContextMut<'a, T>,
     caller: &'a InstanceHandle,
@@ -1469,11 +1479,17 @@ impl<T> Caller<'_, T> {
     ///
     /// Note that this function is only implemented for the `Extern::Memory`
     /// and the `Extern::Func` types currently. No other exported structures
-    /// can be acquired through this just yet, but this may be implemented
-    /// in the future!
+    /// can be acquired through this method.
     ///
-    /// Note that when accessing and calling exported functions, one should adhere
-    /// to the guidelines of the interface types proposal.
+    /// Note that when accessing and calling exported functions, one should
+    /// adhere to the guidelines of the interface types proposal.  This method
+    /// is a temporary mechanism for accessing the caller's information until
+    /// interface types has been fully standardized and implemented. The
+    /// interface types proposal will obsolete this type and this will be
+    /// removed in the future at some point after interface types is
+    /// implemented. If you're relying on this method type it's recommended to
+    /// become familiar with interface types to ensure that your use case is
+    /// covered by the proposal.
     ///
     /// # Return
     ///

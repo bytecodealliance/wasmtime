@@ -22,17 +22,14 @@ use wasmtime_runtime::{
 /// This type represents the instantiation of a [`Module`]. Once instantiated
 /// you can access the [`exports`](Instance::exports) which are of type
 /// [`Extern`] and provide the ability to call functions, set globals, read
-/// memory, etc. This is where all the fun stuff happens!
+/// memory, etc. When interacting with any wasm code you'll want to make an
+/// [`Instance`] to call any code or execute anything.
 ///
-/// An [`Instance`] is created from two inputs, a [`Module`] and a list of
-/// imports, provided as a list of [`Extern`] values. The [`Module`] is the wasm
-/// code that was compiled and we're instantiating, and the [`Extern`] imports
-/// are how we're satisfying the imports of the module provided. On successful
-/// instantiation an [`Instance`] will automatically invoke the wasm `start`
-/// function.
-///
-/// When interacting with any wasm code you'll want to make an [`Instance`] to
-/// call any code or execute anything!
+/// Instances are owned by a [`Store`](crate::Store) which is passed in at
+/// creation time. It's recommended to create instances with
+/// [`Linker::instantiate`](crate::Linker::instantiate) or similar
+/// [`Linker`](crate::Linker) methods, but a more low-level constructor is also
+/// available as [`Instance::new`].
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
 pub struct Instance(Stored<RuntimeInstance>);
@@ -45,32 +42,30 @@ impl Instance {
     /// following the procedure in the [core specification][inst] to
     /// instantiate. Instantiation can fail for a number of reasons (many
     /// specified below), but if successful the `start` function will be
-    /// automatically run (if provided) and then the [`Instance`] will be
-    /// returned.
+    /// automatically run (if specified in the `module`) and then the
+    /// [`Instance`] will be returned.
     ///
     /// Per the WebAssembly spec, instantiation includes running the module's
     /// start function, if it has one (not to be confused with the `_start`
     /// function, which is not run).
     ///
-    /// Note that this is a low-level function that just performance an
-    /// instantiation. See the `Linker` struct for an API which provides a
-    /// convenient way to link imports and provides automatic Command and Reactor
-    /// behavior.
+    /// Note that this is a low-level function that just performs an
+    /// instantiation. See the [`Linker`](crate::Linker) struct for an API which
+    /// provides a convenient way to link imports and provides automatic Command
+    /// and Reactor behavior.
     ///
     /// ## Providing Imports
     ///
-    /// The `imports` array here is a bit tricky. The entries in the list of
-    /// `imports` are intended to correspond 1:1 with the list of imports
-    /// returned by [`Module::imports`]. Before calling [`Instance::new`] you'll
-    /// want to inspect the return value of [`Module::imports`] and, for each
-    /// import type, create an [`Extern`] which corresponds to that type.
-    /// These [`Extern`] values are all then collected into a list and passed to
-    /// this function.
+    /// The entries in the list of `imports` are intended to correspond 1:1
+    /// with the list of imports returned by [`Module::imports`]. Before
+    /// calling [`Instance::new`] you'll want to inspect the return value of
+    /// [`Module::imports`] and, for each import type, create an [`Extern`]
+    /// which corresponds to that type.  These [`Extern`] values are all then
+    /// collected into a list and passed to this function.
     ///
-    /// Note that this function is intentionally relatively low level. It is the
-    /// intention that we'll soon provide a [higher level API][issue] which will
-    /// be much more ergonomic for instantiating modules. If you need the full
-    /// power of customization of imports, though, this is the method for you!
+    /// Note that this function is intentionally relatively low level. For an
+    /// easier time passing imports by doing name-based resolution it's
+    /// recommended to instead use the [`Linker`](crate::Linker) type.
     ///
     /// ## Errors
     ///
@@ -91,10 +86,10 @@ impl Instance {
     /// # Panics
     ///
     /// This function will panic if called with a store associated with a
-    /// [`asynchronous config`](crate::Config::async_support).
+    /// [`asynchronous config`](crate::Config::async_support). This function
+    /// will also panic if any [`Extern`] supplied is not owned by `store`.
     ///
     /// [inst]: https://webassembly.github.io/spec/core/exec/modules.html#exec-instantiation
-    /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/727
     /// [`ExternType`]: crate::ExternType
     pub fn new(
         mut store: impl AsContextMut,
@@ -139,9 +134,13 @@ impl Instance {
     ///
     /// # Panics
     ///
-    /// This function will panic if called with a store associated with a [`synchronous
-    /// config`](crate::Config::new). This is only compatible with stores associated with
-    /// an [`asynchronous config`](crate::Config::async_support).
+    /// This function will panic if called with a store associated with a
+    /// [`synchronous config`](crate::Config::new). This is only compatible with
+    /// stores associated with an [`asynchronous
+    /// config`](crate::Config::async_support).
+    ///
+    /// This function will also panic, like [`Instance::new`], if any [`Extern`]
+    /// specified does not belong to `store`.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn new_async<T>(
@@ -190,6 +189,10 @@ impl Instance {
     }
 
     /// Returns the type signature of this instance.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn ty(&self, store: impl AsContext) -> InstanceType {
         let store = store.as_context();
         let items = &store[self.0];
@@ -209,6 +212,10 @@ impl Instance {
     }
 
     /// Returns the list of exported items from this [`Instance`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn exports<'a, T: 'a>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
@@ -225,6 +232,10 @@ impl Instance {
     /// the value, if found.
     ///
     /// Returns `None` if there was no export named `name`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn get_export(&self, store: impl AsContextMut, name: &str) -> Option<Extern> {
         let store = store.as_context();
         store[self.0].get(name).cloned()
@@ -234,6 +245,10 @@ impl Instance {
     ///
     /// Returns `None` if there was no export named `name`, or if there was but
     /// it wasn't a function.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn get_func(&self, store: impl AsContextMut, name: &str) -> Option<Func> {
         self.get_export(store, name)?.into_func()
     }
@@ -245,6 +260,10 @@ impl Instance {
     ///
     /// Returns an error if `name` isn't a function export or if the export's
     /// type did not match `Params` or `Results`
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn get_typed_func<Params, Results, S>(
         &self,
         mut store: S,
@@ -266,6 +285,10 @@ impl Instance {
     ///
     /// Returns `None` if there was no export named `name`, or if there was but
     /// it wasn't a table.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn get_table(&self, store: impl AsContextMut, name: &str) -> Option<Table> {
         self.get_export(store, name)?.into_table()
     }
@@ -274,6 +297,10 @@ impl Instance {
     ///
     /// Returns `None` if there was no export named `name`, or if there was but
     /// it wasn't a memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn get_memory(&self, store: impl AsContextMut, name: &str) -> Option<Memory> {
         self.get_export(store, name)?.into_memory()
     }
@@ -282,6 +309,10 @@ impl Instance {
     ///
     /// Returns `None` if there was no export named `name`, or if there was but
     /// it wasn't a global.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
     pub fn get_global(&self, store: impl AsContextMut, name: &str) -> Option<Global> {
         self.get_export(store, name)?.into_global()
     }

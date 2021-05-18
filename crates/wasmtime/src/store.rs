@@ -22,31 +22,50 @@ pub use self::context::*;
 mod data;
 pub use self::data::*;
 
-/// A `Store` is a collection of WebAssembly instances and host-defined items.
+/// A [`Store`] is a collection of WebAssembly instances and host-defined state.
 ///
 /// All WebAssembly instances and items will be attached to and refer to a
-/// `Store`. For example instances, functions, globals, and tables are all
-/// attached to a `Store`. Instances are created by instantiating a
-/// [`Module`](crate::Module) within a `Store`.
+/// [`Store`]. For example instances, functions, globals, and tables are all
+/// attached to a [`Store`]. Instances are created by instantiating a
+/// [`Module`](crate::Module) within a [`Store`].
 ///
-/// `Store` is not thread-safe and cannot be sent to other threads. All items
-/// which refer to a `Store` additionally are not threadsafe and can only be
-/// used on the original thread that they were created on.
+/// A [`Store`] is intended to be a short-lived object in a program. No form
+/// of GC is implemented at this time so once an instance is created within a
+/// [`Store`] it will not be deallocated until the [`Store`] itself is dropped.
+/// This makes [`Store`] unsuitable for creating an unbounded number of
+/// instances in it because [`Store`] will never release this memory. It's
+/// recommended to have a [`Store`] correspond roughly to the liftime of a "main
+/// instance" that an embedding is interested in executing.
 ///
-/// A `Store` is not intended to be a long-lived object in a program. No form of
-/// GC is implemented at this time so once an instance is created within a
-/// `Store` it will not be deallocated until all references to the `Store` have
-/// gone away (this includes all references to items in the store). This makes
-/// `Store` unsuitable for creating an unbounded number of instances in it
-/// because `Store` will never release this memory. It's instead recommended to
-/// have a long-lived [`Engine`] and instead create a `Store` for a more scoped
-/// portion of your application.
+/// ## Type parameter `T`
 ///
-/// # Stores and `Clone`
+/// Each [`Store`] has a type parameter `T` associated with it. This `T`
+/// represents state defined by the host. This state will be accessible through
+/// the [`Caller`](crate::Caller) type that host-defined functions get access
+/// to. This `T` is suitable for storing `Store`-specific information which
+/// imported functions may want access to.
 ///
-/// Using `clone` on a `Store` is a cheap operation. It will not create an
-/// entirely new store, but rather just a new reference to the existing object.
-/// In other words it's a shallow copy, not a deep copy.
+/// The data `T` can be accessed through methods like [`Store::data`] and
+/// [`Store::data_mut`].
+///
+/// ## Stores, contexts, oh my
+///
+/// Most methods in Wasmtime take something of the form
+/// [`AsContext`](crate::AsContext) or [`AsContextMut`](crate::AsContextMut) as
+/// the first argument. These two traits allow ergonomically passing in the
+/// context you currently have to any method. The primary two sources of
+/// contexts are:
+///
+/// * `Store<T>`
+/// * `Caller<'_, T>`
+///
+/// corresponding to what you create and what you have access to in a host
+/// function. You can also explicitly acquire a [`StoreContext`] or
+/// [`StoreContextMut`] and pass that around as well.
+///
+/// Note that all methods on [`Store`] are mirrored onto [`StoreContext`],
+/// [`StoreContextMut`], and [`Caller`]. This way no matter what form of context
+/// you have you can call various methods, create objects, etc.
 ///
 /// ## Stores and `Default`
 ///
@@ -144,17 +163,18 @@ impl<T> Store<T> {
     /// The created [`Store`] will place no additional limits on the size of
     /// linear memories or tables at runtime. Linear memories and tables will
     /// be allowed to grow to any upper limit specified in their definitions.
-    ///
     /// The store will limit the number of instances, linear memories, and
-    /// tables created to 10,000.
-    ///
-    /// Use [`Store::limiter`] with a
-    /// [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) to specify different
-    /// limits for the store.
-    ///
-    /// TODO
+    /// tables created to 10,000. This can be overridden with the
+    /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
         let finished_functions = &Default::default();
+        // Wasmtime uses the callee argument to host functions to learn about
+        // the original pointer to the `Store` itself, allowing it to
+        // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
+        // however, there's no "callee" to provide. To fix this we allocate a
+        // single "default callee" for the entire `Store`. This is then used as
+        // part of `Func::call` to guarantee that the `callee: *mut VMContext`
+        // is never null.
         let default_callee = unsafe {
             OnDemandInstanceAllocator::default()
                 .allocate(InstanceAllocationRequest {
@@ -192,6 +212,9 @@ impl<T> Store<T> {
             default_callee,
             data,
         });
+
+        // Once we've actually allocated the store itself we can configure the
+        // trait object pointer of the default callee.
         let store = StoreContextMut(&mut *inner).opaque().traitobj;
         unsafe {
             inner.default_callee.set_store(store);
@@ -209,7 +232,12 @@ impl<T> Store<T> {
         self.inner.data_mut()
     }
 
-    /// TODO
+    /// Configures the [`ResourceLimiter`](crate::ResourceLimiter) used to limit
+    /// resource creation within this [`Store`].
+    ///
+    /// Note that this limiter is only used to limit the creation/growth of
+    /// resources in the future, this does not retroactively attempt to apply
+    /// limits to the [`Store`].
     pub fn limiter(&mut self, limiter: impl crate::ResourceLimiter) {
         self.inner.limiter = Some(Box::new(crate::limits::ResourceLimiterProxy(limiter)));
     }
@@ -277,15 +305,15 @@ impl<T> Store<T> {
     /// // Enable interruptable code via `Config` and then create an interrupt
     /// // handle which we'll use later to interrupt running code.
     /// let engine = Engine::new(Config::new().interruptable(true))?;
-    /// let store = Store::new(&engine);
+    /// let mut store = Store::new(&engine, ());
     /// let interrupt_handle = store.interrupt_handle()?;
     ///
     /// // Compile and instantiate a small example with an infinite loop.
     /// let module = Module::new(&engine, r#"
     ///     (func (export "run") (loop br 0))
     /// "#)?;
-    /// let instance = Instance::new(&store, &module, &[])?;
-    /// let run = instance.get_typed_func::<(), ()>("run")?;
+    /// let instance = Instance::new(&mut store, &module, &[])?;
+    /// let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
     ///
     /// // Spin up a thread to send us an interrupt in a second
     /// std::thread::spawn(move || {
@@ -293,7 +321,7 @@ impl<T> Store<T> {
     ///     interrupt_handle.interrupt();
     /// });
     ///
-    /// let trap = run.call(()).unwrap_err();
+    /// let trap = run.call(&mut store, ()).unwrap_err();
     /// assert!(trap.to_string().contains("wasm trap: interrupt"));
     /// # Ok(())
     /// # }
@@ -303,6 +331,10 @@ impl<T> Store<T> {
     }
 
     /// Perform garbage collection of `ExternRef`s.
+    ///
+    /// Note that it is not required to actively call this function. GC will
+    /// automatically happen when internal buffers fill up. This is provided if
+    /// fine-grained control over the GC is desired.
     pub fn gc(&mut self) {
         self.inner.gc()
     }

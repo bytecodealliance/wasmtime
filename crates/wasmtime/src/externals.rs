@@ -26,7 +26,7 @@ pub enum Extern {
     /// A WebAssembly `global` which acts like a `Cell<T>` of sorts, supporting
     /// `get` and `set` operations.
     Global(Global),
-    /// A WebAssembly `table` which is an array of `Val` types.
+    /// A WebAssembly `table` which is an array of `Val` reference types.
     Table(Table),
     /// A WebAssembly linear memory.
     Memory(Memory),
@@ -98,6 +98,13 @@ impl Extern {
     }
 
     /// Returns the type associated with this `Extern`.
+    ///
+    /// The `store` argument provided must own this `Extern` and is used to look
+    /// up type information.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this item does not belong to the `store` provided.
     pub fn ty(&self, store: impl AsContext) -> ExternType {
         let store = store.as_context();
         match self {
@@ -198,14 +205,10 @@ impl From<Module> for Extern {
 /// instructions will modify and read global values in a wasm module. Globals
 /// can either be imported or exported from wasm modules.
 ///
-/// If you're familiar with Rust already you can think of a `Global` as a sort
-/// of `Rc<Cell<Val>>`, more or less.
-///
-/// # `Global` and `Clone`
-///
-/// Globals are internally reference counted so you can `clone` a `Global`. The
-/// cloning process only performs a shallow clone, so two cloned `Global`
-/// instances are equivalent in their functionality.
+/// A [`Global`] "belongs" to the store that it was originally created within
+/// (either via [`Global::new`] or via instantiating a [`Module`]). Operations
+/// on a [`Global`] only work with the store it belongs to, and if another store
+/// is passed in by accident then methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
 pub struct Global(Stored<wasmtime_runtime::ExportGlobal>);
@@ -214,14 +217,47 @@ impl Global {
     /// Creates a new WebAssembly `global` value with the provide type `ty` and
     /// initial value `val`.
     ///
-    /// The `store` argument provided is used as a general global cache for
-    /// information, and otherwise the `ty` and `val` arguments are used to
-    /// initialize the global.
+    /// The `store` argument will be the owner of the [`Global`] returned. Using
+    /// the returned [`Global`] other items in the store may access this global.
+    /// For example this could be provided as an argument to
+    /// [`Instance::new`](crate::Instance::new) or
+    /// [`Linker::define`](crate::Linker::define).
     ///
     /// # Errors
     ///
     /// Returns an error if the `ty` provided does not match the type of the
-    /// value `val`.
+    /// value `val`, or if `val` comes from a different store than `store`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    ///
+    /// let ty = GlobalType::new(ValType::I32, Mutability::Const);
+    /// let i32_const = Global::new(&mut store, ty, 1i32.into())?;
+    /// let ty = GlobalType::new(ValType::F64, Mutability::Var);
+    /// let f64_mut = Global::new(&mut store, ty, 2.0f64.into())?;
+    ///
+    /// let module = Module::new(
+    ///     &engine,
+    ///     "(module
+    ///         (global (import \"\" \"i32-const\") i32)
+    ///         (global (import \"\" \"f64-mut\") (mut f64))
+    ///     )"
+    /// )?;
+    ///
+    /// let mut linker = Linker::new(&engine);
+    /// linker.define("", "i32-const", i32_const)?;
+    /// linker.define("", "f64-mut", f64_mut)?;
+    ///
+    /// let instance = linker.instantiate(&mut store, &module)?;
+    /// // ...
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(mut store: impl AsContextMut, ty: GlobalType, val: Val) -> Result<Global> {
         Global::_new(&mut store.as_context_mut().opaque(), ty, val)
     }
@@ -240,6 +276,10 @@ impl Global {
     }
 
     /// Returns the underlying type of this `global`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
     pub fn ty(&self, store: impl AsContext) -> GlobalType {
         let store = store.as_context();
         let ty = &store[self.0].global;
@@ -247,6 +287,10 @@ impl Global {
     }
 
     /// Returns the current [`Val`] of this global.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
     pub fn get(&self, mut store: impl AsContextMut) -> Val {
         unsafe {
             let store = store.as_context_mut();
@@ -274,8 +318,13 @@ impl Global {
     ///
     /// # Errors
     ///
-    /// Returns an error if this global has a different type than `Val`, or if
-    /// it's not a mutable global.
+    /// Returns an error if this global has a different type than `Val`, if
+    /// it's not a mutable global, or if `val` comes from a different store than
+    /// the one provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
     pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
         let store = store.as_context_mut();
         let ty = self.ty(&store);
@@ -336,26 +385,22 @@ impl Global {
 /// A WebAssembly `table`, or an array of values.
 ///
 /// Like [`Memory`] a table is an indexed array of values, but unlike [`Memory`]
-/// it's an array of WebAssembly values rather than bytes. One of the most
-/// common usages of a table is a function table for wasm modules, where each
-/// element has the `Func` type.
+/// it's an array of WebAssembly reference type values rather than bytes. One of
+/// the most common usages of a table is a function table for wasm modules (a
+/// `funcref` table), where each element has the `ValType::FuncRef` type.
 ///
-/// Tables, like globals, are not threadsafe and can only be used on one thread.
-/// Tables can be grown in size and each element can be read/written.
-///
-/// # `Table` and `Clone`
-///
-/// Tables are internally reference counted so you can `clone` a `Table`. The
-/// cloning process only performs a shallow clone, so two cloned `Table`
-/// instances are equivalent in their functionality.
+/// A [`Table`] "belongs" to the store that it was originally created within
+/// (either via [`Table::new`] or via instantiating a [`Module`]). Operations
+/// on a [`Table`] only work with the store it belongs to, and if another store
+/// is passed in by accident then methods will panic.
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)] // here for the C API
 pub struct Table(Stored<wasmtime_runtime::ExportTable>);
 
 impl Table {
-    /// Creates a new `Table` with the given parameters.
+    /// Creates a new [`Table`] with the given parameters.
     ///
-    /// * `store` - a global cache to store information in
+    /// * `store` - the owner of the resulting [`Table`]
     /// * `ty` - the type of this table, containing both the element type as
     ///   well as the initial size and maximum size, if any.
     /// * `init` - the initial value to fill all table entries with, if the
@@ -363,7 +408,35 @@ impl Table {
     ///
     /// # Errors
     ///
-    /// Returns an error if `init` does not match the element type of the table.
+    /// Returns an error if `init` does not match the element type of the table,
+    /// or if `init` does not belong to the `store` provided.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    ///
+    /// let ty = TableType::new(ValType::FuncRef, Limits::new(2, None));
+    /// let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
+    ///
+    /// let module = Module::new(
+    ///     &engine,
+    ///     "(module
+    ///         (table (import \"\" \"\") 2 funcref)
+    ///         (func $f (result i32)
+    ///             i32.const 10)
+    ///         (elem (i32.const 0) (func $f))
+    ///     )"
+    /// )?;
+    ///
+    /// let instance = Instance::new(&mut store, &module, &[table.into()])?;
+    /// // ...
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new(mut store: impl AsContextMut, ty: TableType, init: Val) -> Result<Table> {
         Table::_new(&mut store.as_context_mut().opaque(), ty, init)
     }
@@ -403,6 +476,10 @@ impl Table {
 
     /// Returns the underlying type of this table, including its element type as
     /// well as the maximum/minimum lower bounds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
     pub fn ty(&self, store: impl AsContext) -> TableType {
         let store = store.as_context();
         let ty = &store[self.0].table.table;
@@ -421,6 +498,10 @@ impl Table {
     /// Returns the table element value at `index`.
     ///
     /// Returns `None` if `index` is out of bounds.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
     pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Val> {
         let mut store = store.as_context_mut().opaque();
         let table = self.wasmtime_table(&mut store);
@@ -439,8 +520,13 @@ impl Table {
     ///
     /// # Errors
     ///
-    /// Returns an error if `index` is out of bounds or if `val` does not have
-    /// the right type to be stored in this table.
+    /// Returns an error if `index` is out of bounds, if `val` does not have
+    /// the right type to be stored in this table, or if `val` belongs to a
+    /// different store.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
     pub fn set(&self, mut store: impl AsContextMut, index: u32, val: Val) -> Result<()> {
         let ty = self.ty(&store).element().clone();
         let mut store = store.as_context_mut().opaque();
@@ -454,6 +540,10 @@ impl Table {
     }
 
     /// Returns the current size of this table.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
     pub fn size(&self, store: impl AsContext) -> u32 {
         let store = store.as_context();
         unsafe { (*store[self.0].definition).current_elements }
@@ -468,7 +558,12 @@ impl Table {
     ///
     /// Returns an error if the table cannot be grown by `delta`, for example
     /// if it would cause the table to exceed its maximum size. Also returns an
-    /// error if `init` is not of the right type.
+    /// error if `init` is not of the right type or if `init` does not belong to
+    /// `store`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
         let ty = self.ty(&store).element().clone();
         let mut store = store.as_context_mut().opaque();
@@ -493,6 +588,10 @@ impl Table {
     ///
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn copy(
         mut store: impl AsContextMut,
         dst_table: &Table,
@@ -528,6 +627,10 @@ impl Table {
     /// * the region to be filled is out of bounds, or
     ///
     /// * `val` comes from a different `Store` from this table.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u32, val: Val, len: u32) -> Result<()> {
         let ty = self.ty(&store).element().clone();
         let mut store = store.as_context_mut().opaque();
@@ -590,6 +693,10 @@ impl<'instance> Export<'instance> {
     }
 
     /// Return the `ExternType` of this export.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this `Extern`.
     pub fn ty(&self, store: impl AsContext) -> ExternType {
         self.definition.ty(store)
     }
@@ -621,5 +728,17 @@ impl<'instance> Export<'instance> {
     /// or `None` otherwise.
     pub fn into_global(self) -> Option<Global> {
         self.definition.into_global()
+    }
+
+    /// Consume this `Export` and return the contained `Instance`, if it's a
+    /// instance, or `None` otherwise.
+    pub fn into_instance(self) -> Option<Instance> {
+        self.definition.into_instance()
+    }
+
+    /// Consume this `Export` and return the contained `Module`, if it's a
+    /// module, or `None` otherwise.
+    pub fn into_module(self) -> Option<Module> {
+        self.definition.into_module()
     }
 }

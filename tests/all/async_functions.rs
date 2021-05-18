@@ -50,14 +50,16 @@ fn smoke_host_func() -> Result<()> {
     linker.func_wrap0_async("", "second", move |_caller| Box::new(async { Ok(()) }))?;
 
     let func = linker
-        .get_one_by_name(&mut store, "", Some("first"))?
+        .get(&mut store, "", Some("first"))
+        .unwrap()
         .into_func()
         .unwrap();
     run_smoke_test(&mut store, func);
     run_smoke_typed_test(&mut store, func);
 
     let func = linker
-        .get_one_by_name(&mut store, "", Some("second"))?
+        .get(&mut store, "", Some("second"))
+        .unwrap()
         .into_func()
         .unwrap();
     run_smoke_test(&mut store, func);
@@ -117,14 +119,16 @@ fn smoke_host_func_with_suspension() -> Result<()> {
     })?;
 
     let func = linker
-        .get_one_by_name(&mut store, "", Some("first"))?
+        .get(&mut store, "", Some("first"))
+        .unwrap()
         .into_func()
         .unwrap();
     run_smoke_test(&mut store, func);
     run_smoke_typed_test(&mut store, func);
 
     let func = linker
-        .get_one_by_name(&mut store, "", Some("second"))?
+        .get(&mut store, "", Some("second"))
+        .unwrap()
         .into_func()
         .unwrap();
     run_smoke_test(&mut store, func);
@@ -469,7 +473,8 @@ fn async_host_func_with_pooling_stacks() -> Result<()> {
     )?;
 
     let func = linker
-        .get_one_by_name(&mut store, "", Some(""))?
+        .get(&mut store, "", Some(""))
+        .unwrap()
         .into_func()
         .unwrap();
     run_smoke_test(&mut store, func);
