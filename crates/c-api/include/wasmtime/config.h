@@ -1,7 +1,7 @@
 /**
  * \file wasmtime/config.h
  *
- * TODO
+ * \brief Wasmtime-specific extensions to #wasm_config_t
  */
 
 #ifndef WASMTIME_CONFIG_H

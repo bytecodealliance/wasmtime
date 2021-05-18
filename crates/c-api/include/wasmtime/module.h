@@ -1,7 +1,7 @@
 /**
  * \file wasmtime/module.h
  *
- * TODO
+ * APIs for interacting with modules in Wasmtime
  */
 
 #ifndef WASMTIME_MODULE_H
@@ -99,7 +99,8 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_new(
 WASM_API_EXTERN void wasmtime_module_delete(wasmtime_module_t *m);
 
 /**
- * TODO
+ * \brief Creates a shallow clone of the specified module, increasing the
+ * internal reference count.
  */
 WASM_API_EXTERN wasmtime_module_t *wasmtime_module_clone(wasmtime_module_t *m);
 

@@ -1,7 +1,7 @@
 /**
  * \file wasmtime/instance.h
  *
- * TODO
+ * Wasmtime APIs for interacting with wasm instances.
  */
 
 #ifndef WASMTIME_INSTANCE_H
@@ -21,7 +21,7 @@ extern "C" {
  */
 typedef struct wasmtime_instancetype wasmtime_instancetype_t;
 
-/// TODO
+/// \brief Deletes an instance type
 WASM_API_EXTERN void wasmtime_instancetype_delete(wasmtime_instancetype_t *ty);
 
 /**
@@ -51,12 +51,24 @@ WASM_API_EXTERN wasm_externtype_t* wasmtime_instancetype_as_externtype(wasmtime_
 WASM_API_EXTERN wasmtime_instancetype_t* wasmtime_externtype_as_instancetype(wasm_externtype_t*);
 
 /**
- * \brief Wasmtime-specific function to instantiate a module.
+ * \brief Instantiate a wasm module.
  *
- * This function is similar to #wasm_instance_new, but with a few tweaks:
+ * This function will instantiate a WebAssembly module with the provided
+ * imports, creating a WebAssembly instance. The returned instance can then
+ * afterwards be inspected for exports.
  *
- * * An error message can be returned from this function.
- * * The `trap` pointer is required to not be NULL.
+ * \param store the store in which to create the instance
+ * \param module the module that's being instantiated
+ * \param imports the imports provided to the module
+ * \param nimports the size of `imports`
+ * \param instance where to store the returned instance
+ * \param trap where to store the returned trap
+ *
+ * This function requires that `imports` is the same size as the imports that
+ * `module` has. Additionally the `imports` array must be 1:1 lined up with the
+ * imports of the `module` specified. This is intended to be relatively low
+ * level, and #wasmtime_linker_instantiate is provided for a more ergonomic
+ * name-based resolution API.
  *
  * The states of return values from this function are similar to
  * #wasmtime_func_call where an error can be returned meaning something like a
@@ -64,11 +76,11 @@ WASM_API_EXTERN wasmtime_instancetype_t* wasmtime_externtype_as_instancetype(was
  * instance is returned), or an instance can be returned (meaning no error or
  * trap is returned).
  *
+ * Note that this function requires that all `imports` specified must be owned
+ * by the `store` provided as well.
+ *
  * This function does not take ownership of any of its arguments, but all return
  * values are owned by the caller.
- *
- * See #wasm_instance_new for information about how to fill in the `imports`
- * array.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_new(
     wasmtime_context_t *store,
@@ -79,22 +91,57 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_new(
     wasm_trap_t **trap
 );
 
-/// TODO
+/**
+ * \brief Returns the type of the specified instance.
+ *
+ * The returned type is owned by the caller.
+ */
 WASM_API_EXTERN wasmtime_instancetype_t *wasmtime_instance_type(
     const wasmtime_context_t *store,
     wasmtime_instance_t instance
 );
 
-/// TODO
+/**
+ * \brief Get an export by name from an instance.
+ *
+ * \param store the store that owns `instance`
+ * \param instance the instance to lookup within
+ * \param name the export name to lookup
+ * \param name_len the byte length of `name`
+ * \param item where to store the returned value
+ *
+ * Returns nonzero if the export was found, and `item` is filled in. Otherwise
+ * returns 0.
+ *
+ * Doesn't take ownership of any arguments but does return ownership of the
+ * #wasmtime_extern_t.
+ */
 WASM_API_EXTERN bool wasmtime_instance_export_get(
     wasmtime_context_t *store,
     wasmtime_instance_t instance,
-    char *name,
+    const char *name,
     size_t name_len,
     wasmtime_extern_t *item
 );
 
-/// TODO
+/**
+ * \brief Get an export by index from an instance.
+ *
+ * \param store the store that owns `instance`
+ * \param instance the instance to lookup within
+ * \param index the index to lookup
+ * \param name where to store the name of the export
+ * \param name_len where to store the byte length of the name
+ * \param item where to store the export itself
+ *
+ * Returns nonzero if the export was found, and `name`, `name_len`, and `item`
+ * are filled in. Otherwise returns 0.
+ *
+ * Doesn't take ownership of any arguments but does return ownership of the
+ * #wasmtime_extern_t. The `name` pointer return value is owned by the `store`
+ * and must be immediately used before calling any other APIs on
+ * #wasmtime_context_t.
+ */
 WASM_API_EXTERN bool wasmtime_instance_export_nth(
     wasmtime_context_t *store,
     wasmtime_instance_t instance,

@@ -177,6 +177,11 @@ pub extern "C" fn wasm_func_as_extern(f: &mut wasm_func_t) -> &mut wasm_extern_t
     &mut (*f).ext
 }
 
+#[no_mangle]
+pub extern "C" fn wasm_func_as_extern_const(f: &wasm_func_t) -> &wasm_extern_t {
+    &(*f).ext
+}
+
 #[repr(C)]
 pub struct wasmtime_caller_t<'a> {
     caller: Caller<'a, crate::StoreData>,

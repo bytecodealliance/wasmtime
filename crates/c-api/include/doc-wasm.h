@@ -1,94 +1,7 @@
 /**
- * \mainpage Wasmtime C API
- *
- * This documentation is an overview and API reference for the C API of
- * Wasmtime. The C API is spread between three different header files:
- *
- * * \ref wasm.h
- * * \ref wasi.h
- * * \ref wasmtime.h
- *
- * The \ref wasm.h header file comes directly from the
- * [WebAssembly/wasm-c-api](https://github.com/WebAssembly/wasm-c-api)
- * repository. At this time the upstream header file does not have documentation
- * so Wasmtime provides documentation here. It should be noted, however, that
- * some semantics may be Wasmtime-specific and may not be portable to other
- * engines. The Wasmtime project intends to assist in the development of the
- * upstream C API.
- *
- * The \ref wasi.h and \ref wasmtime.h header files are specific to the Wasmtime
- * project. It's hoped to standardize \ref wasi.h in the WASI standard
- * eventually, but \ref wasmtime.h provides Wasmtime-specific extensions to the
- * C API which are not intended to standardize.
- *
- * ## Installing the C API
- *
- * To install the C API from precompiled binaries you can download the
- * appropriate binary from the [releases page of
- * Wasmtime](https://github.com/bytecodealliance/wasmtime/releases). Artifacts
- * for the C API all end in "-c-api" for the filename.
- *
- * Each archive contains an `include` directory with necessary headers, as well
- * as a `lib` directory with both a static archive and a dynamic library of
- * Wasmtime. You can link to either of them as you see fit.
- *
- * ## Linking against the C API
- *
- * You'll want to arrange the `include` directory of the C API to be in your
- * compiler's header path (e.g. the `-I` flag). If you're compiling for Windows
- * and you're using the static library then you'll also need to pass
- * `-DWASM_API_EXTERN=` and `-DWASI_API_EXTERN=` to disable dllimport.
- *
- * Your final artifact can then be linked with `-lwasmtime`. If you're linking
- * against the static library you may need to pass other system libraries
- * depending on your platform:
- *
- * * Linux - `-lpthread -ldl -lm`
- * * macOS - no extra flags needed
- * * Windows - `ws2_32.lib advapi32.lib userenv.lib ntdll.lib shell32.lib ole32.lib`
- *
- * ## Building from Source
- *
- * The C API is located in the
- * [`crates/c-api`](https://github.com/bytecodealliance/wasmtime/tree/main/crates/c-api)
- * directory of the [Wasmtime
- * repository](https://github.com/bytecodealliance/wasmtime). To build from
- * source you'll need a Rust compiler and a checkout of the `wasmtime` project.
- * Afterwards you can execute:
- *
- * ```
- * $ cargo build --release -p wasmtime-c-api
- * ```
- *
- * This will place the final artifacts in `target/release`, with names depending
- * on what platform you're compiling for.
- *
- * ## Other resources
- *
- * Some other handy resources you might find useful when exploring the C API
- * documentation are:
- *
- * * [Rust `wasmtime` crate
- *   documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/) -
- *   although this documentation is for Rust and not C, you'll find that many
- *   functions mirror one another and there may be extra documentation in Rust
- *   you find helpful. If you find yourself having to frequently do this,
- *   though, please feel free to [file an
- *   issue](https://github.com/bytecodealliance/wasmtime/issues/new).
- *
- * * [C embedding
- *   examples](https://bytecodealliance.github.io/wasmtime/examples-c-embed.html)
- *   are available online and are tested from the Wasmtime repository itself.
- *
- * * [Contribution documentation for
- *   Wasmtime](https://bytecodealliance.github.io/wasmtime/contributing.html) in
- *   case you're interested in helping out!
- */
-
-/**
  * \file wasm.h
  *
- * Embedding API for WebAssembly.
+ * Upstream Embedding API for WebAssembly.
  *
  * This API is defined by the upstream wasm-c-api proposal at
  * https://github.com/WebAssembly/wasm-c-api. That proposal is in flux but
@@ -131,51 +44,6 @@
  * #wasm_name_t on the stack and pass it to #wasm_importtype_new. The memory
  * pointed to by #wasm_name_t must be properly initialized, however, and cannot
  * reside on the stack.
- *
- * ### Thread Safety
- *
- * All objects are not thread safe unless otherwise noted. This means that all
- * objects, once created, cannot be used simultaneously on more than one thread.
- *
- * In general the split happens at the #wasm_store_t layer. Everything within a
- * #wasm_store_t is pinned to that store, and that store is pinned to a thread.
- * Objects like #wasm_config_t and #wasm_engine_t, however, are safe to share
- * across threads.
- *
- * Note that if you move a #wasm_store_t between threads this is ok so long as
- * you move *all* references within that store to the new thread. If any
- * reference lingers on the previous thread then that is unsafe.
- *
- * ### Stores
- *
- * A foundational construct in this API is the #wasm_store_t. A store is a
- * collection of host-provided objects and instantiated wasm modules. Stores are
- * often treated as a "single unit" and items within a store are all allowed to
- * reference one another. References across stores cannot currently be created.
- * For example you cannot instantiate a module in one store with an instance
- * from another store.
- *
- * Stores are entirely single-threaded. All objects referencing a #wasm_store_t
- * are pinned to a single thread and must reside in the same thread as all other
- * objects referencing the same store.
- *
- * A store is not intended to be a global long-lived object. Memory associated
- * with a #wasm_instance_t is not deallocated until the entire #wasm_store_t has
- * been deallocated. This means that if you instantiate a module and then delete
- * the instance, the instance's backing memory isn't actually deleted (it's
- * still referenced by the #wasm_store_t). This aspect makes a #wasm_store_t
- * unsuitable for repeatedly instantiating modules over a long period of time
- * because memory usage will continue to grow.
- *
- * If you're working with a web server, for example, then it's recommended to
- * think of a store as a "one per request" sort of construct. Globally you'd
- * have one #wasm_engine_t and a cache of #wasm_module_t instances compiled into
- * that engine. Each request would create a new #wasm_store_t and then
- * instantiate a #wasm_module_t into the store. This process of creating a store
- * and instantiating a module is expected to be quite fast. When the request is
- * finished you'd delete the #wasm_store_t and #wasm_instance_t (along with any
- * other references), keeping memory usage reasonable for the lifetime of the
- * server.
  */
 
 /**
@@ -204,7 +72,7 @@
  *
  * This structure represents global configuration used when constructing a
  * #wasm_engine_t. There are now functions to modify this from wasm.h but the
- * wasmtime.h header provides a number of Wasmtime-specific functions to
+ * wasmtime/config.h header provides a number of Wasmtime-specific functions to
  * tweak configuration options.
  *
  * This object is created with #wasm_config_new.
@@ -233,16 +101,19 @@
  * \brief Convenience alias for #wasm_engine_t
  *
  * \struct wasm_engine_t
- * \brief Typically global object to create #wasm_store_t from.
+ * \brief Compilation environment and configuration.
  *
  * An engine is typically global in a program and contains all the configuration
  * necessary for compiling wasm code. From an engine you'll typically create a
- * #wasm_store_t. Engines are created with #wasm_engine_new or
+ * #wasmtime_store_t. Engines are created with #wasm_engine_new or
  * #wasm_engine_new_with_config.
  *
  * An engine is safe to share between threads. Multiple stores can be created
  * within the same engine with each store living on a separate thread. Typically
  * you'll create one #wasm_engine_t for the lifetime of your program.
+ *
+ * Engines are reference counted internally so #wasm_engine_delete can be called
+ * at any time after a #wasmtime_store_t has been created from one.
  *
  * \fn wasm_engine_t *wasm_engine_new(void);
  * \brief Creates a new engine with the default configuration.
@@ -1224,9 +1095,7 @@
  * See #wasm_byte_vec_delete for more information.
  *
  * \fn wasm_frame_t *wasm_frame_copy(const wasm_frame_t *)
- * \brief Copies a #wasm_frame_t to a new one.
- *
- * The caller is responsible for deleting the returned #wasm_frame_t.
+ * \brief Unimplemented in Wasmtime.
  *
  * \fn wasm_instance_t *wasm_frame_instance(const wasm_frame_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.
@@ -1478,10 +1347,17 @@
  * uninitialized when passed to this function.
  *
  * \fn void wasm_module_serialize(const wasm_module_t *, wasm_byte_vec_t *out);
- * \brief Unimplemented in Wasmtime.
+ * \brief Serializes the provided module to a byte vector.
+ *
+ * Does not take ownership of the input module but expects the caller will
+ * deallocate the `out` vector. The byte vector can later be deserialized
+ * through #wasm_module_deserialize.
  *
  * \fn wasm_module_t *wasm_module_deserialize(wasm_store_t *, const wasm_byte_vec_t *);
- * \brief Unimplemented in Wasmtime.
+ * \brief Deserializes a previously-serialized module.
+ *
+ * The input bytes must have been created from a previous call to
+ * #wasm_module_serialize.
  */
 
 /**

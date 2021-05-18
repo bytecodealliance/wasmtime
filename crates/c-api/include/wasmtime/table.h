@@ -1,7 +1,7 @@
 /**
  * \file wasmtime/table.h
  *
- * TODO
+ * Wasmtime APIs for interacting with WebAssembly tables.
  */
 
 #ifndef WASMTIME_TABLE_H
@@ -20,21 +20,27 @@ extern "C" {
 /**
  * \brief Creates a new host-defined wasm table.
  *
- * This function is the same as #wasm_table_new except that it's specialized for
- * funcref tables by taking a `wasm_func_t` initialization value. Additionally
- * it returns errors via #wasmtime_error_t.
+ * \param store the store to create the table within
+ * \param ty the type of the table to create
+ * \param init the initial value for this table's elements
+ * \param table where to store the returned table
  *
  * This function does not take ownership of any of its parameters, but yields
- * ownership of returned values (the table and error).
+ * ownership of returned error. This function may return an error if the `init`
+ * value does not match `ty`, for example.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_table_new(
     wasmtime_context_t *store,
-    const wasm_tabletype_t *element_ty,
+    const wasm_tabletype_t *ty,
     wasmtime_val_t *init,
     wasmtime_table_t *table
 );
 
-/// TODO
+/**
+ * \brief Returns the type of this table.
+ *
+ * The caller has ownership of the returned #wasm_tabletype_t
+ */
 WASM_API_EXTERN wasm_tabletype_t* wasmtime_table_type(
     const wasmtime_context_t *store,
     wasmtime_table_t table
@@ -43,12 +49,14 @@ WASM_API_EXTERN wasm_tabletype_t* wasmtime_table_type(
 /**
  * \brief Gets a value in a table.
  *
- * This function is the same as #wasm_table_get except that it's specialized for
- * funcref tables by returning a `wasm_func_t` value. Additionally a `bool`
- * return value indicates whether the `index` provided was in bounds.
+ * \param store the store that owns `table`
+ * \param table the table to access
+ * \param index the table index to access
+ * \param val where to store the table's value
  *
- * This function does not take ownership of any of its parameters, but yields
- * ownership of returned #wasm_func_t.
+ * This function will attempt to access a table element. If a nonzero value is
+ * returned then `val` is filled in and is owned by the caller. Otherwise zero
+ * is returned because the `index` is out-of-bounds.
  */
 WASM_API_EXTERN bool wasmtime_table_get(
     wasmtime_context_t *store,
@@ -60,14 +68,15 @@ WASM_API_EXTERN bool wasmtime_table_get(
 /**
  * \brief Sets a value in a table.
  *
- * This function is similar to #wasm_table_set, but has a few differences:
+ * \param store the store that owns `table`
+ * \param table the table to write to
+ * \param index the table index to write
+ * \param value the value to store.
  *
- * * An error is returned through #wasmtime_error_t describing erroneous
- *   situations.
- * * The value being set is specialized to #wasm_func_t.
- *
- * This function does not take ownership of any of its parameters, but yields
- * ownership of returned #wasmtime_error_t.
+ * This function will store `value` into the specified index in the table. This
+ * does not take ownership of any argument but yields ownership of the error.
+ * This function can fail if `value` has the wrong type for the table, or if
+ * `index` is out of bounds.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_table_set(
     wasmtime_context_t *store,
@@ -76,7 +85,9 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_table_set(
     const wasmtime_val_t *value
 );
 
-/// TODO
+/**
+ * \brief Returns the size, in elements, of the specified table
+ */
 WASM_API_EXTERN uint32_t wasmtime_table_size(
     const wasmtime_context_t *store,
     wasmtime_table_t table
@@ -85,22 +96,26 @@ WASM_API_EXTERN uint32_t wasmtime_table_size(
 /**
  * \brief Grows a table.
  *
- * This function is similar to #wasm_table_grow, but has a few differences:
+ * \param store the store that owns `table`
+ * \param table the table to grow
+ * \param delta the number of elements to grow the table by
+ * \param init the initial value for new table element slots
+ * \param prev_size where to store the previous size of the table before growth
  *
- * * An error is returned through #wasmtime_error_t describing erroneous
- *   situations.
- * * The initialization value is specialized to #wasm_func_t.
- * * The previous size of the table is returned through `prev_size`.
+ * This function will attempt to grow the table by `delta` table elements. This
+ * can fail if `delta` would exceed the maximum size of the table or if `init`
+ * is the wrong type for this table. If growth is successful then `NULL` is
+ * returned and `prev_size` is filled in with the previous size of the table, in
+ * elements, before the growth happened.
  *
- * This function does not take ownership of any of its parameters, but yields
- * ownership of returned #wasmtime_error_t.
+ * This function does not take ownership of any of its arguments.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_table_grow(
     wasmtime_context_t *store,
     wasmtime_table_t table,
     uint32_t delta,
     const wasmtime_val_t *init,
-    wasm_table_size_t *prev_size
+    uint32_t *prev_size
 );
 
 #ifdef __cplusplus

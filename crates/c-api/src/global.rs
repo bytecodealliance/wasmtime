@@ -47,7 +47,12 @@ pub unsafe extern "C" fn wasm_global_new(
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_global_as_extern(g: &wasm_global_t) -> &wasm_extern_t {
+pub extern "C" fn wasm_global_as_extern(g: &mut wasm_global_t) -> &mut wasm_extern_t {
+    &mut g.ext
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_global_as_extern_const(g: &wasm_global_t) -> &wasm_extern_t {
     &g.ext
 }
 

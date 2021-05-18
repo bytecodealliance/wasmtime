@@ -1,7 +1,7 @@
 /**
  * \file wasmtime/global.h
  *
- * TODO
+ * Wasmtime APIs for interacting with WebAssembly globals.
  */
 
 #ifndef WASMTIME_GLOBAL_H
@@ -19,15 +19,19 @@ extern "C" {
 /**
  * \brief Creates a new global value.
  *
- * Similar to #wasm_global_new, but with a few tweaks:
+ * Creates a new host-defined global value within the provided `store`
  *
- * * An error is returned instead of #wasm_global_t, which is taken as an
- *   out-parameter
- * * An error happens when the `type` specified does not match the type of the
- *   value `val`, or if it comes from a different store than `store`.
+ * \param store the store in which to create the global
+ * \param type the wasm type of the global being created
+ * \param val the initial value of the global
+ * \param ret a return pointer for the created global.
  *
- * This function does not take ownership of any of its arguments but returned
- * values are owned by the caller.
+ * This function may return an error if the `val` argument does not match the
+ * specified type of the global, or if `val` comes from a different store than
+ * the one provided.
+ *
+ * This function does not take ownership of any of its arguments but error is
+ * owned by the caller.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_global_new(
     wasmtime_context_t *store,
@@ -36,13 +40,26 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_global_new(
     wasmtime_global_t *ret
 );
 
-/// TODO
+/**
+ * \brief Returns the wasm type of the specified global.
+ *
+ * The returned #wasm_globaltype_t is owned by the caller.
+ */
 WASM_API_EXTERN wasm_globaltype_t* wasmtime_global_type(
     const wasmtime_context_t *store,
     wasmtime_global_t global
 );
 
-/// TODO
+/**
+ * \brief Get the value of the specified global.
+ *
+ * \param store the store that owns `global`
+ * \param global the global to get
+ * \param out where to store the value in this global.
+ *
+ * This function returns ownership of the contents of `out`, so
+ * #wasmtime_val_delete may need to be called on the value.
+ */
 WASM_API_EXTERN void wasmtime_global_get(
     wasmtime_context_t *store,
     wasmtime_global_t global,
@@ -52,8 +69,14 @@ WASM_API_EXTERN void wasmtime_global_get(
 /**
  * \brief Sets a global to a new value.
  *
- * This function is the same as #wasm_global_set, except in the case of an error
- * a #wasmtime_error_t is returned.
+ * \param store the store that owns `global`
+ * \param global the global to set
+ * \param val the value to store in the global
+ *
+ * This function may return an error if `global` is not mutable or if `val` has
+ * the wrong type for `global`.
+ *
+ * THis does not take ownership of any argument but returns ownership of the error.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_global_set(
     wasmtime_context_t *store,

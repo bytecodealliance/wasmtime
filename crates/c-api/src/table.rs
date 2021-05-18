@@ -106,7 +106,12 @@ pub unsafe extern "C" fn wasm_table_grow(
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_table_as_extern(t: &wasm_table_t) -> &wasm_extern_t {
+pub extern "C" fn wasm_table_as_extern(t: &mut wasm_table_t) -> &mut wasm_extern_t {
+    &mut t.ext
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_table_as_extern_const(t: &wasm_table_t) -> &wasm_extern_t {
     &t.ext
 }
 

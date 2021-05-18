@@ -45,7 +45,12 @@ pub unsafe extern "C" fn wasm_memory_new(
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_memory_as_extern(m: &wasm_memory_t) -> &wasm_extern_t {
+pub extern "C" fn wasm_memory_as_extern(m: &mut wasm_memory_t) -> &mut wasm_extern_t {
+    &mut m.ext
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_memory_as_extern_const(m: &wasm_memory_t) -> &wasm_extern_t {
     &m.ext
 }
 

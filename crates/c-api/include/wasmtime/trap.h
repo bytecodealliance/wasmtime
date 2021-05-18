@@ -1,7 +1,7 @@
 /**
  * \file wasmtime/trap.h
  *
- * TODO
+ * Wasmtime APIs for interacting with traps and extensions to #wasm_trap_t.
  */
 
 #ifndef WASMTIME_TRAP_H
@@ -13,8 +13,15 @@
 extern "C" {
 #endif
 
-/// TODO
-WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(char *msg, size_t msg_len);
+/**
+ * \brief Creates a new trap.
+ *
+ * \param msg the message to associate with this trap
+ * \param msg_len the byte length of `msg`
+ *
+ * The #wasm_trap_t returned is owned by the caller.
+ */
+WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(const char *msg, size_t msg_len);
 
 /**
  * \brief Attempts to extract a WASI-specific exit status from this trap.

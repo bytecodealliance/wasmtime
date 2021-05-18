@@ -117,7 +117,7 @@ pub unsafe extern "C" fn wasmtime_linker_get_default(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wasmtime_linker_get_one_by_name(
+pub unsafe extern "C" fn wasmtime_linker_get(
     linker: &wasmtime_linker_t,
     store: CStoreContextMut<'_>,
     module: *const u8,
