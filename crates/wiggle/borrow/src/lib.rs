@@ -5,7 +5,16 @@ use wiggle::{BorrowHandle, GuestError, Region};
 pub struct BorrowChecker {
     /// Unfortunately, since the terminology of std::cell and the problem domain of borrow checking
     /// overlap, the method calls on this member will be confusing.
-    // TODO
+    ///
+    /// Also, unfortunately, for now this uses a `Mutex`. The reason for that is
+    /// that this is shared as `&BorrowChecker` in a bunch of `GuestPtr` values.
+    /// Through this sharing we still want each `GuestPtr` to be `Send` and the
+    /// "naive" way to make `&T` `Send` with interior mutability is to use a
+    /// `Mutex`. Fixing this will likely require rethinking `GuestPtr` one way
+    /// or another. That needs to happen for other reasons as well (for example
+    /// to allow for wasm calls to happen while `GuestPtr` values are active),
+    /// so it's hoped that in a later rethinking of `GuestPtr` we can revisit
+    /// this and remove this `Mutex`.
     bc: Mutex<InnerBorrowChecker>,
 }
 
