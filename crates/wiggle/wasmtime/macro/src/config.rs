@@ -1,12 +1,11 @@
 use wiggle_generate::config::AsyncFunctions;
 use {
     proc_macro2::Span,
-    std::collections::HashMap,
     syn::{
         braced,
         parse::{Parse, ParseStream},
         punctuated::Punctuated,
-        Error, Ident, Path, Result, Token,
+        Error, Path, Result, Token,
     },
     wiggle_generate::config::WitxConf,
 };
@@ -15,7 +14,6 @@ pub struct Config {
     pub target: TargetConf,
     pub witx: WitxConf,
     pub ctx: CtxConf,
-    pub modules: ModulesConf,
     pub async_: AsyncConf,
 }
 
@@ -24,7 +22,6 @@ pub enum ConfigField {
     Target(TargetConf),
     Witx(WitxConf),
     Ctx(CtxConf),
-    Modules(ModulesConf),
     Async(AsyncConf),
 }
 
@@ -33,10 +30,6 @@ mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(ctx);
-    syn::custom_keyword!(modules);
-    syn::custom_keyword!(name);
-    syn::custom_keyword!(docs);
-    syn::custom_keyword!(function_override);
     syn::custom_keyword!(block_on);
 }
 
@@ -59,10 +52,6 @@ impl Parse for ConfigField {
             input.parse::<kw::ctx>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Ctx(input.parse()?))
-        } else if lookahead.peek(kw::modules) {
-            input.parse::<kw::modules>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::Modules(input.parse()?))
         } else if lookahead.peek(Token![async]) {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
@@ -88,7 +77,6 @@ impl Config {
         let mut target = None;
         let mut witx = None;
         let mut ctx = None;
-        let mut modules = None;
         let mut async_ = None;
         for f in fields {
             match f {
@@ -110,12 +98,6 @@ impl Config {
                     }
                     ctx = Some(c);
                 }
-                ConfigField::Modules(c) => {
-                    if modules.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `modules` field"));
-                    }
-                    modules = Some(c);
-                }
                 ConfigField::Async(c) => {
                     if async_.is_some() {
                         return Err(Error::new(err_loc, "duplicate `async` field"));
@@ -128,7 +110,6 @@ impl Config {
             target: target.ok_or_else(|| Error::new(err_loc, "`target` field required"))?,
             witx: witx.ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
             ctx: ctx.ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
-            modules: modules.ok_or_else(|| Error::new(err_loc, "`modules` field required"))?,
             async_: async_.unwrap_or_default(),
         })
     }
@@ -175,100 +156,6 @@ impl Parse for TargetConf {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(TargetConf {
             path: input.parse()?,
-        })
-    }
-}
-
-enum ModuleConfField {
-    Name(Ident),
-    Docs(String),
-}
-
-impl Parse for ModuleConfField {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let lookahead = input.lookahead1();
-        if lookahead.peek(kw::name) {
-            input.parse::<kw::name>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ModuleConfField::Name(input.parse()?))
-        } else if lookahead.peek(kw::docs) {
-            input.parse::<kw::docs>()?;
-            input.parse::<Token![:]>()?;
-            let docs: syn::LitStr = input.parse()?;
-            Ok(ModuleConfField::Docs(docs.value()))
-        } else {
-            Err(lookahead.error())
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ModuleConf {
-    pub name: Ident,
-    pub docs: Option<String>,
-}
-
-impl ModuleConf {
-    fn build(fields: impl Iterator<Item = ModuleConfField>, err_loc: Span) -> Result<Self> {
-        let mut name = None;
-        let mut docs = None;
-        for f in fields {
-            match f {
-                ModuleConfField::Name(c) => {
-                    if name.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `name` field"));
-                    }
-                    name = Some(c);
-                }
-                ModuleConfField::Docs(c) => {
-                    if docs.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `docs` field"));
-                    }
-                    docs = Some(c);
-                }
-            }
-        }
-        Ok(ModuleConf {
-            name: name.ok_or_else(|| Error::new(err_loc, "`name` field required"))?,
-            docs,
-        })
-    }
-}
-
-impl Parse for ModuleConf {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let contents;
-        let _lbrace = braced!(contents in input);
-        let fields: Punctuated<ModuleConfField, Token![,]> =
-            contents.parse_terminated(ModuleConfField::parse)?;
-        Ok(ModuleConf::build(fields.into_iter(), input.span())?)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ModulesConf {
-    pub mods: HashMap<String, ModuleConf>,
-}
-
-impl ModulesConf {
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &ModuleConf)> {
-        self.mods.iter()
-    }
-}
-
-impl Parse for ModulesConf {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let contents;
-        let _lbrace = braced!(contents in input);
-        let fields: Punctuated<(String, ModuleConf), Token![,]> =
-            contents.parse_terminated(|i| {
-                let name = i.parse::<Ident>()?.to_string();
-                i.parse::<Token![=>]>()?;
-                let val = i.parse()?;
-                Ok((name, val))
-            })?;
-        Ok(ModulesConf {
-            mods: fields.into_iter().collect(),
         })
     }
 }
@@ -320,5 +207,15 @@ impl AsyncConf {
             }
             AsyncFunctions::All => a,
         }
+    }
+
+    pub fn contains_async(&self, module: &witx::Module) -> bool {
+        for f in module.funcs() {
+            match self.is_async(module.name.as_str(), f.name.as_str()) {
+                Asyncness::Async => return true,
+                _ => {}
+            }
+        }
+        false
     }
 }

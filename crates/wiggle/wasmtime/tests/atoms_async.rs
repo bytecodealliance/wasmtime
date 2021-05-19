@@ -14,7 +14,6 @@ wasmtime_wiggle::wasmtime_integration!({
     target: crate,
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
     ctx: Ctx,
-    modules: { atoms => { name: atoms } },
     async: {
         atoms::double_int_return_float
     }
@@ -45,7 +44,7 @@ impl atoms::Atoms for Ctx {
 fn test_sync_host_func() {
     let mut store = async_store();
     let mut linker = Linker::new(store.engine());
-    add_atoms_to_linker(&mut linker).unwrap();
+    add_to_linker(&mut linker).unwrap();
     let shim_mod = shim_module(linker.engine());
     let shim_inst = run(linker.instantiate_async(&mut store, &shim_mod)).unwrap();
 
@@ -67,7 +66,7 @@ fn test_sync_host_func() {
 fn test_async_host_func() {
     let mut store = async_store();
     let mut linker = Linker::new(store.engine());
-    add_atoms_to_linker(&mut linker).unwrap();
+    add_to_linker(&mut linker).unwrap();
 
     let shim_mod = shim_module(linker.engine());
     let shim_inst = run(linker.instantiate_async(&mut store, &shim_mod)).unwrap();
