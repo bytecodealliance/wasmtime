@@ -355,9 +355,11 @@ impl Module {
             wasmparser::ImportSectionEntryType::Table(ty) => {
                 self.push_table(cx, ty);
             }
-            wasmparser::ImportSectionEntryType::Module(_)
-            | wasmparser::ImportSectionEntryType::Event(_) => {
-                unreachable!()
+            wasmparser::ImportSectionEntryType::Module(_) => {
+                unreachable!("we disallow module imports; checked in validation")
+            }
+            wasmparser::ImportSectionEntryType::Event(_) => {
+                unreachable!("exceptions are unsupported; checked in validation")
             }
         }
     }
