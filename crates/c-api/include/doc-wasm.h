@@ -1095,7 +1095,9 @@
  * See #wasm_byte_vec_delete for more information.
  *
  * \fn wasm_frame_t *wasm_frame_copy(const wasm_frame_t *)
- * \brief Unimplemented in Wasmtime.
+ * \brief Returns a copy of the provided frame.
+ *
+ * The caller is expected to call #wasm_frame_delete on the returned frame.
  *
  * \fn wasm_instance_t *wasm_frame_instance(const wasm_frame_t *);
  * \brief Unimplemented in Wasmtime, aborts the process if called.

@@ -145,3 +145,8 @@ pub extern "C" fn wasm_frame_instance(_arg1: *const wasm_frame_t) -> *mut wasm_i
 pub extern "C" fn wasm_frame_module_offset(frame: &wasm_frame_t) -> usize {
     frame.trap.trace()[frame.idx].module_offset()
 }
+
+#[no_mangle]
+pub extern "C" fn wasm_frame_copy(frame: &wasm_frame_t) -> Box<wasm_frame_t> {
+    Box::new(frame.clone())
+}
