@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use witx::{Document, Id, InterfaceFunc, Module, NamedType, TypeRef};
 
+pub use crate::config::Asyncness;
+
 pub struct CodegenSettings {
     pub errors: ErrorTransform,
     async_: AsyncConf,
@@ -18,9 +20,8 @@ impl CodegenSettings {
             async_: async_.clone(),
         })
     }
-    pub fn is_async(&self, module: &Module, func: &InterfaceFunc) -> bool {
-        self.async_
-            .is_async(module.name.as_str(), func.name.as_str())
+    pub fn get_async(&self, module: &Module, func: &InterfaceFunc) -> Asyncness {
+        self.async_.get(module.name.as_str(), func.name.as_str())
     }
 }
 

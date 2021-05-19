@@ -26,6 +26,7 @@ pub enum ConfigField {
 mod kw {
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
+    syn::custom_keyword!(block_on);
     syn::custom_keyword!(errors);
 }
 
@@ -48,6 +49,14 @@ impl Parse for ConfigField {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Async(AsyncConf {
+                blocking: false,
+                functions: input.parse()?,
+            }))
+        } else if lookahead.peek(kw::block_on) {
+            input.parse::<kw::block_on>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Async(AsyncConf {
+                blocking: true,
                 functions: input.parse()?,
             }))
         } else {
@@ -284,7 +293,27 @@ impl Parse for ErrorConfField {
 #[derive(Clone, Default, Debug)]
 /// Modules and funcs that have async signatures
 pub struct AsyncConf {
+    blocking: bool,
     functions: AsyncFunctions,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum Asyncness {
+    /// Wiggle function is synchronous, wasmtime Func is synchronous
+    Sync,
+    /// Wiggle function is asynchronous, but wasmtime Func is synchronous
+    Blocking,
+    /// Wiggle function and wasmtime Func are asynchronous.
+    Async,
+}
+
+impl Asyncness {
+    pub fn is_async(&self) -> bool {
+        match self {
+            Self::Blocking | Self::Async => true,
+            Self::Sync => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -299,14 +328,35 @@ impl Default for AsyncFunctions {
 }
 
 impl AsyncConf {
-    pub fn is_async(&self, module: &str, function: &str) -> bool {
+    pub fn get(&self, module: &str, function: &str) -> Asyncness {
+        let a = if self.blocking {
+            Asyncness::Blocking
+        } else {
+            Asyncness::Async
+        };
         match &self.functions {
-            AsyncFunctions::Some(fs) => fs
-                .get(module)
-                .and_then(|fs| fs.iter().find(|f| *f == function))
-                .is_some(),
-            AsyncFunctions::All => true,
+            AsyncFunctions::Some(fs) => {
+                if fs
+                    .get(module)
+                    .and_then(|fs| fs.iter().find(|f| *f == function))
+                    .is_some()
+                {
+                    a
+                } else {
+                    Asyncness::Sync
+                }
+            }
+            AsyncFunctions::All => a,
         }
+    }
+
+    pub fn contains_async(&self, module: &witx::Module) -> bool {
+        for f in module.funcs() {
+            if self.get(module.name.as_str(), f.name.as_str()).is_async() {
+                return true;
+            }
+        }
+        false
     }
 }
 

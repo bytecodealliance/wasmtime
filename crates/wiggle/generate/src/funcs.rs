@@ -53,7 +53,7 @@ pub fn define_func(
         },
     );
 
-    let asyncness = if settings.is_async(&module, &func) {
+    let asyncness = if settings.get_async(&module, &func).is_async() {
         quote!(async)
     } else {
         quote!()
@@ -222,7 +222,7 @@ impl witx::Bindgen for Rust<'_> {
 
                 let trait_name = self.names.trait_name(&self.module.name);
                 let ident = self.names.func(&func.name);
-                if self.settings.is_async(&self.module, &func) {
+                if self.settings.get_async(&self.module, &func).is_async() {
                     self.src.extend(quote! {
                         let ret = #trait_name::#ident(ctx, #(#args),*).await;
                     })
