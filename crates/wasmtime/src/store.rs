@@ -7,6 +7,7 @@ use std::error::Error;
 use std::fmt;
 use std::future::Future;
 use std::marker;
+use std::mem::ManuallyDrop;
 use std::pin::Pin;
 use std::ptr;
 use std::sync::Arc;
@@ -73,7 +74,8 @@ pub use self::data::*;
 /// `Store::default()`. This will create a brand new [`Engine`] with default
 /// ocnfiguration (see [`Config`](crate::Config) for more information).
 pub struct Store<T> {
-    inner: Box<StoreInner<T>>,
+    // for comments about `ManuallyDrop`, see `Store::into_data`
+    inner: ManuallyDrop<Box<StoreInner<T>>>,
 }
 
 pub struct StoreInner<T: ?Sized> {
@@ -119,7 +121,8 @@ pub struct StoreInner<T: ?Sized> {
     store_data: StoreData,
     limiter: Option<Box<dyn wasmtime_runtime::ResourceLimiter>>,
     default_callee: InstanceHandle,
-    data: T,
+    // for comments about `ManuallyDrop`, see `Store::into_data`
+    data: ManuallyDrop<T>,
 }
 
 struct AsyncState {
@@ -210,7 +213,7 @@ impl<T> Store<T> {
             store_data: StoreData::new(),
             limiter: None,
             default_callee,
-            data,
+            data: ManuallyDrop::new(data),
         });
 
         // Once we've actually allocated the store itself we can configure the
@@ -219,7 +222,9 @@ impl<T> Store<T> {
         unsafe {
             inner.default_callee.set_store(store);
         }
-        Self { inner }
+        Self {
+            inner: ManuallyDrop::new(inner),
+        }
     }
 
     /// Access the underlying data owned by this `Store`.
@@ -230,6 +235,39 @@ impl<T> Store<T> {
     /// Access the underlying data owned by this `Store`.
     pub fn data_mut(&mut self) -> &mut T {
         self.inner.data_mut()
+    }
+
+    /// Consumes this [`Store`], destroying it, and returns the underlying data.
+    pub fn into_data(mut self) -> T {
+        // This is an unsafe operation because we want to avoid having a runtime
+        // check or boolean for whether the data is actually contained within a
+        // `Store`. The data itself is stored as `ManuallyDrop` since we're
+        // manually managing the memory here, and there's also a `ManuallyDrop`
+        // around the `Box<StoreInner<T>>`. The way this works though is a bit
+        // tricky, so here's how things get dropped appropriately:
+        //
+        // * When a `Store<T>` is normally dropped, the custom destructor for
+        //   `Store<T>` will drop `T`, then the `self.inner` field. The
+        //   rustc-glue destructor runs for `Box<StoreInner<T>>` which drops
+        //   `StoreInner<T>`. This cleans up all internal fields and doesn't
+        //   touch `T` because it's wrapped in `ManuallyDrop`.
+        //
+        // * When calling this method we skip the top-level destructor for
+        //   `Store<T>` with `mem::forget`. This skips both the destructor for
+        //   `T` and the destructor for `StoreInner<T>`. We do, however, run the
+        //   destructor for `Box<StoreInner<T>>` which, like above, will skip
+        //   the destructor for `T` since it's `ManuallyDrop`.
+        //
+        // In both cases all the other fields of `StoreInner<T>` should all get
+        // dropped, and the manual management of destructors is basically
+        // between this method and `Drop for Store<T>`. Note that this also
+        // means that `Drop for StoreInner<T>` cannot access `self.data`, so
+        // there is a comment indicating this as well.
+        unsafe {
+            let mut inner = ManuallyDrop::take(&mut self.inner);
+            std::mem::forget(self);
+            ManuallyDrop::take(&mut inner.data)
+        }
     }
 
     /// Configures the [`ResourceLimiter`](crate::ResourceLimiter) used to limit
@@ -1141,7 +1179,7 @@ impl<T: Default> Default for Store<T> {
 
 impl<T: fmt::Debug> fmt::Debug for Store<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let inner = &*self.inner as *const StoreInner<T>;
+        let inner = &**self.inner as *const StoreInner<T>;
         f.debug_struct("Store")
             .field("inner", &inner)
             .field("data", &self.inner.data)
@@ -1149,8 +1187,21 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
     }
 }
 
+impl<T> Drop for Store<T> {
+    fn drop(&mut self) {
+        // for documentation on this `unsafe`, see `into_data`.
+        unsafe {
+            ManuallyDrop::drop(&mut self.inner.data);
+            ManuallyDrop::drop(&mut self.inner);
+        }
+    }
+}
+
 impl<T: ?Sized> Drop for StoreInner<T> {
     fn drop(&mut self) {
+        // NB it's important that this destructor does not access `T`. That is
+        // deallocated by `Drop for Store<T>` above.
+
         let allocator = self.engine.allocator();
         unsafe {
             let ondemand = OnDemandInstanceAllocator::default();

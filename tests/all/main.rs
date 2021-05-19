@@ -22,6 +22,7 @@ mod module_serialize;
 mod name;
 mod pooling_allocator;
 mod stack_overflow;
+mod store;
 mod table;
 mod traps;
 mod wast;
