@@ -13,7 +13,6 @@ use {
 pub struct Config {
     pub target: TargetConf,
     pub witx: WitxConf,
-    pub ctx: CtxConf,
     pub async_: AsyncConf,
 }
 
@@ -21,7 +20,6 @@ pub struct Config {
 pub enum ConfigField {
     Target(TargetConf),
     Witx(WitxConf),
-    Ctx(CtxConf),
     Async(AsyncConf),
 }
 
@@ -29,7 +27,6 @@ mod kw {
     syn::custom_keyword!(target);
     syn::custom_keyword!(witx);
     syn::custom_keyword!(witx_literal);
-    syn::custom_keyword!(ctx);
     syn::custom_keyword!(block_on);
 }
 
@@ -48,10 +45,6 @@ impl Parse for ConfigField {
             input.parse::<kw::witx_literal>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Witx(WitxConf::Literal(input.parse()?)))
-        } else if lookahead.peek(kw::ctx) {
-            input.parse::<kw::ctx>()?;
-            input.parse::<Token![:]>()?;
-            Ok(ConfigField::Ctx(input.parse()?))
         } else if lookahead.peek(Token![async]) {
             input.parse::<Token![async]>()?;
             input.parse::<Token![:]>()?;
@@ -76,7 +69,6 @@ impl Config {
     pub fn build(fields: impl Iterator<Item = ConfigField>, err_loc: Span) -> Result<Self> {
         let mut target = None;
         let mut witx = None;
-        let mut ctx = None;
         let mut async_ = None;
         for f in fields {
             match f {
@@ -92,12 +84,6 @@ impl Config {
                     }
                     witx = Some(c);
                 }
-                ConfigField::Ctx(c) => {
-                    if ctx.is_some() {
-                        return Err(Error::new(err_loc, "duplicate `ctx` field"));
-                    }
-                    ctx = Some(c);
-                }
                 ConfigField::Async(c) => {
                     if async_.is_some() {
                         return Err(Error::new(err_loc, "duplicate `async` field"));
@@ -109,7 +95,6 @@ impl Config {
         Ok(Config {
             target: target.ok_or_else(|| Error::new(err_loc, "`target` field required"))?,
             witx: witx.ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
-            ctx: ctx.ok_or_else(|| Error::new(err_loc, "`ctx` field required"))?,
             async_: async_.unwrap_or_default(),
         })
     }
@@ -131,19 +116,6 @@ impl Parse for Config {
         let fields: Punctuated<ConfigField, Token![,]> =
             contents.parse_terminated(ConfigField::parse)?;
         Ok(Config::build(fields.into_iter(), input.span())?)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct CtxConf {
-    pub name: syn::Type,
-}
-
-impl Parse for CtxConf {
-    fn parse(input: ParseStream) -> Result<Self> {
-        Ok(CtxConf {
-            name: input.parse()?,
-        })
     }
 }
 

@@ -10,7 +10,6 @@ wasmtime_wiggle::from_witx!({
 wasmtime_wiggle::wasmtime_integration!({
     target: crate,
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
-    ctx: Ctx,
     block_on: {
         atoms::double_int_return_float
     }

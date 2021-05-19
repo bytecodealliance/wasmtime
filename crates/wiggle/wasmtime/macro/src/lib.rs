@@ -6,7 +6,7 @@ use wiggle_generate::Names;
 
 mod config;
 
-use config::{AsyncConf, Asyncness, TargetConf};
+use config::{AsyncConf, Asyncness};
 
 /// Define the structs required to integrate a Wiggle implementation with Wasmtime.
 ///
@@ -26,25 +26,21 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = Names::new(quote!(wasmtime_wiggle));
 
-    let modules = doc.modules().map(|module| {
-        generate_module(
-            &module,
-            &names,
-            &config.target,
-            &config.ctx.name,
-            &config.async_,
-        )
-    });
+    let modules = doc
+        .modules()
+        .map(|module| generate_module(&module, &names, &config.target.path, &config.async_));
     quote!( #(#modules)* ).into()
 }
 
 fn generate_module(
     module: &witx::Module,
     names: &Names,
-    target_conf: &TargetConf,
-    ctx_type: &syn::Type,
+    target_path: &syn::Path,
     async_conf: &AsyncConf,
 ) -> TokenStream2 {
+    let module_ident = names.module(&module.name);
+    let trait_ident = names.trait_name(&module.name);
+
     let send_bound = if async_conf.contains_async(module) {
         quote! { + Send }
     } else {
@@ -53,14 +49,15 @@ fn generate_module(
 
     let bodies = module.funcs().map(|f| {
         let asyncness = async_conf.is_async(module.name.as_str(), f.name.as_str());
-        generate_func(&module, &f, names, &target_conf.path, asyncness)
+        generate_func(&module, &f, names, &target_path, asyncness)
     });
 
     quote! {
         /// Adds all instance items to the specified `Linker`.
-        pub fn add_to_linker<T>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()>
+        pub fn add_to_linker<T, C>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()>
             where
-                T: std::borrow::BorrowMut<#ctx_type> #send_bound
+                T: std::borrow::BorrowMut<C> #send_bound,
+                C: #target_path::#module_ident::#trait_ident #send_bound,
         {
             #(#bodies)*
             Ok(())
