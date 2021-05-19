@@ -9,6 +9,8 @@ assignees: ''
 
 Thanks for filing a bug report! Please fill out the TODOs below.
 
+**Note: if you want to report a security issue, please read our [security policy](https://bytecodealliance.org/security)!**
+
 ### Test Case
 
 TODO: upload Wasm file here
