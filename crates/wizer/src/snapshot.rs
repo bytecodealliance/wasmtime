@@ -2,7 +2,6 @@ use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
 
 const WASM_PAGE_SIZE: u32 = 65_536;
-const NATIVE_PAGE_SIZE: u32 = 4_096;
 
 /// A "snapshot" of Wasm state from its default value after having been initialized.
 pub struct Snapshot<'a> {
@@ -20,6 +19,7 @@ pub struct Snapshot<'a> {
 }
 
 /// A data segment initializer for a memory.
+#[derive(Clone, Copy)]
 pub struct DataSegment<'a> {
     /// The index of this data segment's memory.
     pub memory_index: u32,
@@ -86,7 +86,6 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
         memory_mins.push(memory.size());
 
         let num_wasm_pages = memory.size();
-        let num_native_pages = num_wasm_pages * (WASM_PAGE_SIZE / NATIVE_PAGE_SIZE);
 
         let memory: &'a [u8] = unsafe {
             // Safe because no one else has a (potentially mutable)
@@ -95,71 +94,86 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
             std::slice::from_raw_parts(memory.data_ptr(), memory.data_size())
         };
 
-        // Consider each "native" page of the memory. (Scare quotes
-        // because we have no guarantee that anyone isn't using huge
-        // page sizes or something). Process each page in
-        // parallel. If any byte has changed, add the whole page as
-        // a data segment. This means that the resulting Wasm module
-        // should instantiate faster, since there are fewer segments
-        // to bounds check on instantiation. Engines could even
-        // theoretically recognize that each of these segments is
-        // page sized and aligned, and use lazy copy-on-write
-        // initialization of each instance's memory.
-        data_segments.par_extend((0..num_native_pages).into_par_iter().filter_map(|i| {
-            let start = i * NATIVE_PAGE_SIZE;
-            let end = ((i + 1) * NATIVE_PAGE_SIZE) as usize;
-            let page = &memory[start as usize..end];
-            for byte in page {
-                if *byte != 0 {
-                    return Some(DataSegment {
-                        memory_index,
-                        offset: start as u32,
-                        data: page,
-                    });
-                }
+        // Consider each Wasm page in parallel. Create data segments for each
+        // region of non-zero memory.
+        data_segments.par_extend((0..num_wasm_pages).into_par_iter().flat_map(|i| {
+            let page_end = ((i + 1) * WASM_PAGE_SIZE) as usize;
+            let mut start = (i * WASM_PAGE_SIZE) as usize;
+            let mut segments = vec![];
+            while start < page_end {
+                let nonzero = match memory[start..page_end].iter().position(|byte| *byte != 0) {
+                    None => break,
+                    Some(i) => i,
+                };
+                start += nonzero;
+                let zero = memory[start..page_end]
+                    .iter()
+                    .position(|byte| *byte == 0)
+                    .unwrap_or(page_end);
+                let end = start + zero;
+                segments.push(DataSegment {
+                    memory_index,
+                    offset: start as u32,
+                    data: &memory[start..end],
+                });
+                start = end;
             }
-            None
+            segments
         }));
 
         memory_index += 1;
+    }
+
+    if data_segments.is_empty() {
+        return (memory_mins, data_segments);
     }
 
     // Sort data segments to enforce determinism in the face of the
     // parallelism above.
     data_segments.sort_by_key(|s| (s.memory_index, s.offset));
 
-    // Merge any contiguous pages, so that the engine can initialize them
-    // all at once (ideally with a single copy-on-write `mmap`) rather than
-    // initializing each data segment individually.
-    for i in (1..data_segments.len()).rev() {
-        let a = &data_segments[i - 1];
-        let b = &data_segments[i];
+    // Merge any contiguous segments (caused by spanning a Wasm page boundary,
+    // and therefore created in separate logical threads above) or pages that
+    // are within four bytes of each other. Four because this is the minimum
+    // overhead of defining a new active data segment: one for the memory index
+    // LEB, two for the memory offset init expression (one for the `i32.const`
+    // opcode and another for the constant immediate LEB), and finally one for
+    // the data length LEB).
+    const MIN_ACTIVE_SEGMENT_OVERHEAD: u32 = 4;
+    let mut merged_data_segments = Vec::with_capacity(data_segments.len());
+    merged_data_segments.push(data_segments[0]);
+    for b in &data_segments[1..] {
+        let a = merged_data_segments.last_mut().unwrap();
 
         // Only merge segments for the same memory.
         if a.memory_index != b.memory_index {
+            merged_data_segments.push(*b);
             continue;
         }
 
-        // Only merge segments if they are contiguous.
-        if a.offset + u32::try_from(a.data.len()).unwrap() != b.offset {
+        // Only merge segments if they are contiguous or if it is definitely
+        // more size efficient than leaving them apart.
+        let distance = b.offset - (a.offset + u32::try_from(a.data.len()).unwrap());
+        if distance > MIN_ACTIVE_SEGMENT_OVERHEAD {
+            merged_data_segments.push(*b);
             continue;
         }
 
         // Okay, merge them together into `a` (so that the next iteration
         // can merge it with its predecessor) and then remove `b`!
-        data_segments[i - 1].data = unsafe {
+        a.data = unsafe {
+            let distance = usize::try_from(distance).unwrap();
             debug_assert_eq!(
                 a.data
                     .as_ptr()
-                    .offset(isize::try_from(a.data.len()).unwrap()),
+                    .offset(isize::try_from(a.data.len() + distance).unwrap()),
                 b.data.as_ptr()
             );
-            std::slice::from_raw_parts(a.data.as_ptr(), a.data.len() + b.data.len())
+            std::slice::from_raw_parts(a.data.as_ptr(), a.data.len() + distance + b.data.len())
         };
-        data_segments.remove(i);
     }
 
-    (memory_mins, data_segments)
+    (memory_mins, merged_data_segments)
 }
 
 fn snapshot_instantiations<'a>(
