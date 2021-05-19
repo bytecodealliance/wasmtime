@@ -46,7 +46,7 @@ impl<'a> ModuleContext<'a> {
 
     /// Get a shared reference to the `DefinedModuleInfo` for this module,
     /// following through aliases.
-    fn resolve(&self, module: Module) -> &DefinedModuleInfo<'a> {
+    fn defined(&self, module: Module) -> &DefinedModuleInfo<'a> {
         let mut id = module.id;
         loop {
             match &self.arena[id] {
@@ -403,7 +403,7 @@ impl Module {
     /// Returns the index of the type and updates the total count of types in
     /// `num_types`.
     pub fn define_instance_type(self, cx: &mut ModuleContext<'_>) -> TypeId {
-        // Inline `cx.resolve(self)` to avoid borrowck errors.
+        // Inline `cx.defined(self)` to avoid borrowck errors.
         let info = {
             let mut id = self.id;
             loop {
@@ -495,12 +495,12 @@ impl Module {
     /// Get the count of how many instance imports are in each import section in
     /// this module.
     pub fn instance_import_counts<'b>(self, cx: &'b ModuleContext<'_>) -> &'b [u32] {
-        &cx.resolve(self).instance_import_counts
+        &cx.defined(self).instance_import_counts
     }
 
     /// Get the aliases defined in this module.
     pub fn aliases<'a, 'b>(self, cx: &'b ModuleContext<'a>) -> &'b [wasmparser::Alias<'a>] {
-        &cx.resolve(self).aliases
+        &cx.defined(self).aliases
     }
 
     /// Get an export from the `n`th instance by name.
@@ -511,7 +511,7 @@ impl Module {
         name: &str,
     ) -> Option<&'b EntityType> {
         let instance = usize::try_from(instance).unwrap();
-        let info = cx.resolve(self);
+        let info = cx.defined(self);
         let type_id = info.instances[instance];
         let instance = match cx.types.get(type_id) {
             Type::Instance(i) => i,
@@ -528,7 +528,7 @@ impl Module {
         let mut stack = vec![self];
         while let Some(module) = stack.pop() {
             f(cx, module);
-            let info = cx.resolve(module);
+            let info = cx.defined(module);
             stack.extend(info.modules.iter().copied().rev());
         }
     }
@@ -536,12 +536,12 @@ impl Module {
     /// Get the first index in the memory space where a memory is defined rather
     /// than aliased or imported.
     pub fn defined_memories_index(self, cx: &ModuleContext) -> Option<u32> {
-        cx.resolve(self).defined_memories_index
+        cx.defined(self).defined_memories_index
     }
 
     /// The number of defined memories in this module.
     pub fn defined_memories_len(self, cx: &ModuleContext) -> usize {
-        let info = cx.resolve(self);
+        let info = cx.defined(self);
         info.defined_memories_index.map_or(0, |n| {
             let n = usize::try_from(n).unwrap();
             assert!(info.memories.len() > n);
@@ -554,7 +554,7 @@ impl Module {
         self,
         cx: &'b ModuleContext<'_>,
     ) -> impl Iterator<Item = (u32, wasmparser::MemoryType)> + 'b {
-        let info = cx.resolve(self);
+        let info = cx.defined(self);
         info.memories
             .iter()
             .copied()
@@ -569,12 +569,12 @@ impl Module {
     /// Get the first index in the global space where a global is defined rather
     /// than aliased or imported.
     pub fn defined_globals_index(self, cx: &ModuleContext) -> Option<u32> {
-        cx.resolve(self).defined_globals_index
+        cx.defined(self).defined_globals_index
     }
 
     /// The number of defined globals in this module.
     pub fn defined_globals_len(self, cx: &ModuleContext<'_>) -> usize {
-        let info = cx.resolve(self);
+        let info = cx.defined(self);
         info.defined_globals_index.map_or(0, |n| {
             let n = usize::try_from(n).unwrap();
             assert!(info.globals.len() > n);
@@ -587,7 +587,7 @@ impl Module {
         self,
         cx: &'b ModuleContext<'_>,
     ) -> impl Iterator<Item = (u32, wasmparser::GlobalType)> + 'b {
-        let info = cx.resolve(self);
+        let info = cx.defined(self);
         info.globals
             .iter()
             .copied()
@@ -604,7 +604,7 @@ impl Module {
         self,
         cx: &'b ModuleContext<'a>,
     ) -> impl Iterator<Item = &'b wasm_encoder::RawSection<'a>> + 'b {
-        let info = cx.resolve(self);
+        let info = cx.defined(self);
         info.raw_sections
             .iter()
             .filter(|s| s.id != SectionId::Custom.into())
@@ -623,22 +623,22 @@ impl Module {
         self,
         cx: &'b ModuleContext<'a>,
     ) -> &'b [wasm_encoder::RawSection<'a>] {
-        &cx.resolve(self).raw_sections
+        &cx.defined(self).raw_sections
     }
 
     /// Get a slice of this module's nested child modules.
     pub fn child_modules<'b>(self, cx: &'b ModuleContext<'_>) -> &'b [Module] {
-        &cx.resolve(self).modules
+        &cx.defined(self).modules
     }
 
     /// Get a slice of this module's exports.
     pub fn exports<'a, 'b>(self, cx: &'b ModuleContext<'a>) -> &'b [wasmparser::Export<'a>] {
-        &cx.resolve(self).exports
+        &cx.defined(self).exports
     }
 
     /// Get a slice of this module's imports.
     pub fn imports<'a, 'b>(self, cx: &'b ModuleContext<'a>) -> &'b [wasmparser::Import<'a>] {
-        &cx.resolve(self).imports
+        &cx.defined(self).imports
     }
 
     /// Get this module's defined (as opposed to imported or aliased)
@@ -650,17 +650,17 @@ impl Module {
         self,
         cx: &'b ModuleContext<'a>,
     ) -> &'b BTreeMap<u32, (Module, Vec<wasmparser::InstanceArg<'a>>)> {
-        &cx.resolve(self).instantiations
+        &cx.defined(self).instantiations
     }
 
     /// Get this module's `n`th nested child module.
     pub fn child_module_at(self, cx: &ModuleContext<'_>, n: u32) -> Module {
-        cx.resolve(self).modules[usize::try_from(n).unwrap()]
+        cx.defined(self).modules[usize::try_from(n).unwrap()]
     }
 
     /// Get the full types index space for this module.
     pub fn types<'a, 'b>(self, cx: &'b ModuleContext<'a>) -> &'b [TypeId] {
-        &cx.resolve(self).types
+        &cx.defined(self).types
     }
 
     /// Get the type at the given index.
@@ -675,7 +675,7 @@ impl Module {
     ///
     /// Panics if the types index space does not contain the given index.
     pub fn type_id_at(self, cx: &ModuleContext<'_>, type_index: u32) -> TypeId {
-        cx.resolve(self).types[usize::try_from(type_index).unwrap()]
+        cx.defined(self).types[usize::try_from(type_index).unwrap()]
     }
 
     /// Get the id for instance type at the given type index.
