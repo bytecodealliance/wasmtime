@@ -223,12 +223,7 @@ impl Module {
         cx: &ModuleContext<'_>,
         ty: wasmparser::ImportSectionEntryType,
     ) -> EntityType {
-        let module = self.get_aliased(cx).unwrap_or(self);
-        let types_space = match &cx.arena[module.id] {
-            ModuleInfo::Aliased(_) => unreachable!(),
-            ModuleInfo::Defined(d) => &d.types,
-        };
-        cx.types().entity_type(ty, types_space)
+        cx.types().entity_type(ty, &cx.defined(self).types)
     }
 
     /// Add a new raw section to this module info during parsing.
