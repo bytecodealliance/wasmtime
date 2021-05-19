@@ -1408,16 +1408,17 @@ pub(crate) fn emit(
         }
 
         Inst::XmmUnaryRmREvex { op, src, dst } => {
-            let opcode = match op {
-                Avx512Opcode::Vpabsq => 0x1f,
+            let (prefix, map, w, opcode) = match op {
+                Avx512Opcode::Vpabsq => (LegacyPrefixes::_66, OpcodeMap::_0F38, true, 0x1f),
+                Avx512Opcode::Vcvtudq2ps => (LegacyPrefixes::_F2, OpcodeMap::_0F, false, 0x7a),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             match src {
                 RegMem::Reg { reg: src } => EvexInstruction::new()
                     .length(EvexVectorLength::V128)
-                    .prefix(LegacyPrefixes::_66)
-                    .map(OpcodeMap::_0F38)
-                    .w(true)
+                    .prefix(prefix)
+                    .map(map)
+                    .w(w)
                     .opcode(opcode)
                     .reg(dst.to_reg().get_hw_encoding())
                     .rm(src.get_hw_encoding())
