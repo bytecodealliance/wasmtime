@@ -140,7 +140,7 @@ impl WastContext {
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<()> {
         match name {
-            Some(name) => self.linker.alias(name, as_name),
+            Some(name) => self.linker.alias_module(name, as_name),
             None => {
                 let current = *self
                     .current

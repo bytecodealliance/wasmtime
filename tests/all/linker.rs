@@ -296,3 +296,15 @@ fn funcs_live_on_to_fight_another_day() -> Result<()> {
     assert_eq!(flag.load(SeqCst), 1);
     Ok(())
 }
+
+#[test]
+fn alias_one() -> Result<()> {
+    let mut store = Store::<()>::default();
+    let mut linker = Linker::new(store.engine());
+    assert!(linker.alias("a", "b", "c", "d").is_err());
+    linker.func_wrap("a", "b", || {})?;
+    assert!(linker.alias("a", "b", "c", "d").is_ok());
+    assert!(linker.get(&mut store, "a", Some("b")).is_some());
+    assert!(linker.get(&mut store, "c", Some("d")).is_some());
+    Ok(())
+}

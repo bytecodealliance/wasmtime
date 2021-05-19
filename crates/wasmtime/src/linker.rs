@@ -684,6 +684,31 @@ impl<T> Linker<T> {
         Ok(self)
     }
 
+    /// Aliases one item's name as another.
+    ///
+    /// This method will alias an item with the specified `module` and `name`
+    /// under a new name of `as_module` and `as_name`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any shadowing violations happen while defining new
+    /// items, or if the original item wasn't defined.
+    pub fn alias(
+        &mut self,
+        module: &str,
+        name: &str,
+        as_module: &str,
+        as_name: &str,
+    ) -> Result<&mut Self> {
+        let src = self.import_key(module, Some(name));
+        let dst = self.import_key(as_module, Some(as_name));
+        match self.map.get(&src).cloned() {
+            Some(item) => self.insert(dst, item)?,
+            None => bail!("no item named `{}::{}` defined", module, name),
+        }
+        Ok(self)
+    }
+
     /// Aliases one module's name as another.
     ///
     /// This method will alias all currently defined under `module` to also be
@@ -693,7 +718,7 @@ impl<T> Linker<T> {
     ///
     /// Returns an error if any shadowing violations happen while defining new
     /// items.
-    pub fn alias(&mut self, module: &str, as_module: &str) -> Result<()> {
+    pub fn alias_module(&mut self, module: &str, as_module: &str) -> Result<()> {
         let module = self.intern_str(module);
         let as_module = self.intern_str(as_module);
         let items = self
