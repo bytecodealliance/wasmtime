@@ -72,10 +72,6 @@ fn generate_module(
     ctx_type: &syn::Type,
     async_conf: &AsyncConf,
 ) -> TokenStream2 {
-    let target_path = &target_conf.path;
-    let module_id = names.module(&module.name);
-    let target_module = quote! { #target_path::#module_id };
-
     let mut host_funcs = Vec::new();
 
     let mut any_async = false;
@@ -92,7 +88,14 @@ fn generate_module(
             }
             _ => {}
         }
-        generate_func(&f, names, &target_module, asyncness, &mut host_funcs);
+        generate_func(
+            module,
+            &f,
+            names,
+            &target_conf.path,
+            asyncness,
+            &mut host_funcs,
+        );
     }
 
     let send_bound = if any_async {
@@ -100,32 +103,6 @@ fn generate_module(
     } else {
         quote! {}
     };
-
-    let linker_add_definitions = host_funcs.iter().map(|(func_name, body)| {
-        let adder_func = format_ident!("add_{}_to_linker", names.func(&func_name));
-        let docs = format!(
-            "Add the host function for `{}` to a linker under a given module and field name.",
-            func_name.as_str()
-        );
-        quote! {
-            #[doc = #docs]
-            pub fn #adder_func<T>(linker: &mut wasmtime::Linker<T>, module: &str, field: &str)
-                -> anyhow::Result<()>
-            where
-                T: std::borrow::BorrowMut<#ctx_type> #send_bound
-            {
-                #body
-            }
-        }
-    });
-    let linker_add_invocations = host_funcs.iter().map(|(func_name, _body)| {
-        let adder_func = format_ident!("add_{}_to_linker", names.func(&func_name));
-        let module = module.name.as_str();
-        let field = func_name.as_str();
-        quote! {
-            #adder_func(linker, #module, #field)?;
-        }
-    });
 
     let type_name = module_conf.name.clone();
     let add_to_linker = format_ident!("add_{}_to_linker", type_name);
@@ -135,23 +112,27 @@ fn generate_module(
             where
                 T: std::borrow::BorrowMut<#ctx_type> #send_bound
         {
-            #(#linker_add_invocations)*
+            #(#host_funcs)*
             Ok(())
         }
-
-        #(#linker_add_definitions)*
     }
 }
 
 fn generate_func(
+    module: &witx::Module,
     func: &witx::InterfaceFunc,
     names: &Names,
-    target_module: &TokenStream2,
+    target_path: &syn::Path,
     asyncness: Asyncness,
-    host_funcs: &mut Vec<(witx::Id, TokenStream2)>,
+    host_funcs: &mut Vec<TokenStream2>,
 ) {
     let rt = names.runtime_mod();
-    let name_ident = names.func(&func.name);
+
+    let module_str = module.name.as_str();
+    let module_ident = names.module(&module.name);
+
+    let field_str = func.name.as_str();
+    let field_ident = names.func(&func.name);
 
     let (params, results) = func.wasm_signature();
 
@@ -208,7 +189,7 @@ fn generate_func(
             let mem = &mut *(mem.data_mut(&mut caller) as *mut [u8]);
             (caller.data_mut().borrow_mut(), #runtime::WasmtimeGuestMemory::new(mem))
         };
-        match #target_module::#name_ident(ctx, &mem #(, #arg_names)*) #await_ {
+        match #target_path::#module_ident::#field_ident(ctx, &mem #(, #arg_names)*) #await_ {
             Ok(r) => Ok(<#ret_ty>::from(r)),
             Err(wasmtime_wiggle::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
             Err(wasmtime_wiggle::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
@@ -220,42 +201,39 @@ fn generate_func(
             let wrapper = format_ident!("func_wrap{}_async", params.len());
             quote! {
                 linker.#wrapper(
-                    module,
-                    field,
+                    #module_str,
+                    #field_str,
                     move |mut caller: wasmtime::Caller<'_, T> #(, #arg_decls)*| {
                         Box::new(async move { #body })
                     },
                 )?;
-                Ok(())
             }
         }
 
         Asyncness::Blocking => {
             quote! {
                 linker.func_wrap(
-                    module,
-                    field,
+                    #module_str,
+                    #field_str,
                     move |mut caller: wasmtime::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
                         let result = async { #body };
                         #rt::run_in_dummy_executor(result)
                     },
                 )?;
-                Ok(())
             }
         }
 
         Asyncness::Sync => {
             quote! {
                 linker.func_wrap(
-                    module,
-                    field,
+                    #module_str,
+                    #field_str,
                     move |mut caller: wasmtime::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
                         #body
                     },
                 )?;
-                Ok(())
             }
         }
     };
-    host_funcs.push((func.name.clone(), host_wrapper));
+    host_funcs.push(host_wrapper);
 }
