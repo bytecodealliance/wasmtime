@@ -290,7 +290,6 @@ impl Default for PoolingAllocationStrategy {
 #[derive(Debug)]
 struct InstancePool {
     mapping: Mmap,
-    offsets: VMOffsets,
     instance_size: usize,
     max_instances: usize,
     free_list: Mutex<Vec<usize>>,
@@ -335,7 +334,6 @@ impl InstancePool {
 
         let pool = Self {
             mapping,
-            offsets,
             instance_size,
             max_instances,
             free_list: Mutex::new((0..max_instances).collect()),
@@ -346,7 +344,7 @@ impl InstancePool {
 
         // Use a default module to initialize the instances to start
         for i in 0..instance_limits.count as usize {
-            pool.initialize(i);
+            pool.initialize(module_limits, i);
         }
 
         Ok(pool)
@@ -357,7 +355,7 @@ impl InstancePool {
         &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
     }
 
-    fn initialize(&self, index: usize) {
+    fn initialize(&self, limits: &ModuleLimits, index: usize) {
         unsafe {
             let instance = self.instance(index);
 
@@ -366,9 +364,12 @@ impl InstancePool {
                 instance as _,
                 Instance {
                     module: self.empty_module.clone(),
-                    offsets: self.offsets,
-                    memories: PrimaryMap::with_capacity(self.offsets.num_defined_memories as usize),
-                    tables: PrimaryMap::with_capacity(self.offsets.num_defined_tables as usize),
+                    offsets: VMOffsets::new(
+                        std::mem::size_of::<*const u8>() as u8,
+                        &self.empty_module,
+                    ),
+                    memories: PrimaryMap::with_capacity(limits.memories as usize),
+                    tables: PrimaryMap::with_capacity(limits.tables as usize),
                     dropped_elements: EntitySet::new(),
                     dropped_data: EntitySet::new(),
                     host_state: Box::new(()),
@@ -502,7 +503,8 @@ impl InstancePool {
         // should put everything back in a relatively pristine state for each
         // fresh allocation later on.
         instance.module = self.empty_module.clone();
-        instance.offsets = self.offsets;
+        instance.offsets =
+            VMOffsets::new(std::mem::size_of::<*const u8>() as u8, &self.empty_module);
 
         self.free_list.lock().unwrap().push(index);
     }

@@ -102,7 +102,7 @@
  * multithreading story of the Rust API for Wasmtime. All objects are safe to
  * send to other threads so long as user-specific data is also safe to send to
  * other threads. Functions are safe to call from any thread but some functions
- * cannot be called concurrently. For examples functions which correspond to
+ * cannot be called concurrently. For example, functions which correspond to
  * `&T` in Rust can be called concurrently with any other methods that take
  * `&T`. Functions that take `&mut T` in Rust, however, cannot be called
  * concurrently with any other function (but can still be invoked on any
