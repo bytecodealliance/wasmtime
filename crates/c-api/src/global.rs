@@ -93,7 +93,7 @@ pub unsafe extern "C" fn wasmtime_global_new(
 #[no_mangle]
 pub extern "C" fn wasmtime_global_type(
     store: CStoreContext<'_>,
-    global: Global,
+    global: &Global,
 ) -> Box<wasm_globaltype_t> {
     Box::new(wasm_globaltype_t::new(global.ty(store)))
 }
@@ -101,7 +101,7 @@ pub extern "C" fn wasmtime_global_type(
 #[no_mangle]
 pub extern "C" fn wasmtime_global_get(
     store: CStoreContextMut<'_>,
-    global: Global,
+    global: &Global,
     val: &mut MaybeUninit<wasmtime_val_t>,
 ) {
     crate::initialize(val, wasmtime_val_t::from_val(global.get(store)))
@@ -110,7 +110,7 @@ pub extern "C" fn wasmtime_global_get(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_global_set(
     store: CStoreContextMut<'_>,
-    global: Global,
+    global: &Global,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(global.set(store, val.to_val()), |()| {})

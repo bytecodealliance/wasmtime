@@ -109,7 +109,8 @@ int deserialize(wasm_byte_vec_t* buffer) {
   // function above.
   printf("Creating callback...\n");
   wasm_functype_t *hello_ty = wasm_functype_new_0_0();
-  wasmtime_func_t hello = wasmtime_func_new(context, hello_ty, hello_callback, NULL, NULL);
+  wasmtime_func_t hello;
+  wasmtime_func_new(context, hello_ty, hello_callback, NULL, NULL, &hello);
 
   // With our callback function we can now instantiate the compiled module,
   // giving us an instance we can then execute exports from. Note that
@@ -128,13 +129,13 @@ int deserialize(wasm_byte_vec_t* buffer) {
 
   // Lookup our `run` export function
   wasmtime_extern_t run;
-  bool ok = wasmtime_instance_export_get(context, instance, "run", 3, &run);
+  bool ok = wasmtime_instance_export_get(context, &instance, "run", 3, &run);
   assert(ok);
   assert(run.kind == WASMTIME_EXTERN_FUNC);
 
   // And call it!
   printf("Calling export...\n");
-  error = wasmtime_func_call(context, run.of.func, NULL, 0, NULL, 0, &trap);
+  error = wasmtime_func_call(context, &run.of.func, NULL, 0, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 

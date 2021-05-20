@@ -136,7 +136,7 @@ pub(crate) fn handle_instantiate(
 #[no_mangle]
 pub extern "C" fn wasmtime_instance_type(
     store: CStoreContext<'_>,
-    instance: Instance,
+    instance: &Instance,
 ) -> Box<wasmtime_instancetype_t> {
     Box::new(wasmtime_instancetype_t::new(instance.ty(store)))
 }
@@ -144,7 +144,7 @@ pub extern "C" fn wasmtime_instance_type(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_instance_export_get(
     store: CStoreContextMut<'_>,
-    instance: Instance,
+    instance: &Instance,
     name: *const u8,
     name_len: usize,
     item: &mut MaybeUninit<wasmtime_extern_t>,
@@ -166,7 +166,7 @@ pub unsafe extern "C" fn wasmtime_instance_export_get(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_instance_export_nth(
     store: CStoreContextMut<'_>,
-    instance: Instance,
+    instance: &Instance,
     index: usize,
     name_ptr: &mut *const u8,
     name_len: &mut usize,

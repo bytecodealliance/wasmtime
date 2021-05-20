@@ -43,7 +43,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_table_new(
  */
 WASM_API_EXTERN wasm_tabletype_t* wasmtime_table_type(
     const wasmtime_context_t *store,
-    wasmtime_table_t table
+    const wasmtime_table_t *table
 );
 
 /**
@@ -60,7 +60,7 @@ WASM_API_EXTERN wasm_tabletype_t* wasmtime_table_type(
  */
 WASM_API_EXTERN bool wasmtime_table_get(
     wasmtime_context_t *store,
-    wasmtime_table_t table,
+    const wasmtime_table_t *table,
     uint32_t index,
     wasmtime_val_t *val
 );
@@ -80,7 +80,7 @@ WASM_API_EXTERN bool wasmtime_table_get(
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_table_set(
     wasmtime_context_t *store,
-    wasmtime_table_t table,
+    const wasmtime_table_t *table,
     uint32_t index,
     const wasmtime_val_t *value
 );
@@ -90,7 +90,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_table_set(
  */
 WASM_API_EXTERN uint32_t wasmtime_table_size(
     const wasmtime_context_t *store,
-    wasmtime_table_t table
+    const wasmtime_table_t *table
 );
 
 /**
@@ -112,7 +112,7 @@ WASM_API_EXTERN uint32_t wasmtime_table_size(
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_table_grow(
     wasmtime_context_t *store,
-    wasmtime_table_t table,
+    const wasmtime_table_t *table,
     uint32_t delta,
     const wasmtime_val_t *init,
     uint32_t *prev_size

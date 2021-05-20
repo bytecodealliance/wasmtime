@@ -104,8 +104,14 @@ typedef union wasmtime_valunion {
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_F64
   float64_t f64;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_FUNCREF
+  ///
+  /// If this value represents a `ref.null func` value then the `store_id` field
+  /// is set to zero.
   wasmtime_func_t funcref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_EXTERNREF
+  ///
+  /// If this value represents a `ref.null extern` value then this pointer will
+  /// be `NULL`.
   wasmtime_externref_t *externref;
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_V128
   wasmtime_v128 v128;
@@ -130,10 +136,6 @@ typedef struct wasmtime_val {
   /// Container for the extern item's value.
   wasmtime_valunion_t of;
 } wasmtime_val_t;
-
-/// \brief value for #wasmtime_valunion::funcref indicating that the funcref is
-/// null.
-#define WASMTIME_FUNCREF_NULL ((uint64_t) 0xffffffffffffffff)
 
 /**
  * \brief Delets an owned #wasmtime_val_t.

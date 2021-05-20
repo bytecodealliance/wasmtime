@@ -47,7 +47,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_global_new(
  */
 WASM_API_EXTERN wasm_globaltype_t* wasmtime_global_type(
     const wasmtime_context_t *store,
-    wasmtime_global_t global
+    const wasmtime_global_t *global
 );
 
 /**
@@ -62,7 +62,7 @@ WASM_API_EXTERN wasm_globaltype_t* wasmtime_global_type(
  */
 WASM_API_EXTERN void wasmtime_global_get(
     wasmtime_context_t *store,
-    wasmtime_global_t global,
+    const wasmtime_global_t *global,
     wasmtime_val_t *out
 );
 
@@ -80,7 +80,7 @@ WASM_API_EXTERN void wasmtime_global_get(
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_global_set(
     wasmtime_context_t *store,
-    wasmtime_global_t global,
+    const wasmtime_global_t *global,
     const wasmtime_val_t *val
 );
 

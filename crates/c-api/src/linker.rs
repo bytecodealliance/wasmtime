@@ -71,11 +71,11 @@ pub unsafe extern "C" fn wasmtime_linker_define_instance(
     store: CStoreContextMut<'_>,
     name: *const u8,
     name_len: usize,
-    instance: Instance,
+    instance: &Instance,
 ) -> Option<Box<wasmtime_error_t>> {
     let linker = &mut linker.linker;
     let name = to_str!(name, name_len);
-    handle_result(linker.instance(store, name, instance), |_linker| ())
+    handle_result(linker.instance(store, name, *instance), |_linker| ())
 }
 
 #[no_mangle]

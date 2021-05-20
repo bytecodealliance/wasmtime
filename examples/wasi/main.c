@@ -89,7 +89,7 @@ int main() {
   if (error != NULL)
     exit_with_error("failed to locate default export for module", error, NULL);
 
-  error = wasmtime_func_call(context, func, NULL, 0, NULL, 0, &trap);
+  error = wasmtime_func_call(context, &func, NULL, 0, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("error calling default export", error, trap);
 

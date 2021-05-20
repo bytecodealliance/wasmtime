@@ -37,7 +37,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_memory_new(
  */
 WASM_API_EXTERN wasm_memorytype_t* wasmtime_memory_type(
     const wasmtime_context_t *store,
-    wasmtime_memory_t memory
+    const wasmtime_memory_t *memory
 );
 
 /**
@@ -45,7 +45,7 @@ WASM_API_EXTERN wasm_memorytype_t* wasmtime_memory_type(
  */
 WASM_API_EXTERN uint8_t *wasmtime_memory_data(
     const wasmtime_context_t *store,
-    wasmtime_memory_t memory
+    const wasmtime_memory_t *memory
 );
 
 /**
@@ -53,7 +53,7 @@ WASM_API_EXTERN uint8_t *wasmtime_memory_data(
  */
 WASM_API_EXTERN size_t wasmtime_memory_data_size(
     const wasmtime_context_t *store,
-    wasmtime_memory_t memory
+    const wasmtime_memory_t *memory
 );
 
 /**
@@ -61,7 +61,7 @@ WASM_API_EXTERN size_t wasmtime_memory_data_size(
  */
 WASM_API_EXTERN uint32_t wasmtime_memory_size(
     const wasmtime_context_t *store,
-    wasmtime_memory_t memory
+    const wasmtime_memory_t *memory
 );
 
 /**
@@ -78,7 +78,7 @@ WASM_API_EXTERN uint32_t wasmtime_memory_size(
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_memory_grow(
     wasmtime_context_t *store,
-    wasmtime_memory_t memory,
+    const wasmtime_memory_t *memory,
     uint32_t delta,
     uint32_t *prev_size
 );

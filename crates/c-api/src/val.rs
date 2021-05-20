@@ -161,9 +161,16 @@ pub union wasmtime_val_union {
     pub i64: i64,
     pub f32: u32,
     pub f64: u64,
-    pub funcref: u64,
+    pub funcref: wasmtime_func_t,
     pub externref: ManuallyDrop<Option<ExternRef>>,
     pub v128: [u8; 16],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct wasmtime_func_t {
+    pub store_id: u64,
+    pub index: usize,
 }
 
 impl wasmtime_val_t {
@@ -195,8 +202,11 @@ impl wasmtime_val_t {
                 kind: crate::WASMTIME_FUNCREF,
                 of: wasmtime_val_union {
                     funcref: match i {
-                        Some(func) => unsafe { mem::transmute::<Func, u64>(func) },
-                        None => u64::max_value(),
+                        Some(func) => unsafe { mem::transmute::<Func, wasmtime_func_t>(func) },
+                        None => wasmtime_func_t {
+                            store_id: 0,
+                            index: 0,
+                        },
                     },
                 },
             },
@@ -216,11 +226,15 @@ impl wasmtime_val_t {
             crate::WASMTIME_F32 => Val::F32(self.of.f32),
             crate::WASMTIME_F64 => Val::F64(self.of.f64),
             crate::WASMTIME_V128 => Val::V128(u128::from_le_bytes(self.of.v128)),
-            crate::WASMTIME_FUNCREF => Val::FuncRef(if self.of.funcref == u64::max_value() {
-                None
-            } else {
-                Some(mem::transmute::<u64, Func>(self.of.funcref))
-            }),
+            crate::WASMTIME_FUNCREF => {
+                let store = self.of.funcref.store_id;
+                let index = self.of.funcref.index;
+                Val::FuncRef(if store == 0 && index == 0 {
+                    None
+                } else {
+                    Some(mem::transmute::<wasmtime_func_t, Func>(self.of.funcref))
+                })
+            }
             crate::WASMTIME_EXTERNREF => Val::ExternRef((*self.of.externref).clone()),
             other => panic!("unknown wasmtime_valkind_t: {}", other),
         }

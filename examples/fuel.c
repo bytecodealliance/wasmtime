@@ -82,7 +82,7 @@ int main() {
 
   // Lookup our `fibonacci` export function
   wasmtime_extern_t fib;
-  bool ok = wasmtime_instance_export_get(context, instance, "fibonacci", strlen("fibonacci"), &fib);
+  bool ok = wasmtime_instance_export_get(context, &instance, "fibonacci", strlen("fibonacci"), &fib);
   assert(ok);
   assert(fib.kind == WASMTIME_EXTERN_FUNC);
 
@@ -94,7 +94,7 @@ int main() {
     params[0].kind = WASMTIME_I32;
     params[0].of.i32 = n;
     wasmtime_val_t results[1];
-    error = wasmtime_func_call(context, fib.of.func, params, 1, results, 1, &trap);
+    error = wasmtime_func_call(context, &fib.of.func, params, 1, results, 1, &trap);
     if (error != NULL || trap != NULL) {
       printf("Exhausted fuel computing fib(%d)\n", n);
       break;

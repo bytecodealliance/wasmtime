@@ -3,6 +3,7 @@ use crate::{StoreContext, StoreContextMut};
 use std::convert::TryFrom;
 use std::fmt;
 use std::marker;
+use std::num::NonZeroU64;
 use std::ops::Index;
 use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 
@@ -14,7 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 pub struct InstanceId(pub(super) usize);
 
 pub struct StoreData {
-    id: u64,
+    id: NonZeroU64,
     funcs: Vec<crate::func::FuncData>,
     tables: Vec<wasmtime_runtime::ExportTable>,
     globals: Vec<wasmtime_runtime::ExportGlobal>,
@@ -63,30 +64,16 @@ impl StoreData {
     pub fn new() -> StoreData {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
-        // Currently we neither recycle ids nor do we allow overlap of ids (e.g.
-        // the ABA problem). We also only allocate a certain number of bits
-        // (controlled by INDEX_BITS below) for the id. Make sure that the id
-        // fits in the allocated bits (currently 40 bits).
-        //
-        // Note that this is the maximal number of `Store` instances that a
-        // process can make before it needs to be restarted. That means this
-        // needs to be pretty reasonable. At the assumption of creating 10k
-        // stores per second 40 bits allows that program to run for ~3.5 years.
-        // Hopefully programs don't run that long.
-        //
-        // If a program does indeed run that long then we rest the counter back
-        // to a known bad value (and it's basically impossible the counter will
-        // wrap back to zero inbetween this time) and then panic the current
-        // thread.
+        // Only allow 2^63 stores at which point we start panicking to prevent
+        // overflow. This should still last us to effectively the end of time.
         let id = NEXT_ID.fetch_add(1, SeqCst);
-        let upper_bits_used = (id >> (64 - INDEX_BITS)) != 0;
-        if upper_bits_used {
-            NEXT_ID.store(1 << (64 - INDEX_BITS), SeqCst);
+        if id & (1 << 63) != 0 {
+            NEXT_ID.store(1 << 63, SeqCst);
             panic!("store id allocator overflow");
         }
 
         StoreData {
-            id,
+            id: NonZeroU64::new(id + 1).unwrap(),
             funcs: Vec::new(),
             tables: Vec::new(),
             globals: Vec::new(),
@@ -169,77 +156,28 @@ where
     }
 }
 
-// NB the repre(transparent) here is for the usage of this throughout the C API.
-// If the representation here changes then the C API will need changing as well.
-#[repr(transparent)]
+#[repr(C)] // used by reference in the C API
 pub struct Stored<T> {
-    // See documentation below on `INDEX_BITS` for how this is interpreted.
-    bits: u64,
+    store_id: NonZeroU64,
+    index: usize,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-// This is the maximal number of bits that the index of an item within a store
-// can take up. As this is set to 24 that allows for 16 million items. Note
-// that this is not a limit on something like the number of functions within an
-// instance, only a limit on the number of externally referenced items in a
-// Store. For example this is more equivalent to exported functions of a module
-// rather than functions themselves.
-//
-// The reason for this limitation is that we want `Stored<T>` to fit into a
-// 64-bit value (for the C API). This 64-bit value gives us limited, well, uh,
-// bits, to work with. We need to pack both a "store id" as well as an index
-// within the store into those 64 bits. Given that there's no implementation of
-// recycling store IDs at this time it also means that the number of bits
-// allocated to the store id represents the maximal number of stores that a
-// process can create for its entire lifetime.
-//
-// These factors led to the choice of bits here for this. This can be moved
-// around a bit, but the hope is that this is good enough for all practical
-// users.
-//
-// The choice of 24 means that the limitations of wasmtime are:
-//
-// * 24 bits for the index, meaning 16 million items maximum. As noted above
-//   this is 16 million *host references* to wasm items, so this is akin to
-//   creating 16 million instances within one store or creating an instance
-//   that has 16 million exported function. If 24 bits isn't enough then we
-//   may need to look into compile-time options to change this perhaps.
-//
-// * 40 bits for the store id. This is a whole lot more bits than the index,
-//   but intentionally so. As the maximal number of stores for the entire
-//   process that's far more limiting than the number of items within a store
-//   (which are typically drastically lower than 16 million and/or limited via
-//   other means, e.g. wasm module validation, instance limits, etc).
-//
-// So all-in-all we try to maximize the number of store bits without placing
-// too many restrictions on the number of items within a store. Using 40
-// bits practically means that if you create 10k stores a second your program
-// can run for ~3.5 years. Hopefully that's enough?
-//
-// If we didn't need to be clever in the C API and returned structs-by-value
-// instead of returning 64-bit integers then we could just change this to a
-// u64/usize pair which would solve all of these problems. Hopefully, though,
-// no one will ever run into these limits...
-const INDEX_BITS: usize = 24;
-
 impl<T> Stored<T> {
-    fn new(store_id: u64, index: usize) -> Stored<T> {
-        let masked_index = ((1 << INDEX_BITS) - 1) & index;
-        if masked_index != index {
-            panic!("too many items have been allocated into the store");
-        }
+    fn new(store_id: NonZeroU64, index: usize) -> Stored<T> {
         Stored {
-            bits: (store_id << INDEX_BITS) | u64::try_from(masked_index).unwrap(),
+            store_id,
+            index,
             _marker: marker::PhantomData,
         }
     }
 
-    fn store_id(&self) -> u64 {
-        self.bits >> INDEX_BITS
+    fn store_id(&self) -> NonZeroU64 {
+        self.store_id
     }
 
     fn index(&self) -> usize {
-        usize::try_from(self.bits & ((1 << INDEX_BITS) - 1)).unwrap()
+        self.index
     }
 }
 

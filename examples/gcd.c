@@ -73,7 +73,7 @@ int main() {
 
   // Lookup our `gcd` export function
   wasmtime_extern_t gcd;
-  bool ok = wasmtime_instance_export_get(context, instance, "gcd", 3, &gcd);
+  bool ok = wasmtime_instance_export_get(context, &instance, "gcd", 3, &gcd);
   assert(ok);
   assert(gcd.kind == WASMTIME_EXTERN_FUNC);
 
@@ -86,7 +86,7 @@ int main() {
   params[1].kind = WASMTIME_I32;
   params[1].of.i32 = b;
   wasmtime_val_t results[1];
-  error = wasmtime_func_call(context, gcd.of.func, params, 2, results, 1, &trap);
+  error = wasmtime_func_call(context, &gcd.of.func, params, 2, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call gcd", error, trap);
   assert(results[0].kind == WASMTIME_I32);
