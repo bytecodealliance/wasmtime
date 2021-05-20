@@ -439,7 +439,7 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-nn")]
         {
-            wasmtime_wasi_nn::add_to_linker(linker)?;
+            wasmtime_wasi_nn::add_to_linker::<_, WasiNnCtx>(linker)?;
             store.data_mut().wasi_nn = Some(WasiNnCtx::new()?);
         }
     }
