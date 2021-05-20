@@ -31,4 +31,5 @@ proc-macro2 = "1.0"
 wiggle = { path = ".." }
 
 [features]
+wasmtime = []
 wiggle_metadata = []

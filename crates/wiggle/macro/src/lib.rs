@@ -144,9 +144,13 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = wiggle_generate::Names::new(quote!(wiggle));
 
-    let error_transform =
-        wiggle_generate::CodegenSettings::new(&config.errors, &config.async_, &doc)
-            .expect("validating codegen settings");
+    let error_transform = wiggle_generate::CodegenSettings::new(
+        &config.errors,
+        &config.async_,
+        &doc,
+        cfg!(feature = "wasmtime"),
+    )
+    .expect("validating codegen settings");
 
     let code = wiggle_generate::generate(&doc, &names, &error_transform);
     let metadata = if cfg!(feature = "wiggle_metadata") {
@@ -166,4 +170,24 @@ pub fn async_trait(attr: TokenStream, item: TokenStream) -> TokenStream {
         #[wiggle::async_trait_crate::async_trait]
         #item
     })
+}
+
+#[cfg(feature = "wasmtime")]
+/// Define the structs required to integrate a Wiggle implementation with Wasmtime.
+///
+/// ## Arguments
+///
+/// Arguments are provided using struct syntax e.g. `{ arg_name: value }`.
+///
+/// * `target`: The path of the module where the Wiggle implementation is defined.
+#[proc_macro]
+pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
+    let config = parse_macro_input!(args as wiggle_generate::WasmtimeConfig);
+    let doc = config.c.load_document();
+    let names = wiggle_generate::Names::new(quote!(wiggle));
+
+    let modules = doc.modules().map(|module| {
+        wiggle_generate::wasmtime::link_module(&module, &names, &config.target, &config.c.async_)
+    });
+    quote!( #(#modules)* ).into()
 }

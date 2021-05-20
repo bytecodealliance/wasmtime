@@ -5,6 +5,7 @@ mod lifetimes;
 mod module_trait;
 mod names;
 mod types;
+pub mod wasmtime;
 
 use heck::ShoutySnakeCase;
 use lifetimes::anon_lifetime;
@@ -12,7 +13,7 @@ use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
 pub use codegen_settings::{CodegenSettings, UserErrorType};
-pub use config::Config;
+pub use config::{Config, WasmtimeConfig};
 pub use funcs::define_func;
 pub use module_trait::define_module_trait;
 pub use names::Names;

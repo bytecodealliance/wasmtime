@@ -3928,11 +3928,13 @@ dependencies = [
 name = "wiggle"
 version = "0.26.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bitflags",
  "proptest",
  "thiserror",
  "tracing",
+ "wasmtime",
  "wiggle-macro",
  "wiggle-test",
  "witx",
