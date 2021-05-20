@@ -56,85 +56,87 @@ fn bad_tables() {
     assert_eq!(t.size(&store), 1);
 }
 
-// #[test]
-// fn cross_store() -> anyhow::Result<()> {
-//     let mut cfg = Config::new();
-//     cfg.wasm_reference_types(true);
-//     let engine = Engine::new(&cfg)?;
-//     let store1 = Store::new(&engine);
-//     let store2 = Store::new(&engine);
+#[test]
+fn cross_store() -> anyhow::Result<()> {
+    let mut cfg = Config::new();
+    cfg.wasm_reference_types(true);
+    let engine = Engine::new(&cfg)?;
+    let mut store1 = Store::new(&engine, ());
+    let mut store2 = Store::new(&engine, ());
 
-//     // ============ Cross-store instantiation ==============
+    // ============ Cross-store instantiation ==============
 
-//     let func = Func::wrap(&store2, || {});
-//     let ty = GlobalType::new(ValType::I32, Mutability::Const);
-//     let global = Global::new(&store2, ty, Val::I32(0))?;
-//     let ty = MemoryType::new(Limits::new(1, None));
-//     let memory = Memory::new(&store2, ty)?;
-//     let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
-//     let table = Table::new(&store2, ty, Val::FuncRef(None))?;
+    let func = Func::wrap(&mut store2, || {});
+    let ty = GlobalType::new(ValType::I32, Mutability::Const);
+    let global = Global::new(&mut store2, ty, Val::I32(0))?;
+    let ty = MemoryType::new(Limits::new(1, None));
+    let memory = Memory::new(&mut store2, ty)?;
+    let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
+    let table = Table::new(&mut store2, ty, Val::FuncRef(None))?;
 
-//     let need_func = Module::new(&engine, r#"(module (import "" "" (func)))"#)?;
-//     assert!(Instance::new(&store1, &need_func, &[func.into()]).is_err());
+    let need_func = Module::new(&engine, r#"(module (import "" "" (func)))"#)?;
+    assert!(Instance::new(&mut store1, &need_func, &[func.into()]).is_err());
 
-//     let need_global = Module::new(&engine, r#"(module (import "" "" (global i32)))"#)?;
-//     assert!(Instance::new(&store1, &need_global, &[global.into()]).is_err());
+    let need_global = Module::new(&engine, r#"(module (import "" "" (global i32)))"#)?;
+    assert!(Instance::new(&mut store1, &need_global, &[global.into()]).is_err());
 
-//     let need_table = Module::new(&engine, r#"(module (import "" "" (table 1 funcref)))"#)?;
-//     assert!(Instance::new(&store1, &need_table, &[table.into()]).is_err());
+    let need_table = Module::new(&engine, r#"(module (import "" "" (table 1 funcref)))"#)?;
+    assert!(Instance::new(&mut store1, &need_table, &[table.into()]).is_err());
 
-//     let need_memory = Module::new(&engine, r#"(module (import "" "" (memory 1)))"#)?;
-//     assert!(Instance::new(&store1, &need_memory, &[memory.into()]).is_err());
+    let need_memory = Module::new(&engine, r#"(module (import "" "" (memory 1)))"#)?;
+    assert!(Instance::new(&mut store1, &need_memory, &[memory.into()]).is_err());
 
-//     // ============ Cross-store globals ==============
+    // ============ Cross-store globals ==============
 
-//     let store1val = Val::FuncRef(Some(Func::wrap(&store1, || {})));
-//     let store2val = Val::FuncRef(Some(Func::wrap(&store2, || {})));
+    let store1val = Val::FuncRef(Some(Func::wrap(&mut store1, || {})));
+    let store2val = Val::FuncRef(Some(Func::wrap(&mut store2, || {})));
 
-//     let ty = GlobalType::new(ValType::FuncRef, Mutability::Var);
-//     assert!(Global::new(&store2, ty.clone(), store1val.clone()).is_err());
-//     if let Ok(g) = Global::new(&store2, ty.clone(), store2val.clone()) {
-//         assert!(g.set(store1val.clone()).is_err());
-//     }
+    let ty = GlobalType::new(ValType::FuncRef, Mutability::Var);
+    assert!(Global::new(&mut store2, ty.clone(), store1val.clone()).is_err());
+    if let Ok(g) = Global::new(&mut store2, ty.clone(), store2val.clone()) {
+        assert!(g.set(&mut store2, store1val.clone()).is_err());
+    }
 
-//     // ============ Cross-store tables ==============
+    // ============ Cross-store tables ==============
 
-//     let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
-//     assert!(Table::new(&store2, ty.clone(), store1val.clone()).is_err());
-//     let t1 = Table::new(&store2, ty.clone(), store2val.clone())?;
-//     assert!(t1.set(0, store1val.clone()).is_err());
-//     assert!(t1.grow(0, store1val.clone()).is_err());
-//     assert!(t1.fill(0, store1val.clone(), 1).is_err());
-//     let t2 = Table::new(&store1, ty.clone(), store1val.clone())?;
-//     assert!(Table::copy(&t1, 0, &t2, 0, 0).is_err());
+    let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
+    assert!(Table::new(&mut store2, ty.clone(), store1val.clone()).is_err());
+    let t1 = Table::new(&mut store2, ty.clone(), store2val.clone())?;
+    assert!(t1.set(&mut store2, 0, store1val.clone()).is_err());
+    assert!(t1.grow(&mut store2, 0, store1val.clone()).is_err());
+    assert!(t1.fill(&mut store2, 0, store1val.clone(), 1).is_err());
 
-//     // ============ Cross-store funcs ==============
+    // ============ Cross-store funcs ==============
 
-//     let module = Module::new(&engine, r#"(module (func (export "f") (param funcref)))"#)?;
-//     let s1_inst = Instance::new(&store1, &module, &[])?;
-//     let s2_inst = Instance::new(&store2, &module, &[])?;
-//     let s1_f = s1_inst.get_func("f").unwrap();
-//     let s2_f = s2_inst.get_func("f").unwrap();
+    let module = Module::new(&engine, r#"(module (func (export "f") (param funcref)))"#)?;
+    let s1_inst = Instance::new(&mut store1, &module, &[])?;
+    let s2_inst = Instance::new(&mut store2, &module, &[])?;
+    let s1_f = s1_inst.get_func(&mut store1, "f").unwrap();
+    let s2_f = s2_inst.get_func(&mut store2, "f").unwrap();
 
-//     assert!(s1_f.call(&[Val::FuncRef(None)]).is_ok());
-//     assert!(s2_f.call(&[Val::FuncRef(None)]).is_ok());
-//     assert!(s1_f.call(&[Val::FuncRef(Some(s1_f.clone()))]).is_ok());
-//     assert!(s1_f.call(&[Val::FuncRef(Some(s2_f.clone()))]).is_err());
-//     assert!(s2_f.call(&[Val::FuncRef(Some(s1_f.clone()))]).is_err());
-//     assert!(s2_f.call(&[Val::FuncRef(Some(s2_f.clone()))]).is_ok());
+    assert!(s1_f.call(&mut store1, &[Val::FuncRef(None)]).is_ok());
+    assert!(s2_f.call(&mut store2, &[Val::FuncRef(None)]).is_ok());
+    assert!(s1_f.call(&mut store1, &[Some(s1_f.clone()).into()]).is_ok());
+    assert!(s1_f
+        .call(&mut store1, &[Some(s2_f.clone()).into()])
+        .is_err());
+    assert!(s2_f
+        .call(&mut store2, &[Some(s1_f.clone()).into()])
+        .is_err());
+    assert!(s2_f.call(&mut store2, &[Some(s2_f.clone()).into()]).is_ok());
 
-//     let s1_f_t = s1_f.typed::<Option<Func>, ()>()?;
-//     let s2_f_t = s2_f.typed::<Option<Func>, ()>()?;
+    let s1_f_t = s1_f.typed::<Option<Func>, (), _>(&store1)?;
+    let s2_f_t = s2_f.typed::<Option<Func>, (), _>(&store2)?;
 
-//     assert!(s1_f_t.call(None).is_ok());
-//     assert!(s2_f_t.call(None).is_ok());
-//     assert!(s1_f_t.call(Some(s1_f.clone())).is_ok());
-//     assert!(s1_f_t.call(Some(s2_f.clone())).is_err());
-//     assert!(s2_f_t.call(Some(s1_f.clone())).is_err());
-//     assert!(s2_f_t.call(Some(s2_f.clone())).is_ok());
+    assert!(s1_f_t.call(&mut store1, None).is_ok());
+    assert!(s2_f_t.call(&mut store2, None).is_ok());
+    assert!(s1_f_t.call(&mut store1, Some(s1_f.clone())).is_ok());
+    assert!(s1_f_t.call(&mut store1, Some(s2_f.clone())).is_err());
+    assert!(s2_f_t.call(&mut store2, Some(s1_f.clone())).is_err());
+    assert!(s2_f_t.call(&mut store2, Some(s2_f.clone())).is_ok());
 
-//     Ok(())
-// }
+    Ok(())
+}
 
 #[test]
 fn get_set_externref_globals_via_api() -> anyhow::Result<()> {

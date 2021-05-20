@@ -237,13 +237,9 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
 #[test]
 fn global_drops_externref() -> anyhow::Result<()> {
     test_engine(&Engine::default())?;
-    test_engine(&Engine::new(Config::new().allocation_strategy(
-        InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            module_limits: ModuleLimits::default(),
-            instance_limits: InstanceLimits::default(),
-        },
-    ))?)?;
+    test_engine(&Engine::new(
+        Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
+    )?)?;
 
     return Ok(());
 
@@ -288,13 +284,9 @@ fn global_drops_externref() -> anyhow::Result<()> {
 #[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
 fn table_drops_externref() -> anyhow::Result<()> {
     test_engine(&Engine::default())?;
-    test_engine(&Engine::new(Config::new().allocation_strategy(
-        InstanceAllocationStrategy::Pooling {
-            strategy: PoolingAllocationStrategy::NextAvailable,
-            module_limits: ModuleLimits::default(),
-            instance_limits: InstanceLimits::default(),
-        },
-    ))?)?;
+    test_engine(&Engine::new(
+        Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
+    )?)?;
 
     return Ok(());
 

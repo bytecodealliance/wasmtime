@@ -964,7 +964,7 @@ impl StoreOpaqueSend<'_> {
         //
         // While somewhat onerous it shouldn't be too too hard (the TLS bit is
         // the hardest bit so far). This does mean, though, that no user should
-        // ever hae to worry about the `Send`-ness of Wasmtime. If rustc says
+        // ever have to worry about the `Send`-ness of Wasmtime. If rustc says
         // it's ok, then it's ok.
         //
         // With all that in mind we unsafely assert here that wasmtime is
@@ -1198,8 +1198,8 @@ impl<T> Drop for Store<T> {
 
 impl<T: ?Sized> Drop for StoreInner<T> {
     fn drop(&mut self) {
-        // NB it's important that this destructor does not access `T`. That is
-        // deallocated by `Drop for Store<T>` above.
+        // NB it's important that this destructor does not access `self.data`.
+        // That is deallocated by `Drop for Store<T>` above.
 
         let allocator = self.engine.allocator();
         unsafe {
