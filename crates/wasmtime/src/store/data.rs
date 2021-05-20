@@ -1,6 +1,5 @@
 use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
-use std::convert::TryFrom;
 use std::fmt;
 use std::marker;
 use std::num::NonZeroU64;
