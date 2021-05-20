@@ -74,6 +74,7 @@ typedef wasm_trap_t* (*wasmtime_func_callback_t)(
  * \param env host-specific data passed to the callback invocation, can be
  * `NULL`
  * \param finalizer optional finalizer for `env`, can be `NULL`
+ * \param ret the #wasmtime_func_t return value to be filled in.
  *
  * The returned function can only be used with the specified `store`.
  */
