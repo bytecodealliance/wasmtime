@@ -64,7 +64,7 @@ pub mod table;
 
 pub use cap_rand::RngCore;
 pub use clocks::{SystemTimeSpec, WasiClocks, WasiMonotonicClock, WasiSystemClock};
-pub use ctx::{WasiCtx, WasiCtxBuilder};
+pub use ctx::WasiCtx;
 pub use dir::WasiDir;
 pub use error::{Context, Error, ErrorExt, ErrorKind};
 pub use file::WasiFile;

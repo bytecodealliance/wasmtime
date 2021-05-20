@@ -18,7 +18,7 @@ fn main() -> Result<()> {
         WasiCtxBuilder::new()
             .inherit_stdio()
             .inherit_args()?
-            .build()?,
+            .build(),
     );
     wasi.add_to_linker(&mut linker)?;
 

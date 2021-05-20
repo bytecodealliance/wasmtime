@@ -27,7 +27,7 @@ fn main() -> Result<()> {
         WasiCtxBuilder::new()
             .inherit_stdio()
             .inherit_args()?
-            .build()?
+            .build()
     )
     .is_ok());
 

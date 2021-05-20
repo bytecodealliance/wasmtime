@@ -254,7 +254,7 @@ fn create_wasi_ctx(config: wasi_config_t) -> Result<Rc<RefCell<WasiCtx>>> {
     for (dir, path) in config.preopens {
         builder = builder.preopened_dir(dir, path)?;
     }
-    Ok(Rc::new(RefCell::new(builder.build()?)))
+    Ok(Rc::new(RefCell::new(builder.build())))
 }
 
 #[repr(C)]

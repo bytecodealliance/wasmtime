@@ -53,7 +53,7 @@ fn run(
         // cap-std-sync does not yet support the sync family of fdflags
         builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-        let wasi = Wasi::new(&store, builder.build()?);
+        let wasi = Wasi::new(&store, builder.build());
 
         let mut linker = Linker::new(&store);
 
