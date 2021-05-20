@@ -20,20 +20,24 @@ pub struct WasiCtx {
 }
 
 impl WasiCtx {
-    pub fn builder(
+    pub fn new(
         random: RefCell<Box<dyn RngCore>>,
         clocks: WasiClocks,
         sched: Box<dyn WasiSched>,
         table: Rc<RefCell<Table>>,
-    ) -> WasiCtxBuilder {
-        WasiCtxBuilder(WasiCtx {
+    ) -> Self {
+        let mut s = WasiCtx {
             args: StringArray::new(),
             env: StringArray::new(),
             random,
             clocks,
             sched,
             table,
-        })
+        };
+        s.set_stdin(Box::new(crate::pipe::ReadPipe::new(std::io::empty())));
+        s.set_stdout(Box::new(crate::pipe::WritePipe::new(std::io::sink())));
+        s.set_stderr(Box::new(crate::pipe::WritePipe::new(std::io::sink())));
+        s
     }
 
     pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>, caps: FileCaps) {
@@ -58,67 +62,41 @@ impl WasiCtx {
     pub fn table(&self) -> RefMut<Table> {
         self.table.borrow_mut()
     }
-}
 
-pub struct WasiCtxBuilder(WasiCtx);
-
-impl WasiCtxBuilder {
-    pub fn build(self) -> Result<WasiCtx, Error> {
-        use crate::file::TableFileExt;
-        // Default to an empty readpipe for stdin:
-        if self.0.table().get_file(0).is_err() {
-            let stdin = crate::pipe::ReadPipe::new(std::io::empty());
-            self.0.insert_file(0, Box::new(stdin), FileCaps::all());
-        }
-        // Default to a sink writepipe for stdout, stderr:
-        for stdio_write in &[1, 2] {
-            if self.0.table().get_file(*stdio_write).is_err() {
-                let output_file = crate::pipe::WritePipe::new(std::io::sink());
-                self.0
-                    .insert_file(*stdio_write, Box::new(output_file), FileCaps::all());
-            }
-        }
-        Ok(self.0)
+    pub fn push_arg(&mut self, arg: &str) -> Result<(), StringArrayError> {
+        self.args.push(arg.to_owned())
     }
 
-    pub fn arg(mut self, arg: &str) -> Result<Self, StringArrayError> {
-        self.0.args.push(arg.to_owned())?;
-        Ok(self)
+    pub fn push_env(&mut self, var: &str, value: &str) -> Result<(), StringArrayError> {
+        self.env.push(format!("{}={}", var, value))?;
+        Ok(())
     }
 
-    pub fn env(mut self, var: &str, value: &str) -> Result<Self, StringArrayError> {
-        self.0.env.push(format!("{}={}", var, value))?;
-        Ok(self)
+    pub fn set_stdin(&mut self, f: Box<dyn WasiFile>) {
+        self.insert_file(0, f, FileCaps::all());
     }
 
-    pub fn stdin(self, f: Box<dyn WasiFile>) -> Self {
-        self.0.insert_file(0, f, FileCaps::all());
-        self
+    pub fn set_stdout(&mut self, f: Box<dyn WasiFile>) {
+        self.insert_file(1, f, FileCaps::all());
     }
 
-    pub fn stdout(self, f: Box<dyn WasiFile>) -> Self {
-        self.0.insert_file(1, f, FileCaps::all());
-        self
+    pub fn set_stderr(&mut self, f: Box<dyn WasiFile>) {
+        self.insert_file(2, f, FileCaps::all());
     }
 
-    pub fn stderr(self, f: Box<dyn WasiFile>) -> Self {
-        self.0.insert_file(2, f, FileCaps::all());
-        self
-    }
-
-    pub fn preopened_dir(
-        self,
+    pub fn push_preopened_dir(
+        &mut self,
         dir: Box<dyn WasiDir>,
         path: impl AsRef<Path>,
-    ) -> Result<Self, Error> {
+    ) -> Result<(), Error> {
         let caps = DirCaps::all();
         let file_caps = FileCaps::all();
-        self.0.table().push(Box::new(DirEntry::new(
+        self.table().push(Box::new(DirEntry::new(
             caps,
             file_caps,
             Some(path.as_ref().to_owned()),
             dir,
         )))?;
-        Ok(self)
+        Ok(())
     }
 }
