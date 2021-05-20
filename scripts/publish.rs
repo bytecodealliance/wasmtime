@@ -40,12 +40,10 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-interpreter",
     "cranelift",
     "cranelift-jit",
-    // wig/wiggle
+    // wiggle
     "wiggle-generate",
     "wiggle-macro",
     "wiggle",
-    "wiggle-borrow",
-    "wasmtime-wiggle-macro",
     // wasi-common
     "wasi-common",
     "wasi-cap-std-sync",
@@ -63,7 +61,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-jit",
     "wasmtime-cache",
     "wasmtime",
-    "wasmtime-wiggle",
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-crypto",

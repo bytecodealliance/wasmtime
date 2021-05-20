@@ -46,9 +46,11 @@ pub fn link_module(
         format_ident!("add_{}_to_linker", module_ident)
     };
 
+    let rt = names.runtime_mod();
+
     quote! {
         /// Adds all instance items to the specified `Linker`.
-        pub fn #func_name<T, C>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()>
+        pub fn #func_name<T, C>(linker: &mut #rt::wasmtime_crate::Linker<T>) -> anyhow::Result<()>
             where
                 T: std::borrow::BorrowMut<C> #send_bound,
                 C: #ctx_bound
@@ -107,13 +109,11 @@ fn generate_func(
         quote!( #field_ident )
     };
 
-    let runtime = names.runtime_mod();
-
     let body = quote! {
         let mem = match caller.get_export("memory") {
-            Some(wasmtime::Extern::Memory(m)) => m,
+            Some(#rt::wasmtime_crate::Extern::Memory(m)) => m,
             _ => {
-                return Err(wasmtime::Trap::new("missing required memory export"));
+                return Err(#rt::wasmtime_crate::Trap::new("missing required memory export"));
             }
         };
         // Note the unsafety here. Our goal is to simultaneously borrow the
@@ -133,12 +133,12 @@ fn generate_func(
         // working from the previous iteration for now.
         let (ctx, mem) = unsafe {
             let mem = &mut *(mem.data_mut(&mut caller) as *mut [u8]);
-            (caller.data_mut().borrow_mut(), #runtime::wasmtime::WasmtimeGuestMemory::new(mem))
+            (caller.data_mut().borrow_mut(), #rt::wasmtime::WasmtimeGuestMemory::new(mem))
         };
         match #abi_func(ctx, &mem #(, #arg_names)*) #await_ {
             Ok(r) => Ok(<#ret_ty>::from(r)),
-            Err(#runtime::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
-            Err(#runtime::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
+            Err(#rt::Trap::String(err)) => Err(#rt::wasmtime_crate::Trap::new(err)),
+            Err(#rt::Trap::I32Exit(err)) => Err(#rt::wasmtime_crate::Trap::i32_exit(err)),
         }
     };
 
@@ -149,7 +149,7 @@ fn generate_func(
                 linker.#wrapper(
                     #module_str,
                     #field_str,
-                    move |mut caller: wasmtime::Caller<'_, T> #(, #arg_decls)*| {
+                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| {
                         Box::new(async move { #body })
                     },
                 )?;
@@ -161,7 +161,7 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: wasmtime::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, #rt::wasmtime_crate::Trap> {
                         let result = async { #body };
                         #rt::run_in_dummy_executor(result)
                     },
@@ -174,7 +174,7 @@ fn generate_func(
                 linker.func_wrap(
                     #module_str,
                     #field_str,
-                    move |mut caller: wasmtime::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, wasmtime::Trap> {
+                    move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, #rt::wasmtime_crate::Trap> {
                         #body
                     },
                 )?;

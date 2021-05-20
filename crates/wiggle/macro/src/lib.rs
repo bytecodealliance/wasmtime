@@ -17,14 +17,18 @@ use syn::parse_macro_input;
 ///     * For each `@interface func` defined in a witx module, an abi-level
 ///       function is generated which takes ABI-level arguments, along with
 ///       a ref that impls the module trait, and a `GuestMemory` implementation.
-///       Users typically won't use these abi-level functions: The `wasmtime-wiggle`
-///       and `lucet-wiggle` crates adapt these to work with a particular WebAssembly
-///       engine.
+///       Users typically won't use these abi-level functions: Either the
+///       `wasmtime_integration` macro or the `lucet-wiggle` crates adapt these
+///       to work with a particular WebAssembly engine.
 ///
 ///     * A public "module trait" is defined (called the module name, in
 ///       SnakeCase) which has a `&self` method for each function in the
 ///       module. These methods takes idiomatic Rust types for each argument
 ///       and return `Result<($return_types),$error_type>`
+///
+///     * When the `wiggle` crate is built with the `wasmtime_integration`
+///     feature, each module contains an `add_to_linker` function to add it to
+///     a `wasmtime::Linker`.
 ///
 /// Arguments are provided using Rust struct value syntax.
 ///

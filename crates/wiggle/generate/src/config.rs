@@ -311,12 +311,21 @@ pub enum Asyncness {
 impl Asyncness {
     pub fn is_async(&self) -> bool {
         match self {
-            Self::Blocking | Self::Async => true,
-            Self::Sync => false,
+            Self::Async => true,
+            _ => false,
+        }
+    }
+    pub fn is_blocking(&self) -> bool {
+        match self {
+            Self::Blocking => true,
+            _ => false,
         }
     }
     pub fn is_sync(&self) -> bool {
-        !self.is_async()
+        match self {
+            Self::Sync => true,
+            _ => false,
+        }
     }
 }
 

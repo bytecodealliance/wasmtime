@@ -64,6 +64,7 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
         quote!(
             pub mod #modname {
                 use super::types::*;
+                pub use super::types::UserErrorConversion;
                 #(#fs)*
 
                 #modtrait
