@@ -74,15 +74,17 @@ typedef wasm_trap_t* (*wasmtime_func_callback_t)(
  * \param env host-specific data passed to the callback invocation, can be
  * `NULL`
  * \param finalizer optional finalizer for `env`, can be `NULL`
+ * \param ret the #wasmtime_func_t return value to be filled in.
  *
  * The returned function can only be used with the specified `store`.
  */
-WASM_API_EXTERN wasmtime_func_t wasmtime_func_new(
+WASM_API_EXTERN void wasmtime_func_new(
   wasmtime_context_t *store,
   const wasm_functype_t* type,
   wasmtime_func_callback_t callback,
   void *env,
-  void (*finalizer)(void*)
+  void (*finalizer)(void*),
+  wasmtime_func_t *ret
 );
 
 /**
@@ -92,7 +94,7 @@ WASM_API_EXTERN wasmtime_func_t wasmtime_func_new(
  */
 WASM_API_EXTERN wasm_functype_t* wasmtime_func_type(
     const wasmtime_context_t *store,
-    wasmtime_func_t func
+    const wasmtime_func_t *func
 );
 
 /**
@@ -132,7 +134,7 @@ WASM_API_EXTERN wasm_functype_t* wasmtime_func_type(
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call(
     wasmtime_context_t *store,
-    wasmtime_func_t func,
+    const wasmtime_func_t *func,
     const wasmtime_val_t *args,
     size_t nargs,
     wasmtime_val_t *results,

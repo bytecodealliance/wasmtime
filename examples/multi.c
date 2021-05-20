@@ -115,8 +115,8 @@ int main(int argc, const char* argv[]) {
       wasm_valtype_new_i64(),
       wasm_valtype_new_i32()
   );
-  wasmtime_func_t callback_func =
-    wasmtime_func_new(context, callback_type, callback, NULL, NULL);
+  wasmtime_func_t callback_func;
+  wasmtime_func_new(context, callback_type, callback, NULL, NULL, &callback_func);
   wasm_functype_delete(callback_type);
 
   // Instantiate.
@@ -134,7 +134,7 @@ int main(int argc, const char* argv[]) {
   // Extract export.
   printf("Extracting export...\n");
   wasmtime_extern_t run;
-  bool ok = wasmtime_instance_export_get(context, instance, "g", 1, &run);
+  bool ok = wasmtime_instance_export_get(context, &instance, "g", 1, &run);
   assert(ok);
   assert(run.kind == WASMTIME_EXTERN_FUNC);
 
@@ -146,7 +146,7 @@ int main(int argc, const char* argv[]) {
   args[1].kind = WASMTIME_I64;
   args[1].of.i64 = 2;
   wasmtime_val_t results[2];
-  error = wasmtime_func_call(context, run.of.func, args, 2, results, 2, &trap);
+  error = wasmtime_func_call(context, &run.of.func, args, 2, results, 2, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call run", error, trap);
 

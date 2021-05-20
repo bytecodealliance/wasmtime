@@ -658,6 +658,12 @@ impl<'a> Instantiator<'a> {
         // `instance` (nothing does that except `Drop` for `Store`), so this in
         // theory should be safe.
         let instance = unsafe { store.instance(instance).clone() };
+
+        // FIXME(#2916) we should ideally just store the `InstanceId` within the
+        // store itself. There should be no reason we have to allocate a hash
+        // map here and allocate a bunch of strings, that's quite wasteful if
+        // only one or two exports are used. Additionally this can push items
+        // into the `Store` which never end up getting used.
         let exports = instance
             .module()
             .exports

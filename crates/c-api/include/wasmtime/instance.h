@@ -98,7 +98,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_new(
  */
 WASM_API_EXTERN wasmtime_instancetype_t *wasmtime_instance_type(
     const wasmtime_context_t *store,
-    wasmtime_instance_t instance
+    const wasmtime_instance_t *instance
 );
 
 /**
@@ -118,7 +118,7 @@ WASM_API_EXTERN wasmtime_instancetype_t *wasmtime_instance_type(
  */
 WASM_API_EXTERN bool wasmtime_instance_export_get(
     wasmtime_context_t *store,
-    wasmtime_instance_t instance,
+    const wasmtime_instance_t *instance,
     const char *name,
     size_t name_len,
     wasmtime_extern_t *item
@@ -144,7 +144,7 @@ WASM_API_EXTERN bool wasmtime_instance_export_get(
  */
 WASM_API_EXTERN bool wasmtime_instance_export_nth(
     wasmtime_context_t *store,
-    wasmtime_instance_t instance,
+    const wasmtime_instance_t *instance,
     size_t index,
     char **name,
     size_t *name_len,

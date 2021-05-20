@@ -21,7 +21,12 @@ extern "C" {
 /// interoperate between #wasmtime_store_t instances and if the wrong function
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
-typedef uint64_t wasmtime_func_t;
+typedef struct wasmtime_func {
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
+} wasmtime_func_t;
 
 /// \brief Representation of a table in Wasmtime.
 ///
@@ -30,7 +35,12 @@ typedef uint64_t wasmtime_func_t;
 /// interoperate between #wasmtime_store_t instances and if the wrong table
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
-typedef uint64_t wasmtime_table_t;
+typedef struct wasmtime_table {
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
+} wasmtime_table_t;
 
 /// \brief Representation of a memory in Wasmtime.
 ///
@@ -39,7 +49,12 @@ typedef uint64_t wasmtime_table_t;
 /// interoperate between #wasmtime_store_t instances and if the wrong memory
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
-typedef uint64_t wasmtime_memory_t;
+typedef struct wasmtime_memory {
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
+} wasmtime_memory_t;
 
 /// \brief Representation of a instance in Wasmtime.
 ///
@@ -48,7 +63,12 @@ typedef uint64_t wasmtime_memory_t;
 /// interoperate between #wasmtime_store_t instances and if the wrong instance
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
-typedef uint64_t wasmtime_instance_t;
+typedef struct wasmtime_instance {
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
+} wasmtime_instance_t;
 
 /// \brief Representation of a global in Wasmtime.
 ///
@@ -57,7 +77,12 @@ typedef uint64_t wasmtime_instance_t;
 /// interoperate between #wasmtime_store_t instances and if the wrong global
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
-typedef uint64_t wasmtime_global_t;
+typedef struct wasmtime_global {
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
+} wasmtime_global_t;
 
 /// \brief Disciminant of #wasmtime_extern_t
 typedef uint8_t wasmtime_extern_kind_t;

@@ -38,7 +38,7 @@ void check(bool success) {
 }
 
 void check_call(wasmtime_context_t *store,
-                wasmtime_func_t func,
+                wasmtime_func_t *func,
                 const wasmtime_val_t* args,
                 size_t nargs,
                 int32_t expected) {
@@ -55,18 +55,18 @@ void check_call(wasmtime_context_t *store,
   }
 }
 
-void check_call0(wasmtime_context_t *store, wasmtime_func_t func, int32_t expected) {
+void check_call0(wasmtime_context_t *store, wasmtime_func_t *func, int32_t expected) {
   check_call(store, func, NULL, 0, expected);
 }
 
-void check_call1(wasmtime_context_t *store, wasmtime_func_t func, int32_t arg, int32_t expected) {
+void check_call1(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg, int32_t expected) {
   wasmtime_val_t args[1];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg;
   check_call(store, func, args, 1, expected);
 }
 
-void check_call2(wasmtime_context_t *store, wasmtime_func_t func, int32_t arg1, int32_t arg2, int32_t expected) {
+void check_call2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1, int32_t arg2, int32_t expected) {
   wasmtime_val_t args[2];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg1;
@@ -75,14 +75,14 @@ void check_call2(wasmtime_context_t *store, wasmtime_func_t func, int32_t arg1, 
   check_call(store, func, args, 2, expected);
 }
 
-void check_ok(wasmtime_context_t *store, wasmtime_func_t func, const wasmtime_val_t* args, size_t nargs) {
+void check_ok(wasmtime_context_t *store, wasmtime_func_t *func, const wasmtime_val_t* args, size_t nargs) {
   wasm_trap_t *trap = NULL;
   wasmtime_error_t *error = wasmtime_func_call(store, func, args, nargs, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 }
 
-void check_ok2(wasmtime_context_t *store, wasmtime_func_t func, int32_t arg1, int32_t arg2) {
+void check_ok2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1, int32_t arg2) {
   wasmtime_val_t args[2];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg1;
@@ -92,7 +92,7 @@ void check_ok2(wasmtime_context_t *store, wasmtime_func_t func, int32_t arg1, in
 }
 
 void check_trap(wasmtime_context_t *store,
-                wasmtime_func_t func,
+                wasmtime_func_t *func,
                 const wasmtime_val_t *args,
                 size_t nargs,
                 size_t num_results) {
@@ -109,14 +109,14 @@ void check_trap(wasmtime_context_t *store,
   wasm_trap_delete(trap);
 }
 
-void check_trap1(wasmtime_context_t *store, wasmtime_func_t  func, int32_t arg) {
+void check_trap1(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg) {
   wasmtime_val_t args[1];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg;
   check_trap(store, func, args, 1, 1);
 }
 
-void check_trap2(wasmtime_context_t *store, wasmtime_func_t func, int32_t arg1, int32_t arg2) {
+void check_trap2(wasmtime_context_t *store, wasmtime_func_t *func, int32_t arg1, int32_t arg2) {
   wasmtime_val_t args[2];
   args[0].kind = WASMTIME_I32;
   args[0].of.i32 = arg1;
@@ -179,63 +179,63 @@ int main(int argc, const char* argv[]) {
   wasmtime_func_t size_func, load_func, store_func;
   wasmtime_extern_t item;
   bool ok;
-  ok = wasmtime_instance_export_get(context, instance, "memory", strlen("memory"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "memory", strlen("memory"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_MEMORY);
   memory = item.of.memory;
-  ok = wasmtime_instance_export_get(context, instance, "size", strlen("size"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "size", strlen("size"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   size_func = item.of.func;
-  ok = wasmtime_instance_export_get(context, instance, "load", strlen("load"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "load", strlen("load"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   load_func = item.of.func;
-  ok = wasmtime_instance_export_get(context, instance, "store", strlen("store"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "store", strlen("store"), &item);
   assert(ok && item.kind == WASMTIME_EXTERN_FUNC);
   store_func = item.of.func;
 
   // Check initial memory.
   printf("Checking memory...\n");
-  check(wasmtime_memory_size(context, memory) == 2);
-  check(wasmtime_memory_data_size(context, memory) == 0x20000);
-  check(wasmtime_memory_data(context, memory)[0] == 0);
-  check(wasmtime_memory_data(context, memory)[0x1000] == 1);
-  check(wasmtime_memory_data(context, memory)[0x1003] == 4);
+  check(wasmtime_memory_size(context, &memory) == 2);
+  check(wasmtime_memory_data_size(context, &memory) == 0x20000);
+  check(wasmtime_memory_data(context, &memory)[0] == 0);
+  check(wasmtime_memory_data(context, &memory)[0x1000] == 1);
+  check(wasmtime_memory_data(context, &memory)[0x1003] == 4);
 
-  check_call0(context, size_func, 2);
-  check_call1(context, load_func, 0, 0);
-  check_call1(context, load_func, 0x1000, 1);
-  check_call1(context, load_func, 0x1003, 4);
-  check_call1(context, load_func, 0x1ffff, 0);
-  check_trap1(context, load_func, 0x20000);
+  check_call0(context, &size_func, 2);
+  check_call1(context, &load_func, 0, 0);
+  check_call1(context, &load_func, 0x1000, 1);
+  check_call1(context, &load_func, 0x1003, 4);
+  check_call1(context, &load_func, 0x1ffff, 0);
+  check_trap1(context, &load_func, 0x20000);
 
   // Mutate memory.
   printf("Mutating memory...\n");
-  wasmtime_memory_data(context, memory)[0x1003] = 5;
-  check_ok2(context, store_func, 0x1002, 6);
-  check_trap2(context, store_func, 0x20000, 0);
+  wasmtime_memory_data(context, &memory)[0x1003] = 5;
+  check_ok2(context, &store_func, 0x1002, 6);
+  check_trap2(context, &store_func, 0x20000, 0);
 
-  check(wasmtime_memory_data(context, memory)[0x1002] == 6);
-  check(wasmtime_memory_data(context, memory)[0x1003] == 5);
-  check_call1(context, load_func, 0x1002, 6);
-  check_call1(context, load_func, 0x1003, 5);
+  check(wasmtime_memory_data(context, &memory)[0x1002] == 6);
+  check(wasmtime_memory_data(context, &memory)[0x1003] == 5);
+  check_call1(context, &load_func, 0x1002, 6);
+  check_call1(context, &load_func, 0x1003, 5);
 
   // Grow memory.
   printf("Growing memory...\n");
   uint32_t old_size;
-  error = wasmtime_memory_grow(context, memory, 1, &old_size);
+  error = wasmtime_memory_grow(context, &memory, 1, &old_size);
   if (error != NULL)
     exit_with_error("failed to grow memory", error, trap);
-  check(wasmtime_memory_size(context, memory) == 3);
-  check(wasmtime_memory_data_size(context, memory) == 0x30000);
+  check(wasmtime_memory_size(context, &memory) == 3);
+  check(wasmtime_memory_data_size(context, &memory) == 0x30000);
 
-  check_call1(context, load_func, 0x20000, 0);
-  check_ok2(context, store_func, 0x20000, 0);
-  check_trap1(context, load_func, 0x30000);
-  check_trap2(context, store_func, 0x30000, 0);
+  check_call1(context, &load_func, 0x20000, 0);
+  check_ok2(context, &store_func, 0x20000, 0);
+  check_trap1(context, &load_func, 0x30000);
+  check_trap2(context, &store_func, 0x30000, 0);
 
-  error = wasmtime_memory_grow(context, memory, 1, &old_size);
+  error = wasmtime_memory_grow(context, &memory, 1, &old_size);
   assert(error != NULL);
   wasmtime_error_delete(error);
-  error = wasmtime_memory_grow(context, memory, 0, &old_size);
+  error = wasmtime_memory_grow(context, &memory, 0, &old_size);
   if (error != NULL)
     exit_with_error("failed to grow memory", error, trap);
 
@@ -248,7 +248,7 @@ int main(int argc, const char* argv[]) {
   if (error != NULL)
     exit_with_error("failed to create memory", error, trap);
   wasm_memorytype_delete(memorytype);
-  check(wasmtime_memory_size(context, memory2) == 5);
+  check(wasmtime_memory_size(context, &memory2) == 5);
 
   // Shut down.
   printf("Shutting down...\n");

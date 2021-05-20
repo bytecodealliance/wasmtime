@@ -125,7 +125,7 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_instance(
     wasmtime_context_t *store,
     const char *name,
     size_t name_len,
-    wasmtime_instance_t instance
+    const wasmtime_instance_t *instance
 );
 
 /**

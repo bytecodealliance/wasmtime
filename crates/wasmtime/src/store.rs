@@ -116,6 +116,7 @@ pub struct StoreInner<T: ?Sized> {
     /// An adjustment to add to the fuel consumed value in `interrupts` above
     /// to get the true amount of fuel consumed.
     fuel_adj: i64,
+    #[cfg(feature = "async")]
     async_state: AsyncState,
     out_of_gas_behavior: OutOfGas,
     store_data: StoreData,
@@ -125,11 +126,10 @@ pub struct StoreInner<T: ?Sized> {
     data: ManuallyDrop<T>,
 }
 
+#[cfg(feature = "async")]
 struct AsyncState {
-    #[cfg(feature = "async")]
     current_suspend:
         UnsafeCell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
-    #[cfg(feature = "async")]
     current_poll_cx: UnsafeCell<*mut Context<'static>>,
 }
 
@@ -203,10 +203,9 @@ impl<T> Store<T> {
             memory_count: 0,
             table_count: 0,
             fuel_adj: 0,
+            #[cfg(feature = "async")]
             async_state: AsyncState {
-                #[cfg(feature = "async")]
                 current_suspend: UnsafeCell::new(ptr::null()),
-                #[cfg(feature = "async")]
                 current_poll_cx: UnsafeCell::new(ptr::null_mut()),
             },
             out_of_gas_behavior: OutOfGas::Trap,
@@ -965,7 +964,7 @@ impl StoreOpaqueSend<'_> {
         //
         // While somewhat onerous it shouldn't be too too hard (the TLS bit is
         // the hardest bit so far). This does mean, though, that no user should
-        // ever hae to worry about the `Send`-ness of Wasmtime. If rustc says
+        // ever have to worry about the `Send`-ness of Wasmtime. If rustc says
         // it's ok, then it's ok.
         //
         // With all that in mind we unsafely assert here that wasmtime is
@@ -1199,8 +1198,8 @@ impl<T> Drop for Store<T> {
 
 impl<T: ?Sized> Drop for StoreInner<T> {
     fn drop(&mut self) {
-        // NB it's important that this destructor does not access `T`. That is
-        // deallocated by `Drop for Store<T>` above.
+        // NB it's important that this destructor does not access `self.data`.
+        // That is deallocated by `Drop for Store<T>` above.
 
         let allocator = self.engine.allocator();
         unsafe {

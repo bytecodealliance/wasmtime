@@ -201,10 +201,11 @@ pub unsafe extern "C" fn wasmtime_func_new(
     ) -> Option<Box<wasm_trap_t>>,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
-) -> Func {
+    func: &mut Func,
+) {
     let foreign = crate::ForeignData { data, finalizer };
     let ty = ty.ty().ty.clone();
-    Func::new(store, ty, move |caller, params, results| {
+    let f = Func::new(store, ty, move |caller, params, results| {
         let params = params
             .iter()
             .cloned()
@@ -233,13 +234,14 @@ pub unsafe extern "C" fn wasmtime_func_new(
             results[i] = unsafe { result.to_val() };
         }
         Ok(())
-    })
+    });
+    *func = f;
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_call(
     store: CStoreContextMut<'_>,
-    func: Func,
+    func: &Func,
     args: *const wasmtime_val_t,
     nargs: usize,
     results: *mut MaybeUninit<wasmtime_val_t>,
@@ -291,7 +293,10 @@ pub unsafe extern "C" fn wasmtime_func_call(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_func_type(store: CStoreContext<'_>, func: Func) -> Box<wasm_functype_t> {
+pub extern "C" fn wasmtime_func_type(
+    store: CStoreContext<'_>,
+    func: &Func,
+) -> Box<wasm_functype_t> {
     Box::new(wasm_functype_t::new(func.ty(store)))
 }
 

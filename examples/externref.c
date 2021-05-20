@@ -97,7 +97,7 @@ int main() {
   wasmtime_extern_t item;
 
   // Lookup the `table` export.
-  ok = wasmtime_instance_export_get(context, instance, "table", strlen("table"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "table", strlen("table"), &item);
   assert(ok);
   assert(item.kind == WASMTIME_EXTERN_TABLE);
 
@@ -105,13 +105,13 @@ int main() {
   wasmtime_val_t externref_val;
   externref_val.kind = WASMTIME_EXTERNREF;
   externref_val.of.externref = externref;
-  error = wasmtime_table_set(context, item.of.table, 3, &externref_val);
+  error = wasmtime_table_set(context, &item.of.table, 3, &externref_val);
   if (error != NULL)
     exit_with_error("failed to set table", error, NULL);
 
   // `table[3]` should now be our `externref`.
   wasmtime_val_t elem;
-  ok = wasmtime_table_get(context, item.of.table, 3, &elem);
+  ok = wasmtime_table_get(context, &item.of.table, 3, &elem);
   assert(ok);
   assert(elem.kind == WASMTIME_EXTERNREF);
   assert(strcmp((char*)wasmtime_externref_data(elem.of.externref), "Hello, World!") == 0);
@@ -120,18 +120,18 @@ int main() {
   printf("Touching `externref` global...\n");
 
   // Lookup the `global` export.
-  ok = wasmtime_instance_export_get(context, instance, "global", strlen("global"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "global", strlen("global"), &item);
   assert(ok);
   assert(item.kind == WASMTIME_EXTERN_GLOBAL);
 
   // Set the global to our `externref`.
-  error = wasmtime_global_set(context, item.of.global, &externref_val);
+  error = wasmtime_global_set(context, &item.of.global, &externref_val);
   if (error != NULL)
     exit_with_error("failed to set global", error, NULL);
 
   // Get the global, and it should return our `externref` again.
   wasmtime_val_t global_val;
-  wasmtime_global_get(context, item.of.global, &global_val);
+  wasmtime_global_get(context, &item.of.global, &global_val);
   assert(global_val.kind == WASMTIME_EXTERNREF);
   assert(strcmp((char*)wasmtime_externref_data(elem.of.externref), "Hello, World!") == 0);
   wasmtime_val_delete(&global_val);
@@ -139,13 +139,13 @@ int main() {
   printf("Calling `externref` func...\n");
 
   // Lookup the `func` export.
-  ok = wasmtime_instance_export_get(context, instance, "func", strlen("func"), &item);
+  ok = wasmtime_instance_export_get(context, &instance, "func", strlen("func"), &item);
   assert(ok);
   assert(item.kind == WASMTIME_EXTERN_FUNC);
 
   // And call it!
   wasmtime_val_t results[1];
-  error = wasmtime_func_call(context, item.of.func, &externref_val, 1, results, 1, &trap);
+  error = wasmtime_func_call(context, &item.of.func, &externref_val, 1, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 

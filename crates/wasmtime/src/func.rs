@@ -1799,14 +1799,28 @@ macro_rules! impl_into_func {
 
 for_each_function_signature!(impl_into_func);
 
-/// Represents a host function.
+/// Representation of a host-defined function.
 ///
-/// This differs from `Func` in that it is not associated with a `Store`.
-/// Host functions are associated with a `Config`.
+/// This is used for `Func::new` but also for `Linker`-defined functions. For
+/// `Func::new` this is stored within a `Store`, and for `Linker`-defined
+/// functions they wrap this up in `Arc` to enable shared ownership of this
+/// across many stores.
+///
+/// Technically this structure needs a `<T>` type parameter to connect to the
+/// `Store<T>` itself, but that's an unsafe contract of using this for now
+/// rather than part of the struct type (to avoid `Func<T>` in the API).
 pub(crate) struct HostFunc {
+    // Owned `*mut VMContext` allocation. Deallocated when this `HostFunc` is
+    // dropped.
     instance: InstanceHandle,
+    // Trampoline to enter this function from Rust.
     trampoline: VMTrampoline,
+    // The loaded `ExportFunction` from the above `InstanceHandle` which has raw
+    // pointers and information about how to actually call this function (e.g.
+    // the actual address in JIT code and the vm shared function index).
     export: ExportFunction,
+    // Stored to unregister this function's signature with the engine when this
+    // is dropped.
     engine: Engine,
 }
 
@@ -1840,6 +1854,8 @@ impl HostFunc {
         HostFunc::_new(engine, instance, trampoline)
     }
 
+    /// Requires that this function's signature is already registered within
+    /// `Engine`. This happens automatically during the above two constructors.
     fn _new(engine: &Engine, instance: InstanceHandle, trampoline: VMTrampoline) -> Self {
         let idx = EntityIndex::Function(FuncIndex::from_u32(0));
         let export = match instance.lookup_by_declaration(&idx) {

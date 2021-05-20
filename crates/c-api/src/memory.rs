@@ -97,30 +97,30 @@ pub extern "C" fn wasmtime_memory_new(
 #[no_mangle]
 pub extern "C" fn wasmtime_memory_type(
     store: CStoreContext<'_>,
-    mem: Memory,
+    mem: &Memory,
 ) -> Box<wasm_memorytype_t> {
     Box::new(wasm_memorytype_t::new(mem.ty(store)))
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_memory_data(store: CStoreContext<'_>, mem: Memory) -> *const u8 {
+pub extern "C" fn wasmtime_memory_data(store: CStoreContext<'_>, mem: &Memory) -> *const u8 {
     mem.data(store).as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_memory_data_size(store: CStoreContext<'_>, mem: Memory) -> usize {
+pub extern "C" fn wasmtime_memory_data_size(store: CStoreContext<'_>, mem: &Memory) -> usize {
     mem.data(store).len()
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_memory_size(store: CStoreContext<'_>, mem: Memory) -> u32 {
+pub extern "C" fn wasmtime_memory_size(store: CStoreContext<'_>, mem: &Memory) -> u32 {
     mem.size(store)
 }
 
 #[no_mangle]
 pub extern "C" fn wasmtime_memory_grow(
     store: CStoreContextMut<'_>,
-    mem: Memory,
+    mem: &Memory,
     delta: u32,
     prev_size: &mut u32,
 ) -> Option<Box<wasmtime_error_t>> {

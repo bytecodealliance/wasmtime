@@ -131,7 +131,7 @@ pub unsafe extern "C" fn wasmtime_table_new(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_type(
     store: CStoreContext<'_>,
-    table: Table,
+    table: &Table,
 ) -> Box<wasm_tabletype_t> {
     Box::new(wasm_tabletype_t::new(table.ty(store)))
 }
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn wasmtime_table_type(
 #[no_mangle]
 pub extern "C" fn wasmtime_table_get(
     store: CStoreContextMut<'_>,
-    table: Table,
+    table: &Table,
     index: u32,
     ret: &mut MaybeUninit<wasmtime_val_t>,
 ) -> bool {
@@ -155,7 +155,7 @@ pub extern "C" fn wasmtime_table_get(
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_set(
     store: CStoreContextMut<'_>,
-    table: Table,
+    table: &Table,
     index: u32,
     val: &wasmtime_val_t,
 ) -> Option<Box<wasmtime_error_t>> {
@@ -163,14 +163,14 @@ pub unsafe extern "C" fn wasmtime_table_set(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_table_size(store: CStoreContext<'_>, table: Table) -> u32 {
+pub extern "C" fn wasmtime_table_size(store: CStoreContext<'_>, table: &Table) -> u32 {
     table.size(store)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_table_grow(
     store: CStoreContextMut<'_>,
-    table: Table,
+    table: &Table,
     delta: u32,
     val: &wasmtime_val_t,
     prev_size: &mut u32,

@@ -59,7 +59,7 @@ int main(int argc, const char* argv[]) {
 
   // Extract export.
   wasmtime_extern_t fib;
-  bool ok = wasmtime_instance_export_get(context, instance, "fib", 3, &fib);
+  bool ok = wasmtime_instance_export_get(context, &instance, "fib", 3, &fib);
   assert(ok);
 
   // Call.
@@ -68,7 +68,7 @@ int main(int argc, const char* argv[]) {
   params[0].kind = WASMTIME_I32;
   params[0].of.i32 = 6;
   wasmtime_val_t results[1];
-  error = wasmtime_func_call(context, fib.of.func, params, 1, results, 1, &trap);
+  error = wasmtime_func_call(context, &fib.of.func, params, 1, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 

@@ -81,7 +81,7 @@ int main() {
     exit_with_error("failed to instantiate linking2", error, trap);
 
   // Register our new `linking2` instance with the linker
-  error = wasmtime_linker_define_instance(linker, context, "linking2", strlen("linking2"), linking2);
+  error = wasmtime_linker_define_instance(linker, context, "linking2", strlen("linking2"), &linking2);
   if (error != NULL)
     exit_with_error("failed to link linking2", error, NULL);
 
@@ -93,10 +93,10 @@ int main() {
 
   // Lookup our `run` export function
   wasmtime_extern_t run;
-  bool ok = wasmtime_instance_export_get(context, linking1, "run", 3, &run);
+  bool ok = wasmtime_instance_export_get(context, &linking1, "run", 3, &run);
   assert(ok);
   assert(run.kind == WASMTIME_EXTERN_FUNC);
-  error = wasmtime_func_call(context, run.of.func, NULL, 0, NULL, 0, &trap);
+  error = wasmtime_func_call(context, &run.of.func, NULL, 0, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call run", error, trap);
 
