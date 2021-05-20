@@ -1382,19 +1382,6 @@ mod test {
 
         let instances = InstancePool::new(&module_limits, &instance_limits)?;
 
-        assert_eq!(
-            instances.offsets.pointer_size,
-            std::mem::size_of::<*const u8>() as u8
-        );
-        assert_eq!(instances.offsets.num_signature_ids, 0);
-        assert_eq!(instances.offsets.num_imported_functions, 0);
-        assert_eq!(instances.offsets.num_imported_tables, 0);
-        assert_eq!(instances.offsets.num_imported_memories, 0);
-        assert_eq!(instances.offsets.num_imported_globals, 0);
-        assert_eq!(instances.offsets.num_defined_functions, 0);
-        assert_eq!(instances.offsets.num_defined_tables, 1);
-        assert_eq!(instances.offsets.num_defined_memories, 1);
-        assert_eq!(instances.offsets.num_defined_globals, 0);
         // As of April 2021, the instance struct's size is largely below the size of a single page,
         // so it's safe to assume it's been rounded to the size of a single memory page here.
         assert_eq!(instances.instance_size, region::page::size());
