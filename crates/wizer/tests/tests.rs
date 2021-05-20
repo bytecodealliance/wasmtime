@@ -713,6 +713,31 @@ fn rust_regex() -> anyhow::Result<()> {
 }
 
 #[test]
+fn data_segment_at_end_of_memory() -> anyhow::Result<()> {
+    // Test that we properly synthesize data segments for data at the end of
+    // memory.
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (memory 1)
+  (func (export "wizer.initialize")
+    ;; Store 42 to the last byte in memory.
+    i32.const 0
+    i32.const 42
+    i32.store8 offset=65535
+  )
+  (func (export "run") (result i32)
+    i32.const 0
+    i32.load8_u offset=65535
+  )
+)
+"#,
+    )
+}
+
+#[test]
 fn rename_functions() -> anyhow::Result<()> {
     let wat = r#"
 (module

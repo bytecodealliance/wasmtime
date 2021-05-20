@@ -106,11 +106,10 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
                     Some(i) => i,
                 };
                 start += nonzero;
-                let zero = memory[start..page_end]
+                let end = memory[start..page_end]
                     .iter()
                     .position(|byte| *byte == 0)
-                    .unwrap_or(page_end);
-                let end = start + zero;
+                    .map_or(page_end, |zero| start + zero);
                 segments.push(DataSegment {
                     memory_index,
                     offset: start as u32,
