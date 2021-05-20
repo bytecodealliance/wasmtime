@@ -1,14 +1,23 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
-use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime::{Engine, Linker, Module, Store};
 
+// from_witx invocation says the func is async. This context doesn't support async!
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
     async: {
         atoms::{double_int_return_float}
     }
 });
+
+pub mod integration {
+    //  The integration invocation says the func is blocking, so it will still work.
+    wiggle::wasmtime_integration!({
+        target: crate,
+        witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
+        block_on: {
+            atoms::{double_int_return_float}
+        }
+    });
+}
 
 pub struct Ctx;
 impl wiggle::GuestErrorType for types::Errno {
@@ -33,17 +42,18 @@ impl atoms::Atoms for Ctx {
 
 #[test]
 fn test_sync_host_func() {
-    let mut store = async_store();
-    let mut linker = Linker::new(store.engine());
-    atoms::add_to_linker(&mut linker).unwrap();
-    let shim_mod = shim_module(linker.engine());
-    let shim_inst = run(linker.instantiate_async(&mut store, &shim_mod)).unwrap();
+    let engine = Engine::default();
+    let mut linker = Linker::new(&engine);
+    integration::add_atoms_to_linker(&mut linker).unwrap();
+    let mut store = store(&engine);
+    let shim_mod = shim_module(&engine);
+    let shim_inst = linker.instantiate(&mut store, &shim_mod).unwrap();
 
-    let results = run(shim_inst
+    let results = shim_inst
         .get_func(&mut store, "int_float_args_shim")
         .unwrap()
-        .call_async(&mut store, &[0i32.into(), 123.45f32.into()]))
-    .unwrap();
+        .call(&mut store, &[0i32.into(), 123.45f32.into()])
+        .unwrap();
 
     assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
@@ -55,21 +65,22 @@ fn test_sync_host_func() {
 
 #[test]
 fn test_async_host_func() {
-    let mut store = async_store();
-    let mut linker = Linker::new(store.engine());
-    atoms::add_to_linker(&mut linker).unwrap();
+    let engine = Engine::default();
+    let mut linker = Linker::new(&engine);
+    integration::add_atoms_to_linker(&mut linker).unwrap();
+    let mut store = store(&engine);
 
-    let shim_mod = shim_module(linker.engine());
-    let shim_inst = run(linker.instantiate_async(&mut store, &shim_mod)).unwrap();
+    let shim_mod = shim_module(&engine);
+    let shim_inst = linker.instantiate(&mut store, &shim_mod).unwrap();
 
     let input: i32 = 123;
     let result_location: i32 = 0;
 
-    let results = run(shim_inst
+    let results = shim_inst
         .get_func(&mut store, "double_int_return_float_shim")
         .unwrap()
-        .call_async(&mut store, &[input.into(), result_location.into()]))
-    .unwrap();
+        .call(&mut store, &[input.into(), result_location.into()])
+        .unwrap();
 
     assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
@@ -87,45 +98,8 @@ fn test_async_host_func() {
     assert_eq!((input * 2) as f32, result);
 }
 
-fn run<F: Future>(future: F) -> F::Output {
-    let mut f = Pin::from(Box::new(future));
-    let waker = dummy_waker();
-    let mut cx = Context::from_waker(&waker);
-    loop {
-        match f.as_mut().poll(&mut cx) {
-            Poll::Ready(val) => break val,
-            Poll::Pending => {}
-        }
-    }
-}
-
-fn dummy_waker() -> Waker {
-    return unsafe { Waker::from_raw(clone(5 as *const _)) };
-
-    unsafe fn clone(ptr: *const ()) -> RawWaker {
-        assert_eq!(ptr as usize, 5);
-        const VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
-        RawWaker::new(ptr, &VTABLE)
-    }
-
-    unsafe fn wake(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-
-    unsafe fn wake_by_ref(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-
-    unsafe fn drop(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-}
-
-fn async_store() -> Store<Ctx> {
-    Store::new(
-        &Engine::new(Config::new().async_support(true)).unwrap(),
-        Ctx,
-    )
+fn store(engine: &Engine) -> Store<Ctx> {
+    Store::new(engine, Ctx)
 }
 
 // Wiggle expects the caller to have an exported memory. Wasmtime can only

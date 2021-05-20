@@ -37,6 +37,12 @@ name = "wasmtime_sync"
 path = "tests/wasmtime_sync.rs"
 required-features = ["wasmtime_integration", "wasmtime/wat"]
 
+[[test]]
+name = "wasmtime_integration"
+path = "tests/wasmtime_integration.rs"
+required-features = ["wasmtime_integration", "wasmtime/wat"]
+
+
 [features]
 # The wiggle proc-macro emits some code (inside `pub mod metadata`) guarded
 # by the `wiggle_metadata` feature flag. We use this feature flag so that

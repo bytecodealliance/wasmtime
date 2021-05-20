@@ -144,7 +144,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = wiggle_generate::Names::new(quote!(wiggle));
 
-    let error_transform = wiggle_generate::CodegenSettings::new(
+    let settings = wiggle_generate::CodegenSettings::new(
         &config.errors,
         &config.async_,
         &doc,
@@ -152,7 +152,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     )
     .expect("validating codegen settings");
 
-    let code = wiggle_generate::generate(&doc, &names, &error_transform);
+    let code = wiggle_generate::generate(&doc, &names, &settings);
     let metadata = if cfg!(feature = "wiggle_metadata") {
         wiggle_generate::generate_metadata(&doc, &names)
     } else {
@@ -186,8 +186,16 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
     let doc = config.c.load_document();
     let names = wiggle_generate::Names::new(quote!(wiggle));
 
+    let settings = wiggle_generate::CodegenSettings::new(
+        &config.c.errors,
+        &config.c.async_,
+        &doc,
+        cfg!(feature = "wasmtime"),
+    )
+    .expect("validating codegen settings");
+
     let modules = doc.modules().map(|module| {
-        wiggle_generate::wasmtime::link_module(&module, &names, &config.target, &config.c.async_)
+        wiggle_generate::wasmtime::link_module(&module, &names, Some(&config.target), &settings)
     });
     quote!( #(#modules)* ).into()
 }

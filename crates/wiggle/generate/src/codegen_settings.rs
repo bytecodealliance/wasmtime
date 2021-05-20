@@ -10,7 +10,7 @@ pub use crate::config::Asyncness;
 
 pub struct CodegenSettings {
     pub errors: ErrorTransform,
-    async_: AsyncConf,
+    pub async_: AsyncConf,
     pub wasmtime: bool,
 }
 impl CodegenSettings {

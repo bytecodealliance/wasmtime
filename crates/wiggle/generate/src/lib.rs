@@ -56,12 +56,19 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
             .funcs()
             .map(|f| define_func(&names, &module, &f, &settings));
         let modtrait = define_module_trait(&names, &module, &settings);
+        let wasmtime = if settings.wasmtime {
+            crate::wasmtime::link_module(&module, &names, None, &settings)
+        } else {
+            quote! {}
+        };
         quote!(
             pub mod #modname {
                 use super::types::*;
                 #(#fs)*
 
                 #modtrait
+
+                #wasmtime
             }
         )
     });

@@ -1,34 +1,57 @@
-use crate::config::{AsyncConf, Asyncness};
-use crate::Names;
+use crate::config::Asyncness;
+use crate::funcs::func_bounds;
+use crate::{CodegenSettings, Names};
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
+use std::collections::HashSet;
 
 pub fn link_module(
     module: &witx::Module,
     names: &Names,
-    target_path: &syn::Path,
-    async_conf: &AsyncConf,
+    target_path: Option<&syn::Path>,
+    settings: &CodegenSettings,
 ) -> TokenStream {
     let module_ident = names.module(&module.name);
-    let trait_ident = names.trait_name(&module.name);
 
-    let send_bound = if async_conf.contains_async(module) {
+    let send_bound = if settings.async_.contains_async(module) {
         quote! { + Send }
     } else {
         quote! {}
     };
 
-    let bodies = module.funcs().map(|f| {
-        let asyncness = async_conf.get(module.name.as_str(), f.name.as_str());
-        generate_func(&module, &f, names, &target_path, asyncness)
-    });
+    let mut bodies = Vec::new();
+    let mut bounds = HashSet::new();
+    for f in module.funcs() {
+        let asyncness = settings.async_.get(module.name.as_str(), f.name.as_str());
+        bodies.push(generate_func(&module, &f, names, target_path, asyncness));
+        let bound = func_bounds(names, module, &f, settings);
+        for b in bound {
+            bounds.insert(b);
+        }
+    }
+
+    let ctx_bound = if let Some(target_path) = target_path {
+        let bounds = bounds
+            .into_iter()
+            .map(|b| quote!(#target_path::#module_ident::#b));
+        quote!( #(#bounds)+* #send_bound )
+    } else {
+        let bounds = bounds.into_iter();
+        quote!( #(#bounds)+* #send_bound )
+    };
+
+    let func_name = if target_path.is_none() {
+        format_ident!("add_to_linker")
+    } else {
+        format_ident!("add_{}_to_linker", module_ident)
+    };
 
     quote! {
         /// Adds all instance items to the specified `Linker`.
-        pub fn add_to_linker<T, C>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()>
+        pub fn #func_name<T, C>(linker: &mut wasmtime::Linker<T>) -> anyhow::Result<()>
             where
                 T: std::borrow::BorrowMut<C> #send_bound,
-                C: #target_path::#module_ident::#trait_ident #send_bound,
+                C: #ctx_bound
         {
             #(#bodies)*
             Ok(())
@@ -40,7 +63,7 @@ fn generate_func(
     module: &witx::Module,
     func: &witx::InterfaceFunc,
     names: &Names,
-    target_path: &syn::Path,
+    target_path: Option<&syn::Path>,
     asyncness: Asyncness,
 ) -> TokenStream {
     let rt = names.runtime_mod();
@@ -78,6 +101,12 @@ fn generate_func(
         quote!(.await)
     };
 
+    let abi_func = if let Some(target_path) = target_path {
+        quote!( #target_path::#module_ident::#field_ident )
+    } else {
+        quote!( #field_ident )
+    };
+
     let runtime = names.runtime_mod();
 
     let body = quote! {
@@ -106,7 +135,7 @@ fn generate_func(
             let mem = &mut *(mem.data_mut(&mut caller) as *mut [u8]);
             (caller.data_mut().borrow_mut(), #runtime::wasmtime::WasmtimeGuestMemory::new(mem))
         };
-        match #target_path::#module_ident::#field_ident(ctx, &mem #(, #arg_names)*) #await_ {
+        match #abi_func(ctx, &mem #(, #arg_names)*) #await_ {
             Ok(r) => Ok(<#ret_ty>::from(r)),
             Err(#runtime::Trap::String(err)) => Err(wasmtime::Trap::new(err)),
             Err(#runtime::Trap::I32Exit(err)) => Err(wasmtime::Trap::i32_exit(err)),
