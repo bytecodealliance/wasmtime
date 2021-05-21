@@ -183,10 +183,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
+        let is_apple_cc = call_conv == isa::CallConv::AppleAarch64;
         let is_baldrdash = call_conv.extends_baldrdash();
         let has_baldrdash_tls = call_conv == isa::CallConv::Baldrdash2020;
 
-        // See AArch64 ABI (https://c9x.me/compile/bib/abi-arm64.pdf), sections 5.4.
+        // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#64parameter-passing), sections 6.4.
         //
         // MacOS aarch64 is slightly different, see also
         // https://developer.apple.com/documentation/xcode/writing_arm64_code_for_apple_platforms.
@@ -194,8 +195,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // following ways:
         // - sign- and zero- extensions of data types less than 32 bits are not
         // implemented yet.
-        // - i128 arguments passing isn't implemented yet in the standard (non
-        // MacOS) aarch64 ABI.
         // - we align the arguments stack space to a 16-bytes boundary, while
         // the MacOS allows aligning only on 8 bytes. In practice it means we're
         // slightly overallocating when calling, which is fine, and doesn't
@@ -265,20 +264,16 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 "Invalid type for AArch64: {:?}",
                 param.value_type
             );
-            let (rcs, _) = Inst::rc_for_type(param.value_type).unwrap();
-            assert!(rcs.len() == 1, "Multi-reg values not supported yet");
-            let rc = rcs[0];
 
-            let next_reg = match rc {
-                RegClass::I64 => &mut next_xreg,
-                RegClass::V128 => &mut next_vreg,
-                _ => panic!("Invalid register class: {:?}", rc),
-            };
+            let (rcs, reg_types) = Inst::rc_for_type(param.value_type)?;
 
             if let Some(param) = try_fill_baldrdash_reg(call_conv, param) {
-                assert!(rc == RegClass::I64);
+                assert!(rcs[0] == RegClass::I64);
                 ret.push(param);
-            } else if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
+                continue;
+            }
+
+            if let ir::ArgumentPurpose::StructArgument(size) = param.purpose {
                 let offset = next_stack as i64;
                 let size = size as u64;
                 assert!(size % 8 == 0, "StructArgument size is not properly aligned");
@@ -288,50 +283,148 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     size,
                     purpose: param.purpose,
                 });
-            } else if *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0 {
-                let reg = match rc {
-                    RegClass::I64 => xreg(*next_reg),
-                    RegClass::V128 => vreg(*next_reg),
-                    _ => unreachable!(),
-                };
-                ret.push(ABIArg::reg(
-                    reg.to_real_reg(),
-                    param.value_type,
-                    param.extension,
-                    param.purpose,
-                ));
-                *next_reg += 1;
-                remaining_reg_vals -= 1;
-            } else {
-                // Compute the stack slot's size.
-                let size = (ty_bits(param.value_type) / 8) as u64;
-
-                let size = if call_conv == isa::CallConv::AppleAarch64
-                    || (call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets)
-                {
-                    // MacOS aarch64 and Wasmtime allow stack slots with
-                    // sizes less than 8 bytes. They still need to be
-                    // properly aligned on their natural data alignment,
-                    // though.
-                    size
-                } else {
-                    // Every arg takes a minimum slot of 8 bytes. (16-byte stack
-                    // alignment happens separately after all args.)
-                    std::cmp::max(size, 8)
-                };
-
-                // Align the stack slot.
-                debug_assert!(size.is_power_of_two());
-                next_stack = align_to(next_stack, size);
-
-                ret.push(ABIArg::stack(
-                    next_stack as i64,
-                    param.value_type,
-                    param.extension,
-                    param.purpose,
-                ));
-                next_stack += size;
+                continue;
             }
+
+            // Handle multi register params
+            //
+            // See AArch64 ABI (https://github.com/ARM-software/abi-aa/blob/2021Q1/aapcs64/aapcs64.rst#642parameter-passing-rules), (Section 6.4.2 Stage C).
+            //
+            // For arguments with alignment of 16 we round up the the register number
+            // to the next even value. So we can never allocate for example an i128
+            // to X1 and X2, we have to skip one register and do X2, X3
+            // (Stage C.8)
+            // Note: The Apple ABI deviates a bit here. They don't respect Stage C.8
+            // and will happily allocate a i128 to X1 and X2
+            //
+            // For integer types with alignment of 16 we also have the additional
+            // restriction of passing the lower half in Xn and the upper half in Xn+1
+            // (Stage C.9)
+            //
+            // For examples of how LLVM handles this: https://godbolt.org/z/bhd3vvEfh
+            //
+            // On the Apple ABI it is unspecified if we can spill half the value into the stack
+            // i.e load the lower half into x7 and the upper half into the stack
+            // LLVM does not seem to do this, so we are going to replicate that behaviour
+            let is_multi_reg = rcs.len() >= 2;
+            if is_multi_reg {
+                assert!(
+                    rcs.len() == 2,
+                    "Unable to handle multi reg params with more than 2 regs"
+                );
+                assert!(
+                    rcs == &[RegClass::I64, RegClass::I64],
+                    "Unable to handle non i64 regs"
+                );
+
+                let reg_class_space = max_per_class_reg_vals - next_xreg;
+                let reg_space = remaining_reg_vals;
+
+                if reg_space >= 2 && reg_class_space >= 2 {
+                    // The aarch64 ABI does not allow us to start a split argument
+                    // at an odd numbered register. So we need to skip one register
+                    //
+                    // TODO: The Fast ABI should probably not skip the register
+                    if !is_apple_cc && next_xreg % 2 != 0 {
+                        next_xreg += 1;
+                    }
+
+                    let lower_reg = xreg(next_xreg);
+                    let upper_reg = xreg(next_xreg + 1);
+
+                    ret.push(ABIArg::Slots {
+                        slots: vec![
+                            ABIArgSlot::Reg {
+                                reg: lower_reg.to_real_reg(),
+                                ty: param.value_type,
+                                extension: param.extension,
+                            },
+                            ABIArgSlot::Reg {
+                                reg: upper_reg.to_real_reg(),
+                                ty: param.value_type,
+                                extension: param.extension,
+                            },
+                        ],
+                        purpose: param.purpose,
+                    });
+
+                    next_xreg += 2;
+                    remaining_reg_vals -= 2;
+                    continue;
+                }
+            } else {
+                // Single Register parameters
+                let rc = rcs[0];
+                let next_reg = match rc {
+                    RegClass::I64 => &mut next_xreg,
+                    RegClass::V128 => &mut next_vreg,
+                    _ => panic!("Invalid register class: {:?}", rc),
+                };
+
+                if *next_reg < max_per_class_reg_vals && remaining_reg_vals > 0 {
+                    let reg = match rc {
+                        RegClass::I64 => xreg(*next_reg),
+                        RegClass::V128 => vreg(*next_reg),
+                        _ => unreachable!(),
+                    };
+                    ret.push(ABIArg::reg(
+                        reg.to_real_reg(),
+                        param.value_type,
+                        param.extension,
+                        param.purpose,
+                    ));
+                    *next_reg += 1;
+                    remaining_reg_vals -= 1;
+                    continue;
+                }
+            }
+
+            // Spill to the stack
+
+            // Compute the stack slot's size.
+            let size = (ty_bits(param.value_type) / 8) as u64;
+
+            let size = if is_apple_cc
+                || (call_conv.extends_wasmtime() && args_or_rets == ArgsOrRets::Rets)
+            {
+                // MacOS aarch64 and Wasmtime allow stack slots with
+                // sizes less than 8 bytes. They still need to be
+                // properly aligned on their natural data alignment,
+                // though.
+                size
+            } else {
+                // Every arg takes a minimum slot of 8 bytes. (16-byte stack
+                // alignment happens separately after all args.)
+                std::cmp::max(size, 8)
+            };
+
+            // Align the stack slot.
+            debug_assert!(size.is_power_of_two());
+            next_stack = align_to(next_stack, size);
+
+            let slots = reg_types
+                .iter()
+                .copied()
+                // Build the stack locations from each slot
+                .scan(next_stack, |next_stack, ty| {
+                    let slot_offset = *next_stack as i64;
+                    *next_stack += (ty_bits(ty) / 8) as u64;
+
+                    Some((ty, slot_offset))
+                })
+                .map(|(ty, offset)| ABIArgSlot::Stack {
+                    offset,
+                    ty,
+                    extension: param.extension,
+                })
+                .collect();
+
+            ret.push(ABIArg::Slots {
+                slots,
+                purpose: param.purpose,
+            });
+
+            next_stack += size;
         }
 
         if args_or_rets == ArgsOrRets::Rets && is_baldrdash {
