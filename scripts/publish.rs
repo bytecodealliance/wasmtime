@@ -332,6 +332,7 @@ fn verify(crates: &[Crate]) {
         if krate.name.contains("lightbeam")
             || krate.name == "witx"
             || krate.name.contains("wasi-nn")
+            || krate.name.contains("peepmatic")
         {
             cmd.arg("--no-verify");
         }
