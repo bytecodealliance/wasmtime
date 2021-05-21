@@ -2,13 +2,13 @@
 name = "peepmatic-test-operator"
 description = "Operator for usage in peepmatic tests"
 license = "Apache-2.0 WITH LLVM-exception"
-version = "0.73.0"
+version = "0.74.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-peepmatic-traits = { version = "0.73.0", path = "../traits" }
+peepmatic-traits = { version = "0.74.0", path = "../traits" }
 serde = { version = "1.0.105", features = ["derive"] }
 wast = "35.0.0"

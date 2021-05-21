@@ -4,18 +4,87 @@
 
 ## Unreleased
 
+## 0.27.0
+
+Released 2021-05-21.
+
+### Security Fixes
+
+* Fixed a security issue in Cranelift's x64 backend that could result in a heap
+  sandbox escape due to an incorrect sign-extension:
+  [#2913](https://github.com/bytecodealliance/wasmtime/issues/2913).
+
 ### Added
+
+* Support for IBM z/Archiecture (`s390x`) machines in Cranelift and Wasmtime:
+  [#2836](https://github.com/bytecodealliance/wasmtime/pull/2836),
+  [#2837](https://github.com/bytecodealliance/wasmtime/pull/2837),
+  [#2838](https://github.com/bytecodealliance/wasmtime/pull/2838),
+  [#2843](https://github.com/bytecodealliance/wasmtime/pull/2843),
+  [#2854](https://github.com/bytecodealliance/wasmtime/pull/2854),
+  [#2870](https://github.com/bytecodealliance/wasmtime/pull/2870),
+  [#2871](https://github.com/bytecodealliance/wasmtime/pull/2871),
+  [#2872](https://github.com/bytecodealliance/wasmtime/pull/2872),
+  [#2874](https://github.com/bytecodealliance/wasmtime/pull/2874).
+
+* Improved async support in wasi-common runtime:
+  [#2832](https://github.com/bytecodealliance/wasmtime/pull/2832).
 
 * Added `Store::with_limits`, `StoreLimits`, and `ResourceLimiter` to the
   Wasmtime API to help with enforcing resource limits at runtime. The
   `ResourceLimiter` trait can be implemented by custom resource limiters to
   decide if linear memories or tables can be grown.
 
+* Added `allow-unknown-exports` option for the run command:
+  [#2879](https://github.com/bytecodealliance/wasmtime/pull/2879).
+
+* Added API to notify that a `Store` has moved to a new thread:
+  [#2822](https://github.com/bytecodealliance/wasmtime/pull/2822).
+
+* Documented guidance around using Wasmtime in multithreaded contexts:
+  [#2812](https://github.com/bytecodealliance/wasmtime/pull/2812).
+  In the future, the Wasmtime API will change to allow some of its core types
+  to be Send/Sync; see the in-progress
+  [#2897](https://github.com/bytecodealliance/wasmtime/pull/2897) for details.
+
+* Support calls from native code to multiple-return-value functions:
+  [#2806](https://github.com/bytecodealliance/wasmtime/pull/2806).
+
 ### Changed
 
 * Breaking: `Memory::new` has been changed to return `Result` as creating a
   host memory object is now a fallible operation when the initial size of
   the memory exceeds the store limits.
+
+### Fixed
+
+* Many instruction selection improvements on x64 and aarch64:
+  [#2819](https://github.com/bytecodealliance/wasmtime/pull/2819),
+  [#2828](https://github.com/bytecodealliance/wasmtime/pull/2828),
+  [#2823](https://github.com/bytecodealliance/wasmtime/pull/2823),
+  [#2862](https://github.com/bytecodealliance/wasmtime/pull/2862),
+  [#2886](https://github.com/bytecodealliance/wasmtime/pull/2886),
+  [#2889](https://github.com/bytecodealliance/wasmtime/pull/2889),
+  [#2905](https://github.com/bytecodealliance/wasmtime/pull/2905).
+
+* Improved performance of Wasmtime runtime substantially:
+  [#2811](https://github.com/bytecodealliance/wasmtime/pull/2811),
+  [#2818](https://github.com/bytecodealliance/wasmtime/pull/2818),
+  [#2821](https://github.com/bytecodealliance/wasmtime/pull/2821),
+  [#2847](https://github.com/bytecodealliance/wasmtime/pull/2847),
+  [#2900](https://github.com/bytecodealliance/wasmtime/pull/2900).
+
+* Fixed WASI issue with file metadata on Windows:
+  [#2884](https://github.com/bytecodealliance/wasmtime/pull/2884).
+
+* Fixed an issue with debug info and an underflowing (trapping) offset:
+  [#2866](https://github.com/bytecodealliance/wasmtime/pull/2866).
+
+* Fixed an issue with unwind information in the old x86 backend:
+  [#2845](https://github.com/bytecodealliance/wasmtime/pull/2845).
+
+* Fixed i32 spilling in x64 backend:
+  [#2840](https://github.com/bytecodealliance/wasmtime/pull/2840).
 
 ## 0.26.0
 

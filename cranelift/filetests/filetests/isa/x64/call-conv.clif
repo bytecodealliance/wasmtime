@@ -102,7 +102,7 @@ block0(
     ; nextln: movq    %r8, %r11
     ; nextln: movq    %r9, %r12
     ; nextln: movq    16(%rbp), %r13
-    ; nextln: movslq  24(%rbp), %r14
+    ; nextln: movq    24(%rbp), %r14
     ; nextln: movss   32(%rbp), %xmm8
     ; nextln: movsd   40(%rbp), %xmm9
     ; nextln: subq    $$144, %rsp
@@ -236,7 +236,7 @@ block0:
     ; nextln: virtual_sp_offset_adjust 16
     ; nextln: lea     0(%rsp), %rdi
     ; nextln: call    *%rsi
-    ; nextln: movslq  0(%rsp), %rsi
+    ; nextln: movq    0(%rsp), %rsi
     ; nextln: addq    $$16, %rsp
     ; nextln: virtual_sp_offset_adjust -16
     ; nextln: movq    %rsi, %rdx
@@ -282,7 +282,7 @@ block0:
     ; nextln: virtual_sp_offset_adjust 16
     ; nextln: lea     0(%rsp), %rdi
     ; nextln: call    *%rsi
-    ; nextln: movslq  0(%rsp), %rsi
+    ; nextln: movq    0(%rsp), %rsi
     ; nextln: addq    $$16, %rsp
     ; nextln: virtual_sp_offset_adjust -16
     ; nextln: movq    %rdx, 0(%r12)
