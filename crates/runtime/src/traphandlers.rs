@@ -54,7 +54,7 @@ static mut IS_WASM_PC: fn(usize) -> bool = |_| false;
 /// This function must not only be called globally once before entering
 /// WebAssembly but it must also be called once-per-thread that enters
 /// WebAssembly. Currently in wasmtime's integration this function is called on
-/// creation of a `Store`.
+/// creation of a `Engine`.
 ///
 /// The `is_wasm_pc` argument is used when a trap happens to determine if a
 /// program counter is the pc of an actual wasm trap or not. This is then used
