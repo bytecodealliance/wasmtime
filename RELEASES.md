@@ -4,6 +4,15 @@
 
 ## Unreleased
 
+## 0.26.1
+
+Released 2021-05-21.
+
+### Security fixes.
+
+* Fixed CVE-2021-32629. This is a backport from `main` onto a stable branch for
+  a security point-release.
+
 ## 0.26.0
 
 Released 2021-04-05.
