@@ -942,6 +942,7 @@ impl wasmtime_runtime::ModuleInfoLookup for StoreInner {
 /// particular `Store`.
 ///
 /// This structure is created by the [`Store::interrupt_handle`] method.
+#[derive(Debug)]
 pub struct InterruptHandle {
     interrupts: Arc<VMInterrupts>,
 }
