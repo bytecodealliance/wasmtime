@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime"
-version = "0.26.0"
+version = "0.27.0"
 authors = ["The Wasmtime Project Developers"]
 description = "High-level API to expose the Wasmtime runtime"
 documentation = "https://docs.rs/wasmtime"
@@ -14,12 +14,12 @@ edition = "2018"
 # rustdoc-args = ["--cfg", "nightlydoc"]
 
 [dependencies]
-wasmtime-runtime = { path = "../runtime", version = "0.26.0" }
-wasmtime-environ = { path = "../environ", version = "0.26.0" }
-wasmtime-jit = { path = "../jit", version = "0.26.0" }
-wasmtime-cache = { path = "../cache", version = "0.26.0", optional = true }
-wasmtime-profiling = { path = "../profiling", version = "0.26.0" }
-wasmtime-fiber = { path = "../fiber", version = "0.26.0", optional = true }
+wasmtime-runtime = { path = "../runtime", version = "0.27.0" }
+wasmtime-environ = { path = "../environ", version = "0.27.0" }
+wasmtime-jit = { path = "../jit", version = "0.27.0" }
+wasmtime-cache = { path = "../cache", version = "0.27.0", optional = true }
+wasmtime-profiling = { path = "../profiling", version = "0.27.0" }
+wasmtime-fiber = { path = "../fiber", version = "0.27.0", optional = true }
 target-lexicon = { version = "0.12.0", default-features = false }
 wasmparser = "0.78"
 anyhow = "1.0.19"
