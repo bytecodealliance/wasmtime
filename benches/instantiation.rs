@@ -6,7 +6,7 @@ use wasmtime::*;
 use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
 fn instantiate(linker: &Linker<WasiCtx>, module: &Module) -> Result<()> {
-    let wasi = WasiCtxBuilder::new().build()?;
+    let wasi = WasiCtxBuilder::new().build();
     let mut store = Store::new(module.engine(), wasi);
     let _instance = linker.instantiate(&mut store, module)?;
 
