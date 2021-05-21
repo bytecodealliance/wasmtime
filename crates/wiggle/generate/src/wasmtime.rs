@@ -53,7 +53,7 @@ pub fn link_module(
         pub fn #func_name<T, U>(
             linker: &mut #rt::wasmtime_crate::Linker<T>,
             get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-        ) -> anyhow::Result<()>
+        ) -> #rt::anyhow::Result<()>
             where
                 U: #ctx_bound #send_bound
         {

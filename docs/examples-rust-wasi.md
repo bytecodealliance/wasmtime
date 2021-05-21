@@ -58,7 +58,7 @@ fn main() -> Result<()> {
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()
         .inherit_args()?
-        .build()?;
+        .build();
     let mut store = Store::new(&engine, MyState {
         message: format!("hello!"),
         wasi,

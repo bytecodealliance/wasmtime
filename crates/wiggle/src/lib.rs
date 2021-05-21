@@ -6,6 +6,8 @@ use std::sync::Arc;
 pub use wiggle_macro::{async_trait, from_witx};
 
 #[cfg(feature = "wasmtime")]
+pub use anyhow;
+#[cfg(feature = "wasmtime")]
 pub use wiggle_macro::wasmtime_integration;
 
 pub use bitflags;
