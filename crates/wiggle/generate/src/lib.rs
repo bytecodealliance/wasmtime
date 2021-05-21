@@ -5,6 +5,7 @@ mod lifetimes;
 mod module_trait;
 mod names;
 mod types;
+pub mod wasmtime;
 
 use heck::ShoutySnakeCase;
 use lifetimes::anon_lifetime;
@@ -12,7 +13,7 @@ use proc_macro2::{Literal, TokenStream};
 use quote::quote;
 
 pub use codegen_settings::{CodegenSettings, UserErrorType};
-pub use config::Config;
+pub use config::{Config, WasmtimeConfig};
 pub use funcs::define_func;
 pub use module_trait::define_module_trait;
 pub use names::Names;
@@ -55,12 +56,20 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
             .funcs()
             .map(|f| define_func(&names, &module, &f, &settings));
         let modtrait = define_module_trait(&names, &module, &settings);
+        let wasmtime = if settings.wasmtime {
+            crate::wasmtime::link_module(&module, &names, None, &settings)
+        } else {
+            quote! {}
+        };
         quote!(
             pub mod #modname {
                 use super::types::*;
+                pub use super::types::UserErrorConversion;
                 #(#fs)*
 
                 #modtrait
+
+                #wasmtime
             }
         )
     });

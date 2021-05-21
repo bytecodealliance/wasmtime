@@ -14,7 +14,6 @@ publish = false
 [dependencies]
 proptest = "1.0.0"
 wiggle = { path = "..", features = ["tracing_log"] }
-wiggle-borrow = { path = "../borrow" }
 
 [dev-dependencies]
 thiserror = "1.0"

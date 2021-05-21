@@ -75,7 +75,7 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
             _ => unimplemented!(),
         };
 
-        let asyncness = if settings.is_async(&m, &f) {
+        let asyncness = if settings.get_async(&m, &f).is_async() {
             quote!(async)
         } else {
             quote!()

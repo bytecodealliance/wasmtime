@@ -1,9 +1,7 @@
 use proptest::prelude::*;
 use std::cell::UnsafeCell;
 use std::marker;
-use wiggle::{BorrowHandle, GuestMemory, Region};
-
-use wiggle_borrow::BorrowChecker;
+use wiggle::{borrow::BorrowChecker, BorrowHandle, GuestMemory, Region};
 
 #[derive(Debug, Clone)]
 pub struct MemAreas(Vec<MemArea>);

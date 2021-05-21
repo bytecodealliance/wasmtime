@@ -6,21 +6,29 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use witx::{Document, Id, InterfaceFunc, Module, NamedType, TypeRef};
 
+pub use crate::config::Asyncness;
+
 pub struct CodegenSettings {
     pub errors: ErrorTransform,
-    async_: AsyncConf,
+    pub async_: AsyncConf,
+    pub wasmtime: bool,
 }
 impl CodegenSettings {
-    pub fn new(error_conf: &ErrorConf, async_: &AsyncConf, doc: &Document) -> Result<Self, Error> {
+    pub fn new(
+        error_conf: &ErrorConf,
+        async_: &AsyncConf,
+        doc: &Document,
+        wasmtime: bool,
+    ) -> Result<Self, Error> {
         let errors = ErrorTransform::new(error_conf, doc)?;
         Ok(Self {
             errors,
             async_: async_.clone(),
+            wasmtime,
         })
     }
-    pub fn is_async(&self, module: &Module, func: &InterfaceFunc) -> bool {
-        self.async_
-            .is_async(module.name.as_str(), func.name.as_str())
+    pub fn get_async(&self, module: &Module, func: &InterfaceFunc) -> Asyncness {
+        self.async_.get(module.name.as_str(), func.name.as_str())
     }
 }
 

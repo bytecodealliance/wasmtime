@@ -17,14 +17,18 @@ use syn::parse_macro_input;
 ///     * For each `@interface func` defined in a witx module, an abi-level
 ///       function is generated which takes ABI-level arguments, along with
 ///       a ref that impls the module trait, and a `GuestMemory` implementation.
-///       Users typically won't use these abi-level functions: The `wasmtime-wiggle`
-///       and `lucet-wiggle` crates adapt these to work with a particular WebAssembly
-///       engine.
+///       Users typically won't use these abi-level functions: Either the
+///       `wasmtime_integration` macro or the `lucet-wiggle` crates adapt these
+///       to work with a particular WebAssembly engine.
 ///
 ///     * A public "module trait" is defined (called the module name, in
 ///       SnakeCase) which has a `&self` method for each function in the
 ///       module. These methods takes idiomatic Rust types for each argument
 ///       and return `Result<($return_types),$error_type>`
+///
+///     * When the `wiggle` crate is built with the `wasmtime_integration`
+///     feature, each module contains an `add_to_linker` function to add it to
+///     a `wasmtime::Linker`.
 ///
 /// Arguments are provided using Rust struct value syntax.
 ///
@@ -144,11 +148,15 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
     let doc = config.load_document();
     let names = wiggle_generate::Names::new(quote!(wiggle));
 
-    let error_transform =
-        wiggle_generate::CodegenSettings::new(&config.errors, &config.async_, &doc)
-            .expect("validating codegen settings");
+    let settings = wiggle_generate::CodegenSettings::new(
+        &config.errors,
+        &config.async_,
+        &doc,
+        cfg!(feature = "wasmtime"),
+    )
+    .expect("validating codegen settings");
 
-    let code = wiggle_generate::generate(&doc, &names, &error_transform);
+    let code = wiggle_generate::generate(&doc, &names, &settings);
     let metadata = if cfg!(feature = "wiggle_metadata") {
         wiggle_generate::generate_metadata(&doc, &names)
     } else {
@@ -166,4 +174,32 @@ pub fn async_trait(attr: TokenStream, item: TokenStream) -> TokenStream {
         #[wiggle::async_trait_crate::async_trait]
         #item
     })
+}
+
+#[cfg(feature = "wasmtime")]
+/// Define the structs required to integrate a Wiggle implementation with Wasmtime.
+///
+/// ## Arguments
+///
+/// Arguments are provided using struct syntax e.g. `{ arg_name: value }`.
+///
+/// * `target`: The path of the module where the Wiggle implementation is defined.
+#[proc_macro]
+pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
+    let config = parse_macro_input!(args as wiggle_generate::WasmtimeConfig);
+    let doc = config.c.load_document();
+    let names = wiggle_generate::Names::new(quote!(wiggle));
+
+    let settings = wiggle_generate::CodegenSettings::new(
+        &config.c.errors,
+        &config.c.async_,
+        &doc,
+        cfg!(feature = "wasmtime"),
+    )
+    .expect("validating codegen settings");
+
+    let modules = doc.modules().map(|module| {
+        wiggle_generate::wasmtime::link_module(&module, &names, Some(&config.target), &settings)
+    });
+    quote!( #(#modules)* ).into()
 }

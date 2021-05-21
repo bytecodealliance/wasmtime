@@ -5,11 +5,15 @@ use std::sync::Arc;
 
 pub use wiggle_macro::{async_trait, from_witx};
 
+#[cfg(feature = "wasmtime")]
+pub use wiggle_macro::wasmtime_integration;
+
 pub use bitflags;
 
 #[cfg(feature = "wiggle_metadata")]
 pub use witx;
 
+pub mod borrow;
 mod error;
 mod guest_type;
 mod region;
@@ -22,6 +26,14 @@ pub use region::Region;
 
 pub mod async_trait_crate {
     pub use async_trait::*;
+}
+
+#[cfg(feature = "wasmtime")]
+pub mod wasmtime;
+
+#[cfg(feature = "wasmtime")]
+pub mod wasmtime_crate {
+    pub use wasmtime::*;
 }
 
 /// A trait which abstracts how to get at the region of host memory taht

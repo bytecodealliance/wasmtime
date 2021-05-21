@@ -1,7 +1,5 @@
-pub use wasmtime_wiggle_macro::*;
-pub use wiggle::*;
-
-use wiggle_borrow::BorrowChecker;
+use crate::borrow::BorrowChecker;
+use crate::{BorrowHandle, GuestError, GuestMemory, Region};
 
 /// Lightweight `wasmtime::Memory` wrapper so we can implement the
 /// `wiggle::GuestMemory` trait on it.
