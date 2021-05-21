@@ -1,0 +1,38 @@
+test run
+target x86_64
+feature "experimental_x64"
+
+function %f(i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32) -> i64 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v8: i32, v9: i32, v10: i32, v11: i32, v12: i32, v13: i32, v14: i32, v15: i32, v16: i32, v17: i32, v18: i32, v19: i32):
+  v20 = iadd.i32 v0, v1
+  v21 = iadd.i32 v2, v3
+  v22 = iadd.i32 v4, v5
+  v23 = iadd.i32 v6, v7
+  v24 = iadd.i32 v8, v9
+  v25 = iadd.i32 v10, v11
+  v26 = iadd.i32 v12, v13
+  v27 = iadd.i32 v14, v15
+  v28 = iadd.i32 v16, v17
+  v29 = iadd.i32 v18, v19
+
+  v30 = iadd.i32 v20, v21
+  v31 = iadd.i32 v22, v23
+  v32 = iadd.i32 v24, v25
+  v33 = iadd.i32 v26, v27
+  v34 = iadd.i32 v28, v29
+
+  v35 = iadd.i32 v30, v31
+  v36 = iadd.i32 v32, v33
+  v37 = iadd.i32 v35, v34
+  v38 = iadd.i32 v36, v37
+  ;; v38 should be zero (due to wrapping).
+
+  v39 = iconst.i64 1
+  v40 = uextend.i64 v0  ;; should be reloaded from a spillslot
+  v41 = uextend.i64 v38
+  v42 = iadd.i64 v39, v40
+  v43 = iadd.i64 v42, v41
+  return v43
+}
+
+; run: %f(0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000, 0x80000000) == 0x80000001
