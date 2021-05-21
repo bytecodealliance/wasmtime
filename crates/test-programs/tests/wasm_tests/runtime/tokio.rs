@@ -62,7 +62,7 @@ fn run(
             // does not.
             builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-            Wasi::set_context(&store, builder.build()?)
+            Wasi::set_context(&store, builder.build())
                 .map_err(|_| anyhow::anyhow!("wasi set_context failed"))?;
 
             let module =

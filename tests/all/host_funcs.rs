@@ -757,7 +757,7 @@ fn wasi_imports() -> Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, wasm)?;
     let store = Store::new(&engine);
-    assert!(Wasi::set_context(&store, WasiCtxBuilder::new().build()?).is_ok());
+    assert!(Wasi::set_context(&store, WasiCtxBuilder::new().build()).is_ok());
     let linker = Linker::new(&store);
     let instance = linker.instantiate(&module)?;
 

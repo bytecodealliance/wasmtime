@@ -222,7 +222,7 @@ impl BenchState {
             cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
         }
 
-        Wasi::new(linker.store(), cx.build()?).add_to_linker(&mut linker)?;
+        Wasi::new(linker.store(), cx.build()).add_to_linker(&mut linker)?;
 
         #[cfg(feature = "wasi-nn")]
         {

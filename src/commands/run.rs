@@ -371,7 +371,7 @@ fn populate_with_wasi(
     }
 
     if wasi_modules.wasi_common {
-        Wasi::new(linker.store(), builder.build()?).add_to_linker(linker)?;
+        Wasi::new(linker.store(), builder.build()).add_to_linker(linker)?;
     }
 
     if wasi_modules.wasi_nn {

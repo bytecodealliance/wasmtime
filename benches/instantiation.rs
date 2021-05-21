@@ -11,7 +11,7 @@ fn instantiate(module: &Module) -> Result<Instance> {
     // As we don't actually invoke Wasm code in this benchmark, we still add
     // the WASI context to the store as it is considered part of getting a
     // module that depends on WASI "ready to run".
-    Wasi::set_context(&store, WasiCtxBuilder::new().build()?)
+    Wasi::set_context(&store, WasiCtxBuilder::new().build())
         .map_err(|_| anyhow::anyhow!("wasi set_context failed"))?;
 
     let linker = Linker::new(&store);

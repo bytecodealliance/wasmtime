@@ -146,7 +146,7 @@ async fn _run_wasm(inputs: Inputs) -> Result<(), Error> {
             .inherit_stdout()
             // Set an environment variable so the wasm knows its name.
             .env("NAME", &inputs.name)?
-            .build()?,
+            .build(),
     )
     .map_err(|_| anyhow!("setting wasi context"))?;
 
