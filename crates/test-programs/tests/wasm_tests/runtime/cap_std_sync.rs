@@ -28,7 +28,7 @@ fn run(
         let engine = Engine::default();
         let module = Module::new(&engine, &data).context("failed to create wasm module")?;
         let mut linker = Linker::new(&engine);
-        add_to_linker(&mut linker)?;
+        add_to_linker(&mut linker, |cx| cx)?;
 
         // Create our wasi context.
         // Additionally register any preopened directories if we have them.

@@ -34,7 +34,7 @@ fn run(
             let engine = Engine::new(&config)?;
             let module = Module::new(&engine, &data).context("failed to create wasm module")?;
             let mut linker = Linker::new(&engine);
-            add_to_linker(&mut linker)?;
+            add_to_linker(&mut linker, |cx| cx)?;
 
             // Create our wasi context.
             let mut builder = WasiCtxBuilder::new();
