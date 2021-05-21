@@ -53,7 +53,7 @@ struct MyState {
 fn main() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker, |state| &mut state.wasi)?;
+    wasmtime_wasi::add_to_linker(&mut linker, |state: &mut MyState| &mut state.wasi)?;
 
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()
