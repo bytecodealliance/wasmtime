@@ -4,7 +4,7 @@ on:
     branches: [main]
     tags-ignore: [dev]
   pull_request:
-    branches: [main]
+    branches: [main, stable-v0.26]
 defaults:
   run:
     shell: bash
