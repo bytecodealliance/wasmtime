@@ -234,7 +234,6 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: ${{ matrix.rust }}
-    - uses: ./.github/actions/define-llvm-env
 
     - name: Install libclang
       # Note: libclang is pre-installed on the macOS and linux images.
@@ -277,21 +276,18 @@ jobs:
 
     # Test debug (DWARF) related functionality.
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb
+        sudo apt-get update && sudo apt-get install -y gdb lldb llvm
         cargo test test_debug_dwarf -- --ignored --test-threads 1
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
-        LLDB: /usr/bin/lldb
 
     # Test debug (DWARF) related functionality on new backend.
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb
         cargo test test_debug_dwarf -- --ignored --test-threads 1 --test debug::
       if: matrix.os == 'ubuntu-latest'
       env:
         RUST_BACKTRACE: 1
-        LLDB: /usr/bin/lldb
 
     # Test uffd functionality on Linux
     - run: |
@@ -311,7 +307,7 @@ jobs:
         RUST_BACKTRACE: 1
 
   # Perform all tests (debug mode) for `wasmtime` with the old x86 backend.
-  test_x64:
+  test_x86:
     name: Test old x86 backend
     runs-on: ubuntu-latest
     steps:
@@ -321,7 +317,6 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: stable
-    - uses: ./.github/actions/define-llvm-env
 
     # Install wasm32 targets in order to build various tests throughout the
     # repo.
