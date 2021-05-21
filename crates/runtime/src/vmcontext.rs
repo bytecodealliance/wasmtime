@@ -159,6 +159,10 @@ mod test_vmmemory_import {
 
 /// The fields compiled code needs to access to utilize a WebAssembly global
 /// variable imported from another instance.
+///
+/// Note that unlike with functions, tables, and memories, `VMGlobalImport`
+/// doesn't include a `vmctx` pointer. Globals are never resized, and don't
+/// require a `vmctx` pointer to access.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
 pub struct VMGlobalImport {
@@ -744,8 +748,6 @@ mod test_vminterrupts {
 /// The struct here is empty, as the sizes of these fields are dynamic, and
 /// we can't describe them in Rust's type system. Sufficient memory is
 /// allocated at runtime.
-///
-/// TODO: We could move the globals into the `vmctx` allocation too.
 #[derive(Debug)]
 #[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
 pub struct VMContext {
