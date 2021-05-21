@@ -90,7 +90,7 @@ impl wasi_config_t {
         for (dir, path) in self.preopens {
             builder = builder.preopened_dir(dir, path)?;
         }
-        Ok(builder.build()?)
+        Ok(builder.build())
     }
 }
 
