@@ -56,7 +56,7 @@ fn run(
         // cap-std-sync does not yet support the sync family of fdflags
         builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-        let mut store = Store::new(&engine, builder.build()?);
+        let mut store = Store::new(&engine, builder.build());
         let instance = linker.instantiate(&mut store, &module)?;
         let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
         start.call(&mut store, ()).map_err(anyhow::Error::from)

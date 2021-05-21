@@ -4069,64 +4069,78 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => panic!("unexpected input type for FcvtFromUint: {:?}", input_ty),
                 };
             } else {
-                // Converting packed unsigned integers to packed floats requires a few steps.
-                // There is no single instruction lowering for converting unsigned floats but there
-                // is for converting packed signed integers to float (cvtdq2ps). In the steps below
-                // we isolate the upper half (16 bits) and lower half (16 bits) of each lane and
-                // then we convert each half separately using cvtdq2ps meant for signed integers.
-                // In order for this to work for the upper half bits we must shift right by 1
-                // (divide by 2) these bits in order to ensure the most significant bit is 0 not
-                // signed, and then after the conversion we double the value. Finally we add the
-                // converted values where addition will correctly round.
-                //
-                // Sequence:
-                // -> A = 0xffffffff
-                // -> Ah = 0xffff0000
-                // -> Al = 0x0000ffff
-                // -> Convert(Al) // Convert int to float
-                // -> Ah = Ah >> 1 // Shift right 1 to assure Ah conversion isn't treated as signed
-                // -> Convert(Ah) // Convert .. with no loss of significant digits from previous shift
-                // -> Ah = Ah + Ah // Double Ah to account for shift right before the conversion.
-                // -> dst = Ah + Al // Add the two floats together
-
                 assert_eq!(ctx.input_ty(insn, 0), types::I32X4);
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
-                // Create a temporary register
-                let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                ctx.emit(Inst::xmm_unary_rm_r(
-                    SseOpcode::Movapd,
-                    RegMem::reg(src),
-                    tmp,
-                ));
-                ctx.emit(Inst::gen_move(dst, src, ty));
+                if isa_flags.use_avx512f_simd() || isa_flags.use_avx512vl_simd() {
+                    // When either AVX512VL or AVX512F are available,
+                    // `fcvt_from_uint` can be lowered to a single instruction.
+                    ctx.emit(Inst::xmm_unary_rm_r_evex(
+                        Avx512Opcode::Vcvtudq2ps,
+                        RegMem::reg(src),
+                        dst,
+                    ));
+                } else {
+                    // Converting packed unsigned integers to packed floats
+                    // requires a few steps. There is no single instruction
+                    // lowering for converting unsigned floats but there is for
+                    // converting packed signed integers to float (cvtdq2ps). In
+                    // the steps below we isolate the upper half (16 bits) and
+                    // lower half (16 bits) of each lane and then we convert
+                    // each half separately using cvtdq2ps meant for signed
+                    // integers. In order for this to work for the upper half
+                    // bits we must shift right by 1 (divide by 2) these bits in
+                    // order to ensure the most significant bit is 0 not signed,
+                    // and then after the conversion we double the value.
+                    // Finally we add the converted values where addition will
+                    // correctly round.
+                    //
+                    // Sequence:
+                    // -> A = 0xffffffff
+                    // -> Ah = 0xffff0000
+                    // -> Al = 0x0000ffff
+                    // -> Convert(Al) // Convert int to float
+                    // -> Ah = Ah >> 1 // Shift right 1 to assure Ah conversion isn't treated as signed
+                    // -> Convert(Ah) // Convert .. with no loss of significant digits from previous shift
+                    // -> Ah = Ah + Ah // Double Ah to account for shift right before the conversion.
+                    // -> dst = Ah + Al // Add the two floats together
 
-                // Get the low 16 bits
-                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Pslld, RegMemImm::imm(16), tmp));
-                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(16), tmp));
+                    // Create a temporary register
+                    let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_unary_rm_r(
+                        SseOpcode::Movapd,
+                        RegMem::reg(src),
+                        tmp,
+                    ));
+                    ctx.emit(Inst::gen_move(dst, src, ty));
 
-                // Get the high 16 bits
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::from(tmp), dst));
+                    // Get the low 16 bits
+                    ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Pslld, RegMemImm::imm(16), tmp));
+                    ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(16), tmp));
 
-                // Convert the low 16 bits
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(tmp), tmp));
+                    // Get the high 16 bits
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::from(tmp), dst));
 
-                // Shift the high bits by 1, convert, and double to get the correct value.
-                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), dst));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(dst), dst));
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Addps,
-                    RegMem::reg(dst.to_reg()),
-                    dst,
-                ));
+                    // Convert the low 16 bits
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(tmp), tmp));
 
-                // Add together the two converted values.
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Addps,
-                    RegMem::reg(tmp.to_reg()),
-                    dst,
-                ));
+                    // Shift the high bits by 1, convert, and double to get the correct value.
+                    ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrld, RegMemImm::imm(1), dst));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Cvtdq2ps, RegMem::from(dst), dst));
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Addps,
+                        RegMem::reg(dst.to_reg()),
+                        dst,
+                    ));
+
+                    // Add together the two converted values.
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Addps,
+                        RegMem::reg(tmp.to_reg()),
+                        dst,
+                    ));
+                }
             }
         }
 

@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()
         .inherit_args()?
-        .build()?;
+        .build();
     let mut store = Store::new(&engine, wasi);
 
     // Instantiate our module with the imports we've created, and run it.

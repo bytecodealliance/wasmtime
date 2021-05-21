@@ -388,7 +388,7 @@ fn populate_with_wasi(
         for (name, dir) in preopen_dirs.into_iter() {
             builder = builder.preopened_dir(dir, name)?;
         }
-        store.data_mut().wasi = Some(builder.build()?);
+        store.data_mut().wasi = Some(builder.build());
     }
 
     if wasi_modules.wasi_nn {

@@ -2,17 +2,21 @@ test run
 set enable_simd
 target x86_64 machinst
 
-function %fcvt_from_sint() -> b1 {
-block0:
-    v0 = vconst.i32x4 [-1 0 1 123456789]
+function %fcvt_from_sint(i32x4) -> f32x4 {
+block0(v0: i32x4):
     v1 = fcvt_from_sint.f32x4 v0
-
-    v2 = vconst.f32x4 [-0x1.0 0.0 0x1.0 0x75bcd18.0] ; 123456789 rounds to 123456792.0, an error of 3
-    v3 = fcmp eq v1, v2
-    v4 = vall_true v3
-    return v4
+    return v1
 }
-; run
+; run: %fcvt_from_sint([-1 0 1 123456789]) == [-0x1.0 0.0 0x1.0 0x75bcd18.0]
+; Note that 123456789 rounds to 123456792.0, an error of 3
+
+function %fcvt_from_uint(i32x4) -> f32x4 {
+block0(v0: i32x4):
+    v1 = fcvt_from_uint.f32x4 v0
+    return v1
+}
+; run: %fcvt_from_uint([0xFFFFFFFF 0 1 123456789]) == [0x100000000.0 0.0 0x1.0 0x75bcd18.0]
+; Note that 0xFFFFFFFF is decimal 4,294,967,295 and is rounded up 1 to 4,294,967,296 in f32x4.
 
 function %fcvt_to_sint_sat(f32x4) -> i32x4 {
 block0(v0:f32x4):

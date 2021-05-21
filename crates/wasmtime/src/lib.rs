@@ -294,7 +294,7 @@
 //! // Configure and create a `WasiCtx`, which WASI functions need access to
 //! // through the host state of the store (which in this case is the host state
 //! // of the store)
-//! let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build()?;
+//! let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build();
 //! let mut store = Store::new(&engine, wasi_ctx);
 //!
 //! // Instantiate our module with the imports we've created, and run it.

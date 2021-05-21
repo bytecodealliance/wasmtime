@@ -228,7 +228,7 @@ impl BenchState {
         if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
             cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
         }
-        let wasi = cx.build()?;
+        let wasi = cx.build();
         wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
 
         #[cfg(feature = "wasi-nn")]

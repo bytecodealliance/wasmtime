@@ -3889,6 +3889,12 @@ fn test_x64_emit() {
         "vpabsq  %xmm2, %xmm8",
     ));
 
+    insns.push((
+        Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vcvtudq2ps, RegMem::reg(xmm2), w_xmm8),
+        "62717F087AC2",
+        "vcvtudq2ps %xmm2, %xmm8",
+    ));
+
     // Xmm to int conversions, and conversely.
 
     insns.push((

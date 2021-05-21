@@ -61,7 +61,7 @@ impl Environment {
         // adds WASI functions to the linker, notably the async versions built
         // on tokio.
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::tokio::add_to_linker(&mut linker)?;
+        wasmtime_wasi::tokio::add_to_linker(&mut linker, |cx| cx)?;
 
         Ok(Self {
             engine,
@@ -91,7 +91,7 @@ async fn run_wasm(inputs: Inputs) -> Result<(), Error> {
         .inherit_stdout()
         // Set an environment variable so the wasm knows its name.
         .env("NAME", &inputs.name)?
-        .build()?;
+        .build();
     let mut store = Store::new(&inputs.env.engine, wasi);
 
     // WebAssembly execution will be paused for an async yield every time it

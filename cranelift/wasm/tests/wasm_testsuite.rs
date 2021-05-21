@@ -10,7 +10,7 @@ use target_lexicon::triple;
 
 #[test]
 fn testsuite() {
-    let mut paths: Vec<_> = fs::read_dir("../wasmtests")
+    let mut paths: Vec<_> = fs::read_dir("./wasmtests")
         .unwrap()
         .map(|r| r.unwrap())
         .filter(|p| {
@@ -36,7 +36,7 @@ fn testsuite() {
 #[test]
 fn use_fallthrough_return() {
     let flags = Flags::new(settings::builder());
-    let path = Path::new("../wasmtests/use_fallthrough_return.wat");
+    let path = Path::new("./wasmtests/use_fallthrough_return.wat");
     let data = read_module(&path);
     handle_module(data, &flags, ReturnMode::FallthroughReturn);
 }

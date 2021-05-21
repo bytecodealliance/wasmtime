@@ -7,7 +7,7 @@
 //! Individual snapshots are available through
 //! `wasmtime_wasi::snapshots::preview_{0, 1}::Wasi::new(&Store, Rc<RefCell<WasiCtx>>)`.
 
-pub use wasi_common::{Error, WasiCtx, WasiCtxBuilder, WasiDir, WasiFile};
+pub use wasi_common::{Error, WasiCtx, WasiDir, WasiFile};
 
 /// Re-export the commonly used wasi-cap-std-sync crate here. This saves
 /// consumers of this library from having to keep additional dependencies

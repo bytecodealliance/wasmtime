@@ -63,7 +63,7 @@ fn run(
             // does not.
             builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-            let mut store = Store::new(&engine, builder.build()?);
+            let mut store = Store::new(&engine, builder.build());
 
             let instance = linker.instantiate_async(&mut store, &module).await?;
             let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
