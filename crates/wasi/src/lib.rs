@@ -28,7 +28,7 @@ pub use sync::*;
 #[cfg(feature = "tokio")]
 pub mod tokio {
     pub use wasi_tokio::*;
-    super::define_wasi!(async + Send);
+    super::define_wasi!(async T: Send);
 }
 
 // The only difference between these definitions for sync vs async is whether
@@ -38,14 +38,16 @@ pub mod tokio {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! define_wasi {
-    ($async_mode: tt $($bounds:tt)*) => {
+    ($async_mode:tt $($bounds:tt)*) => {
 
 use wasmtime::Linker;
 
 pub fn add_to_linker<T>(
     linker: &mut Linker<T>,
     get_cx: impl Fn(&mut T) -> &mut crate::WasiCtx + Send + Sync + Copy + 'static,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+    where $($bounds)*
+{
     snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker, get_cx)?;
     snapshots::preview_0::add_wasi_unstable_to_linker(linker, get_cx)?;
     Ok(())
