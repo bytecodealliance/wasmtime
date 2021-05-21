@@ -2,7 +2,6 @@
 
 use crate::{CommonOptions, WasiModules};
 use anyhow::{anyhow, bail, Context as _, Result};
-use std::borrow::{Borrow, BorrowMut};
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -371,46 +370,6 @@ struct Host {
     wasi_crypto: Option<WasiCryptoCtx>,
 }
 
-impl Borrow<wasmtime_wasi::WasiCtx> for Host {
-    fn borrow(&self) -> &wasmtime_wasi::WasiCtx {
-        self.wasi.as_ref().unwrap()
-    }
-}
-
-impl BorrowMut<wasmtime_wasi::WasiCtx> for Host {
-    fn borrow_mut(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        self.wasi.as_mut().unwrap()
-    }
-}
-
-#[cfg(feature = "wasi-nn")]
-impl Borrow<WasiNnCtx> for Host {
-    fn borrow(&self) -> &WasiNnCtx {
-        self.wasi_nn.as_ref().unwrap()
-    }
-}
-
-#[cfg(feature = "wasi-nn")]
-impl BorrowMut<WasiNnCtx> for Host {
-    fn borrow_mut(&mut self) -> &mut WasiNnCtx {
-        self.wasi_nn.as_mut().unwrap()
-    }
-}
-
-#[cfg(feature = "wasi-crypto")]
-impl Borrow<WasiCryptoCtx> for Host {
-    fn borrow(&self) -> &WasiCryptoCtx {
-        self.wasi_crypto.as_ref().unwrap()
-    }
-}
-
-#[cfg(feature = "wasi-crypto")]
-impl BorrowMut<WasiCryptoCtx> for Host {
-    fn borrow_mut(&mut self) -> &mut WasiCryptoCtx {
-        self.wasi_crypto.as_mut().unwrap()
-    }
-}
-
 /// Populates the given `Linker` with WASI APIs.
 fn populate_with_wasi(
     store: &mut Store<Host>,
@@ -421,7 +380,7 @@ fn populate_with_wasi(
     wasi_modules: &WasiModules,
 ) -> Result<()> {
     if wasi_modules.wasi_common {
-        wasmtime_wasi::add_to_linker(linker)?;
+        wasmtime_wasi::add_to_linker(linker, |host| host.wasi.as_mut().unwrap())?;
 
         let mut builder = WasiCtxBuilder::new();
         builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
@@ -439,7 +398,7 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-nn")]
         {
-            wasmtime_wasi_nn::add_to_linker::<_, WasiNnCtx>(linker)?;
+            wasmtime_wasi_nn::add_to_linker(linker, |host| host.wasi_nn.as_mut().unwrap())?;
             store.data_mut().wasi_nn = Some(WasiNnCtx::new()?);
         }
     }
@@ -451,7 +410,7 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-crypto")]
         {
-            wasmtime_wasi_crypto::add_to_linker(linker)?;
+            wasmtime_wasi_crypto::add_to_linker(linker, |host| host.wasi_crypto.as_mut().unwrap())?;
             store.data_mut().wasi_crypto = Some(WasiCryptoCtx::new());
         }
     }

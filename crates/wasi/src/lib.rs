@@ -40,15 +40,14 @@ pub mod tokio {
 macro_rules! define_wasi {
     ($async_mode: tt $($bounds:tt)*) => {
 
-use std::borrow::BorrowMut;
 use wasmtime::Linker;
 
-pub fn add_to_linker<T>(linker: &mut Linker<T>) -> anyhow::Result<()>
-where
-    T: BorrowMut<crate::WasiCtx> $($bounds)*,
-{
-    snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker)?;
-    snapshots::preview_0::add_wasi_unstable_to_linker(linker)?;
+pub fn add_to_linker<T>(
+    linker: &mut Linker<T>,
+    get_cx: impl Fn(&mut T) -> &mut crate::WasiCtx + Send + Sync + Copy + 'static,
+) -> anyhow::Result<()> {
+    snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker, get_cx)?;
+    snapshots::preview_0::add_wasi_unstable_to_linker(linker, get_cx)?;
     Ok(())
 }
 

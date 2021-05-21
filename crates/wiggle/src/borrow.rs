@@ -1,6 +1,6 @@
+use crate::{BorrowHandle, GuestError, Region};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use crate::{BorrowHandle, GuestError, Region};
 
 pub struct BorrowChecker {
     /// Unfortunately, since the terminology of std::cell and the problem domain of borrow checking

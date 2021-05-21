@@ -717,7 +717,7 @@ fn store_with_context() -> Result<()> {
 fn wasi_imports() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker)?;
+    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
 
     let wasm = wat::parse_str(
         r#"

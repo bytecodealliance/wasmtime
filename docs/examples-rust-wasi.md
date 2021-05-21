@@ -26,11 +26,10 @@ WebAssembly module.
 
 ## WASI state with other custom host state
 
-The [`add_to_linker`] function requires that the host state of a [`Store`]
-implements the [`BorrowMut<WasiCtx>`] trait. In the above example this is true
-because the host state itself is [`WasiCtx`], but you may also have custom host
-state you'd like to store adjacent to the [`WasiCtx`]. An example of doing this
-looks like:
+The [`add_to_linker`] takes a second argument which is a closure to access `&mut
+WasiCtx` from within the `T` stored in the `Store<T>` itself. In the above
+example this is trivial because the `T` in `Store<T>` is `WasiCtx` itself, but
+you can also store other state in `Store` like so:
 
 [`add_to_linker`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/sync/fn.add_to_linker.html
 [`Store`]: https://docs.rs/wasmtime/0.26.0/wasmtime/struct.Store.html
@@ -51,22 +50,10 @@ struct MyState {
     wasi: WasiCtx,
 }
 
-impl Borrow<WasiCtx> for MyState {
-    fn borrow(&self) -> &WasiCtx {
-        &self.wasi
-    }
-}
-
-impl BorrowMut<WasiCtx> for MyState {
-    fn borrow_mut(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
-    }
-}
-
 fn main() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker)?;
+    wasmtime_wasi::add_to_linker(&mut linker, |state| &mut state.wasi)?;
 
     let wasi = WasiCtxBuilder::new()
         .inherit_stdio()

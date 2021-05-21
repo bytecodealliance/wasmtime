@@ -289,7 +289,7 @@
 //! let engine = Engine::default();
 //! let module = Module::from_file(&engine, "foo.wasm")?;
 //! let mut linker = Linker::new(&engine);
-//! wasmtime_wasi::add_to_linker(&mut linker)?;
+//! wasmtime_wasi::add_to_linker(&mut linker, |cx| cx)?;
 //!
 //! // Configure and create a `WasiCtx`, which WASI functions need access to
 //! // through the host state of the store (which in this case is the host state

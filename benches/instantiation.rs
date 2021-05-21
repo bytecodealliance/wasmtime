@@ -45,7 +45,7 @@ fn bench_sequential(c: &mut Criterion, modules: &[&str]) {
             let module = Module::from_file(&engine, &path)
                 .expect(&format!("failed to load benchmark `{}`", path.display()));
             let mut linker = Linker::new(&engine);
-            wasmtime_wasi::add_to_linker(&mut linker).unwrap();
+            wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
 
             group.bench_function(BenchmarkId::new(benchmark_name(strategy), file_name), |b| {
                 b.iter(|| instantiate(&linker, &module).expect("failed to instantiate module"));
@@ -74,7 +74,7 @@ fn bench_parallel(c: &mut Criterion) {
         let module = Module::from_file(&engine, "benches/instantiation/wasi.wasm")
             .expect("failed to load WASI example module");
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::add_to_linker(&mut linker).unwrap();
+        wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
 
         for threads in 1..=num_cpus::get_physical() {
             let pool = ThreadPoolBuilder::new()

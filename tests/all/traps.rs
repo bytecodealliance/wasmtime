@@ -510,7 +510,7 @@ fn parse_dwarf_info() -> Result<()> {
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, &wasm)?;
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker(&mut linker)?;
+    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
     let mut store = Store::new(
         &engine,
         wasmtime_wasi::sync::WasiCtxBuilder::new()

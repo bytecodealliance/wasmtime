@@ -66,25 +66,7 @@ pub type CStoreContextMut<'a> = StoreContextMut<'a, StoreData>;
 pub struct StoreData {
     foreign: crate::ForeignData,
     #[cfg(feature = "wasi")]
-    wasi: Option<wasmtime_wasi::WasiCtx>,
-}
-
-#[cfg(feature = "wasi")]
-impl std::borrow::Borrow<wasmtime_wasi::WasiCtx> for StoreData {
-    fn borrow(&self) -> &wasmtime_wasi::WasiCtx {
-        self.wasi
-            .as_ref()
-            .expect("wasi not configured via `wasmtime_context_set_wasi` yet")
-    }
-}
-
-#[cfg(feature = "wasi")]
-impl std::borrow::BorrowMut<wasmtime_wasi::WasiCtx> for StoreData {
-    fn borrow_mut(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        self.wasi
-            .as_mut()
-            .expect("wasi not configured via `wasmtime_context_set_wasi` yet")
-    }
+    pub(crate) wasi: Option<wasmtime_wasi::WasiCtx>,
 }
 
 #[no_mangle]

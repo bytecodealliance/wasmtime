@@ -79,7 +79,6 @@
 //! ```
 
 use anyhow::{anyhow, Context, Result};
-use std::borrow::{Borrow, BorrowMut};
 use std::env;
 use std::os::raw::{c_int, c_void};
 use std::path::Path;
@@ -206,45 +205,6 @@ struct StoreState {
     wasi_crypto: wasmtime_wasi_crypto::WasiCryptoCtx,
 }
 
-impl Borrow<WasiCtx> for StoreState {
-    fn borrow(&self) -> &WasiCtx {
-        &self.wasi
-    }
-}
-impl BorrowMut<WasiCtx> for StoreState {
-    fn borrow_mut(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
-    }
-}
-
-#[cfg(feature = "wasi-nn")]
-impl Borrow<wasmtime_wasi_nn::WasiNnCtx> for StoreState {
-    fn borrow(&self) -> &wasmtime_wasi_nn::WasiNnCtx {
-        &self.wasi_nn
-    }
-}
-
-#[cfg(feature = "wasi-nn")]
-impl BorrowMut<wasmtime_wasi_nn::WasiNnCtx> for StoreState {
-    fn borrow_mut(&mut self) -> &mut wasmtime_wasi_nn::WasiNnCtx {
-        &mut self.wasi_nn
-    }
-}
-
-#[cfg(feature = "wasi-crypto")]
-impl Borrow<wasmtime_wasi_crypto::WasiCryptoCtx> for StoreState {
-    fn borrow(&self) -> &wasmtime_wasi_crypto::WasiCryptoCtx {
-        &self.wasi_crypto
-    }
-}
-
-#[cfg(feature = "wasi-crypto")]
-impl BorrowMut<wasmtime_wasi_crypto::WasiCryptoCtx> for StoreState {
-    fn borrow_mut(&mut self) -> &mut wasmtime_wasi_crypto::WasiCryptoCtx {
-        &mut self.wasi_crypto
-    }
-}
-
 impl BenchState {
     fn new(working_dir: impl AsRef<Path>) -> Result<Self> {
         let mut config = Config::new();
@@ -252,7 +212,7 @@ impl BenchState {
         // NB: do not configure a code cache.
 
         let engine = Engine::new(&config)?;
-        let mut linker = Linker::new(&engine);
+        let mut linker = Linker::<StoreState>::new(&engine);
 
         // Create a WASI environment.
 
@@ -269,17 +229,17 @@ impl BenchState {
             cx = cx.env("WASM_BENCH_USE_SMALL_WORKLOAD", &val)?;
         }
         let wasi = cx.build()?;
-        wasmtime_wasi::add_to_linker(&mut linker)?;
+        wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
 
         #[cfg(feature = "wasi-nn")]
         let wasi_nn = {
-            wasmtime_wasi_nn::add_wasi_nn_to_linker(&mut linker)?;
+            wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
             wasmtime_wasi_nn::WasiNnCtx::new()?
         };
 
         #[cfg(feature = "wasi-crypto")]
         let wasi_crypto = {
-            wasmtime_wasi_crypto::add_to_linker(&mut linker)?;
+            wasmtime_wasi_crypto::add_to_linker(&mut linker, |cx| &mut cx.wasi_crypto)?;
             wasmtime_wasi_crypto::WasiCryptoCtx::new()
         };
 

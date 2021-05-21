@@ -14,7 +14,7 @@ pub fn link_module(
     let module_ident = names.module(&module.name);
 
     let send_bound = if settings.async_.contains_async(module) {
-        quote! { + Send }
+        quote! { + Send, T: Send }
     } else {
         quote! {}
     };
@@ -50,10 +50,12 @@ pub fn link_module(
 
     quote! {
         /// Adds all instance items to the specified `Linker`.
-        pub fn #func_name<T, C>(linker: &mut #rt::wasmtime_crate::Linker<T>) -> anyhow::Result<()>
+        pub fn #func_name<T, U>(
+            linker: &mut #rt::wasmtime_crate::Linker<T>,
+            get_cx: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+        ) -> anyhow::Result<()>
             where
-                T: std::borrow::BorrowMut<C> #send_bound,
-                C: #ctx_bound
+                U: #ctx_bound #send_bound
         {
             #(#bodies)*
             Ok(())
@@ -133,7 +135,7 @@ fn generate_func(
         // working from the previous iteration for now.
         let (ctx, mem) = unsafe {
             let mem = &mut *(mem.data_mut(&mut caller) as *mut [u8]);
-            (caller.data_mut().borrow_mut(), #rt::wasmtime::WasmtimeGuestMemory::new(mem))
+            (get_cx(caller.data_mut()), #rt::wasmtime::WasmtimeGuestMemory::new(mem))
         };
         match #abi_func(ctx, &mem #(, #arg_names)*) #await_ {
             Ok(r) => Ok(<#ret_ty>::from(r)),
