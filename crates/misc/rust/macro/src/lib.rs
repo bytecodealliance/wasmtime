@@ -61,7 +61,7 @@ fn generate_load(item: &syn::ItemTrait) -> syn::Result<TokenStream> {
 
             let mut imports: Vec<Extern> = Vec::new();
             if let Some(module_name) = data.find_wasi_module_name() {
-                let wasi_cx = #root::wasmtime_wasi::WasiCtxBuilder::new().build()?;
+                let wasi_cx = #root::wasmtime_wasi::WasiCtxBuilder::new().build();
                 let wasi = #root::wasmtime_wasi::Wasi::new(&store, wasi_cx);
                 for i in module.imports().iter() {
                     if i.module() != module_name {

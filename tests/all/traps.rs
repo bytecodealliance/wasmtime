@@ -500,7 +500,7 @@ fn parse_dwarf_info() -> Result<()> {
         &store,
         wasmtime_wasi::sync::WasiCtxBuilder::new()
             .inherit_stdio()
-            .build()?,
+            .build(),
     )
     .add_to_linker(&mut linker)?;
     linker.module("", &module)?;
