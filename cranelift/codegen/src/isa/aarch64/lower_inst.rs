@@ -85,10 +85,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     assert_eq!(rhs.len(), 2);
                     assert_eq!(dst.len(), 2);
 
-                    // adds    x0, x0, x1
+                    // adds    x0, x0, x2
                     // adc     x1, x1, x3
 
-                    // Add lower
                     ctx.emit(Inst::AluRRR {
                         alu_op: ALUOp::AddS64,
                         rd: dst.regs()[0],
@@ -149,31 +148,56 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
         Opcode::Isub => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let ty = ty.unwrap();
-            if !ty.is_vector() {
-                let (rm, negated) = put_input_in_rse_imm12_maybe_negated(
-                    ctx,
-                    inputs[1],
-                    ty_bits(ty),
-                    NarrowValueMode::None,
-                );
-                let alu_op = if !negated {
-                    choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64)
-                } else {
-                    choose_32_64(ty, ALUOp::Add32, ALUOp::Add64)
-                };
-                ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
-            } else {
-                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                ctx.emit(Inst::VecRRR {
-                    rd,
-                    rn,
-                    rm,
-                    alu_op: VecALUOp::Sub,
-                    size: VectorSize::from_ty(ty),
+            if ty == I128 {
+                let lhs = put_input_in_regs(ctx, inputs[0]);
+                let rhs = put_input_in_regs(ctx, inputs[1]);
+                let dst = get_output_reg(ctx, outputs[0]);
+                assert_eq!(lhs.len(), 2);
+                assert_eq!(rhs.len(), 2);
+                assert_eq!(dst.len(), 2);
+
+                // subs    x0, x0, x2
+                // sbc     x1, x1, x3
+
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::SubS64,
+                    rd: dst.regs()[0],
+                    rn: lhs.regs()[0],
+                    rm: rhs.regs()[0],
                 });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Sbc64,
+                    rd: dst.regs()[1],
+                    rn: lhs.regs()[1],
+                    rm: rhs.regs()[1],
+                });
+            } else {
+                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+                if !ty.is_vector() {
+                    let (rm, negated) = put_input_in_rse_imm12_maybe_negated(
+                        ctx,
+                        inputs[1],
+                        ty_bits(ty),
+                        NarrowValueMode::None,
+                    );
+                    let alu_op = if !negated {
+                        choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64)
+                    } else {
+                        choose_32_64(ty, ALUOp::Add32, ALUOp::Add64)
+                    };
+                    ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+                } else {
+                    let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+                    ctx.emit(Inst::VecRRR {
+                        rd,
+                        rn,
+                        rm,
+                        alu_op: VecALUOp::Sub,
+                        size: VectorSize::from_ty(ty),
+                    });
+                }
             }
         }
         Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat => {

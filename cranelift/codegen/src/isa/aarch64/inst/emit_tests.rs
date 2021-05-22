@@ -92,6 +92,27 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
+            alu_op: ALUOp::Sbc32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        },
+        "4100035A",
+        "sbc w1, w2, w3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::Sbc64,
+            rd: writable_xreg(4),
+            rn: xreg(5),
+            rm: xreg(6),
+        },
+        "A40006DA",
+        "sbc x4, x5, x6",
+    ));
+
+    insns.push((
+        Inst::AluRRR {
             alu_op: ALUOp::Orr32,
             rd: writable_xreg(1),
             rn: xreg(2),
