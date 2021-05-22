@@ -32,7 +32,7 @@ extern "C" {
 WASM_API_EXTERN wasmtime_error_t *wasmtime_table_new(
     wasmtime_context_t *store,
     const wasm_tabletype_t *ty,
-    wasmtime_val_t *init,
+    const wasmtime_val_t *init,
     wasmtime_table_t *table
 );
 
