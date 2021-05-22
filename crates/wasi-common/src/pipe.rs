@@ -30,9 +30,8 @@ use std::sync::{Arc, RwLock};
 /// let clocks = todo!();
 /// let sched = todo!();
 /// let table = Table::new();
-/// let ctx = WasiCtx::new(random, clocks, sched, table)
-///             .stdin(Box::new(stdin.clone()))
-///             .build();
+/// let mut ctx = WasiCtx::new(random, clocks, sched, table);
+/// ctx.set_stdin(Box::new(stdin.clone()));
 /// ```
 #[derive(Debug)]
 pub struct ReadPipe<R: Read> {
@@ -199,9 +198,8 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
 /// let clocks = todo!();
 /// let sched = todo!();
 /// let table = Table::new();
-/// let ctx = WasiCtx::new(random, clocks, sched, table)
-///             .stdout(Box::new(stdout.clone()))
-///             .build();
+/// let mut ctx = WasiCtx::new(random, clocks, sched, table);
+/// ctx.set_stdout(Box::new(stdout.clone()));
 /// // use ctx in an instance, then make sure it is dropped:
 /// drop(ctx);
 /// let contents: Vec<u8> = stdout.try_into_inner().expect("sole remaining reference to WritePipe").into_inner();
