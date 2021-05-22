@@ -97,7 +97,7 @@ pub(crate) struct StoreInner {
 enum OutOfGas {
     Trap,
     InjectFuel {
-        injection_count: u32,
+        injection_count: Option<u32>,
         fuel_to_inject: u64,
     },
 }
@@ -571,14 +571,19 @@ impl Store {
     /// will be consumed between yields of an async future.
     ///
     /// The `injection_count` parameter indicates how many times this fuel will
-    /// be injected. Multiplying the two parameters is the total amount of fuel
-    /// this store is allowed before wasm traps.
+    /// be injected.
+    /// If the parameter contains a value, then multiplying the two parameters
+    /// is the total amount of fuel this store is allowed before wasm traps.
+    /// If it is `None`, then additional fuel will be injected forever.
+    /// To still have the ability to stop a running store, you should can use
+    /// an [`InterruptHandle`]. See [`Store::interrupt_handle`].
+    ///
     ///
     /// # Panics
     ///
     /// This method will panic if it is not called on a store associated with an [async
     /// config](crate::Config::async_support).
-    pub fn out_of_fuel_async_yield(&self, injection_count: u32, fuel_to_inject: u64) {
+    pub fn out_of_fuel_async_yield(&self, injection_count: Option<u32>, fuel_to_inject: u64) {
         assert!(
             self.async_support(),
             "cannot use `out_of_fuel_async_yield` without enabling async support in the config"
@@ -883,13 +888,17 @@ unsafe impl TrapInfo for Store {
                 injection_count,
                 fuel_to_inject,
             } => {
-                if injection_count == 0 {
-                    self.out_of_gas_trap();
+                // If the injection count is limited, decrement the count or
+                // trap if it reaches 0.
+                if let Some(count) = injection_count {
+                    if count == 0 {
+                        self.out_of_gas_trap();
+                    }
+                    self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
+                        injection_count: Some(count - 1),
+                        fuel_to_inject,
+                    });
                 }
-                self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
-                    injection_count: injection_count - 1,
-                    fuel_to_inject,
-                });
                 self.out_of_gas_yield(fuel_to_inject);
             }
             #[cfg(not(feature = "async"))]

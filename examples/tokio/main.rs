@@ -137,7 +137,7 @@ async fn _run_wasm(inputs: Inputs) -> Result<(), Error> {
 
     // WebAssembly execution will be paused for an async yield every time it
     // consumes 10000 fuel. Fuel will be refilled u32::MAX times.
-    store.out_of_fuel_async_yield(u32::MAX, 10000);
+    store.out_of_fuel_async_yield(Some(u32::MAX), 10000);
 
     Wasi::set_context(
         &store,
