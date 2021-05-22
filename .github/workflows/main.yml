@@ -84,10 +84,11 @@ jobs:
           --exclude cranelift-codegen-meta \
           --exclude 'peepmatic*'
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
-    - uses: actions/upload-artifact@v1
+    - run: tar czf doc-api.tar.gz -C target/doc .
+    - uses: actions/upload-artifact@v2
       with:
         name: doc-api
-        path: target/doc
+        path: doc-api.tar.gz
 
   doc_capi:
     name: Doc - build the C API documentation
@@ -552,7 +553,7 @@ jobs:
       with:
         name: doc-book
     - name: Download API docs
-      uses: actions/download-artifact@v1
+      uses: actions/download-artifact@v2
       with:
         name: doc-api
     - name: Download C API docs
@@ -583,8 +584,10 @@ jobs:
     - name: Assemble gh-pages
       run: |
         mv doc-book gh-pages
-        mv doc-api gh-pages/api
         mv doc-c-api gh-pages/c-api
+        mkdir gh-pages/api
+        cd gh-pages/api
+        tar xf ../../doc-api.tar.gz
 
     # If this is a push to the main branch push to the `gh-pages` using a
     # deploy key. Note that a deploy key is necessary for now because otherwise
@@ -623,16 +626,6 @@ jobs:
       with:
         name: tarballs
         path: dist
-
-    # The action 'pypa/gh-action-pypi-publish' will try to upload all files in the
-    # dist/ folder. This folder also contains non-package files, and therefore the
-    # action fails.
-    #
-    # To prevent the action from failing all .whl files are copied into a new
-    # directory.
-    - run: |
-        mkdir -p tmp/whl
-        find dist/ -name '*.whl' -type f -exec cp '{}' tmp/whl -v \;
 
     # ... and if this was an actual push (tag or `main`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`
