@@ -453,3 +453,18 @@ block0(v0: i128, v1: i128):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
+function %mul_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = imul v0, v1
+    return v2
+}
+
+; check:  stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: umulh x4, x0, x2
+; nextln: madd x3, x0, x3, x4
+; nextln: madd x1, x1, x2, x3
+; nextln: madd x0, x0, x2, xzr
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+

@@ -244,21 +244,70 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Imul => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let lhs = put_input_in_regs(ctx, inputs[0]);
+            let rhs = put_input_in_regs(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]);
+
+            let rd = dst.regs()[0];
+            let rn = lhs.regs()[0];
+            let rm = rhs.regs()[0];
+
             let ty = ty.unwrap();
-            if !ty.is_vector() {
-                let alu_op = choose_32_64(ty, ALUOp3::MAdd32, ALUOp3::MAdd64);
-                ctx.emit(Inst::AluRRRR {
-                    alu_op,
-                    rd,
-                    rn,
-                    rm,
-                    ra: zero_reg(),
-                });
-            } else {
-                if ty == I64X2 {
+            match ty {
+                I128 => {
+                    assert_eq!(lhs.len(), 2);
+                    assert_eq!(rhs.len(), 2);
+                    assert_eq!(dst.len(), 2);
+
+                    // 128bit mul formula:
+                    //   dst_lo = lhs_lo * rhs_lo
+                    //   dst_hi = umulhi(lhs_lo, rhs_lo) + (lhs_lo * rhs_hi) + (lhs_hi * rhs_lo)
+                    //
+                    // We can convert the above formula into the following
+                    // umulh   dst_hi, lhs_lo, rhs_lo
+                    // madd    dst_hi, lhs_lo, rhs_hi, dst_hi
+                    // madd    dst_hi, lhs_hi, rhs_lo, dst_hi
+                    // mul     dst_lo, lhs_lo, rhs_lo
+
+                    ctx.emit(Inst::AluRRR {
+                        alu_op: ALUOp::UMulH,
+                        rd: dst.regs()[1],
+                        rn: lhs.regs()[0],
+                        rm: rhs.regs()[0],
+                    });
+                    ctx.emit(Inst::AluRRRR {
+                        alu_op: ALUOp3::MAdd64,
+                        rd: dst.regs()[1],
+                        rn: lhs.regs()[0],
+                        rm: rhs.regs()[1],
+                        ra: dst.regs()[1].to_reg(),
+                    });
+                    ctx.emit(Inst::AluRRRR {
+                        alu_op: ALUOp3::MAdd64,
+                        rd: dst.regs()[1],
+                        rn: lhs.regs()[1],
+                        rm: rhs.regs()[0],
+                        ra: dst.regs()[1].to_reg(),
+                    });
+                    ctx.emit(Inst::AluRRRR {
+                        alu_op: ALUOp3::MAdd64,
+                        rd: dst.regs()[0],
+                        rn: lhs.regs()[0],
+                        rm: rhs.regs()[0],
+                        ra: zero_reg(),
+                    });
+                }
+                ty if !ty.is_vector() => {
+                    let alu_op = choose_32_64(ty, ALUOp3::MAdd32, ALUOp3::MAdd64);
+                    ctx.emit(Inst::AluRRRR {
+                        alu_op,
+                        rd,
+                        rn,
+                        rm,
+                        ra: zero_reg(),
+                    });
+                }
+                I64X2 => {
                     let tmp1 = ctx.alloc_tmp(I64X2).only_reg().unwrap();
                     let tmp2 = ctx.alloc_tmp(I64X2).only_reg().unwrap();
 
@@ -363,7 +412,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rm: tmp1.to_reg(),
                         size: VectorSize::Size32x2,
                     });
-                } else {
+                }
+                ty if ty.is_vector() => {
                     ctx.emit(Inst::VecRRR {
                         alu_op: VecALUOp::Mul,
                         rd,
@@ -372,6 +422,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         size: VectorSize::from_ty(ty),
                     });
                 }
+                _ => panic!("Unable to emit mul for {}", ty),
             }
         }
 
