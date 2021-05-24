@@ -127,8 +127,9 @@ pub(crate) fn emit(
             InstructionSet::BMI1 => info.isa_flags.use_bmi1(),
             InstructionSet::BMI2 => info.isa_flags.has_bmi2(),
             InstructionSet::AVX512BITALG => info.isa_flags.has_avx512bitalg(),
-            InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
             InstructionSet::AVX512DQ => info.isa_flags.has_avx512dq(),
+            InstructionSet::AVX512F => info.isa_flags.has_avx512f(),
+            InstructionSet::AVX512VBMI => info.isa_flags.has_avx512vbmi(),
             InstructionSet::AVX512VL => info.isa_flags.has_avx512vl(),
         }
     };
@@ -1558,8 +1559,9 @@ pub(crate) fn emit(
             src2,
             dst,
         } => {
-            let opcode = match op {
-                Avx512Opcode::Vpmullq => 0x40,
+            let (w, opcode) = match op {
+                Avx512Opcode::Vpermi2b => (false, 0x75),
+                Avx512Opcode::Vpmullq => (true, 0x40),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             match src1 {
@@ -1567,7 +1569,7 @@ pub(crate) fn emit(
                     .length(EvexVectorLength::V128)
                     .prefix(LegacyPrefixes::_66)
                     .map(OpcodeMap::_0F38)
-                    .w(true)
+                    .w(w)
                     .opcode(opcode)
                     .reg(dst.to_reg().get_hw_encoding())
                     .rm(src.get_hw_encoding())

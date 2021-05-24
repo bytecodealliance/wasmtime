@@ -5551,35 +5551,55 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // `src` so we disregard this register).
                 ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp), dst));
             } else {
-                // If `lhs` and `rhs` are different, we must shuffle each separately and then OR
-                // them together. This is necessary due to PSHUFB semantics. As in the case above,
-                // we build the `constructed_mask` for each case statically.
+                if isa_flags.use_avx512vl_simd() && isa_flags.use_avx512vbmi_simd() {
+                    assert!(
+                        mask.iter().all(|b| *b < 32),
+                        "shuffle mask values must be between 0 and 31"
+                    );
 
-                // PSHUFB the `lhs` argument into `tmp0`, placing zeroes for unused lanes.
-                let tmp0 = ctx.alloc_tmp(lhs_ty).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(tmp0, lhs, lhs_ty));
-                let constructed_mask = mask.iter().cloned().map(zero_unknown_lane_index).collect();
-                let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
-                let tmp1 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-                ctx.emit(Inst::xmm_load_const(constant, tmp1, ty));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp1), tmp0));
+                    // Load the mask into the destination register.
+                    let constant = ctx.use_constant(VCodeConstantData::Generated(mask.into()));
+                    ctx.emit(Inst::xmm_load_const(constant, dst, ty));
 
-                // PSHUFB the second argument, placing zeroes for unused lanes.
-                let constructed_mask = mask
-                    .iter()
-                    .map(|b| b.wrapping_sub(16))
-                    .map(zero_unknown_lane_index)
-                    .collect();
-                let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
-                let tmp2 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-                ctx.emit(Inst::xmm_load_const(constant, tmp2, ty));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp2), dst));
+                    // VPERMI2B has the exact semantics of Wasm's shuffle:
+                    // permute the bytes in `src1` and `src2` using byte indexes
+                    // in `dst` and store the byte results in `dst`.
+                    ctx.emit(Inst::xmm_rm_r_evex(
+                        Avx512Opcode::Vpermi2b,
+                        RegMem::reg(rhs),
+                        lhs,
+                        dst,
+                    ));
+                } else {
+                    // If `lhs` and `rhs` are different, we must shuffle each separately and then OR
+                    // them together. This is necessary due to PSHUFB semantics. As in the case above,
+                    // we build the `constructed_mask` for each case statically.
 
-                // OR the shuffled registers (the mechanism and lane-size for OR-ing the registers
-                // is not important).
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Orps, RegMem::from(tmp0), dst));
+                    // PSHUFB the `lhs` argument into `tmp0`, placing zeroes for unused lanes.
+                    let tmp0 = ctx.alloc_tmp(lhs_ty).only_reg().unwrap();
+                    ctx.emit(Inst::gen_move(tmp0, lhs, lhs_ty));
+                    let constructed_mask =
+                        mask.iter().cloned().map(zero_unknown_lane_index).collect();
+                    let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
+                    let tmp1 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_load_const(constant, tmp1, ty));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp1), tmp0));
 
-                // TODO when AVX512 is enabled we should replace this sequence with a single VPERMB
+                    // PSHUFB the second argument, placing zeroes for unused lanes.
+                    let constructed_mask = mask
+                        .iter()
+                        .map(|b| b.wrapping_sub(16))
+                        .map(zero_unknown_lane_index)
+                        .collect();
+                    let constant = ctx.use_constant(VCodeConstantData::Generated(constructed_mask));
+                    let tmp2 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_load_const(constant, tmp2, ty));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::from(tmp2), dst));
+
+                    // OR the shuffled registers (the mechanism and lane-size for OR-ing the registers
+                    // is not important).
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Orps, RegMem::from(tmp0), dst));
+                }
             }
         }
 
