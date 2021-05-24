@@ -258,6 +258,24 @@ impl Context {
         }
     }
 
+    /// If available, return information about the code layout in the
+    /// final machine code: the offsets (in bytes) of each basic-block
+    /// start, and all basic-block edges.
+    pub fn get_code_bb_layout(&self) -> Option<(Vec<usize>, Vec<(usize, usize)>)> {
+        if let Some(result) = self.mach_compile_result.as_ref() {
+            Some((
+                result.bb_starts.iter().map(|&off| off as usize).collect(),
+                result
+                    .bb_edges
+                    .iter()
+                    .map(|&(from, to)| (from as usize, to as usize))
+                    .collect(),
+            ))
+        } else {
+            None
+        }
+    }
+
     /// Creates unwind information for the function.
     ///
     /// Returns `None` if the function has no unwind information.

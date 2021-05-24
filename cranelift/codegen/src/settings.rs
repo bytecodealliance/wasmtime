@@ -511,6 +511,7 @@ enable_atomics = true
 enable_safepoints = false
 enable_llvm_abi_extensions = false
 unwind_info = true
+machine_code_cfg_info = false
 emit_all_ones_funcaddrs = false
 enable_probestack = true
 probestack_func_adjusts_sp = false
