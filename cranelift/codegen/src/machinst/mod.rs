@@ -341,10 +341,16 @@ pub struct MachCompileResult {
     /// Debug info: stackslots to stack pointer offsets.
     pub stackslot_offsets: PrimaryMap<StackSlot, u32>,
     /// Basic-block layout info: block start offsets.
+    ///
+    /// This info is generated only if the `machine_code_cfg_info`
+    /// flag is set.
     pub bb_starts: Vec<CodeOffset>,
     /// Basic-block layout info: block edges. Each edge is `(from,
     /// to)`, where `from` and `to` are basic-block start offsets of
     /// the respective blocks.
+    ///
+    /// This info is generated only if the `machine_code_cfg_info`
+    /// flag is set.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 }
 
