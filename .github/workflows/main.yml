@@ -9,6 +9,12 @@ defaults:
   run:
     shell: bash
 
+# Cancel any in-flight jobs for the same PR/branch so there's only one active
+# at a time
+concurrency:
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   # Check Code style quickly by running `rustfmt` over all code
   rustfmt:
@@ -209,7 +215,6 @@ jobs:
     name: Test
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         build: [stable, beta, nightly, windows, macos]
         include:
@@ -392,7 +397,6 @@ jobs:
     name: Build wasmtime
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
         include:
         - build: x86_64-linux
