@@ -45,35 +45,11 @@ jobs:
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check
 
-  # Build `mdBook` documentation for `wasmtime`, and upload it as a temporary
-  # build artifact
-  doc_book:
-    name: Doc - build the book
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - run: rustup update stable && rustup default stable
-    - run: |
-        set -e
-        curl -L https://github.com/rust-lang-nursery/mdBook/releases/download/v0.4.4/mdbook-v0.4.4-x86_64-unknown-linux-gnu.tar.gz | tar xzf -
-        echo `pwd` >> $GITHUB_PATH
-    - run: (cd docs && mdbook build)
-    - run: cargo build -p wasmtime
-    - run: (cd docs && mdbook test -L ../target/debug/deps)
-    - uses: actions/upload-artifact@v1
-      with:
-        name: doc-book
-        path: docs/book
-
-  # Build rustdoc API documentation for `wasmtime*` crates. Note that we don't
-  # want to document all our transitive dependencies, hence `--no-deps`. This is
-  # a temporary build artifact we upload to consume later.
-  doc_api:
-    name: Doc - build the API documentation
+  doc:
+    name: Doc build
     runs-on: ubuntu-latest
     env:
+      CARGO_MDBOOK_VERSION: 0.4.8
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg nightlydoc
       OPENVINO_SKIP_LINKING: 1
     steps:
@@ -83,6 +59,24 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly-2021-04-11
+
+    # Build C API documentation
+    - run: sudo apt-get update && sudo apt-get install -y doxygen git
+    - run: cd crates/c-api && doxygen doxygen.conf
+
+    # install mdbook, build the docs, and test the docs
+    - uses: actions/cache@v2
+      with:
+        path: ${{ runner.tool_cache }}/mdbook
+        key: cargo-mdbook-bin-${{ env.CARGO_MDBOOK_VERSION }}
+    - run: |
+        echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
+        cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook
+    - run: (cd docs && mdbook build)
+    - run: cargo build -p wasmtime
+    - run: (cd docs && mdbook test -L ../target/debug/deps)
+
+    # Build Rust API documentation
     - run: |
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
@@ -90,26 +84,30 @@ jobs:
           --exclude cranelift-codegen-meta \
           --exclude 'peepmatic*'
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
-    - run: tar czf doc-api.tar.gz -C target/doc .
+
+    # Assemble the documentation, and always upload it as an artifact for
+    # inspection on PRs and such.
+    - run: |
+        mv docs/book gh-pages
+        mv crates/c-api/html gh-pages/c-api
+        mv target/doc gh-pages/api
+        tar czf gh-pages.tar.gz gh-pages
     - uses: actions/upload-artifact@v2
       with:
-        name: doc-api
-        path: doc-api.tar.gz
+        name: gh-pages
+        path: gh-pages.tar.gz
 
-  doc_capi:
-    name: Doc - build the C API documentation
-    runs-on: ubuntu-latest
-    container: ubuntu:20.04
-    steps:
-    - run: apt-get update && apt-get install -y doxygen git
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - run: cd crates/c-api && doxygen doxygen.conf
-    - uses: actions/upload-artifact@v1
-      with:
-        name: doc-c-api
-        path: crates/c-api/html
+    # If this is a push to the main branch push to the `gh-pages` using a
+    # deploy key. Note that a deploy key is necessary for now because otherwise
+    # using the default token for github actions doesn't actually trigger a page
+    # rebuild.
+    - name: Push to gh-pages
+      run: curl -LsSf https://git.io/fhJ8n | rustc - && (cd gh-pages && ../rust_out)
+      env:
+        GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        BUILD_REPOSITORY_ID: ${{ github.repository }}
+        BUILD_SOURCEVERSION: ${{ github.sha }}
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
   # Quick checks of various feature combinations and whether things
   # compile. The goal here isn't to run tests, mostly just serve as a
@@ -541,7 +539,7 @@ jobs:
   # github releases and/or tags for pushes.
   publish:
     name: Publish
-    needs: [doc_book, doc_api, build]
+    needs: build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -549,21 +547,6 @@ jobs:
         submodules: true
     - run: rustup update stable && rustup default stable
 
-    # Download all the artifacts that we'll be publishing. Should keep an eye on
-    # the `download-artifact` repository to see if we can ever get something
-    # like "download all artifacts" or "download this list of artifacts"
-    - name: Download book
-      uses: actions/download-artifact@v1
-      with:
-        name: doc-book
-    - name: Download API docs
-      uses: actions/download-artifact@v2
-      with:
-        name: doc-api
-    - name: Download C API docs
-      uses: actions/download-artifact@v1
-      with:
-        name: doc-c-api
     - name: Download x86_64 macOS binaries
       uses: actions/download-artifact@v1
       with:
@@ -584,26 +567,6 @@ jobs:
       uses: actions/download-artifact@v1
       with:
         name: bins-x86_64-mingw
-
-    - name: Assemble gh-pages
-      run: |
-        mv doc-book gh-pages
-        mv doc-c-api gh-pages/c-api
-        mkdir gh-pages/api
-        cd gh-pages/api
-        tar xf ../../doc-api.tar.gz
-
-    # If this is a push to the main branch push to the `gh-pages` using a
-    # deploy key. Note that a deploy key is necessary for now because otherwise
-    # using the default token for github actions doesn't actually trigger a page
-    # rebuild.
-    - name: Push to gh-pages
-      run: curl -LsSf https://git.io/fhJ8n | rustc - && (cd gh-pages && ../rust_out)
-      env:
-        GITHUB_DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
-        BUILD_REPOSITORY_ID: ${{ github.repository }}
-        BUILD_SOURCEVERSION: ${{ github.sha }}
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     - name: Calculate tag name
       run: |
