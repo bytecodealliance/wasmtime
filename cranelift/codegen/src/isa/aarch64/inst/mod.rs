@@ -84,6 +84,12 @@ pub enum ALUOp {
     Asr64,
     Lsl32,
     Lsl64,
+    /// Add with carry
+    Adc32,
+    Adc64,
+    /// Subtract with carry
+    Sbc32,
+    Sbc64,
 }
 
 /// An ALU operation with three arguments.
@@ -1363,6 +1369,23 @@ impl Inst {
 
             insts
         }
+    }
+
+    /// Create instructions that load a 128-bit constant.
+    pub fn load_constant128(to_regs: ValueRegs<Writable<Reg>>, value: u128) -> SmallVec<[Inst; 4]> {
+        assert_eq!(to_regs.len(), 2, "Expected to load i128 into two registers");
+
+        let lower = value as u64;
+        let upper = (value >> 64) as u64;
+
+        let lower_reg = to_regs.regs()[0];
+        let upper_reg = to_regs.regs()[1];
+
+        let mut load_ins = Inst::load_constant(lower_reg, lower);
+        let load_upper = Inst::load_constant(upper_reg, upper);
+
+        load_ins.extend(load_upper.into_iter());
+        load_ins
     }
 
     /// Create instructions that load a 32-bit floating-point constant.
@@ -3033,30 +3056,15 @@ impl MachInst for Inst {
         ty: Type,
         alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
-        let to_reg = to_regs
-            .only_reg()
-            .expect("multi-reg values not supported yet");
-        let value = value as u64;
-        if ty == F64 {
-            Inst::load_fp_constant64(to_reg, value, alloc_tmp)
-        } else if ty == F32 {
-            Inst::load_fp_constant32(to_reg, value as u32, alloc_tmp)
-        } else {
-            // Must be an integer type.
-            debug_assert!(
-                ty == B1
-                    || ty == I8
-                    || ty == B8
-                    || ty == I16
-                    || ty == B16
-                    || ty == I32
-                    || ty == B32
-                    || ty == I64
-                    || ty == B64
-                    || ty == R32
-                    || ty == R64
-            );
-            Inst::load_constant(to_reg, value)
+        let to_reg = to_regs.only_reg();
+        match ty {
+            F64 => Inst::load_fp_constant64(to_reg.unwrap(), value as u64, alloc_tmp),
+            F32 => Inst::load_fp_constant32(to_reg.unwrap(), value as u32, alloc_tmp),
+            B1 | B8 | B16 | B32 | B64 | I8 | I16 | I32 | I64 | R32 | R64 => {
+                Inst::load_constant(to_reg.unwrap(), value as u64)
+            }
+            I128 => Inst::load_constant128(to_regs, value),
+            _ => panic!("Cannot generate constant for type: {}", ty),
         }
     }
 
@@ -3202,6 +3210,10 @@ impl Inst {
                 ALUOp::Asr64 => ("asr", OperandSize::Size64),
                 ALUOp::Lsl32 => ("lsl", OperandSize::Size32),
                 ALUOp::Lsl64 => ("lsl", OperandSize::Size64),
+                ALUOp::Adc32 => ("adc", OperandSize::Size32),
+                ALUOp::Adc64 => ("adc", OperandSize::Size64),
+                ALUOp::Sbc32 => ("sbc", OperandSize::Size32),
+                ALUOp::Sbc64 => ("sbc", OperandSize::Size64),
             }
         }
 
