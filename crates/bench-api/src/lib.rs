@@ -25,9 +25,23 @@
 //! use wasmtime_bench_api::*;
 //!
 //! let working_dir = std::env::current_dir().unwrap().display().to_string();
+//! let stdout_path = "./stdout.log";
+//! let stderr_path = "./stderr.log";
+//!
+//! let config = WasmBenchConfig {
+//!     working_dir_ptr: working_dir.as_ptr(),
+//!     working_dir_len: working_dir.len(),
+//!     stdout_path_ptr: stdout_path.as_ptr(),
+//!     stdout_path_len: stdout_path.len(),
+//!     stderr_path_ptr: stderr_path.as_ptr(),
+//!     stderr_path_len: stderr_path.len(),
+//!     stdin_path_ptr: ptr::null(),
+//!     stdin_path_len: 0,
+//! };
+//!
 //! let mut bench_api = ptr::null_mut();
 //! unsafe {
-//!     let code = wasm_bench_create(working_dir.as_ptr(), working_dir.len(), &mut bench_api);
+//!     let code = wasm_bench_create(config, &mut bench_api);
 //!     assert_eq!(code, OK);
 //!     assert!(!bench_api.is_null());
 //! };
@@ -98,6 +112,65 @@ pub const ERR: ExitCode = -1;
 static ALLOC: shuffling_allocator::ShufflingAllocator<std::alloc::System> =
     shuffling_allocator::wrap!(&std::alloc::System);
 
+/// Configuration options for the benchmark.
+#[repr(C)]
+pub struct WasmBenchConfig {
+    /// The working directory where benchmarks should be executed.
+    pub working_dir_ptr: *const u8,
+    pub working_dir_len: usize,
+
+    /// The file path that should be created and used as `stdout`.
+    pub stdout_path_ptr: *const u8,
+    pub stdout_path_len: usize,
+
+    /// The file path that should be created and used as `stderr`.
+    pub stderr_path_ptr: *const u8,
+    pub stderr_path_len: usize,
+
+    /// The (optional) file path that should be opened and used as `stdin`. If
+    /// not provided, then the WASI context will not have a `stdin` initialized.
+    pub stdin_path_ptr: *const u8,
+    pub stdin_path_len: usize,
+}
+
+impl WasmBenchConfig {
+    fn working_dir(&self) -> Result<&str> {
+        let working_dir =
+            unsafe { std::slice::from_raw_parts(self.working_dir_ptr, self.working_dir_len) };
+        let working_dir = std::str::from_utf8(working_dir)
+            .context("given working directory is not valid UTF-8")?;
+        Ok(working_dir)
+    }
+
+    fn stdout_path(&self) -> Result<&str> {
+        let stdout_path =
+            unsafe { std::slice::from_raw_parts(self.stdout_path_ptr, self.stdout_path_len) };
+        let stdout_path =
+            std::str::from_utf8(stdout_path).context("given stdout path is not valid UTF-8")?;
+        Ok(stdout_path)
+    }
+
+    fn stderr_path(&self) -> Result<&str> {
+        let stderr_path =
+            unsafe { std::slice::from_raw_parts(self.stderr_path_ptr, self.stderr_path_len) };
+        let stderr_path =
+            std::str::from_utf8(stderr_path).context("given stderr path is not valid UTF-8")?;
+        Ok(stderr_path)
+    }
+
+    fn stdin_path(&self) -> Result<Option<&str>> {
+        if self.stdin_path_ptr.is_null() {
+            return Ok(None);
+        }
+
+        let stdin_path =
+            unsafe { std::slice::from_raw_parts(self.stdin_path_ptr, self.stdin_path_len) };
+        let stdin_path =
+            std::str::from_utf8(stdin_path).context("given stdin path is not valid UTF-8")?;
+        Ok(Some(stdin_path))
+    }
+}
+
 /// Exposes a C-compatible way of creating the engine from the bytes of a single
 /// Wasm module.
 ///
@@ -107,15 +180,20 @@ static ALLOC: shuffling_allocator::ShufflingAllocator<std::alloc::System> =
 /// untouched.
 #[no_mangle]
 pub extern "C" fn wasm_bench_create(
-    working_dir_ptr: *const u8,
-    working_dir_len: usize,
+    config: WasmBenchConfig,
     out_bench_ptr: *mut *mut c_void,
 ) -> ExitCode {
     let result = (|| -> Result<_> {
-        let working_dir = unsafe { std::slice::from_raw_parts(working_dir_ptr, working_dir_len) };
-        let working_dir = std::str::from_utf8(working_dir)
-            .context("given working directory is not valid UTF-8")?;
-        let state = Box::new(BenchState::new(working_dir)?);
+        let working_dir = config.working_dir()?;
+        let stdout_path = config.stdout_path()?;
+        let stderr_path = config.stderr_path()?;
+        let stdin_path = config.stdin_path()?;
+        let state = Box::new(BenchState::new(
+            working_dir,
+            stdout_path,
+            stderr_path,
+            stdin_path,
+        )?);
         Ok(Box::into_raw(state) as _)
     })();
 
@@ -197,7 +275,12 @@ struct BenchState {
 }
 
 impl BenchState {
-    fn new(working_dir: impl AsRef<Path>) -> Result<Self> {
+    fn new(
+        working_dir: impl AsRef<Path>,
+        stdout: impl AsRef<Path>,
+        stderr: impl AsRef<Path>,
+        stdin: Option<impl AsRef<Path>>,
+    ) -> Result<Self> {
         let mut config = Config::new();
         config.wasm_simd(true);
         // NB: do not configure a code cache.
@@ -210,12 +293,33 @@ impl BenchState {
         // Create a WASI environment.
 
         let mut cx = WasiCtxBuilder::new();
-        cx = cx.inherit_stdio();
+
+        let stdout = std::fs::File::create(stdout.as_ref())
+            .with_context(|| format!("failed to create {}", stdout.as_ref().display()))?;
+        let stdout = unsafe { cap_std::fs::File::from_std(stdout) };
+        let stdout = wasi_cap_std_sync::file::File::from_cap_std(stdout);
+        cx = cx.stdout(Box::new(stdout));
+
+        let stderr = std::fs::File::create(stderr.as_ref())
+            .with_context(|| format!("failed to create {}", stderr.as_ref().display()))?;
+        let stderr = unsafe { cap_std::fs::File::from_std(stderr) };
+        let stderr = wasi_cap_std_sync::file::File::from_cap_std(stderr);
+        cx = cx.stderr(Box::new(stderr));
+
+        if let Some(stdin) = stdin {
+            let stdin = std::fs::File::open(stdin.as_ref())
+                .with_context(|| format!("failed to open {}", stdin.as_ref().display()))?;
+            let stdin = unsafe { cap_std::fs::File::from_std(stdin) };
+            let stdin = wasi_cap_std_sync::file::File::from_cap_std(stdin);
+            cx = cx.stdin(Box::new(stdin));
+        }
+
         // Allow access to the working directory so that the benchmark can read
         // its input workload(s).
         let working_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(working_dir) }
             .context("failed to preopen the working directory")?;
         cx = cx.preopened_dir(working_dir, ".")?;
+
         // Pass this env var along so that the benchmark program can use smaller
         // input workload(s) if it has them and that has been requested.
         if let Ok(val) = env::var("WASM_BENCH_USE_SMALL_WORKLOAD") {
