@@ -58,6 +58,12 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
         "AVX512VL: CPUID.07H:EBX.AVX512VL[bit 31]",
         false,
     );
+    let has_avx512vbmi = settings.add_bool(
+        "has_avx512vbmi",
+        "Has support for AVX512VMBI.",
+        "AVX512VBMI: CPUID.07H:ECX.AVX512VBMI[bit 1]",
+        false,
+    );
     let has_avx512f = settings.add_bool(
         "has_avx512f",
         "Has support for AVX512F.",
@@ -125,6 +131,10 @@ pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
     settings.add_predicate(
         "use_avx512vl_simd",
         predicate!(shared_enable_simd && has_avx512vl),
+    );
+    settings.add_predicate(
+        "use_avx512vbmi_simd",
+        predicate!(shared_enable_simd && has_avx512vbmi),
     );
     settings.add_predicate(
         "use_avx512f_simd",

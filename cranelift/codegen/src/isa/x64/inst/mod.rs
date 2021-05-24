@@ -1944,11 +1944,18 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             }
         }
         Inst::XmmRmREvex {
-            src1, src2, dst, ..
+            op,
+            src1,
+            src2,
+            dst,
+            ..
         } => {
             src1.get_regs_as_uses(collector);
             collector.add_use(*src2);
-            collector.add_def(*dst);
+            match *op {
+                Avx512Opcode::Vpermi2b => collector.add_mod(*dst),
+                _ => collector.add_def(*dst),
+            }
         }
         Inst::XmmRmRImm { op, src, dst, .. } => {
             if inst.produces_const() {
@@ -2336,6 +2343,7 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             }
         }
         Inst::XmmRmREvex {
+            op,
             ref mut src1,
             ref mut src2,
             ref mut dst,
@@ -2343,7 +2351,10 @@ fn x64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             src1.map_uses(mapper);
             map_use(mapper, src2);
-            map_def(mapper, dst);
+            match *op {
+                Avx512Opcode::Vpermi2b => map_mod(mapper, dst),
+                _ => map_def(mapper, dst),
+            }
         }
         Inst::XmmRmiReg {
             ref mut src,

@@ -97,11 +97,14 @@ pub fn builder_with_options(
         if std::is_x86_feature_detected!("avx512dq") {
             isa_builder.enable("has_avx512dq").unwrap();
         }
+        if std::is_x86_feature_detected!("avx512f") {
+            isa_builder.enable("has_avx512f").unwrap();
+        }
         if std::is_x86_feature_detected!("avx512vl") {
             isa_builder.enable("has_avx512vl").unwrap();
         }
-        if std::is_x86_feature_detected!("avx512f") {
-            isa_builder.enable("has_avx512f").unwrap();
+        if std::is_x86_feature_detected!("avx512vbmi") {
+            isa_builder.enable("has_avx512vbmi").unwrap();
         }
         if std::is_x86_feature_detected!("lzcnt") {
             isa_builder.enable("has_lzcnt").unwrap();
