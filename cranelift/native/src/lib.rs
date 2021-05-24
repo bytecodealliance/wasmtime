@@ -91,6 +91,9 @@ pub fn builder_with_options(
         if std::is_x86_feature_detected!("bmi2") {
             isa_builder.enable("has_bmi2").unwrap();
         }
+        if std::is_x86_feature_detected!("avx512bitalg") {
+            isa_builder.enable("has_avx512bitalg").unwrap();
+        }
         if std::is_x86_feature_detected!("avx512dq") {
             isa_builder.enable("has_avx512dq").unwrap();
         }
