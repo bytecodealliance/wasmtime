@@ -460,9 +460,10 @@ pub(crate) enum InstructionSet {
     BMI1,
     #[allow(dead_code)] // never constructed (yet).
     BMI2,
+    AVX512BITALG,
+    AVX512DQ,
     AVX512F,
     AVX512VL,
-    AVX512DQ,
 }
 
 /// Some SSE operations requiring 2 operands r/m and r.
@@ -1003,6 +1004,7 @@ pub enum Avx512Opcode {
     Vcvtudq2ps,
     Vpabsq,
     Vpmullq,
+    Vpopcntb,
 }
 
 impl Avx512Opcode {
@@ -1014,6 +1016,9 @@ impl Avx512Opcode {
             }
             Avx512Opcode::Vpabsq => smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL],
             Avx512Opcode::Vpmullq => smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512DQ],
+            Avx512Opcode::Vpopcntb => {
+                smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512BITALG]
+            }
         }
     }
 }
@@ -1024,6 +1029,7 @@ impl fmt::Debug for Avx512Opcode {
             Avx512Opcode::Vcvtudq2ps => "vcvtudq2ps",
             Avx512Opcode::Vpabsq => "vpabsq",
             Avx512Opcode::Vpmullq => "vpmullq",
+            Avx512Opcode::Vpopcntb => "vpopcntb",
         };
         write!(fmt, "{}", name)
     }

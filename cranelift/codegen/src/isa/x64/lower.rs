@@ -3079,81 +3079,92 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     ));
                 }
             } else {
-                // For SIMD 4.4 we use Mula's algroithm (https://arxiv.org/pdf/1611.07612.pdf)
-                //
-                //__m128i count_bytes ( __m128i v) {
-                //    __m128i lookup = _mm_setr_epi8(0 ,1 ,1 ,2 ,1 ,2 ,2 ,3 ,1 ,2 ,2 ,3 ,2 ,3 ,3 ,4) ;
-                //    __m128i low_mask = _mm_set1_epi8 (0 x0f ) ;
-                //    __m128i lo = _mm_and_si128 (v, low_mask ) ;
-                //    __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4) , low_mask ) ;
-                //    __m128i cnt1 = _mm_shuffle_epi8 (lookup , lo) ;
-                //    __m128i cnt2 = _mm_shuffle_epi8 (lookup , hi) ;
-                //    return _mm_add_epi8 (cnt1 , cnt2 ) ;
-                //}
-                //
-                // Details of the above algorithm can be found in the reference noted above, but the basics
-                // are to create a lookup table that pre populates the popcnt values for each number [0,15].
-                // The algorithm uses shifts to isolate 4 bit sections of the vector, pshufb as part of the
-                // lookup process, and adds together the results.
-
-                // Get input vector and destination
+                // Lower `popcount` for vectors.
                 let ty = ty.unwrap();
-                let lhs = put_input_in_reg(ctx, inputs[0]);
+                let src = put_input_in_reg(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
-                // __m128i lookup = _mm_setr_epi8(0 ,1 ,1 ,2 ,1 ,2 ,2 ,3 ,1 ,2 ,2 ,3 ,2 ,3 ,3 ,4);
-                static POPCOUNT_4BIT: [u8; 16] = [
-                    0x00, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x01, 0x02, 0x02, 0x03, 0x02,
-                    0x03, 0x03, 0x04,
-                ];
-                let lookup = ctx.use_constant(VCodeConstantData::WellKnown(&POPCOUNT_4BIT));
+                if isa_flags.use_avx512vl_simd() || isa_flags.use_avx512bitalg_simd() {
+                    // When either AVX512VL or AVX512BITALG are available,
+                    // `popcnt.i8x16` can be lowered to a single instruction.
+                    assert_eq!(ty, types::I8X16);
+                    ctx.emit(Inst::xmm_unary_rm_r_evex(
+                        Avx512Opcode::Vpopcntb,
+                        RegMem::reg(src),
+                        dst,
+                    ));
+                } else {
+                    // For SIMD 4.4 we use Mula's algorithm (https://arxiv.org/pdf/1611.07612.pdf)
+                    //
+                    //__m128i count_bytes ( __m128i v) {
+                    //    __m128i lookup = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
+                    //    __m128i low_mask = _mm_set1_epi8 (0x0f);
+                    //    __m128i lo = _mm_and_si128 (v, low_mask);
+                    //    __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4), low_mask);
+                    //    __m128i cnt1 = _mm_shuffle_epi8 (lookup, lo);
+                    //    __m128i cnt2 = _mm_shuffle_epi8 (lookup, hi);
+                    //    return _mm_add_epi8 (cnt1, cnt2);
+                    //}
+                    //
+                    // Details of the above algorithm can be found in the reference noted above, but the basics
+                    // are to create a lookup table that pre populates the popcnt values for each number [0,15].
+                    // The algorithm uses shifts to isolate 4 bit sections of the vector, pshufb as part of the
+                    // lookup process, and adds together the results.
 
-                // Create a mask for lower 4bits of each subword.
-                static LOW_MASK: [u8; 16] = [0x0F; 16];
-                let low_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&LOW_MASK));
-                let low_mask = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-                ctx.emit(Inst::xmm_load_const(low_mask_const, low_mask, ty));
+                    // __m128i lookup = _mm_setr_epi8(0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4);
+                    static POPCOUNT_4BIT: [u8; 16] = [
+                        0x00, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x03, 0x01, 0x02, 0x02, 0x03,
+                        0x02, 0x03, 0x03, 0x04,
+                    ];
+                    let lookup = ctx.use_constant(VCodeConstantData::WellKnown(&POPCOUNT_4BIT));
 
-                // __m128i lo = _mm_and_si128 (v, low_mask );
-                let lo = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(lo, low_mask.to_reg(), types::I8X16));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pand, RegMem::reg(lhs), lo));
+                    // Create a mask for lower 4bits of each subword.
+                    static LOW_MASK: [u8; 16] = [0x0F; 16];
+                    let low_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&LOW_MASK));
+                    let low_mask = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_load_const(low_mask_const, low_mask, ty));
 
-                // __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4) , low_mask ) ;
-                ctx.emit(Inst::gen_move(dst, lhs, ty));
-                ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrlw, RegMemImm::imm(4), dst));
-                let tmp = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(tmp, low_mask.to_reg(), types::I8X16));
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Pand,
-                    RegMem::reg(dst.to_reg()),
-                    tmp,
-                ));
+                    // __m128i lo = _mm_and_si128 (v, low_mask);
+                    let lo = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                    ctx.emit(Inst::gen_move(lo, low_mask.to_reg(), types::I8X16));
+                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pand, RegMem::reg(src), lo));
 
-                // __m128i cnt1 = _mm_shuffle_epi8 (lookup , lo) ;
-                let tmp2 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
-                ctx.emit(Inst::xmm_load_const(lookup, tmp2, ty));
-                ctx.emit(Inst::gen_move(dst, tmp2.to_reg(), types::I8X16));
+                    // __m128i hi = _mm_and_si128 (_mm_srli_epi16 (v, 4), low_mask);
+                    ctx.emit(Inst::gen_move(dst, src, ty));
+                    ctx.emit(Inst::xmm_rmi_reg(SseOpcode::Psrlw, RegMemImm::imm(4), dst));
+                    let tmp = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                    ctx.emit(Inst::gen_move(tmp, low_mask.to_reg(), types::I8X16));
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Pand,
+                        RegMem::reg(dst.to_reg()),
+                        tmp,
+                    ));
 
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Pshufb,
-                    RegMem::reg(lo.to_reg()),
-                    dst,
-                ));
+                    // __m128i cnt1 = _mm_shuffle_epi8 (lookup, lo);
+                    let tmp2 = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_load_const(lookup, tmp2, ty));
+                    ctx.emit(Inst::gen_move(dst, tmp2.to_reg(), types::I8X16));
 
-                // __m128i cnt2 = _mm_shuffle_epi8 (lookup , hi) ;
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Pshufb,
-                    RegMem::reg(tmp.to_reg()),
-                    tmp2,
-                ));
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Pshufb,
+                        RegMem::reg(lo.to_reg()),
+                        dst,
+                    ));
 
-                // return _mm_add_epi8 (cnt1 , cnt2 ) ;
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Paddb,
-                    RegMem::reg(tmp2.to_reg()),
-                    dst,
-                ));
+                    // __m128i cnt2 = _mm_shuffle_epi8 (lookup , hi) ;
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Pshufb,
+                        RegMem::reg(tmp.to_reg()),
+                        tmp2,
+                    ));
+
+                    // return _mm_add_epi8 (cnt1 , cnt2 ) ;
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Paddb,
+                        RegMem::reg(tmp2.to_reg()),
+                        dst,
+                    ));
+                }
             }
         }
 
