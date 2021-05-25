@@ -11,12 +11,15 @@ function sleep(milliseconds) {
 async function runOnce() {
   // Load all our inputs and env vars. Note that `getInput` reads from `INPUT_*`
   const files = core.getInput('files');
-  const name = core.getInput('name');
   const token = core.getInput('token');
   const slug = process.env.GITHUB_REPOSITORY;
   const owner = slug.split('/')[0];
   const repo = slug.split('/')[1];
   const sha = process.env.GITHUB_SHA;
+  let name = 'dev';
+  if (process.env.GITHUB_REF.startsWith('refs/tags/v')) {
+    name = process.env.GITHUB_REF.substring(10);
+  }
 
   core.info(`files: ${files}`);
   core.info(`name: ${name}`);
@@ -24,53 +27,88 @@ async function runOnce() {
 
   const octokit = new github.GitHub(token);
 
-  // Delete the previous release since we can't overwrite one. This may happen
-  // due to retrying an upload or it may happen because we're doing the dev
-  // release.
-  const releases = await octokit.paginate("GET /repos/:owner/:repo/releases", { owner, repo });
-  for (const release of releases) {
-    if (release.tag_name !== name) {
-      continue;
+  // For the `dev` release we may need to update the tag to point to the new
+  // commit on this branch. All other names should already have tags associated
+  // with them.
+  if (name == 'dev') {
+    let tag = null;
+    try {
+      tag = await octokit.request("GET /repos/:owner/:repo/git/refs/tags/:name", { owner, repo, name });
+      core.info(`found existing tag`);
+      console.log("tag: ", JSON.stringify(tag.data, null, 2));
+    } catch (e) {
+      // ignore if this tag doesn't exist
+      core.info(`no existing tag found`);
     }
-    const release_id = release.id;
-    core.info(`deleting release ${release_id}`);
-    await octokit.repos.deleteRelease({ owner, repo, release_id });
+
+    if (tag === null || tag.data.object.sha !== sha) {
+      core.info(`updating existing tag or creating new one`);
+      // Delete the previous release for this tag, if any
+      try {
+        core.info(`fetching release for ${name}`);
+        const release = await octokit.repos.getReleaseByTag({ owner, repo, tag: name });
+        core.info(`deleting release ${release.data.id}`);
+        await octokit.repos.deleteRelease({ owner, repo, release_id: release.data.id });
+      } catch (e) {
+        // ignore, there may not have been a release
+        console.log("ERROR: ", JSON.stringify(e, null, 2));
+      }
+
+      try {
+        core.info(`updating dev tag`);
+        await octokit.git.updateRef({
+            owner,
+            repo,
+            ref: 'tags/dev',
+            sha,
+            force: true,
+        });
+      } catch (e) {
+        console.log("ERROR: ", JSON.stringify(e, null, 2));
+        core.info(`creating dev tag`);
+        try {
+          await octokit.git.createTag({
+            owner,
+            repo,
+            tag: 'dev',
+            message: 'dev release',
+            object: sha,
+            type: 'commit',
+          });
+        } catch (e) {
+          // we might race with others, so assume someone else has created the
+          // tag by this point.
+        }
+      }
+    } else {
+      core.info(`existing tag works`);
+    }
   }
 
-  // We also need to update the `dev` tag while we're at it on the `dev` branch.
-  if (name == 'dev') {
+  // Try to load the release for this tag, and if it doesn't exist then make a
+  // new one. We might race with other builders on creation, though, so if the
+  // creation fails try again to get the release by the tag.
+  let release = null;
+  try {
+    core.info(`fetching release`);
+    release = await octokit.repos.getReleaseByTag({ owner, repo, tag: name });
+  } catch (e) {
+    console.log("ERROR: ", JSON.stringify(e, null, 2));
+    core.info(`creating a release`);
     try {
-      core.info(`updating dev tag`);
-      await octokit.git.updateRef({
-          owner,
-          repo,
-          ref: 'tags/dev',
-          sha,
-          force: true,
-      });
-    } catch (e) {
-      console.log("ERROR: ", JSON.stringify(e, null, 2));
-      core.info(`creating dev tag`);
-      await octokit.git.createTag({
+      release = await octokit.repos.createRelease({
         owner,
         repo,
-        tag: 'dev',
-        message: 'dev release',
-        object: sha,
-        type: 'commit',
+        tag_name: name,
+        prerelease: name === 'dev',
       });
+    } catch(e) {
+      console.log("ERROR: ", JSON.stringify(e, null, 2));
+      core.info(`fetching one more time`);
+      release = await octokit.repos.getReleaseByTag({ owner, repo, tag: name });
     }
   }
-
-  // Creates an official GitHub release for this `tag`, and if this is `dev`
-  // then we know that from the previous block this should be a fresh release.
-  core.info(`creating a release`);
-  const release = await octokit.repos.createRelease({
-    owner,
-    repo,
-    tag_name: name,
-    prerelease: name === 'dev',
-  });
+  console.log("found release: ", JSON.stringify(release.data, null, 2));
 
   // Upload all the relevant assets for this release as just general blobs.
   for (const file of glob.sync(files)) {
