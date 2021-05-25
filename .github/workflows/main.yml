@@ -162,7 +162,6 @@ jobs:
     - run: cargo +1.43.0 check -p cranelift-codegen
     - run: cargo +1.43.0 check -p cranelift-wasm
 
-
   fuzz_targets:
     name: Fuzz Targets
     runs-on: ubuntu-latest
@@ -212,60 +211,86 @@ jobs:
   test:
     name: Test
     runs-on: ${{ matrix.os }}
+    env:
+      QEMU_BUILD_VERSION: 6.0.0
     strategy:
       matrix:
-        build: [stable, beta, nightly, windows, macos]
         include:
-          - build: stable
-            os: ubuntu-latest
-            rust: stable
-          - build: beta
-            os: ubuntu-latest
-            rust: beta
-          - build: nightly
-            os: ubuntu-latest
-            rust: nightly-2021-04-11
-          - build: macos
-            os: macos-latest
-            rust: stable
-          - build: windows
-            os: windows-latest
-            rust: stable
+          - os: ubuntu-latest
+          - os: macos-latest
+          - os: windows-latest
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            gcc_package: gcc-aarch64-linux-gnu
+            gcc: aarch64-linux-gnu-gcc
+            qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
+            qemu_target: aarch64-linux-user
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-      with:
-        toolchain: ${{ matrix.rust }}
 
-    - name: Install libclang
-      # Note: libclang is pre-installed on the macOS and linux images.
-      if: matrix.os == 'windows-latest'
-      run: |
-        curl https://releases.llvm.org/9.0.0/LLVM-9.0.0-win64.exe -o llvm-installer.exe
-        7z x llvm-installer.exe -oC:/llvm-binary
-        echo LIBCLANG_PATH=C:/llvm-binary/bin/libclang.dll >> $GITHUB_ENV
-        echo C:/llvm-binary/bin >> $GITHUB_PATH
+    # Install targets in order to build various tests throughout the repo
+    - run: rustup target add wasm32-wasi wasm32-unknown-unknown ${{ matrix.target }}
+    - run: echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+      if: matrix.target != ''
 
-    - name: Query Clang Version
-      if: matrix.os == 'windows-latest'
-      run: |
-        where clang.exe
-        clang.exe --version
-
-    # Install wasm32 targets in order to build various tests throughout the
-    # repo
-    - run: rustup target add wasm32-wasi
-    - run: rustup target add wasm32-unknown-unknown
+    # Fix an ICE for now in gcc when compiling zstd with debuginfo (??)
+    - run: echo CFLAGS=-g0 >> $GITHUB_ENV
+      if: matrix.target == 'x86_64-pc-windows-gnu'
 
     - run: cargo fetch --locked
     - run: cargo fetch --locked --manifest-path crates/test-programs/wasi-tests/Cargo.toml
+
+    - uses: actions/cache@v2
+      with:
+        path: ${{ runner.tool_cache }}/qemu
+        key: qemu-${{ matrix.target }}-${{ env.QEMU_BUILD_VERSION }}
+      if: matrix.target != '' && matrix.os == 'ubuntu-latest'
+    - name: Install cross-compilation tools
+      run: |
+        set -ex
+        sudo apt-get update
+        sudo apt-get install -y ${{ matrix.gcc_package }} ninja-build
+
+        # Configure Cargo for cross compilation and tell it how it can run
+        # cross executables
+        upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
+        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
+        echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
+
+        # QEMU emulation is not always the speediest, so total testing time
+        # goes down if we build the libs in release mode when running tests.
+        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
+
+        # See comments in the source for why we enable this during QEMU
+        # emulation.
+        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
+
+        # See if qemu is already in the cache
+        if [ -f ${{ runner.tool_cache }}/qemu/built ]; then
+          exit 0
+        fi
+
+        # Download and build qemu from source since the most recent release is
+        # way faster at arm emulation than the current version github actions'
+        # ubuntu image uses. Disable as much as we can to get it to build
+        # quickly.
+        curl https://download.qemu.org/qemu-$QEMU_BUILD_VERSION.tar.xz | tar xJf -
+        cd qemu-$QEMU_BUILD_VERSION
+        ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
+        ninja -C build install
+        touch ${{ runner.tool_cache }}/qemu/built
+      if: matrix.gcc != ''
 
     # Ensure all our examples build and execute
     - run: cargo run -p run-examples
       env:
         RUST_BACKTRACE: 1
+      if: matrix.target == ''
 
     # Build and test all features except for lightbeam
     - run: |
@@ -274,7 +299,8 @@ jobs:
             --workspace \
             --exclude '*lightbeam*' \
             --exclude 'wasmtime-wasi-*' \
-            --exclude 'peepmatic*'
+            --exclude 'peepmatic*' \
+            --exclude wasi-crypto
       env:
         RUST_BACKTRACE: 1
 
@@ -282,14 +308,7 @@ jobs:
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb llvm
         cargo test test_debug_dwarf -- --ignored --test-threads 1
-      if: matrix.os == 'ubuntu-latest'
-      env:
-        RUST_BACKTRACE: 1
-
-    # Test debug (DWARF) related functionality on new backend.
-    - run: |
-        cargo test test_debug_dwarf -- --ignored --test-threads 1 --test debug::
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
       env:
         RUST_BACKTRACE: 1
 
@@ -298,14 +317,16 @@ jobs:
         cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
         cargo test --features uffd -p wasmtime-cli pooling_allocator
         cargo test --features uffd -p wasmtime-cli wast::Cranelift
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
       env:
         RUST_BACKTRACE: 1
 
     # Build and test lightbeam. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
+      if: matrix.target != 'aarch64-unknown-linux-gnu'
     - run: cargo test --package lightbeam
+      if: matrix.target != 'aarch64-unknown-linux-gnu'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
@@ -394,112 +415,49 @@ jobs:
   build:
     name: Build wasmtime
     runs-on: ${{ matrix.os }}
-    env:
-      QEMU_VERSION: 5.0.0
     strategy:
       matrix:
         include:
         - build: x86_64-linux
           os: ubuntu-latest
-          rust: stable
         - build: x86_64-macos
           os: macos-latest
-          rust: stable
         - build: x86_64-windows
           os: windows-latest
-          rust: stable
         - build: x86_64-mingw
           os: windows-latest
           target: x86_64-pc-windows-gnu
-          rust: beta        # needs rust-lang/rust#69351 to ride to stable
         - build: aarch64-linux
           os: ubuntu-latest
-          rust: stable
           target: aarch64-unknown-linux-gnu
           gcc_package: gcc-aarch64-linux-gnu
           gcc: aarch64-linux-gnu-gcc
-          qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
-          qemu_target: aarch64-linux-user
     steps:
     - uses: actions/checkout@v2
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-      with:
-        toolchain: ${{ matrix.rust }}
     - uses: ./.github/actions/binary-compatible-builds
       if: matrix.target == ''
-
-    - name: Configure Cargo target
-      run: |
-        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
-        rustup target add ${{ matrix.target }}
-      if: matrix.target != ''
-
-    - uses: actions/cache@v2
-      with:
-        path: ${{ runner.tool_cache }}/qemu
-        key: qemu-${{ matrix.target }}-${{ env.QEMU_VERSION }}
-      if: matrix.target != '' && matrix.os == 'ubuntu-latest'
 
     - name: Install cross-compilation tools
       run: |
         set -ex
         sudo apt-get update
         sudo apt-get install -y ${{ matrix.gcc_package }}
-
-        # Configure Cargo for cross compilation and tell it how it can run
-        # cross executables
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
-        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
-
-        # See comments in the source for why we enable this during QEMU
-        # emulation.
-        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
-
-        # See if qemu is already in the cache
-        if [ -f ${{ runner.tool_cache }}/qemu/built ]; then
-          exit 0
-        fi
-
-        # Download and build qemu from source since the most recent release is
-        # way faster at arm emulation than the current version github actions'
-        # ubuntu image uses. Disable as much as we can to get it to build
-        # quickly.
-        curl https://download.qemu.org/qemu-5.0.0.tar.xz | tar xJf -
-        cd qemu-5.0.0
-        ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
-        make -j$(nproc) install
-        touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
-
-    # Install wasm32-wasi target in order to build wasi-common's integration
-    # tests
-    - run: rustup target add wasm32-wasi
+    - run: |
+        echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
+        rustup target add ${{ matrix.target }}
+      if: matrix.target != ''
 
     # Build `wasmtime` and executables
     - run: $CENTOS cargo build --release --bin wasmtime
 
     # Build `libwasmtime.so`
     - run: $CENTOS cargo build --release --manifest-path crates/c-api/Cargo.toml
-
-    # Test what we just built.
-    #
-    # Ignore some optional dependencies that are used by features that aren't
-    # enabled by default, are tested in other, dedicated CI jobs, and which
-    # would increase build times here.
-    - run: |
-        $CENTOS cargo test \
-            --features test-programs/test_programs \
-            --release \
-            --workspace \
-            --exclude '*lightbeam*' \
-            --exclude 'wasmtime-wasi-*' \
-            --exclude 'peepmatic*' \
-            --exclude wasmtime-fuzz
-      env:
-        RUST_BACKTRACE: 1
 
     # Assemble release artifats appropriate for this platform, then upload them
     # unconditionally to this workflow's files so we have a copy of them.
