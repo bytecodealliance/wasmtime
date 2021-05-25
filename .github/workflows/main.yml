@@ -394,6 +394,8 @@ jobs:
   build:
     name: Build wasmtime
     runs-on: ${{ matrix.os }}
+    env:
+      QEMU_VERSION: 5.0.0
     strategy:
       matrix:
         include:
@@ -434,11 +436,32 @@ jobs:
         rustup target add ${{ matrix.target }}
       if: matrix.target != ''
 
+    - uses: actions/cache@v2
+      with:
+        path: ${{ runner.tool_cache }}/qemu
+        key: qemu-${{ matrix.target }}-${{ env.QEMU_VERSION }}
+      if: matrix.target != '' && matrix.os == 'ubuntu-latest'
+
     - name: Install cross-compilation tools
       run: |
         set -ex
         sudo apt-get update
         sudo apt-get install -y ${{ matrix.gcc_package }}
+
+        # Configure Cargo for cross compilation and tell it how it can run
+        # cross executables
+        upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
+        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
+        echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
+
+        # See comments in the source for why we enable this during QEMU
+        # emulation.
+        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
+
+        # See if qemu is already in the cache
+        if [ -f ${{ runner.tool_cache }}/qemu/built ]; then
+          exit 0
+        fi
 
         # Download and build qemu from source since the most recent release is
         # way faster at arm emulation than the current version github actions'
@@ -446,18 +469,9 @@ jobs:
         # quickly.
         curl https://download.qemu.org/qemu-5.0.0.tar.xz | tar xJf -
         cd qemu-5.0.0
-        ./configure --target-list=${{ matrix.qemu_target }} --prefix=$HOME/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
+        ./configure --target-list=${{ matrix.qemu_target }} --prefix=${{ runner.tool_cache}}/qemu --disable-tools --disable-slirp --disable-fdt --disable-capstone --disable-docs
         make -j$(nproc) install
-
-        # Configure Cargo for cross compilation and tell it how it can run
-        # cross executables
-        upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
-        echo CARGO_TARGET_${upcase}_RUNNER=$HOME/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
-        echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
-
-        # See comments in the source for why we enable this during QEMU
-        # emulation.
-        echo WASMTIME_TEST_NO_HOG_MEMORY=1 >> $GITHUB_ENV
+        touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.target != '' && matrix.os == 'ubuntu-latest'
 
     # Install wasm32-wasi target in order to build wasi-common's integration
@@ -487,122 +501,23 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
-    # directive than the default one that comes out of the linker when typically
-    # doing `cargo build`. For more info see #984
-    - run: install_name_tool -id "@rpath/libwasmtime.dylib" target/release/libwasmtime.dylib
-      if: matrix.os == 'macos-latest'
-
-    # ... and now perform some goop to move all the relevant artifacts into
-    # something that we'll upload from this action.
-
-    - run: mkdir dist
-
-    # Move binaries to dist folder
-    - run: cp target/release/wasmtime dist
-      if: matrix.os != 'windows-latest' && matrix.target == ''
-    - run: cp target/${{ matrix.target }}/release/wasmtime dist
-      if: matrix.os != 'windows-latest' && matrix.target != ''
-    - run: cp target/release/wasmtime.exe dist
-      if: matrix.build == 'x86_64-windows'
-    - run: cp target/x86_64-pc-windows-gnu/release/wasmtime.exe dist
-      if: matrix.build == 'x86_64-mingw'
-
-    # Move libwasmtime dylib to dist folder
-    - run: cp target/release/libwasmtime.{so,a} dist
-      if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-    - run: cp target/${{ matrix.target }}/release/libwasmtime.{so,a} dist
-      if: matrix.os == 'ubuntu-latest' && matrix.target != ''
-    - run: cp target/release/libwasmtime.{dylib,a} dist
-      if: matrix.os == 'macos-latest'
-    - run: cp target/release/wasmtime.{dll,lib,dll.lib} dist
-      if: matrix.build == 'x86_64-windows'
-    - run: cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a} dist
-      if: matrix.build == 'x86_64-mingw'
-
-    # Make a Windows MSI installer if we're on Windows
-    - run: |
-        export WT_VERSION=`cat Cargo.toml | sed -n 's/^version = "\([^"]*\)".*/\1/p'`
-        "$WIX/bin/candle" -arch x64 -out target/wasmtime.wixobj ci/wasmtime.wxs
-        "$WIX/bin/light" -out dist/installer.msi target/wasmtime.wixobj -ext WixUtilExtension
-        rm dist/installer.wixpdb
-      if: matrix.build == 'x86_64-windows'
-
+    # Assemble release artifats appropriate for this platform, then upload them
+    # unconditionally to this workflow's files so we have a copy of them.
+    - run: ./ci/build-tarballs.sh "${{ matrix.build }}" "${{ matrix.target }}"
     - uses: actions/upload-artifact@v1
       with:
         name: bins-${{ matrix.build }}
         path: dist
 
-  # Consumes all published artifacts from all the previous build steps, creates
-  # a bunch of tarballs for all of them, and then publishes the tarballs
-  # themselves as an artifact (for inspection) and then optionally creates
-  # github releases and/or tags for pushes.
-  publish:
-    name: Publish
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - run: rustup update stable && rustup default stable
-
-    - name: Download x86_64 macOS binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-x86_64-macos
-    - name: Download x86_64 Linux binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-x86_64-linux
-    - name: Download AArch64 Linux binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-aarch64-linux
-    - name: Download x86_64 Windows binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-x86_64-windows
-    - name: Download x86_64 Windows MinGW binaries
-      uses: actions/download-artifact@v1
-      with:
-        name: bins-x86_64-mingw
-
-    - name: Calculate tag name
-      run: |
-        name=dev
-        if [[ $GITHUB_REF == refs/tags/v* ]]; then
-          name=${GITHUB_REF:10}
-        fi
-        echo ::set-output name=val::$name
-        echo TAG=$name >> $GITHUB_ENV
-      id: tagname
-
-    # Assemble all the build artifacts into tarballs and zip archives.
-    - name: Assemble tarballs
-      run: |
-        ./ci/build-tarballs.sh x86_64-linux
-        ./ci/build-tarballs.sh x86_64-windows .exe
-        ./ci/build-tarballs.sh x86_64-mingw .exe
-        ./ci/build-tarballs.sh x86_64-macos
-        ./ci/build-tarballs.sh aarch64-linux
-
-    # Upload all assembled tarballs as an artifact of the github action run, so
-    # that way even PRs can inspect the output.
-    - uses: actions/upload-artifact@v1
-      with:
-        name: tarballs
-        path: dist
-
     # ... and if this was an actual push (tag or `main`) then we publish a
     # new release. This'll automatically publish a tag release or update `dev`
     # with this `sha`
+    - run: cd .github/actions/github-release && npm install --production
     - name: Publish Release
       uses: ./.github/actions/github-release
       if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
       with:
         files: "dist/*"
-        name: ${{ steps.tagname.outputs.val }}
         token: ${{ secrets.GITHUB_TOKEN }}
 
   cargo-audit:

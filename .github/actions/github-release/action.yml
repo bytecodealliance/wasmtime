@@ -4,12 +4,9 @@ inputs:
   token:
     description: ''
     required: true
-  name:
-    description: ''
-    required: true
   files:
     description: ''
     required: true
 runs:
-  using: 'docker'
-  image: 'Dockerfile'
+  using: 'node12'
+  main: 'main.js'
