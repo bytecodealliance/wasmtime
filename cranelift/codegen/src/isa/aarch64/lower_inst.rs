@@ -661,14 +661,31 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Bnot => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let out_regs = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
-            if !ty.is_vector() {
+            if ty == I128 {
+                // TODO: We can merge this block with the one below once we support immlogic here
+                let in_regs = put_input_in_regs(ctx, inputs[0]);
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::OrrNot64,
+                    rd: out_regs.regs()[0],
+                    rn: zero_reg(),
+                    rm: in_regs.regs()[0],
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::OrrNot64,
+                    rd: out_regs.regs()[1],
+                    rn: zero_reg(),
+                    rm: in_regs.regs()[1],
+                });
+            } else if !ty.is_vector() {
+                let rd = out_regs.only_reg().unwrap();
                 let rm = put_input_in_rs_immlogic(ctx, inputs[0], NarrowValueMode::None);
                 let alu_op = choose_32_64(ty, ALUOp::OrrNot32, ALUOp::OrrNot64);
                 // NOT rd, rm ==> ORR_NOT rd, zero, rm
                 ctx.emit(alu_inst_immlogic(alu_op, rd, zero_reg(), rm));
             } else {
+                let rd = out_regs.only_reg().unwrap();
                 let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 ctx.emit(Inst::VecMisc {
                     op: VecMisc2::Not,
@@ -685,9 +702,36 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::BandNot
         | Opcode::BorNot
         | Opcode::BxorNot => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let out_regs = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
-            if !ty.is_vector() {
+            if ty == I128 {
+                // TODO: Support immlogic here
+                let lhs = put_input_in_regs(ctx, inputs[0]);
+                let rhs = put_input_in_regs(ctx, inputs[1]);
+                let alu_op = match op {
+                    Opcode::Band => ALUOp::And64,
+                    Opcode::Bor => ALUOp::Orr64,
+                    Opcode::Bxor => ALUOp::Eor64,
+                    Opcode::BandNot => ALUOp::AndNot64,
+                    Opcode::BorNot => ALUOp::OrrNot64,
+                    Opcode::BxorNot => ALUOp::EorNot64,
+                    _ => unreachable!(),
+                };
+
+                ctx.emit(Inst::AluRRR {
+                    alu_op,
+                    rd: out_regs.regs()[0],
+                    rn: lhs.regs()[0],
+                    rm: rhs.regs()[0],
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op,
+                    rd: out_regs.regs()[1],
+                    rn: lhs.regs()[1],
+                    rm: rhs.regs()[1],
+                });
+            } else if !ty.is_vector() {
+                let rd = out_regs.only_reg().unwrap();
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let rm = put_input_in_rs_immlogic(ctx, inputs[1], NarrowValueMode::None);
                 let alu_op = match op {
@@ -711,7 +755,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                let rd = out_regs.only_reg().unwrap();
 
                 ctx.emit(Inst::VecRRR {
                     alu_op,
