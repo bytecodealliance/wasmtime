@@ -1,5 +1,5 @@
 use crate::signatures::SignatureRegistry;
-use crate::Config;
+use crate::{Config, Trap};
 use anyhow::Result;
 use std::sync::Arc;
 #[cfg(feature = "cache")]
@@ -61,6 +61,12 @@ impl Engine {
                 signatures: registry,
             }),
         })
+    }
+
+    /// Eagerly initialize thread-local functionality shared by all [`Engine`]s. This
+    /// will be performed lazily by the runtime if users do not perform it eagerly.
+    pub fn tls_eager_initialize() -> Result<(), Trap> {
+        wasmtime_runtime::tls_eager_initialize().map_err(Trap::from_runtime)
     }
 
     /// Returns the configuration settings that this engine is using.

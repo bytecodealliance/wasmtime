@@ -12,7 +12,7 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
 use wasmtime_environ::ir;
 
-pub use self::tls::TlsRestore;
+pub use self::tls::{tls_eager_initialize, TlsRestore};
 
 extern "C" {
     #[allow(improper_ctypes)]
@@ -386,11 +386,28 @@ mod tls {
             })
         }
 
+        #[inline(never)]
+        /// Eagerly initialize thread-local runtime functionality. This will be performed
+        /// lazily by the runtime if users do not perform it eagerly.
+        pub fn initialize() -> Result<(), Trap> {
+            PTR.with(|p| {
+                let (state, mut initialized) = p.get();
+                if !initialized {
+                    super::super::sys::lazy_per_thread_init()?;
+                    initialized = true;
+                }
+                p.set((state, initialized));
+                Ok(())
+            })
+        }
+
         #[inline(never)] // see module docs for why this is here
         pub fn get() -> Ptr {
             PTR.with(|p| p.get().0)
         }
     }
+
+    pub use raw::initialize as tls_eager_initialize;
 
     /// Opaque state used to help control TLS state across stack switches for
     /// async support.
