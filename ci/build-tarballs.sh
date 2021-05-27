@@ -76,9 +76,8 @@ mktarball() {
     tar -cvf - -C tmp $dir | xz -9 -T0 > dist/$dir.tar.xz
   else
     # Note that this runs on Windows, and it looks like GitHub Actions doesn't
-    # have a `zip` tool there, so we use powershell
-    (cd tmp && powershell Compress-Archive $dir $dir.zip)
-    mv tmp/$dir.zip dist
+    # have a `zip` tool there, so we use something else
+    (cd tmp && 7z a ../dist/$dir.zip $dir/)
   fi
 }
 
