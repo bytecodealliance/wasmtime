@@ -356,7 +356,8 @@ impl Module {
     /// blobs across versions of wasmtime you can be safely guaranteed that
     /// future versions of wasmtime will reject old cache entries).
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        let module = SerializedModule::from_bytes(bytes.as_ref())?;
+        let module =
+            SerializedModule::from_bytes(bytes.as_ref(), engine.config().validate_module_version)?;
         module.into_module(engine)
     }
 
