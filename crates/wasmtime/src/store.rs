@@ -575,7 +575,7 @@ impl<T: ?Sized> StoreInner<T> {
     }
 
     pub fn async_support(&self) -> bool {
-        self.engine().config().async_support
+        cfg!(feature = "async") && self.engine().config().async_support
     }
 
     pub fn engine(&self) -> &Engine {

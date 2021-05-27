@@ -387,7 +387,7 @@ pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::externals::*;
 pub use crate::func::*;
-pub use crate::instance::Instance;
+pub use crate::instance::{Instance, InstancePre};
 pub use crate::limits::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
@@ -428,6 +428,8 @@ fn _assert_send_sync() {
     _assert::<Linker<()>>();
     _assert::<Linker<*mut u8>>();
     _assert::<ExternRef>();
+    _assert::<InstancePre<()>>();
+    _assert::<InstancePre<*mut u8>>();
 
     #[cfg(feature = "async")]
     fn _call_async(s: &mut Store<()>, f: Func) {

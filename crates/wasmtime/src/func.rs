@@ -677,7 +677,7 @@ impl Func {
     /// initiates a panic. Also panics if `store` does not own this function.
     pub fn call(&self, mut store: impl AsContextMut, params: &[Val]) -> Result<Box<[Val]>> {
         assert!(
-            !cfg!(feature = "async") || !store.as_context().async_support(),
+            !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config",
         );
         let my_ty = self.ty(&store);
@@ -1893,6 +1893,10 @@ impl HostFunc {
     unsafe fn register_trampoline(&self, store: &mut StoreOpaque<'_>) {
         let idx = self.export.anyfunc.as_ref().type_index;
         store.register_host_trampoline(idx, self.trampoline);
+    }
+
+    pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
+        unsafe { self.export.anyfunc.as_ref().type_index }
     }
 }
 

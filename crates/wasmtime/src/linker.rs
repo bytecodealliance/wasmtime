@@ -1,5 +1,6 @@
 use crate::func::HostFunc;
-use crate::instance::InstanceBuilder;
+use crate::instance::InstancePre;
+use crate::store::StoreOpaque;
 use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
     IntoFunc, Module, Trap, Val,
@@ -75,7 +76,7 @@ pub struct Linker<T> {
     engine: Engine,
     string2idx: HashMap<Arc<str>, usize>,
     strings: Vec<Arc<str>>,
-    map: HashMap<ImportKey, Definition<T>>,
+    map: HashMap<ImportKey, Definition>,
     allow_shadowing: bool,
     allow_unknown_exports: bool,
     _marker: marker::PhantomData<fn() -> T>,
@@ -87,12 +88,11 @@ struct ImportKey {
     module: usize,
 }
 
-enum Definition<T> {
+#[derive(Clone)]
+pub(crate) enum Definition {
     Extern(Extern),
-    HostFunc {
-        func: Arc<HostFunc>,
-        t: marker::PhantomData<fn() -> T>,
-    },
+    HostFunc(Arc<HostFunc>),
+    Instance(Arc<indexmap::IndexMap<String, Definition>>),
 }
 
 macro_rules! generate_wrap_async_func {
@@ -284,13 +284,7 @@ impl<T> Linker<T> {
     ) -> Result<&mut Self> {
         let func = HostFunc::new(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
-        self.insert(
-            key,
-            Definition::HostFunc {
-                func: Arc::new(func),
-                t: marker::PhantomData,
-            },
-        )?;
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)
     }
 
@@ -394,13 +388,7 @@ impl<T> Linker<T> {
     ) -> Result<&mut Self> {
         let func = HostFunc::wrap(&self.engine, func);
         let key = self.import_key(module, Some(name));
-        self.insert(
-            key,
-            Definition::HostFunc {
-                func: Arc::new(func),
-                t: marker::PhantomData,
-            },
-        )?;
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)
     }
 
@@ -590,7 +578,10 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module_name: &str,
         module: &Module,
-    ) -> Result<&mut Self> {
+    ) -> Result<&mut Self>
+    where
+        T: 'static,
+    {
         match ModuleKind::categorize(module)? {
             ModuleKind::Command => self.command(store, module_name, module),
             ModuleKind::Reactor => {
@@ -614,18 +605,20 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module_name: &str,
         module: &Module,
-    ) -> Result<&mut Self> {
+    ) -> Result<&mut Self>
+    where
+        T: 'static,
+    {
         for export in module.exports() {
             if let Some(func_ty) = export.ty().func() {
-                let imports = self.compute_imports(&mut store, module)?;
-                let module = module.clone();
+                let instance_pre = self.instantiate_pre(&mut store, module)?;
                 let export_name = export.name().to_owned();
                 let func = Func::new(
                     &mut store,
                     func_ty.clone(),
                     move |mut caller, params, results| {
                         // Create a new instance for this command execution.
-                        let instance = Instance::new(&mut caller, &module, &imports)?;
+                        let instance = instance_pre.instantiate(&mut caller)?;
 
                         // `unwrap()` everything here because we know the instance contains a
                         // function export with the given name and signature because we're
@@ -739,7 +732,7 @@ impl<T> Linker<T> {
         Ok(())
     }
 
-    fn insert(&mut self, key: ImportKey, item: Definition<T>) -> Result<()> {
+    fn insert(&mut self, key: ImportKey, item: Definition) -> Result<()> {
         match self.map.entry(key) {
             Entry::Occupied(_) if !self.allow_shadowing => {
                 let module = &self.strings[key.module];
@@ -831,8 +824,7 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
     ) -> Result<Instance> {
-        let imports = self.compute_imports(&mut store, module)?;
-        Instance::new(store, module, &imports)
+        self.instantiate_pre(&mut store, module)?.instantiate(store)
     }
 
     /// Attempts to instantiate the `module` provided. This is the same as
@@ -847,22 +839,72 @@ impl<T> Linker<T> {
     where
         T: Send,
     {
-        let imports = self.compute_imports(&mut store, module)?;
-        Instance::new_async(store, module, &imports).await
+        self.instantiate_pre(&mut store, module)?
+            .instantiate_async(store)
+            .await
     }
 
-    fn compute_imports(
+    /// Performs all checks necessary for instantiating `module` with this
+    /// linker within `store`, except that instantiation doesn't actually
+    /// finish.
+    ///
+    /// This method is used for front-loading type-checking information as well
+    /// as collecting the imports to use to instantiate a module with. The
+    /// returned [`InstancePre`] represents a ready-to-be-instantiated module,
+    /// which can also be instantiated multiple times if desired.
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if any item defined in this linker used by
+    /// `module` is not owned by `store`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// # let engine = Engine::default();
+    /// # let mut store = Store::new(&engine, ());
+    /// let mut linker = Linker::new(&engine);
+    /// linker.func_wrap("host", "double", |x: i32| x * 2)?;
+    ///
+    /// let wat = r#"
+    ///     (module
+    ///         (import "host" "double" (func (param i32) (result i32)))
+    ///     )
+    /// "#;
+    /// let module = Module::new(&engine, wat)?;
+    /// let instance_pre = linker.instantiate_pre(&mut store, &module)?;
+    ///
+    /// // Finish instantiation after the type-checking has all completed...
+    /// let instance = instance_pre.instantiate(&mut store)?;
+    ///
+    /// // ... and we can even continue to keep instantiating if desired!
+    /// instance_pre.instantiate(&mut store)?;
+    /// instance_pre.instantiate(&mut store)?;
+    ///
+    /// // Note that functions defined in a linker with `func_wrap` and similar
+    /// // constructors are not owned by any particular `Store`, so we can also
+    /// // instantiate our `instance_pre` in other stores because no imports
+    /// // belong to the original store.
+    /// let mut new_store = Store::new(&engine, ());
+    /// instance_pre.instantiate(&mut new_store)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn instantiate_pre(
         &self,
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
-    ) -> Result<Vec<Extern>> {
-        module
+    ) -> Result<InstancePre<T>> {
+        let imports = module
             .imports()
             .map(|import| {
-                self.get_by_import(&mut store, &import)
+                self._get_by_import(&import)
                     .ok_or_else(|| self.link_error(&import))
             })
-            .collect()
+            .collect::<Result<_>>()?;
+        unsafe { InstancePre::new(&mut store.as_context_mut().opaque(), module, imports) }
     }
 
     fn link_error(&self, import: &ImportType) -> Error {
@@ -887,10 +929,12 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T> + 'p,
     ) -> impl Iterator<Item = (&str, &str, Extern)> + 'p {
         self.map.iter().map(move |(key, item)| {
+            let mut store = store.as_context_mut().opaque();
             (
                 &*self.strings[key.module],
                 &*self.strings[key.name],
-                item.to_extern(&mut store),
+                // Should be safe since `T` is connecting the linker and store
+                unsafe { item.to_extern(&mut store) },
             )
         })
     }
@@ -902,10 +946,16 @@ impl<T> Linker<T> {
     /// [`Linker`].
     pub fn get(
         &self,
-        store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data = T>,
         module: &str,
         name: Option<&str>,
     ) -> Option<Extern> {
+        let mut store = store.as_context_mut().opaque();
+        // Should be safe since `T` is connecting the linker and store
+        Some(unsafe { self._get(module, name)?.to_extern(&mut store) })
+    }
+
+    fn _get(&self, module: &str, name: Option<&str>) -> Option<&Definition> {
         let key = ImportKey {
             module: *self.string2idx.get(module)?,
             name: match name {
@@ -913,7 +963,7 @@ impl<T> Linker<T> {
                 None => usize::max_value(),
             },
         };
-        Some(self.map.get(&key)?.to_extern(store))
+        self.map.get(&key)
     }
 
     /// Looks up a value in this `Linker` which matches the `import` type
@@ -925,8 +975,14 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         import: &ImportType,
     ) -> Option<Extern> {
-        if let Some(item) = self.get(&mut store, import.module(), import.name()) {
-            return Some(item);
+        let mut store = store.as_context_mut().opaque();
+        // Should be safe since `T` is connecting the linker and store
+        Some(unsafe { self._get_by_import(import)?.to_extern(&mut store) })
+    }
+
+    fn _get_by_import(&self, import: &ImportType) -> Option<Definition> {
+        if let Some(item) = self._get(import.module(), import.name()) {
+            return Some(item.clone());
         }
 
         if import.name().is_some() {
@@ -949,12 +1005,12 @@ impl<T> Linker<T> {
             // it each time a module is instantiated. For now though while the
             // module linking proposal is under development this should hopefully
             // suffice.
-            let mut builder = InstanceBuilder::new();
+            let mut map = indexmap::IndexMap::new();
             for export in t.exports() {
-                let item = self.get(&mut store, import.module(), Some(export.name()))?;
-                builder.insert(export.name(), item);
+                let item = self._get(import.module(), Some(export.name()))?;
+                map.insert(export.name().to_string(), item.clone());
             }
-            return Some(builder.finish(&mut store.as_context_mut().opaque()).into());
+            return Some(Definition::Instance(Arc::new(map)));
         }
 
         None
@@ -999,31 +1055,30 @@ impl<T> Default for Linker<T> {
     }
 }
 
-impl<T> Definition<T> {
-    fn to_extern(&self, mut store: impl AsContextMut<Data = T>) -> Extern {
+impl Definition {
+    /// Note the unsafety here is due to calling `HostFunc::to_func`. The
+    /// requirement here is that the `T` that was originally used to create the
+    /// `HostFunc` matches the `T` on the store.
+    pub(crate) unsafe fn to_extern(&self, store: &mut StoreOpaque) -> Extern {
         match self {
             Definition::Extern(e) => e.clone(),
-
-            // Note the unsafety here is due to calling `to_func`. The
-            // requirement here is that the `T` that was originally used to
-            // create the `HostFunc` matches the `T` on the store. This is done
-            // with the `T` on `Definition` (and `Linker`) as well as the
-            // `Data=T` bound above.
-            Definition::HostFunc { func, .. } => unsafe {
-                func.to_func(&mut store.as_context_mut().opaque()).into()
-            },
+            Definition::HostFunc(func) => func.to_func(store).into(),
+            Definition::Instance(i) => {
+                let items = Arc::new(
+                    i.iter()
+                        .map(|(name, item)| (name.clone(), item.to_extern(store)))
+                        .collect(),
+                );
+                Instance::from_wasmtime(items, store).into()
+            }
         }
     }
-}
 
-impl<T> Clone for Definition<T> {
-    fn clone(&self) -> Definition<T> {
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
-            Definition::Extern(e) => Definition::Extern(e.clone()),
-            Definition::HostFunc { func, t } => Definition::HostFunc {
-                func: func.clone(),
-                t: *t,
-            },
+            Definition::Extern(e) => e.comes_from_same_store(store),
+            Definition::HostFunc(_func) => true,
+            Definition::Instance(i) => i.values().all(|e| e.comes_from_same_store(store)),
         }
     }
 }
