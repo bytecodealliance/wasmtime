@@ -420,6 +420,10 @@ jobs:
         include:
         - build: x86_64-linux
           os: ubuntu-latest
+        - build: x86_64-linux-musl
+          os: ubuntu-latest
+          target: x86_64-unknown-linux-musl
+          linker_skip: true
         - build: x86_64-macos
           os: macos-latest
         - build: x86_64-windows
@@ -447,7 +451,7 @@ jobs:
         sudo apt-get install -y ${{ matrix.gcc_package }}
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
-      if: matrix.target != '' && matrix.os == 'ubuntu-latest'
+      if: matrix.target != '' && matrix.os == 'ubuntu-latest' && matrix.linker_skip == ''
     - run: |
         echo CARGO_BUILD_TARGET=${{ matrix.target }} >> $GITHUB_ENV
         rustup target add ${{ matrix.target }}
