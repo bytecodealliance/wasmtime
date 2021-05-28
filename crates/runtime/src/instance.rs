@@ -34,11 +34,18 @@ mod allocator;
 
 pub use allocator::*;
 
+/// Value returned by [`ResourceLimiter::instances`] default method
+pub const DEFAULT_INSTANCE_LIMIT: usize = 10000;
+/// Value returned by [`ResourceLimiter::tables`] default method
+pub const DEFAULT_TABLE_LIMIT: usize = 10000;
+/// Value returned by [`ResourceLimiter::memories`] default method
+pub const DEFAULT_MEMORY_LIMIT: usize = 10000;
+
 /// Used by hosts to limit resource consumption of instances.
 ///
 /// An instance can be created with a resource limiter so that hosts can take into account
 /// non-WebAssembly resource usage to determine if a linear memory or table should grow.
-pub trait ResourceLimiter: Send + Sync + 'static {
+pub trait ResourceLimiter {
     /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
     ///
     /// * `current` is the current size of the linear memory in WebAssembly page units.
@@ -67,17 +74,29 @@ pub trait ResourceLimiter: Send + Sync + 'static {
     /// The maximum number of instances that can be created for a `Store`.
     ///
     /// Module instantiation will fail if this limit is exceeded.
-    fn instances(&self) -> usize;
+    ///
+    /// This value defaults to 10,000.
+    fn instances(&self) -> usize {
+        DEFAULT_INSTANCE_LIMIT
+    }
 
     /// The maximum number of tables that can be created for a `Store`.
     ///
     /// Module instantiation will fail if this limit is exceeded.
-    fn tables(&self) -> usize;
-
-    /// The maximum number of tables that can be created for a `Store`.
     ///
-    /// Module instantiation will fail if this limit is exceeded.
-    fn memories(&self) -> usize;
+    /// This value defaults to 10,000.
+    fn tables(&self) -> usize {
+        DEFAULT_TABLE_LIMIT
+    }
+
+    /// The maximum number of linear memories that can be created for a `Store`
+    ///
+    /// Instantiation will fail with an error if this limit is exceeded.
+    ///
+    /// This value defaults to 10,000.
+    fn memories(&self) -> usize {
+        DEFAULT_MEMORY_LIMIT
+    }
 }
 
 /// A WebAssembly instance.
