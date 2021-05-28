@@ -291,7 +291,7 @@ pub struct Config {
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
-    pub(crate) validate_module_version: bool,
+    pub(crate) deserialize_check_wasmtime_version: bool,
 }
 
 impl Config {
@@ -327,7 +327,7 @@ impl Config {
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             async_support: false,
-            validate_module_version: true,
+            deserialize_check_wasmtime_version: true,
         };
         ret.cranelift_debug_verifier(false);
         ret.cranelift_opt_level(OptLevel::Speed);
@@ -1103,8 +1103,8 @@ impl Config {
     /// produced by [`Module::serialize`] or [`Engine::precompile_module`].
     ///
     /// This value defaults to true.
-    pub fn validate_module_version(&mut self, check: bool) -> &mut Self {
-        self.validate_module_version = check;
+    pub fn deserialize_check_wasmtime_version(&mut self, check: bool) -> &mut Self {
+        self.deserialize_check_wasmtime_version = check;
         self
     }
 
