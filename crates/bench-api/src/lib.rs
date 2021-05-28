@@ -466,24 +466,19 @@ impl BenchState {
             .as_ref()
             .expect("compile the module before instantiating it");
 
-        let wasi_cx = (self.make_wasi_cx)().context("failed to create a WASI context")?;
+        let host = HostState {
+            wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
+            #[cfg(feature = "wasi-nn")]
+            wasi_nn: wasmtime_wasi_nn::WasiNnCtx::new()?,
+            #[cfg(feature = "wasi-crypto")]
+            wasi_crypto: wasmtime_wasi_nn::WasiCryptoCtx::new(),
+        };
 
         // NB: Start measuring instantiation time *after* we've created the WASI
         // context, since that needs to do file I/O to setup
         // stdin/stdout/stderr.
         (self.instantiation_start)(self.instantiation_timer);
-
-        let mut store = Store::new(
-            self.linker.engine(),
-            HostState {
-                wasi: wasi_cx,
-                #[cfg(feature = "wasi-nn")]
-                wasi_nn: wasmtime_wasi_nn::WasiNnCtx::new()?,
-                #[cfg(feature = "wasi-crypto")]
-                wasi_crypto: wasmtime_wasi_nn::WasiCryptoCtx::new(),
-            },
-        );
-
+        let mut store = Store::new(self.linker.engine(), host);
         let instance = self.linker.instantiate(&mut store, &module)?;
         (self.instantiation_end)(self.instantiation_timer);
 
