@@ -104,6 +104,8 @@ pub struct StoreInner<T> {
     _marker: marker::PhantomPinned,
     inner: StoreInnermost,
     limiter: Option<Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>>,
+    entering_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
+    exiting_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
 }
@@ -239,7 +241,8 @@ impl<T> Store<T> {
                 default_callee,
             },
             limiter: None,
-            default_callee,
+            entering_native_hook: None,
+            exiting_native_hook: None,
             data: ManuallyDrop::new(data),
         });
 
@@ -320,6 +323,28 @@ impl<T> Store<T> {
 
         // Save the limiter accessor function:
         inner.limiter = Some(Box::new(limiter));
+    }
+
+    /// Configure a function that runs each time WebAssembly code running on this [`Store`] calls
+    /// into native code.
+    ///
+    /// This function may return a [`Trap`], which terminates execution.
+    pub fn entering_native_code_hook(
+        &mut self,
+        hook: impl FnMut(&mut T) -> Result<(), Trap> + Send + Sync + 'static,
+    ) {
+        self.inner.entering_native_hook = Some(Box::new(hook));
+    }
+
+    /// Configure a function that runs before native code running on this [`Store`] returns to
+    /// WebAssembly code.
+    ///
+    /// This function may return a [`Trap`], which terminates execution.
+    pub fn exiting_native_code_hook(
+        &mut self,
+        hook: impl FnMut(&mut T) -> Result<(), Trap> + Send + Sync + 'static,
+    ) {
+        self.inner.exiting_native_hook = Some(Box::new(hook));
     }
 
     /// Returns the [`Engine`] that this store is associated with.
@@ -620,6 +645,22 @@ impl<T> StoreInner<T> {
     pub fn limiter(&mut self) -> Option<&mut dyn crate::limits::ResourceLimiter> {
         let accessor = self.limiter.as_mut()?;
         Some(accessor(&mut self.data))
+    }
+
+    pub fn entering_native_hook(&mut self) -> Result<(), Trap> {
+        if let Some(hook) = &mut self.entering_native_hook {
+            hook(&mut self.data)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn exiting_native_hook(&mut self) -> Result<(), Trap> {
+        if let Some(hook) = &mut self.exiting_native_hook {
+            hook(&mut self.data)
+        } else {
+            Ok(())
+        }
     }
 }
 
