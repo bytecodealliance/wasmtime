@@ -74,7 +74,6 @@ members = [
   "crates/c-api",
   "crates/fuzzing",
   "crates/misc/run-examples",
-  "crates/misc/rust",
   "crates/wiggle",
   "crates/wiggle/generate",
   "crates/wiggle/macro",

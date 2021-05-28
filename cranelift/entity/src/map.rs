@@ -129,6 +129,13 @@ where
     pub fn resize(&mut self, n: usize) {
         self.elems.resize(n, self.default.clone());
     }
+
+    /// Slow path for `index_mut` which resizes the vector.
+    #[cold]
+    fn resize_for_index_mut(&mut self, i: usize) -> &mut V {
+        self.elems.resize(i + 1, self.default.clone());
+        &mut self.elems[i]
+    }
 }
 
 impl<K, V> Default for SecondaryMap<K, V>
@@ -169,7 +176,7 @@ where
     fn index_mut(&mut self, k: K) -> &mut V {
         let i = k.index();
         if i >= self.elems.len() {
-            self.elems.resize(i + 1, self.default.clone());
+            return self.resize_for_index_mut(i);
         }
         &mut self.elems[i]
     }

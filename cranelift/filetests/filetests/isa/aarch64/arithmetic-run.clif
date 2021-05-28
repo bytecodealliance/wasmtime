@@ -1,0 +1,78 @@
+test run
+target aarch64
+
+; i128 tests
+; TODO: Cleanup these tests when we have native support for i128 immediates in CLIF's parser
+function %i128_const_0() -> i64, i64 {
+block0:
+    v1 = iconst.i128 0
+    v2, v3 = isplit v1
+    return v2, v3
+}
+; run: %i128_const_0() == [0, 0]
+
+function %add_i128(i64, i64, i64, i64) -> i64, i64 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    v6 = iadd v4, v5
+
+    v7, v8 = isplit v6
+    return v7, v8
+}
+; run: %add_i128(0, 0, 0, 0) == [0, 0]
+; run: %add_i128(0, -1, -1, 0) == [-1, -1]
+; run: %add_i128(1, 0, 0, 0) == [1, 0]
+; run: %add_i128(1, 0, 1, 0) == [2, 0]
+; run: %add_i128(1, 0, -1, -1) == [0, 0]
+; run: %add_i128(-1, 0, 1, 0) == [0, 1]
+
+; run: %add_i128(0x01234567_89ABCDEF, 0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210) == [-1, -1]
+; run: %add_i128(0x06060606_06060606, 0xA00A00A0_0A00A00A, 0x30303030_30303030, 0x0BB0BB0B_B0BB0BB0) == [0x36363636_36363636, 0xABBABBAB_BABBABBA]
+; run: %add_i128(0xC0FFEEEE_C0FFEEEE, 0xC0FFEEEE_C0FFEEEE, 0x1DCB1111_1DCB1111, 0x1DCB1111_1DCB1111) == [0xDECAFFFF_DECAFFFF, 0xDECAFFFF_DECAFFFF]
+
+function %sub_i128(i64, i64, i64, i64) -> i64, i64 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    v6 = isub v4, v5
+
+    v7, v8 = isplit v6
+    return v7, v8
+}
+; run: %sub_i128(0, 0, 0, 0) == [0, 0]
+; run: %sub_i128(1, 0, 1, 0) == [0, 0]
+; run: %sub_i128(1, 0, 0, 0) == [1, 0]
+; run: %sub_i128(0, 0, 1, 0) == [-1, -1]
+; run: %sub_i128(0, 0, -1, -1) == [1, 0]
+
+; run: %sub_i128(-1, -1, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210) == [0x01234567_89ABCDEF, 0x01234567_89ABCDEF]
+; run: %sub_i128(0x36363636_36363636, 0xABBABBAB_BABBABBA, 0x30303030_30303030, 0x0BB0BB0B_B0BB0BB0) == [0x06060606_06060606, 0xA00A00A0_0A00A00A]
+; run: %sub_i128(0xDECAFFFF_DECAFFFF, 0xDECAFFFF_DECAFFFF, 0x1DCB1111_1DCB1111, 0x1DCB1111_1DCB1111) == [0xC0FFEEEE_C0FFEEEE, 0xC0FFEEEE_C0FFEEEE]
+
+
+function %mul_i128(i64, i64, i64, i64) -> i64, i64 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    v6 = imul v4, v5
+
+    v7, v8 = isplit v6
+    return v7, v8
+}
+; run: %mul_i128(0, 0, 0, 0) == [0, 0]
+; run: %mul_i128(1, 0, 1, 0) == [1, 0]
+; run: %mul_i128(1, 0, 0, 0) == [0, 0]
+; run: %mul_i128(0, 0, 1, 0) == [0, 0]
+; run: %mul_i128(2, 0, 1, 0) == [2, 0]
+; run: %mul_i128(2, 0, 2, 0) == [4, 0]
+; run: %mul_i128(1, 0, -1, -1) == [-1, -1]
+; run: %mul_i128(2, 0, -1, -1) == [-2, -1]
+
+; run: %mul_i128(0x01010101_01010101, 0x01010101_01010101, 13, 0) == [0x0D0D0D0D_0D0D0D0D, 0x0D0D0D0D_0D0D0D0D]
+; run: %mul_i128(13, 0, 0x01010101_01010101, 0x01010101_01010101) == [0x0D0D0D0D_0D0D0D0D, 0x0D0D0D0D_0D0D0D0D]
+; run: %mul_i128(0x00000000_01234567, 0x89ABCDEF_00000000, 0x00000000_FEDCBA98, 0x76543210_00000000) == [0x0121FA00_23E20B28, 0xE2946058_00000000]
+; run: %mul_i128(0xC0FFEEEE_C0FFEEEE, 0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF, 0xDECAFFFF_DECAFFFF) == [0xDB6B1E48_19BA1112, 0x5ECD38B5_9D1C2B7E]

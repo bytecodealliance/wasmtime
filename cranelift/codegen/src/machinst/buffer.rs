@@ -546,7 +546,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     }
 
     /// Resolve a label to an offset, if known. May return `UNKNOWN_LABEL_OFFSET`.
-    fn resolve_label_offset(&self, mut label: MachLabel) -> CodeOffset {
+    pub(crate) fn resolve_label_offset(&self, mut label: MachLabel) -> CodeOffset {
         let mut iters = 0;
         while self.label_aliases[label.0 as usize] != UNKNOWN_LABEL {
             label = self.label_aliases[label.0 as usize];

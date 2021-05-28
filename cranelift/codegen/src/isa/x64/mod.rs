@@ -61,7 +61,7 @@ impl MachBackend for X64Backend {
         let flags = self.flags();
         let vcode = self.compile_vcode(func, flags.clone())?;
 
-        let buffer = vcode.emit();
+        let (buffer, bb_starts, bb_edges) = vcode.emit();
         let buffer = buffer.finish();
         let frame_size = vcode.frame_size();
         let value_labels_ranges = vcode.value_labels_ranges();
@@ -79,6 +79,8 @@ impl MachBackend for X64Backend {
             disasm,
             value_labels_ranges,
             stackslot_offsets,
+            bb_starts,
+            bb_edges,
         })
     }
 

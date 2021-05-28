@@ -191,7 +191,6 @@ fn x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
     }
 
     match (testsuite, testname) {
-        ("simd", "simd_i8x16_arith2") => return true, // Unsupported feature: proposed simd operator I8x16Popcnt
         ("simd", "simd_conversions") => return true, // unknown operator or unexpected token: tests/spec_testsuite/proposals/simd/simd_conversions.wast:724:6
         ("simd", "simd_i16x8_extadd_pairwise_i8x16") => return true,
         ("simd", "simd_i16x8_extmul_i8x16") => return true,

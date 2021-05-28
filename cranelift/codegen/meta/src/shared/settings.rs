@@ -245,6 +245,21 @@ pub(crate) fn define() -> SettingGroup {
         true,
     );
 
+    settings.add_bool(
+        "machine_code_cfg_info",
+        "Generate CFG metadata for machine code.",
+        r#"
+            This increases metadata size and compile time, but allows for the
+            embedder to more easily post-process or analyze the generated
+            machine code. It provides code offsets for the start of each
+            basic block in the generated machine code, and a list of CFG
+            edges (with blocks identified by start offsets) between them.
+            This is useful for, e.g., machine-code analyses that verify certain
+            properties of the generated code.
+        "#,
+        false,
+    );
+
     // BaldrMonkey requires that not-yet-relocated function addresses be encoded
     // as all-ones bitpatterns.
     settings.add_bool(
