@@ -1,97 +1,4 @@
-pub(crate) const DEFAULT_INSTANCE_LIMIT: usize = 10000;
-pub(crate) const DEFAULT_TABLE_LIMIT: usize = 10000;
-pub(crate) const DEFAULT_MEMORY_LIMIT: usize = 10000;
-
-/// Used by hosts to limit resource consumption of instances at runtime.
-///
-/// [`Store::limiter`](crate::Store::limiter) can be used
-/// with a resource limiter to take into account non-WebAssembly resource
-/// usage to determine if a linear memory or table should be grown.
-pub trait ResourceLimiter: Send + Sync + 'static {
-    /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
-    ///
-    /// * `current` is the current size of the linear memory in WebAssembly page units.
-    /// * `desired` is the desired size of the linear memory in WebAssembly page units.
-    /// * `maximum` is either the linear memory's maximum or a maximum from an instance allocator,
-    ///   also in WebAssembly page units. A value of `None` indicates that the linear memory is
-    ///   unbounded.
-    ///
-    /// This function should return `true` to indicate that the growing operation is permitted or
-    /// `false` if not permitted.
-    ///
-    /// Note that this function will be called even when the desired count exceeds the given maximum.
-    ///
-    /// Returning `true` when a maximum has been exceeded will have no effect as the linear memory
-    /// will not be grown.
-    fn memory_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
-
-    /// Notifies the resource limiter that an instance's table has been requested to grow.
-    ///
-    /// * `current` is the current number of elements in the table.
-    /// * `desired` is the desired number of elements in the table.
-    /// * `maximum` is either the table's maximum or a maximum from an instance allocator,
-    ///   A value of `None` indicates that the table is unbounded.
-    ///
-    /// This function should return `true` to indicate that the growing operation is permitted or
-    /// `false` if not permitted.
-    ///
-    /// Note that this function will be called even when the desired count exceeds the given maximum.
-    ///
-    /// Returning `true` when a maximum has been exceeded will have no effect as the table will
-    /// not be grown.
-    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
-
-    /// The maximum number of instances that can be created for a [`Store`](crate::Store).
-    ///
-    /// Module instantiation will fail if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    fn instances(&self) -> usize {
-        DEFAULT_INSTANCE_LIMIT
-    }
-
-    /// The maximum number of tables that can be created for a [`Store`](crate::Store).
-    ///
-    /// Module instantiation will fail if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    fn tables(&self) -> usize {
-        DEFAULT_TABLE_LIMIT
-    }
-
-    /// The maximum number of linear memories that can be created for a [`Store`](crate::Store).
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    fn memories(&self) -> usize {
-        DEFAULT_MEMORY_LIMIT
-    }
-}
-
-pub(crate) struct ResourceLimiterProxy<T>(pub T);
-
-impl<T: ResourceLimiter> wasmtime_runtime::ResourceLimiter for ResourceLimiterProxy<T> {
-    fn memory_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
-        self.0.memory_growing(current, desired, maximum)
-    }
-
-    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
-        self.0.table_growing(current, desired, maximum)
-    }
-
-    fn instances(&self) -> usize {
-        self.0.instances()
-    }
-
-    fn tables(&self) -> usize {
-        self.0.tables()
-    }
-
-    fn memories(&self) -> usize {
-        self.0.memories()
-    }
-}
+pub use wasmtime_runtime::ResourceLimiter;
 
 /// Used to build [`StoreLimits`].
 pub struct StoreLimitsBuilder(StoreLimits);
@@ -172,9 +79,9 @@ impl Default for StoreLimits {
         Self {
             memory_pages: None,
             table_elements: None,
-            instances: DEFAULT_INSTANCE_LIMIT,
-            tables: DEFAULT_TABLE_LIMIT,
-            memories: DEFAULT_MEMORY_LIMIT,
+            instances: wasmtime_runtime::DEFAULT_INSTANCE_LIMIT,
+            tables: wasmtime_runtime::DEFAULT_TABLE_LIMIT,
+            memories: wasmtime_runtime::DEFAULT_MEMORY_LIMIT,
         }
     }
 }
