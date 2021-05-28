@@ -8,6 +8,7 @@ use std::fmt;
 use std::future::Future;
 use std::marker;
 use std::mem::ManuallyDrop;
+use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::ptr;
 use std::sync::Arc;
@@ -78,7 +79,7 @@ pub struct Store<T> {
     inner: ManuallyDrop<Box<StoreInner<T>>>,
 }
 
-pub struct StoreInner<T: ?Sized> {
+pub struct StoreInner<T> {
     // This `StoreInner<T>` structure has references to itself. These aren't
     // immediately evident, however, so we need to tell the compiler that it
     // contains self-references. This notably suppresses `noalias` annotations
@@ -101,7 +102,28 @@ pub struct StoreInner<T: ?Sized> {
     // least telling the compiler something about all the aliasing happening
     // within a `Store`.
     _marker: marker::PhantomPinned,
+    inner: StoreInnermost,
+    limiter: Option<Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>>,
+    // for comments about `ManuallyDrop`, see `Store::into_data`
+    data: ManuallyDrop<T>,
+}
 
+impl<T> Deref for StoreInner<T> {
+    type Target = StoreInnermost;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+impl<T> DerefMut for StoreInner<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+// I apologize for the convoluted structure and the terrible naming of this struct.
+// This exists so that most of wasmtime can be monomorphic on StoreInnermost, without
+// having to care about the generic in StoreInner<T>.
+pub struct StoreInnermost {
     engine: Engine,
     interrupts: Arc<VMInterrupts>,
     instances: Vec<StoreInstance>,
@@ -109,10 +131,13 @@ pub struct StoreInner<T: ?Sized> {
     externref_activations_table: VMExternRefActivationsTable,
     modules: ModuleRegistry,
     host_trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
-    // Numbers of resources instantiated in this store.
+    // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
+    instance_limit: usize,
     memory_count: usize,
+    memory_limit: usize,
     table_count: usize,
+    table_limit: usize,
     /// An adjustment to add to the fuel consumed value in `interrupts` above
     /// to get the true amount of fuel consumed.
     fuel_adj: i64,
@@ -120,10 +145,7 @@ pub struct StoreInner<T: ?Sized> {
     async_state: AsyncState,
     out_of_gas_behavior: OutOfGas,
     store_data: StoreData,
-    limiter: Option<Box<dyn wasmtime_runtime::ResourceLimiter>>,
     default_callee: InstanceHandle,
-    // for comments about `ManuallyDrop`, see `Store::into_data`
-    data: ManuallyDrop<T>,
 }
 
 #[cfg(feature = "async")]
@@ -192,24 +214,30 @@ impl<T> Store<T> {
         };
         let mut inner = Box::new(StoreInner {
             _marker: marker::PhantomPinned,
-            engine: engine.clone(),
-            interrupts: Default::default(),
-            instances: Vec::new(),
-            signal_handler: None,
-            externref_activations_table: VMExternRefActivationsTable::new(),
-            modules: ModuleRegistry::default(),
-            host_trampolines: HashMap::default(),
-            instance_count: 0,
-            memory_count: 0,
-            table_count: 0,
-            fuel_adj: 0,
-            #[cfg(feature = "async")]
-            async_state: AsyncState {
-                current_suspend: UnsafeCell::new(ptr::null()),
-                current_poll_cx: UnsafeCell::new(ptr::null_mut()),
+            inner: StoreInnermost {
+                engine: engine.clone(),
+                interrupts: Default::default(),
+                instances: Vec::new(),
+                signal_handler: None,
+                externref_activations_table: VMExternRefActivationsTable::new(),
+                modules: ModuleRegistry::default(),
+                host_trampolines: HashMap::default(),
+                instance_count: 0,
+                instance_limit: wasmtime_runtime::DEFAULT_INSTANCE_LIMIT,
+                memory_count: 0,
+                memory_limit: wasmtime_runtime::DEFAULT_MEMORY_LIMIT,
+                table_count: 0,
+                table_limit: wasmtime_runtime::DEFAULT_TABLE_LIMIT,
+                fuel_adj: 0,
+                #[cfg(feature = "async")]
+                async_state: AsyncState {
+                    current_suspend: UnsafeCell::new(ptr::null()),
+                    current_poll_cx: UnsafeCell::new(ptr::null_mut()),
+                },
+                out_of_gas_behavior: OutOfGas::Trap,
+                store_data: StoreData::new(),
+                default_callee,
             },
-            out_of_gas_behavior: OutOfGas::Trap,
-            store_data: StoreData::new(),
             limiter: None,
             default_callee,
             data: ManuallyDrop::new(data),
@@ -275,8 +303,23 @@ impl<T> Store<T> {
     /// Note that this limiter is only used to limit the creation/growth of
     /// resources in the future, this does not retroactively attempt to apply
     /// limits to the [`Store`].
-    pub fn limiter(&mut self, limiter: impl crate::ResourceLimiter) {
-        self.inner.limiter = Some(Box::new(crate::limits::ResourceLimiterProxy(limiter)));
+    pub fn limiter(
+        &mut self,
+        mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync + 'static,
+    ) {
+        // Apply the limits on instances, tables, and memory given by the limiter:
+        let inner = &mut self.inner;
+        let (instance_limit, table_limit, memory_limit) = {
+            let l = limiter(&mut inner.data);
+            (l.instances(), l.tables(), l.memories())
+        };
+        let innermost = &mut inner.inner;
+        innermost.instance_limit = instance_limit;
+        innermost.table_limit = table_limit;
+        innermost.memory_limit = memory_limit;
+
+        // Save the limiter accessor function:
+        inner.limiter = Some(Box::new(limiter));
     }
 
     /// Returns the [`Engine`] that this store is associated with.
@@ -565,7 +608,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     }
 }
 
-impl<T: ?Sized> StoreInner<T> {
+impl<T> StoreInner<T> {
     fn data(&self) -> &T {
         &self.data
     }
@@ -574,16 +617,48 @@ impl<T: ?Sized> StoreInner<T> {
         &mut self.data
     }
 
+    pub fn limiter(&mut self) -> Option<&mut dyn crate::limits::ResourceLimiter> {
+        let accessor = self.limiter.as_mut()?;
+        Some(accessor(&mut self.data))
+    }
+}
+
+impl StoreInnermost {
+    pub fn bump_resource_counts(&mut self, module: &Module) -> Result<()> {
+        fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
+            let new = slot.saturating_add(amt);
+            if new > max {
+                bail!(
+                    "resource limit exceeded: {} count too high at {}",
+                    desc,
+                    new
+                );
+            }
+            *slot = new;
+            Ok(())
+        }
+
+        let module = module.env_module();
+        let memories = module.memory_plans.len() - module.num_imported_memories;
+        let tables = module.table_plans.len() - module.num_imported_tables;
+
+        bump(&mut self.instance_count, self.instance_limit, 1, "instance")?;
+        bump(
+            &mut self.memory_count,
+            self.memory_limit,
+            memories,
+            "memory",
+        )?;
+        bump(&mut self.table_count, self.table_limit, tables, "table")?;
+
+        Ok(())
+    }
     pub fn async_support(&self) -> bool {
         self.engine().config().async_support
     }
 
     pub fn engine(&self) -> &Engine {
         &self.engine
-    }
-
-    pub fn limiter(&mut self) -> Option<&mut dyn wasmtime_runtime::ResourceLimiter> {
-        self.limiter.as_mut().map(|l| &mut **l)
     }
 
     pub fn store_data(&self) -> &StoreData {
@@ -652,43 +727,6 @@ impl<T: ?Sized> StoreInner<T> {
         // For this crate's API, we ensure that `set_stack_canary` invariants
         // are upheld for all host-->Wasm calls.
         unsafe { wasmtime_runtime::gc(&self.modules, &mut self.externref_activations_table) }
-    }
-
-    pub fn bump_resource_counts(&mut self, module: &Module) -> Result<()> {
-        fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
-            let new = slot.saturating_add(amt);
-            if new > max {
-                bail!(
-                    "resource limit exceeded: {} count too high at {}",
-                    desc,
-                    new
-                );
-            }
-            *slot = new;
-            Ok(())
-        }
-
-        let module = module.env_module();
-        let memories = module.memory_plans.len() - module.num_imported_memories;
-        let tables = module.table_plans.len() - module.num_imported_tables;
-        let (max_instances, max_memories, max_tables) = self.limits();
-
-        bump(&mut self.instance_count, max_instances, 1, "instance")?;
-        bump(&mut self.memory_count, max_memories, memories, "memory")?;
-        bump(&mut self.table_count, max_tables, tables, "table")?;
-
-        Ok(())
-    }
-
-    fn limits(&self) -> (usize, usize, usize) {
-        self.limiter
-            .as_ref()
-            .map(|l| (l.instances(), l.memories(), l.tables()))
-            .unwrap_or((
-                crate::limits::DEFAULT_INSTANCE_LIMIT,
-                crate::limits::DEFAULT_MEMORY_LIMIT,
-                crate::limits::DEFAULT_TABLE_LIMIT,
-            ))
     }
 
     pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
@@ -1121,7 +1159,7 @@ impl AsyncCx {
 
 unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     fn vminterrupts(&self) -> *mut VMInterrupts {
-        <StoreInner<T>>::vminterrupts(self)
+        <StoreInnermost>::vminterrupts(self)
     }
 
     fn externref_activations_table(
@@ -1130,11 +1168,12 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         &mut VMExternRefActivationsTable,
         &dyn wasmtime_runtime::ModuleInfoLookup,
     ) {
-        (&mut self.externref_activations_table, &self.modules)
+        let inner = &mut self.inner;
+        (&mut inner.externref_activations_table, &inner.modules)
     }
 
     fn limiter(&mut self) -> Option<&mut dyn wasmtime_runtime::ResourceLimiter> {
-        self.limiter.as_mut().map(|l| &mut **l)
+        <Self>::limiter(self)
     }
 
     fn out_of_gas(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
@@ -1196,7 +1235,7 @@ impl<T> Drop for Store<T> {
     }
 }
 
-impl<T: ?Sized> Drop for StoreInner<T> {
+impl Drop for StoreInnermost {
     fn drop(&mut self) {
         // NB it's important that this destructor does not access `self.data`.
         // That is deallocated by `Drop for Store<T>` above.

@@ -566,11 +566,11 @@ impl Table {
     /// Panics if `store` does not own this table.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
         let ty = self.ty(&store).element().clone();
-        let mut store = store.as_context_mut().opaque();
-        let init = init.into_table_element(&mut store, ty)?;
-        let table = self.wasmtime_table(&mut store);
+        let init = init.into_table_element(&mut store.as_context_mut().opaque(), ty)?;
+        let table = self.wasmtime_table(&mut store.as_context_mut().opaque());
+        let store = store.as_context_mut();
         unsafe {
-            match (*table).grow(delta, init, store.limiter()) {
+            match (*table).grow(delta, init, store.0.limiter()) {
                 Some(size) => {
                     let vm = (*table).vmtable();
                     *store[self.0].definition = vm;
