@@ -1266,6 +1266,211 @@ pub(crate) fn lower_load<C: LowerCtx<I = Inst>, F: FnMut(&mut C, Writable<Reg>, 
     f(ctx, rd, elem_ty, mem);
 }
 
+pub(crate) fn emit_shl_i128<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    src: ValueRegs<Reg>,
+    dst: ValueRegs<Writable<Reg>>,
+    amt: Reg,
+) {
+    let src_lo = src.regs()[0];
+    let src_hi = src.regs()[1];
+    let dst_lo = dst.regs()[0];
+    let dst_hi = dst.regs()[1];
+
+    //     mvn     inv_amt, amt
+    //     lsr     tmp1, src_lo, #1
+    //     lsl     tmp2, src_hi, amt
+    //     lsr     tmp1, tmp1, inv_amt
+    //     lsl     tmp3, src_lo, amt
+    //     tst     amt, #0x40
+    //     orr     tmp2, tmp2, tmp1
+    //     csel    dst_hi, tmp3, tmp2, ne
+    //     csel    dst_lo, xzr, tmp3, ne
+
+    let xzr = writable_zero_reg();
+    let inv_amt = ctx.alloc_tmp(I64).only_reg().unwrap();
+    let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
+    let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+    let tmp3 = ctx.alloc_tmp(I64).only_reg().unwrap();
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::OrrNot32,
+        rd: inv_amt,
+        rn: xzr.to_reg(),
+        rm: amt,
+    });
+
+    ctx.emit(Inst::AluRRImmShift {
+        alu_op: ALUOp::Lsr64,
+        rd: tmp1,
+        rn: src_lo,
+        immshift: ImmShift::maybe_from_u64(1).unwrap(),
+    });
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::Lsl64,
+        rd: tmp2,
+        rn: src_hi,
+        rm: amt,
+    });
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::Lsr64,
+        rd: tmp1,
+        rn: tmp1.to_reg(),
+        rm: inv_amt.to_reg(),
+    });
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::Lsl64,
+        rd: tmp3,
+        rn: src_lo,
+        rm: amt,
+    });
+
+    ctx.emit(Inst::AluRRImmLogic {
+        alu_op: ALUOp::AndS64,
+        rd: xzr,
+        rn: amt,
+        imml: ImmLogic::maybe_from_u64(64, I64).unwrap(),
+    });
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::Orr64,
+        rd: tmp2,
+        rn: tmp2.to_reg(),
+        rm: tmp1.to_reg(),
+    });
+
+    ctx.emit(Inst::CSel {
+        cond: Cond::Ne,
+        rd: dst_hi,
+        rn: tmp3.to_reg(),
+        rm: tmp2.to_reg(),
+    });
+
+    ctx.emit(Inst::CSel {
+        cond: Cond::Ne,
+        rd: dst_lo,
+        rn: xzr.to_reg(),
+        rm: tmp3.to_reg(),
+    });
+}
+
+pub(crate) fn emit_shr_i128<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    src: ValueRegs<Reg>,
+    dst: ValueRegs<Writable<Reg>>,
+    amt: Reg,
+    is_signed: bool,
+) {
+    let src_lo = src.regs()[0];
+    let src_hi = src.regs()[1];
+    let dst_lo = dst.regs()[0];
+    let dst_hi = dst.regs()[1];
+
+    //     mvn       inv_amt, amt
+    //     lsl       tmp1, src_lo, #1
+    //     lsr       tmp2, src_hi, amt
+    //     lsl       tmp1, tmp1, inv_amt
+    //     lsr/asr   tmp3, src_lo, amt
+    //     tst       amt, #0x40
+    //     orr       tmp2, tmp2, tmp1
+    //
+    //     if signed:
+    //         asr     tmp4, src_hi, #63
+    //         csel    dst_hi, tmp4, tmp3, ne
+    //     else:
+    //         csel    dst_hi, xzr, tmp3, ne
+    //
+    //     csel      dst_lo, tmp3, tmp2, ne
+
+    let xzr = writable_zero_reg();
+    let inv_amt = ctx.alloc_tmp(I64).only_reg().unwrap();
+    let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
+    let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+    let tmp3 = ctx.alloc_tmp(I64).only_reg().unwrap();
+    let tmp4 = ctx.alloc_tmp(I64).only_reg().unwrap();
+
+    let shift_op = if is_signed {
+        ALUOp::Asr64
+    } else {
+        ALUOp::Lsr64
+    };
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::OrrNot32,
+        rd: inv_amt,
+        rn: xzr.to_reg(),
+        rm: amt,
+    });
+
+    ctx.emit(Inst::AluRRImmShift {
+        alu_op: ALUOp::Lsl64,
+        rd: tmp1,
+        rn: src_hi,
+        immshift: ImmShift::maybe_from_u64(1).unwrap(),
+    });
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::Lsr64,
+        rd: tmp2,
+        rn: src_lo,
+        rm: amt,
+    });
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::Lsl64,
+        rd: tmp1,
+        rn: tmp1.to_reg(),
+        rm: inv_amt.to_reg(),
+    });
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: shift_op,
+        rd: tmp3,
+        rn: src_hi,
+        rm: amt,
+    });
+
+    ctx.emit(Inst::AluRRImmLogic {
+        alu_op: ALUOp::AndS64,
+        rd: xzr,
+        rn: amt,
+        imml: ImmLogic::maybe_from_u64(64, I64).unwrap(),
+    });
+
+    if is_signed {
+        ctx.emit(Inst::AluRRImmShift {
+            alu_op: ALUOp::Asr64,
+            rd: tmp4,
+            rn: src_hi,
+            immshift: ImmShift::maybe_from_u64(63).unwrap(),
+        });
+    }
+
+    ctx.emit(Inst::AluRRR {
+        alu_op: ALUOp::Orr64,
+        rd: tmp2,
+        rn: tmp2.to_reg(),
+        rm: tmp1.to_reg(),
+    });
+
+    ctx.emit(Inst::CSel {
+        cond: Cond::Ne,
+        rd: dst_hi,
+        rn: if is_signed { tmp4 } else { xzr }.to_reg(),
+        rm: tmp3.to_reg(),
+    });
+
+    ctx.emit(Inst::CSel {
+        cond: Cond::Ne,
+        rd: dst_lo,
+        rn: tmp3.to_reg(),
+        rm: tmp2.to_reg(),
+    });
+}
+
 //=============================================================================
 // Lowering-backend trait implementation.
 

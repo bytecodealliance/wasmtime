@@ -768,9 +768,26 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
+            let out_regs = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            if !ty.is_vector() {
+            if ty == I128 {
+                // TODO: We can use immlogic here
+                let src = put_input_in_regs(ctx, inputs[0]);
+                // We can ignore the top half of the shift amount register
+                let amt = put_input_in_regs(ctx, inputs[1]).regs()[0];
+
+                match op {
+                    Opcode::Ishl => emit_shl_i128(ctx, src, out_regs, amt),
+                    Opcode::Ushr => {
+                        emit_shr_i128(ctx, src, out_regs, amt, /* is_signed = */ false)
+                    }
+                    Opcode::Sshr => {
+                        emit_shr_i128(ctx, src, out_regs, amt, /* is_signed = */ true)
+                    }
+                    _ => unreachable!(),
+                };
+            } else if !ty.is_vector() {
+                let rd = out_regs.only_reg().unwrap();
                 let size = OperandSize::from_bits(ty_bits(ty));
                 let narrow_mode = match (op, size) {
                     (Opcode::Ishl, _) => NarrowValueMode::None,
@@ -790,6 +807,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 };
                 ctx.emit(alu_inst_immshift(alu_op, rd, rn, rm));
             } else {
+                let rd = out_regs.only_reg().unwrap();
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let size = VectorSize::from_ty(ty);
                 let (alu_op, is_right_shift) = match op {
