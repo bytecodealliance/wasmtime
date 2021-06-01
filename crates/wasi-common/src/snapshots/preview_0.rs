@@ -18,6 +18,7 @@ wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/old/snapshot_0/witx/wasi_unstable.witx"],
     errors: { errno => Error },
     async: *,
+    wasmtime: false,
 });
 
 impl wiggle::GuestErrorType for types::Errno {

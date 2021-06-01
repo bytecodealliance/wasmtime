@@ -14,6 +14,7 @@ pub struct Config {
     pub witx: WitxConf,
     pub errors: ErrorConf,
     pub async_: AsyncConf,
+    pub wasmtime: bool,
 }
 
 mod kw {
@@ -22,6 +23,7 @@ mod kw {
     syn::custom_keyword!(block_on);
     syn::custom_keyword!(errors);
     syn::custom_keyword!(target);
+    syn::custom_keyword!(wasmtime);
 }
 
 #[derive(Debug, Clone)]
@@ -29,6 +31,7 @@ pub enum ConfigField {
     Witx(WitxConf),
     Error(ErrorConf),
     Async(AsyncConf),
+    Wasmtime(bool),
 }
 
 impl Parse for ConfigField {
@@ -60,6 +63,10 @@ impl Parse for ConfigField {
                 blocking: true,
                 functions: input.parse()?,
             }))
+        } else if lookahead.peek(kw::wasmtime) {
+            input.parse::<kw::wasmtime>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Wasmtime(input.parse::<syn::LitBool>()?.value))
         } else {
             Err(lookahead.error())
         }
@@ -71,6 +78,7 @@ impl Config {
         let mut witx = None;
         let mut errors = None;
         let mut async_ = None;
+        let mut wasmtime = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -91,6 +99,12 @@ impl Config {
                     }
                     async_ = Some(c);
                 }
+                ConfigField::Wasmtime(c) => {
+                    if wasmtime.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `wasmtime` field"));
+                    }
+                    wasmtime = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -99,6 +113,7 @@ impl Config {
                 .ok_or_else(|| Error::new(err_loc, "`witx` field required"))?,
             errors: errors.take().unwrap_or_default(),
             async_: async_.take().unwrap_or_default(),
+            wasmtime: wasmtime.unwrap_or(true),
         })
     }
 

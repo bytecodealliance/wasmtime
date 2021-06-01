@@ -152,7 +152,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         &config.errors,
         &config.async_,
         &doc,
-        cfg!(feature = "wasmtime"),
+        cfg!(feature = "wasmtime") && config.wasmtime,
     )
     .expect("validating codegen settings");
 
