@@ -468,9 +468,8 @@ pub fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
 
 pub fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
     match isa.triple().default_calling_convention() {
-        Ok(CallingConvention::SystemV) | Ok(CallingConvention::AppleAarch64) | Err(()) => {
-            CallConv::WasmtimeSystemV
-        }
+        Ok(CallingConvention::AppleAarch64) => CallConv::WasmtimeAppleAarch64,
+        Ok(CallingConvention::SystemV) | Err(()) => CallConv::WasmtimeSystemV,
         Ok(CallingConvention::WindowsFastcall) => CallConv::WasmtimeFastcall,
         Ok(unimp) => unimplemented!("calling convention: {:?}", unimp),
     }

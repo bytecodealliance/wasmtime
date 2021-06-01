@@ -652,7 +652,8 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
                 || call_conv.extends_baldrdash()
                 || call_conv.extends_windows_fastcall()
                 || call_conv == isa::CallConv::AppleAarch64
-                || call_conv == isa::CallConv::WasmtimeSystemV,
+                || call_conv == isa::CallConv::WasmtimeSystemV
+                || call_conv == isa::CallConv::WasmtimeAppleAarch64,
             "Unsupported calling convention: {:?}",
             call_conv
         );
