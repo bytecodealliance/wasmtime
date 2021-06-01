@@ -3,6 +3,7 @@
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::s390x::settings as s390x_settings;
+#[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
