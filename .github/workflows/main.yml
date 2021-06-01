@@ -293,14 +293,7 @@ jobs:
       if: matrix.target == ''
 
     # Build and test all features except for lightbeam
-    - run: |
-        cargo test \
-            --features test-programs/test_programs \
-            --workspace \
-            --exclude '*lightbeam*' \
-            --exclude 'wasmtime-wasi-*' \
-            --exclude 'peepmatic*' \
-            --exclude wasi-crypto
+    - run: ./ci/run-tests.sh --locked
       env:
         RUST_BACKTRACE: 1
 
@@ -349,7 +342,7 @@ jobs:
     - run: rustup target add wasm32-unknown-unknown
 
     # Run the old x86 backend CI (we will eventually remove this).
-    - run: ./ci/run-old-x86-ci.sh
+    - run: ./ci/run-tests.sh --features old-x86-backend --locked
       env:
         RUST_BACKTRACE: 1
 
