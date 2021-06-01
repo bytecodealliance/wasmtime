@@ -969,6 +969,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(not(target_arch = "x86_64"), ignore)]
     fn memcpy() {
         use core::str::FromStr;
         use cranelift_codegen::{isa, settings};
@@ -1031,6 +1032,7 @@ block0:
     }
 
     #[test]
+    #[cfg_attr(not(target_arch = "x86_64"), ignore)]
     fn small_memcpy() {
         use core::str::FromStr;
         use cranelift_codegen::{isa, settings};
@@ -1098,6 +1100,7 @@ block0:
     }
 
     #[test]
+    #[cfg_attr(not(target_arch = "x86_64"), ignore)]
     fn not_so_small_memcpy() {
         use core::str::FromStr;
         use cranelift_codegen::{isa, settings};
@@ -1168,6 +1171,7 @@ block0:
     }
 
     #[test]
+    #[cfg_attr(not(target_arch = "x86_64"), ignore)]
     fn small_memset() {
         use core::str::FromStr;
         use cranelift_codegen::{isa, settings};
@@ -1221,6 +1225,7 @@ block0:
     }
 
     #[test]
+    #[cfg_attr(not(target_arch = "x86_64"), ignore)]
     fn not_so_small_memset() {
         use core::str::FromStr;
         use cranelift_codegen::{isa, settings};
