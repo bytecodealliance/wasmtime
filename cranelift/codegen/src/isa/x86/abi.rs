@@ -514,7 +514,7 @@ pub fn prologue_epilogue(func: &mut ir::Function, isa: &dyn TargetIsa) -> Codege
         }
         CallConv::Probestack => unimplemented!("probestack calling convention"),
         CallConv::Baldrdash2020 => unimplemented!("Baldrdash ABI 2020"),
-        CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
     }
 }
 

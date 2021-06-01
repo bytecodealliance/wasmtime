@@ -183,7 +183,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         args_or_rets: ArgsOrRets,
         add_ret_area_ptr: bool,
     ) -> CodegenResult<(Vec<ABIArg>, i64, Option<usize>)> {
-        let is_apple_cc = call_conv == isa::CallConv::AppleAarch64;
+        let is_apple_cc = call_conv.extends_apple_aarch64();
         let is_baldrdash = call_conv.extends_baldrdash();
         let has_baldrdash_tls = call_conv == isa::CallConv::Baldrdash2020;
 

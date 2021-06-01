@@ -463,6 +463,7 @@ pub(crate) enum InstructionSet {
     AVX512BITALG,
     AVX512DQ,
     AVX512F,
+    AVX512VBMI,
     AVX512VL,
 }
 
@@ -999,10 +1000,11 @@ impl fmt::Display for SseOpcode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum Avx512Opcode {
     Vcvtudq2ps,
     Vpabsq,
+    Vpermi2b,
     Vpmullq,
     Vpopcntb,
 }
@@ -1015,6 +1017,9 @@ impl Avx512Opcode {
                 smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL]
             }
             Avx512Opcode::Vpabsq => smallvec![InstructionSet::AVX512F, InstructionSet::AVX512VL],
+            Avx512Opcode::Vpermi2b => {
+                smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512VBMI]
+            }
             Avx512Opcode::Vpmullq => smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512DQ],
             Avx512Opcode::Vpopcntb => {
                 smallvec![InstructionSet::AVX512VL, InstructionSet::AVX512BITALG]
@@ -1028,6 +1033,7 @@ impl fmt::Debug for Avx512Opcode {
         let name = match self {
             Avx512Opcode::Vcvtudq2ps => "vcvtudq2ps",
             Avx512Opcode::Vpabsq => "vpabsq",
+            Avx512Opcode::Vpermi2b => "vpermi2b",
             Avx512Opcode::Vpmullq => "vpmullq",
             Avx512Opcode::Vpopcntb => "vpopcntb",
         };

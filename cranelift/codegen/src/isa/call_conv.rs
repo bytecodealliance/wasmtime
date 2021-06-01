@@ -18,7 +18,7 @@ pub enum CallConv {
     SystemV,
     /// Windows "fastcall" convention, also used for x64 and ARM.
     WindowsFastcall,
-    /// Mac aarch64 calling convention, which is a tweak aarch64 ABI.
+    /// Mac aarch64 calling convention, which is a tweaked aarch64 ABI.
     AppleAarch64,
     /// SpiderMonkey WebAssembly convention on systems using natively SystemV.
     BaldrdashSystemV,
@@ -39,6 +39,10 @@ pub enum CallConv {
     ///
     /// Differs from fastcall in the same way as `WasmtimeSystemV`.
     WasmtimeFastcall,
+    /// Wasmtime equivalent of AppleAarch64, not ABI-stable.
+    ///
+    /// Differs from apple-aarch64 in the same way as `WasmtimeSystemV`.
+    WasmtimeAppleAarch64,
 }
 
 impl CallConv {
@@ -78,6 +82,14 @@ impl CallConv {
         }
     }
 
+    /// Is the calling convention extending the Apple aarch64 ABI?
+    pub fn extends_apple_aarch64(self) -> bool {
+        match self {
+            Self::AppleAarch64 | Self::WasmtimeAppleAarch64 => true,
+            _ => false,
+        }
+    }
+
     /// Is the calling convention extending the Baldrdash ABI?
     pub fn extends_baldrdash(self) -> bool {
         match self {
@@ -89,7 +101,7 @@ impl CallConv {
     /// Is the calling convention extending the Wasmtime ABI?
     pub fn extends_wasmtime(self) -> bool {
         match self {
-            Self::WasmtimeSystemV | Self::WasmtimeFastcall => true,
+            Self::WasmtimeSystemV | Self::WasmtimeFastcall | Self::WasmtimeAppleAarch64 => true,
             _ => false,
         }
     }
@@ -109,6 +121,7 @@ impl fmt::Display for CallConv {
             Self::Probestack => "probestack",
             Self::WasmtimeSystemV => "wasmtime_system_v",
             Self::WasmtimeFastcall => "wasmtime_fastcall",
+            Self::WasmtimeAppleAarch64 => "wasmtime_apple_aarch64",
         })
     }
 }
@@ -128,6 +141,7 @@ impl str::FromStr for CallConv {
             "probestack" => Ok(Self::Probestack),
             "wasmtime_system_v" => Ok(Self::WasmtimeSystemV),
             "wasmtime_fastcall" => Ok(Self::WasmtimeFastcall),
+            "wasmtime_apple_aarch64" => Ok(Self::WasmtimeAppleAarch64),
             _ => Err(()),
         }
     }

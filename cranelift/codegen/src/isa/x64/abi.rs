@@ -906,7 +906,7 @@ fn get_intreg_for_retval(
             _ => None,
         },
         CallConv::BaldrdashWindows | CallConv::Probestack => todo!(),
-        CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
     }
 }
 
@@ -936,7 +936,7 @@ fn get_fltreg_for_retval(
             _ => None,
         },
         CallConv::BaldrdashWindows | CallConv::Probestack => todo!(),
-        CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
     }
 }
 
@@ -1005,7 +1005,7 @@ fn get_callee_saves(call_conv: &CallConv, regs: &Set<Writable<RealReg>>) -> Vec<
             .filter(|r| is_callee_save_fastcall(r.to_reg()))
             .collect(),
         CallConv::Probestack => todo!("probestack?"),
-        CallConv::AppleAarch64 => unreachable!(),
+        CallConv::AppleAarch64 | CallConv::WasmtimeAppleAarch64 => unreachable!(),
     };
     // Sort registers for deterministic code output. We can do an unstable sort because the
     // registers will be unique (there are no dups).
