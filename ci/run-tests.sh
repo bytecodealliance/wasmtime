@@ -8,7 +8,7 @@ then
 fi
 
 cargo test \
-    --features "test-programs/test_programs wiggle/wasmtime_async wasmtime/wat" \
+    --features "test-programs/test_programs" \
     $EXTRA_FEATURE \
     --locked \
     --workspace \
