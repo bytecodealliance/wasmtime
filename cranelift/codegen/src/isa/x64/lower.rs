@@ -1668,8 +1668,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rhs = put_input_in_reg(ctx, inputs[1]);
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
-                if isa_flags.use_avx512f_simd() || isa_flags.use_avx512vl_simd() {
-                    // With the right AVX512 features (VL, DQ) this operation
+                if isa_flags.use_avx512vl_simd() && isa_flags.use_avx512dq_simd() {
+                    // With the right AVX512 features (VL + DQ) this operation
                     // can lower to a single operation.
                     ctx.emit(Inst::xmm_rm_r_evex(
                         Avx512Opcode::Vpmullq,
@@ -1905,7 +1905,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
             if ty == types::I64X2 {
-                if isa_flags.use_avx512f_simd() || isa_flags.use_avx512vl_simd() {
+                if isa_flags.use_avx512vl_simd() && isa_flags.use_avx512f_simd() {
                     ctx.emit(Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, src, dst));
                 } else {
                     // If `VPABSQ` from AVX512 is unavailable, we use a separate register, `tmp`, to
@@ -2426,7 +2426,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ));
             } else if dst_ty == types::I64X2 && op == Opcode::Sshr {
                 // The `sshr.i8x16` CLIF instruction has no single x86 instruction in the older feature sets; newer ones
-                // like AVX512VL and AVX512F include VPSRAQ, a 128-bit instruction that would fit here, but this backend
+                // like AVX512VL + AVX512F include VPSRAQ, a 128-bit instruction that would fit here, but this backend
                 // does not currently have support for EVEX encodings (TODO when EVEX support is available, add an
                 // alternate lowering here). To remedy this, we extract each 64-bit lane to a GPR, shift each using a
                 // scalar instruction, and insert the shifted values back in the `dst` XMM register.
@@ -3084,8 +3084,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
-                if isa_flags.use_avx512vl_simd() || isa_flags.use_avx512bitalg_simd() {
-                    // When either AVX512VL or AVX512BITALG are available,
+                if isa_flags.use_avx512vl_simd() && isa_flags.use_avx512bitalg_simd() {
+                    // When AVX512VL and AVX512BITALG are available,
                     // `popcnt.i8x16` can be lowered to a single instruction.
                     assert_eq!(ty, types::I8X16);
                     ctx.emit(Inst::xmm_unary_rm_r_evex(
@@ -4163,8 +4163,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
-                if isa_flags.use_avx512f_simd() || isa_flags.use_avx512vl_simd() {
-                    // When either AVX512VL or AVX512F are available,
+                if isa_flags.use_avx512vl_simd() && isa_flags.use_avx512f_simd() {
+                    // When AVX512VL and AVX512F are available,
                     // `fcvt_from_uint` can be lowered to a single instruction.
                     ctx.emit(Inst::xmm_unary_rm_r_evex(
                         Avx512Opcode::Vcvtudq2ps,
