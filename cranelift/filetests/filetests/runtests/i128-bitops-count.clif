@@ -25,3 +25,20 @@ block0(v0: i64, v1: i64):
 ; run: %clz(0x00000000_00010000, 0x00000001_00000000) == 31
 ; run: %clz(0x00000000_00010000, 0x00000000_00000000) == 111
 ; run: %clz(0x00000000_00000000, 0x00000000_00000000) == 128
+
+function %popcnt_i128(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+
+    v3 = popcnt v2
+
+    v4, v5 = isplit v3
+    v6 = iadd v4, v5
+    return v6
+}
+; run: %popcnt_i128(0, 0) == 0
+; run: %popcnt_i128(-1, 0) == 64
+; run: %popcnt_i128(0, -1) == 64
+; run: %popcnt_i128(-1, -1) == 128
+; run: %popcnt_i128(0x55555555_55555555, 0x55555555_55555555) == 64
+; run: %popcnt_i128(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == 96

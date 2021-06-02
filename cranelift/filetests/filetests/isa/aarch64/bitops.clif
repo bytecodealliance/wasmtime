@@ -207,6 +207,24 @@ block0(v0: i64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
+function %d(i128) -> i128 {
+block0(v0: i128):
+    v1 = popcnt v0
+    return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: fmov d0, x0
+; nextln: mov v0.d[1], x1
+; nextln: cnt v0.16b, v0.16b
+; nextln: addv b0, v0.16b
+; nextln: umov w0, v0.b[0]
+; nextln: movz x1, #0
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
 function %d(i64) -> i64 {
 block0(v0: i64):
     v1 = popcnt v0
