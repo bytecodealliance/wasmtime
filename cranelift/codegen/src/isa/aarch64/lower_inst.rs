@@ -3175,6 +3175,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (I32, Opcode::SwidenHigh) => (VecExtendOp::Sxtl16, true),
                 (I32, Opcode::UwidenLow) => (VecExtendOp::Uxtl16, false),
                 (I32, Opcode::UwidenHigh) => (VecExtendOp::Uxtl16, true),
+                (I64, Opcode::SwidenLow) => (VecExtendOp::Sxtl32, false),
+                (I64, Opcode::SwidenHigh) => (VecExtendOp::Sxtl32, true),
+                (I64, Opcode::UwidenLow) => (VecExtendOp::Uxtl32, false),
+                (I64, Opcode::UwidenHigh) => (VecExtendOp::Uxtl32, true),
                 _ => {
                     return Err(CodegenError::Unsupported(format!(
                         "Unsupported SIMD vector lane type: {:?}",
