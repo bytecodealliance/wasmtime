@@ -2612,6 +2612,28 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Fcvtn32,
+            rd: writable_vreg(0),
+            rn: vreg(0),
+            high_half: false,
+        },
+        "0068210E",
+        "fcvtn v0.4h, v0.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Fcvtn64,
+            rd: writable_vreg(31),
+            rn: vreg(30),
+            high_half: true,
+        },
+        "DF6B614E",
+        "fcvtn2 v31.4s, v30.2d",
+    ));
+
+    insns.push((
         Inst::VecRRPair {
             op: VecPairOp::Addp,
             rd: writable_vreg(0),
