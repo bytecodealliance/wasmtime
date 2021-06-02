@@ -396,6 +396,10 @@ pub enum VecRRNarrowOp {
     Uqxtn32,
     /// Unsigned saturating extract narrow, 64-bit elements
     Uqxtn64,
+    /// Floating-point convert to lower precision narrow, 32-bit elements
+    Fcvtn32,
+    /// Floating-point convert to lower precision narrow, 64-bit elements
+    Fcvtn64,
 }
 
 /// A vector operation on a pair of elements with one register.
@@ -4072,6 +4076,18 @@ impl Inst {
                     }
                     (VecRRNarrowOp::Uqxtn64, true) => {
                         ("uqxtn2", VectorSize::Size32x4, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Fcvtn32, false) => {
+                        ("fcvtn", VectorSize::Size16x4, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Fcvtn32, true) => {
+                        ("fcvtn2", VectorSize::Size16x8, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Fcvtn64, false) => {
+                        ("fcvtn", VectorSize::Size32x2, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Fcvtn64, true) => {
+                        ("fcvtn2", VectorSize::Size32x4, VectorSize::Size64x2)
                     }
                 };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
