@@ -2128,6 +2128,8 @@ impl MachInstEmit for Inst {
                     VecRRNarrowOp::Uqxtn16 => (0b1, 0b00, 0b10100),
                     VecRRNarrowOp::Uqxtn32 => (0b1, 0b01, 0b10100),
                     VecRRNarrowOp::Uqxtn64 => (0b1, 0b10, 0b10100),
+                    VecRRNarrowOp::Fcvtn32 => (0b0, 0b00, 0b10110),
+                    VecRRNarrowOp::Fcvtn64 => (0b0, 0b01, 0b10110),
                 };
 
                 sink.put4(enc_vec_rr_misc(
