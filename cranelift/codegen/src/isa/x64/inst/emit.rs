@@ -137,7 +137,7 @@ pub(crate) fn emit(
     // Certain instructions may be present in more than one ISA feature set; we must at least match
     // one of them in the target CPU.
     let isa_requirements = inst.available_in_any_isa();
-    if !isa_requirements.is_empty() && !isa_requirements.iter().any(matches_isa_flags) {
+    if !isa_requirements.is_empty() && !isa_requirements.iter().all(matches_isa_flags) {
         panic!(
             "Cannot emit inst '{:?}' for target; failed to match ISA requirements: {:?}",
             inst, isa_requirements
