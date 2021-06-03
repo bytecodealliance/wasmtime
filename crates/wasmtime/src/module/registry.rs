@@ -3,7 +3,7 @@
 use crate::{signatures::SignatureCollection, Module};
 use std::{
     collections::BTreeMap,
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 use wasmtime_environ::{
     entity::EntityRef,
@@ -15,7 +15,7 @@ use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
 lazy_static::lazy_static! {
-    static ref GLOBAL_MODULES: Mutex<GlobalModuleRegistry> = Default::default();
+    static ref GLOBAL_MODULES: RwLock<GlobalModuleRegistry> = Default::default();
 }
 
 fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u32)> {
@@ -88,7 +88,7 @@ impl ModuleRegistry {
         );
         assert!(prev.is_none());
 
-        GLOBAL_MODULES.lock().unwrap().register(start, end, module);
+        GLOBAL_MODULES.write().unwrap().register(start, end, module);
     }
 
     /// Looks up a trampoline from an anyfunc.
@@ -100,7 +100,7 @@ impl ModuleRegistry {
 
 impl Drop for ModuleRegistry {
     fn drop(&mut self) {
-        let mut info = GLOBAL_MODULES.lock().unwrap();
+        let mut info = GLOBAL_MODULES.write().unwrap();
         for end in self.0.keys() {
             info.unregister(*end);
         }
@@ -235,7 +235,7 @@ impl GlobalModuleRegistry {
     /// Returns whether the `pc`, according to globally registered information,
     /// is a wasm trap or not.
     pub(crate) fn is_wasm_pc(pc: usize) -> bool {
-        let modules = GLOBAL_MODULES.lock().unwrap();
+        let modules = GLOBAL_MODULES.read().unwrap();
 
         match modules.module(pc) {
             Some(entry) => match func_by_pc(&entry.module, pc) {
@@ -259,11 +259,8 @@ impl GlobalModuleRegistry {
 
     // Work with the global instance of `GlobalModuleRegistry`. Note that only
     // shared access is allowed, this isn't intended to mutate the contents.
-    //
-    // (right now we use a `Mutex` but if motivated we could one day use a
-    // `RwLock`)
     pub(crate) fn with<R>(f: impl FnOnce(&GlobalModuleRegistry) -> R) -> R {
-        f(&GLOBAL_MODULES.lock().unwrap())
+        f(&GLOBAL_MODULES.read().unwrap())
     }
 
     /// Fetches frame information about a program counter in a backtrace.
