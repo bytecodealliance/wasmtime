@@ -32,12 +32,12 @@ fn runtime_value(v: &wast::Expression<'_>) -> Result<Val> {
 
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
-pub struct WastContext {
+pub struct WastContext<T> {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<Instance>,
-    linker: Linker<()>,
-    store: Store<()>,
+    linker: Linker<T>,
+    store: Store<T>,
 }
 
 enum Outcome<T = Vec<Val>> {
@@ -54,9 +54,9 @@ impl<T> Outcome<T> {
     }
 }
 
-impl WastContext {
+impl<T> WastContext<T> {
     /// Construct a new instance of `WastContext`.
-    pub fn new(store: Store<()>) -> Self {
+    pub fn new(store: Store<T>) -> Self {
         // Spec tests will redefine the same module/name sometimes, so we need
         // to allow shadowing in the linker which picks the most recent
         // definition as what to link when linking.

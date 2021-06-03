@@ -42,9 +42,9 @@ fn log_wasm(wasm: &[u8]) {
     }
 }
 
-fn create_store(engine: &Engine) -> Store<()> {
-    let mut store = Store::new(&engine, ());
-    store.limiter(
+fn create_store(engine: &Engine) -> Store<StoreLimits> {
+    let mut store = Store::new(
+        &engine,
         StoreLimitsBuilder::new()
             // The limits here are chosen based on the default "maximum type size"
             // configured in wasm-smith, which is 1000. This means that instances
@@ -55,6 +55,7 @@ fn create_store(engine: &Engine) -> Store<()> {
             .memories(1100)
             .build(),
     );
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
     store
 }
 
@@ -268,7 +269,7 @@ pub fn differential_execution(
         }
     }
 
-    fn init_hang_limit(store: &mut Store<()>, instance: Instance) {
+    fn init_hang_limit<T>(store: &mut Store<T>, instance: Instance) {
         match instance.get_export(&mut *store, "hangLimitInitializer") {
             None => return,
             Some(Extern::Func(f)) => {
@@ -337,7 +338,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
     let mut config: Option<Config> = None;
     let mut engine: Option<Engine> = None;
-    let mut store: Option<Store<()>> = None;
+    let mut store: Option<Store<StoreLimits>> = None;
     let mut modules: HashMap<usize, Module> = Default::default();
     let mut instances: HashMap<usize, Instance> = Default::default();
 
@@ -501,7 +502,7 @@ pub fn table_ops(
         const MAX_GCS: usize = 5;
 
         let num_gcs = AtomicUsize::new(0);
-        let gc = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| {
+        let gc = Func::wrap(&mut store, move |mut caller: Caller<'_, StoreLimits>| {
             if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
                 caller.gc();
             }

@@ -4,7 +4,7 @@ use std::fmt::Write;
 use wasmtime::*;
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_linker<'module>(store: &mut Store<()>, module: &Module) -> Linker<()> {
+pub fn dummy_linker<'module, T>(store: &mut Store<T>, module: &Module) -> Linker<T> {
     let mut linker = Linker::new(store.engine());
     linker.allow_shadowing(true);
     for import in module.imports() {
@@ -34,7 +34,7 @@ pub fn dummy_linker<'module>(store: &mut Store<()>, module: &Module) -> Linker<(
 }
 
 /// Construct a dummy `Extern` from its type signature
-pub fn dummy_extern(store: &mut Store<()>, ty: ExternType) -> Extern {
+pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Extern {
     match ty {
         ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
@@ -46,7 +46,7 @@ pub fn dummy_extern(store: &mut Store<()>, ty: ExternType) -> Extern {
 }
 
 /// Construct a dummy function for the given function type
-pub fn dummy_func(store: &mut Store<()>, ty: FuncType) -> Func {
+pub fn dummy_func<T>(store: &mut Store<T>, ty: FuncType) -> Func {
     Func::new(store, ty.clone(), move |_, _, results| {
         for (ret_ty, result) in ty.results().zip(results) {
             *result = dummy_value(ret_ty);
@@ -74,19 +74,19 @@ pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Vec<Val> {
 }
 
 /// Construct a dummy global for the given global type.
-pub fn dummy_global(store: &mut Store<()>, ty: GlobalType) -> Global {
+pub fn dummy_global<T>(store: &mut Store<T>, ty: GlobalType) -> Global {
     let val = dummy_value(ty.content().clone());
     Global::new(store, ty, val).unwrap()
 }
 
 /// Construct a dummy table for the given table type.
-pub fn dummy_table(store: &mut Store<()>, ty: TableType) -> Table {
+pub fn dummy_table<T>(store: &mut Store<T>, ty: TableType) -> Table {
     let init_val = dummy_value(ty.element().clone());
     Table::new(store, ty, init_val).unwrap()
 }
 
 /// Construct a dummy memory for the given memory type.
-pub fn dummy_memory(store: &mut Store<()>, ty: MemoryType) -> Memory {
+pub fn dummy_memory<T>(store: &mut Store<T>, ty: MemoryType) -> Memory {
     Memory::new(store, ty).unwrap()
 }
 
@@ -94,7 +94,7 @@ pub fn dummy_memory(store: &mut Store<()>, ty: MemoryType) -> Memory {
 ///
 /// This is done by using the expected type to generate a module on-the-fly
 /// which we the instantiate.
-pub fn dummy_instance(store: &mut Store<()>, ty: InstanceType) -> Instance {
+pub fn dummy_instance<T>(store: &mut Store<T>, ty: InstanceType) -> Instance {
     let mut wat = WatGenerator::new();
     for ty in ty.exports() {
         wat.export(&ty);
