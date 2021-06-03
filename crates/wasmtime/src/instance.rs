@@ -813,6 +813,8 @@ impl<T> InstancePre<T> {
     ///
     /// Panics if any import closed over by this [`InstancePre`] isn't owned by
     /// `store`, or if `store` does not have async support enabled.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub async fn instantiate_async(
         &self,
         mut store: impl AsContextMut<Data = T>,
