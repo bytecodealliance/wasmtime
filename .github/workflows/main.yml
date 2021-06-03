@@ -61,7 +61,9 @@ jobs:
         toolchain: nightly-2021-04-11
 
     # Build C API documentation
-    - run: sudo apt-get update && sudo apt-get install -y doxygen git
+    - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9 libclang-cpp9
+    - run: curl -L https://doxygen.nl/files/doxygen-1.9.1.linux.bin.tar.gz | tar xzf -
+    - run: echo "`pwd`/doxygen-1.9.1/bin" >> $GITHUB_PATH
     - run: cd crates/c-api && doxygen doxygen.conf
 
     # install mdbook, build the docs, and test the docs
@@ -73,7 +75,7 @@ jobs:
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
         cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook
     - run: (cd docs && mdbook build)
-    - run: cargo build -p wasmtime
+    - run: cargo build -p wasmtime-wasi --features wasmtime/wat
     - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation

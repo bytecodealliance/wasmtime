@@ -34,8 +34,8 @@ mkdir tmp/$api_pkgname/include
 mkdir tmp/$bin_pkgname
 cp LICENSE README.md tmp/$api_pkgname
 cp LICENSE README.md tmp/$bin_pkgname
+cp -r crates/c-api/include tmp/$api_pkgname
 cp crates/c-api/wasm-c-api/include/wasm.h tmp/$api_pkgname/include
-cp crates/c-api/include/{wasmtime,wasi}.h tmp/$api_pkgname/include
 
 fmt=tar
 if [ "$platform" = "x86_64-windows" ]; then

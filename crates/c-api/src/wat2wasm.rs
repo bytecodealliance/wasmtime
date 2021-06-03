@@ -1,11 +1,13 @@
 use crate::{bad_utf8, handle_result, wasm_byte_vec_t, wasmtime_error_t};
 
 #[no_mangle]
-pub extern "C" fn wasmtime_wat2wasm(
-    wat: &wasm_byte_vec_t,
+pub unsafe extern "C" fn wasmtime_wat2wasm(
+    wat: *const u8,
+    wat_len: usize,
     ret: &mut wasm_byte_vec_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let wat = match std::str::from_utf8(wat.as_slice()) {
+    let wat = crate::slice_from_raw_parts(wat, wat_len);
+    let wat = match std::str::from_utf8(wat) {
         Ok(s) => s,
         Err(_) => return bad_utf8(),
     };

@@ -16,12 +16,11 @@ build = "build.rs"
 wasi-common = { path = "../wasi-common", version = "0.27.0" }
 wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync", version = "0.27.0", optional = true }
 wasi-tokio = { path = "../wasi-common/tokio", version = "0.27.0", optional = true }
-wiggle = { path = "../wiggle", default-features = false, version = "0.27.0" }
-wasmtime-wiggle = { path = "../wiggle/wasmtime", default-features = false, version = "0.27.0" }
+wiggle = { path = "../wiggle", default-features = false, version = "0.27.0", features = ["wasmtime_integration"] }
 wasmtime = { path = "../wasmtime", default-features = false, version = "0.27.0" }
 anyhow = "1.0"
 
 [features]
 default = ["sync"]
 sync = ["wasi-cap-std-sync"]
-tokio = ["wasi-tokio", "wasmtime/async", "wasmtime-wiggle/async"]
+tokio = ["wasi-tokio", "wasmtime/async", "wiggle/wasmtime_async"]

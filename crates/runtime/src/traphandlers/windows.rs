@@ -6,7 +6,8 @@ use winapi::um::winnt::*;
 use winapi::vc::excpt::*;
 
 /// Function which may handle custom signals while processing traps.
-pub type SignalHandler<'a> = dyn Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + 'a;
+pub type SignalHandler<'a> =
+    dyn Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + Send + Sync + 'a;
 
 pub unsafe fn platform_init() {
     // our trap handler needs to go first, so that we can recover from

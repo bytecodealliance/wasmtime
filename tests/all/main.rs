@@ -22,9 +22,9 @@ mod module_serialize;
 mod name;
 mod pooling_allocator;
 mod stack_overflow;
+mod store;
 mod table;
 mod traps;
-mod use_after_drop;
 mod wast;
 
 // TODO(#1886): Cranelift only supports reference types on x64.
@@ -37,7 +37,7 @@ mod gc;
 #[cfg(target_arch = "x86_64")]
 pub(crate) fn ref_types_module(
     source: &str,
-) -> anyhow::Result<(wasmtime::Store, wasmtime::Module)> {
+) -> anyhow::Result<(wasmtime::Store<()>, wasmtime::Module)> {
     use wasmtime::*;
 
     let _ = env_logger::try_init();
@@ -46,7 +46,7 @@ pub(crate) fn ref_types_module(
     config.wasm_reference_types(true);
 
     let engine = Engine::new(&config)?;
-    let store = Store::new(&engine);
+    let store = Store::new(&engine, ());
 
     let module = Module::new(&engine, source)?;
 

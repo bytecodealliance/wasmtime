@@ -1,4 +1,5 @@
-use crate::{signatures::SignatureCollection, Extern, Store};
+use crate::store::StoreData;
+use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Context, Result};
 use wasmtime_environ::wasm::{
     EntityType, Global, InstanceTypeIndex, Memory, ModuleTypeIndex, SignatureIndex, Table,
@@ -8,12 +9,13 @@ use wasmtime_jit::TypeTables;
 pub struct MatchCx<'a> {
     pub signatures: &'a SignatureCollection,
     pub types: &'a TypeTables,
-    pub store: &'a Store,
+    pub store_data: &'a StoreData,
+    pub engine: &'a Engine,
 }
 
 impl MatchCx<'_> {
     pub fn global(&self, expected: &Global, actual: &crate::Global) -> Result<()> {
-        self.global_ty(expected, actual.wasmtime_ty())
+        self.global_ty(expected, actual.wasmtime_ty(self.store_data))
     }
 
     fn global_ty(&self, expected: &Global, actual: &Global) -> Result<()> {
@@ -28,7 +30,7 @@ impl MatchCx<'_> {
     }
 
     pub fn table(&self, expected: &Table, actual: &crate::Table) -> Result<()> {
-        self.table_ty(expected, actual.wasmtime_ty())
+        self.table_ty(expected, actual.wasmtime_ty(self.store_data))
     }
 
     fn table_ty(&self, expected: &Table, actual: &Table) -> Result<()> {
@@ -50,7 +52,7 @@ impl MatchCx<'_> {
     }
 
     pub fn memory(&self, expected: &Memory, actual: &crate::Memory) -> Result<()> {
-        self.memory_ty(expected, actual.wasmtime_ty())
+        self.memory_ty(expected, actual.wasmtime_ty(self.store_data))
     }
 
     fn memory_ty(&self, expected: &Memory, actual: &Memory) -> Result<()> {
@@ -72,7 +74,7 @@ impl MatchCx<'_> {
 
     pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
         let matches = match self.signatures.shared_signature(expected) {
-            Some(idx) => actual.sig_index() == idx,
+            Some(idx) => actual.sig_index(self.store_data) == idx,
             // If our expected signature isn't registered, then there's no way
             // that `actual` can match it.
             None => false,
@@ -85,11 +87,11 @@ impl MatchCx<'_> {
     }
 
     pub fn instance(&self, expected: InstanceTypeIndex, actual: &crate::Instance) -> Result<()> {
+        let items = actual.items(self.store_data);
         for (name, expected) in self.types.instance_signatures[expected].exports.iter() {
-            match actual.items.get(name) {
+            match items.get(name) {
                 Some(item) => {
-                    let item = unsafe { Extern::from_wasmtime_export(item, self.store) };
-                    self.extern_(expected, &item)
+                    self.extern_(expected, item)
                         .with_context(|| format!("instance export {:?} incompatible", name))?;
                 }
                 None => bail!("instance type missing export {:?}", name),
@@ -104,7 +106,7 @@ impl MatchCx<'_> {
         // This should only ever be invoked with module linking, and this is an
         // early check that our `field` assertion below should always work as
         // well.
-        assert!(self.store.engine().config().features.module_linking);
+        assert!(self.engine.config().features.module_linking);
 
         let expected_sig = &self.types.module_signatures[expected];
         let module = actual.compiled_module().module();
@@ -149,7 +151,8 @@ impl MatchCx<'_> {
             MatchCx {
                 signatures: actual_signatures,
                 types: actual_types,
-                store: self.store,
+                store_data: self.store_data,
+                engine: self.engine,
             }
             .extern_ty_matches(&actual_ty, expected_ty, self.signatures, self.types)
             .with_context(|| format!("module import {:?} incompatible", name))?;

@@ -1,114 +1,105 @@
-use std::cell::Cell;
-use std::cell::RefCell;
+use anyhow::Result;
 use std::future::Future;
 use std::pin::Pin;
-use std::rc::Rc;
 use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::*;
 
-fn async_store() -> Store {
-    Store::new(&Engine::new(Config::new().async_support(true)).unwrap())
+fn async_store() -> Store<()> {
+    Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), ())
 }
 
-fn run_smoke_test(func: &Func) {
-    run(func.call_async(&[])).unwrap();
-    run(func.call_async(&[])).unwrap();
-    let future1 = func.call_async(&[]);
-    let future2 = func.call_async(&[]);
-    run(future2).unwrap();
-    run(future1).unwrap();
+fn run_smoke_test(store: &mut Store<()>, func: Func) {
+    run(func.call_async(&mut *store, &[])).unwrap();
+    run(func.call_async(&mut *store, &[])).unwrap();
 }
 
-fn run_smoke_typed_test(func: &Func) {
-    let func = func.typed::<(), ()>().unwrap();
-    run(func.call_async(())).unwrap();
-    run(func.call_async(())).unwrap();
-    let future1 = func.call_async(());
-    let future2 = func.call_async(());
-    run(future2).unwrap();
-    run(future1).unwrap();
+fn run_smoke_typed_test(store: &mut Store<()>, func: Func) {
+    let func = func.typed::<(), (), _>(&store).unwrap();
+    run(func.call_async(&mut *store, ())).unwrap();
+    run(func.call_async(&mut *store, ())).unwrap();
 }
 
 #[test]
 fn smoke() {
-    let store = async_store();
+    let mut store = async_store();
     let func = Func::new_async(
-        &store,
+        &mut store,
         FuncType::new(None, None),
-        (),
-        move |_caller, _state, _params, _results| Box::new(async { Ok(()) }),
+        move |_caller, _params, _results| Box::new(async { Ok(()) }),
     );
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 
-    let func = Func::wrap0_async(&store, (), move |_caller: Caller<'_>, _state| {
-        Box::new(async { Ok(()) })
-    });
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    let func = Func::wrap0_async(&mut store, move |_caller| Box::new(async { Ok(()) }));
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 }
 
 #[test]
-fn smoke_host_func() {
-    let mut config = Config::new();
-    config.async_support(true);
-    config.define_host_func_async(
+fn smoke_host_func() -> Result<()> {
+    let mut store = async_store();
+    let mut linker = Linker::new(store.engine());
+
+    linker.func_new_async(
         "",
         "first",
         FuncType::new(None, None),
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
-    );
-    config.wrap0_host_func_async("", "second", move |_caller: Caller<'_>| {
-        Box::new(async { Ok(()) })
-    });
+    )?;
 
-    let store = Store::new(&Engine::new(&config).unwrap());
+    linker.func_wrap0_async("", "second", move |_caller| Box::new(async { Ok(()) }))?;
 
-    let func = store
-        .get_host_func("", "first")
-        .expect("expected host function");
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    let func = linker
+        .get(&mut store, "", Some("first"))
+        .unwrap()
+        .into_func()
+        .unwrap();
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 
-    let func = store
-        .get_host_func("", "second")
-        .expect("expected host function");
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    let func = linker
+        .get(&mut store, "", Some("second"))
+        .unwrap()
+        .into_func()
+        .unwrap();
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
+
+    Ok(())
 }
 
 #[test]
 fn smoke_with_suspension() {
-    let store = async_store();
+    let mut store = async_store();
     let func = Func::new_async(
-        &store,
+        &mut store,
         FuncType::new(None, None),
-        (),
-        move |_caller, _state, _params, _results| {
+        move |_caller, _params, _results| {
             Box::new(async {
                 PendingOnce::default().await;
                 Ok(())
             })
         },
     );
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 
-    let func = Func::wrap0_async(&store, (), move |_caller: Caller<'_>, _state| {
+    let func = Func::wrap0_async(&mut store, move |_caller| {
         Box::new(async {
             PendingOnce::default().await;
             Ok(())
         })
     });
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 }
 
 #[test]
-fn smoke_host_func_with_suspension() {
-    let mut config = Config::new();
-    config.async_support(true);
-    config.define_host_func_async(
+fn smoke_host_func_with_suspension() -> Result<()> {
+    let mut store = async_store();
+    let mut linker = Linker::new(store.engine());
+
+    linker.func_new_async(
         "",
         "first",
         FuncType::new(None, None),
@@ -118,56 +109,57 @@ fn smoke_host_func_with_suspension() {
                 Ok(())
             })
         },
-    );
-    config.wrap0_host_func_async("", "second", move |_caller: Caller<'_>| {
+    )?;
+
+    linker.func_wrap0_async("", "second", move |_caller| {
         Box::new(async {
             PendingOnce::default().await;
             Ok(())
         })
-    });
+    })?;
 
-    let store = Store::new(&Engine::new(&config).unwrap());
+    let func = linker
+        .get(&mut store, "", Some("first"))
+        .unwrap()
+        .into_func()
+        .unwrap();
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 
-    let func = store
-        .get_host_func("", "first")
-        .expect("expected host function");
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    let func = linker
+        .get(&mut store, "", Some("second"))
+        .unwrap()
+        .into_func()
+        .unwrap();
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 
-    let func = store
-        .get_host_func("", "second")
-        .expect("expected host function");
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    Ok(())
 }
 
 #[test]
 fn recursive_call() {
-    let store = async_store();
-    let async_wasm_func = Rc::new(Func::new_async(
-        &store,
+    let mut store = async_store();
+    let async_wasm_func = Func::new_async(
+        &mut store,
         FuncType::new(None, None),
-        (),
-        |_caller, _state, _params, _results| {
+        |_caller, _params, _results| {
             Box::new(async {
                 PendingOnce::default().await;
                 Ok(())
             })
         },
-    ));
-    let weak = Rc::downgrade(&async_wasm_func);
+    );
 
     // Create an imported function which recursively invokes another wasm
     // function asynchronously, although this one is just our own host function
     // which suffices for this test.
     let func2 = Func::new_async(
-        &store,
+        &mut store,
         FuncType::new(None, None),
-        (),
-        move |_caller, _state, _params, _results| {
-            let async_wasm_func = weak.upgrade().unwrap();
+        move |mut caller, _params, _results| {
             Box::new(async move {
-                async_wasm_func.call_async(&[]).await?;
+                async_wasm_func.call_async(&mut caller, &[]).await?;
                 Ok(())
             })
         },
@@ -190,16 +182,16 @@ fn recursive_call() {
     .unwrap();
 
     run(async {
-        let instance = Instance::new_async(&store, &module, &[func2.into()]).await?;
-        let func = instance.get_func("").unwrap();
-        func.call_async(&[]).await
+        let instance = Instance::new_async(&mut store, &module, &[func2.into()]).await?;
+        let func = instance.get_func(&mut store, "").unwrap();
+        func.call_async(&mut store, &[]).await
     })
     .unwrap();
 }
 
 #[test]
 fn suspend_while_suspending() {
-    let store = async_store();
+    let mut store = async_store();
 
     // Create a synchronous function which calls our asynchronous function and
     // runs it locally. This shouldn't generally happen but we know everything
@@ -208,19 +200,16 @@ fn suspend_while_suspending() {
     // The purpose of this test is intended to stress various cases in how
     // we manage pointers in ways that are not necessarily common but are still
     // possible in safe code.
-    let async_thunk = Rc::new(Func::new_async(
-        &store,
+    let async_thunk = Func::new_async(
+        &mut store,
         FuncType::new(None, None),
-        (),
-        |_caller, _state, _params, _results| Box::new(async { Ok(()) }),
-    ));
-    let weak = Rc::downgrade(&async_thunk);
+        |_caller, _params, _results| Box::new(async { Ok(()) }),
+    );
     let sync_call_async_thunk = Func::new(
-        &store,
+        &mut store,
         FuncType::new(None, None),
-        move |_caller, _params, _results| {
-            let async_thunk = weak.upgrade().unwrap();
-            run(async_thunk.call_async(&[]))?;
+        move |mut caller, _params, _results| {
+            run(async_thunk.call_async(&mut caller, &[]))?;
             Ok(())
         },
     );
@@ -228,10 +217,9 @@ fn suspend_while_suspending() {
     // A small async function that simply awaits once to pump the loops and
     // then finishes.
     let async_import = Func::new_async(
-        &store,
+        &mut store,
         FuncType::new(None, None),
-        (),
-        move |_caller, _state, _params, _results| {
+        move |_caller, _params, _results| {
             Box::new(async move {
                 PendingOnce::default().await;
                 Ok(())
@@ -255,31 +243,28 @@ fn suspend_while_suspending() {
     .unwrap();
     run(async {
         let instance = Instance::new_async(
-            &store,
+            &mut store,
             &module,
             &[sync_call_async_thunk.into(), async_import.into()],
         )
         .await?;
-        let func = instance.get_func("").unwrap();
-        func.call_async(&[]).await
+        let func = instance.get_func(&mut store, "").unwrap();
+        func.call_async(&mut store, &[]).await
     })
     .unwrap();
 }
 
 #[test]
 fn cancel_during_run() {
-    let store = async_store();
-    let state = Rc::new(Cell::new(0));
-    let state2 = state.clone();
+    let mut store = Store::new(&Engine::new(Config::new().async_support(true)).unwrap(), 0);
 
     let async_thunk = Func::new_async(
-        &store,
+        &mut store,
         FuncType::new(None, None),
-        (),
-        move |_caller, _state, _params, _results| {
-            assert_eq!(state2.get(), 0);
-            state2.set(1);
-            let dtor = SetOnDrop(state2.clone());
+        move |mut caller, _params, _results| {
+            assert_eq!(*caller.data(), 0);
+            *caller.data_mut() = 1;
+            let dtor = SetOnDrop(caller);
             Box::new(async move {
                 drop(&dtor);
                 PendingOnce::default().await;
@@ -288,12 +273,11 @@ fn cancel_during_run() {
         },
     );
     // Shouldn't have called anything yet...
-    assert_eq!(state.get(), 0);
+    assert_eq!(*store.data(), 0);
 
     // Create our future, but as per async conventions this still doesn't
     // actually do anything. No wasm or host function has been called yet.
-    let mut future = Pin::from(Box::new(async_thunk.call_async(&[])));
-    assert_eq!(state.get(), 0);
+    let mut future = Pin::from(Box::new(async_thunk.call_async(&mut store, &[])));
 
     // Push the future forward one tick, which actually runs the host code in
     // our async func. Our future is designed to be pending once, however.
@@ -301,19 +285,18 @@ fn cancel_during_run() {
         .as_mut()
         .poll(&mut Context::from_waker(&dummy_waker()));
     assert!(poll.is_pending());
-    assert_eq!(state.get(), 1);
 
     // Now that our future is running (on a separate, now-suspended fiber), drop
     // the future and that should deallocate all the Rust bits as well.
     drop(future);
-    assert_eq!(state.get(), 2);
+    assert_eq!(*store.data(), 2);
 
-    struct SetOnDrop(Rc<Cell<u32>>);
+    struct SetOnDrop<'a>(Caller<'a, usize>);
 
-    impl Drop for SetOnDrop {
+    impl Drop for SetOnDrop<'_> {
         fn drop(&mut self) {
-            assert_eq!(self.0.get(), 1);
-            self.0.set(2);
+            assert_eq!(*self.0.data(), 1);
+            *self.0.data_mut() = 2;
         }
     }
 }
@@ -374,7 +357,7 @@ fn dummy_waker() -> Waker {
 #[test]
 fn iloop_with_fuel() {
     let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
-    let store = Store::new(&engine);
+    let mut store = Store::new(&engine, ());
     store.out_of_fuel_async_yield(1_000, 10);
     let module = Module::new(
         &engine,
@@ -386,7 +369,7 @@ fn iloop_with_fuel() {
         ",
     )
     .unwrap();
-    let instance = Instance::new_async(&store, &module, &[]);
+    let instance = Instance::new_async(&mut store, &module, &[]);
     let mut f = Pin::from(Box::new(instance));
     let waker = dummy_waker();
     let mut cx = Context::from_waker(&waker);
@@ -408,7 +391,7 @@ fn iloop_with_fuel() {
 #[test]
 fn fuel_eventually_finishes() {
     let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
-    let store = Store::new(&engine);
+    let mut store = Store::new(&engine, ());
     store.out_of_fuel_async_yield(u32::max_value(), 10);
     let module = Module::new(
         &engine,
@@ -430,7 +413,7 @@ fn fuel_eventually_finishes() {
         ",
     )
     .unwrap();
-    let instance = Instance::new_async(&store, &module, &[]);
+    let instance = Instance::new_async(&mut store, &module, &[]);
     run(instance).unwrap();
 }
 
@@ -452,20 +435,19 @@ fn async_with_pooling_stacks() {
     });
 
     let engine = Engine::new(&config).unwrap();
-    let store = Store::new(&engine);
+    let mut store = Store::new(&engine, ());
     let func = Func::new_async(
-        &store,
+        &mut store,
         FuncType::new(None, None),
-        (),
-        move |_caller, _state, _params, _results| Box::new(async { Ok(()) }),
+        move |_caller, _params, _results| Box::new(async { Ok(()) }),
     );
 
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
 }
 
 #[test]
-fn async_host_func_with_pooling_stacks() {
+fn async_host_func_with_pooling_stacks() -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
@@ -481,32 +463,27 @@ fn async_host_func_with_pooling_stacks() {
         },
     });
 
-    config.define_host_func_async(
+    let mut store = Store::new(&Engine::new(&config)?, ());
+    let mut linker = Linker::new(store.engine());
+    linker.func_new_async(
         "",
         "",
         FuncType::new(None, None),
         move |_caller, _params, _results| Box::new(async { Ok(()) }),
-    );
+    )?;
 
-    let store = Store::new(&Engine::new(&config).unwrap());
-    let func = store.get_host_func("", "").expect("expected host function");
-
-    run_smoke_test(&func);
-    run_smoke_typed_test(&func);
+    let func = linker
+        .get(&mut store, "", Some(""))
+        .unwrap()
+        .into_func()
+        .unwrap();
+    run_smoke_test(&mut store, func);
+    run_smoke_typed_test(&mut store, func);
+    Ok(())
 }
 
-fn execute_across_threads<F: Future + 'static>(future: F) {
-    struct UnsafeSend<T>(T);
-    unsafe impl<T> Send for UnsafeSend<T> {}
-
-    impl<T: Future> Future for UnsafeSend<T> {
-        type Output = T::Output;
-        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T::Output> {
-            unsafe { self.map_unchecked_mut(|p| &mut p.0).poll(cx) }
-        }
-    }
-
-    let mut future = Pin::from(Box::new(UnsafeSend(future)));
+fn execute_across_threads<F: Future + Send + 'static>(future: F) {
+    let mut future = Pin::from(Box::new(future));
     let poll = future
         .as_mut()
         .poll(&mut Context::from_waker(&dummy_waker()));
@@ -527,7 +504,7 @@ fn resume_separate_thread() {
     // This test will poll the following future on two threads. Simulating a
     // trap requires accessing TLS info, so that should be preserved correctly.
     execute_across_threads(async {
-        let store = async_store();
+        let mut store = async_store();
         let module = Module::new(
             store.engine(),
             "
@@ -538,13 +515,13 @@ fn resume_separate_thread() {
             ",
         )
         .unwrap();
-        let func = Func::wrap0_async(&store, (), |_, _| {
+        let func = Func::wrap0_async(&mut store, |_| {
             Box::new(async {
                 PendingOnce::default().await;
                 Err::<(), _>(wasmtime::Trap::new("test"))
             })
         });
-        let result = Instance::new_async(&store, &module, &[func.into()]).await;
+        let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
         assert!(result.is_err());
     });
 }
@@ -555,7 +532,7 @@ fn resume_separate_thread2() {
     // signal requires looking up TLS information to determine whether it's a
     // trap to handle or not, so that must be preserved correctly across threads.
     execute_across_threads(async {
-        let store = async_store();
+        let mut store = async_store();
         let module = Module::new(
             store.engine(),
             "
@@ -569,10 +546,10 @@ fn resume_separate_thread2() {
             ",
         )
         .unwrap();
-        let func = Func::wrap0_async(&store, (), |_, _| {
+        let func = Func::wrap0_async(&mut store, |_| {
             Box::new(async { PendingOnce::default().await })
         });
-        let result = Instance::new_async(&store, &module, &[func.into()]).await;
+        let result = Instance::new_async(&mut store, &module, &[func.into()]).await;
         assert!(result.is_err());
     });
 }
@@ -587,30 +564,28 @@ fn resume_separate_thread3() {
     // "enter into wasm" semantics since it's just calling a trampoline. In this
     // situation we'll set up the TLS info so it's in place while the body of
     // the function executes...
-    let store = Store::default();
-    let storage = Rc::new(RefCell::new(None));
-    let storage2 = storage.clone();
-    let f = Func::wrap(&store, move || {
+    let mut store = Store::new(&Engine::default(), None);
+    let f = Func::wrap(&mut store, move |mut caller: Caller<'_, _>| {
         // ... and the execution of this host-defined function (while the TLS
         // info is initialized), will set up a recursive call into wasm. This
         // recursive call will be done asynchronously so we can suspend it
         // halfway through.
         let f = async {
-            let store = async_store();
+            let mut store = async_store();
             let module = Module::new(
                 store.engine(),
                 "
-            (module
-                (import \"\" \"\" (func))
-                (start 0)
-            )
-            ",
+                    (module
+                        (import \"\" \"\" (func))
+                        (start 0)
+                    )
+                ",
             )
             .unwrap();
-            let func = Func::wrap0_async(&store, (), |_, _| {
+            let func = Func::wrap0_async(&mut store, |_| {
                 Box::new(async { PendingOnce::default().await })
             });
-            drop(Instance::new_async(&store, &module, &[func.into()]).await);
+            drop(Instance::new_async(&mut store, &module, &[func.into()]).await);
             unreachable!()
         };
         let mut future = Pin::from(Box::new(f));
@@ -626,12 +601,12 @@ fn resume_separate_thread3() {
         // here then we would reenter the future's suspended stack to clean it
         // up, which would do more alterations of TLS information we're not
         // testing here.
-        *storage2.borrow_mut() = Some(future);
+        *caller.data_mut() = Some(future);
 
         // ... all in all this function will need access to the original TLS
         // information to raise the trap. This TLS information should be
         // restored even though the asynchronous execution is suspended.
         Err::<(), _>(wasmtime::Trap::new(""))
     });
-    assert!(f.call(&[]).is_err());
+    assert!(f.call(&mut store, &[]).is_err());
 }

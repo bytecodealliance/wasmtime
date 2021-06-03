@@ -35,9 +35,11 @@ int main() {
   // Create an *engine*, which is a compilation context, with our configured options.
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   assert(engine != NULL);
-  wasm_store_t *store = wasm_store_new(engine);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
-  error = wasmtime_store_add_fuel(store, 10000);
+  wasmtime_context_t *context = wasmtime_store_context(store);
+
+  error = wasmtime_context_add_fuel(context, 10000);
   if (error != NULL)
     exit_with_error("failed to add fuel", error, NULL);
 
@@ -60,60 +62,57 @@ int main() {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t wasm;
-  error = wasmtime_wat2wasm(&wat, &wasm);
+  error = wasmtime_wat2wasm(wat.data, wat.size, &wasm);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile and instantiate our module
-  wasm_module_t *module = NULL;
-  error = wasmtime_module_new(engine, &wasm, &module);
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
   if (module == NULL)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
+
   wasm_trap_t *trap = NULL;
-  wasm_instance_t *instance = NULL;
-  wasm_extern_vec_t imports = WASM_EMPTY_VEC;
-  error = wasmtime_instance_new(store, module, &imports, &instance, &trap);
-  if (instance == NULL)
+  wasmtime_instance_t instance;
+  error = wasmtime_instance_new(context, module, NULL, 0, &instance, &trap);
+  if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
 
   // Lookup our `fibonacci` export function
-  wasm_extern_vec_t externs;
-  wasm_instance_exports(instance, &externs);
-  assert(externs.size == 1);
-  wasm_func_t *fibonacci = wasm_extern_as_func(externs.data[0]);
-  assert(fibonacci != NULL);
+  wasmtime_extern_t fib;
+  bool ok = wasmtime_instance_export_get(context, &instance, "fibonacci", strlen("fibonacci"), &fib);
+  assert(ok);
+  assert(fib.kind == WASMTIME_EXTERN_FUNC);
 
   // Call it repeatedly until it fails
   for (int n = 1; ; n++) {
     uint64_t fuel_before;
-    wasmtime_store_fuel_consumed(store, &fuel_before);
-    wasm_val_t params[1] = { WASM_I32_VAL(n) };
-    wasm_val_t results[1];
-    wasm_val_vec_t params_vec = WASM_ARRAY_VEC(params);
-    wasm_val_vec_t results_vec = WASM_ARRAY_VEC(results);
-    error = wasmtime_func_call(fibonacci, &params_vec, &results_vec, &trap);
+    wasmtime_context_fuel_consumed(context, &fuel_before);
+    wasmtime_val_t params[1];
+    params[0].kind = WASMTIME_I32;
+    params[0].of.i32 = n;
+    wasmtime_val_t results[1];
+    error = wasmtime_func_call(context, &fib.of.func, params, 1, results, 1, &trap);
     if (error != NULL || trap != NULL) {
       printf("Exhausted fuel computing fib(%d)\n", n);
       break;
     }
 
     uint64_t fuel_after;
-    wasmtime_store_fuel_consumed(store, &fuel_after);
-    assert(results[0].kind == WASM_I32);
+    wasmtime_context_fuel_consumed(context, &fuel_after);
+    assert(results[0].kind == WASMTIME_I32);
     printf("fib(%d) = %d [consumed %lld fuel]\n", n, results[0].of.i32, fuel_after - fuel_before);
 
-    error = wasmtime_store_add_fuel(store, fuel_after - fuel_before);
+    error = wasmtime_context_add_fuel(context, fuel_after - fuel_before);
     if (error != NULL)
       exit_with_error("failed to add fuel", error, NULL);
   }
 
   // Clean up after ourselves at this point
-  wasm_extern_vec_delete(&externs);
-  wasm_instance_delete(instance);
-  wasm_module_delete(module);
-  wasm_store_delete(store);
+  wasmtime_module_delete(module);
+  wasmtime_store_delete(store);
   wasm_engine_delete(engine);
   return 0;
 }

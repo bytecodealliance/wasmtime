@@ -16,12 +16,12 @@ fn main() -> Result<()> {
     // also ensure that we generate debuginfo so this executable can be
     // debugged in GDB.
     let engine = Engine::new(Config::new().debug_info(true))?;
-    let store = Store::new(&engine);
+    let mut store = Store::new(&engine, ());
     let module = Module::from_file(&engine, "target/wasm32-unknown-unknown/debug/fib.wasm")?;
-    let instance = Instance::new(&store, &module, &[])?;
+    let instance = Instance::new(&mut store, &module, &[])?;
 
     // Invoke `fib` export
-    let fib = instance.get_typed_func::<i32, i32>("fib")?;
-    println!("fib(6) = {}", fib.call(6)?);
+    let fib = instance.get_typed_func::<i32, i32, _>(&mut store, "fib")?;
+    println!("fib(6) = {}", fib.call(&mut store, 6)?);
     Ok(())
 }

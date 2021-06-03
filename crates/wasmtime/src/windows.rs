@@ -9,23 +9,25 @@
 //! throughout the `wasmtime` crate with extra functionality that's only
 //! available on Windows.
 
-use crate::Store;
+use crate::{AsContextMut, Store};
 
 /// Extensions for the [`Store`] type only available on Windows.
 pub trait StoreExt {
     /// Configures a custom signal handler to execute.
     ///
     /// TODO: needs more documentation.
-    unsafe fn set_signal_handler<H>(&self, handler: H)
+    unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool;
+        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + Send + Sync;
 }
 
-impl StoreExt for Store {
-    unsafe fn set_signal_handler<H>(&self, handler: H)
+impl<T> StoreExt for Store<T> {
+    unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
-        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool,
+        H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + Send + Sync,
     {
-        self.set_signal_handler(Some(Box::new(handler)));
+        self.as_context_mut()
+            .opaque()
+            .set_signal_handler(Some(Box::new(handler)));
     }
 }

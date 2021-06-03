@@ -1,11 +1,11 @@
-use crate::trampoline::{create_handle, StoreInstanceHandle};
-use crate::Store;
+use crate::store::{InstanceId, StoreOpaque};
+use crate::trampoline::create_handle;
 use crate::{TableType, ValType};
 use anyhow::{bail, Result};
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, Module};
 
-pub fn create_table(store: &Store, table: &TableType) -> Result<StoreInstanceHandle> {
+pub fn create_table(store: &mut StoreOpaque<'_>, table: &TableType) -> Result<InstanceId> {
     let mut module = Module::new();
 
     let table = wasm::Table {

@@ -1,4 +1,3 @@
-use crate::externref::{ModuleInfoLookup, VMExternRefActivationsTable, EMPTY_MODULE_LOOKUP};
 use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle, ResourceLimiter, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
@@ -6,16 +5,15 @@ use crate::table::Table;
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryImport, VMSharedSignatureIndex,
-    VMTableImport,
+    VMGlobalDefinition, VMGlobalImport, VMMemoryImport, VMSharedSignatureIndex, VMTableImport,
 };
+use crate::Store;
 use anyhow::Result;
 use std::alloc;
 use std::any::Any;
-use std::cell::RefCell;
 use std::convert::TryFrom;
+use std::marker;
 use std::ptr::{self, NonNull};
-use std::rc::Rc;
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
@@ -49,19 +47,23 @@ pub struct InstanceAllocationRequest<'a> {
     pub shared_signatures: SharedSignatures<'a>,
 
     /// The host state to associate with the instance.
-    pub host_state: Box<dyn Any>,
+    pub host_state: Box<dyn Any + Send + Sync>,
 
-    /// The pointer to the VM interrupts structure to use for the instance.
-    pub interrupts: *const VMInterrupts,
-
-    /// The pointer to the reference activations table to use for the instance.
-    pub externref_activations_table: *mut VMExternRefActivationsTable,
-
-    /// The pointer to the module info lookup to use for the instance.
-    pub module_info_lookup: Option<*const dyn ModuleInfoLookup>,
-
-    /// The resource limiter to use for the instance.
-    pub limiter: Option<&'a Rc<dyn ResourceLimiter>>,
+    /// A pointer to the "store" for this instance to be allocated. The store
+    /// correlates with the `Store` in wasmtime itself, and lots of contextual
+    /// information about the execution of wasm can be learned through the store.
+    ///
+    /// Note that this is a raw pointer and has a static lifetime, both of which
+    /// are a bit of a lie. This is done purely so a store can learn about
+    /// itself when it gets called as a host function, and additionally so this
+    /// runtime can access internals as necessary (such as the
+    /// VMExternRefActivationsTable or the ResourceLimiter).
+    ///
+    /// Note that this ends up being a self-pointer to the instance when stored.
+    /// The reason is that the instance itself is then stored within the store.
+    /// We use a number of `PhantomPinned` declarations to indicate this to the
+    /// compiler. More info on this in `wasmtime/src/store.rs`
+    pub store: Option<*mut dyn Store>,
 }
 
 /// An link error while instantiating a module.
@@ -141,7 +143,8 @@ pub unsafe trait InstanceAllocator: Send + Sync {
     /// This method is only safe to call immediately after an instance has been allocated.
     unsafe fn initialize(
         &self,
-        handle: &InstanceHandle,
+        handle: &mut InstanceHandle,
+        module: &Module,
         is_bulk_memory: bool,
     ) -> Result<(), InstantiationError>;
 
@@ -232,9 +235,12 @@ fn get_table_init_start(
     }
 }
 
-fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
-    for init in &instance.module.table_initializers {
-        let table = instance.get_table(init.table_index);
+fn check_table_init_bounds(
+    instance: &mut Instance,
+    module: &Module,
+) -> Result<(), InstantiationError> {
+    for init in &module.table_initializers {
+        let table = unsafe { &*instance.get_table(init.table_index) };
         let start = get_table_init_start(init, instance)?;
         let start = usize::try_from(start).unwrap();
         let end = start.checked_add(init.elements.len());
@@ -254,8 +260,8 @@ fn check_table_init_bounds(instance: &Instance) -> Result<(), InstantiationError
     Ok(())
 }
 
-fn initialize_tables(instance: &Instance) -> Result<(), InstantiationError> {
-    for init in &instance.module.table_initializers {
+fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+    for init in &module.table_initializers {
         instance
             .table_init_segment(
                 init.table_index,
@@ -318,7 +324,7 @@ fn check_memory_init_bounds(
 }
 
 fn initialize_memories(
-    instance: &Instance,
+    instance: &mut Instance,
     initializers: &[MemoryInitializer],
 ) -> Result<(), InstantiationError> {
     for init in initializers {
@@ -336,8 +342,8 @@ fn initialize_memories(
     Ok(())
 }
 
-fn check_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
-    check_table_init_bounds(instance)?;
+fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+    check_table_init_bounds(instance, module)?;
 
     match &instance.module.memory_initialization {
         MemoryInitialization::Paged { out_of_bounds, .. } => {
@@ -356,7 +362,8 @@ fn check_init_bounds(instance: &Instance) -> Result<(), InstantiationError> {
 }
 
 fn initialize_instance(
-    instance: &Instance,
+    instance: &mut Instance,
+    module: &Module,
     is_bulk_memory: bool,
 ) -> Result<(), InstantiationError> {
     // If bulk memory is not enabled, bounds check the data and element segments before
@@ -364,14 +371,14 @@ fn initialize_instance(
     // in-order and side effects are observed up to the point of an out-of-bounds
     // initializer, so the early checking is not desired.
     if !is_bulk_memory {
-        check_init_bounds(instance)?;
+        check_init_bounds(instance, module)?;
     }
 
     // Initialize the tables
-    initialize_tables(instance)?;
+    initialize_tables(instance, module)?;
 
     // Initialize the memories
-    match &instance.module.memory_initialization {
+    match &module.memory_initialization {
         MemoryInitialization::Paged { map, out_of_bounds } => {
             for (index, pages) in map {
                 let memory = instance.memory(index);
@@ -404,12 +411,14 @@ fn initialize_instance(
     Ok(())
 }
 
-unsafe fn initialize_vmcontext(instance: &Instance, req: InstanceAllocationRequest) {
-    let module = &instance.module;
+unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
+    if let Some(store) = req.store {
+        *instance.interrupts() = (*store).vminterrupts();
+        *instance.externref_activations_table() = (*store).externref_activations_table().0;
+        instance.set_store(store);
+    }
 
-    *instance.interrupts() = req.interrupts;
-    *instance.externref_activations_table() = req.externref_activations_table;
-    *instance.module_info_lookup() = req.module_info_lookup.unwrap_or(&EMPTY_MODULE_LOOKUP);
+    let module = &instance.module;
 
     // Initialize shared signatures
     let mut ptr = instance.signature_ids_ptr();
@@ -520,17 +529,24 @@ unsafe fn initialize_vmcontext_globals(instance: &Instance) {
                 let from = if let Some(def_x) = module.defined_global_index(x) {
                     instance.global(def_x)
                 } else {
-                    *instance.imported_global(x).from
+                    &*instance.imported_global(x).from
                 };
-                *to = from;
+                // Globals of type `externref` need to manage the reference
+                // count as values move between globals, everything else is just
+                // copy-able bits.
+                match global.wasm_ty {
+                    WasmType::ExternRef => *(*to).as_externref_mut() = from.as_externref().clone(),
+                    _ => ptr::copy_nonoverlapping(from, to, 1),
+                }
             }
             GlobalInit::RefFunc(f) => {
                 *(*to).as_anyfunc_mut() = instance.get_caller_checked_anyfunc(f).unwrap()
                     as *const VMCallerCheckedAnyfunc;
             }
             GlobalInit::RefNullConst => match global.wasm_ty {
-                WasmType::FuncRef => *(*to).as_anyfunc_mut() = ptr::null(),
-                WasmType::ExternRef => *(*to).as_externref_mut() = None,
+                // `VMGlobalDefinition::new()` already zeroed out the bits
+                WasmType::FuncRef => {}
+                WasmType::ExternRef => {}
                 ty => panic!("unsupported reference type for global: {:?}", ty),
             },
             GlobalInit::Import => panic!("locally-defined global initialized as import"),
@@ -545,6 +561,17 @@ pub struct OnDemandInstanceAllocator {
     stack_size: usize,
 }
 
+// rustc is quite strict with the lifetimes when dealing with mutable borrows,
+// so this is a little helper to get a shorter lifetime on `Option<&mut T>`
+fn borrow_limiter<'a>(
+    limiter: &'a mut Option<&mut dyn ResourceLimiter>,
+) -> Option<&'a mut dyn ResourceLimiter> {
+    match limiter {
+        Some(limiter) => Some(&mut **limiter),
+        None => None,
+    }
+}
+
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
     pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
@@ -556,13 +583,16 @@ impl OnDemandInstanceAllocator {
 
     fn create_tables(
         module: &Module,
-        limiter: Option<&Rc<dyn ResourceLimiter>>,
+        mut limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<PrimaryMap<DefinedTableIndex, Table>, InstantiationError> {
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
-            tables.push(Table::new_dynamic(table, limiter).map_err(InstantiationError::Resource)?);
+            tables.push(
+                Table::new_dynamic(table, borrow_limiter(&mut limiter))
+                    .map_err(InstantiationError::Resource)?,
+            );
         }
         Ok(tables)
     }
@@ -570,7 +600,7 @@ impl OnDemandInstanceAllocator {
     fn create_memories(
         &self,
         module: &Module,
-        limiter: Option<&Rc<dyn ResourceLimiter>>,
+        mut limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -581,7 +611,7 @@ impl OnDemandInstanceAllocator {
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
             memories.push(
-                Memory::new_dynamic(plan, creator, limiter)
+                Memory::new_dynamic(plan, creator, borrow_limiter(&mut limiter))
                     .map_err(InstantiationError::Resource)?,
             );
         }
@@ -603,23 +633,24 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module, req.limiter)?;
-        let tables = Self::create_tables(&req.module, req.limiter)?;
+        let mut limiter = req.store.and_then(|s| (*s).limiter());
+        let memories = self.create_memories(&req.module, borrow_limiter(&mut limiter))?;
+        let tables = Self::create_tables(&req.module, borrow_limiter(&mut limiter))?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
-        let handle = {
+        let mut handle = {
             let instance = Instance {
                 module: req.module.clone(),
                 offsets: VMOffsets::new(std::mem::size_of::<*const u8>() as u8, &req.module),
                 memories,
                 tables,
-                dropped_elements: RefCell::new(EntitySet::with_capacity(
-                    req.module.passive_elements.len(),
-                )),
-                dropped_data: RefCell::new(EntitySet::with_capacity(req.module.passive_data.len())),
+                dropped_elements: EntitySet::with_capacity(req.module.passive_elements.len()),
+                dropped_data: EntitySet::with_capacity(req.module.passive_data.len()),
                 host_state,
-                vmctx: VMContext {},
+                vmctx: VMContext {
+                    _marker: marker::PhantomPinned,
+                },
             };
             let layout = instance.alloc_layout();
             let instance_ptr = alloc::alloc(layout) as *mut Instance;
@@ -632,17 +663,18 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
             }
         };
 
-        initialize_vmcontext(handle.instance(), req);
+        initialize_vmcontext(handle.instance_mut(), req);
 
         Ok(handle)
     }
 
     unsafe fn initialize(
         &self,
-        handle: &InstanceHandle,
+        handle: &mut InstanceHandle,
+        module: &Module,
         is_bulk_memory: bool,
     ) -> Result<(), InstantiationError> {
-        initialize_instance(handle.instance(), is_bulk_memory)
+        initialize_instance(handle.instance_mut(), module, is_bulk_memory)
     }
 
     unsafe fn deallocate(&self, handle: &InstanceHandle) {

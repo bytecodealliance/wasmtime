@@ -2,9 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-
 #include <wasm.h>
-#include "wasmtime.h"
+#include <wasmtime.h>
 
 #define own
 
@@ -20,7 +19,8 @@ int main(int argc, const char* argv[]) {
   // Initialize.
   printf("Initializing...\n");
   wasm_engine_t* engine = wasm_engine_new_with_config(config);
-  wasm_store_t* store = wasm_store_new(engine);
+  wasmtime_store_t* store = wasmtime_store_new(engine, NULL, NULL);
+  wasmtime_context_t* context = wasmtime_store_context(store);
 
   // Load binary.
   printf("Loading binary...\n");
@@ -42,75 +42,42 @@ int main(int argc, const char* argv[]) {
 
   // Compile.
   printf("Compiling module...\n");
-  wasm_module_t *module = NULL;
-  wasmtime_error_t* error = wasmtime_module_new(engine, &binary, &module);
+  wasmtime_module_t *module = NULL;
+  wasmtime_error_t* error = wasmtime_module_new(engine, (uint8_t*) binary.data, binary.size, &module);
   if (!module)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&binary);
 
-  // Figure out which export is the `fib` export
-  wasm_exporttype_vec_t module_exports;
-  wasm_module_exports(module, &module_exports);
-  int fib_idx = -1;
-  for (int i = 0; i < module_exports.size; i++) {
-    const wasm_name_t *name = wasm_exporttype_name(module_exports.data[i]);
-    if (name->size != 3)
-      continue;
-    if (strncmp("fib", name->data, 3) != 0)
-      continue;
-    fib_idx = i;
-    break;
-  }
-  wasm_exporttype_vec_delete(&module_exports);
-  if (fib_idx == -1) {
-    printf("> Error finding `fib` export!\n");
-    return 1;
-  }
-
   // Instantiate.
   printf("Instantiating module...\n");
-  wasm_instance_t* instance = NULL;
+  wasmtime_instance_t instance;
   wasm_trap_t *trap = NULL;
-  wasm_extern_vec_t imports = WASM_EMPTY_VEC;
-  error = wasmtime_instance_new(store, module, &imports, &instance, &trap);
+  error = wasmtime_instance_new(context, module, NULL, 0, &instance, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
-  wasm_module_delete(module);
+  wasmtime_module_delete(module);
 
   // Extract export.
-  printf("Extracting export...\n");
-  own wasm_extern_vec_t exports;
-  wasm_instance_exports(instance, &exports);
-  if (exports.size == 0) {
-    printf("> Error accessing exports!\n");
-    return 1;
-  }
-  // Getting second export (first is memory).
-  wasm_func_t* run_func = wasm_extern_as_func(exports.data[fib_idx]);
-  if (run_func == NULL) {
-    printf("> Error accessing export!\n");
-    return 1;
-  }
-
-  wasm_instance_delete(instance);
+  wasmtime_extern_t fib;
+  bool ok = wasmtime_instance_export_get(context, &instance, "fib", 3, &fib);
+  assert(ok);
 
   // Call.
   printf("Calling fib...\n");
-  wasm_val_t params[1] = { WASM_I32_VAL(6) };
-  wasm_val_t results[1];
-  wasm_val_vec_t params_vec = WASM_ARRAY_VEC(params);
-  wasm_val_vec_t results_vec = WASM_ARRAY_VEC(results);
-  error = wasmtime_func_call(run_func, &params_vec, &results_vec, &trap);
+  wasmtime_val_t params[1];
+  params[0].kind = WASMTIME_I32;
+  params[0].of.i32 = 6;
+  wasmtime_val_t results[1];
+  error = wasmtime_func_call(context, &fib.of.func, params, 1, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 
-  wasm_extern_vec_delete(&exports);
-
+  assert(results[0].kind == WASMTIME_I32);
   printf("> fib(6) = %d\n", results[0].of.i32);
 
   // Shut down.
   printf("Shutting down...\n");
-  wasm_store_delete(store);
+  wasmtime_store_delete(store);
   wasm_engine_delete(engine);
 
   // All done.

@@ -61,11 +61,12 @@ int main() {
   wasmtime_config_interruptable_set(config, true);
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   assert(engine != NULL);
-  wasm_store_t *store = wasm_store_new(engine);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Create our interrupt handle we'll use later
-  wasmtime_interrupt_handle_t *handle = wasmtime_interrupt_handle_new(store);
+  wasmtime_interrupt_handle_t *handle = wasmtime_interrupt_handle_new(context);
   assert(handle != NULL);
 
   // Read our input file, which in this case is a wasm text file.
@@ -81,50 +82,45 @@ int main() {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t wasm;
-  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
+  wasmtime_error_t *error = wasmtime_wat2wasm(wat.data, wat.size, &wasm);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Now that we've got our binary webassembly we can compile our module.
-  wasm_module_t *module = NULL;
-  wasm_trap_t *trap = NULL;
-  wasm_instance_t *instance = NULL;
-  wasm_extern_vec_t imports = WASM_EMPTY_VEC;
-  error = wasmtime_module_new(engine, &wasm, &module);
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
-  error = wasmtime_instance_new(store, module, &imports, &instance, &trap);
-  if (instance == NULL)
+
+  wasm_trap_t *trap = NULL;
+  wasmtime_instance_t instance;
+  error = wasmtime_instance_new(context, module, NULL, 0, &instance, &trap);
+  if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
+  wasmtime_module_delete(module);
 
   // Lookup our `run` export function
-  wasm_extern_vec_t externs;
-  wasm_instance_exports(instance, &externs);
-  assert(externs.size == 1);
-  wasm_func_t *run = wasm_extern_as_func(externs.data[0]);
-  assert(run != NULL);
+  wasmtime_extern_t run;
+  bool ok = wasmtime_instance_export_get(context, &instance, "run", 3, &run);
+  assert(ok);
+  assert(run.kind == WASMTIME_EXTERN_FUNC);
 
   // Spawn a thread to send us an interrupt after a period of time.
   spawn_interrupt(handle);
 
   // And call it!
   printf("Entering infinite loop...\n");
-  wasm_val_vec_t args_vec = WASM_EMPTY_VEC;
-  wasm_val_vec_t results_vec = WASM_EMPTY_VEC;
-  error = wasmtime_func_call(run, &args_vec, &results_vec, &trap);
+  error = wasmtime_func_call(context, &run.of.func, NULL, 0, NULL, 0, &trap);
   assert(error == NULL);
   assert(trap != NULL);
   printf("Got a trap!...\n");
 
   // `trap` can be inspected here to see the trap message has an interrupt in it
-
   wasm_trap_delete(trap);
-  wasm_extern_vec_delete(&externs);
-  wasm_instance_delete(instance);
-  wasm_module_delete(module);
-  wasm_store_delete(store);
+
+  wasmtime_store_delete(store);
   wasm_engine_delete(engine);
   return 0;
 }

@@ -3804,7 +3804,6 @@ dependencies = [
  "wasi-common",
  "wasi-tokio",
  "wasmtime",
- "wasmtime-wiggle",
  "wiggle",
 ]
 
@@ -3815,7 +3814,6 @@ dependencies = [
  "anyhow",
  "wasi-crypto",
  "wasmtime",
- "wasmtime-wiggle",
  "wiggle",
 ]
 
@@ -3831,7 +3829,6 @@ dependencies = [
  "wasmtime",
  "wasmtime-runtime",
  "wasmtime-wasi",
- "wasmtime-wiggle",
  "wiggle",
 ]
 
@@ -3842,30 +3839,6 @@ dependencies = [
  "anyhow",
  "wasmtime",
  "wast 35.0.2",
-]
-
-[[package]]
-name = "wasmtime-wiggle"
-version = "0.27.0"
-dependencies = [
- "anyhow",
- "proptest",
- "wasmtime",
- "wasmtime-wiggle-macro",
- "wiggle",
- "wiggle-borrow",
- "witx",
-]
-
-[[package]]
-name = "wasmtime-wiggle-macro"
-version = "0.27.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "wiggle-generate",
- "witx",
 ]
 
 [[package]]
@@ -3909,21 +3882,16 @@ dependencies = [
 name = "wiggle"
 version = "0.27.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bitflags",
  "proptest",
  "thiserror",
  "tracing",
+ "wasmtime",
  "wiggle-macro",
  "wiggle-test",
  "witx",
-]
-
-[[package]]
-name = "wiggle-borrow"
-version = "0.27.0"
-dependencies = [
- "wiggle",
 ]
 
 [[package]]
@@ -3961,7 +3929,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wiggle",
- "wiggle-borrow",
 ]
 
 [[package]]

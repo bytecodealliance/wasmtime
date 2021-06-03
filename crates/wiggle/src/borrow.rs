@@ -1,11 +1,21 @@
-use std::cell::RefCell;
+use crate::{BorrowHandle, GuestError, Region};
 use std::collections::HashMap;
-use wiggle::{BorrowHandle, GuestError, Region};
+use std::sync::Mutex;
 
 pub struct BorrowChecker {
     /// Unfortunately, since the terminology of std::cell and the problem domain of borrow checking
     /// overlap, the method calls on this member will be confusing.
-    bc: RefCell<InnerBorrowChecker>,
+    ///
+    /// Also, unfortunately, for now this uses a `Mutex`. The reason for that is
+    /// that this is shared as `&BorrowChecker` in a bunch of `GuestPtr` values.
+    /// Through this sharing we still want each `GuestPtr` to be `Send` and the
+    /// "naive" way to make `&T` `Send` with interior mutability is to use a
+    /// `Mutex`. Fixing this will likely require rethinking `GuestPtr` one way
+    /// or another. That needs to happen for other reasons as well (for example
+    /// to allow for wasm calls to happen while `GuestPtr` values are active),
+    /// so it's hoped that in a later rethinking of `GuestPtr` we can revisit
+    /// this and remove this `Mutex`.
+    bc: Mutex<InnerBorrowChecker>,
 }
 
 impl BorrowChecker {
@@ -19,7 +29,7 @@ impl BorrowChecker {
     /// shared or mutable borrow.
     pub fn new() -> Self {
         BorrowChecker {
-            bc: RefCell::new(InnerBorrowChecker::new()),
+            bc: Mutex::new(InnerBorrowChecker::new()),
         }
     }
     /// Indicates whether any outstanding shared or mutable borrows are known
@@ -27,25 +37,25 @@ impl BorrowChecker {
     /// to be safe to recursively call into a WebAssembly module, or to
     /// manipulate the WebAssembly memory by any other means.
     pub fn has_outstanding_borrows(&self) -> bool {
-        self.bc.borrow().has_outstanding_borrows()
+        self.bc.lock().unwrap().has_outstanding_borrows()
     }
     pub fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.borrow_mut().shared_borrow(r)
+        self.bc.lock().unwrap().shared_borrow(r)
     }
     pub fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        self.bc.borrow_mut().mut_borrow(r)
+        self.bc.lock().unwrap().mut_borrow(r)
     }
     pub fn shared_unborrow(&self, h: BorrowHandle) {
-        self.bc.borrow_mut().shared_unborrow(h)
+        self.bc.lock().unwrap().shared_unborrow(h)
     }
     pub fn mut_unborrow(&self, h: BorrowHandle) {
-        self.bc.borrow_mut().mut_unborrow(h)
+        self.bc.lock().unwrap().mut_unborrow(h)
     }
     pub fn is_shared_borrowed(&self, r: Region) -> bool {
-        self.bc.borrow().is_shared_borrowed(r)
+        self.bc.lock().unwrap().is_shared_borrowed(r)
     }
     pub fn is_mut_borrowed(&self, r: Region) -> bool {
-        self.bc.borrow().is_mut_borrowed(r)
+        self.bc.lock().unwrap().is_mut_borrowed(r)
     }
 }
 

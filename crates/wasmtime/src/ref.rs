@@ -5,6 +5,7 @@ use wasmtime_runtime::VMExternRef;
 
 /// Represents an opaque reference to any data within WebAssembly.
 #[derive(Clone, Debug)]
+#[repr(transparent)]
 pub struct ExternRef {
     pub(crate) inner: VMExternRef,
 }
@@ -13,7 +14,7 @@ impl ExternRef {
     /// Creates a new instance of `ExternRef` wrapping the given value.
     pub fn new<T>(value: T) -> ExternRef
     where
-        T: 'static + Any,
+        T: 'static + Any + Send + Sync,
     {
         let inner = VMExternRef::new(value);
         ExternRef { inner }
@@ -25,6 +26,9 @@ impl ExternRef {
     }
 
     /// Get the strong reference count for this `ExternRef`.
+    ///
+    /// Note that this loads the reference count with a `SeqCst` ordering to
+    /// synchronize with other threads.
     pub fn strong_count(&self) -> usize {
         self.inner.strong_count()
     }

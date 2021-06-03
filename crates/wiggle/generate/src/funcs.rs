@@ -14,6 +14,26 @@ pub fn define_func(
     func: &witx::InterfaceFunc,
     settings: &CodegenSettings,
 ) -> TokenStream {
+    let (ts, _bounds) = _define_func(names, module, func, settings);
+    ts
+}
+
+pub fn func_bounds(
+    names: &Names,
+    module: &witx::Module,
+    func: &witx::InterfaceFunc,
+    settings: &CodegenSettings,
+) -> Vec<Ident> {
+    let (_ts, bounds) = _define_func(names, module, func, settings);
+    bounds
+}
+
+fn _define_func(
+    names: &Names,
+    module: &witx::Module,
+    func: &witx::InterfaceFunc,
+    settings: &CodegenSettings,
+) -> (TokenStream, Vec<Ident>) {
     let rt = names.runtime_mod();
     let ident = names.func(&func.name);
 
@@ -36,7 +56,7 @@ pub fn define_func(
     };
 
     let mut body = TokenStream::new();
-    let mut required_impls = vec![names.trait_name(&module.name)];
+    let mut bounds = vec![names.trait_name(&module.name)];
     func.call_interface(
         &module.name,
         &mut Rust {
@@ -49,37 +69,40 @@ pub fn define_func(
             module,
             funcname: func.name.as_str(),
             settings,
-            required_impls: &mut required_impls,
+            bounds: &mut bounds,
         },
     );
 
-    let asyncness = if settings.is_async(&module, &func) {
-        quote!(async)
-    } else {
+    let asyncness = if settings.get_async(&module, &func).is_sync() {
         quote!()
+    } else {
+        quote!(async)
     };
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
-    quote! {
-        #[allow(unreachable_code)] // deals with warnings in noreturn functions
-        pub #asyncness fn #ident(
-            ctx: &(impl #(#required_impls)+*),
-            memory: &dyn #rt::GuestMemory,
-            #(#abi_params),*
-        ) -> Result<#abi_ret, #rt::Trap> {
-            use std::convert::TryFrom as _;
+    (
+        quote! {
+            #[allow(unreachable_code)] // deals with warnings in noreturn functions
+            pub #asyncness fn #ident(
+                ctx: &mut (impl #(#bounds)+*),
+                memory: &dyn #rt::GuestMemory,
+                #(#abi_params),*
+            ) -> Result<#abi_ret, #rt::Trap> {
+                use std::convert::TryFrom as _;
 
-            let _span = #rt::tracing::span!(
-                #rt::tracing::Level::TRACE,
-                "wiggle abi",
-                module = #mod_name,
-                function = #func_name
-            );
-            let _enter = _span.enter();
+                let _span = #rt::tracing::span!(
+                    #rt::tracing::Level::TRACE,
+                    "wiggle abi",
+                    module = #mod_name,
+                    function = #func_name
+                );
+                let _enter = _span.enter();
 
-            #body
-        }
-    }
+                #body
+            }
+        },
+        bounds,
+    )
 }
 
 struct Rust<'a> {
@@ -92,13 +115,13 @@ struct Rust<'a> {
     module: &'a witx::Module,
     funcname: &'a str,
     settings: &'a CodegenSettings,
-    required_impls: &'a mut Vec<Ident>,
+    bounds: &'a mut Vec<Ident>,
 }
 
 impl Rust<'_> {
-    fn required_impl(&mut self, i: Ident) {
-        if !self.required_impls.contains(&i) {
-            self.required_impls.push(i);
+    fn bound(&mut self, i: Ident) {
+        if !self.bounds.contains(&i) {
+            self.bounds.push(i);
         }
     }
 }
@@ -222,13 +245,13 @@ impl witx::Bindgen for Rust<'_> {
 
                 let trait_name = self.names.trait_name(&self.module.name);
                 let ident = self.names.func(&func.name);
-                if self.settings.is_async(&self.module, &func) {
+                if self.settings.get_async(&self.module, &func).is_sync() {
                     self.src.extend(quote! {
-                        let ret = #trait_name::#ident(ctx, #(#args),*).await;
+                        let ret = #trait_name::#ident(ctx, #(#args),*);
                     })
                 } else {
                     self.src.extend(quote! {
-                        let ret = #trait_name::#ident(ctx, #(#args),*);
+                        let ret = #trait_name::#ident(ctx, #(#args),*).await;
                     })
                 };
                 self.src.extend(quote! {
@@ -254,7 +277,7 @@ impl witx::Bindgen for Rust<'_> {
                 let val = match self.settings.errors.for_name(ty) {
                     Some(custom) => {
                         let method = self.names.user_error_conversion_method(&custom);
-                        self.required_impl(quote::format_ident!("UserErrorConversion"));
+                        self.bound(quote::format_ident!("UserErrorConversion"));
                         quote!(UserErrorConversion::#method(ctx, #val)?)
                     }
                     None => val,

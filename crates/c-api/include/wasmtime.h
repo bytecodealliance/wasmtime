@@ -1,307 +1,194 @@
 /**
- * @file
+ * \mainpage Wasmtime C API
  *
- * Wasmtime-specific extensions to the WebAssembly C API.
+ * This documentation is an overview and API reference for the C API of
+ * Wasmtime. The C API is spread between three different header files:
  *
- * This file contains all of the Wasmtime-specific functions which will not be
- * present in other engines. The intention of this file is to augment the
- * functionality provided in `wasm.h`.
+ * * \ref wasmtime.h
+ * * \ref wasi.h
+ * * \ref wasm.h
+ *
+ * The \ref wasmtime.h header file includes all the other header files and is
+ * the main header file you'll likely be using. The \ref wasm.h header file
+ * comes directly from the
+ * [WebAssembly/wasm-c-api](https://github.com/WebAssembly/wasm-c-api)
+ * repository, and at this time the upstream header file does not have
+ * documentation so Wasmtime provides documentation here. It should be noted
+ * some semantics may be Wasmtime-specific and may not be portable to other
+ * engines.
+ *
+ * ## Installing the C API
+ *
+ * To install the C API from precompiled binaries you can download the
+ * appropriate binary from the [releases page of
+ * Wasmtime](https://github.com/bytecodealliance/wasmtime/releases). Artifacts
+ * for the C API all end in "-c-api" for the filename.
+ *
+ * Each archive contains an `include` directory with necessary headers, as well
+ * as a `lib` directory with both a static archive and a dynamic library of
+ * Wasmtime. You can link to either of them as you see fit.
+ *
+ * ## Linking against the C API
+ *
+ * You'll want to arrange the `include` directory of the C API to be in your
+ * compiler's header path (e.g. the `-I` flag). If you're compiling for Windows
+ * and you're using the static library then you'll also need to pass
+ * `-DWASM_API_EXTERN=` and `-DWASI_API_EXTERN=` to disable dllimport.
+ *
+ * Your final artifact can then be linked with `-lwasmtime`. If you're linking
+ * against the static library you may need to pass other system libraries
+ * depending on your platform:
+ *
+ * * Linux - `-lpthread -ldl -lm`
+ * * macOS - no extra flags needed
+ * * Windows - `ws2_32.lib advapi32.lib userenv.lib ntdll.lib shell32.lib ole32.lib`
+ *
+ * ## Building from Source
+ *
+ * The C API is located in the
+ * [`crates/c-api`](https://github.com/bytecodealliance/wasmtime/tree/main/crates/c-api)
+ * directory of the [Wasmtime
+ * repository](https://github.com/bytecodealliance/wasmtime). To build from
+ * source you'll need a Rust compiler and a checkout of the `wasmtime` project.
+ * Afterwards you can execute:
+ *
+ * ```
+ * $ cargo build --release -p wasmtime-c-api
+ * ```
+ *
+ * This will place the final artifacts in `target/release`, with names depending
+ * on what platform you're compiling for.
+ *
+ * ## Other resources
+ *
+ * Some other handy resources you might find useful when exploring the C API
+ * documentation are:
+ *
+ * * [Rust `wasmtime` crate
+ *   documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/) -
+ *   although this documentation is for Rust and not C, you'll find that many
+ *   functions mirror one another and there may be extra documentation in Rust
+ *   you find helpful. If you find yourself having to frequently do this,
+ *   though, please feel free to [file an
+ *   issue](https://github.com/bytecodealliance/wasmtime/issues/new).
+ *
+ * * [C embedding
+ *   examples](https://bytecodealliance.github.io/wasmtime/examples-c-embed.html)
+ *   are available online and are tested from the Wasmtime repository itself.
+ *
+ * * [Contribution documentation for
+ *   Wasmtime](https://bytecodealliance.github.io/wasmtime/contributing.html) in
+ *   case you're interested in helping out!
  */
 
+/**
+ * \file wasmtime.h
+ *
+ * \brief Wasmtime's C API
+ *
+ * This file is the central inclusion point for Wasmtime's C API. There are a
+ * number of sub-header files but this file includes them all. The C API is
+ * based on \ref wasm.h but there are many Wasmtime-specific APIs which are
+ * tailored to Wasmtime's implementation.
+ *
+ * The #wasm_config_t and #wasm_engine_t types are used from \ref wasm.h.
+ * Additionally all type-level information (like #wasm_functype_t) is also
+ * used from \ref wasm.h. Otherwise, though, all wasm objects (like
+ * #wasmtime_store_t or #wasmtime_func_t) are used from this header file.
+ *
+ * ### Thread Safety
+ *
+ * The multithreading story of the C API very closely follows the
+ * multithreading story of the Rust API for Wasmtime. All objects are safe to
+ * send to other threads so long as user-specific data is also safe to send to
+ * other threads. Functions are safe to call from any thread but some functions
+ * cannot be called concurrently. For example, functions which correspond to
+ * `&T` in Rust can be called concurrently with any other methods that take
+ * `&T`. Functions that take `&mut T` in Rust, however, cannot be called
+ * concurrently with any other function (but can still be invoked on any
+ * thread).
+ *
+ * This generally equates to mutation of internal state. Functions which don't
+ * mutate anything, such as learning type information through
+ * #wasmtime_func_type, can be called concurrently. Functions which do require
+ * mutation, for example #wasmtime_func_call, cannot be called concurrently.
+ * This is conveyed in the C API with either `const wasmtime_context_t*`
+ * (concurrency is ok as it's read-only) or `wasmtime_context_t*` (concurrency
+ * is not ok, mutation may happen).
+ *
+ * When in doubt assume that functions cannot be called concurrently with
+ * aliasing objects.
+ *
+ * ### Aliasing
+ *
+ * The C API for Wasmtime is intended to be a relatively thin layer over the
+ * Rust API for Wasmtime. Rust has much more strict rules about aliasing than C
+ * does, and the Rust API for Wasmtime is designed around these rules to be
+ * used safely. These same rules must be upheld when using the C API of
+ * Wasmtime.
+ *
+ * The main consequence of this is that the #wasmtime_context_t pointer into
+ * the #wasmtime_store_t must be carefully used. Since the context is an
+ * internal pointer into the store it must be used carefully to ensure you're
+ * not doing something that Rust would otherwise forbid at compile time. A
+ * #wasmtime_context_t can only be used when you would otherwise have been
+ * provided access to it. For example in a host function created with
+ * #wasmtime_func_new you can use #wasmtime_context_t in the host function
+ * callback. This is because an argument, a #wasmtime_caller_t, provides access
+ * to #wasmtime_context_t. On the other hand a destructor passed to
+ * #wasmtime_externref_new, however, cannot use a #wasmtime_context_t because
+ * it was not provided access to one. Doing so may lead to memory unsafety.
+ *
+ * ### Stores
+ *
+ * A foundational construct in this API is the #wasmtime_store_t. A store is a
+ * collection of host-provided objects and instantiated wasm modules. Stores are
+ * often treated as a "single unit" and items within a store are all allowed to
+ * reference one another. References across stores cannot currently be created.
+ * For example you cannot pass a function from one store into another store.
+ *
+ * A store is not intended to be a global long-lived object. Stores provide no
+ * means of internal garbage collections of wasm objects (such as instances),
+ * meaning that no memory from a store will be deallocated until you call
+ * #wasmtime_store_delete. If you're working with a web server, for example,
+ * then it's recommended to think of a store as a "one per request" sort of
+ * construct. Globally you'd have one #wasm_engine_t and a cache of
+ * #wasmtime_module_t instances compiled into that engine. Each request would
+ * create a new #wasmtime_store_t and then instantiate a #wasmtime_module_t
+ * into the store. This process of creating a store and instantiating a module
+ * is expected to be quite fast. When the request is finished you'd delete the
+ * #wasmtime_store_t keeping memory usage reasonable for the lifetime of the
+ * server.
+ */
 
 #ifndef WASMTIME_API_H
 #define WASMTIME_API_H
 
-#include <wasm.h>
 #include <wasi.h>
+#include <wasmtime/config.h>
+#include <wasmtime/error.h>
+#include <wasmtime/extern.h>
+#include <wasmtime/func.h>
+#include <wasmtime/global.h>
+#include <wasmtime/instance.h>
+#include <wasmtime/linker.h>
+#include <wasmtime/memory.h>
+#include <wasmtime/module.h>
+#include <wasmtime/store.h>
+#include <wasmtime/table.h>
+#include <wasmtime/trap.h>
+#include <wasmtime/val.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define own
-
-#define WASMTIME_DECLARE_OWN(name) \
-  typedef struct wasmtime_##name##_t wasmtime_##name##_t; \
-  \
-  WASM_API_EXTERN void wasmtime_##name##_delete(own wasmtime_##name##_t*);
-
-/**
- * \typedef wasmtime_error_t
- * \brief Convenience alias for #wasmtime_error_t
- *
- * \struct wasmtime_error_t
- * \brief Errors generated by Wasmtime.
- *
- * This opaque type represents an error that happened as part of one of the
- * functions below. Errors primarily have an error message associated with them
- * at this time, which you can acquire by calling #wasmtime_error_message.
- *
- * \fn void wasmtime_error_delete(own wasmtime_error_t *);
- * \brief Deletes an error.
- */
-WASMTIME_DECLARE_OWN(error)
-
-/**
- * \brief Returns the string description of this error.
- *
- * This will "render" the error to a string and then return the string
- * representation of the error to the caller. The `message` argument should be
- * uninitialized before this function is called and the caller is responsible
- * for deallocating it with #wasm_byte_vec_delete afterwards.
- */
-WASM_API_EXTERN void wasmtime_error_message(
-    const wasmtime_error_t *error,
-    own wasm_name_t *message
-);
-
-/**
- * \brief Specifier for how Wasmtime will compile code, values are in
- * #wasmtime_strategy_enum
- */
-typedef uint8_t wasmtime_strategy_t;
-
-/**
- * \brief Different ways that Wasmtime can compile WebAssembly
- *
- * The default value is #WASMTIME_STRATEGY_AUTO.
- */
-enum wasmtime_strategy_enum { // Strategy
-  /// Wasmtime will automatically determine whether to use Cranelift or
-  /// Lightbeam, and currently it will always pick Cranelift. This default may
-  /// change over time though.
-  WASMTIME_STRATEGY_AUTO,
-
-  /// Indicates that Cranelift will unconditionally use Cranelift to compile
-  /// WebAssembly code.
-  WASMTIME_STRATEGY_CRANELIFT,
-
-  /// Indicates that Cranelift will unconditionally use Lightbeam to compile
-  /// WebAssembly code. Note that Lightbeam isn't always enabled at compile
-  /// time, and if that's the case an error will be returned.
-  WASMTIME_STRATEGY_LIGHTBEAM,
-};
-
-/**
- * \brief Specifier of what optimization level to use for generated JIT code.
- *
- * See #wasmtime_opt_level_enum for possible values.
- */
-typedef uint8_t wasmtime_opt_level_t;
-
-/**
- * \brief Different ways Wasmtime can optimize generated code.
- *
- * The default value is #WASMTIME_OPT_LEVEL_SPEED.
- */
-enum wasmtime_opt_level_enum { // OptLevel
-  /// Generated code will not be optimized at all.
-  WASMTIME_OPT_LEVEL_NONE,
-  /// Generated code will be optimized purely for speed.
-  WASMTIME_OPT_LEVEL_SPEED,
-  /// Generated code will be optimized, but some speed optimizations are
-  /// disabled if they cause the generated code to be significantly larger.
-  WASMTIME_OPT_LEVEL_SPEED_AND_SIZE,
-};
-
-/**
- * \brief Different ways wasmtime can enable profiling JIT code.
- *
- * See #wasmtime_profiling_strategy_enum for possible values.
- */
-typedef uint8_t wasmtime_profiling_strategy_t;
-
-/**
- * \brief Different ways to profile JIT code.
- *
- * The default is #WASMTIME_PROFILING_STRATEGY_NONE.
- */
-enum wasmtime_profiling_strategy_enum { // ProfilingStrategy
-  /// No profiling is enabled at runtime.
-  WASMTIME_PROFILING_STRATEGY_NONE,
-  /// Linux's "jitdump" support in `perf` is enabled and when Wasmtime is run
-  /// under `perf` necessary calls will be made to profile generated JIT code.
-  WASMTIME_PROFILING_STRATEGY_JITDUMP,
-  /// Support for VTune will be enabled and the VTune runtime will be informed,
-  /// at runtime, about JIT code.
-  ///
-  /// Note that this isn't always enabled at build time.
-  WASMTIME_PROFILING_STRATEGY_VTUNE,
-};
-
-#define WASMTIME_CONFIG_PROP(ret, name, ty) \
-    WASM_API_EXTERN ret wasmtime_config_##name##_set(wasm_config_t*, ty);
-
-/**
- * \brief Configures whether DWARF debug information is constructed at runtime
- * to describe JIT code.
- *
- * This setting is `false` by default. When enabled it will attempt to inform
- * native debuggers about DWARF debugging information for JIT code to more
- * easily debug compiled WebAssembly via native debuggers. This can also
- * sometimes improve the quality of output when profiling is enabled.
- */
-WASMTIME_CONFIG_PROP(void, debug_info, bool)
-
-/**
- * \brief Enables WebAssembly code to be interrupted.
- *
- * This setting is `false` by default. When enabled it will enable getting an
- * interrupt handle via #wasmtime_interrupt_handle_new which can be used to
- * interrupt currently-executing WebAssembly code.
- */
-WASMTIME_CONFIG_PROP(void, interruptable, bool)
-
-/**
- * \brief Whether or not fuel is enabled for generated code.
- *
- * This setting is `false` by default. When enabled it will enable fuel counting
- * meaning that fuel will be consumed every time a wasm instruction is executed,
- * and trap when reaching zero.
- */
-WASMTIME_CONFIG_PROP(void, consume_fuel, bool)
-
-/**
- * \brief Configures the maximum stack size, in bytes, that JIT code can use.
- *
- * This setting is 2MB by default. Configuring this setting will limit the
- * amount of native stack space that JIT code can use while it is executing. If
- * you're hitting stack overflow you can try making this setting larger, or if
- * you'd like to limit wasm programs to less stack you can also configure this.
- *
- * Note that this setting is not interpreted with 100% precision. Additionally
- * the amount of stack space that wasm takes is always relative to the first
- * invocation of wasm on the stack, so recursive calls with host frames in the
- * middle will all need to fit within this setting.
- */
-WASMTIME_CONFIG_PROP(void, max_wasm_stack, size_t)
-
-/**
- * \brief Configures whether the WebAssembly threading proposal is enabled.
- *
- * This setting is `false` by default.
- *
- * Note that threads are largely unimplemented in Wasmtime at this time.
- */
-WASMTIME_CONFIG_PROP(void, wasm_threads, bool)
-
-/**
- * \brief Configures whether the WebAssembly reference types proposal is
- * enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_reference_types, bool)
-
-/**
- * \brief Configures whether the WebAssembly SIMD proposal is
- * enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_simd, bool)
-
-/**
- * \brief Configures whether the WebAssembly bulk memory proposal is
- * enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_bulk_memory, bool)
-
-/**
- * \brief Configures whether the WebAssembly multi value proposal is
- * enabled.
- *
- * This setting is `true` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_multi_value, bool)
-
-/**
- * \brief Configures whether the WebAssembly module linking proposal is
- * enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_module_linking, bool)
-
-/**
- * \brief Configures how JIT code will be compiled.
- *
- * This setting is #WASMTIME_STRATEGY_AUTO by default.
- *
- * If the compilation strategy selected could not be enabled then an error is
- * returned.
- */
-WASMTIME_CONFIG_PROP(wasmtime_error_t*, strategy, wasmtime_strategy_t)
-
-/**
- * \brief Configures whether Cranelift's debug verifier is enabled.
- *
- * This setting in `false` by default.
- *
- * When cranelift is used for compilation this enables expensive debug checks
- * within Cranelift itself to verify it's correct.
- */
-WASMTIME_CONFIG_PROP(void, cranelift_debug_verifier, bool)
-
-/**
- * \brief Configures Cranelift's optimization level for JIT code.
- *
- * This setting in #WASMTIME_OPT_LEVEL_SPEED by default.
- */
-WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
-
-/**
- * \brief Configures the profiling strategy used for JIT code.
- *
- * This setting in #WASMTIME_PROFILING_STRATEGY_NONE by default.
- */
-WASMTIME_CONFIG_PROP(wasmtime_error_t*, profiler, wasmtime_profiling_strategy_t)
-
-/**
- * \brief Configures the maximum size for memory to be considered "static"
- *
- * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.static_memory_maximum_size.
- */
-WASMTIME_CONFIG_PROP(void, static_memory_maximum_size, uint64_t)
-
-/**
- * \brief Configures the guard region size for "static" memory.
- *
- * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.static_memory_guard_size.
- */
-WASMTIME_CONFIG_PROP(void, static_memory_guard_size, uint64_t)
-
-/**
- * \brief Configures the guard region size for "dynamic" memory.
- *
- * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.dynamic_memory_guard_size.
- */
-WASMTIME_CONFIG_PROP(void, dynamic_memory_guard_size, uint64_t)
-
-/**
- * \brief Enables Wasmtime's cache and loads configuration from the specified
- * path.
- *
- * By default the Wasmtime compilation cache is disabled. The configuration path
- * here can be `NULL` to use the default settings, and otherwise the argument
- * here must be a file on the filesystem with TOML configuration -
- * https://bytecodealliance.github.io/wasmtime/cli-cache.html.
- *
- * An error is returned if the cache configuration could not be loaded or if the
- * cache could not be enabled.
- */
-WASM_API_EXTERN wasmtime_error_t* wasmtime_config_cache_config_load(wasm_config_t*, const char*);
-
 /**
  * \brief Converts from the text format of WebAssembly to to the binary format.
  *
- * \param wat this it the input buffer with the WebAssembly Text Format inside of
+ * \param wat this it the input pointer with the WebAssembly Text Format inside of
  *   it. This will be parsed and converted to the binary format.
+ * \param wat_len this it the length of `wat`, in bytes.
  * \param ret if the conversion is successful, this byte vector is filled in with
  *   the WebAssembly binary format.
  *
@@ -311,987 +198,11 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_config_cache_config_load(wasm_config_
  * This function does not take ownership of `wat`, and the caller is expected to
  * deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
  */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_wat2wasm(
-    const wasm_byte_vec_t *wat,
-    own wasm_byte_vec_t *ret
+WASM_API_EXTERN wasmtime_error_t* wasmtime_wat2wasm(
+    const char *wat,
+    size_t wat_len,
+    wasm_byte_vec_t *ret
 );
-
-/**
- * \brief Perform garbage collection within the given store.
- *
- * Garbage collects `externref`s that are used within this store. Any
- * `externref`s that are discovered to be unreachable by other code or objects
- * will have their finalizers run.
- *
- * The `store` argument must not be NULL.
- */
-WASM_API_EXTERN void wasmtime_store_gc(wasm_store_t* store);
-
-/**
- * \typedef wasmtime_linker_t
- * \brief Convenience alias for #wasmtime_linker_t
- *
- * \struct wasmtime_linker_t
- * \brief Object used to conveniently link together and instantiate wasm
- * modules.
- *
- * This type corresponds to the `wasmtime::Linker` type in Rust. This
- * Wasmtime-specific extension is intended to make it easier to manage a set of
- * modules that link together, or to make it easier to link WebAssembly modules
- * to WASI.
- *
- * A #wasmtime_linker_t is a higher level way to instantiate a module than
- * #wasm_instance_new since it works at the "string" level of imports rather
- * than requiring 1:1 mappings.
- *
- * \fn void wasmtime_linker_delete(own wasmtime_linker_t *);
- * \brief Deletes a linker.
- */
-WASMTIME_DECLARE_OWN(linker)
-
-/**
- * \brief Creates a new linker which will link together objects in the specified
- * store.
- *
- * This function does not take ownership of the store argument, and the caller
- * is expected to delete the returned linker.
- */
-WASM_API_EXTERN own wasmtime_linker_t* wasmtime_linker_new(wasm_store_t* store);
-
-/**
- * \brief Configures whether this linker allows later definitions to shadow
- * previous definitions.
- *
- * By default this setting is `false`.
- */
-WASM_API_EXTERN void wasmtime_linker_allow_shadowing(wasmtime_linker_t* linker, bool allow_shadowing);
-
-/**
- * \brief Defines a new item in this linker.
- *
- * \param linker the linker the name is being defined in.
- * \param module the module name the item is defined under.
- * \param name the field name the item is defined under
- * \param item the item that is being defined in this linker.
- *
- * \return On success `NULL` is returned, otherwise an error is returned which
- * describes why the definition failed.
- *
- * For more information about name resolution consult the [Rust
- * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_define(
-    wasmtime_linker_t *linker,
-    const wasm_name_t *module,
-    const wasm_name_t *name,
-    const wasm_extern_t *item
-);
-
-/**
- * \brief Defines a WASI instance in this linker.
- *
- * \param linker the linker the name is being defined in.
- * \param instance a previously-created WASI instance.
- *
- * \return On success `NULL` is returned, otherwise an error is returned which
- * describes why the definition failed.
- *
- * For more information about name resolution consult the [Rust
- * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_define_wasi(
-    wasmtime_linker_t *linker,
-    const wasi_instance_t *instance
-);
-
-/**
- * \brief Defines an instance under the specified name in this linker.
- *
- * \param linker the linker the name is being defined in.
- * \param name the module name to define `instance` under.
- * \param instance a previously-created instance.
- *
- * \return On success `NULL` is returned, otherwise an error is returned which
- * describes why the definition failed.
- *
- * This function will take all of the exports of the `instance` provided and
- * defined them under a module called `name` with a field name as the export's
- * own name.
- *
- * For more information about name resolution consult the [Rust
- * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_define_instance(
-    wasmtime_linker_t *linker,
-    const wasm_name_t *name,
-    const wasm_instance_t *instance
-);
-
-/**
- * \brief Instantiates a #wasm_module_t with the items defined in this linker.
- *
- * \param linker the linker used to instantiate the provided module.
- * \param module the module that is being instantiated.
- * \param instance the returned instance, if successful.
- * \param trap a trap returned, if the start function traps.
- *
- * \return One of three things can happen as a result of this function. First
- * the module could be successfully instantiated and returned through
- * `instance`, meaning the return value and `trap` are both set to `NULL`.
- * Second the start function may trap, meaning the return value and `instance`
- * are set to `NULL` and `trap` describes the trap that happens. Finally
- * instantiation may fail for another reason, in which case an error is returned
- * and `trap` and `instance` are set to `NULL`.
- *
- * This function will attempt to satisfy all of the imports of the `module`
- * provided with items previously defined in this linker. If any name isn't
- * defined in the linker than an error is returned. (or if the previously
- * defined item is of the wrong type).
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_instantiate(
-    const wasmtime_linker_t *linker,
-    const wasm_module_t *module,
-    own wasm_instance_t **instance,
-    own wasm_trap_t **trap
-);
-
-/**
- * \brief Defines automatic instantiations of a #wasm_module_t in this linker.
- *
- * \param linker the linker the module is being added to
- * \param name the name of the module within the linker
- * \param module the module that's being instantiated
- *
- * \return An error if the module could not be instantiated or added or `NULL`
- * on success.
- *
- * This function automatically handles [Commands and
- * Reactors](https://github.com/WebAssembly/WASI/blob/master/design/application-abi.md#current-unstable-abi)
- * instantiation and initialization.
- *
- * For more information see the [Rust
- * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#method.module).
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_module(
-    const wasmtime_linker_t *linker,
-    const wasm_name_t *name,
-    const wasm_module_t *module
-);
-
-/**
- * \brief Acquires the "default export" of the named module in this linker.
- *
- * \param linker the linker to load from
- * \param name the name of the module to get the default export for
- * \param func where to store the extracted default function.
- *
- * \return An error is returned if the default export could not be found, or
- * `NULL` is returned and `func` is filled in otherwise.
- *
- * For more information see the [Rust
- * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#method.get_default).
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_get_default(
-    const wasmtime_linker_t *linker,
-    const wasm_name_t *name,
-    own wasm_func_t **func
-);
-
-/**
- * \brief Loads an item by name from this linker.
- *
- * \param linker the linker to load from
- * \param module the name of the module to get
- * \param name the name of the field to get
- * \param item where to store the extracted item
- *
- * \return An error is returned if the item isn't defined or has more than one
- * definition, or `NULL` is returned and `item` is filled in otherwise.
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_linker_get_one_by_name(
-    const wasmtime_linker_t *linker,
-    const wasm_name_t *module,
-    const wasm_name_t *name,
-    own wasm_extern_t **item
-);
-
-/**
- * \brief Structure used to learn about the caller of a host-defined function.
- *
- * This structure is the first argument of #wasmtime_func_callback_t and
- * wasmtime_func_callback_with_env_t. The main purpose of this structure is for
- * building a WASI-like API which can inspect the memory of the caller,
- * regardless of the caller.
- *
- * This is intended to be a temporary API extension until interface types have
- * become more prevalent. This is not intended to be supported until the end of
- * time, but it will be supported so long as WASI requires it.
- */
-typedef struct wasmtime_caller_t wasmtime_caller_t;
-
-/**
- * \brief Callback signature for #wasmtime_func_new.
- *
- * This function is the same as #wasm_func_callback_t except that its first
- * argument is a #wasmtime_caller_t which allows learning information about the
- * caller.
- */
-typedef own wasm_trap_t* (*wasmtime_func_callback_t)(const wasmtime_caller_t* caller, const wasm_val_vec_t *args, wasm_val_vec_t *results);
-
-/**
- * \brief Callback signature for #wasmtime_func_new_with_env.
- *
- * This function is the same as #wasm_func_callback_with_env_t except that its
- * first argument is a #wasmtime_caller_t which allows learning information
- * about the caller.
- */
-typedef own wasm_trap_t* (*wasmtime_func_callback_with_env_t)(const wasmtime_caller_t* caller, void* env, const wasm_val_vec_t *args, wasm_val_vec_t *results);
-
-/**
- * \brief Creates a new host-defined function.
- *
- * This function is the same as #wasm_func_new, except the callback has the type
- * signature #wasmtime_func_callback_t which gives a #wasmtime_caller_t as its
- * first argument.
- */
-WASM_API_EXTERN own wasm_func_t* wasmtime_func_new(wasm_store_t*, const wasm_functype_t*, wasmtime_func_callback_t callback);
-
-/**
- * \brief Creates a new host-defined function.
- *
- * This function is the same as #wasm_func_new_with_env, except the callback
- * has the type signature #wasmtime_func_callback_with_env_t which gives a
- * #wasmtime_caller_t as its first argument.
- */
-WASM_API_EXTERN own wasm_func_t* wasmtime_func_new_with_env(
-  wasm_store_t* store,
-  const wasm_functype_t* type,
-  wasmtime_func_callback_with_env_t callback,
-  void* env,
-  void (*finalizer)(void*)
-);
-
-/**
- * \brief Creates a new `funcref` value referencing `func`.
- *
- * Create a `funcref` value that references `func` and writes it to `funcrefp`.
- *
- * Gives ownership fo the `funcref` value written to `funcrefp`.
- *
- * Both `func` and `funcrefp` must not be NULL.
- */
-WASM_API_EXTERN void wasmtime_func_as_funcref(const wasm_func_t* func, wasm_val_t* funcrefp);
-
-/**
- * \brief Get the `wasm_func_t*` referenced by the given `funcref` value.
- *
- * Gets an owning handle to the `wasm_func_t*` that the given `funcref` value is
- * referencing. Returns NULL if the value is not a `funcref`, or if the value is
- * a null function reference.
- *
- * The `val` pointer must not be NULL.
- */
-WASM_API_EXTERN own wasm_func_t* wasmtime_funcref_as_func(const wasm_val_t* val);
-
-/**
- * \brief Loads a #wasm_extern_t from the caller's context
- *
- * This function will attempt to look up the export named `name` on the caller
- * instance provided. If it is found then the #wasm_extern_t for that is
- * returned, otherwise `NULL` is returned.
- *
- * Note that this only works for exported memories right now for WASI
- * compatibility.
- */
-WASM_API_EXTERN own wasm_extern_t* wasmtime_caller_export_get(const wasmtime_caller_t* caller, const wasm_name_t* name);
-
-/**
- * \typedef wasmtime_interrupt_handle_t
- * \brief Convenience alias for #wasmtime_interrupt_handle_t
- *
- * \struct wasmtime_interrupt_handle_t
- * \brief A handle used to interrupt executing WebAssembly code.
- *
- * This structure is an opaque handle that represents a handle to a store. This
- * handle can be used to remotely (from another thread) interrupt currently
- * executing WebAssembly code.
- *
- * This structure is safe to share from multiple threads.
- *
- * \fn void wasmtime_interrupt_handle_delete(own wasmtime_interrupt_handle_t *);
- * \brief Deletes an interrupt handle.
- */
-WASMTIME_DECLARE_OWN(interrupt_handle)
-
-/**
- * \brief Creates a new interrupt handle to interrupt executing WebAssembly from
- * the provided store.
- *
- * There are a number of caveats about how interrupt is handled in Wasmtime. For
- * more information see the [Rust
- * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Store.html#method.interrupt_handle).
- *
- * This function returns `NULL` if the store's configuration does not have
- * interrupts enabled. See #wasmtime_config_interruptable_set.
- */
-WASM_API_EXTERN own wasmtime_interrupt_handle_t *wasmtime_interrupt_handle_new(wasm_store_t *store);
-
-/**
- * \brief Adds fuel to this Store for wasm to consume while executing.
- *
- * For this method to work fuel consumption must be enabled via
- * #wasmtime_config_consume_fuel_set. By default a Store starts with 0 fuel
- * for wasm to execute with (meaning it will immediately trap).
- * This function must be called for the store to have
- * some fuel to allow WebAssembly to execute.
- *
- * Note that at this time when fuel is entirely consumed it will cause
- * wasm to trap. More usages of fuel are planned for the future.
- *
- * If fuel is not enabled within this store then an error is returned. If fuel
- * is successfully added then NULL is returned.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_store_add_fuel(wasm_store_t *store, uint64_t fuel);
-
-/**
- * \brief Returns the amount of fuel consumed by this store's execution so far.
- *
- * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set
- * then this function will return false. Otherwise true is returned and the
- * fuel parameter is filled in with fuel consuemd so far.
- *
- * Also note that fuel, if enabled, must be originally configured via
- * #wasmtime_store_add_fuel.
- */
-WASM_API_EXTERN bool wasmtime_store_fuel_consumed(wasm_store_t *store, uint64_t *fuel);
-
-/**
- * \brief Requests that WebAssembly code running in the store attached to this
- * interrupt handle is interrupted.
- *
- * For more information about interrupts see #wasmtime_interrupt_handle_new.
- *
- * Note that this is safe to call from any thread.
- */
-WASM_API_EXTERN void wasmtime_interrupt_handle_interrupt(wasmtime_interrupt_handle_t *handle);
-
-/**
- * \brief Attempts to extract a WASI-specific exit status from this trap.
- *
- * Returns `true` if the trap is a WASI "exit" trap and has a return status. If
- * `true` is returned then the exit status is returned through the `status`
- * pointer. If `false` is returned then this is not a wasi exit trap.
- */
-WASM_API_EXTERN bool wasmtime_trap_exit_status(const wasm_trap_t*, int *status);
-
-/**
- * \brief Returns a human-readable name for this frame's function.
- *
- * This function will attempt to load a human-readable name for function this
- * frame points to. This function may return `NULL`.
- *
- * The lifetime of the returned name is the same as the #wasm_frame_t itself.
- */
-WASM_API_EXTERN const wasm_name_t *wasmtime_frame_func_name(const wasm_frame_t*);
-
-/**
- * \brief Returns a human-readable name for this frame's module.
- *
- * This function will attempt to load a human-readable name for module this
- * frame points to. This function may return `NULL`.
- *
- * The lifetime of the returned name is the same as the #wasm_frame_t itself.
- */
-WASM_API_EXTERN const wasm_name_t *wasmtime_frame_module_name(const wasm_frame_t*);
-
-/**
- * \brief Call a WebAssembly function.
- *
- * This function is similar to #wasm_func_call, but with a few tweaks:
- *
- * * An error *and* a trap can be returned
- * * Errors are returned if `args` have the wrong types, if the args/results
- *   arrays have the wrong lengths, or if values come from the wrong store.
- *
- * There are three possible return states from this function:
- *
- * 1. The returned error is non-null. This means `results`
- *    wasn't written to and `trap` will have `NULL` written to it. This state
- *    means that programmer error happened when calling the function (e.g. the
- *    size of the args/results were wrong)
- * 2. The trap pointer is filled in. This means the returned error is `NULL` and
- *    `results` was not written to. This state means that the function was
- *    executing but hit a wasm trap while executing.
- * 3. The error and trap returned are both `NULL` and `results` are written to.
- *    This means that the function call worked and the specified results were
- *    produced.
- *
- * The `trap` pointer cannot be `NULL`. The `args` and `results` pointers may be
- * `NULL` if the corresponding length is zero.
- *
- * Does not take ownership of `wasm_val_t` arguments. Gives ownership of
- * `wasm_val_t` results.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_func_call(
-    wasm_func_t *func,
-    const wasm_val_vec_t *args,
-    wasm_val_vec_t *results,
-    own wasm_trap_t **trap
-);
-
-/**
- * \brief Creates a new global value.
- *
- * Similar to #wasm_global_new, but with a few tweaks:
- *
- * * An error is returned instead of #wasm_global_t, which is taken as an
- *   out-parameter
- * * An error happens when the `type` specified does not match the type of the
- *   value `val`, or if it comes from a different store than `store`.
- *
- * This function does not take ownership of any of its arguments but returned
- * values are owned by the caller.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_global_new(
-    wasm_store_t *store,
-    const wasm_globaltype_t *type,
-    const wasm_val_t *val,
-    own wasm_global_t **ret
-);
-
-/**
- * \brief Sets a global to a new value.
- *
- * This function is the same as #wasm_global_set, except in the case of an error
- * a #wasmtime_error_t is returned.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_global_set(
-    wasm_global_t *global,
-    const wasm_val_t *val
-);
-
-/**
- * \brief Wasmtime-specific function to instantiate a module.
- *
- * This function is similar to #wasm_instance_new, but with a few tweaks:
- *
- * * An error message can be returned from this function.
- * * The `trap` pointer is required to not be NULL.
- *
- * The states of return values from this function are similar to
- * #wasmtime_func_call where an error can be returned meaning something like a
- * link error in this context. A trap can be returned (meaning no error or
- * instance is returned), or an instance can be returned (meaning no error or
- * trap is returned).
- *
- * This function does not take ownership of any of its arguments, but all return
- * values are owned by the caller.
- *
- * See #wasm_instance_new for information about how to fill in the `imports`
- * array.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_instance_new(
-    wasm_store_t *store,
-    const wasm_module_t *module,
-    const wasm_extern_vec_t* imports,
-    own wasm_instance_t **instance,
-    own wasm_trap_t **trap
-);
-
-/**
- * \brief Wasmtime-specific function to compile a module.
- *
- * This function will compile a WebAssembly binary into an owned #wasm_module_t.
- * This performs the same as #wasm_module_new except that it returns a
- * #wasmtime_error_t type to get richer error information.
- *
- * On success the returned #wasmtime_error_t is `NULL` and the `ret` pointer is
- * filled in with a #wasm_module_t. On failure the #wasmtime_error_t is
- * non-`NULL` and the `ret` pointer is unmodified.
- *
- * This function does not take ownership of any of its arguments, but the
- * returned error and module are owned by the caller.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_new(
-    wasm_engine_t *engine,
-    const wasm_byte_vec_t *binary,
-    own wasm_module_t **ret
-);
-
-/**
- * \brief Wasmtime-specific function to validate a module.
- *
- * This function will validate the provided byte sequence to determine if it is
- * a valid WebAssembly binary. This function performs the same as
- * #wasm_module_validate except that it returns a #wasmtime_error_t which
- * contains an error message if validation fails.
- *
- * This function does not take ownership of its arguments but the caller is
- * expected to deallocate the returned error if it is non-`NULL`.
- *
- * If the binary validates then `NULL` is returned, otherwise the error returned
- * describes why the binary did not validate.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_validate(
-    wasm_store_t *store,
-    const wasm_byte_vec_t *binary
-);
-
-
-/**
- * \brief Creates a new host-defined wasm table.
- *
- * This function is the same as #wasm_table_new except that it's specialized for
- * funcref tables by taking a `wasm_func_t` initialization value. Additionally
- * it returns errors via #wasmtime_error_t.
- *
- * This function does not take ownership of any of its parameters, but yields
- * ownership of returned values (the table and error).
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_funcref_table_new(
-    wasm_store_t *store,
-    const wasm_tabletype_t *element_ty,
-    wasm_func_t *init,
-    own wasm_table_t **table
-);
-
-/**
- * \brief Gets a value in a table.
- *
- * This function is the same as #wasm_table_get except that it's specialized for
- * funcref tables by returning a `wasm_func_t` value. Additionally a `bool`
- * return value indicates whether the `index` provided was in bounds.
- *
- * This function does not take ownership of any of its parameters, but yields
- * ownership of returned #wasm_func_t.
- */
-WASM_API_EXTERN bool wasmtime_funcref_table_get(
-    const wasm_table_t *table,
-    wasm_table_size_t index,
-    own wasm_func_t **func
-);
-
-/**
- * \brief Sets a value in a table.
- *
- * This function is similar to #wasm_table_set, but has a few differences:
- *
- * * An error is returned through #wasmtime_error_t describing erroneous
- *   situations.
- * * The value being set is specialized to #wasm_func_t.
- *
- * This function does not take ownership of any of its parameters, but yields
- * ownership of returned #wasmtime_error_t.
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_funcref_table_set(
-    wasm_table_t *table,
-    wasm_table_size_t index,
-    const wasm_func_t *value
-);
-
-/**
- * \brief Grows a table.
- *
- * This function is similar to #wasm_table_grow, but has a few differences:
- *
- * * An error is returned through #wasmtime_error_t describing erroneous
- *   situations.
- * * The initialization value is specialized to #wasm_func_t.
- * * The previous size of the table is returned through `prev_size`.
- *
- * This function does not take ownership of any of its parameters, but yields
- * ownership of returned #wasmtime_error_t.
- */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_funcref_table_grow(
-    wasm_table_t *table,
-    wasm_table_size_t delta,
-    const wasm_func_t *init,
-    wasm_table_size_t *prev_size
-);
-
-/**
- * \brief Create a new `externref` value.
- *
- * Creates a new `externref` value wrapping the provided data, and writes it to
- * `valp`.
- *
- * This function does not take an associated finalizer to clean up the data when
- * the reference is reclaimed. If you need a finalizer to clean up the data,
- * then use #wasmtime_externref_new_with_finalizer.
- *
- * Gives ownership of the newly created `externref` value.
- */
-WASM_API_EXTERN void wasmtime_externref_new(own void *data, wasm_val_t *valp);
-
-/**
- * \brief A finalizer for an `externref`'s wrapped data.
- *
- * A finalizer callback to clean up an `externref`'s wrapped data after the
- * `externref` has been reclaimed. This is an opportunity to run destructors,
- * free dynamically allocated memory, close file handles, etc.
- */
-typedef void (*wasmtime_externref_finalizer_t)(void*);
-
-/**
- * \brief Create a new `externref` value with a finalizer.
- *
- * Creates a new `externref` value wrapping the provided data, and writes it to
- * `valp`.
- *
- * When the reference is reclaimed, the wrapped data is cleaned up with the
- * provided finalizer. If you do not need to clean up the wrapped data, then use
- * #wasmtime_externref_new.
- *
- * Gives ownership of the newly created `externref` value.
- */
-WASM_API_EXTERN void wasmtime_externref_new_with_finalizer(
-    own void *data,
-    wasmtime_externref_finalizer_t finalizer,
-    wasm_val_t *valp
-);
-
-/**
- * \brief Get an `externref`'s wrapped data
- *
- * If the given value is a reference to a non-null `externref`, writes the
- * wrapped data that was passed into #wasmtime_externref_new or
- * #wasmtime_externref_new_with_finalizer when creating the given `externref` to
- * `datap`, and returns `true`.
- *
- * If the value is a reference to a null `externref`, writes `NULL` to `datap`
- * and returns `true`.
- *
- * If the given value is not an `externref`, returns `false` and leaves `datap`
- * unmodified.
- *
- * Does not take ownership of `val`. Does not give up ownership of the `void*`
- * data written to `datap`.
- *
- * Both `val` and `datap` must not be `NULL`.
- */
-WASM_API_EXTERN bool wasmtime_externref_data(wasm_val_t* val, void** datap);
-
-/**
- * \brief This function serializes compiled module artifacts
- *   as blob data.
- *
- * \param module the module
- * \param ret if the conversion is successful, this byte vector is filled in with
- *   the serialized compiled module.
- *
- * \return a non-null error if parsing fails, or returns `NULL`. If parsing
- * fails then `ret` isn't touched.
- *
- * This function does not take ownership of `module`, and the caller is
- * expected to deallocate the returned #wasmtime_error_t and #wasm_byte_vec_t.
- */
-WASM_API_EXTERN own wasmtime_error_t* wasmtime_module_serialize(
-    wasm_module_t* module,
-    own wasm_byte_vec_t *ret
-);
-
-/**
- * \brief Build a module from serialized data.
- *
- * This function does not take ownership of any of its arguments, but the
- * returned error and module are owned by the caller.
- *
- * This function is not safe to receive arbitrary user input. See the Rust
- * documentation for more information on what inputs are safe to pass in here
- * (e.g. only that of #wasmtime_module_serialize)
- */
-WASM_API_EXTERN own wasmtime_error_t *wasmtime_module_deserialize(
-    wasm_engine_t *engine,
-    const wasm_byte_vec_t *serialized,
-    own wasm_module_t **ret
-);
-
-/**
- * \struct wasm_instancetype_t
- * \brief An opaque object representing the type of a function.
- *
- * \typedef wasm_instancetype_t
- * \brief Convenience alias for #wasm_instancetype_t
- *
- * \struct wasm_instancetype_vec_t
- * \brief A list of #wasm_instancetype_t values.
- *
- * \var wasm_instancetype_vec_t::size
- * \brief Length of this vector.
- *
- * \var wasm_instancetype_vec_t::data
- * \brief Pointer to the base of this vector
- *
- * \typedef wasm_instancetype_vec_t
- * \brief Convenience alias for #wasm_instancetype_vec_t
- *
- * \fn void wasm_instancetype_delete(own wasm_instancetype_t *);
- * \brief Deletes a type.
- *
- * \fn void wasm_instancetype_vec_new_empty(own wasm_instancetype_vec_t *out);
- * \brief Creates an empty vector.
- *
- * See #wasm_byte_vec_new_empty for more information.
- *
- * \fn void wasm_instancetype_vec_new_uninitialized(own wasm_instancetype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
- *
- * See #wasm_byte_vec_new_uninitialized for more information.
- *
- * \fn void wasm_instancetype_vec_new(own wasm_instancetype_vec_t *out, size_t, own wasm_instancetype_t *const[]);
- * \brief Creates a vector with the provided contents.
- *
- * See #wasm_byte_vec_new for more information.
- *
- * \fn void wasm_instancetype_vec_copy(own wasm_instancetype_vec_t *out, const wasm_instancetype_vec_t *)
- * \brief Copies one vector to another
- *
- * See #wasm_byte_vec_copy for more information.
- *
- * \fn void wasm_instancetype_vec_delete(own wasm_instancetype_vec_t *out)
- * \brief Deallocates memory for a vector.
- *
- * See #wasm_byte_vec_delete for more information.
- *
- * \fn own wasm_instancetype_t* wasm_instancetype_copy(const wasm_instancetype_t *)
- * \brief Creates a new value which matches the provided one.
- *
- * The caller is responsible for deleting the returned value.
- */
-WASM_DECLARE_TYPE(instancetype)
-
-/**
- * \brief Returns the list of exports that this instance type provides.
- *
- * This function does not take ownership of the provided instance type but
- * ownership of `out` is passed to the caller. Note that `out` is treated as
- * uninitialized when passed to this function.
- */
-WASM_API_EXTERN void wasm_instancetype_exports(const wasm_instancetype_t*, own wasm_exporttype_vec_t* out);
-
-/**
- * \brief Converts a #wasm_instancetype_t to a #wasm_externtype_t
- *
- * The returned value is owned by the #wasm_instancetype_t argument and should not
- * be deleted.
- */
-WASM_API_EXTERN wasm_externtype_t* wasm_instancetype_as_externtype(wasm_instancetype_t*);
-
-/**
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_instancetype_t
- *
- * The returned value is owned by the #wasm_instancetype_t argument and should not
- * be deleted. Returns `NULL` if the provided argument is not a
- * #wasm_instancetype_t.
- */
-WASM_API_EXTERN wasm_instancetype_t* wasm_externtype_as_instancetype(wasm_externtype_t*);
-
-/**
- * \brief Converts a #wasm_instancetype_t to a #wasm_externtype_t
- *
- * The returned value is owned by the #wasm_instancetype_t argument and should not
- * be deleted.
- */
-WASM_API_EXTERN const wasm_externtype_t* wasm_instancetype_as_externtype_const(const wasm_instancetype_t*);
-
-/**
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_instancetype_t
- *
- * The returned value is owned by the #wasm_instancetype_t argument and should not
- * be deleted. Returns `NULL` if the provided argument is not a
- * #wasm_instancetype_t.
- */
-WASM_API_EXTERN const wasm_instancetype_t* wasm_externtype_as_instancetype_const(const wasm_externtype_t*);
-
-/**
- * \struct wasm_moduletype_t
- * \brief An opaque object representing the type of a function.
- *
- * \typedef wasm_moduletype_t
- * \brief Convenience alias for #wasm_moduletype_t
- *
- * \struct wasm_moduletype_vec_t
- * \brief A list of #wasm_moduletype_t values.
- *
- * \var wasm_moduletype_vec_t::size
- * \brief Length of this vector.
- *
- * \var wasm_moduletype_vec_t::data
- * \brief Pointer to the base of this vector
- *
- * \typedef wasm_moduletype_vec_t
- * \brief Convenience alias for #wasm_moduletype_vec_t
- *
- * \fn void wasm_moduletype_delete(own wasm_moduletype_t *);
- * \brief Deletes a type.
- *
- * \fn void wasm_moduletype_vec_new_empty(own wasm_moduletype_vec_t *out);
- * \brief Creates an empty vector.
- *
- * See #wasm_byte_vec_new_empty for more information.
- *
- * \fn void wasm_moduletype_vec_new_uninitialized(own wasm_moduletype_vec_t *out, size_t);
- * \brief Creates a vector with the given capacity.
- *
- * See #wasm_byte_vec_new_uninitialized for more information.
- *
- * \fn void wasm_moduletype_vec_new(own wasm_moduletype_vec_t *out, size_t, own wasm_moduletype_t *const[]);
- * \brief Creates a vector with the provided contents.
- *
- * See #wasm_byte_vec_new for more information.
- *
- * \fn void wasm_moduletype_vec_copy(own wasm_moduletype_vec_t *out, const wasm_moduletype_vec_t *)
- * \brief Copies one vector to another
- *
- * See #wasm_byte_vec_copy for more information.
- *
- * \fn void wasm_moduletype_vec_delete(own wasm_moduletype_vec_t *out)
- * \brief Deallocates memory for a vector.
- *
- * See #wasm_byte_vec_delete for more information.
- *
- * \fn own wasm_moduletype_t* wasm_moduletype_copy(const wasm_moduletype_t *)
- * \brief Creates a new value which matches the provided one.
- *
- * The caller is responsible for deleting the returned value.
- */
-WASM_DECLARE_TYPE(moduletype)
-
-/**
- * \brief Returns the list of imports that this module type requires.
- *
- * This function does not take ownership of the provided module type but
- * ownership of `out` is passed to the caller. Note that `out` is treated as
- * uninitialized when passed to this function.
- */
-WASM_API_EXTERN void wasm_moduletype_imports(const wasm_moduletype_t*, own wasm_importtype_vec_t* out);
-
-/**
- * \brief Returns the list of exports that this module type provides.
- *
- * This function does not take ownership of the provided module type but
- * ownership of `out` is passed to the caller. Note that `out` is treated as
- * uninitialized when passed to this function.
- */
-WASM_API_EXTERN void wasm_moduletype_exports(const wasm_moduletype_t*, own wasm_exporttype_vec_t* out);
-
-/**
- * \brief Converts a #wasm_moduletype_t to a #wasm_externtype_t
- *
- * The returned value is owned by the #wasm_moduletype_t argument and should not
- * be deleted.
- */
-WASM_API_EXTERN wasm_externtype_t* wasm_moduletype_as_externtype(wasm_moduletype_t*);
-
-/**
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_moduletype_t
- *
- * The returned value is owned by the #wasm_moduletype_t argument and should not
- * be deleted. Returns `NULL` if the provided argument is not a
- * #wasm_moduletype_t.
- */
-WASM_API_EXTERN wasm_moduletype_t* wasm_externtype_as_moduletype(wasm_externtype_t*);
-
-/**
- * \brief Converts a #wasm_moduletype_t to a #wasm_externtype_t
- *
- * The returned value is owned by the #wasm_moduletype_t argument and should not
- * be deleted.
- */
-WASM_API_EXTERN const wasm_externtype_t* wasm_moduletype_as_externtype_const(const wasm_moduletype_t*);
-
-/**
- * \brief Attempts to convert a #wasm_externtype_t to a #wasm_moduletype_t
- *
- * The returned value is owned by the #wasm_moduletype_t argument and should not
- * be deleted. Returns `NULL` if the provided argument is not a
- * #wasm_moduletype_t.
- */
-WASM_API_EXTERN const wasm_moduletype_t* wasm_externtype_as_moduletype_const(const wasm_externtype_t*);
-
-/**
- * \brief Converts a #wasm_module_t to #wasm_extern_t.
- *
- * The returned #wasm_extern_t is owned by the #wasm_module_t argument. Callers
- * should not delete the returned value, and it only lives as long as the
- * #wasm_module_t argument.
- */
-WASM_API_EXTERN wasm_extern_t* wasm_module_as_extern(wasm_module_t*);
-
-/**
- * \brief Converts a #wasm_extern_t to #wasm_module_t.
- *
- * The returned #wasm_module_t is owned by the #wasm_extern_t argument. Callers
- * should not delete the returned value, and it only lives as long as the
- * #wasm_extern_t argument.
- *
- * If the #wasm_extern_t argument isn't a #wasm_module_t then `NULL` is returned.
- */
-WASM_API_EXTERN wasm_module_t* wasm_extern_as_module(wasm_extern_t*);
-
-/**
- * \brief Converts a #wasm_extern_t to #wasm_instance_t.
- *
- * The returned #wasm_instance_t is owned by the #wasm_extern_t argument. Callers
- * should not delete the returned value, and it only lives as long as the
- * #wasm_extern_t argument.
- */
-WASM_API_EXTERN const wasm_module_t* wasm_extern_as_module_const(const wasm_extern_t*);
-
-/**
- * \brief Converts a #wasm_instance_t to #wasm_extern_t.
- *
- * The returned #wasm_extern_t is owned by the #wasm_instance_t argument. Callers
- * should not delete the returned value, and it only lives as long as the
- * #wasm_instance_t argument.
- */
-WASM_API_EXTERN wasm_extern_t* wasm_instance_as_extern(wasm_instance_t*);
-
-/**
- * \brief Converts a #wasm_extern_t to #wasm_instance_t.
- *
- * The returned #wasm_instance_t is owned by the #wasm_extern_t argument. Callers
- * should not delete the returned value, and it only lives as long as the
- * #wasm_extern_t argument.
- *
- * If the #wasm_extern_t argument isn't a #wasm_instance_t then `NULL` is returned.
- */
-WASM_API_EXTERN wasm_instance_t* wasm_extern_as_instance(wasm_extern_t*);
-
-/**
- * \brief Converts a #wasm_extern_t to #wasm_instance_t.
- *
- * The returned #wasm_instance_t is owned by the #wasm_extern_t argument. Callers
- * should not delete the returned value, and it only lives as long as the
- * #wasm_extern_t argument.
- */
-WASM_API_EXTERN const wasm_instance_t* wasm_extern_as_instance_const(const wasm_extern_t*);
-
-/**
- * \brief Returns the type of this instance.
- *
- * The returned #wasm_instancetype_t is expected to be deallocated by the caller.
- */
-WASM_API_EXTERN own wasm_instancetype_t* wasm_instance_type(const wasm_instance_t*);
-
-/**
- * \brief Returns the type of this module.
- *
- * The returned #wasm_moduletype_t is expected to be deallocated by the caller.
- */
-WASM_API_EXTERN own wasm_moduletype_t* wasm_module_type(const wasm_module_t*);
-
-/**
- * \brief Value of #wasm_externkind_enum corresponding to a wasm module.
- */
-#define WASM_EXTERN_MODULE 4
-
-/**
- * \brief Value of #wasm_externkind_enum corresponding to a wasm instance.
- */
-#define WASM_EXTERN_INSTANCE 5
-
-#undef own
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -3,21 +3,14 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rayon::{prelude::*, ThreadPoolBuilder};
 use std::{path::PathBuf, process::Command};
 use wasmtime::*;
-use wasmtime_wasi::{sync::WasiCtxBuilder, Wasi};
+use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
-fn instantiate(module: &Module) -> Result<Instance> {
-    let store = Store::new(&module.engine());
+fn instantiate(linker: &Linker<WasiCtx>, module: &Module) -> Result<()> {
+    let wasi = WasiCtxBuilder::new().build();
+    let mut store = Store::new(module.engine(), wasi);
+    let _instance = linker.instantiate(&mut store, module)?;
 
-    // As we don't actually invoke Wasm code in this benchmark, we still add
-    // the WASI context to the store as it is considered part of getting a
-    // module that depends on WASI "ready to run".
-    Wasi::set_context(&store, WasiCtxBuilder::new().build())
-        .map_err(|_| anyhow::anyhow!("wasi set_context failed"))?;
-
-    let linker = Linker::new(&store);
-    let instance = linker.instantiate(module)?;
-
-    Ok(instance)
+    Ok(())
 }
 
 fn benchmark_name<'a>(strategy: &InstanceAllocationStrategy) -> &'static str {
@@ -46,15 +39,16 @@ fn bench_sequential(c: &mut Criterion, modules: &[&str]) {
             path.push(file_name);
 
             let mut config = Config::default();
-            Wasi::add_to_config(&mut config);
             config.allocation_strategy(strategy.clone());
 
             let engine = Engine::new(&config).expect("failed to create engine");
             let module = Module::from_file(&engine, &path)
                 .expect(&format!("failed to load benchmark `{}`", path.display()));
+            let mut linker = Linker::new(&engine);
+            wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
 
             group.bench_function(BenchmarkId::new(benchmark_name(strategy), file_name), |b| {
-                b.iter(|| instantiate(&module).expect("failed to instantiate module"));
+                b.iter(|| instantiate(&linker, &module).expect("failed to instantiate module"));
             });
         }
     }
@@ -74,12 +68,13 @@ fn bench_parallel(c: &mut Criterion) {
         InstanceAllocationStrategy::pooling(),
     ] {
         let mut config = Config::default();
-        Wasi::add_to_config(&mut config);
         config.allocation_strategy(strategy.clone());
 
         let engine = Engine::new(&config).expect("failed to create engine");
         let module = Module::from_file(&engine, "benches/instantiation/wasi.wasm")
             .expect("failed to load WASI example module");
+        let mut linker = Linker::new(&engine);
+        wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
 
         for threads in 1..=num_cpus::get_physical() {
             let pool = ThreadPoolBuilder::new()
@@ -101,7 +96,8 @@ fn bench_parallel(c: &mut Criterion) {
                     b.iter(|| {
                         pool.install(|| {
                             (0..PARALLEL_INSTANCES).into_par_iter().for_each(|_| {
-                                instantiate(&module).expect("failed to instantiate module");
+                                instantiate(&linker, &module)
+                                    .expect("failed to instantiate module");
                             })
                         })
                     });

@@ -42,8 +42,9 @@ int main() {
 
   // With an engine we can create a *store* which is a long-lived group of wasm
   // modules.
-  wasm_store_t *store = wasm_store_new(engine);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Read our input file, which in this case is a wasm text file.
   FILE* file = fopen("examples/externref.wat", "r");
@@ -58,15 +59,15 @@ int main() {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t wasm;
-  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
+  wasmtime_error_t *error = wasmtime_wat2wasm(wat.data, wat.size, &wasm);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Now that we've got our binary webassembly we can compile our module.
   printf("Compiling module...\n");
-  wasm_module_t *module = NULL;
-  error = wasmtime_module_new(engine, &wasm, &module);
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
@@ -74,104 +75,99 @@ int main() {
   // Instantiate the module.
   printf("Instantiating module...\n");
   wasm_trap_t *trap = NULL;
-  wasm_instance_t *instance = NULL;
-  wasm_extern_vec_t imports = WASM_EMPTY_VEC;
-  error = wasmtime_instance_new(store, module, &imports, &instance, &trap);
-  if (instance == NULL)
+  wasmtime_instance_t instance;
+  error = wasmtime_instance_new(context, module, NULL, 0, &instance, &trap);
+  if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
 
   printf("Creating new `externref`...\n");
 
   // Create a new `externref` value.
   //
-  // Note that if you need clean up for after the externref is reclaimed, you
-  // can use `wasmtime_externref_new_with_finalizer`.
-  wasm_val_t externref;
-  wasmtime_externref_new("Hello, World!", &externref);
-  assert(externref.kind == WASM_ANYREF);
+  // Note that the NULL here is a finalizer callback, but we don't need one for
+  // this example.
+  wasmtime_externref_t *externref = wasmtime_externref_new("Hello, World!", NULL);
 
   // The `externref`'s wrapped data should be the string "Hello, World!".
-  void* data = NULL;
-  ok = wasmtime_externref_data(&externref, &data);
-  assert(ok);
+  void* data = wasmtime_externref_data(externref);
   assert(strcmp((char*)data, "Hello, World!") == 0);
 
   printf("Touching `externref` table...\n");
 
+  wasmtime_extern_t item;
+
   // Lookup the `table` export.
-  wasm_extern_vec_t externs;
-  wasm_instance_exports(instance, &externs);
-  assert(externs.size == 3);
-  wasm_table_t *table = wasm_extern_as_table(externs.data[0]);
-  assert(table != NULL);
+  ok = wasmtime_instance_export_get(context, &instance, "table", strlen("table"), &item);
+  assert(ok);
+  assert(item.kind == WASMTIME_EXTERN_TABLE);
 
   // Set `table[3]` to our `externref`.
-  wasm_val_t elem;
-  wasm_val_copy(&elem, &externref);
-  assert(elem.kind == WASM_ANYREF);
-  ok = wasm_table_set(table, 3, elem.of.ref);
-  assert(ok);
+  wasmtime_val_t externref_val;
+  externref_val.kind = WASMTIME_EXTERNREF;
+  externref_val.of.externref = externref;
+  error = wasmtime_table_set(context, &item.of.table, 3, &externref_val);
+  if (error != NULL)
+    exit_with_error("failed to set table", error, NULL);
 
   // `table[3]` should now be our `externref`.
-  wasm_ref_delete(elem.of.ref);
-  elem.of.ref = wasm_table_get(table, 3);
-  assert(elem.of.ref != NULL);
-  assert(wasm_ref_same(elem.of.ref, externref.of.ref));
+  wasmtime_val_t elem;
+  ok = wasmtime_table_get(context, &item.of.table, 3, &elem);
+  assert(ok);
+  assert(elem.kind == WASMTIME_EXTERNREF);
+  assert(strcmp((char*)wasmtime_externref_data(elem.of.externref), "Hello, World!") == 0);
+  wasmtime_val_delete(&elem);
 
   printf("Touching `externref` global...\n");
 
   // Lookup the `global` export.
-  wasm_global_t *global = wasm_extern_as_global(externs.data[1]);
-  assert(global != NULL);
+  ok = wasmtime_instance_export_get(context, &instance, "global", strlen("global"), &item);
+  assert(ok);
+  assert(item.kind == WASMTIME_EXTERN_GLOBAL);
 
   // Set the global to our `externref`.
-  wasm_global_set(global, &externref);
+  error = wasmtime_global_set(context, &item.of.global, &externref_val);
+  if (error != NULL)
+    exit_with_error("failed to set global", error, NULL);
 
   // Get the global, and it should return our `externref` again.
-  wasm_val_t global_val;
-  wasm_global_get(global, &global_val);
-  assert(global_val.kind == WASM_ANYREF);
-  assert(wasm_ref_same(global_val.of.ref, externref.of.ref));
+  wasmtime_val_t global_val;
+  wasmtime_global_get(context, &item.of.global, &global_val);
+  assert(global_val.kind == WASMTIME_EXTERNREF);
+  assert(strcmp((char*)wasmtime_externref_data(elem.of.externref), "Hello, World!") == 0);
+  wasmtime_val_delete(&global_val);
 
   printf("Calling `externref` func...\n");
 
   // Lookup the `func` export.
-  wasm_func_t *func = wasm_extern_as_func(externs.data[2]);
-  assert(func != NULL);
+  ok = wasmtime_instance_export_get(context, &instance, "func", strlen("func"), &item);
+  assert(ok);
+  assert(item.kind == WASMTIME_EXTERN_FUNC);
 
   // And call it!
-  wasm_val_t args[1] = { externref };
-  wasm_val_t results[1];
-  wasm_val_vec_t args_vec = WASM_ARRAY_VEC(args);
-  wasm_val_vec_t results_vec = WASM_ARRAY_VEC(results);
-  error = wasmtime_func_call(func, &args_vec, &results_vec, &trap);
+  wasmtime_val_t results[1];
+  error = wasmtime_func_call(context, &item.of.func, &externref_val, 1, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 
   // `func` returns the same reference we gave it, so `results[0]` should be our
   // `externref`.
-  assert(results[0].kind == WASM_ANYREF);
-  assert(wasm_ref_same(results[0].of.ref, externref.of.ref));
+  assert(results[0].kind == WASMTIME_EXTERNREF);
+  assert(strcmp((char*)wasmtime_externref_data(results[0].of.externref), "Hello, World!") == 0);
+  wasmtime_val_delete(&results[0]);
 
   // We can GC any now-unused references to our externref that the store is
   // holding.
   printf("GCing within the store...\n");
-  wasmtime_store_gc(store);
+  wasmtime_context_gc(context);
 
   // Clean up after ourselves at this point
   printf("All finished!\n");
   ret = 0;
 
-  wasm_val_delete(&results[0]);
-  wasm_val_delete(&global_val);
-  wasm_val_delete(&elem);
-  wasm_extern_vec_delete(&externs);
-  wasm_val_delete(&externref);
-  wasm_instance_delete(instance);
-  wasm_module_delete(module);
-  wasm_store_delete(store);
+  wasmtime_store_delete(store);
+  wasmtime_module_delete(module);
   wasm_engine_delete(engine);
-  return ret;
+  return 0;
 }
 
 static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap) {

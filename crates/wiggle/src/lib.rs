@@ -1,18 +1,21 @@
-use std::cell::Cell;
 use std::fmt;
-use std::marker;
-use std::rc::Rc;
 use std::slice;
 use std::str;
 use std::sync::Arc;
 
 pub use wiggle_macro::{async_trait, from_witx};
 
+#[cfg(feature = "wasmtime")]
+pub use anyhow;
+#[cfg(feature = "wasmtime")]
+pub use wiggle_macro::wasmtime_integration;
+
 pub use bitflags;
 
 #[cfg(feature = "wiggle_metadata")]
 pub use witx;
 
+pub mod borrow;
 mod error;
 mod guest_type;
 mod region;
@@ -25,6 +28,14 @@ pub use region::Region;
 
 pub mod async_trait_crate {
     pub use async_trait::*;
+}
+
+#[cfg(feature = "wasmtime")]
+pub mod wasmtime;
+
+#[cfg(feature = "wasmtime")]
+pub mod wasmtime_crate {
+    pub use wasmtime::*;
 }
 
 /// A trait which abstracts how to get at the region of host memory taht
@@ -79,7 +90,7 @@ pub mod async_trait_crate {
 /// the contents of a WebAssembly memory, all `GuestSlice`s and `GuestStr`s
 /// for the memory must be dropped, at which point
 /// `GuestMemory::has_outstanding_borrows()` will return `false`.
-pub unsafe trait GuestMemory {
+pub unsafe trait GuestMemory: Send + Sync {
     /// Returns the base allocation of this guest memory, located in host
     /// memory.
     ///
@@ -275,33 +286,6 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Box<T> {
     }
 }
 
-unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Rc<T> {
-    fn base(&self) -> (*mut u8, u32) {
-        T::base(self)
-    }
-    fn has_outstanding_borrows(&self) -> bool {
-        T::has_outstanding_borrows(self)
-    }
-    fn is_mut_borrowed(&self, r: Region) -> bool {
-        T::is_mut_borrowed(self, r)
-    }
-    fn is_shared_borrowed(&self, r: Region) -> bool {
-        T::is_shared_borrowed(self, r)
-    }
-    fn mut_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::mut_borrow(self, r)
-    }
-    fn shared_borrow(&self, r: Region) -> Result<BorrowHandle, GuestError> {
-        T::shared_borrow(self, r)
-    }
-    fn mut_unborrow(&self, h: BorrowHandle) {
-        T::mut_unborrow(self, h)
-    }
-    fn shared_unborrow(&self, h: BorrowHandle) {
-        T::shared_unborrow(self, h)
-    }
-}
-
 unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
     fn base(&self) -> (*mut u8, u32) {
         T::base(self)
@@ -382,7 +366,6 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
 pub struct GuestPtr<'a, T: ?Sized + Pointee> {
     mem: &'a (dyn GuestMemory + 'a),
     pointer: T::Pointer,
-    _marker: marker::PhantomData<&'a Cell<T>>,
 }
 
 impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
@@ -392,11 +375,7 @@ impl<'a, T: ?Sized + Pointee> GuestPtr<'a, T> {
     /// value is a `u32` offset into guest memory. For slices and strings,
     /// `pointer` is a `(u32, u32)` offset/length pair.
     pub fn new(mem: &'a (dyn GuestMemory + 'a), pointer: T::Pointer) -> GuestPtr<'a, T> {
-        GuestPtr {
-            mem,
-            pointer,
-            _marker: marker::PhantomData,
-        }
+        GuestPtr { mem, pointer }
     }
 
     /// Returns the offset of this pointer in guest memory.
@@ -630,7 +609,7 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// of this guest pointer is not equal to the length of the slice provided.
     pub fn copy_from_slice(&self, slice: &[T]) -> Result<(), GuestError>
     where
-        T: GuestTypeTransparent<'a> + Copy,
+        T: GuestTypeTransparent<'a> + Copy + 'a,
     {
         // bounds check ...
         let mut self_slice = self.as_slice_mut()?;

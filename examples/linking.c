@@ -30,12 +30,12 @@ static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_t
 static void read_wat_file(wasm_engine_t *engine, wasm_byte_vec_t *bytes, const char *file);
 
 int main() {
-  int ret = 0;
   // Set up our context
   wasm_engine_t *engine = wasm_engine_new();
   assert(engine != NULL);
-  wasm_store_t *store = wasm_store_new(engine);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
 
   wasm_byte_vec_t linking1_wasm, linking2_wasm;
   read_wat_file(engine, &linking1_wasm, "examples/linking1.wat");
@@ -43,18 +43,18 @@ int main() {
 
   // Compile our two modules
   wasmtime_error_t *error;
-  wasm_module_t *linking1_module = NULL;
-  wasm_module_t *linking2_module = NULL;
-  error = wasmtime_module_new(engine, &linking1_wasm, &linking1_module);
+  wasmtime_module_t *linking1_module = NULL;
+  wasmtime_module_t *linking2_module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t*) linking1_wasm.data, linking1_wasm.size, &linking1_module);
   if (error != NULL)
     exit_with_error("failed to compile linking1", error, NULL);
-  error = wasmtime_module_new(engine, &linking2_wasm, &linking2_module);
+  error = wasmtime_module_new(engine, (uint8_t*) linking2_wasm.data, linking2_wasm.size, &linking2_module);
   if (error != NULL)
     exit_with_error("failed to compile linking2", error, NULL);
   wasm_byte_vec_delete(&linking1_wasm);
   wasm_byte_vec_delete(&linking2_wasm);
 
-  // Instantiate wasi
+  // Configure WASI and store it within our `wasmtime_store_t`
   wasi_config_t *wasi_config = wasi_config_new();
   assert(wasi_config);
   wasi_config_inherit_argv(wasi_config);
@@ -63,57 +63,48 @@ int main() {
   wasi_config_inherit_stdout(wasi_config);
   wasi_config_inherit_stderr(wasi_config);
   wasm_trap_t *trap = NULL;
-  wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
-  if (wasi == NULL)
+  error = wasmtime_context_set_wasi(context, wasi_config);
+  if (error != NULL)
     exit_with_error("failed to instantiate wasi", NULL, trap);
 
   // Create our linker which will be linking our modules together, and then add
   // our WASI instance to it.
-  wasmtime_linker_t *linker = wasmtime_linker_new(store);
-  error = wasmtime_linker_define_wasi(linker, wasi);
+  wasmtime_linker_t *linker = wasmtime_linker_new(engine);
+  error = wasmtime_linker_define_wasi(linker);
   if (error != NULL)
     exit_with_error("failed to link wasi", error, NULL);
 
   // Instantiate `linking2` with our linker.
-  wasm_instance_t *linking2;
-  error = wasmtime_linker_instantiate(linker, linking2_module, &linking2, &trap);
+  wasmtime_instance_t linking2;
+  error = wasmtime_linker_instantiate(linker, context, linking2_module, &linking2, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate linking2", error, trap);
 
   // Register our new `linking2` instance with the linker
-  wasm_name_t linking2_name;
-  linking2_name.data = "linking2";
-  linking2_name.size = strlen(linking2_name.data);
-  error = wasmtime_linker_define_instance(linker, &linking2_name, linking2);
+  error = wasmtime_linker_define_instance(linker, context, "linking2", strlen("linking2"), &linking2);
   if (error != NULL)
     exit_with_error("failed to link linking2", error, NULL);
 
   // Instantiate `linking1` with the linker now that `linking2` is defined
-  wasm_instance_t *linking1;
-  error = wasmtime_linker_instantiate(linker, linking1_module, &linking1, &trap);
+  wasmtime_instance_t linking1;
+  error = wasmtime_linker_instantiate(linker, context, linking1_module, &linking1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate linking1", error, trap);
 
   // Lookup our `run` export function
-  wasm_extern_vec_t linking1_externs;
-  wasm_instance_exports(linking1, &linking1_externs);
-  assert(linking1_externs.size == 1);
-  wasm_func_t *run = wasm_extern_as_func(linking1_externs.data[0]);
-  assert(run != NULL);
-  wasm_val_vec_t args_vec = WASM_EMPTY_VEC;
-  wasm_val_vec_t results_vec = WASM_EMPTY_VEC;
-  error = wasmtime_func_call(run, &args_vec, &results_vec, &trap);
+  wasmtime_extern_t run;
+  bool ok = wasmtime_instance_export_get(context, &linking1, "run", 3, &run);
+  assert(ok);
+  assert(run.kind == WASMTIME_EXTERN_FUNC);
+  error = wasmtime_func_call(context, &run.of.func, NULL, 0, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call run", error, trap);
 
   // Clean up after ourselves at this point
-  wasm_extern_vec_delete(&linking1_externs);
-  wasm_instance_delete(linking1);
-  wasm_instance_delete(linking2);
   wasmtime_linker_delete(linker);
-  wasm_module_delete(linking1_module);
-  wasm_module_delete(linking2_module);
-  wasm_store_delete(store);
+  wasmtime_module_delete(linking1_module);
+  wasmtime_module_delete(linking2_module);
+  wasmtime_store_delete(store);
   wasm_engine_delete(engine);
   return 0;
 }
@@ -141,7 +132,7 @@ static void read_wat_file(
   fclose(file);
 
   // Parse the wat into the binary wasm format
-  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, bytes);
+  wasmtime_error_t *error = wasmtime_wat2wasm(wat.data, wat.size, bytes);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);

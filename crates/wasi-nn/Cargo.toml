@@ -17,7 +17,6 @@ anyhow = "1.0"
 log = { version = "0.4", default-features = false }
 wasmtime = { path = "../wasmtime", version = "0.27.0", default-features = false }
 wasmtime-runtime = { path = "../runtime", version = "0.27.0" }
-wasmtime-wiggle = { path = "../wiggle/wasmtime", version = "0.27.0" }
 wasmtime-wasi = { path = "../wasi", version = "0.27.0" }
 wiggle = { path = "../wiggle", version = "0.27.0" }
 

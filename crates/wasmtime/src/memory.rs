@@ -1,6 +1,7 @@
-use crate::trampoline::{generate_memory_export, StoreInstanceHandle};
-use crate::{MemoryType, Store};
-use anyhow::{anyhow, Result};
+use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::trampoline::generate_memory_export;
+use crate::{AsContext, AsContextMut, MemoryType, StoreContext, StoreContextMut};
+use anyhow::{bail, Result};
 use std::slice;
 
 /// Error for out of bounds [`Memory`] access.
@@ -25,118 +26,72 @@ impl std::error::Error for MemoryAccessError {}
 /// that is always a multiple of the WebAssembly page size, currently 64
 /// kilobytes.
 ///
-/// WebAssembly memory is used for global data, statics in C/C++/Rust, shadow
-/// stack memory, etc. Accessing wasm memory is generally quite fast!
+/// WebAssembly memory is used for global data (not to be confused with wasm
+/// `global` items), statics in C/C++/Rust, shadow stack memory, etc. Accessing
+/// wasm memory is generally quite fast.
 ///
-/// # `Memory` and `Clone`
-///
-/// Memories are internally reference counted so you can `clone` a `Memory`. The
-/// cloning process only performs a shallow clone, so two cloned `Memory`
-/// instances are equivalent in their functionality.
-///
-/// # `Memory` and threads
-///
-/// It is intended that `Memory` is safe to share between threads. At this time
-/// this is not implemented in `wasmtime`, however. This is planned to be
-/// implemented though!
+/// Memories, like other wasm items, are owned by a [`Store`](crate::Store).
 ///
 /// # `Memory` and Safety
 ///
-/// Linear memory is a lynchpin of safety for WebAssembly, but it turns out
-/// there are very few ways to safely inspect the contents of a memory from the
-/// host (Rust). This is because memory safety is quite tricky when working with
-/// a `Memory` and we're still working out the best idioms to encapsulate
-/// everything safely where it's efficient and ergonomic. This section of
-/// documentation, however, is intended to help educate a bit what is and isn't
-/// safe when working with `Memory`.
+/// Linear memory is a lynchpin of safety for WebAssembly. In Wasmtime there are
+/// safe methods of interacting with a [`Memory`]:
 ///
-/// For safety purposes you can think of a `Memory` as a glorified
-/// `Rc<UnsafeCell<Vec<u8>>>`. There are a few consequences of this
-/// interpretation:
+/// * [`Memory::read`]
+/// * [`Memory::write`]
+/// * [`Memory::data`]
+/// * [`Memory::data_mut`]
 ///
-/// * At any time someone else may have access to the memory (hence the `Rc`).
-///   This could be a wasm instance, other host code, or a set of wasm instances
-///   which all reference a `Memory`. When in doubt assume someone else has a
-///   handle to your `Memory`.
+/// Note that all of these consider the entire store context as borrowed for the
+/// duration of the call or the duration of the returned slice. This largely
+/// means that while the function is running you'll be unable to borrow anything
+/// else from the store. This includes getting access to the `T` on
+/// [`Store<T>`](crate::Store), but it also means that you can't recursively
+/// call into WebAssembly for instance.
 ///
-/// * At any time, memory can be read from or written to (hence the
-///   `UnsafeCell`). Anyone with a handle to a wasm memory can read/write to it.
-///   Primarily other instances can execute the `load` and `store` family of
-///   instructions, as well as any other which modifies or reads memory.
+/// If you'd like to dip your toes into handling [`Memory`] in a more raw
+/// fashion (e.g. by using raw pointers or raw slices), then there's a few
+/// important points to consider when doing so:
 ///
-/// * At any time memory may grow (hence the `Vec<..>`). Growth may relocate the
-///   base memory pointer (similar to how `vec.push(...)` can change the result
-///   of `.as_ptr()`)
+/// * Any recursive calls into WebAssembly can possibly modify any byte of the
+///   entire memory. This means that whenever wasm is called Rust can't have any
+///   long-lived borrows live across the wasm function call. Slices like `&mut
+///   [u8]` will be violated because they're not actually exclusive at that
+///   point, and slices like `&[u8]` are also violated because their contents
+///   may be mutated.
 ///
-/// So given that we're working roughly with `Rc<UnsafeCell<Vec<u8>>>` that's a
-/// lot to keep in mind! It's hopefully though sort of setting the stage as to
-/// what you can safely do with memories.
+/// * WebAssembly memories can grow, and growth may change the base pointer.
+///   This means that even holding a raw pointer to memory over a wasm function
+///   call is also incorrect. Anywhere in the function call the base address of
+///   memory may change. Note that growth can also be requested from the
+///   embedding API as well.
 ///
-/// Let's run through a few safe examples first of how you can use a `Memory`.
+/// As a general rule of thumb it's recommended to stick to the safe methods of
+/// [`Memory`] if you can. It's not advised to use raw pointers or `unsafe`
+/// operations because of how easy it is to accidentally get things wrong.
+///
+/// Some examples of safely interacting with memory are:
 ///
 /// ```rust
-/// use wasmtime::{Memory, MemoryAccessError};
+/// use wasmtime::{Memory, Store, MemoryAccessError};
 ///
 /// // Memory can be read and written safely with the `Memory::read` and
 /// // `Memory::write` methods.
 /// // An error is returned if the copy did not succeed.
-/// fn safe_examples(mem: &Memory) -> Result<(), MemoryAccessError> {
+/// fn safe_examples(mem: Memory, store: &mut Store<()>) -> Result<(), MemoryAccessError> {
 ///     let offset = 5;
-///     mem.write(offset, b"hello")?;
+///     mem.write(&mut *store, offset, b"hello")?;
 ///     let mut buffer = [0u8; 5];
-///     mem.read(offset, &mut buffer)?;
+///     mem.read(&store, offset, &mut buffer)?;
 ///     assert_eq!(b"hello", &buffer);
+///
+///     // Note that while this is safe care must be taken because the indexing
+///     // here may panic if the memory isn't large enough.
+///     assert_eq!(&mem.data(&store)[offset..offset + 5], b"hello");
+///     mem.data_mut(&mut *store)[offset..offset + 5].copy_from_slice(b"bye!!");
+///
 ///     Ok(())
 /// }
-///
-/// // You can also get direct, unsafe access to the memory, but must manually
-/// // ensure that safety invariants are upheld.
-///
-/// fn correct_unsafe_examples(mem: &Memory) {
-///     // Just like wasm, it's safe to read memory almost at any time. The
-///     // gotcha here is that we need to be sure to load from the correct base
-///     // pointer and perform the bounds check correctly. So long as this is
-///     // all self contained here (e.g. not arbitrary code in the middle) we're
-///     // good to go.
-///     let byte = unsafe { mem.data_unchecked()[0x123] };
-///
-///     // Short-lived borrows of memory are safe, but they must be scoped and
-///     // not have code which modifies/etc `Memory` while the borrow is active.
-///     // For example if you want to read a string from memory it is safe to do
-///     // so:
-///     let string_base = 0xdead;
-///     let string_len = 0xbeef;
-///     let string = unsafe {
-///         let bytes = &mem.data_unchecked()[string_base..][..string_len];
-///         match std::str::from_utf8(bytes) {
-///             Ok(s) => s.to_string(), // copy out of wasm memory
-///             Err(_) => panic!("not valid utf-8"),
-///         }
-///     };
-///
-///     // Additionally like wasm you can write to memory at any point in time,
-///     // again making sure that after you get the unchecked slice you don't
-///     // execute code which could read/write/modify `Memory`:
-///     unsafe {
-///         mem.data_unchecked_mut()[0x123] = 3;
-///     }
-///
-///     // When working with *borrows* that point directly into wasm memory you
-///     // need to be extremely careful. Any functionality that operates on a
-///     // borrow into wasm memory needs to be thoroughly audited to effectively
-///     // not touch the `Memory` at all
-///     let data_base = 0xfeed;
-///     let data_len = 0xface;
-///     unsafe {
-///         let data = &mem.data_unchecked()[data_base..][..data_len];
-///         host_function_that_doesnt_touch_memory(data);
-///
-///         // effectively the same rules apply to mutable borrows
-///         let data_mut = &mut mem.data_unchecked_mut()[data_base..][..data_len];
-///         host_function_that_doesnt_touch_memory(data);
-///     }
-/// }
-/// # fn host_function_that_doesnt_touch_memory(_: &[u8]){}
 /// ```
 ///
 /// It's worth also, however, covering some examples of **incorrect**,
@@ -144,54 +99,52 @@ impl std::error::Error for MemoryAccessError {}
 ///
 /// ```rust
 /// # use anyhow::Result;
-/// use wasmtime::Memory;
+/// use wasmtime::{Memory, Store};
 ///
 /// // NOTE: All code in this function is not safe to execute and may cause
 /// // segfaults/undefined behavior at runtime. Do not copy/paste these examples
 /// // into production code!
-/// unsafe fn unsafe_examples(mem: &Memory) -> Result<()> {
+/// unsafe fn unsafe_examples(mem: Memory, store: &mut Store<()>) -> Result<()> {
 ///     // First and foremost, any borrow can be invalidated at any time via the
 ///     // `Memory::grow` function. This can relocate memory which causes any
 ///     // previous pointer to be possibly invalid now.
-///     let pointer: &u8 = &mem.data_unchecked()[0x100];
-///     mem.grow(1)?; // invalidates `pointer`!
+///     let pointer: &u8 = &*mem.data_ptr(&store);
+///     mem.grow(&mut *store, 1)?; // invalidates `pointer`!
 ///     // println!("{}", *pointer); // FATAL: use-after-free
 ///
 ///     // Note that the use-after-free also applies to slices, whether they're
 ///     // slices of bytes or strings.
-///     let slice: &[u8] = &mem.data_unchecked()[0x100..0x102];
-///     mem.grow(1)?; // invalidates `slice`!
+///     let mem_slice = std::slice::from_raw_parts(
+///         mem.data_ptr(&store),
+///         mem.data_size(&store),
+///     );
+///     let slice: &[u8] = &mem_slice[0x100..0x102];
+///     mem.grow(&mut *store, 1)?; // invalidates `slice`!
 ///     // println!("{:?}", slice); // FATAL: use-after-free
 ///
-///     // Due to the reference-counted nature of `Memory` note that literal
-///     // calls to `Memory::grow` are not sufficient to audit for. You'll need
-///     // to be careful that any mutation of `Memory` doesn't happen while
-///     // you're holding an active borrow.
-///     let slice: &[u8] = &mem.data_unchecked()[0x100..0x102];
-///     some_other_function(); // may invalidate `slice` through another `mem` reference
-///     // println!("{:?}", slice); // FATAL: maybe a use-after-free
+///     // The `Memory` type may be stored in other locations, so if you hand
+///     // off access to the `Store` then those locations may also call
+///     // `Memory::grow` or similar, so it's not enough to just audit code for
+///     // calls to `Memory::grow`.
+///     let pointer: &u8 = &*mem.data_ptr(&store);
+///     some_other_function(store); // may invalidate `pointer` through use of `store`
+///     // println!("{:?}", pointer); // FATAL: maybe a use-after-free
 ///
 ///     // An especially subtle aspect of accessing a wasm instance's memory is
 ///     // that you need to be extremely careful about aliasing. Anyone at any
 ///     // time can call `data_unchecked()` or `data_unchecked_mut()`, which
 ///     // means you can easily have aliasing mutable references:
-///     let ref1: &u8 = &mem.data_unchecked()[0x100];
-///     let ref2: &mut u8 = &mut mem.data_unchecked_mut()[0x100];
+///     let ref1: &u8 = &*mem.data_ptr(&store).add(0x100);
+///     let ref2: &mut u8 = &mut *mem.data_ptr(&store).add(0x100);
 ///     // *ref2 = *ref1; // FATAL: violates Rust's aliasing rules
-///
-///     // Note that aliasing applies to strings as well, for example this is
-///     // not valid because the slices overlap.
-///     let slice1: &mut [u8] = &mut mem.data_unchecked_mut()[0x100..][..3];
-///     let slice2: &mut [u8] = &mut mem.data_unchecked_mut()[0x102..][..4];
-///     // println!("{:?} {:?}", slice1, slice2); // FATAL: aliasing mutable pointers
 ///
 ///     Ok(())
 /// }
-/// # fn some_other_function() {}
+/// # fn some_other_function(store: &mut Store<()>) {}
 /// ```
 ///
-/// Overall there's some general rules of thumb when working with `Memory` and
-/// getting raw pointers inside of it:
+/// Overall there's some general rules of thumb when unsafely working with
+/// `Memory` and getting raw pointers inside of it:
 ///
 /// * If you never have a "long lived" pointer into memory, you're likely in the
 ///   clear. Care still needs to be taken in threaded scenarios or when/where
@@ -199,27 +152,24 @@ impl std::error::Error for MemoryAccessError {}
 /// * Long-lived pointers must always respect Rust'a aliasing rules. It's ok for
 ///   shared borrows to overlap with each other, but mutable borrows must
 ///   overlap with nothing.
-/// * Long-lived pointers are only valid if `Memory` isn't used in an unsafe way
-///   while the pointer is valid. This includes both aliasing and growth.
+/// * Long-lived pointers are only valid if they're not invalidated for their
+///   lifetime. This means that [`Store`](crate::Store) isn't used to reenter
+///   wasm or the memory itself is never grown or otherwise modified/aliased.
 ///
-/// At this point it's worth reiterating again that working with `Memory` is
-/// pretty tricky and that's not great! Proposals such as [interface types] are
-/// intended to prevent wasm modules from even needing to import/export memory
-/// in the first place, which obviates the need for all of these safety caveats!
-/// Additionally over time we're still working out the best idioms to expose in
-/// `wasmtime`, so if you've got ideas or questions please feel free to [open an
-/// issue]!
+/// At this point it's worth reiterating again that unsafely working with
+/// `Memory` is pretty tricky and not recommended! It's highly recommended to
+/// use the safe methods to interact with [`Memory`] whenever possible.
 ///
 /// ## `Memory` Safety and Threads
 ///
 /// Currently the `wasmtime` crate does not implement the wasm threads proposal,
-/// but it is planned to do so. It's additionally worthwhile discussing how this
+/// but it is planned to do so. It may be interesting to readers to see how this
 /// affects memory safety and what was previously just discussed as well.
 ///
 /// Once threads are added into the mix, all of the above rules still apply.
-/// There's an additional, rule, however, that all reads and writes can
-/// happen *concurrently*. This effectively means that long-lived borrows into
-/// wasm memory are virtually never safe to have.
+/// There's an additional consideration that all reads and writes can happen
+/// concurrently, though. This effectively means that any borrow into wasm
+/// memory are virtually never safe to have.
 ///
 /// Mutable pointers are fundamentally unsafe to have in a concurrent scenario
 /// in the face of arbitrary wasm code. Only if you dynamically know for sure
@@ -228,30 +178,28 @@ impl std::error::Error for MemoryAccessError {}
 /// underlying contents may change, so unless `UnsafeCell` in one form or
 /// another is used everywhere there's no safety.
 ///
-/// One important point about concurrency is that `Memory::grow` can indeed
-/// happen concurrently. This, however, will never relocate the base pointer.
-/// Shared memories must always have a maximum size and they will be
-/// preallocated such that growth will never relocate the base pointer. The
-/// maximum length of the memory, however, will change over time.
+/// One important point about concurrency is that while [`Memory::grow`] can
+/// happen concurrently it will never relocate the base pointer. Shared
+/// memories must always have a maximum size and they will be preallocated such
+/// that growth will never relocate the base pointer. The current size of the
+/// memory may still change over time though.
 ///
 /// Overall the general rule of thumb for shared memories is that you must
 /// atomically read and write everything. Nothing can be borrowed and everything
-/// must be eagerly copied out.
-///
-/// [interface types]: https://github.com/webassembly/interface-types
-/// [open an issue]: https://github.com/bytecodealliance/wasmtime/issues/new
-#[derive(Clone)]
-pub struct Memory {
-    pub(crate) instance: StoreInstanceHandle,
-    wasmtime_export: wasmtime_runtime::ExportMemory,
-}
+/// must be eagerly copied out. This means that [`Memory::data`] and
+/// [`Memory::data_mut`] won't work in the future (they'll probably return an
+/// error) for shared memories when they're implemented. When possible it's
+/// recommended to use [`Memory::read`] and [`Memory::write`] which will still
+/// be provided.
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
+pub struct Memory(Stored<wasmtime_runtime::ExportMemory>);
 
 impl Memory {
     /// Creates a new WebAssembly memory given the configuration of `ty`.
     ///
-    /// The `store` argument is a general location for cache information, and
-    /// otherwise the memory will immediately be allocated according to the
-    /// type's configuration. All WebAssembly memory is initialized to zero.
+    /// The `store` argument will be the owner of the returned [`Memory`]. All
+    /// WebAssembly memory is initialized to zero.
     ///
     /// # Examples
     ///
@@ -259,26 +207,33 @@ impl Memory {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// let engine = Engine::default();
-    /// let store = Store::new(&engine);
+    /// let mut store = Store::new(&engine, ());
     ///
     /// let memory_ty = MemoryType::new(Limits::new(1, None));
-    /// let memory = Memory::new(&store, memory_ty)?;
+    /// let memory = Memory::new(&mut store, memory_ty)?;
     ///
     /// let module = Module::new(&engine, "(module (memory (import \"\" \"\") 1))")?;
-    /// let instance = Instance::new(&store, &module, &[memory.into()])?;
+    /// let instance = Instance::new(&mut store, &module, &[memory.into()])?;
     /// // ...
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(store: &Store, ty: MemoryType) -> Result<Memory> {
-        let (instance, wasmtime_export) = generate_memory_export(store, &ty)?;
-        Ok(Memory {
-            instance,
-            wasmtime_export,
-        })
+    pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
+        Memory::_new(&mut store.as_context_mut().opaque(), ty)
+    }
+
+    fn _new(store: &mut StoreOpaque<'_>, ty: MemoryType) -> Result<Memory> {
+        unsafe {
+            let export = generate_memory_export(store, &ty)?;
+            Ok(Memory::from_wasmtime_memory(export, store))
+        }
     }
 
     /// Returns the underlying type of this memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
     ///
     /// # Examples
     ///
@@ -286,115 +241,114 @@ impl Memory {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// let engine = Engine::default();
-    /// let store = Store::new(&engine);
+    /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1))")?;
-    /// let instance = Instance::new(&store, &module, &[])?;
-    /// let memory = instance.get_memory("mem").unwrap();
-    /// let ty = memory.ty();
+    /// let instance = Instance::new(&mut store, &module, &[])?;
+    /// let memory = instance.get_memory(&mut store, "mem").unwrap();
+    /// let ty = memory.ty(&store);
     /// assert_eq!(ty.limits().min(), 1);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn ty(&self) -> MemoryType {
-        MemoryType::from_wasmtime_memory(&self.wasmtime_export.memory.memory)
+    pub fn ty(&self, store: impl AsContext) -> MemoryType {
+        let store = store.as_context();
+        let ty = &store[self.0].memory.memory;
+        MemoryType::from_wasmtime_memory(&ty)
     }
 
     /// Safely reads memory contents at the given offset into a buffer.
     ///
     /// The entire buffer will be filled.
     ///
-    /// If offset + buffer length exceed the current memory capacity, then the
+    /// If `offset + buffer.len()` exceed the current memory capacity, then the
     /// buffer is left untouched and a [`MemoryAccessError`] is returned.
-    pub fn read(&self, offset: usize, buffer: &mut [u8]) -> Result<(), MemoryAccessError> {
-        unsafe {
-            let slice = self
-                .data_unchecked()
-                .get(offset..)
-                .and_then(|s| s.get(..buffer.len()))
-                .ok_or(MemoryAccessError { _private: () })?;
-            buffer.copy_from_slice(slice);
-            Ok(())
-        }
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn read(
+        &self,
+        store: impl AsContext,
+        offset: usize,
+        buffer: &mut [u8],
+    ) -> Result<(), MemoryAccessError> {
+        let store = store.as_context();
+        let slice = self
+            .data(&store)
+            .get(offset..)
+            .and_then(|s| s.get(..buffer.len()))
+            .ok_or(MemoryAccessError { _private: () })?;
+        buffer.copy_from_slice(slice);
+        Ok(())
     }
 
     /// Safely writes contents of a buffer to this memory at the given offset.
     ///
-    /// If the offset + buffer length exceed current memory capacity, then none
-    /// of the buffer is written to memory and a [`MemoryAccessError`] is
+    /// If the `offset + buffer.len()` exceeds the current memory capacity, then
+    /// none of the buffer is written to memory and a [`MemoryAccessError`] is
     /// returned.
-    pub fn write(&self, offset: usize, buffer: &[u8]) -> Result<(), MemoryAccessError> {
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn write(
+        &self,
+        mut store: impl AsContextMut,
+        offset: usize,
+        buffer: &[u8],
+    ) -> Result<(), MemoryAccessError> {
+        let mut context = store.as_context_mut();
+        self.data_mut(&mut context)
+            .get_mut(offset..)
+            .and_then(|s| s.get_mut(..buffer.len()))
+            .ok_or(MemoryAccessError { _private: () })?
+            .copy_from_slice(buffer);
+        Ok(())
+    }
+
+    /// Returns this memory as a native Rust slice.
+    ///
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned slice.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
         unsafe {
-            self.data_unchecked_mut()
-                .get_mut(offset..)
-                .and_then(|s| s.get_mut(..buffer.len()))
-                .ok_or(MemoryAccessError { _private: () })?
-                .copy_from_slice(buffer);
-            Ok(())
+            let store = store.into();
+            let definition = *store[self.0].definition;
+            slice::from_raw_parts(definition.base, definition.current_length)
         }
     }
 
-    /// Returns this memory as a slice view that can be read natively in Rust.
+    /// Returns this memory as a native Rust mutable slice.
     ///
-    /// # Safety
+    /// Note that this method will consider the entire store context provided as
+    /// borrowed for the duration of the lifetime of the returned slice.
     ///
-    /// This is an unsafe operation because there is no guarantee that the
-    /// following operations do not happen concurrently while the slice is in
-    /// use:
+    /// # Panics
     ///
-    /// * Data could be modified by calling into a wasm module.
-    /// * Memory could be relocated through growth by calling into a wasm
-    ///   module.
-    /// * When threads are supported, non-atomic reads will race with other
-    ///   writes.
-    ///
-    /// Extreme care need be taken when the data of a `Memory` is read. The
-    /// above invariants all need to be upheld at a bare minimum, and in
-    /// general you'll need to ensure that while you're looking at slice you're
-    /// the only one who can possibly look at the slice and read/write it.
-    ///
-    /// Be sure to keep in mind that `Memory` is reference counted, meaning
-    /// that there may be other users of this `Memory` instance elsewhere in
-    /// your program. Additionally `Memory` can be shared and used in any number
-    /// of wasm instances, so calling any wasm code should be considered
-    /// dangerous while you're holding a slice of memory.
-    ///
-    /// For more information and examples see the documentation on the
-    /// [`Memory`] type.
-    pub unsafe fn data_unchecked(&self) -> &[u8] {
-        self.data_unchecked_mut()
-    }
-
-    /// Returns this memory as a slice view that can be read and written
-    /// natively in Rust.
-    ///
-    /// # Safety
-    ///
-    /// All of the same safety caveats of [`Memory::data_unchecked`] apply
-    /// here, doubly so because this is returning a mutable slice! As a
-    /// double-extra reminder, remember that `Memory` is reference counted, so
-    /// you can very easily acquire two mutable slices by simply calling this
-    /// function twice. Extreme caution should be used when using this method,
-    /// and in general you probably want to result to unsafe accessors and the
-    /// `data` methods below.
-    ///
-    /// For more information and examples see the documentation on the
-    /// [`Memory`] type.
-    pub unsafe fn data_unchecked_mut(&self) -> &mut [u8] {
-        let definition = &*self.wasmtime_export.definition;
-        slice::from_raw_parts_mut(definition.base, definition.current_length)
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_mut<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>) -> &'a mut [u8] {
+        unsafe {
+            let store = store.into();
+            let definition = *store[self.0].definition;
+            slice::from_raw_parts_mut(definition.base, definition.current_length)
+        }
     }
 
     /// Returns the base pointer, in the host's address space, that the memory
     /// is located at.
     ///
-    /// When reading and manipulating memory be sure to read up on the caveats
-    /// of [`Memory::data_unchecked`] to make sure that you can safely
-    /// read/write the memory.
-    ///
     /// For more information and examples see the documentation on the
     /// [`Memory`] type.
-    pub fn data_ptr(&self) -> *mut u8 {
-        unsafe { (*self.wasmtime_export.definition).base }
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_ptr(&self, store: impl AsContext) -> *mut u8 {
+        unsafe { (*store.as_context()[self.0].definition).base }
     }
 
     /// Returns the byte length of this memory.
@@ -403,21 +357,29 @@ impl Memory {
     ///
     /// For more information and examples see the documentation on the
     /// [`Memory`] type.
-    pub fn data_size(&self) -> usize {
-        unsafe { (*self.wasmtime_export.definition).current_length }
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_size(&self, store: impl AsContext) -> usize {
+        unsafe { (*store.as_context()[self.0].definition).current_length }
     }
 
-    /// Returns the size, in pages, of this wasm memory.
-    pub fn size(&self) -> u32 {
-        (self.data_size() / wasmtime_environ::WASM_PAGE_SIZE as usize) as u32
+    /// Returns the size, in WebAssembly pages, of this wasm memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn size(&self, store: impl AsContext) -> u32 {
+        (self.data_size(store) / wasmtime_environ::WASM_PAGE_SIZE as usize) as u32
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
     ///
     /// This will attempt to add `delta` more pages of memory on to the end of
     /// this `Memory` instance. If successful this may relocate the memory and
-    /// cause [`Memory::data_ptr`] to return a new value. Additionally previous
-    /// slices into this memory may no longer be valid.
+    /// cause [`Memory::data_ptr`] to return a new value. Additionally any
+    /// unsafetly constructed slices into this memory may no longer be valid.
     ///
     /// On success returns the number of pages this memory previously had
     /// before the growth succeeded.
@@ -425,7 +387,13 @@ impl Memory {
     /// # Errors
     ///
     /// Returns an error if memory could not be grown, for example if it exceeds
-    /// the maximum limits of this memory.
+    /// the maximum limits of this memory. A
+    /// [`ResourceLimiter`](crate::ResourceLimiter) is another example of
+    /// preventing a memory to grow.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
     ///
     /// # Examples
     ///
@@ -433,52 +401,68 @@ impl Memory {
     /// # use wasmtime::*;
     /// # fn main() -> anyhow::Result<()> {
     /// let engine = Engine::default();
-    /// let store = Store::new(&engine);
+    /// let mut store = Store::new(&engine, ());
     /// let module = Module::new(&engine, "(module (memory (export \"mem\") 1 2))")?;
-    /// let instance = Instance::new(&store, &module, &[])?;
-    /// let memory = instance.get_memory("mem").unwrap();
+    /// let instance = Instance::new(&mut store, &module, &[])?;
+    /// let memory = instance.get_memory(&mut store, "mem").unwrap();
     ///
-    /// assert_eq!(memory.size(), 1);
-    /// assert_eq!(memory.grow(1)?, 1);
-    /// assert_eq!(memory.size(), 2);
-    /// assert!(memory.grow(1).is_err());
-    /// assert_eq!(memory.size(), 2);
-    /// assert_eq!(memory.grow(0)?, 2);
+    /// assert_eq!(memory.size(&store), 1);
+    /// assert_eq!(memory.grow(&mut store, 1)?, 1);
+    /// assert_eq!(memory.size(&store), 2);
+    /// assert!(memory.grow(&mut store, 1).is_err());
+    /// assert_eq!(memory.size(&store), 2);
+    /// assert_eq!(memory.grow(&mut store, 0)?, 2);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn grow(&self, delta: u32) -> Result<u32> {
-        let index = self
-            .instance
-            .memory_index(unsafe { &*self.wasmtime_export.definition });
-        self.instance
-            .memory_grow(index, delta)
-            .ok_or_else(|| anyhow!("failed to grow memory by `{}`", delta))
+    pub fn grow(&self, mut store: impl AsContextMut, delta: u32) -> Result<u32> {
+        let mut store = store.as_context_mut().opaque();
+        let mem = self.wasmtime_memory(&mut store);
+        unsafe {
+            match (*mem).grow(delta, store.limiter()) {
+                Some(size) => {
+                    let vm = (*mem).vmmemory();
+                    *store[self.0].definition = vm;
+                    Ok(size)
+                }
+                None => bail!("failed to grow memory by `{}`", delta),
+            }
+        }
+    }
+
+    fn wasmtime_memory(&self, store: &mut StoreOpaque<'_>) -> *mut wasmtime_runtime::Memory {
+        unsafe {
+            let export = &store[self.0];
+            let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(export.vmctx);
+            let idx = handle.memory_index(&*export.definition);
+            handle.get_defined_memory(idx)
+        }
     }
 
     pub(crate) unsafe fn from_wasmtime_memory(
-        wasmtime_export: &wasmtime_runtime::ExportMemory,
-        store: &Store,
+        wasmtime_export: wasmtime_runtime::ExportMemory,
+        store: &mut StoreOpaque,
     ) -> Memory {
-        Memory {
-            instance: store.existing_vmctx(wasmtime_export.vmctx),
-            wasmtime_export: wasmtime_export.clone(),
-        }
+        Memory(store.store_data_mut().insert(wasmtime_export))
     }
 
-    pub(crate) fn wasmtime_ty(&self) -> &wasmtime_environ::wasm::Memory {
-        &self.wasmtime_export.memory.memory
+    pub(crate) fn wasmtime_ty<'a>(
+        &self,
+        store: &'a StoreData,
+    ) -> &'a wasmtime_environ::wasm::Memory {
+        &store[self.0].memory.memory
     }
 
-    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMMemoryImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque<'_>) -> wasmtime_runtime::VMMemoryImport {
+        let export = &store[self.0];
         wasmtime_runtime::VMMemoryImport {
-            from: self.wasmtime_export.definition,
-            vmctx: self.wasmtime_export.vmctx,
+            from: export.definition,
+            vmctx: export.vmctx,
         }
     }
 
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportMemory {
-        &self.wasmtime_export
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
+        store.store_data().contains(self.0)
     }
 }
 
@@ -488,14 +472,15 @@ impl Memory {
 /// one can supply wasmtime with custom allocated host managed memory.
 ///
 /// # Safety
-/// The memory should be page aligned and a multiple of page size.
-/// To prevent possible silent overflows, the memory should be protected by a guard page.
-/// Additionally the safety concerns explained in ['Memory'], for accessing the memory
-/// apply here as well.
 ///
-/// Note that this is a relatively new and experimental feature and it is recommended
-/// to be familiar with wasmtime runtime code to use it.
-pub unsafe trait LinearMemory {
+/// The memory should be page aligned and a multiple of page size.
+/// To prevent possible silent overflows, the memory should be protected by a
+/// guard page.  Additionally the safety concerns explained in ['Memory'], for
+/// accessing the memory apply here as well.
+///
+/// Note that this is a relatively new and experimental feature and it is
+/// recommended to be familiar with wasmtime runtime code to use it.
+pub unsafe trait LinearMemory: Send + Sync + 'static {
     /// Returns the number of allocated wasm pages.
     fn size(&self) -> u32;
 
@@ -507,7 +492,7 @@ pub unsafe trait LinearMemory {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of wasm pages.
-    fn grow(&self, delta: u32) -> Option<u32>;
+    fn grow(&mut self, delta: u32) -> Option<u32>;
 
     /// Return the allocated memory as a mutable pointer to u8.
     fn as_ptr(&self) -> *mut u8;
@@ -517,13 +502,14 @@ pub unsafe trait LinearMemory {
 /// to wasmtime which supplies host managed memory.
 ///
 /// # Safety
-/// This trait is unsafe, as the memory safety depends on proper implementation of
-/// memory management. Memories created by the MemoryCreator should always be treated
-/// as owned by wasmtime instance, and any modification of them outside of wasmtime
-/// invoked routines is unsafe and may lead to corruption.
 ///
-/// Note that this is a relatively new and experimental feature and it is recommended
-/// to be familiar with wasmtime runtime code to use it.
+/// This trait is unsafe, as the memory safety depends on proper implementation
+/// of memory management. Memories created by the MemoryCreator should always be
+/// treated as owned by wasmtime instance, and any modification of them outside
+/// of wasmtime invoked routines is unsafe and may lead to corruption.
+///
+/// Note that this is a relatively new and experimental feature and it is
+/// recommended to be familiar with wasmtime runtime code to use it.
 pub unsafe trait MemoryCreator: Send + Sync {
     /// Create a new `LinearMemory` object from the specified parameters.
     ///
@@ -569,11 +555,12 @@ mod tests {
         let mut cfg = Config::new();
         cfg.static_memory_maximum_size(0)
             .dynamic_memory_guard_size(0);
-        let store = Store::new(&Engine::new(&cfg).unwrap());
+        let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
         let ty = MemoryType::new(Limits::new(1, None));
-        let mem = Memory::new(&store, ty).unwrap();
-        assert_eq!(mem.wasmtime_export.memory.offset_guard_size, 0);
-        match mem.wasmtime_export.memory.style {
+        let mem = Memory::new(&mut store, ty).unwrap();
+        let store = store.as_context();
+        assert_eq!(store[mem.0].memory.offset_guard_size, 0);
+        match &store[mem.0].memory.style {
             wasmtime_environ::MemoryStyle::Dynamic => {}
             other => panic!("unexpected style {:?}", other),
         }

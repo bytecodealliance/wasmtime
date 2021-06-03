@@ -10,75 +10,65 @@ use anyhow::Result;
 use wasmtime::*;
 
 fn main() -> Result<()> {
-    // Create our `Store` context and then compile a module and create an
+    // Create our `store_fn` context and then compile a module and create an
     // instance from the compiled module all in one go.
-    let wasmtime_store = Store::default();
-    let module = Module::from_file(wasmtime_store.engine(), "examples/memory.wat")?;
-    let instance = Instance::new(&wasmtime_store, &module, &[])?;
+    let mut store: Store<()> = Store::default();
+    let module = Module::from_file(store.engine(), "examples/memory.wat")?;
+    let instance = Instance::new(&mut store, &module, &[])?;
 
-    // Load up our exports from the instance
+    // load_fn up our exports from the instance
     let memory = instance
-        .get_memory("memory")
+        .get_memory(&mut store, "memory")
         .ok_or(anyhow::format_err!("failed to find `memory` export"))?;
-    let size = instance.get_typed_func::<(), i32>("size")?;
-    let load = instance.get_typed_func::<i32, i32>("load")?;
-    let store = instance.get_typed_func::<(i32, i32), ()>("store")?;
+    let size = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
+    let load_fn = instance.get_typed_func::<i32, i32, _>(&mut store, "load")?;
+    let store_fn = instance.get_typed_func::<(i32, i32), (), _>(&mut store, "store")?;
 
-    // Note that these memory reads are *unsafe* due to unknown knowledge about
-    // aliasing with wasm memory. For more information about the safety
-    // guarantees here and how to use `Memory` safely, see the API
-    // documentation.
     println!("Checking memory...");
-    assert_eq!(memory.size(), 2);
-    assert_eq!(memory.data_size(), 0x20000);
-    unsafe {
-        assert_eq!(memory.data_unchecked_mut()[0], 0);
-        assert_eq!(memory.data_unchecked_mut()[0x1000], 1);
-        assert_eq!(memory.data_unchecked_mut()[0x1003], 4);
-    }
+    assert_eq!(memory.size(&store), 2);
+    assert_eq!(memory.data_size(&store), 0x20000);
+    assert_eq!(memory.data_mut(&mut store)[0], 0);
+    assert_eq!(memory.data_mut(&mut store)[0x1000], 1);
+    assert_eq!(memory.data_mut(&mut store)[0x1003], 4);
 
-    assert_eq!(size.call(())?, 2);
-    assert_eq!(load.call(0)?, 0);
-    assert_eq!(load.call(0x1000)?, 1);
-    assert_eq!(load.call(0x1003)?, 4);
-    assert_eq!(load.call(0x1ffff)?, 0);
-    assert!(load.call(0x20000).is_err()); // out of bounds trap
+    assert_eq!(size.call(&mut store, ())?, 2);
+    assert_eq!(load_fn.call(&mut store, 0)?, 0);
+    assert_eq!(load_fn.call(&mut store, 0x1000)?, 1);
+    assert_eq!(load_fn.call(&mut store, 0x1003)?, 4);
+    assert_eq!(load_fn.call(&mut store, 0x1ffff)?, 0);
+    assert!(load_fn.call(&mut store, 0x20000).is_err()); // out of bounds trap
 
     println!("Mutating memory...");
-    unsafe {
-        memory.data_unchecked_mut()[0x1003] = 5;
-    }
+    memory.data_mut(&mut store)[0x1003] = 5;
 
-    store.call((0x1002, 6))?;
-    assert!(store.call((0x20000, 0)).is_err()); // out of bounds trap
+    store_fn.call(&mut store, (0x1002, 6))?;
+    assert!(store_fn.call(&mut store, (0x20000, 0)).is_err()); // out of bounds trap
 
-    unsafe {
-        assert_eq!(memory.data_unchecked_mut()[0x1002], 6);
-        assert_eq!(memory.data_unchecked_mut()[0x1003], 5);
-    }
-    assert_eq!(load.call(0x1002)?, 6);
-    assert_eq!(load.call(0x1003)?, 5);
+    assert_eq!(memory.data(&store)[0x1002], 6);
+    assert_eq!(memory.data(&store)[0x1003], 5);
+    assert_eq!(load_fn.call(&mut store, 0x1002)?, 6);
+    assert_eq!(load_fn.call(&mut store, 0x1003)?, 5);
 
     // Grow memory.
     println!("Growing memory...");
-    memory.grow(1)?;
-    assert_eq!(memory.size(), 3);
-    assert_eq!(memory.data_size(), 0x30000);
+    memory.grow(&mut store, 1)?;
+    assert_eq!(memory.size(&store), 3);
+    assert_eq!(memory.data_size(&store), 0x30000);
 
-    assert_eq!(load.call(0x20000)?, 0);
-    store.call((0x20000, 0))?;
-    assert!(load.call(0x30000).is_err());
-    assert!(store.call((0x30000, 0)).is_err());
+    assert_eq!(load_fn.call(&mut store, 0x20000)?, 0);
+    store_fn.call(&mut store, (0x20000, 0))?;
+    assert!(load_fn.call(&mut store, 0x30000).is_err());
+    assert!(store_fn.call(&mut store, (0x30000, 0)).is_err());
 
-    assert!(memory.grow(1).is_err());
-    assert!(memory.grow(0).is_ok());
+    assert!(memory.grow(&mut store, 1).is_err());
+    assert!(memory.grow(&mut store, 0).is_ok());
 
     println!("Creating stand-alone memory...");
     let memorytype = MemoryType::new(Limits::new(5, Some(5)));
-    let memory2 = Memory::new(&wasmtime_store, memorytype)?;
-    assert_eq!(memory2.size(), 5);
-    assert!(memory2.grow(1).is_err());
-    assert!(memory2.grow(0).is_ok());
+    let memory2 = Memory::new(&mut store, memorytype)?;
+    assert_eq!(memory2.size(&store), 5);
+    assert!(memory2.grow(&mut store, 1).is_err());
+    assert!(memory2.grow(&mut store, 0).is_ok());
 
     Ok(())
 }

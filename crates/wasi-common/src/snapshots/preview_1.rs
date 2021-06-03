@@ -1,8 +1,8 @@
 use crate::{
     dir::{DirCaps, DirEntry, DirEntryExt, DirFdStat, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
-        Advice, FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileEntryMutExt, FileType,
-        Filestat, OFlags, TableFileExt, WasiFile,
+        Advice, FdFlags, FdStat, FileCaps, FileEntry, FileEntryExt, FileType, Filestat, OFlags,
+        TableFileExt, WasiFile,
     },
     sched::{
         subscription::{RwEventFlags, SubscriptionResult},
@@ -12,7 +12,6 @@ use crate::{
 };
 use anyhow::Context;
 use cap_std::time::{Duration, SystemClock};
-use std::cell::{Ref, RefMut};
 use std::collections::HashSet;
 use std::convert::{TryFrom, TryInto};
 use std::io::{IoSlice, IoSliceMut};
@@ -26,7 +25,8 @@ wiggle::from_witx!({
     // Note: not every function actually needs to be async, however, nearly all of them do, and
     // keeping that set the same in this macro and the wasmtime_wiggle / lucet_wiggle macros is
     // tedious, and there is no cost to having a sync function be async in this case.
-    async: *
+    async: *,
+    wasmtime: false
 });
 
 impl wiggle::GuestErrorType for types::Errno {
@@ -36,7 +36,7 @@ impl wiggle::GuestErrorType for types::Errno {
 }
 
 impl types::UserErrorConversion for WasiCtx {
-    fn errno_from_error(&self, e: Error) -> Result<types::Errno, wiggle::Trap> {
+    fn errno_from_error(&mut self, e: Error) -> Result<types::Errno, wiggle::Trap> {
         debug!("Error: {:?}", e);
         e.try_into()
             .map_err(|e| wiggle::Trap::String(format!("{:?}", e)))
@@ -196,30 +196,30 @@ impl TryFrom<std::io::Error> for types::Errno {
 #[wiggle::async_trait]
 impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     async fn args_get<'b>(
-        &self,
+        &mut self,
         argv: &GuestPtr<'b, GuestPtr<'b, u8>>,
         argv_buf: &GuestPtr<'b, u8>,
     ) -> Result<(), Error> {
         self.args.write_to_guest(argv_buf, argv)
     }
 
-    async fn args_sizes_get(&self) -> Result<(types::Size, types::Size), Error> {
+    async fn args_sizes_get(&mut self) -> Result<(types::Size, types::Size), Error> {
         Ok((self.args.number_elements(), self.args.cumulative_size()))
     }
 
     async fn environ_get<'b>(
-        &self,
+        &mut self,
         environ: &GuestPtr<'b, GuestPtr<'b, u8>>,
         environ_buf: &GuestPtr<'b, u8>,
     ) -> Result<(), Error> {
         self.env.write_to_guest(environ_buf, environ)
     }
 
-    async fn environ_sizes_get(&self) -> Result<(types::Size, types::Size), Error> {
+    async fn environ_sizes_get(&mut self) -> Result<(types::Size, types::Size), Error> {
         Ok((self.env.number_elements(), self.env.cumulative_size()))
     }
 
-    async fn clock_res_get(&self, id: types::Clockid) -> Result<types::Timestamp, Error> {
+    async fn clock_res_get(&mut self, id: types::Clockid) -> Result<types::Timestamp, Error> {
         let resolution = match id {
             types::Clockid::Realtime => Ok(self.clocks.system.resolution()),
             types::Clockid::Monotonic => Ok(self.clocks.monotonic.resolution()),
@@ -231,7 +231,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn clock_time_get(
-        &self,
+        &mut self,
         id: types::Clockid,
         precision: types::Timestamp,
     ) -> Result<types::Timestamp, Error> {
@@ -256,7 +256,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_advise(
-        &self,
+        &mut self,
         fd: types::Fd,
         offset: types::Filesize,
         len: types::Filesize,
@@ -271,7 +271,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_allocate(
-        &self,
+        &mut self,
         fd: types::Fd,
         offset: types::Filesize,
         len: types::Filesize,
@@ -284,8 +284,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    async fn fd_close(&self, fd: types::Fd) -> Result<(), Error> {
-        let mut table = self.table();
+    async fn fd_close(&mut self, fd: types::Fd) -> Result<(), Error> {
+        let table = self.table();
         let fd = u32::from(fd);
 
         // Fail fast: If not present in table, Badf
@@ -297,7 +297,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             let _ = table.delete(fd);
         } else if table.is::<DirEntry>(fd) {
             // We cannot close preopened directories
-            let dir_entry: Ref<DirEntry> = table.get(fd).unwrap();
+            let dir_entry: &DirEntry = table.get(fd).unwrap();
             if dir_entry.preopen_path().is_some() {
                 return Err(Error::not_supported().context("cannot close propened directory"));
             }
@@ -310,7 +310,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    async fn fd_datasync(&self, fd: types::Fd) -> Result<(), Error> {
+    async fn fd_datasync(&mut self, fd: types::Fd) -> Result<(), Error> {
         self.table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::DATASYNC)?
@@ -319,15 +319,15 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    async fn fd_fdstat_get(&self, fd: types::Fd) -> Result<types::Fdstat, Error> {
+    async fn fd_fdstat_get(&mut self, fd: types::Fd) -> Result<types::Fdstat, Error> {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let file_entry: Ref<FileEntry> = table.get(fd)?;
+            let file_entry: &FileEntry = table.get(fd)?;
             let fdstat = file_entry.get_fdstat().await?;
             Ok(types::Fdstat::from(&fdstat))
         } else if table.is::<DirEntry>(fd) {
-            let dir_entry: Ref<DirEntry> = table.get(fd)?;
+            let dir_entry: &DirEntry = table.get(fd)?;
             let dir_fdstat = dir_entry.get_dir_fdstat();
             Ok(types::Fdstat::from(&dir_fdstat))
         } else {
@@ -335,16 +335,20 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
     }
 
-    async fn fd_fdstat_set_flags(&self, fd: types::Fd, flags: types::Fdflags) -> Result<(), Error> {
+    async fn fd_fdstat_set_flags(
+        &mut self,
+        fd: types::Fd,
+        flags: types::Fdflags,
+    ) -> Result<(), Error> {
         self.table()
             .get_file_mut(u32::from(fd))?
-            .get_cap(FileCaps::FDSTAT_SET_FLAGS)?
+            .get_cap_mut(FileCaps::FDSTAT_SET_FLAGS)?
             .set_fdflags(FdFlags::from(flags))
             .await
     }
 
     async fn fd_fdstat_set_rights(
-        &self,
+        &mut self,
         fd: types::Fd,
         fs_rights_base: types::Rights,
         fs_rights_inheriting: types::Rights,
@@ -352,11 +356,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
-            let mut file_entry: RefMut<FileEntry> = table.get_mut(fd)?;
+            let file_entry: &mut FileEntry = table.get_mut(fd)?;
             let file_caps = FileCaps::from(&fs_rights_base);
             file_entry.drop_caps_to(file_caps)
         } else if table.is::<DirEntry>(fd) {
-            let mut dir_entry: RefMut<DirEntry> = table.get_mut(fd)?;
+            let dir_entry: &mut DirEntry = table.get_mut(fd)?;
             let dir_caps = DirCaps::from(&fs_rights_base);
             let file_caps = FileCaps::from(&fs_rights_inheriting);
             dir_entry.drop_caps_to(dir_caps, file_caps)
@@ -365,7 +369,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
     }
 
-    async fn fd_filestat_get(&self, fd: types::Fd) -> Result<types::Filestat, Error> {
+    async fn fd_filestat_get(&mut self, fd: types::Fd) -> Result<types::Filestat, Error> {
         let table = self.table();
         let fd = u32::from(fd);
         if table.is::<FileEntry>(fd) {
@@ -388,7 +392,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_filestat_set_size(
-        &self,
+        &mut self,
         fd: types::Fd,
         size: types::Filesize,
     ) -> Result<(), Error> {
@@ -401,7 +405,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_filestat_set_times(
-        &self,
+        &mut self,
         fd: types::Fd,
         atim: types::Timestamp,
         mtim: types::Timestamp,
@@ -438,7 +442,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_read<'a>(
-        &self,
+        &mut self,
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
     ) -> Result<types::Size, Error> {
@@ -464,7 +468,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_pread<'a>(
-        &self,
+        &mut self,
         fd: types::Fd,
         iovs: &types::IovecArray<'a>,
         offset: types::Filesize,
@@ -493,7 +497,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_write<'a>(
-        &self,
+        &mut self,
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
     ) -> Result<types::Size, Error> {
@@ -519,7 +523,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_pwrite<'a>(
-        &self,
+        &mut self,
         fd: types::Fd,
         ciovs: &types::CiovecArray<'a>,
         offset: types::Filesize,
@@ -547,9 +551,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(types::Size::try_from(bytes_written)?)
     }
 
-    async fn fd_prestat_get(&self, fd: types::Fd) -> Result<types::Prestat, Error> {
+    async fn fd_prestat_get(&mut self, fd: types::Fd) -> Result<types::Prestat, Error> {
         let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::badf())?;
+        let dir_entry: &DirEntry = table.get(u32::from(fd)).map_err(|_| Error::badf())?;
         if let Some(ref preopen) = dir_entry.preopen_path() {
             let path_str = preopen.to_str().ok_or_else(|| Error::not_supported())?;
             let pr_name_len = u32::try_from(path_str.as_bytes().len())?;
@@ -560,13 +564,13 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_prestat_dir_name<'a>(
-        &self,
+        &mut self,
         fd: types::Fd,
         path: &GuestPtr<'a, u8>,
         path_max_len: types::Size,
     ) -> Result<(), Error> {
         let table = self.table();
-        let dir_entry: Ref<DirEntry> = table.get(u32::from(fd)).map_err(|_| Error::not_dir())?;
+        let dir_entry: &DirEntry = table.get(u32::from(fd)).map_err(|_| Error::not_dir())?;
         if let Some(ref preopen) = dir_entry.preopen_path() {
             let path_bytes = preopen
                 .to_str()
@@ -583,8 +587,8 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             Err(Error::not_supported())
         }
     }
-    async fn fd_renumber(&self, from: types::Fd, to: types::Fd) -> Result<(), Error> {
-        let mut table = self.table();
+    async fn fd_renumber(&mut self, from: types::Fd, to: types::Fd) -> Result<(), Error> {
+        let table = self.table();
         let from = u32::from(from);
         let to = u32::from(to);
         if !table.contains_key(from) {
@@ -601,7 +605,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_seek(
-        &self,
+        &mut self,
         fd: types::Fd,
         offset: types::Filedelta,
         whence: types::Whence,
@@ -628,7 +632,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(newoffset)
     }
 
-    async fn fd_sync(&self, fd: types::Fd) -> Result<(), Error> {
+    async fn fd_sync(&mut self, fd: types::Fd) -> Result<(), Error> {
         self.table()
             .get_file(u32::from(fd))?
             .get_cap(FileCaps::SYNC)?
@@ -637,7 +641,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(())
     }
 
-    async fn fd_tell(&self, fd: types::Fd) -> Result<types::Filesize, Error> {
+    async fn fd_tell(&mut self, fd: types::Fd) -> Result<types::Filesize, Error> {
         // XXX should this be stream_position?
         let offset = self
             .table()
@@ -649,7 +653,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn fd_readdir<'a>(
-        &self,
+        &mut self,
         fd: types::Fd,
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
@@ -703,7 +707,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_create_directory<'a>(
-        &self,
+        &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
@@ -715,7 +719,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_filestat_get<'a>(
-        &self,
+        &mut self,
         dirfd: types::Fd,
         flags: types::Lookupflags,
         path: &GuestPtr<'a, str>,
@@ -733,7 +737,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_filestat_set_times<'a>(
-        &self,
+        &mut self,
         dirfd: types::Fd,
         flags: types::Lookupflags,
         path: &GuestPtr<'a, str>,
@@ -761,7 +765,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_link<'a>(
-        &self,
+        &mut self,
         src_fd: types::Fd,
         src_flags: types::Lookupflags,
         src_path: &GuestPtr<'a, str>,
@@ -791,7 +795,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_open<'a>(
-        &self,
+        &mut self,
         dirfd: types::Fd,
         dirflags: types::Lookupflags,
         path: &GuestPtr<'a, str>,
@@ -800,7 +804,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         fs_rights_inheriting: types::Rights,
         fdflags: types::Fdflags,
     ) -> Result<types::Fd, Error> {
-        let mut table = self.table();
+        let table = self.table();
         let dirfd = u32::from(dirfd);
         if table.is::<FileEntry>(dirfd) {
             return Err(Error::not_dir());
@@ -850,7 +854,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_readlink<'a>(
-        &self,
+        &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
         buf: &GuestPtr<'a, u8>,
@@ -876,7 +880,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_remove_directory<'a>(
-        &self,
+        &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
@@ -888,7 +892,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_rename<'a>(
-        &self,
+        &mut self,
         src_fd: types::Fd,
         src_path: &GuestPtr<'a, str>,
         dest_fd: types::Fd,
@@ -911,7 +915,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_symlink<'a>(
-        &self,
+        &mut self,
         src_path: &GuestPtr<'a, str>,
         dirfd: types::Fd,
         dest_path: &GuestPtr<'a, str>,
@@ -924,7 +928,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn path_unlink_file<'a>(
-        &self,
+        &mut self,
         dirfd: types::Fd,
         path: &GuestPtr<'a, str>,
     ) -> Result<(), Error> {
@@ -936,7 +940,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn poll_oneoff<'a>(
-        &self,
+        &mut self,
         subs: &GuestPtr<'a, types::Subscription>,
         events: &GuestPtr<'a, types::Event>,
         nsubscriptions: types::Size,
@@ -970,11 +974,11 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
             }
         }
 
-        let table = self.table();
+        let table = &mut self.table;
         let mut sub_fds: HashSet<types::Fd> = HashSet::new();
         // We need these refmuts to outlive Poll, which will hold the &mut dyn WasiFile inside
-        let mut read_refs: Vec<(RefMut<'_, dyn WasiFile>, Userdata)> = Vec::new();
-        let mut write_refs: Vec<(RefMut<'_, dyn WasiFile>, Userdata)> = Vec::new();
+        let mut read_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
+        let mut write_refs: Vec<(&dyn WasiFile, Userdata)> = Vec::new();
         let mut poll = Poll::new();
 
         let subs = subs.as_array(nsubscriptions);
@@ -1020,7 +1024,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         sub_fds.insert(fd);
                     }
                     let file_ref = table
-                        .get_file_mut(u32::from(fd))?
+                        .get_file(u32::from(fd))?
                         .get_cap(FileCaps::POLL_READWRITE)?;
                     read_refs.push((file_ref, sub.userdata.into()));
                 }
@@ -1033,7 +1037,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                         sub_fds.insert(fd);
                     }
                     let file_ref = table
-                        .get_file_mut(u32::from(fd))?
+                        .get_file(u32::from(fd))?
                         .get_cap(FileCaps::POLL_READWRITE)?;
                     write_refs.push((file_ref, sub.userdata.into()));
                 }
@@ -1041,10 +1045,10 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
 
         for (f, ud) in read_refs.iter_mut() {
-            poll.subscribe_read(f.deref_mut(), *ud);
+            poll.subscribe_read(*f, *ud);
         }
         for (f, ud) in write_refs.iter_mut() {
-            poll.subscribe_write(f.deref_mut(), *ud);
+            poll.subscribe_write(*f, *ud);
         }
 
         self.sched.poll_oneoff(&mut poll).await?;
@@ -1122,7 +1126,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Ok(num_results.try_into().expect("results fit into memory"))
     }
 
-    async fn proc_exit(&self, status: types::Exitcode) -> wiggle::Trap {
+    async fn proc_exit(&mut self, status: types::Exitcode) -> wiggle::Trap {
         // Check that the status is within WASI's range.
         if status < 126 {
             wiggle::Trap::I32Exit(status as i32)
@@ -1131,26 +1135,26 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         }
     }
 
-    async fn proc_raise(&self, _sig: types::Signal) -> Result<(), Error> {
+    async fn proc_raise(&mut self, _sig: types::Signal) -> Result<(), Error> {
         Err(Error::trap("proc_raise unsupported"))
     }
 
-    async fn sched_yield(&self) -> Result<(), Error> {
+    async fn sched_yield(&mut self) -> Result<(), Error> {
         self.sched.sched_yield().await
     }
 
     async fn random_get<'a>(
-        &self,
+        &mut self,
         buf: &GuestPtr<'a, u8>,
         buf_len: types::Size,
     ) -> Result<(), Error> {
         let mut buf = buf.as_array(buf_len).as_slice_mut()?;
-        self.random.borrow_mut().try_fill_bytes(buf.deref_mut())?;
+        self.random.try_fill_bytes(buf.deref_mut())?;
         Ok(())
     }
 
     async fn sock_recv<'a>(
-        &self,
+        &mut self,
         _fd: types::Fd,
         _ri_data: &types::IovecArray<'a>,
         _ri_flags: types::Riflags,
@@ -1159,7 +1163,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
     }
 
     async fn sock_send<'a>(
-        &self,
+        &mut self,
         _fd: types::Fd,
         _si_data: &types::CiovecArray<'a>,
         _si_flags: types::Siflags,
@@ -1167,7 +1171,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         Err(Error::trap("sock_send unsupported"))
     }
 
-    async fn sock_shutdown(&self, _fd: types::Fd, _how: types::Sdflags) -> Result<(), Error> {
+    async fn sock_shutdown(&mut self, _fd: types::Fd, _how: types::Sdflags) -> Result<(), Error> {
         Err(Error::trap("sock_shutdown unsupported"))
     }
 }

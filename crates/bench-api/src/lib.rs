@@ -138,11 +138,8 @@ use anyhow::{anyhow, Context, Result};
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
-use wasmtime::{Config, Engine, FuncType, Instance, Linker, Module, Store};
-use wasmtime_wasi::{
-    sync::{Wasi, WasiCtxBuilder},
-    WasiCtx,
-};
+use wasmtime::{Config, Engine, Instance, Linker, Module, Store};
+use wasmtime_wasi::{sync::WasiCtxBuilder, WasiCtx};
 
 pub type ExitCode = c_int;
 pub const OK: ExitCode = 0;
@@ -372,7 +369,7 @@ fn to_exit_code<T>(result: impl Into<Result<T>>) -> ExitCode {
 /// This structure contains the actual Rust implementation of the state required
 /// to manage the Wasmtime engine between calls.
 struct BenchState {
-    engine: Engine,
+    linker: Linker<HostState>,
     compilation_timer: *mut u8,
     compilation_start: extern "C" fn(*mut u8),
     compilation_end: extern "C" fn(*mut u8),
@@ -381,7 +378,16 @@ struct BenchState {
     instantiation_end: extern "C" fn(*mut u8),
     make_wasi_cx: Box<dyn FnMut() -> Result<WasiCtx>>,
     module: Option<Module>,
-    instance: Option<Instance>,
+    store_and_instance: Option<(Store<HostState>, Instance)>,
+}
+
+struct HostState {
+    wasi: WasiCtx,
+    #[cfg(feature = "wasi-nn")]
+    wasi_nn: wasmtime_wasi_nn::WasiNnCtx,
+
+    #[cfg(feature = "wasi-crypto")]
+    wasi_crypto: wasmtime_wasi_crypto::WasiCryptoCtx,
 }
 
 impl BenchState {
@@ -400,7 +406,8 @@ impl BenchState {
         // NB: do not configure a code cache.
         let mut config = Config::new();
         config.wasm_simd(true);
-        Wasi::add_to_config(&mut config);
+        let engine = Engine::new(&config)?;
+        let mut linker = Linker::<HostState>::new(&engine);
 
         // Define the benchmarking start/end functions.
         let execution_timer = unsafe {
@@ -408,29 +415,25 @@ impl BenchState {
             // are only ever called from a single thread.
             UnsafeSendSync::new(execution_timer)
         };
-        config.define_host_func(
-            "bench",
-            "start",
-            FuncType::new(vec![], vec![]),
-            move |_, _, _| {
-                execution_start(*execution_timer.get());
-                Ok(())
-            },
-        );
-        config.define_host_func(
-            "bench",
-            "end",
-            FuncType::new(vec![], vec![]),
-            move |_, _, _| {
-                execution_end(*execution_timer.get());
-                Ok(())
-            },
-        );
+        linker.func_wrap("bench", "start", move || {
+            execution_start(*execution_timer.get());
+            Ok(())
+        })?;
+        linker.func_wrap("bench", "end", move || {
+            execution_end(*execution_timer.get());
+            Ok(())
+        })?;
 
-        let engine = Engine::new(&config)?;
+        wasmtime_wasi::add_to_linker(&mut linker, |cx| &mut cx.wasi)?;
+
+        #[cfg(feature = "wasi-nn")]
+        wasmtime_wasi_nn::add_to_linker(&mut linker, |cx| &mut cx.wasi_nn)?;
+
+        #[cfg(feature = "wasi-crypto")]
+        wasmtime_wasi_crypto::add_to_linker(&mut linker, |cx| &mut cx.wasi_crypto)?;
 
         Ok(Self {
-            engine,
+            linker,
             compilation_timer,
             compilation_start,
             compilation_end,
@@ -439,7 +442,7 @@ impl BenchState {
             instantiation_end,
             make_wasi_cx: Box::new(make_wasi_cx) as _,
             module: None,
-            instance: None,
+            store_and_instance: None,
         })
     }
 
@@ -450,7 +453,7 @@ impl BenchState {
         );
 
         (self.compilation_start)(self.compilation_timer);
-        let module = Module::from_binary(&self.engine, bytes)?;
+        let module = Module::from_binary(self.linker.engine(), bytes)?;
         (self.compilation_end)(self.compilation_timer);
 
         self.module = Some(module);
@@ -463,60 +466,34 @@ impl BenchState {
             .as_ref()
             .expect("compile the module before instantiating it");
 
-        let wasi_cx = (self.make_wasi_cx)().context("failed to create a WASI context")?;
+        let host = HostState {
+            wasi: (self.make_wasi_cx)().context("failed to create a WASI context")?,
+            #[cfg(feature = "wasi-nn")]
+            wasi_nn: wasmtime_wasi_nn::WasiNnCtx::new()?,
+            #[cfg(feature = "wasi-crypto")]
+            wasi_crypto: wasmtime_wasi_nn::WasiCryptoCtx::new(),
+        };
 
         // NB: Start measuring instantiation time *after* we've created the WASI
         // context, since that needs to do file I/O to setup
         // stdin/stdout/stderr.
         (self.instantiation_start)(self.instantiation_timer);
-
-        let store = Store::new(&self.engine);
-        assert!(Wasi::set_context(&store, wasi_cx).is_ok());
-
-        let linker = Linker::new(&store);
-
-        #[cfg(feature = "wasi-nn")]
-        {
-            use std::cell::RefCell;
-            use std::rc::Rc;
-            use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
-
-            let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
-            wasi_nn.add_to_linker(&mut linker)?;
-        }
-
-        #[cfg(feature = "wasi-crypto")]
-        {
-            use std::cell::RefCell;
-            use std::rc::Rc;
-            use wasmtime_wasi_crypto::{
-                WasiCryptoAsymmetricCommon, WasiCryptoCommon, WasiCryptoCtx, WasiCryptoSignatures,
-                WasiCryptoSymmetric,
-            };
-
-            let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
-            WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-            WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone())
-                .add_to_linker(linker)?;
-            WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-            WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
-        }
-
-        let instance = linker.instantiate(&module)?;
+        let mut store = Store::new(self.linker.engine(), host);
+        let instance = self.linker.instantiate(&mut store, &module)?;
         (self.instantiation_end)(self.instantiation_timer);
 
-        self.instance = Some(instance);
+        self.store_and_instance = Some((store, instance));
         Ok(())
     }
 
     fn execute(&mut self) -> Result<()> {
-        let instance = self
-            .instance
+        let (mut store, instance) = self
+            .store_and_instance
             .take()
             .expect("instantiate the module before executing it");
 
-        let start_func = instance.get_typed_func::<(), ()>("_start")?;
-        match start_func.call(()) {
+        let start_func = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+        match start_func.call(&mut store, ()) {
             Ok(_) => Ok(()),
             Err(trap) => {
                 // Since _start will likely return by using the system `exit` call, we must

@@ -130,7 +130,7 @@ fn reset_guard_page(addr: *mut u8, len: usize) -> Result<()> {
 }
 
 /// Represents a location of a page fault within monitored regions of memory.
-enum FaultLocation<'a> {
+enum FaultLocation {
     /// The address location is in a WebAssembly linear memory page.
     /// The fault handler will copy the pages from initialization data if necessary.
     MemoryPage {
@@ -139,7 +139,7 @@ enum FaultLocation<'a> {
         /// The length of the page being accessed.
         len: usize,
         /// The instance related to the memory page that was accessed.
-        instance: &'a Instance,
+        instance: *mut Instance,
         /// The index of the memory that was accessed.
         memory_index: DefinedMemoryIndex,
         /// The Wasm page index to initialize if the access was not a guard page.
@@ -194,9 +194,9 @@ impl FaultLocator {
     ///
     /// If the assumption holds true, accessing the instance data from the handler thread
     /// should, in theory, be safe.
-    unsafe fn get_instance(&self, index: usize) -> &Instance {
+    unsafe fn get_instance(&self, index: usize) -> *mut Instance {
         debug_assert!(index < self.max_instances);
-        &*((self.instances_start + (index * self.instance_size)) as *const Instance)
+        (self.instances_start + (index * self.instance_size)) as *mut Instance
     }
 
     unsafe fn locate(&self, addr: usize) -> Option<FaultLocation> {
@@ -208,7 +208,7 @@ impl FaultLocator {
             let page_index = (addr - memory_start) / WASM_PAGE_SIZE;
             let instance = self.get_instance(index / self.max_memories);
 
-            let init_page_index = instance.memories.get(memory_index).and_then(|m| {
+            let init_page_index = (*instance).memories.get(memory_index).and_then(|m| {
                 if page_index < m.size() as usize {
                     Some(page_index)
                 } else {
@@ -310,13 +310,13 @@ unsafe fn handle_page_fault(
 
             match page_index {
                 Some(page_index) => {
-                    initialize_wasm_page(&uffd, instance, page_addr, memory_index, page_index)?;
+                    initialize_wasm_page(&uffd, &*instance, page_addr, memory_index, page_index)?;
                 }
                 None => {
                     log::trace!("out of bounds memory access at {:p}", addr);
 
                     // Record the guard page fault so the page protection level can be reset later
-                    instance.memories[memory_index].record_guard_page_fault(
+                    (*instance).memories[memory_index].record_guard_page_fault(
                         page_addr,
                         len,
                         reset_guard_page,
@@ -436,7 +436,6 @@ mod test {
         Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
         PoolingAllocationStrategy, VMSharedSignatureIndex,
     };
-    use std::ptr;
     use std::sync::Arc;
     use wasmtime_environ::{entity::PrimaryMap, wasm::Memory, MemoryPlan, MemoryStyle, Module};
 
@@ -521,10 +520,7 @@ mod test {
                                 },
                                 shared_signatures: VMSharedSignatureIndex::default().into(),
                                 host_state: Box::new(()),
-                                interrupts: ptr::null(),
-                                externref_activations_table: ptr::null_mut(),
-                                module_info_lookup: None,
-                                limiter: None,
+                                store: None,
                             },
                         )
                         .expect("instance should allocate"),

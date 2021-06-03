@@ -31,7 +31,7 @@ mod convert_just_errno {
     /// When the `errors` mapping in witx is non-empty, we need to impl the
     /// types::UserErrorConversion trait that wiggle generates from that mapping.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&self, e: RichError) -> Result<types::Errno, wiggle::Trap> {
+        fn errno_from_rich_error(&mut self, e: RichError) -> Result<types::Errno, wiggle::Trap> {
             // WasiCtx can collect a Vec<String> log so we can test this. We're
             // logging the Display impl that `thiserror::Error` provides us.
             self.log.borrow_mut().push(e.to_string());
@@ -44,7 +44,7 @@ mod convert_just_errno {
     }
 
     impl<'a> one_error_conversion::OneErrorConversion for WasiCtx<'a> {
-        fn foo(&self, strike: u32) -> Result<(), RichError> {
+        fn foo(&mut self, strike: u32) -> Result<(), RichError> {
             // We use the argument to this function to exercise all of the
             // possible error cases we could hit here
             match strike {
@@ -57,12 +57,12 @@ mod convert_just_errno {
 
     #[test]
     fn one_error_conversion_test() {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         // Exercise each of the branches in `foo`.
         // Start with the success case:
-        let r0 = one_error_conversion::foo(&ctx, &host_memory, 0);
+        let r0 = one_error_conversion::foo(&mut ctx, &host_memory, 0);
         assert_eq!(
             r0,
             Ok(types::Errno::Ok as i32),
@@ -71,7 +71,7 @@ mod convert_just_errno {
         assert!(ctx.log.borrow().is_empty(), "No error log for strike=0");
 
         // First error case:
-        let r1 = one_error_conversion::foo(&ctx, &host_memory, 1);
+        let r1 = one_error_conversion::foo(&mut ctx, &host_memory, 1);
         assert_eq!(
             r1,
             Ok(types::Errno::PicketLine as i32),
@@ -84,7 +84,7 @@ mod convert_just_errno {
         );
 
         // Second error case:
-        let r2 = one_error_conversion::foo(&ctx, &host_memory, 2);
+        let r2 = one_error_conversion::foo(&mut ctx, &host_memory, 2);
         assert_eq!(
             r2,
             Ok(types::Errno::InvalidArg as i32),
@@ -140,11 +140,11 @@ mod convert_multiple_error_types {
     // each member of the `errors` mapping.
     // Bodies elided.
     impl<'a> types::UserErrorConversion for WasiCtx<'a> {
-        fn errno_from_rich_error(&self, _e: RichError) -> Result<types::Errno, wiggle::Trap> {
+        fn errno_from_rich_error(&mut self, _e: RichError) -> Result<types::Errno, wiggle::Trap> {
             unimplemented!()
         }
         fn errno2_from_another_rich_error(
-            &self,
+            &mut self,
             _e: AnotherRichError,
         ) -> Result<types::Errno2, wiggle::Trap> {
             unimplemented!()
@@ -153,13 +153,13 @@ mod convert_multiple_error_types {
 
     // And here's the witx module trait impl, bodies elided
     impl<'a> two_error_conversions::TwoErrorConversions for WasiCtx<'a> {
-        fn foo(&self, _: u32) -> Result<(), RichError> {
+        fn foo(&mut self, _: u32) -> Result<(), RichError> {
             unimplemented!()
         }
-        fn bar(&self, _: u32) -> Result<(), AnotherRichError> {
+        fn bar(&mut self, _: u32) -> Result<(), AnotherRichError> {
             unimplemented!()
         }
-        fn baz(&self, _: u32) -> wiggle::Trap {
+        fn baz(&mut self, _: u32) -> wiggle::Trap {
             unimplemented!()
         }
     }

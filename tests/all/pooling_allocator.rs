@@ -21,8 +21,8 @@ fn successful_instantiation() -> Result<()> {
     let module = Module::new(&engine, r#"(module (memory 1) (table 10 funcref))"#)?;
 
     // Module should instantiate
-    let store = Store::new(&engine);
-    Instance::new(&store, &module, &[])?;
+    let mut store = Store::new(&engine, ());
+    Instance::new(&mut store, &module, &[])?;
 
     Ok(())
 }
@@ -61,30 +61,36 @@ fn memory_limit() -> Result<()> {
 
     // Instantiate the module and grow the memory via the `f` function
     {
-        let store = Store::new(&engine);
-        let instance = Instance::new(&store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32>("f")?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
 
-        assert_eq!(f.call(()).expect("function should not trap"), 0);
-        assert_eq!(f.call(()).expect("function should not trap"), 1);
-        assert_eq!(f.call(()).expect("function should not trap"), 2);
-        assert_eq!(f.call(()).expect("function should not trap"), -1);
-        assert_eq!(f.call(()).expect("function should not trap"), -1);
+        assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 0);
+        assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 1);
+        assert_eq!(f.call(&mut store, ()).expect("function should not trap"), 2);
+        assert_eq!(
+            f.call(&mut store, ()).expect("function should not trap"),
+            -1
+        );
+        assert_eq!(
+            f.call(&mut store, ()).expect("function should not trap"),
+            -1
+        );
     }
 
     // Instantiate the module and grow the memory via the Wasmtime API
-    let store = Store::new(&engine);
-    let instance = Instance::new(&store, &module, &[])?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
 
-    let memory = instance.get_memory("m").unwrap();
-    assert_eq!(memory.size(), 0);
-    assert_eq!(memory.grow(1).expect("memory should grow"), 0);
-    assert_eq!(memory.size(), 1);
-    assert_eq!(memory.grow(1).expect("memory should grow"), 1);
-    assert_eq!(memory.size(), 2);
-    assert_eq!(memory.grow(1).expect("memory should grow"), 2);
-    assert_eq!(memory.size(), 3);
-    assert!(memory.grow(1).is_err());
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+    assert_eq!(memory.size(&store), 0);
+    assert_eq!(memory.grow(&mut store, 1).expect("memory should grow"), 0);
+    assert_eq!(memory.size(&store), 1);
+    assert_eq!(memory.grow(&mut store, 1).expect("memory should grow"), 1);
+    assert_eq!(memory.size(&store), 2);
+    assert_eq!(memory.grow(&mut store, 1).expect("memory should grow"), 2);
+    assert_eq!(memory.size(&store), 3);
+    assert!(memory.grow(&mut store, 1).is_err());
 
     Ok(())
 }
@@ -112,17 +118,15 @@ fn memory_init() -> Result<()> {
         r#"(module (memory (export "m") 2) (data (i32.const 65530) "this data spans multiple pages") (data (i32.const 10) "hello world"))"#,
     )?;
 
-    let store = Store::new(&engine);
-    let instance = Instance::new(&store, &module, &[])?;
-    let memory = instance.get_memory("m").unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
 
-    unsafe {
-        assert_eq!(
-            &memory.data_unchecked()[65530..65560],
-            b"this data spans multiple pages"
-        );
-        assert_eq!(&memory.data_unchecked()[10..21], b"hello world");
-    }
+    assert_eq!(
+        &memory.data(&store)[65530..65560],
+        b"this data spans multiple pages"
+    );
+    assert_eq!(&memory.data(&store)[10..21], b"hello world");
 
     Ok(())
 }
@@ -152,30 +156,31 @@ fn memory_guard_page_trap() -> Result<()> {
 
     // Instantiate the module and check for out of bounds trap
     for _ in 0..10 {
-        let store = Store::new(&engine);
-        let instance = Instance::new(&store, &module, &[])?;
-        let m = instance.get_memory("m").unwrap();
-        let f = instance.get_typed_func::<i32, ()>("f")?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let m = instance.get_memory(&mut store, "m").unwrap();
+        let f = instance.get_typed_func::<i32, (), _>(&mut store, "f")?;
 
-        let trap = f.call(0).expect_err("function should trap");
+        let trap = f.call(&mut store, 0).expect_err("function should trap");
         assert!(trap.to_string().contains("out of bounds"));
 
-        let trap = f.call(1).expect_err("function should trap");
+        let trap = f.call(&mut store, 1).expect_err("function should trap");
         assert!(trap.to_string().contains("out of bounds"));
 
-        m.grow(1).expect("memory should grow");
-        f.call(0).expect("function should not trap");
+        m.grow(&mut store, 1).expect("memory should grow");
+        f.call(&mut store, 0).expect("function should not trap");
 
-        let trap = f.call(65536).expect_err("function should trap");
+        let trap = f.call(&mut store, 65536).expect_err("function should trap");
         assert!(trap.to_string().contains("out of bounds"));
 
-        let trap = f.call(65537).expect_err("function should trap");
+        let trap = f.call(&mut store, 65537).expect_err("function should trap");
         assert!(trap.to_string().contains("out of bounds"));
 
-        m.grow(1).expect("memory should grow");
-        f.call(65536).expect("function should not trap");
+        m.grow(&mut store, 1).expect("memory should grow");
+        f.call(&mut store, 65536).expect("function should not trap");
 
-        m.grow(1).expect_err("memory should be at the limit");
+        m.grow(&mut store, 1)
+            .expect_err("memory should be at the limit");
     }
 
     Ok(())
@@ -204,20 +209,20 @@ fn memory_zeroed() -> Result<()> {
 
     // Instantiate the module repeatedly after writing data to the entire memory
     for _ in 0..10 {
-        let store = Store::new(&engine);
-        let instance = Instance::new(&store, &module, &[])?;
-        let memory = instance.get_memory("m").unwrap();
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let memory = instance.get_memory(&mut store, "m").unwrap();
 
-        assert_eq!(memory.size(), 1);
-        assert_eq!(memory.data_size(), 65536);
+        assert_eq!(memory.size(&store,), 1);
+        assert_eq!(memory.data_size(&store), 65536);
 
-        let ptr = memory.data_ptr();
+        let ptr = memory.data_mut(&mut store).as_mut_ptr();
 
         unsafe {
             for i in 0..8192 {
                 assert_eq!(*ptr.cast::<u64>().offset(i), 0);
             }
-            std::ptr::write_bytes(ptr, 0xFE, memory.data_size());
+            std::ptr::write_bytes(ptr, 0xFE, memory.data_size(&store));
         }
     }
 
@@ -259,36 +264,45 @@ fn table_limit() -> Result<()> {
 
     // Instantiate the module and grow the table via the `f` function
     {
-        let store = Store::new(&engine);
-        let instance = Instance::new(&store, &module, &[])?;
-        let f = instance.get_typed_func::<(), i32>("f")?;
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let f = instance.get_typed_func::<(), i32, _>(&mut store, "f")?;
 
         for i in 0..TABLE_ELEMENTS {
-            assert_eq!(f.call(()).expect("function should not trap"), i as i32);
+            assert_eq!(
+                f.call(&mut store, ()).expect("function should not trap"),
+                i as i32
+            );
         }
 
-        assert_eq!(f.call(()).expect("function should not trap"), -1);
-        assert_eq!(f.call(()).expect("function should not trap"), -1);
+        assert_eq!(
+            f.call(&mut store, ()).expect("function should not trap"),
+            -1
+        );
+        assert_eq!(
+            f.call(&mut store, ()).expect("function should not trap"),
+            -1
+        );
     }
 
     // Instantiate the module and grow the table via the Wasmtime API
-    let store = Store::new(&engine);
-    let instance = Instance::new(&store, &module, &[])?;
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
 
-    let table = instance.get_table("t").unwrap();
+    let table = instance.get_table(&mut store, "t").unwrap();
 
     for i in 0..TABLE_ELEMENTS {
-        assert_eq!(table.size(), i);
+        assert_eq!(table.size(&store), i);
         assert_eq!(
             table
-                .grow(1, Val::FuncRef(None))
+                .grow(&mut store, 1, Val::FuncRef(None))
                 .expect("table should grow"),
             i
         );
     }
 
-    assert_eq!(table.size(), TABLE_ELEMENTS);
-    assert!(table.grow(1, Val::FuncRef(None)).is_err());
+    assert_eq!(table.size(&store), TABLE_ELEMENTS);
+    assert!(table.grow(&mut store, 1, Val::FuncRef(None)).is_err());
 
     Ok(())
 }
@@ -316,22 +330,22 @@ fn table_init() -> Result<()> {
         r#"(module (table (export "t") 6 funcref) (elem (i32.const 1) 1 2 3 4) (elem (i32.const 0) 0) (func) (func (param i32)) (func (param i32 i32)) (func (param i32 i32 i32)) (func (param i32 i32 i32 i32)))"#,
     )?;
 
-    let store = Store::new(&engine);
-    let instance = Instance::new(&store, &module, &[])?;
-    let table = instance.get_table("t").unwrap();
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let table = instance.get_table(&mut store, "t").unwrap();
 
     for i in 0..5 {
-        let v = table.get(i).expect("table should have entry");
+        let v = table.get(&mut store, i).expect("table should have entry");
         let f = v
             .funcref()
             .expect("expected funcref")
             .expect("expected non-null value");
-        assert_eq!(f.ty().params().len(), i as usize);
+        assert_eq!(f.ty(&store).params().len(), i as usize);
     }
 
     assert!(
         table
-            .get(5)
+            .get(&mut store, 5)
             .expect("table should have entry")
             .funcref()
             .expect("expected funcref")
@@ -365,19 +379,21 @@ fn table_zeroed() -> Result<()> {
 
     // Instantiate the module repeatedly after filling table elements
     for _ in 0..10 {
-        let store = Store::new(&engine);
-        let instance = Instance::new(&store, &module, &[])?;
-        let table = instance.get_table("t").unwrap();
-        let f = Func::wrap(&store, || {});
+        let mut store = Store::new(&engine, ());
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let table = instance.get_table(&mut store, "t").unwrap();
+        let f = Func::wrap(&mut store, || {});
 
-        assert_eq!(table.size(), 10);
+        assert_eq!(table.size(&store), 10);
 
         for i in 0..10 {
-            match table.get(i).unwrap() {
+            match table.get(&mut store, i).unwrap() {
                 Val::FuncRef(r) => assert!(r.is_none()),
                 _ => panic!("expected a funcref"),
             }
-            table.set(i, Val::FuncRef(Some(f.clone()))).unwrap();
+            table
+                .set(&mut store, i, Val::FuncRef(Some(f.clone())))
+                .unwrap();
         }
     }
 
@@ -406,13 +422,13 @@ fn instantiation_limit() -> Result<()> {
 
     // Instantiate to the limit
     {
-        let store = Store::new(&engine);
+        let mut store = Store::new(&engine, ());
 
         for _ in 0..INSTANCE_LIMIT {
-            Instance::new(&store, &module, &[])?;
+            Instance::new(&mut store, &module, &[])?;
         }
 
-        match Instance::new(&store, &module, &[]) {
+        match Instance::new(&mut store, &module, &[]) {
             Ok(_) => panic!("instantiation should fail"),
             Err(e) => assert_eq!(
                 e.to_string(),
@@ -426,10 +442,10 @@ fn instantiation_limit() -> Result<()> {
 
     // With the above store dropped, ensure instantiations can be made
 
-    let store = Store::new(&engine);
+    let mut store = Store::new(&engine, ());
 
     for _ in 0..INSTANCE_LIMIT {
-        Instance::new(&store, &module, &[])?;
+        Instance::new(&mut store, &module, &[])?;
     }
 
     Ok(())

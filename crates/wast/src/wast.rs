@@ -36,11 +36,8 @@ pub struct WastContext {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<Instance>,
-    // FIXME(#1479) this is only needed to retain correct trap information after
-    // we've dropped previous `Instance` values.
-    modules: Vec<Module>,
-    linker: Linker,
-    store: Store,
+    linker: Linker<()>,
+    store: Store<()>,
 }
 
 enum Outcome<T = Vec<Val>> {
@@ -59,36 +56,37 @@ impl<T> Outcome<T> {
 
 impl WastContext {
     /// Construct a new instance of `WastContext`.
-    pub fn new(store: Store) -> Self {
+    pub fn new(store: Store<()>) -> Self {
         // Spec tests will redefine the same module/name sometimes, so we need
         // to allow shadowing in the linker which picks the most recent
         // definition as what to link when linking.
-        let mut linker = Linker::new(&store);
+        let mut linker = Linker::new(store.engine());
         linker.allow_shadowing(true);
         Self {
             current: None,
             linker,
             store,
-            modules: Vec::new(),
         }
     }
 
-    fn get_export(&self, module: Option<&str>, name: &str) -> Result<Extern> {
+    fn get_export(&mut self, module: Option<&str>, name: &str) -> Result<Extern> {
         match module {
-            Some(module) => self.linker.get_one_by_name(module, Some(name)),
+            Some(module) => self
+                .linker
+                .get(&mut self.store, module, Some(name))
+                .ok_or_else(|| anyhow!("no item named `{}::{}` found", module, name)),
             None => self
                 .current
                 .as_ref()
                 .ok_or_else(|| anyhow!("no previous instance found"))?
-                .get_export(name)
+                .get_export(&mut self.store, name)
                 .ok_or_else(|| anyhow!("no item named `{}` found", name)),
         }
     }
 
     fn instantiate(&mut self, module: &[u8]) -> Result<Outcome<Instance>> {
         let module = Module::new(self.store.engine(), module)?;
-        self.modules.push(module.clone());
-        let instance = match self.linker.instantiate(&module) {
+        let instance = match self.linker.instantiate(&mut self.store, &module) {
             Ok(i) => i,
             Err(e) => return e.downcast::<Trap>().map(Outcome::Trap),
         };
@@ -97,7 +95,7 @@ impl WastContext {
 
     /// Register "spectest" which is used by the spec testsuite.
     pub fn register_spectest(&mut self) -> Result<()> {
-        link_spectest(&mut self.linker)?;
+        link_spectest(&mut self.linker, &mut self.store)?;
         Ok(())
     }
 
@@ -133,7 +131,7 @@ impl WastContext {
             Outcome::Trap(e) => return Err(e).context("instantiation failed"),
         };
         if let Some(name) = instance_name {
-            self.linker.instance(name, &instance)?;
+            self.linker.instance(&mut self.store, name, instance)?;
         }
         self.current = Some(instance);
         Ok(())
@@ -142,13 +140,13 @@ impl WastContext {
     /// Register an instance to make it available for performing actions.
     fn register(&mut self, name: Option<&str>, as_name: &str) -> Result<()> {
         match name {
-            Some(name) => self.linker.alias(name, as_name),
+            Some(name) => self.linker.alias_module(name, as_name),
             None => {
-                let current = self
+                let current = *self
                     .current
                     .as_ref()
                     .ok_or(anyhow!("no previous instance"))?;
-                self.linker.instance(as_name, current)?;
+                self.linker.instance(&mut self.store, as_name, current)?;
                 Ok(())
             }
         }
@@ -165,7 +163,7 @@ impl WastContext {
             .get_export(instance_name, field)?
             .into_func()
             .ok_or_else(|| anyhow!("no function named `{}`", field))?;
-        Ok(match func.call(args) {
+        Ok(match func.call(&mut self.store, args) {
             Ok(result) => Outcome::Ok(result.into()),
             Err(e) => Outcome::Trap(e.downcast()?),
         })
@@ -177,7 +175,7 @@ impl WastContext {
             .get_export(instance_name, field)?
             .into_global()
             .ok_or_else(|| anyhow!("no global named `{}`", field))?;
-        Ok(Outcome::Ok(vec![global.get()]))
+        Ok(Outcome::Ok(vec![global.get(&mut self.store)]))
     }
 
     fn assert_return(&self, result: Outcome, results: &[wast::AssertExpression]) -> Result<()> {

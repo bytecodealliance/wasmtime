@@ -1,31 +1,19 @@
 use super::ref_types_module;
-use std::cell::Cell;
-use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
+use std::sync::Arc;
 use wasmtime::*;
 
-struct SetFlagOnDrop(Rc<Cell<bool>>);
+struct SetFlagOnDrop(Arc<AtomicBool>);
 
 impl Drop for SetFlagOnDrop {
     fn drop(&mut self) {
-        self.0.set(true);
-    }
-}
-
-struct GcOnDrop {
-    store: Store,
-    gc_count: Rc<Cell<usize>>,
-}
-
-impl Drop for GcOnDrop {
-    fn drop(&mut self) {
-        self.store.gc();
-        self.gc_count.set(self.gc_count.get() + 1);
+        self.0.store(true, SeqCst);
     }
 }
 
 #[test]
 fn smoke_test_gc() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
+    let (mut store, module) = ref_types_module(
         r#"
             (module
                 (import "" "" (func $do_gc))
@@ -47,18 +35,18 @@ fn smoke_test_gc() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let do_gc = Func::wrap(&store, |caller: Caller| {
+    let do_gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| {
         // Do a GC with `externref`s on the stack in Wasm frames.
-        caller.store().gc();
+        caller.gc();
     });
-    let instance = Instance::new(&store, &module, &[do_gc.into()])?;
-    let func = instance.get_func("func").unwrap();
+    let instance = Instance::new(&mut store, &module, &[do_gc.into()])?;
+    let func = instance.get_func(&mut store, "func").unwrap();
 
-    let inner_dropped = Rc::new(Cell::new(false));
+    let inner_dropped = Arc::new(AtomicBool::new(false));
     let r = ExternRef::new(SetFlagOnDrop(inner_dropped.clone()));
     {
         let args = [Val::I32(5), Val::ExternRef(Some(r.clone()))];
-        func.call(&args)?;
+        func.call(&mut store, &args)?;
     }
 
     // Still held alive by the `VMExternRefActivationsTable` (potentially in
@@ -72,14 +60,14 @@ fn smoke_test_gc() -> anyhow::Result<()> {
 
     // Dropping `r` should drop the inner `SetFlagOnDrop` value.
     drop(r);
-    assert!(inner_dropped.get());
+    assert!(inner_dropped.load(SeqCst));
 
     Ok(())
 }
 
 #[test]
 fn wasm_dropping_refs() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
+    let (mut store, module) = ref_types_module(
         r#"
             (module
                 (func (export "drop_ref") (param externref)
@@ -89,32 +77,32 @@ fn wasm_dropping_refs() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let instance = Instance::new(&store, &module, &[])?;
-    let drop_ref = instance.get_func("drop_ref").unwrap();
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let drop_ref = instance.get_func(&mut store, "drop_ref").unwrap();
 
-    let num_refs_dropped = Rc::new(Cell::new(0));
+    let num_refs_dropped = Arc::new(AtomicUsize::new(0));
 
     // NB: 4096 is greater than the initial `VMExternRefActivationsTable`
     // capacity, so this will trigger at least one GC.
     for _ in 0..4096 {
         let r = ExternRef::new(CountDrops(num_refs_dropped.clone()));
         let args = [Val::ExternRef(Some(r))];
-        drop_ref.call(&args)?;
+        drop_ref.call(&mut store, &args)?;
     }
 
-    assert!(num_refs_dropped.get() > 0);
+    assert!(num_refs_dropped.load(SeqCst) > 0);
 
     // And after doing a final GC, all the refs should have been dropped.
     store.gc();
-    assert_eq!(num_refs_dropped.get(), 4096);
+    assert_eq!(num_refs_dropped.load(SeqCst), 4096);
 
     return Ok(());
 
-    struct CountDrops(Rc<Cell<usize>>);
+    struct CountDrops(Arc<AtomicUsize>);
 
     impl Drop for CountDrops {
         fn drop(&mut self) {
-            self.0.set(self.0.get() + 1);
+            self.0.fetch_add(1, SeqCst);
         }
     }
 }
@@ -156,54 +144,53 @@ fn many_live_refs() -> anyhow::Result<()> {
         ",
     );
 
-    let (store, module) = ref_types_module(&wat)?;
+    let (mut store, module) = ref_types_module(&wat)?;
 
-    let live_refs = Rc::new(Cell::new(0));
+    let live_refs = Arc::new(AtomicUsize::new(0));
 
-    let make_ref = Func::wrap(&store, {
+    let make_ref = Func::wrap(&mut store, {
         let live_refs = live_refs.clone();
         move || Some(ExternRef::new(CountLiveRefs::new(live_refs.clone())))
     });
 
-    let observe_ref = Func::wrap(&store, |r: Option<ExternRef>| {
+    let observe_ref = Func::wrap(&mut store, |r: Option<ExternRef>| {
         let r = r.unwrap();
         let r = r.data().downcast_ref::<CountLiveRefs>().unwrap();
-        assert!(r.live_refs.get() > 0);
+        assert!(r.live_refs.load(SeqCst) > 0);
     });
 
-    let instance = Instance::new(&store, &module, &[make_ref.into(), observe_ref.into()])?;
-    let many_live_refs = instance.get_func("many_live_refs").unwrap();
+    let instance = Instance::new(&mut store, &module, &[make_ref.into(), observe_ref.into()])?;
+    let many_live_refs = instance.get_func(&mut store, "many_live_refs").unwrap();
 
-    many_live_refs.call(&[])?;
+    many_live_refs.call(&mut store, &[])?;
 
     store.gc();
-    assert_eq!(live_refs.get(), 0);
+    assert_eq!(live_refs.load(SeqCst), 0);
 
     return Ok(());
 
     struct CountLiveRefs {
-        live_refs: Rc<Cell<usize>>,
+        live_refs: Arc<AtomicUsize>,
     }
 
     impl CountLiveRefs {
-        fn new(live_refs: Rc<Cell<usize>>) -> Self {
-            let live = live_refs.get();
-            live_refs.set(live + 1);
+        fn new(live_refs: Arc<AtomicUsize>) -> Self {
+            live_refs.fetch_add(1, SeqCst);
             Self { live_refs }
         }
     }
 
     impl Drop for CountLiveRefs {
         fn drop(&mut self) {
-            let live = self.live_refs.get();
-            self.live_refs.set(live - 1);
+            self.live_refs.fetch_sub(1, SeqCst);
         }
     }
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
 fn drop_externref_via_table_set() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
+    let (mut store, module) = ref_types_module(
         r#"
             (module
                 (table $t 1 externref)
@@ -215,373 +202,218 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
         "#,
     )?;
 
-    let instance = Instance::new(&store, &module, &[])?;
-    let table_set = instance.get_func("table-set").unwrap();
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let table_set = instance.get_func(&mut store, "table-set").unwrap();
 
-    let foo_is_dropped = Rc::new(Cell::new(false));
-    let bar_is_dropped = Rc::new(Cell::new(false));
+    let foo_is_dropped = Arc::new(AtomicBool::new(false));
+    let bar_is_dropped = Arc::new(AtomicBool::new(false));
 
     let foo = ExternRef::new(SetFlagOnDrop(foo_is_dropped.clone()));
     let bar = ExternRef::new(SetFlagOnDrop(bar_is_dropped.clone()));
 
     {
         let args = vec![Val::ExternRef(Some(foo))];
-        table_set.call(&args)?;
+        table_set.call(&mut store, &args)?;
     }
     store.gc();
-    assert!(!foo_is_dropped.get());
-    assert!(!bar_is_dropped.get());
+    assert!(!foo_is_dropped.load(SeqCst));
+    assert!(!bar_is_dropped.load(SeqCst));
 
     {
         let args = vec![Val::ExternRef(Some(bar))];
-        table_set.call(&args)?;
+        table_set.call(&mut store, &args)?;
     }
     store.gc();
-    assert!(foo_is_dropped.get());
-    assert!(!bar_is_dropped.get());
+    assert!(foo_is_dropped.load(SeqCst));
+    assert!(!bar_is_dropped.load(SeqCst));
 
-    table_set.call(&[Val::ExternRef(None)])?;
-    assert!(foo_is_dropped.get());
-    assert!(bar_is_dropped.get());
+    table_set.call(&mut store, &[Val::ExternRef(None)])?;
+    assert!(foo_is_dropped.load(SeqCst));
+    assert!(bar_is_dropped.load(SeqCst));
 
     Ok(())
 }
 
 #[test]
-fn gc_in_externref_dtor() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
-        r#"
-            (module
-                (table $t 1 externref)
-
-                (func (export "table-set") (param externref)
-                  (table.set $t (i32.const 0) (local.get 0))
-                )
-            )
-        "#,
-    )?;
-
-    let instance = Instance::new(&store, &module, &[])?;
-    let table_set = instance.get_func("table-set").unwrap();
-
-    let gc_count = Rc::new(Cell::new(0));
-
-    // Put a `GcOnDrop` into the table.
-    {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(GcOnDrop {
-            store: store.clone(),
-            gc_count: gc_count.clone(),
-        })))];
-        table_set.call(&args)?;
-    }
-
-    // Remove the `GcOnDrop` from the `VMExternRefActivationsTable`.
-    store.gc();
-
-    // Overwrite the `GcOnDrop` table element, causing it to be dropped, and
-    // triggering a GC.
-    table_set.call(&[Val::ExternRef(None)])?;
-    assert_eq!(gc_count.get(), 1);
-
-    Ok(())
-}
-
-#[test]
-fn touch_own_table_element_in_externref_dtor() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
-        r#"
-            (module
-                (table $t (export "table") 1 externref)
-
-                (func (export "table-set") (param externref)
-                  (table.set $t (i32.const 0) (local.get 0))
-                )
-            )
-        "#,
-    )?;
-
-    let instance = Instance::new(&store, &module, &[])?;
-    let table = instance.get_table("table").unwrap();
-    let table_set = instance.get_func("table-set").unwrap();
-
-    let touched = Rc::new(Cell::new(false));
-
-    {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(TouchTableOnDrop {
-            table,
-            touched: touched.clone(),
-        })))];
-        table_set.call(&args)?;
-    }
-
-    // Remove the `TouchTableOnDrop` from the `VMExternRefActivationsTable`.
-    store.gc();
-
-    table_set.call(&[Val::ExternRef(Some(ExternRef::new("hello".to_string())))])?;
-    assert!(touched.get());
+fn global_drops_externref() -> anyhow::Result<()> {
+    test_engine(&Engine::default())?;
+    test_engine(&Engine::new(
+        Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
+    )?)?;
 
     return Ok(());
 
-    struct TouchTableOnDrop {
-        table: Table,
-        touched: Rc<Cell<bool>>,
-    }
+    fn test_engine(engine: &Engine) -> anyhow::Result<()> {
+        let mut store = Store::new(&engine, ());
+        let flag = Arc::new(AtomicBool::new(false));
+        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        Global::new(
+            &mut store,
+            GlobalType::new(ValType::ExternRef, Mutability::Const),
+            externref.into(),
+        )?;
+        drop(store);
+        assert!(flag.load(SeqCst));
 
-    impl Drop for TouchTableOnDrop {
-        fn drop(&mut self) {
-            // From the `Drop` implementation, we see the new table element, not
-            // `self`.
-            let elem = self.table.get(0).unwrap().unwrap_externref().unwrap();
-            assert!(elem.data().is::<String>());
-            assert_eq!(elem.data().downcast_ref::<String>().unwrap(), "hello");
-            self.touched.set(true);
-        }
-    }
-}
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(
+            &engine,
+            r#"
+                (module
+                    (global (mut externref) (ref.null extern))
 
-#[test]
-fn gc_during_gc_when_passing_refs_into_wasm() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
-        r#"
-            (module
-                (table $t 1 externref)
-                (func (export "f") (param externref)
-                  (table.set $t (i32.const 0) (local.get 0))
-                )
-            )
-        "#,
-    )?;
-
-    let instance = Instance::new(&store, &module, &[])?;
-    let f = instance.get_func("f").unwrap();
-
-    let gc_count = Rc::new(Cell::new(0));
-
-    for _ in 0..1024 {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(GcOnDrop {
-            store: store.clone(),
-            gc_count: gc_count.clone(),
-        })))];
-        f.call(&args)?;
-    }
-
-    f.call(&[Val::ExternRef(None)])?;
-    store.gc();
-    assert_eq!(gc_count.get(), 1024);
-
-    Ok(())
-}
-
-#[test]
-fn gc_during_gc_from_many_table_gets() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
-        r#"
-            (module
-                (import "" "" (func $observe_ref (param externref)))
-                (table $t 1 externref)
-                (func (export "init") (param externref)
-                    (table.set $t (i32.const 0) (local.get 0))
-                )
-                (func (export "run") (param i32)
-                    (loop $continue
-                        (if (i32.eqz (local.get 0)) (return))
-                        (call $observe_ref (table.get $t (i32.const 0)))
-                        (local.set 0 (i32.sub (local.get 0) (i32.const 1)))
-                        (br $continue)
+                    (func (export "run") (param externref)
+                        local.get 0
+                        global.set 0
                     )
                 )
+            "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let run = instance.get_typed_func::<Option<ExternRef>, (), _>(&mut store, "run")?;
+        let flag = Arc::new(AtomicBool::new(false));
+        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        run.call(&mut store, Some(externref))?;
+        drop(store);
+        assert!(flag.load(SeqCst));
+        Ok(())
+    }
+}
+
+#[test]
+#[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
+fn table_drops_externref() -> anyhow::Result<()> {
+    test_engine(&Engine::default())?;
+    test_engine(&Engine::new(
+        Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
+    )?)?;
+
+    return Ok(());
+
+    fn test_engine(engine: &Engine) -> anyhow::Result<()> {
+        let mut store = Store::new(&engine, ());
+        let flag = Arc::new(AtomicBool::new(false));
+        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        Table::new(
+            &mut store,
+            TableType::new(ValType::ExternRef, Limits::new(1, None)),
+            externref.into(),
+        )?;
+        drop(store);
+        assert!(flag.load(SeqCst));
+
+        let mut store = Store::new(&engine, ());
+        let module = Module::new(
+            &engine,
+            r#"
+            (module
+                (table 1 externref)
+
+                (func (export "run") (param externref)
+                    i32.const 0
+                    local.get 0
+                    table.set 0
+                )
+            )
+        "#,
+        )?;
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let run = instance.get_typed_func::<Option<ExternRef>, (), _>(&mut store, "run")?;
+        let flag = Arc::new(AtomicBool::new(false));
+        let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+        run.call(&mut store, Some(externref))?;
+        drop(store);
+        assert!(flag.load(SeqCst));
+        Ok(())
+    }
+}
+
+#[test]
+#[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
+fn gee_i_sure_hope_refcounting_is_atomic() -> anyhow::Result<()> {
+    let mut config = Config::new();
+    config.wasm_reference_types(true);
+    config.interruptable(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (global (mut externref) (ref.null extern))
+                (table 1 externref)
+
+                (func (export "run") (param externref)
+                    local.get 0
+                    global.set 0
+                    i32.const 0
+                    local.get 0
+                    table.set 0
+                    loop
+                        global.get 0
+                        global.set 0
+
+                        i32.const 0
+                        i32.const 0
+                        table.get
+                        table.set
+
+                        local.get 0
+                        call $f
+
+                        br 0
+                    end
+                )
+
+                (func $f (param externref))
             )
         "#,
     )?;
 
-    let observe_ref = Func::wrap(&store, |_: Option<ExternRef>| {});
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run = instance.get_typed_func::<Option<ExternRef>, (), _>(&mut store, "run")?;
 
-    let instance = Instance::new(&store, &module, &[observe_ref.into()])?;
-    let init = instance.get_func("init").unwrap();
-    let run = instance.get_func("run").unwrap();
+    let flag = Arc::new(AtomicBool::new(false));
+    let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
+    let externref2 = externref.clone();
+    let handle = store.interrupt_handle()?;
 
-    let gc_count = Rc::new(Cell::new(0));
+    let child = std::thread::spawn(move || run.call(&mut store, Some(externref2)));
 
-    // Initialize the table element with a `GcOnDrop`. This also puts it in the
-    // `VMExternRefActivationsTable`.
-    {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(GcOnDrop {
-            store: store.clone(),
-            gc_count: gc_count.clone(),
-        })))];
-        init.call(&args)?;
+    for _ in 0..10000 {
+        drop(externref.clone());
     }
+    handle.interrupt();
 
-    // Overwrite the `GcOnDrop` with another reference. The `GcOnDrop` is still
-    // in the `VMExternRefActivationsTable`.
-    {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(String::from("hello"))))];
-        init.call(&args)?;
-    }
-
-    // Now call `run`, which does a bunch of `table.get`s, filling up the
-    // `VMExternRefActivationsTable`'s bump region, and eventually triggering a
-    // GC that will deallocate our `GcOnDrop` which will also trigger a nested
-    // GC.
-    run.call(&[Val::I32(1024)])?;
-
-    // We should have done our nested GC.
-    assert_eq!(gc_count.get(), 1);
+    assert!(child.join().unwrap().is_err());
+    assert!(!flag.load(SeqCst));
+    assert_eq!(externref.strong_count(), 1);
+    drop(externref);
+    assert!(flag.load(SeqCst));
 
     Ok(())
 }
 
 #[test]
-fn pass_externref_into_wasm_during_destructor_in_gc() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
+fn global_init_no_leak() -> anyhow::Result<()> {
+    let (mut store, module) = ref_types_module(
         r#"
             (module
-                (table $t 1 externref)
-
-                (func (export "f") (param externref)
-                  nop
-                )
+                (import "" "" (global externref))
+                (global externref (global.get 0))
             )
         "#,
     )?;
 
-    let instance = Instance::new(&store, &module, &[])?;
-    let f = instance.get_func("f").unwrap();
-    let r = ExternRef::new("hello");
-    let did_call = Rc::new(Cell::new(false));
-
-    // Put a `CallOnDrop` into the `VMExternRefActivationsTable`.
-    {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(CallOnDrop(
-            f.clone(),
-            r.clone(),
-            did_call.clone(),
-        ))))];
-        f.call(&args)?;
-    }
-
-    // One ref count for `r`, one for the `CallOnDrop`.
-    assert_eq!(r.strong_count(), 2);
-
-    // Do a GC, which will see that the only reference holding the `CallOnDrop`
-    // is the `VMExternRefActivationsTable`, and will drop it. Dropping it will
-    // cause it to call into `f` again.
-    store.gc();
-    assert!(did_call.get());
-
-    // The `CallOnDrop` is no longer holding onto `r`, but the
-    // `VMExternRefActivationsTable` is.
-    assert_eq!(r.strong_count(), 2);
-
-    // GC again to empty the `VMExternRefActivationsTable`. Now `r` is the only
-    // thing holding its `externref` alive.
-    store.gc();
-    assert_eq!(r.strong_count(), 1);
-
-    return Ok(());
-
-    struct CallOnDrop(Func, ExternRef, Rc<Cell<bool>>);
-
-    impl Drop for CallOnDrop {
-        fn drop(&mut self) {
-            self.0
-                .call(&[Val::ExternRef(Some(self.1.clone()))])
-                .unwrap();
-            self.2.set(true);
-        }
-    }
-}
-
-#[test]
-fn gc_on_drop_in_mutable_externref_global() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
-        r#"
-            (module
-                (global $g (mut externref) (ref.null extern))
-
-                (func (export "set-g") (param externref)
-                  (global.set $g (local.get 0))
-                )
-            )
-        "#,
+    let externref = ExternRef::new(());
+    let global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::ExternRef, Mutability::Const),
+        externref.clone().into(),
     )?;
-
-    let instance = Instance::new(&store, &module, &[])?;
-    let set_g = instance.get_func("set-g").unwrap();
-
-    let gc_count = Rc::new(Cell::new(0));
-
-    // Put a `GcOnDrop` into the global.
-    {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(GcOnDrop {
-            store: store.clone(),
-            gc_count: gc_count.clone(),
-        })))];
-        set_g.call(&args)?;
-    }
-
-    // Remove the `GcOnDrop` from the `VMExternRefActivationsTable`.
-    store.gc();
-
-    // Overwrite the `GcOnDrop` global value, causing it to be dropped, and
-    // triggering a GC.
-    assert_eq!(gc_count.get(), 0);
-    set_g.call(&[Val::ExternRef(None)])?;
-    assert_eq!(gc_count.get(), 1);
+    Instance::new(&mut store, &module, &[global.into()])?;
+    drop(store);
+    assert_eq!(externref.strong_count(), 1);
 
     Ok(())
-}
-
-#[test]
-fn touch_own_externref_global_on_drop() -> anyhow::Result<()> {
-    let (store, module) = ref_types_module(
-        r#"
-            (module
-                (global $g (export "g") (mut externref) (ref.null extern))
-
-                (func (export "set-g") (param externref)
-                  (global.set $g (local.get 0))
-                )
-            )
-        "#,
-    )?;
-
-    let instance = Instance::new(&store, &module, &[])?;
-    let g = instance.get_global("g").unwrap();
-    let set_g = instance.get_func("set-g").unwrap();
-
-    let touched = Rc::new(Cell::new(false));
-
-    {
-        let args = vec![Val::ExternRef(Some(ExternRef::new(TouchGlobalOnDrop {
-            g,
-            touched: touched.clone(),
-        })))];
-        set_g.call(&args)?;
-    }
-
-    // Remove the `TouchGlobalOnDrop` from the `VMExternRefActivationsTable`.
-    store.gc();
-
-    assert!(!touched.get());
-    set_g.call(&[Val::ExternRef(Some(ExternRef::new("hello".to_string())))])?;
-    assert!(touched.get());
-
-    return Ok(());
-
-    struct TouchGlobalOnDrop {
-        g: Global,
-        touched: Rc<Cell<bool>>,
-    }
-
-    impl Drop for TouchGlobalOnDrop {
-        fn drop(&mut self) {
-            // From the `Drop` implementation, we see the new global value, not
-            // `self`.
-            let r = self.g.get().unwrap_externref().unwrap();
-            assert!(r.data().is::<String>());
-            assert_eq!(r.data().downcast_ref::<String>().unwrap(), "hello");
-            self.touched.set(true);
-        }
-    }
 }

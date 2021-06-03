@@ -655,17 +655,6 @@ impl<'module> ExportType<'module> {
             EntityOrExtern::Extern(e) => (*e).clone(),
         }
     }
-
-    pub(crate) fn as_import<'a>(&self, module: &'a str) -> ImportType<'a>
-    where
-        'module: 'a,
-    {
-        ImportType {
-            module,
-            name: Some(self.name),
-            ty: self.ty.clone(),
-        }
-    }
 }
 
 impl<'module> fmt::Debug for ExportType<'module> {

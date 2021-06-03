@@ -23,15 +23,13 @@ use std::sync::{Arc, RwLock};
 /// A variety of `From` impls are provided so that common pipe types are easy to create. For example:
 ///
 /// ```no_run
-/// # use std::rc::Rc;
-/// # use std::cell::RefCell;
 /// use wasi_common::{pipe::ReadPipe, WasiCtx, Table};
 /// let stdin = ReadPipe::from("hello from stdin!");
 /// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
 /// let random = todo!();
 /// let clocks = todo!();
 /// let sched = todo!();
-/// let table = Rc::new(RefCell::new(Table::new()));
+/// let table = Table::new();
 /// let mut ctx = WasiCtx::new(random, clocks, sched, table);
 /// ctx.set_stdin(Box::new(stdin.clone()));
 /// ```
@@ -182,10 +180,10 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
     }
-    async fn readable(&mut self) -> Result<(), Error> {
+    async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
-    async fn writable(&mut self) -> Result<(), Error> {
+    async fn writable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
 }
@@ -193,15 +191,13 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
 /// A virtual pipe write end.
 ///
 /// ```no_run
-/// # use std::rc::Rc;
-/// # use std::cell::RefCell;
 /// use wasi_common::{pipe::WritePipe, WasiCtx, Table};
 /// let stdout = WritePipe::new_in_memory();
 /// // Brint these instances from elsewhere (e.g. wasi-cap-std-sync):
 /// let random = todo!();
 /// let clocks = todo!();
 /// let sched = todo!();
-/// let table = Rc::new(RefCell::new(Table::new()));
+/// let table = Table::new();
 /// let mut ctx = WasiCtx::new(random, clocks, sched, table);
 /// ctx.set_stdout(Box::new(stdout.clone()));
 /// // use ctx in an instance, then make sure it is dropped:
@@ -340,10 +336,10 @@ impl<W: Write + Any + Send + Sync> WasiFile for WritePipe<W> {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
     }
-    async fn readable(&mut self) -> Result<(), Error> {
+    async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
-    async fn writable(&mut self) -> Result<(), Error> {
+    async fn writable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
 }

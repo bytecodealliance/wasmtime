@@ -6,25 +6,23 @@ use crate::string_array::{StringArray, StringArrayError};
 use crate::table::Table;
 use crate::Error;
 use cap_rand::RngCore;
-use std::cell::{RefCell, RefMut};
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
 pub struct WasiCtx {
     pub args: StringArray,
     pub env: StringArray,
-    pub random: RefCell<Box<dyn RngCore>>,
+    pub random: Box<dyn RngCore + Send + Sync>,
     pub clocks: WasiClocks,
     pub sched: Box<dyn WasiSched>,
-    pub table: Rc<RefCell<Table>>,
+    pub table: Table,
 }
 
 impl WasiCtx {
     pub fn new(
-        random: RefCell<Box<dyn RngCore>>,
+        random: Box<dyn RngCore + Send + Sync>,
         clocks: WasiClocks,
         sched: Box<dyn WasiSched>,
-        table: Rc<RefCell<Table>>,
+        table: Table,
     ) -> Self {
         let mut s = WasiCtx {
             args: StringArray::new(),
@@ -40,13 +38,13 @@ impl WasiCtx {
         s
     }
 
-    pub fn insert_file(&self, fd: u32, file: Box<dyn WasiFile>, caps: FileCaps) {
+    pub fn insert_file(&mut self, fd: u32, file: Box<dyn WasiFile>, caps: FileCaps) {
         self.table()
             .insert_at(fd, Box::new(FileEntry::new(caps, file)));
     }
 
     pub fn insert_dir(
-        &self,
+        &mut self,
         fd: u32,
         dir: Box<dyn WasiDir>,
         caps: DirCaps,
@@ -59,8 +57,8 @@ impl WasiCtx {
         );
     }
 
-    pub fn table(&self) -> RefMut<Table> {
-        self.table.borrow_mut()
+    pub fn table(&mut self) -> &mut Table {
+        &mut self.table
     }
 
     pub fn push_arg(&mut self, arg: &str) -> Result<(), StringArrayError> {

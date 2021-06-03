@@ -1,11 +1,15 @@
-//! This file defines the extern "C" API, which is compatible with the
-//! [Wasm C API](https://github.com/WebAssembly/wasm-c-api).
+//! This crate is the implementation of Wasmtime's C API.
+//!
+//! This crate is not intended to be used from Rust itself, for that see the
+//! `wasmtime` crate. Otherwise this is typically compiled as a
+//! cdylib/staticlib. Documentation for this crate largely lives in the header
+//! files of the `include` directory for this crate.
+//!
+//! At a high level this crate implements the `wasm.h` API with some gymnastics,
+//! but otherwise an accompanying `wasmtime.h` API is provided which is more
+//! specific to Wasmtime and has fewer gymnastics to implement.
 
 #![allow(non_snake_case, non_camel_case_types, non_upper_case_globals)]
-#![allow(unknown_lints)]
-#![allow(improper_ctypes_definitions)]
-
-// TODO complete the C API
 
 mod config;
 mod engine;
@@ -53,18 +57,6 @@ mod wat2wasm;
 #[cfg(feature = "wat")]
 pub use crate::wat2wasm::*;
 
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_foreign_t {
-    _unused: [u8; 0],
-}
-
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasm_shared_module_t {
-    _unused: [u8; 0],
-}
-
 /// Initialize a `MaybeUninit<T>`
 ///
 /// TODO: Replace calls to this function with
@@ -73,5 +65,45 @@ pub struct wasm_shared_module_t {
 pub(crate) fn initialize<T>(dst: &mut std::mem::MaybeUninit<T>, val: T) {
     unsafe {
         std::ptr::write(dst.as_mut_ptr(), val);
+    }
+}
+
+/// Helper for running a C-defined finalizer over some data when the Rust
+/// structure is dropped.
+pub struct ForeignData {
+    data: *mut std::ffi::c_void,
+    finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
+}
+
+unsafe impl Send for ForeignData {}
+unsafe impl Sync for ForeignData {}
+
+impl Drop for ForeignData {
+    fn drop(&mut self) {
+        if let Some(f) = self.finalizer {
+            f(self.data);
+        }
+    }
+}
+
+/// Helper for creating Rust slices from C inputs.
+///
+/// This specifically disregards the `ptr` argument if the length is zero. The
+/// `ptr` in that case maybe `NULL` or invalid, and it's not valid to have a
+/// zero-length Rust slice with a `NULL` pointer.
+unsafe fn slice_from_raw_parts<'a, T>(ptr: *const T, len: usize) -> &'a [T] {
+    if len == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(ptr, len)
+    }
+}
+
+/// Same as above, but for `*_mut`
+unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a mut [T] {
+    if len == 0 {
+        &mut []
+    } else {
+        std::slice::from_raw_parts_mut(ptr, len)
     }
 }

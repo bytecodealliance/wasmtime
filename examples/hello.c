@@ -26,7 +26,14 @@ to tweak the `-lpthread` and such annotations as well as the name of the
 
 static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
-static wasm_trap_t* hello_callback(const wasm_val_vec_t* args, wasm_val_vec_t* results) {
+static wasm_trap_t* hello_callback(
+    void *env,
+    wasmtime_caller_t *caller,
+    const wasmtime_val_t *args,
+    size_t nargs,
+    wasmtime_val_t *results,
+    size_t nresults
+) {
   printf("Calling back...\n");
   printf("> Hello World!\n");
   return NULL;
@@ -42,9 +49,11 @@ int main() {
   assert(engine != NULL);
 
   // With an engine we can create a *store* which is a long-lived group of wasm
-  // modules.
-  wasm_store_t *store = wasm_store_new(engine);
+  // modules. Note that we allocate some custom data here to live in the store,
+  // but here we skip that and specify NULL.
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Read our input file, which in this case is a wasm text file.
   FILE* file = fopen("examples/hello.wat", "r");
@@ -59,25 +68,27 @@ int main() {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t wasm;
-  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
+  wasmtime_error_t *error = wasmtime_wat2wasm(wat.data, wat.size, &wasm);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Now that we've got our binary webassembly we can compile our module.
   printf("Compiling module...\n");
-  wasm_module_t *module = NULL;
-  error = wasmtime_module_new(engine, &wasm, &module);
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
   wasm_byte_vec_delete(&wasm);
   if (error != NULL)
     exit_with_error("failed to compile module", error, NULL);
 
   // Next up we need to create the function that the wasm module imports. Here
   // we'll be hooking up a thunk function to the `hello_callback` native
-  // function above.
+  // function above. Note that we can assign custom data, but we just use NULL
+  // for now).
   printf("Creating callback...\n");
   wasm_functype_t *hello_ty = wasm_functype_new_0_0();
-  wasm_func_t *hello = wasm_func_new(store, hello_ty, hello_callback);
+  wasmtime_func_t hello;
+  wasmtime_func_new(context, hello_ty, hello_callback, NULL, NULL, &hello);
 
   // With our callback function we can now instantiate the compiled module,
   // giving us an instance we can then execute exports from. Note that
@@ -85,26 +96,24 @@ int main() {
   // to handle that here too.
   printf("Instantiating module...\n");
   wasm_trap_t *trap = NULL;
-  wasm_instance_t *instance = NULL;
-  wasm_extern_t* imports[] = { wasm_func_as_extern(hello) };
-  wasm_extern_vec_t imports_vec = WASM_ARRAY_VEC(imports);
-  error = wasmtime_instance_new(store, module, &imports_vec, &instance, &trap);
-  if (instance == NULL)
+  wasmtime_instance_t instance;
+  wasmtime_extern_t import;
+  import.kind = WASMTIME_EXTERN_FUNC;
+  import.of.func = hello;
+  error = wasmtime_instance_new(context, module, &import, 1, &instance, &trap);
+  if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
 
   // Lookup our `run` export function
   printf("Extracting export...\n");
-  wasm_extern_vec_t externs;
-  wasm_instance_exports(instance, &externs);
-  assert(externs.size == 1);
-  wasm_func_t *run = wasm_extern_as_func(externs.data[0]);
-  assert(run != NULL);
+  wasmtime_extern_t run;
+  bool ok = wasmtime_instance_export_get(context, &instance, "run", 3, &run);
+  assert(ok);
+  assert(run.kind == WASMTIME_EXTERN_FUNC);
 
   // And call it!
   printf("Calling export...\n");
-  wasm_val_vec_t args_vec = WASM_EMPTY_VEC;
-  wasm_val_vec_t results_vec = WASM_EMPTY_VEC;
-  error = wasmtime_func_call(run, &args_vec, &results_vec, &trap);
+  error = wasmtime_func_call(context, &run.of.func, NULL, 0, NULL, 0, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call function", error, trap);
 
@@ -112,10 +121,8 @@ int main() {
   printf("All finished!\n");
   ret = 0;
 
-  wasm_extern_vec_delete(&externs);
-  wasm_instance_delete(instance);
-  wasm_module_delete(module);
-  wasm_store_delete(store);
+  wasmtime_module_delete(module);
+  wasmtime_store_delete(store);
   wasm_engine_delete(engine);
   return ret;
 }

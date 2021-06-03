@@ -75,16 +75,16 @@ pub fn define_module_trait(names: &Names, m: &Module, settings: &CodegenSettings
             _ => unimplemented!(),
         };
 
-        let asyncness = if settings.is_async(&m, &f) {
-            quote!(async)
-        } else {
+        let asyncness = if settings.get_async(&m, &f).is_sync() {
             quote!()
+        } else {
+            quote!(async)
         };
 
         if is_anonymous {
-            quote!(#asyncness fn #funcname(&self, #(#args),*) -> #result; )
+            quote!(#asyncness fn #funcname(&mut self, #(#args),*) -> #result; )
         } else {
-            quote!(#asyncness fn #funcname<#lifetime>(&self, #(#args),*) -> #result;)
+            quote!(#asyncness fn #funcname<#lifetime>(&mut self, #(#args),*) -> #result;)
         }
     });
 

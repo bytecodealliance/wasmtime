@@ -1,8 +1,8 @@
 #[cfg(target_os = "linux")]
 mod tests {
     use anyhow::Result;
-    use std::rc::Rc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use wasmtime::unix::StoreExt;
     use wasmtime::*;
 
@@ -41,16 +41,18 @@ mod tests {
 )
 "#;
 
-    fn invoke_export(instance: &Instance, func_name: &str) -> Result<i32> {
-        let ret = instance.get_typed_func::<(), i32>(func_name)?.call(())?;
+    fn invoke_export(store: &mut Store<()>, instance: Instance, func_name: &str) -> Result<i32> {
+        let ret = instance
+            .get_typed_func::<(), i32, _>(&mut *store, func_name)?
+            .call(store, ())?;
         Ok(ret)
     }
 
     // Locate "memory" export, get base address and size and set memory protection to PROT_NONE
-    fn set_up_memory(instance: &Instance) -> (*mut u8, usize) {
-        let mem_export = instance.get_memory("memory").unwrap();
-        let base = mem_export.data_ptr();
-        let length = mem_export.data_size();
+    fn set_up_memory(store: &mut Store<()>, instance: Instance) -> (usize, usize) {
+        let mem_export = instance.get_memory(&mut *store, "memory").unwrap();
+        let base = mem_export.data_ptr(&store);
+        let length = mem_export.data_size(&store);
 
         // So we can later trigger SIGSEGV by performing a read
         unsafe {
@@ -59,11 +61,11 @@ mod tests {
 
         println!("memory: base={:?}, length={}", base, length);
 
-        (base, length)
+        (base as usize, length)
     }
 
     fn handle_sigsegv(
-        base: *mut u8,
+        base: usize,
         length: usize,
         signum: libc::c_int,
         siginfo: *const libc::siginfo_t,
@@ -90,15 +92,15 @@ mod tests {
         }
     }
 
-    fn make_externs(store: &Store, module: &Module) -> Vec<Extern> {
+    fn make_externs(store: &mut Store<()>, module: &Module) -> Vec<Extern> {
         module
             .imports()
             .map(|import| {
                 assert_eq!(Some("hostcall_read"), import.name());
-                let func = Func::wrap(&store, {
-                    move |caller: Caller<'_>| {
+                let func = Func::wrap(&mut *store, {
+                    move |mut caller: Caller<'_, _>| {
                         let mem = caller.get_export("memory").unwrap().into_memory().unwrap();
-                        let memory = unsafe { mem.data_unchecked_mut() };
+                        let memory = mem.data(&caller);
                         use std::convert::TryInto;
                         i32::from_le_bytes(memory[0..4].try_into().unwrap())
                     }
@@ -112,20 +114,21 @@ mod tests {
     // hostcall can be handled.
     #[test]
     fn test_custom_signal_handler_single_instance_hostcall() -> Result<()> {
-        let engine = Engine::new(&Config::default())?;
-        let store = Store::new(&engine);
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
         let module = Module::new(&engine, WAT1)?;
 
-        let instance = Instance::new(&store, &module, &make_externs(&store, &module))?;
+        let externs = make_externs(&mut store, &module);
+        let instance = Instance::new(&mut store, &module, &externs)?;
 
-        let (base, length) = set_up_memory(&instance);
+        let (base, length) = set_up_memory(&mut store, instance);
         unsafe {
             store.set_signal_handler(move |signum, siginfo, _| {
                 handle_sigsegv(base, length, signum, siginfo)
             });
         }
         println!("calling hostcall_read...");
-        let result = invoke_export(&instance, "hostcall_read").unwrap();
+        let result = invoke_export(&mut store, instance, "hostcall_read").unwrap();
         assert_eq!(123, result);
         Ok(())
     }
@@ -133,12 +136,13 @@ mod tests {
     #[test]
     fn test_custom_signal_handler_single_instance() -> Result<()> {
         let engine = Engine::new(&Config::default())?;
-        let store = Store::new(&engine);
+        let mut store = Store::new(&engine, ());
         let module = Module::new(&engine, WAT1)?;
 
-        let instance = Instance::new(&store, &module, &make_externs(&store, &module))?;
+        let externs = make_externs(&mut store, &module);
+        let instance = Instance::new(&mut store, &module, &externs)?;
 
-        let (base, length) = set_up_memory(&instance);
+        let (base, length) = set_up_memory(&mut store, instance);
         unsafe {
             store.set_signal_handler(move |signum, siginfo, _| {
                 handle_sigsegv(base, length, signum, siginfo)
@@ -148,13 +152,13 @@ mod tests {
         // these invoke wasmtime_call_trampoline from action.rs
         {
             println!("calling read...");
-            let result = invoke_export(&instance, "read").expect("read succeeded");
+            let result = invoke_export(&mut store, instance, "read").expect("read succeeded");
             assert_eq!(123, result);
         }
 
         {
             println!("calling read_out_of_bounds...");
-            let trap = invoke_export(&instance, "read_out_of_bounds")
+            let trap = invoke_export(&mut store, instance, "read_out_of_bounds")
                 .unwrap_err()
                 .downcast::<Trap>()?;
             assert!(
@@ -167,17 +171,19 @@ mod tests {
 
         // these invoke wasmtime_call_trampoline from callable.rs
         {
-            let read_func = instance.get_typed_func::<(), i32>("read")?;
+            let read_func = instance.get_typed_func::<(), i32, _>(&mut store, "read")?;
             println!("calling read...");
-            let result = read_func.call(()).expect("expected function not to trap");
+            let result = read_func
+                .call(&mut store, ())
+                .expect("expected function not to trap");
             assert_eq!(123i32, result);
         }
 
         {
             let read_out_of_bounds_func =
-                instance.get_typed_func::<(), i32>("read_out_of_bounds")?;
+                instance.get_typed_func::<(), i32, _>(&mut store, "read_out_of_bounds")?;
             println!("calling read_out_of_bounds...");
-            let trap = read_out_of_bounds_func.call(()).unwrap_err();
+            let trap = read_out_of_bounds_func.call(&mut store, ()).unwrap_err();
             assert!(trap
                 .to_string()
                 .contains("wasm trap: out of bounds memory access"));
@@ -187,17 +193,18 @@ mod tests {
 
     #[test]
     fn test_custom_signal_handler_multiple_instances() -> Result<()> {
-        let engine = Engine::new(&Config::default())?;
-        let store = Store::new(&engine);
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
         let module = Module::new(&engine, WAT1)?;
 
         // Set up multiple instances
 
-        let instance1 = Instance::new(&store, &module, &make_externs(&store, &module))?;
-        let instance1_handler_triggered = Rc::new(AtomicBool::new(false));
+        let externs = make_externs(&mut store, &module);
+        let instance1 = Instance::new(&mut store, &module, &externs)?;
+        let instance1_handler_triggered = Arc::new(AtomicBool::new(false));
 
         unsafe {
-            let (base1, length1) = set_up_memory(&instance1);
+            let (base1, length1) = set_up_memory(&mut store, instance1);
 
             store.set_signal_handler({
                 let instance1_handler_triggered = instance1_handler_triggered.clone();
@@ -222,11 +229,12 @@ mod tests {
 
         // First instance1
         {
-            let mut exports1 = instance1.exports();
+            let mut exports1 = instance1.exports(&mut store);
             assert!(exports1.next().is_some());
+            drop(exports1);
 
             println!("calling instance1.read...");
-            let result = invoke_export(&instance1, "read").expect("read succeeded");
+            let result = invoke_export(&mut store, instance1, "read").expect("read succeeded");
             assert_eq!(123, result);
             assert_eq!(
                 instance1_handler_triggered.load(Ordering::SeqCst),
@@ -235,12 +243,13 @@ mod tests {
             );
         }
 
-        let instance2 = Instance::new(&store, &module, &make_externs(&store, &module))
-            .expect("failed to instantiate module");
-        let instance2_handler_triggered = Rc::new(AtomicBool::new(false));
+        let externs = make_externs(&mut store, &module);
+        let instance2 =
+            Instance::new(&mut store, &module, &externs).expect("failed to instantiate module");
+        let instance2_handler_triggered = Arc::new(AtomicBool::new(false));
 
         unsafe {
-            let (base2, length2) = set_up_memory(&instance2);
+            let (base2, length2) = set_up_memory(&mut store, instance2);
 
             store.set_signal_handler({
                 let instance2_handler_triggered = instance2_handler_triggered.clone();
@@ -263,11 +272,12 @@ mod tests {
 
         // And then instance2
         {
-            let mut exports2 = instance2.exports();
+            let mut exports2 = instance2.exports(&mut store);
             assert!(exports2.next().is_some());
+            drop(exports2);
 
             println!("calling instance2.read...");
-            let result = invoke_export(&instance2, "read").expect("read succeeded");
+            let result = invoke_export(&mut store, instance2, "read").expect("read succeeded");
             assert_eq!(123, result);
             assert_eq!(
                 instance2_handler_triggered.load(Ordering::SeqCst),
@@ -280,13 +290,14 @@ mod tests {
 
     #[test]
     fn test_custom_signal_handler_instance_calling_another_instance() -> Result<()> {
-        let engine = Engine::new(&Config::default())?;
-        let store = Store::new(&engine);
+        let engine = Engine::default();
+        let mut store = Store::new(&engine, ());
 
         // instance1 which defines 'read'
         let module1 = Module::new(&engine, WAT1)?;
-        let instance1 = Instance::new(&store, &module1, &make_externs(&store, &module1))?;
-        let (base1, length1) = set_up_memory(&instance1);
+        let externs = make_externs(&mut store, &module1);
+        let instance1 = Instance::new(&mut store, &module1, &externs)?;
+        let (base1, length1) = set_up_memory(&mut store, instance1);
         unsafe {
             store.set_signal_handler(move |signum, siginfo, _| {
                 println!("instance1");
@@ -294,12 +305,13 @@ mod tests {
             });
         }
 
-        let mut instance1_exports = instance1.exports();
-        let instance1_read = instance1_exports.next().unwrap();
+        let mut instance1_exports = instance1.exports(&mut store);
+        let instance1_read = instance1_exports.next().unwrap().clone().into_extern();
+        drop(instance1_exports);
 
         // instance2 which calls 'instance1.read'
         let module2 = Module::new(&engine, WAT2)?;
-        let instance2 = Instance::new(&store, &module2, &[instance1_read.into_extern()])?;
+        let instance2 = Instance::new(&mut store, &module2, &[instance1_read])?;
         // since 'instance2.run' calls 'instance1.read' we need to set up the signal handler to handle
         // SIGSEGV originating from within the memory of instance1
         unsafe {
@@ -309,7 +321,7 @@ mod tests {
         }
 
         println!("calling instance2.run");
-        let result = invoke_export(&instance2, "run")?;
+        let result = invoke_export(&mut store, instance2, "run")?;
         assert_eq!(123, result);
         Ok(())
     }

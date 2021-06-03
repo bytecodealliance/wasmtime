@@ -1,4 +1,5 @@
-use crate::{FrameInfo, Store};
+use crate::module::GlobalModuleRegistry;
+use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
@@ -136,23 +137,25 @@ impl Trap {
     /// let trap = wasmtime::Trap::new("unexpected error");
     /// assert!(trap.to_string().contains("unexpected error"));
     /// ```
+    #[cold] // traps are exceptional, this helps move handling off the main path
     pub fn new<I: Into<String>>(message: I) -> Self {
         let reason = TrapReason::Message(message.into());
-        Trap::new_with_trace(None, None, reason, Backtrace::new_unresolved())
+        Trap::new_with_trace(None, reason, Backtrace::new_unresolved())
     }
 
     /// Creates a new `Trap` representing an explicit program exit with a classic `i32`
     /// exit status value.
+    #[cold] // see Trap::new
     pub fn i32_exit(status: i32) -> Self {
         Trap::new_with_trace(
-            None,
             None,
             TrapReason::I32Exit(status),
             Backtrace::new_unresolved(),
         )
     }
 
-    pub(crate) fn from_runtime(store: &Store, runtime_trap: wasmtime_runtime::Trap) -> Self {
+    #[cold] // see Trap::new
+    pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
         match runtime_trap {
             wasmtime_runtime::Trap::User(error) => Trap::from(error),
             wasmtime_runtime::Trap::Jit {
@@ -160,43 +163,39 @@ impl Trap {
                 backtrace,
                 maybe_interrupted,
             } => {
-                let mut code = store
-                    .modules()
-                    .borrow()
-                    .lookup_trap_info(pc)
-                    .map(|info| info.trap_code)
-                    .unwrap_or(ir::TrapCode::StackOverflow);
+                let mut code = GlobalModuleRegistry::with(|modules| {
+                    modules
+                        .lookup_trap_info(pc)
+                        .map(|info| info.trap_code)
+                        .unwrap_or(ir::TrapCode::StackOverflow)
+                });
                 if maybe_interrupted && code == ir::TrapCode::StackOverflow {
                     code = ir::TrapCode::Interrupt;
                 }
-                Trap::new_wasm(Some(store), Some(pc), code, backtrace)
+                Trap::new_wasm(Some(pc), code, backtrace)
             }
             wasmtime_runtime::Trap::Wasm {
                 trap_code,
                 backtrace,
-            } => Trap::new_wasm(Some(store), None, trap_code, backtrace),
+            } => Trap::new_wasm(None, trap_code, backtrace),
             wasmtime_runtime::Trap::OOM { backtrace } => {
                 let reason = TrapReason::Message("out of memory".to_string());
-                Trap::new_with_trace(Some(store), None, reason, backtrace)
+                Trap::new_with_trace(None, reason, backtrace)
             }
         }
     }
 
+    #[cold] // see Trap::new
     pub(crate) fn new_wasm(
-        store: Option<&Store>,
         trap_pc: Option<usize>,
         code: ir::TrapCode,
         backtrace: Backtrace,
     ) -> Self {
         let code = TrapCode::from_non_user(code);
-        Trap::new_with_trace(store, trap_pc, TrapReason::InstructionTrap(code), backtrace)
+        Trap::new_with_trace(trap_pc, TrapReason::InstructionTrap(code), backtrace)
     }
 
     /// Creates a new `Trap`.
-    ///
-    /// * `store` - this is optionally provided, if available. If `None` we'll
-    ///   look up the last store, if available, used to call wasm code on the
-    ///   stack.
     ///
     /// * `trap_pc` - this is the precise program counter, if available, that
     ///   wasm trapped at. This is used when learning about the wasm stack trace
@@ -208,52 +207,40 @@ impl Trap {
     /// * `native_trace` - this is a captured backtrace from when the trap
     ///   occurred, and this will iterate over the frames to find frames that
     ///   lie in wasm jit code.
-    fn new_with_trace(
-        store: Option<&Store>,
-        trap_pc: Option<usize>,
-        reason: TrapReason,
-        native_trace: Backtrace,
-    ) -> Self {
+    fn new_with_trace(trap_pc: Option<usize>, reason: TrapReason, native_trace: Backtrace) -> Self {
         let mut wasm_trace = Vec::new();
         let mut hint_wasm_backtrace_details_env = false;
-        wasmtime_runtime::with_last_info(|last| {
-            // If the `store` passed in is `None` then we look at the `last`
-            // store configured to call wasm, and if that's a `Store` we use
-            // that. If that all fails then we just don't generate any
-            // `wasm_trace` information.
-            if let Some(store) = store.or_else(|| last?.downcast_ref()) {
-                for frame in native_trace.frames() {
-                    let pc = frame.ip() as usize;
-                    if pc == 0 {
-                        continue;
-                    }
-                    // Note that we need to be careful about the pc we pass in
-                    // here to lookup frame information. This program counter is
-                    // used to translate back to an original source location in
-                    // the origin wasm module. If this pc is the exact pc that
-                    // the trap happened at, then we look up that pc precisely.
-                    // Otherwise backtrace information typically points at the
-                    // pc *after* the call instruction (because otherwise it's
-                    // likely a call instruction on the stack). In that case we
-                    // want to lookup information for the previous instruction
-                    // (the call instruction) so we subtract one as the lookup.
-                    let pc_to_lookup = if Some(pc) == trap_pc { pc } else { pc - 1 };
-                    if let Some((info, has_unparsed_debuginfo)) =
-                        store.modules().borrow().lookup_frame_info(pc_to_lookup)
-                    {
-                        wasm_trace.push(info);
 
-                        // If this frame has unparsed debug information and the
-                        // store's configuration indicates that we were
-                        // respecting the environment variable of whether to
-                        // do this then we will print out a helpful note in
-                        // `Display` to indicate that more detailed information
-                        // in a trap may be available.
-                        if has_unparsed_debuginfo
-                            && store.engine().config().wasm_backtrace_details_env_used
-                        {
-                            hint_wasm_backtrace_details_env = true;
-                        }
+        GlobalModuleRegistry::with(|registry| {
+            for frame in native_trace.frames() {
+                let pc = frame.ip() as usize;
+                if pc == 0 {
+                    continue;
+                }
+                // Note that we need to be careful about the pc we pass in
+                // here to lookup frame information. This program counter is
+                // used to translate back to an original source location in
+                // the origin wasm module. If this pc is the exact pc that
+                // the trap happened at, then we look up that pc precisely.
+                // Otherwise backtrace information typically points at the
+                // pc *after* the call instruction (because otherwise it's
+                // likely a call instruction on the stack). In that case we
+                // want to lookup information for the previous instruction
+                // (the call instruction) so we subtract one as the lookup.
+                let pc_to_lookup = if Some(pc) == trap_pc { pc } else { pc - 1 };
+                if let Some((info, has_unparsed_debuginfo, wasm_backtrace_details_env_used)) =
+                    registry.lookup_frame_info(pc_to_lookup)
+                {
+                    wasm_trace.push(info);
+
+                    // If this frame has unparsed debug information and the
+                    // store's configuration indicates that we were
+                    // respecting the environment variable of whether to
+                    // do this then we will print out a helpful note in
+                    // `Display` to indicate that more detailed information
+                    // in a trap may be available.
+                    if has_unparsed_debuginfo && wasm_backtrace_details_env_used {
+                        hint_wasm_backtrace_details_env = true;
                     }
                 }
             }
@@ -388,7 +375,7 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for Trap {
             trap.clone()
         } else {
             let reason = TrapReason::Error(e.into());
-            Trap::new_with_trace(None, None, reason, Backtrace::new_unresolved())
+            Trap::new_with_trace(None, reason, Backtrace::new_unresolved())
         }
     }
 }

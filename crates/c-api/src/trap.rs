@@ -45,6 +45,15 @@ pub extern "C" fn wasm_trap_new(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Box<wasm_trap_t> {
+    let bytes = crate::slice_from_raw_parts(message, len);
+    let message = String::from_utf8_lossy(&bytes);
+    Box::new(wasm_trap_t {
+        trap: Trap::new(message),
+    })
+}
+
+#[no_mangle]
 pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t) {
     let mut buffer = Vec::new();
     buffer.extend_from_slice(trap.trap.to_string().as_bytes());
@@ -135,4 +144,9 @@ pub extern "C" fn wasm_frame_instance(_arg1: *const wasm_frame_t) -> *mut wasm_i
 #[no_mangle]
 pub extern "C" fn wasm_frame_module_offset(frame: &wasm_frame_t) -> usize {
     frame.trap.trace()[frame.idx].module_offset()
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_frame_copy(frame: &wasm_frame_t) -> Box<wasm_frame_t> {
+    Box::new(frame.clone())
 }

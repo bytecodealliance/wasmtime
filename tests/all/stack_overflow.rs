@@ -7,7 +7,7 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
     // assume hosts always have at least 512k of stack
     const HOST_STACK: usize = 512 * 1024;
 
-    let store = Store::default();
+    let mut store = Store::<()>::default();
 
     // Create a module that's infinitely recursive, but calls the host on each
     // level of wasm stack to always test how much host stack we have left.
@@ -22,13 +22,13 @@ fn host_always_has_some_stack() -> anyhow::Result<()> {
             )
         "#,
     )?;
-    let func = Func::wrap(&store, test_host_stack);
-    let instance = Instance::new(&store, &module, &[func.into()])?;
-    let foo = instance.get_typed_func::<(), ()>("foo")?;
+    let func = Func::wrap(&mut store, test_host_stack);
+    let instance = Instance::new(&mut store, &module, &[func.into()])?;
+    let foo = instance.get_typed_func::<(), (), _>(&mut store, "foo")?;
 
     // Make sure that our function traps and the trap says that the call stack
     // has been exhausted.
-    let trap = foo.call(()).unwrap_err();
+    let trap = foo.call(&mut store, ()).unwrap_err();
     assert!(
         trap.to_string().contains("call stack exhausted"),
         "{}",

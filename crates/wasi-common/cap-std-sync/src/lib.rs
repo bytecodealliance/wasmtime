@@ -42,9 +42,7 @@ pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
 use cap_rand::RngCore;
-use std::cell::RefCell;
 use std::path::Path;
-use std::rc::Rc;
 use wasi_common::{table::Table, Error, WasiCtx, WasiFile};
 
 pub struct WasiCtxBuilder(WasiCtx);
@@ -55,7 +53,7 @@ impl WasiCtxBuilder {
             random_ctx(),
             clocks_ctx(),
             sched_ctx(),
-            Rc::new(RefCell::new(Table::new())),
+            Table::new(),
         ))
     }
     pub fn env(mut self, var: &str, value: &str) -> Result<Self, wasi_common::StringArrayError> {
@@ -124,6 +122,6 @@ impl WasiCtxBuilder {
     }
 }
 
-pub fn random_ctx() -> RefCell<Box<dyn RngCore>> {
-    RefCell::new(Box::new(unsafe { cap_rand::rngs::OsRng::default() }))
+pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
+    Box::new(unsafe { cap_rand::rngs::OsRng::default() })
 }

@@ -1,9 +1,7 @@
 use proptest::prelude::*;
 use std::cell::UnsafeCell;
 use std::marker;
-use wiggle::{BorrowHandle, GuestMemory, Region};
-
-use wiggle_borrow::BorrowChecker;
+use wiggle::{borrow::BorrowChecker, BorrowHandle, GuestMemory, Region};
 
 #[derive(Debug, Clone)]
 pub struct MemAreas(Vec<MemArea>);
@@ -48,6 +46,9 @@ impl Into<Vec<MemArea>> for MemAreas {
 struct HostBuffer {
     cell: UnsafeCell<[u8; 4096]>,
 }
+
+unsafe impl Send for HostBuffer {}
+unsafe impl Sync for HostBuffer {}
 
 pub struct HostMemory {
     buffer: HostBuffer,

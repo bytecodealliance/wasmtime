@@ -6,9 +6,9 @@ fn serialize(engine: &Engine, wat: &'static str) -> Result<Vec<u8>> {
     Ok(module.serialize()?)
 }
 
-unsafe fn deserialize_and_instantiate(store: &Store, buffer: &[u8]) -> Result<Instance> {
+unsafe fn deserialize_and_instantiate(store: &mut Store<()>, buffer: &[u8]) -> Result<Instance> {
     let module = Module::deserialize(store.engine(), buffer)?;
-    Ok(Instance::new(&store, &module, &[])?)
+    Ok(Instance::new(store, &module, &[])?)
 }
 
 #[test]
@@ -34,10 +34,10 @@ fn test_module_serialize_simple() -> Result<()> {
         "(module (func (export \"run\") (result i32) i32.const 42))",
     )?;
 
-    let store = Store::default();
-    let instance = unsafe { deserialize_and_instantiate(&store, &buffer)? };
-    let run = instance.get_typed_func::<(), i32>("run")?;
-    let result = run.call(())?;
+    let mut store = Store::default();
+    let instance = unsafe { deserialize_and_instantiate(&mut store, &buffer)? };
+    let run = instance.get_typed_func::<(), i32, _>(&mut store, "run")?;
+    let result = run.call(&mut store, ())?;
 
     assert_eq!(42, result);
     Ok(())
@@ -52,8 +52,8 @@ fn test_module_serialize_fail() -> Result<()> {
 
     let mut config = Config::new();
     config.cranelift_opt_level(OptLevel::None);
-    let store = Store::new(&Engine::new(&config)?);
-    match unsafe { deserialize_and_instantiate(&store, &buffer) } {
+    let mut store = Store::new(&Engine::new(&config)?, ());
+    match unsafe { deserialize_and_instantiate(&mut store, &buffer) } {
         Ok(_) => bail!("expected failure at deserialization"),
         Err(_) => (),
     }

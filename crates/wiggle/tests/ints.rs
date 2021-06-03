@@ -10,7 +10,7 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl<'a> ints::Ints for WasiCtx<'a> {
-    fn cookie_cutter(&self, init_cookie: types::Cookie) -> Result<types::Bool, types::Errno> {
+    fn cookie_cutter(&mut self, init_cookie: types::Cookie) -> Result<types::Bool, types::Errno> {
         let res = if init_cookie == types::COOKIE_START {
             types::Bool::True
         } else {
@@ -43,11 +43,11 @@ impl CookieCutterExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         let res = ints::cookie_cutter(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.cookie as i64,
             self.return_ptr_loc.ptr as i32,

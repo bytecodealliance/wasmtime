@@ -14,12 +14,12 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
 )
     "#;
 
-    let store = Store::default();
+    let mut store = Store::<()>::default();
     let module = Module::new(store.engine(), WAT)?;
 
     let imports = [
         Func::new(
-            &store,
+            &mut store,
             FuncType::new(None, Some(ValType::I32)),
             |_, params, results| {
                 assert!(params.is_empty());
@@ -30,7 +30,7 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
         )
         .into(),
         Func::new(
-            &store,
+            &mut store,
             FuncType::new(None, Some(ValType::F32)),
             |_, params, results| {
                 assert!(params.is_empty());
@@ -41,10 +41,10 @@ fn same_import_names_still_distinct() -> anyhow::Result<()> {
         )
         .into(),
     ];
-    let instance = Instance::new(&store, &module, &imports)?;
+    let instance = Instance::new(&mut store, &module, &imports)?;
 
-    let func = instance.get_typed_func::<(), i32>("foo")?;
-    let result = func.call(())?;
+    let func = instance.get_typed_func::<(), i32, _>(&mut store, "foo")?;
+    let result = func.call(&mut store, ())?;
     assert_eq!(result, 3);
     Ok(())
 }

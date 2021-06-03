@@ -1,6 +1,10 @@
+//! This program is an example of how Wasmtime can be used with multithreaded
+//! runtimes and how various types and structures can be shared across threads.
+
 // You can execute this example with `cargo run --example threads`
 
 use anyhow::Result;
+use std::sync::Arc;
 use std::thread;
 use std::time;
 use wasmtime::*;
@@ -8,57 +12,59 @@ use wasmtime::*;
 const N_THREADS: i32 = 10;
 const N_REPS: i32 = 3;
 
-fn run(engine: &Engine, module: Module, id: i32) -> Result<()> {
-    let store = Store::new(&engine);
+fn main() -> Result<()> {
+    println!("Initializing...");
 
-    // Create external print functions.
-    println!("Creating callback...");
-    let callback_func = Func::wrap(&store, |arg: i32| {
-        println!("> Thread {} is running", arg);
-    });
+    // Initialize global per-process state. This state will be shared amonst all
+    // threads. Notably this includes the compiled module as well as a `Linker`,
+    // which contains all our host functions we want to define.
+    let engine = Engine::default();
+    let module = Module::from_file(&engine, "examples/threads.wat")?;
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap("global", "hello", || {
+        println!("> Hello from {:?}", thread::current().id());
+    })?;
+    let linker = Arc::new(linker); // "finalize" the linker
 
-    let id_type = GlobalType::new(ValType::I32, Mutability::Const);
-    let id_global = Global::new(&store, id_type, Val::I32(id))?;
+    // Share this global state amongst a set of threads, each of which will
+    // create stores and execute instances.
+    let children = (0..N_THREADS)
+        .map(|_| {
+            let engine = engine.clone();
+            let module = module.clone();
+            let linker = linker.clone();
+            thread::spawn(move || {
+                run(&engine, &module, &linker).expect("Success");
+            })
+        })
+        .collect::<Vec<_>>();
 
-    // Instantiate.
-    println!("Instantiating module...");
-    let instance = Instance::new(&store, &module, &[callback_func.into(), id_global.into()])?;
-
-    // Extract exports.
-    println!("Extracting export...");
-    let g = instance.get_typed_func::<(), ()>("run")?;
-
-    for _ in 0..N_REPS {
-        thread::sleep(time::Duration::from_millis(100));
-        // Call `$run`.
-        drop(g.call(())?);
+    for child in children {
+        child.join().unwrap();
     }
 
     Ok(())
 }
 
-fn main() -> Result<()> {
-    println!("Initializing...");
-    let engine = Engine::default();
+fn run(engine: &Engine, module: &Module, linker: &Linker<()>) -> Result<()> {
+    // Each sub-thread we have starting out by instantiating the `module`
+    // provided into a fresh `Store`.
+    println!("Instantiating module...");
+    let mut store = Store::new(&engine, ());
+    let instance = linker.instantiate(&mut store, module)?;
+    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
 
-    // Compile.
-    println!("Compiling module...");
-    let module = Module::from_file(&engine, "examples/threads.wat")?;
-
-    let mut children = Vec::new();
-    for id in 0..N_THREADS {
-        let engine = engine.clone();
-        let module = module.clone();
-        children.push(thread::spawn(move || {
-            run(&engine, module, id).expect("Success");
-        }));
+    println!("Executing...");
+    for _ in 0..N_REPS {
+        run.call(&mut store, ())?;
+        thread::sleep(time::Duration::from_millis(100));
     }
 
-    for (i, child) in children.into_iter().enumerate() {
-        if let Err(_) = child.join() {
-            println!("Thread #{} errors", i);
-        }
-    }
+    // Also note that that a `Store` can also move between threads:
+    println!("> Moving {:?} to a new thread", thread::current().id());
+    let child = thread::spawn(move || run.call(&mut store, ()));
+
+    child.join().unwrap()?;
 
     Ok(())
 }

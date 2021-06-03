@@ -10,7 +10,7 @@ pub use subscription::{
 };
 
 #[wiggle::async_trait]
-pub trait WasiSched {
+pub trait WasiSched: Send + Sync {
     async fn poll_oneoff<'a>(&self, poll: &mut Poll<'a>) -> Result<(), Error>;
     async fn sched_yield(&self) -> Result<(), Error>;
     async fn sleep(&self, duration: Duration) -> Result<(), Error>;
@@ -56,11 +56,11 @@ impl<'a> Poll<'a> {
             ud,
         ));
     }
-    pub fn subscribe_read(&mut self, file: &'a mut dyn WasiFile, ud: Userdata) {
+    pub fn subscribe_read(&mut self, file: &'a dyn WasiFile, ud: Userdata) {
         self.subs
             .push((Subscription::Read(RwSubscription::new(file)), ud));
     }
-    pub fn subscribe_write(&mut self, file: &'a mut dyn WasiFile, ud: Userdata) {
+    pub fn subscribe_write(&mut self, file: &'a dyn WasiFile, ud: Userdata) {
         self.subs
             .push((Subscription::Write(RwSubscription::new(file)), ud));
     }

@@ -20,7 +20,7 @@ impl File {
     }
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
@@ -119,10 +119,10 @@ impl WasiFile for File {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
-    async fn readable(&mut self) -> Result<(), Error> {
+    async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
-    async fn writable(&mut self) -> Result<(), Error> {
+    async fn writable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
 }

@@ -16,14 +16,15 @@
 
 int RegisterSetjmp(
     void **buf_storage,
-    void (*body)(void*),
-    void *payload) {
+    void (*body)(void*, void*),
+    void *payload,
+    void *callee) {
   platform_jmp_buf buf;
   if (platform_setjmp(buf) != 0) {
     return 0;
   }
   *buf_storage = &buf;
-  body(payload);
+  body(payload, callee);
   return 1;
 }
 

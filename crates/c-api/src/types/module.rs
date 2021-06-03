@@ -6,25 +6,25 @@ use wasmtime::ModuleType;
 
 #[repr(transparent)]
 #[derive(Clone)]
-pub struct wasm_moduletype_t {
+pub struct wasmtime_moduletype_t {
     ext: wasm_externtype_t,
 }
 
-wasmtime_c_api_macros::declare_ty!(wasm_moduletype_t);
+wasmtime_c_api_macros::declare_ty!(wasmtime_moduletype_t);
 
 #[derive(Clone)]
 pub(crate) struct CModuleType {
     pub(crate) ty: ModuleType,
 }
 
-impl wasm_moduletype_t {
-    pub(crate) fn new(ty: ModuleType) -> wasm_moduletype_t {
-        wasm_moduletype_t {
+impl wasmtime_moduletype_t {
+    pub(crate) fn new(ty: ModuleType) -> wasmtime_moduletype_t {
+        wasmtime_moduletype_t {
             ext: wasm_externtype_t::new(ty.into()),
         }
     }
 
-    pub(crate) fn try_from(e: &wasm_externtype_t) -> Option<&wasm_moduletype_t> {
+    pub(crate) fn try_from(e: &wasm_externtype_t) -> Option<&wasmtime_moduletype_t> {
         match &e.which {
             CExternType::Module(_) => Some(unsafe { &*(e as *const _ as *const _) }),
             _ => None,
@@ -46,20 +46,15 @@ impl CModuleType {
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_moduletype_as_externtype(ty: &wasm_moduletype_t) -> &wasm_externtype_t {
-    &ty.ext
-}
-
-#[no_mangle]
-pub extern "C" fn wasm_moduletype_as_externtype_const(
-    ty: &wasm_moduletype_t,
+pub extern "C" fn wasmtime_moduletype_as_externtype(
+    ty: &wasmtime_moduletype_t,
 ) -> &wasm_externtype_t {
     &ty.ext
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_moduletype_exports(
-    module: &wasm_moduletype_t,
+pub extern "C" fn wasmtime_moduletype_exports(
+    module: &wasmtime_moduletype_t,
     out: &mut wasm_exporttype_vec_t,
 ) {
     let exports = module
@@ -77,8 +72,8 @@ pub extern "C" fn wasm_moduletype_exports(
 }
 
 #[no_mangle]
-pub extern "C" fn wasm_moduletype_imports(
-    module: &wasm_moduletype_t,
+pub extern "C" fn wasmtime_moduletype_imports(
+    module: &wasmtime_moduletype_t,
     out: &mut wasm_importtype_vec_t,
 ) {
     let imports = module

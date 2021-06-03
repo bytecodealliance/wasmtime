@@ -3,10 +3,8 @@ mod file;
 pub mod sched;
 pub mod stdio;
 
-use std::cell::RefCell;
 use std::future::Future;
 use std::path::Path;
-use std::rc::Rc;
 pub use wasi_cap_std_sync::{clocks_ctx, random_ctx};
 use wasi_common::{Error, Table, WasiCtx, WasiFile};
 
@@ -23,7 +21,7 @@ impl WasiCtxBuilder {
             random_ctx(),
             clocks_ctx(),
             sched_ctx(),
-            Rc::new(RefCell::new(Table::new())),
+            Table::new(),
         ))
     }
     pub fn env(mut self, var: &str, value: &str) -> Result<Self, wasi_common::StringArrayError> {

@@ -36,6 +36,7 @@ pub(crate) fn into_valtype(kind: wasm_valkind_t) -> ValType {
         WASM_F64 => ValType::F64,
         WASM_EXTERNREF => ValType::ExternRef,
         WASM_FUNCREF => ValType::FuncRef,
+        WASMTIME_V128 => ValType::V128,
         _ => panic!("unexpected kind: {}", kind),
     }
 }
@@ -48,6 +49,15 @@ pub(crate) fn from_valtype(ty: &ValType) -> wasm_valkind_t {
         ValType::F64 => WASM_F64,
         ValType::ExternRef => WASM_EXTERNREF,
         ValType::FuncRef => WASM_FUNCREF,
-        _ => panic!("wasm_valkind_t has no known conversion for {:?}", ty),
+        ValType::V128 => WASMTIME_V128,
     }
 }
+
+pub type wasmtime_valkind_t = u8;
+pub const WASMTIME_I32: wasmtime_valkind_t = 0;
+pub const WASMTIME_I64: wasmtime_valkind_t = 1;
+pub const WASMTIME_F32: wasmtime_valkind_t = 2;
+pub const WASMTIME_F64: wasmtime_valkind_t = 3;
+pub const WASMTIME_V128: wasmtime_valkind_t = 4;
+pub const WASMTIME_FUNCREF: wasmtime_valkind_t = 5;
+pub const WASMTIME_EXTERNREF: wasmtime_valkind_t = 6;

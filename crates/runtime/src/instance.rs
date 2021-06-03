@@ -3,7 +3,7 @@
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
 use crate::export::Export;
-use crate::externref::{ModuleInfoLookup, VMExternRefActivationsTable};
+use crate::externref::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
@@ -12,24 +12,21 @@ use crate::vmcontext::{
     VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
     VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
 };
-use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable};
-use indexmap::IndexMap;
+use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::Layout;
 use std::any::Any;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::hash::Hash;
 use std::ptr::NonNull;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use wasmtime_environ::entity::{packed_option::ReservedValue, EntityRef, EntitySet, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, EntityIndex,
-    FuncIndex, GlobalIndex, MemoryIndex, TableElementType, TableIndex,
+    FuncIndex, GlobalIndex, MemoryIndex, TableElementType, TableIndex, WasmType,
 };
 use wasmtime_environ::{ir, Module, VMOffsets};
 
@@ -41,7 +38,7 @@ pub use allocator::*;
 ///
 /// An instance can be created with a resource limiter so that hosts can take into account
 /// non-WebAssembly resource usage to determine if a linear memory or table should grow.
-pub trait ResourceLimiter {
+pub trait ResourceLimiter: Send + Sync + 'static {
     /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
     ///
     /// * `current` is the current size of the linear memory in WebAssembly page units.
@@ -53,7 +50,7 @@ pub trait ResourceLimiter {
     /// This function should return `true` to indicate that the growing operation is permitted or
     /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
     /// effect as the linear memory will not grow.
-    fn memory_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+    fn memory_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// Notifies the resource limiter that an instance's table has been requested to grow.
     ///
@@ -65,7 +62,7 @@ pub trait ResourceLimiter {
     /// This function should return `true` to indicate that the growing operation is permitted or
     /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
     /// effect as the table will not grow.
-    fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// The maximum number of instances that can be created for a `Store`.
     ///
@@ -82,10 +79,6 @@ pub trait ResourceLimiter {
     /// Module instantiation will fail if this limit is exceeded.
     fn memories(&self) -> usize;
 }
-
-/// Runtime representation of an instance value, which erases all `Instance`
-/// information since instances are just a collection of values.
-pub type RuntimeInstance = Rc<IndexMap<String, Export>>;
 
 /// A WebAssembly instance.
 ///
@@ -106,14 +99,14 @@ pub(crate) struct Instance {
 
     /// Stores the dropped passive element segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
-    dropped_elements: RefCell<EntitySet<ElemIndex>>,
+    dropped_elements: EntitySet<ElemIndex>,
 
     /// Stores the dropped passive data segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
-    dropped_data: RefCell<EntitySet<DataIndex>>,
+    dropped_data: EntitySet<DataIndex>,
 
     /// Hosts can store arbitrary per-instance information here.
-    host_state: Box<dyn Any>,
+    host_state: Box<dyn Any + Send + Sync>,
 
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
@@ -242,16 +235,8 @@ impl Instance {
     }
 
     /// Return the indexed `VMGlobalDefinition`.
-    fn global(&self, index: DefinedGlobalIndex) -> VMGlobalDefinition {
-        unsafe { *self.global_ptr(index) }
-    }
-
-    /// Set the indexed global to `VMGlobalDefinition`.
-    #[allow(dead_code)]
-    fn set_global(&self, index: DefinedGlobalIndex, global: VMGlobalDefinition) {
-        unsafe {
-            *self.global_ptr(index) = global;
-        }
+    fn global(&self, index: DefinedGlobalIndex) -> &VMGlobalDefinition {
+        unsafe { &*self.global_ptr(index) }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -295,17 +280,35 @@ impl Instance {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_externref_activations_table()) }
     }
 
-    /// Return a pointer to the `ModuleInfoLookup`.
-    pub fn module_info_lookup(&self) -> *mut *const dyn ModuleInfoLookup {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_module_info_lookup()) }
+    /// Gets a pointer to this instance's `Store` which was originally
+    /// configured on creation.
+    ///
+    /// # Panics
+    ///
+    /// This will panic if the originally configured store was `None`. That can
+    /// happen for host functions so host functions can't be queried what their
+    /// original `Store` was since it's just retained as null (since host
+    /// functions are shared amongst threads and don't all share the same
+    /// store).
+    #[inline]
+    pub fn store(&self) -> *mut dyn Store {
+        let ptr = unsafe { *self.vmctx_plus_offset::<*mut dyn Store>(self.offsets.vmctx_store()) };
+        assert!(!ptr.is_null());
+        ptr
+    }
+
+    pub unsafe fn set_store(&mut self, store: *mut dyn Store) {
+        *self.vmctx_plus_offset(self.offsets.vmctx_store()) = store;
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
+    #[inline]
     pub fn vmctx(&self) -> &VMContext {
         &self.vmctx
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
+    #[inline]
     pub fn vmctx_ptr(&self) -> *mut VMContext {
         self.vmctx() as *const VMContext as *mut VMContext
     }
@@ -423,13 +426,18 @@ impl Instance {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
-    pub(crate) fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
+    pub(crate) fn memory_grow(
+        &mut self,
+        memory_index: DefinedMemoryIndex,
+        delta: u32,
+    ) -> Option<u32> {
+        let limiter = unsafe { (*self.store()).limiter() };
         let memory = self
             .memories
-            .get(memory_index)
+            .get_mut(memory_index)
             .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()));
 
-        let result = unsafe { memory.grow(delta) };
+        let result = unsafe { memory.grow(delta, limiter) };
 
         // Keep current the VMContext pointers used by compiled wasm code.
         self.set_memory(memory_index, self.memories[memory_index].vmmemory());
@@ -446,12 +454,12 @@ impl Instance {
     /// This and `imported_memory_size` are currently unsafe because they
     /// dereference the memory import's pointers.
     pub(crate) unsafe fn imported_memory_grow(
-        &self,
+        &mut self,
         memory_index: MemoryIndex,
         delta: u32,
     ) -> Option<u32> {
         let import = self.imported_memory(memory_index);
-        let foreign_instance = (&*import.vmctx).instance();
+        let foreign_instance = (*import.vmctx).instance_mut();
         let foreign_memory = &*import.from;
         let foreign_index = foreign_instance.memory_index(foreign_memory);
 
@@ -480,9 +488,8 @@ impl Instance {
         foreign_instance.memory_size(foreign_index)
     }
 
-    pub(crate) fn table_element_type(&self, table_index: TableIndex) -> TableElementType {
-        let table = self.get_table(table_index);
-        table.element_type()
+    pub(crate) fn table_element_type(&mut self, table_index: TableIndex) -> TableElementType {
+        unsafe { (*self.get_table(table_index)).element_type() }
     }
 
     /// Grow table by the specified amount of elements, filling them with
@@ -491,7 +498,7 @@ impl Instance {
     /// Returns `None` if table can't be grown by the specified amount of
     /// elements, or if `init_value` is the wrong type of table element.
     pub(crate) fn table_grow(
-        &self,
+        &mut self,
         table_index: TableIndex,
         delta: u32,
         init_value: TableElement,
@@ -502,53 +509,24 @@ impl Instance {
     }
 
     fn defined_table_grow(
-        &self,
+        &mut self,
         table_index: DefinedTableIndex,
         delta: u32,
         init_value: TableElement,
     ) -> Option<u32> {
+        let limiter = unsafe { (*self.store()).limiter() };
         let table = self
             .tables
-            .get(table_index)
+            .get_mut(table_index)
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()));
 
-        let result = unsafe { table.grow(delta, init_value) };
+        let result = unsafe { table.grow(delta, init_value, limiter) };
 
         // Keep the `VMContext` pointers used by compiled Wasm code up to
         // date.
         self.set_table(table_index, self.tables[table_index].vmtable());
 
         result
-    }
-
-    pub(crate) fn defined_table_fill(
-        &self,
-        table_index: DefinedTableIndex,
-        dst: u32,
-        val: TableElement,
-        len: u32,
-    ) -> Result<(), Trap> {
-        self.tables.get(table_index).unwrap().fill(dst, val, len)
-    }
-
-    // Get table element by index.
-    fn table_get(&self, table_index: DefinedTableIndex, index: u32) -> Option<TableElement> {
-        self.tables
-            .get(table_index)
-            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-            .get(index)
-    }
-
-    fn table_set(
-        &self,
-        table_index: DefinedTableIndex,
-        index: u32,
-        val: TableElement,
-    ) -> Result<(), ()> {
-        self.tables
-            .get(table_index)
-            .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
-            .set(index, val)
     }
 
     fn alloc_layout(&self) -> Layout {
@@ -584,14 +562,14 @@ impl Instance {
         index: I,
         index_map: &HashMap<I, usize>,
         data: &'a Vec<D>,
-        dropped: &RefCell<EntitySet<I>>,
+        dropped: &EntitySet<I>,
     ) -> &'a [T]
     where
         D: AsRef<[T]>,
         I: EntityRef + Hash,
     {
         match index_map.get(&index) {
-            Some(index) if !dropped.borrow().contains(I::new(*index)) => data[*index].as_ref(),
+            Some(index) if !dropped.contains(I::new(*index)) => data[*index].as_ref(),
             _ => &[],
         }
     }
@@ -604,24 +582,28 @@ impl Instance {
     /// Returns a `Trap` error when the range within the table is out of bounds
     /// or the range within the passive element is out of bounds.
     pub(crate) fn table_init(
-        &self,
+        &mut self,
         table_index: TableIndex,
         elem_index: ElemIndex,
         dst: u32,
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
+        // TODO: this `clone()` shouldn't be necessary but is used for now to
+        // inform `rustc` that the lifetime of the elements here are
+        // disconnected from the lifetime of `self`.
+        let module = self.module.clone();
         let elements = Self::find_passive_segment(
             elem_index,
-            &self.module.passive_elements_map,
-            &self.module.passive_elements,
+            &module.passive_elements_map,
+            &module.passive_elements,
             &self.dropped_elements,
         );
         self.table_init_segment(table_index, elements, dst, src, len)
     }
 
     pub(crate) fn table_init_segment(
-        &self,
+        &mut self,
         table_index: TableIndex,
         elements: &[FuncIndex],
         dst: u32,
@@ -630,7 +612,7 @@ impl Instance {
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
-        let table = self.get_table(table_index);
+        let table = unsafe { &mut *self.get_table(table_index) };
 
         let elements = match elements
             .get(usize::try_from(src).unwrap()..)
@@ -665,17 +647,20 @@ impl Instance {
     }
 
     /// Drop an element.
-    pub(crate) fn elem_drop(&self, elem_index: ElemIndex) {
+    pub(crate) fn elem_drop(&mut self, elem_index: ElemIndex) {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
 
         if let Some(index) = self.module.passive_elements_map.get(&elem_index) {
-            self.dropped_elements
-                .borrow_mut()
-                .insert(ElemIndex::new(*index));
+            self.dropped_elements.insert(ElemIndex::new(*index));
         }
 
         // Note that we don't check that we actually removed a segment because
         // dropping a non-passive segment is a no-op (not a trap).
+    }
+
+    /// Get a locally-defined memory.
+    pub(crate) fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {
+        ptr::addr_of_mut!(self.memories[index])
     }
 
     /// Do a `memory.copy`
@@ -685,7 +670,7 @@ impl Instance {
     /// Returns a `Trap` error when the source or destination ranges are out of
     /// bounds.
     pub(crate) fn memory_copy(
-        &self,
+        &mut self,
         dst_index: MemoryIndex,
         dst: u32,
         src_index: MemoryIndex,
@@ -784,24 +769,28 @@ impl Instance {
     /// memory's bounds or if the source range is outside the data segment's
     /// bounds.
     pub(crate) fn memory_init(
-        &self,
+        &mut self,
         memory_index: MemoryIndex,
         data_index: DataIndex,
         dst: u32,
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
+        // TODO: this `clone()` shouldn't be necessary but is used for now to
+        // inform `rustc` that the lifetime of the elements here are
+        // disconnected from the lifetime of `self`.
+        let module = self.module.clone();
         let data = Self::find_passive_segment(
             data_index,
-            &self.module.passive_data_map,
-            &self.module.passive_data,
+            &module.passive_data_map,
+            &module.passive_data,
             &self.dropped_data,
         );
         self.memory_init_segment(memory_index, &data, dst, src, len)
     }
 
     pub(crate) fn memory_init_segment(
-        &self,
+        &mut self,
         memory_index: MemoryIndex,
         data: &[u8],
         dst: u32,
@@ -834,11 +823,9 @@ impl Instance {
     }
 
     /// Drop the given data segment, truncating its length to zero.
-    pub(crate) fn data_drop(&self, data_index: DataIndex) {
+    pub(crate) fn data_drop(&mut self, data_index: DataIndex) {
         if let Some(index) = self.module.passive_data_map.get(&data_index) {
-            self.dropped_data
-                .borrow_mut()
-                .insert(DataIndex::new(*index));
+            self.dropped_data.insert(DataIndex::new(*index));
         }
 
         // Note that we don't check that we actually removed a segment because
@@ -847,7 +834,7 @@ impl Instance {
 
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
-    pub(crate) fn get_table(&self, table_index: TableIndex) -> &Table {
+    pub(crate) fn get_table(&mut self, table_index: TableIndex) -> *mut Table {
         if let Some(defined_table_index) = self.module.defined_table_index(table_index) {
             self.get_defined_table(defined_table_index)
         } else {
@@ -856,32 +843,55 @@ impl Instance {
     }
 
     /// Get a locally-defined table.
-    pub(crate) fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
-        &self.tables[index]
+    pub(crate) fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
+        ptr::addr_of_mut!(self.tables[index])
     }
 
     /// Get an imported, foreign table.
-    pub(crate) fn get_foreign_table(&self, index: TableIndex) -> &Table {
+    pub(crate) fn get_foreign_table(&mut self, index: TableIndex) -> *mut Table {
         let import = self.imported_table(index);
-        let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
-        let foreign_table = unsafe { &mut *(import).from };
+        let foreign_instance = unsafe { (*import.vmctx).instance_mut() };
+        let foreign_table = unsafe { &*import.from };
         let foreign_index = foreign_instance.table_index(foreign_table);
-        &foreign_instance.tables[foreign_index]
+        ptr::addr_of_mut!(foreign_instance.tables[foreign_index])
     }
 
     pub(crate) fn get_defined_table_index_and_instance(
-        &self,
+        &mut self,
         index: TableIndex,
-    ) -> (DefinedTableIndex, &Instance) {
+    ) -> (DefinedTableIndex, &mut Instance) {
         if let Some(defined_table_index) = self.module.defined_table_index(index) {
             (defined_table_index, self)
         } else {
             let import = self.imported_table(index);
-            let foreign_instance = unsafe { (&mut *(import).vmctx).instance() };
-            let foreign_table_def = unsafe { &mut *(import).from };
+            let foreign_instance = unsafe { (*import.vmctx).instance_mut() };
+            let foreign_table_def = unsafe { &*import.from };
             let foreign_table_index = foreign_instance.table_index(foreign_table_def);
             (foreign_table_index, foreign_instance)
         }
+    }
+
+    fn drop_globals(&mut self) {
+        for (idx, global) in self.module.globals.iter() {
+            let idx = match self.module.defined_global_index(idx) {
+                Some(idx) => idx,
+                None => continue,
+            };
+            match global.wasm_ty {
+                // For now only externref gloabls need to get destroyed
+                WasmType::ExternRef => {}
+                _ => continue,
+            }
+            unsafe {
+                drop((*self.global_ptr(idx)).as_externref_mut().take());
+            }
+        }
+    }
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        self.drop_globals();
     }
 }
 
@@ -891,6 +901,16 @@ pub struct InstanceHandle {
     instance: *mut Instance,
 }
 
+// These are only valid if the `Instance` type is send/sync, hence the
+// assertion below.
+unsafe impl Send for InstanceHandle {}
+unsafe impl Sync for InstanceHandle {}
+
+fn _assert_send_sync() {
+    fn _assert<T: Send + Sync>() {}
+    _assert::<Instance>();
+}
+
 impl InstanceHandle {
     /// Create a new `InstanceHandle` pointing at the instance
     /// pointed to by the given `VMContext` pointer.
@@ -898,6 +918,7 @@ impl InstanceHandle {
     /// # Safety
     /// This is unsafe because it doesn't work on just any `VMContext`, it must
     /// be a `VMContext` allocated as part of an `Instance`.
+    #[inline]
     pub unsafe fn from_vmctx(vmctx: *mut VMContext) -> Self {
         let instance = (&mut *vmctx).instance();
         Self {
@@ -911,6 +932,7 @@ impl InstanceHandle {
     }
 
     /// Return a raw pointer to the vmctx used by compiled wasm code.
+    #[inline]
     pub fn vmctx_ptr(&self) -> *mut VMContext {
         self.instance().vmctx_ptr()
     }
@@ -944,12 +966,9 @@ impl InstanceHandle {
         self.instance().memory_index(memory)
     }
 
-    /// Grow memory in this instance by the specified amount of pages.
-    ///
-    /// Returns `None` if memory can't be grown by the specified amount
-    /// of pages.
-    pub fn memory_grow(&self, memory_index: DefinedMemoryIndex, delta: u32) -> Option<u32> {
-        self.instance().memory_grow(memory_index, delta)
+    /// Get a memory defined locally within this module.
+    pub fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {
+        self.instance_mut().get_defined_memory(index)
     }
 
     /// Return the table index for the given `VMTableDefinition` in this instance.
@@ -957,81 +976,33 @@ impl InstanceHandle {
         self.instance().table_index(table)
     }
 
-    /// Grow table in this instance by the specified amount of elements.
-    ///
-    /// When the table is successfully grown, returns the original size of the
-    /// table.
-    ///
-    /// Returns `None` if memory can't be grown by the specified amount of pages
-    /// or if the `init_value` is the incorrect table element type.
-    pub fn table_grow(
-        &self,
-        table_index: TableIndex,
-        delta: u32,
-        init_value: TableElement,
-    ) -> Option<u32> {
-        self.instance().table_grow(table_index, delta, init_value)
-    }
-
-    /// Grow table in this instance by the specified amount of elements.
-    ///
-    /// When the table is successfully grown, returns the original size of the
-    /// table.
-    ///
-    /// Returns `None` if memory can't be grown by the specified amount of pages
-    /// or if the `init_value` is the incorrect table element type.
-    pub fn defined_table_grow(
-        &self,
-        table_index: DefinedTableIndex,
-        delta: u32,
-        init_value: TableElement,
-    ) -> Option<u32> {
-        self.instance()
-            .defined_table_grow(table_index, delta, init_value)
-    }
-
-    /// Get table element reference.
-    ///
-    /// Returns `None` if index is out of bounds.
-    pub fn table_get(&self, table_index: DefinedTableIndex, index: u32) -> Option<TableElement> {
-        self.instance().table_get(table_index, index)
-    }
-
-    /// Set table element reference.
-    ///
-    /// Returns an error if the index is out of bounds
-    pub fn table_set(
-        &self,
-        table_index: DefinedTableIndex,
-        index: u32,
-        val: TableElement,
-    ) -> Result<(), ()> {
-        self.instance().table_set(table_index, index, val)
-    }
-
-    /// Fill a region of the table.
-    ///
-    /// Returns an error if the region is out of bounds or val is not of the
-    /// correct type.
-    pub fn defined_table_fill(
-        &self,
-        table_index: DefinedTableIndex,
-        dst: u32,
-        val: TableElement,
-        len: u32,
-    ) -> Result<(), Trap> {
-        self.instance()
-            .defined_table_fill(table_index, dst, val, len)
-    }
-
     /// Get a table defined locally within this module.
-    pub fn get_defined_table(&self, index: DefinedTableIndex) -> &Table {
-        self.instance().get_defined_table(index)
+    pub fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
+        self.instance_mut().get_defined_table(index)
     }
 
     /// Return a reference to the contained `Instance`.
+    #[inline]
     pub(crate) fn instance(&self) -> &Instance {
         unsafe { &*(self.instance as *const Instance) }
+    }
+
+    pub(crate) fn instance_mut(&mut self) -> &mut Instance {
+        unsafe { &mut *self.instance }
+    }
+
+    /// Returns the `Store` pointer that was stored on creation
+    #[inline]
+    pub fn store(&self) -> *mut dyn Store {
+        self.instance().store()
+    }
+
+    /// Configure the `*mut dyn Store` internal pointer after-the-fact.
+    ///
+    /// This is provided for the original `Store` itself to configure the first
+    /// self-pointer after the original `Box` has been initialized.
+    pub unsafe fn set_store(&mut self, store: *mut dyn Store) {
+        self.instance_mut().set_store(store);
     }
 
     /// Returns a clone of this instance.

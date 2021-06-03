@@ -28,12 +28,18 @@ to tweak the `-lpthread` and such annotations.
 static void exit_with_error(const char *message, wasmtime_error_t *error, wasm_trap_t *trap);
 
 int main() {
-  int ret = 0;
   // Set up our context
   wasm_engine_t *engine = wasm_engine_new();
   assert(engine != NULL);
-  wasm_store_t *store = wasm_store_new(engine);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
+
+  // Create a linker with WASI functions defined
+  wasmtime_linker_t *linker = wasmtime_linker_new(engine);
+  wasmtime_error_t *error = wasmtime_linker_define_wasi(linker);
+  if (error != NULL)
+    exit_with_error("failed to link wasi", error, NULL);
 
   wasm_byte_vec_t wasm;
   // Load our input file to parse it next
@@ -53,8 +59,8 @@ int main() {
   fclose(file);
 
   // Compile our modules
-  wasm_module_t *module = NULL;
-  wasmtime_error_t *error = wasmtime_module_new(engine, &wasm, &module);
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t*)wasm.data, wasm.size, &module);
   if (!module)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
@@ -68,39 +74,28 @@ int main() {
   wasi_config_inherit_stdout(wasi_config);
   wasi_config_inherit_stderr(wasi_config);
   wasm_trap_t *trap = NULL;
-  wasi_instance_t *wasi = wasi_instance_new(store, "wasi_snapshot_preview1", wasi_config, &trap);
-  if (wasi == NULL)
-    exit_with_error("failed to instantiate WASI", NULL, trap);
-
-  wasmtime_linker_t *linker = wasmtime_linker_new(store);
-  error = wasmtime_linker_define_wasi(linker, wasi);
+  error = wasmtime_context_set_wasi(context, wasi_config);
   if (error != NULL)
-    exit_with_error("failed to link wasi", error, NULL);
+    exit_with_error("failed to instantiate WASI", error, NULL);
 
   // Instantiate the module
-  wasm_name_t empty;
-  wasm_name_new_from_string(&empty, "");
-  wasm_instance_t *instance = NULL;
-  error = wasmtime_linker_module(linker, &empty, module);
+  error = wasmtime_linker_module(linker, context, "", 0, module);
   if (error != NULL)
     exit_with_error("failed to instantiate module", error, NULL);
 
   // Run it.
-  wasm_func_t* func;
-  wasmtime_linker_get_default(linker, &empty, &func);
+  wasmtime_func_t func;
+  error = wasmtime_linker_get_default(linker, context, "", 0, &func);
   if (error != NULL)
     exit_with_error("failed to locate default export for module", error, NULL);
 
-  wasm_val_vec_t args_vec = WASM_EMPTY_VEC;
-  wasm_val_vec_t results_vec = WASM_EMPTY_VEC;
-  error = wasmtime_func_call(func, &args_vec, &results_vec, &trap);
-  if (error != NULL)
+  error = wasmtime_func_call(context, &func, NULL, 0, NULL, 0, &trap);
+  if (error != NULL || trap != NULL)
     exit_with_error("error calling default export", error, trap);
 
   // Clean up after ourselves at this point
-  wasm_name_delete(&empty);
-  wasm_module_delete(module);
-  wasm_store_delete(store);
+  wasmtime_module_delete(module);
+  wasmtime_store_delete(store);
   wasm_engine_delete(engine);
   return 0;
 }

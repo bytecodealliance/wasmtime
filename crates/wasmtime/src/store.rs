@@ -1,26 +1,144 @@
-use crate::{
-    module::ModuleRegistry, signatures::SignatureCollection, trampoline::StoreInstanceHandle,
-    Engine, Func, Module, ResourceLimiter, ResourceLimiterProxy, Trap, DEFAULT_INSTANCE_LIMIT,
-    DEFAULT_MEMORY_LIMIT, DEFAULT_TABLE_LIMIT,
-};
+use crate::{module::ModuleRegistry, Engine, Module, Trap};
 use anyhow::{bail, Result};
-use std::any::{Any, TypeId};
-use std::cell::{Cell, RefCell};
-use std::collections::{hash_map::Entry, HashMap};
+use std::cell::UnsafeCell;
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::error::Error;
 use std::fmt;
 use std::future::Future;
-use std::hash::{Hash, Hasher};
+use std::marker;
+use std::mem::ManuallyDrop;
 use std::pin::Pin;
 use std::ptr;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
-    InstanceAllocator, InstanceHandle, ModuleInfo, OnDemandInstanceAllocator, SignalHandler,
-    TrapInfo, VMCallerCheckedAnyfunc, VMContext, VMExternRef, VMExternRefActivationsTable,
-    VMInterrupts, VMTrampoline,
+    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
+    OnDemandInstanceAllocator, SignalHandler, VMCallerCheckedAnyfunc, VMContext, VMExternRef,
+    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
 };
+
+mod context;
+pub use self::context::*;
+mod data;
+pub use self::data::*;
+
+/// A [`Store`] is a collection of WebAssembly instances and host-defined state.
+///
+/// All WebAssembly instances and items will be attached to and refer to a
+/// [`Store`]. For example instances, functions, globals, and tables are all
+/// attached to a [`Store`]. Instances are created by instantiating a
+/// [`Module`](crate::Module) within a [`Store`].
+///
+/// A [`Store`] is intended to be a short-lived object in a program. No form
+/// of GC is implemented at this time so once an instance is created within a
+/// [`Store`] it will not be deallocated until the [`Store`] itself is dropped.
+/// This makes [`Store`] unsuitable for creating an unbounded number of
+/// instances in it because [`Store`] will never release this memory. It's
+/// recommended to have a [`Store`] correspond roughly to the liftime of a "main
+/// instance" that an embedding is interested in executing.
+///
+/// ## Type parameter `T`
+///
+/// Each [`Store`] has a type parameter `T` associated with it. This `T`
+/// represents state defined by the host. This state will be accessible through
+/// the [`Caller`](crate::Caller) type that host-defined functions get access
+/// to. This `T` is suitable for storing `Store`-specific information which
+/// imported functions may want access to.
+///
+/// The data `T` can be accessed through methods like [`Store::data`] and
+/// [`Store::data_mut`].
+///
+/// ## Stores, contexts, oh my
+///
+/// Most methods in Wasmtime take something of the form
+/// [`AsContext`](crate::AsContext) or [`AsContextMut`](crate::AsContextMut) as
+/// the first argument. These two traits allow ergonomically passing in the
+/// context you currently have to any method. The primary two sources of
+/// contexts are:
+///
+/// * `Store<T>`
+/// * `Caller<'_, T>`
+///
+/// corresponding to what you create and what you have access to in a host
+/// function. You can also explicitly acquire a [`StoreContext`] or
+/// [`StoreContextMut`] and pass that around as well.
+///
+/// Note that all methods on [`Store`] are mirrored onto [`StoreContext`],
+/// [`StoreContextMut`], and [`Caller`](crate::Caller). This way no matter what
+/// form of context you have you can call various methods, create objects, etc.
+///
+/// ## Stores and `Default`
+///
+/// You can create a store with default configuration settings using
+/// `Store::default()`. This will create a brand new [`Engine`] with default
+/// ocnfiguration (see [`Config`](crate::Config) for more information).
+pub struct Store<T> {
+    // for comments about `ManuallyDrop`, see `Store::into_data`
+    inner: ManuallyDrop<Box<StoreInner<T>>>,
+}
+
+pub struct StoreInner<T: ?Sized> {
+    // This `StoreInner<T>` structure has references to itself. These aren't
+    // immediately evident, however, so we need to tell the compiler that it
+    // contains self-references. This notably suppresses `noalias` annotations
+    // when this shows up in compiled code because types of this structure do
+    // indeed alias itself. The best example of this is `StoreOpaque` which
+    // contains a `&mut StoreInner` and a `*mut dyn Store` which are actually
+    // the same pointer, indeed aliasing!
+    //
+    // It's somewhat unclear to me at this time if this is 100% sufficient to
+    // get all the right codegen in all the right places. For example does
+    // `Store` need to internally contain a `Pin<Box<StoreInner<T>>>`? Do the
+    // contexts need to contain `Pin<&mut StoreInner<T>>`? I'm not familiar
+    // enough with `Pin` to understand if it's appropriate here (we do, for
+    // example want to allow movement in and out of `data: T`, just not movement
+    // of most of the other members). It's also not clear if using `Pin` in a
+    // few places buys us much other than a bunch of `unsafe` that we already
+    // sort of hand-wave away.
+    //
+    // In any case this seems like a good mid-ground for now where we're at
+    // least telling the compiler something about all the aliasing happening
+    // within a `Store`.
+    _marker: marker::PhantomPinned,
+
+    engine: Engine,
+    interrupts: Arc<VMInterrupts>,
+    instances: Vec<StoreInstance>,
+    signal_handler: Option<Box<SignalHandler<'static>>>,
+    externref_activations_table: VMExternRefActivationsTable,
+    modules: ModuleRegistry,
+    host_trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
+    // Numbers of resources instantiated in this store.
+    instance_count: usize,
+    memory_count: usize,
+    table_count: usize,
+    /// An adjustment to add to the fuel consumed value in `interrupts` above
+    /// to get the true amount of fuel consumed.
+    fuel_adj: i64,
+    #[cfg(feature = "async")]
+    async_state: AsyncState,
+    out_of_gas_behavior: OutOfGas,
+    store_data: StoreData,
+    limiter: Option<Box<dyn wasmtime_runtime::ResourceLimiter>>,
+    default_callee: InstanceHandle,
+    // for comments about `ManuallyDrop`, see `Store::into_data`
+    data: ManuallyDrop<T>,
+}
+
+#[cfg(feature = "async")]
+struct AsyncState {
+    current_suspend:
+        UnsafeCell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
+    current_poll_cx: UnsafeCell<*mut Context<'static>>,
+}
+
+// Lots of pesky unsafe cells and pointers in this structure. This means we need
+// to declare explicitly that we use this in a threadsafe fashion.
+#[cfg(feature = "async")]
+unsafe impl Send for AsyncState {}
+#[cfg(feature = "async")]
+unsafe impl Sync for AsyncState {}
 
 /// Used to associate instances with the store.
 ///
@@ -32,67 +150,6 @@ struct StoreInstance {
     ondemand: bool,
 }
 
-/// A `Store` is a collection of WebAssembly instances and host-defined items.
-///
-/// All WebAssembly instances and items will be attached to and refer to a
-/// `Store`. For example instances, functions, globals, and tables are all
-/// attached to a `Store`. Instances are created by instantiating a
-/// [`Module`](crate::Module) within a `Store`.
-///
-/// `Store` is not thread-safe and cannot be sent to other threads. All items
-/// which refer to a `Store` additionally are not threadsafe and can only be
-/// used on the original thread that they were created on.
-///
-/// A `Store` is not intended to be a long-lived object in a program. No form of
-/// GC is implemented at this time so once an instance is created within a
-/// `Store` it will not be deallocated until all references to the `Store` have
-/// gone away (this includes all references to items in the store). This makes
-/// `Store` unsuitable for creating an unbounded number of instances in it
-/// because `Store` will never release this memory. It's instead recommended to
-/// have a long-lived [`Engine`] and instead create a `Store` for a more scoped
-/// portion of your application.
-///
-/// # Stores and `Clone`
-///
-/// Using `clone` on a `Store` is a cheap operation. It will not create an
-/// entirely new store, but rather just a new reference to the existing object.
-/// In other words it's a shallow copy, not a deep copy.
-///
-/// ## Stores and `Default`
-///
-/// You can create a store with default configuration settings using
-/// `Store::default()`. This will create a brand new [`Engine`] with default
-/// ocnfiguration (see [`Config`](crate::Config) for more information).
-#[derive(Clone)]
-pub struct Store {
-    inner: Rc<StoreInner>,
-}
-
-pub(crate) struct StoreInner {
-    engine: Engine,
-    interrupts: Arc<VMInterrupts>,
-    instances: RefCell<Vec<StoreInstance>>,
-    signal_handler: RefCell<Option<Box<SignalHandler<'static>>>>,
-    externref_activations_table: VMExternRefActivationsTable,
-    modules: RefCell<ModuleRegistry>,
-    // The signatures and trampolines for `Func` objects
-    signatures: RefCell<SignatureCollection>,
-    // Numbers of resources instantiated in this store.
-    instance_count: Cell<usize>,
-    memory_count: Cell<usize>,
-    table_count: Cell<usize>,
-    /// An adjustment to add to the fuel consumed value in `interrupts` above
-    /// to get the true amount of fuel consumed.
-    fuel_adj: Cell<i64>,
-    #[cfg(feature = "async")]
-    current_suspend: Cell<*const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>>,
-    #[cfg(feature = "async")]
-    current_poll_cx: Cell<*mut Context<'static>>,
-    out_of_gas_behavior: Cell<OutOfGas>,
-    context_values: RefCell<HashMap<TypeId, Box<dyn Any>>>,
-    limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>,
-}
-
 #[derive(Copy, Clone)]
 enum OutOfGas {
     Trap,
@@ -102,251 +159,129 @@ enum OutOfGas {
     },
 }
 
-struct HostInfoKey(VMExternRef);
-
-impl PartialEq for HostInfoKey {
-    fn eq(&self, rhs: &Self) -> bool {
-        VMExternRef::eq(&self.0, &rhs.0)
-    }
-}
-
-impl Eq for HostInfoKey {}
-
-impl Hash for HostInfoKey {
-    fn hash<H>(&self, hasher: &mut H)
-    where
-        H: Hasher,
-    {
-        VMExternRef::hash(&self.0, hasher);
-    }
-}
-
-impl Store {
-    /// Creates a new [`Store`] to be associated with the given [`Engine`].
+impl<T> Store<T> {
+    /// Creates a new [`Store`] to be associated with the given [`Engine`] and
+    /// `data` provided.
     ///
-    /// The created [`Store`] will place no additional limits on the size of linear
-    /// memories or tables at runtime. Linear memories and tables will be allowed to
-    /// grow to any upper limit specified in their definitions.
-    ///
-    /// The store will limit the number of instances, linear memories, and tables created to 10,000.
-    ///
-    /// Use [`Store::new_with_limits`] with a [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) to
-    /// specify different limits for the store.
-    pub fn new(engine: &Engine) -> Self {
-        Self::new_(engine, None)
-    }
+    /// The created [`Store`] will place no additional limits on the size of
+    /// linear memories or tables at runtime. Linear memories and tables will
+    /// be allowed to grow to any upper limit specified in their definitions.
+    /// The store will limit the number of instances, linear memories, and
+    /// tables created to 10,000. This can be overridden with the
+    /// [`Store::limiter`] configuration method.
+    pub fn new(engine: &Engine, data: T) -> Self {
+        let finished_functions = &Default::default();
+        // Wasmtime uses the callee argument to host functions to learn about
+        // the original pointer to the `Store` itself, allowing it to
+        // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
+        // however, there's no "callee" to provide. To fix this we allocate a
+        // single "default callee" for the entire `Store`. This is then used as
+        // part of `Func::call` to guarantee that the `callee: *mut VMContext`
+        // is never null.
+        let default_callee = unsafe {
+            OnDemandInstanceAllocator::default()
+                .allocate(InstanceAllocationRequest {
+                    host_state: Box::new(()),
+                    finished_functions,
+                    shared_signatures: None.into(),
+                    imports: Default::default(),
+                    module: Arc::new(wasmtime_environ::Module::default()),
+                    store: None,
+                })
+                .expect("failed to allocate default callee")
+        };
+        let mut inner = Box::new(StoreInner {
+            _marker: marker::PhantomPinned,
+            engine: engine.clone(),
+            interrupts: Default::default(),
+            instances: Vec::new(),
+            signal_handler: None,
+            externref_activations_table: VMExternRefActivationsTable::new(),
+            modules: ModuleRegistry::default(),
+            host_trampolines: HashMap::default(),
+            instance_count: 0,
+            memory_count: 0,
+            table_count: 0,
+            fuel_adj: 0,
+            #[cfg(feature = "async")]
+            async_state: AsyncState {
+                current_suspend: UnsafeCell::new(ptr::null()),
+                current_poll_cx: UnsafeCell::new(ptr::null_mut()),
+            },
+            out_of_gas_behavior: OutOfGas::Trap,
+            store_data: StoreData::new(),
+            limiter: None,
+            default_callee,
+            data: ManuallyDrop::new(data),
+        });
 
-    /// Creates a new [`Store`] to be associated with the given [`Engine`] and using the supplied
-    /// resource limiter.
-    ///
-    /// A [`ResourceLimiter`] can be implemented by hosts to control the size of WebAssembly
-    /// linear memories and tables when a request is made to grow them.
-    ///
-    /// [`StoreLimitsBuilder`](crate::StoreLimitsBuilder) can be used to create a
-    /// [`StoreLimits`](crate::StoreLimits) that implements [`ResourceLimiter`] using
-    /// static limit values.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use wasmtime::{Engine, Store, StoreLimitsBuilder};
-    /// // Place a limit on linear memories so they cannot grow beyond 1 MiB
-    /// let engine = Engine::default();
-    /// let store = Store::new_with_limits(&engine, StoreLimitsBuilder::new().memory_pages(16).build());
-    /// ```
-    pub fn new_with_limits(engine: &Engine, limiter: impl ResourceLimiter + 'static) -> Self {
-        Self::new_(engine, Some(Rc::new(ResourceLimiterProxy(limiter))))
-    }
-
-    fn new_(engine: &Engine, limiter: Option<Rc<dyn wasmtime_runtime::ResourceLimiter>>) -> Self {
-        // Ensure that wasmtime_runtime's signal handlers are configured. This
-        // is the per-program initialization required for handling traps, such
-        // as configuring signals, vectored exception handlers, etc.
-        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc);
-
+        // Once we've actually allocated the store itself we can configure the
+        // trait object pointer of the default callee.
+        let store = StoreContextMut(&mut *inner).opaque().traitobj;
+        unsafe {
+            inner.default_callee.set_store(store);
+        }
         Self {
-            inner: Rc::new(StoreInner {
-                engine: engine.clone(),
-                interrupts: Arc::new(Default::default()),
-                instances: RefCell::new(Vec::new()),
-                signal_handler: RefCell::new(None),
-                externref_activations_table: VMExternRefActivationsTable::new(),
-                modules: RefCell::new(ModuleRegistry::default()),
-                signatures: RefCell::new(SignatureCollection::new(engine.signatures())),
-                instance_count: Default::default(),
-                memory_count: Default::default(),
-                table_count: Default::default(),
-                fuel_adj: Cell::new(0),
-                #[cfg(feature = "async")]
-                current_suspend: Cell::new(ptr::null()),
-                #[cfg(feature = "async")]
-                current_poll_cx: Cell::new(ptr::null_mut()),
-                out_of_gas_behavior: Cell::new(OutOfGas::Trap),
-                context_values: RefCell::new(HashMap::new()),
-                limiter,
-            }),
+            inner: ManuallyDrop::new(inner),
         }
     }
 
-    /// Gets a host function from the [`Config`](crate::Config) associated with this [`Store`].
+    /// Access the underlying data owned by this `Store`.
+    pub fn data(&self) -> &T {
+        self.inner.data()
+    }
+
+    /// Access the underlying data owned by this `Store`.
+    pub fn data_mut(&mut self) -> &mut T {
+        self.inner.data_mut()
+    }
+
+    /// Consumes this [`Store`], destroying it, and returns the underlying data.
+    pub fn into_data(mut self) -> T {
+        // This is an unsafe operation because we want to avoid having a runtime
+        // check or boolean for whether the data is actually contained within a
+        // `Store`. The data itself is stored as `ManuallyDrop` since we're
+        // manually managing the memory here, and there's also a `ManuallyDrop`
+        // around the `Box<StoreInner<T>>`. The way this works though is a bit
+        // tricky, so here's how things get dropped appropriately:
+        //
+        // * When a `Store<T>` is normally dropped, the custom destructor for
+        //   `Store<T>` will drop `T`, then the `self.inner` field. The
+        //   rustc-glue destructor runs for `Box<StoreInner<T>>` which drops
+        //   `StoreInner<T>`. This cleans up all internal fields and doesn't
+        //   touch `T` because it's wrapped in `ManuallyDrop`.
+        //
+        // * When calling this method we skip the top-level destructor for
+        //   `Store<T>` with `mem::forget`. This skips both the destructor for
+        //   `T` and the destructor for `StoreInner<T>`. We do, however, run the
+        //   destructor for `Box<StoreInner<T>>` which, like above, will skip
+        //   the destructor for `T` since it's `ManuallyDrop`.
+        //
+        // In both cases all the other fields of `StoreInner<T>` should all get
+        // dropped, and the manual management of destructors is basically
+        // between this method and `Drop for Store<T>`. Note that this also
+        // means that `Drop for StoreInner<T>` cannot access `self.data`, so
+        // there is a comment indicating this as well.
+        unsafe {
+            let mut inner = ManuallyDrop::take(&mut self.inner);
+            std::mem::forget(self);
+            ManuallyDrop::take(&mut inner.data)
+        }
+    }
+
+    /// Configures the [`ResourceLimiter`](crate::ResourceLimiter) used to limit
+    /// resource creation within this [`Store`].
     ///
-    /// Returns `None` if the given host function is not defined.
-    pub fn get_host_func(&self, module: &str, name: &str) -> Option<Func> {
-        self.inner
-            .engine
-            .config()
-            .get_host_func(module, name)
-            .map(|f| {
-                // This call is safe because we know the function is coming from the
-                // config associated with this store
-                unsafe { f.to_func(self) }
-            })
+    /// Note that this limiter is only used to limit the creation/growth of
+    /// resources in the future, this does not retroactively attempt to apply
+    /// limits to the [`Store`].
+    pub fn limiter(&mut self, limiter: impl crate::ResourceLimiter) {
+        self.inner.limiter = Some(Box::new(crate::limits::ResourceLimiterProxy(limiter)));
     }
 
     /// Returns the [`Engine`] that this store is associated with.
-    #[inline]
     pub fn engine(&self) -> &Engine {
-        &self.inner.engine
-    }
-
-    /// Gets a context value from the store.
-    ///
-    /// Returns a reference to the context value if present.
-    pub fn get<T: Any>(&self) -> Option<&T> {
-        let values = self.inner.context_values.borrow();
-
-        // Safety: a context value cannot be removed once added and therefore the address is
-        // stable for the life of the store
-        values
-            .get(&TypeId::of::<T>())
-            .map(|v| unsafe { &*(v.downcast_ref::<T>().unwrap() as *const T) })
-    }
-
-    /// Sets a context value into the store.
-    ///
-    /// Returns the given value as an error if an existing value is already set.
-    pub fn set<T: Any>(&self, value: T) -> Result<(), T> {
-        let mut values = self.inner.context_values.borrow_mut();
-
-        match values.entry(value.type_id()) {
-            Entry::Occupied(_) => Err(value),
-            Entry::Vacant(v) => {
-                v.insert(Box::new(value));
-                Ok(())
-            }
-        }
-    }
-
-    pub(crate) fn limiter(&self) -> &Option<Rc<dyn wasmtime_runtime::ResourceLimiter>> {
-        &self.inner.limiter
-    }
-
-    pub(crate) fn signatures(&self) -> &RefCell<SignatureCollection> {
-        &self.inner.signatures
-    }
-
-    pub(crate) fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
-        // Look up the trampoline with the store's trampolines (from `Func`).
-        if let Some(trampoline) = self
-            .inner
-            .signatures
-            .borrow()
-            .trampoline(anyfunc.type_index)
-        {
-            return trampoline;
-        }
-
-        // Look up the trampoline with the registered modules
-        if let Some(trampoline) = self.inner.modules.borrow().lookup_trampoline(anyfunc) {
-            return trampoline;
-        }
-
-        // Lastly, check with the engine (for `HostFunc`)
-        self.inner
-            .engine
-            .host_func_signatures()
-            .trampoline(anyfunc.type_index)
-            .expect("trampoline missing")
-    }
-
-    pub(crate) fn bump_resource_counts(&self, module: &Module) -> Result<()> {
-        fn bump(slot: &Cell<usize>, max: usize, amt: usize, desc: &str) -> Result<()> {
-            let new = slot.get().saturating_add(amt);
-            if new > max {
-                bail!(
-                    "resource limit exceeded: {} count too high at {}",
-                    desc,
-                    new
-                );
-            }
-            slot.set(new);
-            Ok(())
-        }
-
-        let module = module.env_module();
-        let memories = module.memory_plans.len() - module.num_imported_memories;
-        let tables = module.table_plans.len() - module.num_imported_tables;
-        let (max_instances, max_memories, max_tables) = self.limits();
-
-        bump(&self.inner.instance_count, max_instances, 1, "instance")?;
-        bump(&self.inner.memory_count, max_memories, memories, "memory")?;
-        bump(&self.inner.table_count, max_tables, tables, "table")?;
-
-        Ok(())
-    }
-
-    pub(crate) unsafe fn add_instance(
-        &self,
-        handle: InstanceHandle,
-        ondemand: bool,
-    ) -> StoreInstanceHandle {
-        self.inner.instances.borrow_mut().push(StoreInstance {
-            handle: handle.clone(),
-            ondemand,
-        });
-        StoreInstanceHandle {
-            store: self.clone(),
-            handle,
-        }
-    }
-
-    pub(crate) fn existing_instance_handle(&self, handle: InstanceHandle) -> StoreInstanceHandle {
-        debug_assert!(
-            self.inner
-                .instances
-                .borrow()
-                .iter()
-                .any(|i| i.handle.vmctx_ptr() == handle.vmctx_ptr())
-                || self.inner.engine.host_func_anyfunc(&handle).is_some()
-        );
-        StoreInstanceHandle {
-            store: self.clone(),
-            handle,
-        }
-    }
-
-    pub(crate) unsafe fn existing_vmctx(&self, cx: *mut VMContext) -> StoreInstanceHandle {
-        self.existing_instance_handle(InstanceHandle::from_vmctx(cx))
-    }
-
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
-    pub(crate) fn set_signal_handler(&self, handler: Option<Box<SignalHandler<'static>>>) {
-        *self.inner.signal_handler.borrow_mut() = handler;
-    }
-
-    #[inline]
-    pub(crate) fn interrupts(&self) -> &VMInterrupts {
-        &self.inner.interrupts
-    }
-
-    /// Returns whether the stores `a` and `b` refer to the same underlying
-    /// `Store`.
-    ///
-    /// Because the `Store` type is reference counted multiple clones may point
-    /// to the same underlying storage, and this method can be used to determine
-    /// whether two stores are indeed the same.
-    pub fn same(a: &Store, b: &Store) -> bool {
-        Rc::ptr_eq(&a.inner, &b.inner)
+        self.inner.engine()
     }
 
     /// Creates an [`InterruptHandle`] which can be used to interrupt the
@@ -407,15 +342,15 @@ impl Store {
     /// // Enable interruptable code via `Config` and then create an interrupt
     /// // handle which we'll use later to interrupt running code.
     /// let engine = Engine::new(Config::new().interruptable(true))?;
-    /// let store = Store::new(&engine);
+    /// let mut store = Store::new(&engine, ());
     /// let interrupt_handle = store.interrupt_handle()?;
     ///
     /// // Compile and instantiate a small example with an infinite loop.
     /// let module = Module::new(&engine, r#"
     ///     (func (export "run") (loop br 0))
     /// "#)?;
-    /// let instance = Instance::new(&store, &module, &[])?;
-    /// let run = instance.get_typed_func::<(), ()>("run")?;
+    /// let instance = Instance::new(&mut store, &module, &[])?;
+    /// let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
     ///
     /// // Spin up a thread to send us an interrupt in a second
     /// std::thread::spawn(move || {
@@ -423,43 +358,22 @@ impl Store {
     ///     interrupt_handle.interrupt();
     /// });
     ///
-    /// let trap = run.call(()).unwrap_err();
+    /// let trap = run.call(&mut store, ()).unwrap_err();
     /// assert!(trap.to_string().contains("wasm trap: interrupt"));
     /// # Ok(())
     /// # }
     /// ```
     pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
-        if self.engine().config().tunables.interruptable {
-            Ok(InterruptHandle {
-                interrupts: self.inner.interrupts.clone(),
-            })
-        } else {
-            bail!("interrupts aren't enabled for this `Store`")
-        }
-    }
-
-    #[inline]
-    pub(crate) fn externref_activations_table(&self) -> &VMExternRefActivationsTable {
-        &self.inner.externref_activations_table
-    }
-
-    #[inline]
-    pub(crate) fn modules(&self) -> &RefCell<ModuleRegistry> {
-        &self.inner.modules
-    }
-
-    #[inline]
-    pub(crate) fn module_info_lookup(&self) -> &dyn wasmtime_runtime::ModuleInfoLookup {
-        self.inner.as_ref()
+        self.inner.interrupt_handle()
     }
 
     /// Perform garbage collection of `ExternRef`s.
-    pub fn gc(&self) {
-        // For this crate's API, we ensure that `set_stack_canary` invariants
-        // are upheld for all host-->Wasm calls.
-        unsafe {
-            wasmtime_runtime::gc(self.inner.as_ref(), &self.inner.externref_activations_table);
-        }
+    ///
+    /// Note that it is not required to actively call this function. GC will
+    /// automatically happen when internal buffers fill up. This is provided if
+    /// fine-grained control over the GC is desired.
+    pub fn gc(&mut self) {
+        self.inner.gc()
     }
 
     /// Returns the amount of fuel consumed by this store's execution so far.
@@ -469,11 +383,7 @@ impl Store {
     /// function will return `None`. Also note that fuel, if enabled, must be
     /// originally configured via [`Store::add_fuel`].
     pub fn fuel_consumed(&self) -> Option<u64> {
-        if !self.engine().config().tunables.consume_fuel {
-            return None;
-        }
-        let consumed = unsafe { *self.inner.interrupts.fuel_consumed.get() };
-        Some(u64::try_from(self.inner.fuel_adj.get() + consumed).unwrap())
+        self.inner.fuel_consumed()
     }
 
     /// Adds fuel to this [`Store`] for wasm to consume while executing.
@@ -496,38 +406,8 @@ impl Store {
     ///
     /// This function will panic if the store's [`Config`](crate::Config) did
     /// not have fuel consumption enabled.
-    pub fn add_fuel(&self, fuel: u64) -> Result<()> {
-        anyhow::ensure!(
-            self.engine().config().tunables.consume_fuel,
-            "fuel is not configured in this store"
-        );
-
-        // Fuel is stored as an i64, so we need to cast it. If the provided fuel
-        // value overflows that just assume that i64::max will suffice. Wasm
-        // execution isn't fast enough to burn through i64::max fuel in any
-        // reasonable amount of time anyway.
-        let fuel = i64::try_from(fuel).unwrap_or(i64::max_value());
-        let adj = self.inner.fuel_adj.get();
-        let consumed_ptr = unsafe { &mut *self.inner.interrupts.fuel_consumed.get() };
-
-        match (consumed_ptr.checked_sub(fuel), adj.checked_add(fuel)) {
-            // If we succesfully did arithmetic without overflowing then we can
-            // just update our fields.
-            (Some(consumed), Some(adj)) => {
-                self.inner.fuel_adj.set(adj);
-                *consumed_ptr = consumed;
-            }
-
-            // Otherwise something overflowed. Make sure that we preserve the
-            // amount of fuel that's already consumed, but otherwise assume that
-            // we were given infinite fuel.
-            _ => {
-                self.inner.fuel_adj.set(i64::max_value());
-                *consumed_ptr = (*consumed_ptr + adj) - i64::max_value();
-            }
-        }
-
-        Ok(())
+    pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.inner.add_fuel(fuel)
     }
 
     /// Configures a [`Store`] to generate a [`Trap`] whenever it runs out of
@@ -540,8 +420,8 @@ impl Store {
     /// aborted.
     ///
     /// This is the default behavior for running out of fuel.
-    pub fn out_of_fuel_trap(&self) {
-        self.inner.out_of_gas_behavior.set(OutOfGas::Trap);
+    pub fn out_of_fuel_trap(&mut self) {
+        self.inner.out_of_fuel_trap()
     }
 
     /// Configures a [`Store`] to yield execution of async WebAssembly code
@@ -578,88 +458,385 @@ impl Store {
     ///
     /// This method will panic if it is not called on a store associated with an [async
     /// config](crate::Config::async_support).
-    pub fn out_of_fuel_async_yield(&self, injection_count: u32, fuel_to_inject: u64) {
+    pub fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
+        self.inner
+            .out_of_fuel_async_yield(injection_count, fuel_to_inject)
+    }
+}
+
+impl<'a, T> StoreContext<'a, T> {
+    pub(crate) fn async_support(&self) -> bool {
+        self.0.async_support()
+    }
+
+    /// Returns the underlying [`Engine`] this store is connected to.
+    pub fn engine(&self) -> &Engine {
+        self.0.engine()
+    }
+
+    /// Returns an [`InterruptHandle`] to interrupt wasm execution.
+    ///
+    /// See [`Store::interrupt_handle`] for more information.
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        self.0.interrupt_handle()
+    }
+
+    /// Access the underlying data owned by this `Store`.
+    ///
+    /// Same as [`Store::data`].
+    pub fn data(&self) -> &T {
+        self.0.data()
+    }
+
+    /// Returns the fuel consumed by this store.
+    ///
+    /// For more information see [`Store::fuel_consumed`].
+    pub fn fuel_consumed(&self) -> Option<u64> {
+        self.0.fuel_consumed()
+    }
+}
+
+impl<'a, T> StoreContextMut<'a, T> {
+    /// Access the underlying data owned by this `Store`.
+    ///
+    /// Same as [`Store::data`].
+    pub fn data(&self) -> &T {
+        self.0.data()
+    }
+
+    /// Access the underlying data owned by this `Store`.
+    ///
+    /// Same as [`Store::data_mut`].
+    pub fn data_mut(&mut self) -> &mut T {
+        self.0.data_mut()
+    }
+
+    /// Returns the underlying [`Engine`] this store is connected to.
+    pub fn engine(&self) -> &Engine {
+        self.0.engine()
+    }
+
+    /// Returns an [`InterruptHandle`] to interrupt wasm execution.
+    ///
+    /// See [`Store::interrupt_handle`] for more information.
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        self.0.interrupt_handle()
+    }
+
+    /// Perform garbage collection of `ExternRef`s.
+    ///
+    /// Same as [`Store::gc`].
+    pub fn gc(&mut self) {
+        self.0.gc()
+    }
+
+    /// Returns the fuel consumed by this store.
+    ///
+    /// For more information see [`Store::fuel_consumed`].
+    pub fn fuel_consumed(&self) -> Option<u64> {
+        self.0.fuel_consumed()
+    }
+
+    /// Inject more fuel into this store to be consumed when executing wasm code.
+    ///
+    /// For more information see [`Store::add_fuel`]
+    pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
+        self.0.add_fuel(fuel)
+    }
+
+    /// Configures this `Store` to trap whenever fuel runs out.
+    ///
+    /// For more information see [`Store::out_of_fuel_trap`]
+    pub fn out_of_fuel_trap(&mut self) {
+        self.0.out_of_fuel_trap()
+    }
+
+    /// Configures this `Store` to yield while executing futures whenever fuel
+    /// runs out.
+    ///
+    /// For more information see [`Store::out_of_fuel_async_yield`]
+    pub fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
+        self.0
+            .out_of_fuel_async_yield(injection_count, fuel_to_inject)
+    }
+
+    pub(crate) fn store_data(self) -> &'a StoreData {
+        self.0.store_data()
+    }
+}
+
+impl<T: ?Sized> StoreInner<T> {
+    fn data(&self) -> &T {
+        &self.data
+    }
+
+    fn data_mut(&mut self) -> &mut T {
+        &mut self.data
+    }
+
+    pub fn async_support(&self) -> bool {
+        self.engine().config().async_support
+    }
+
+    pub fn engine(&self) -> &Engine {
+        &self.engine
+    }
+
+    pub fn limiter(&mut self) -> Option<&mut dyn wasmtime_runtime::ResourceLimiter> {
+        self.limiter.as_mut().map(|l| &mut **l)
+    }
+
+    pub fn store_data(&self) -> &StoreData {
+        &self.store_data
+    }
+
+    pub fn store_data_mut(&mut self) -> &mut StoreData {
+        &mut self.store_data
+    }
+
+    pub fn register_host_trampoline(
+        &mut self,
+        idx: VMSharedSignatureIndex,
+        trampoline: VMTrampoline,
+    ) {
+        self.host_trampolines.insert(idx, trampoline);
+    }
+
+    pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
+        if self.engine.config().tunables.interruptable {
+            Ok(InterruptHandle {
+                interrupts: self.interrupts.clone(),
+            })
+        } else {
+            bail!("interrupts aren't enabled for this `Store`")
+        }
+    }
+
+    #[inline]
+    pub(crate) fn modules_mut(&mut self) -> &mut ModuleRegistry {
+        &mut self.modules
+    }
+
+    pub unsafe fn add_instance(&mut self, handle: InstanceHandle, ondemand: bool) -> InstanceId {
+        self.instances.push(StoreInstance {
+            handle: handle.clone(),
+            ondemand,
+        });
+        InstanceId(self.instances.len() - 1)
+    }
+
+    pub fn instance(&self, id: InstanceId) -> &InstanceHandle {
+        &self.instances[id.0].handle
+    }
+
+    pub fn instance_mut(&mut self, id: InstanceId) -> &mut InstanceHandle {
+        &mut self.instances[id.0].handle
+    }
+
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
+    pub fn set_signal_handler(&mut self, handler: Option<Box<SignalHandler<'static>>>) {
+        self.signal_handler = handler;
+    }
+
+    #[inline]
+    pub fn interrupts(&self) -> &VMInterrupts {
+        &self.interrupts
+    }
+
+    #[inline]
+    pub fn externref_activations_table(&mut self) -> &mut VMExternRefActivationsTable {
+        &mut self.externref_activations_table
+    }
+
+    pub fn gc(&mut self) {
+        // For this crate's API, we ensure that `set_stack_canary` invariants
+        // are upheld for all host-->Wasm calls.
+        unsafe { wasmtime_runtime::gc(&self.modules, &mut self.externref_activations_table) }
+    }
+
+    pub fn bump_resource_counts(&mut self, module: &Module) -> Result<()> {
+        fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
+            let new = slot.saturating_add(amt);
+            if new > max {
+                bail!(
+                    "resource limit exceeded: {} count too high at {}",
+                    desc,
+                    new
+                );
+            }
+            *slot = new;
+            Ok(())
+        }
+
+        let module = module.env_module();
+        let memories = module.memory_plans.len() - module.num_imported_memories;
+        let tables = module.table_plans.len() - module.num_imported_tables;
+        let (max_instances, max_memories, max_tables) = self.limits();
+
+        bump(&mut self.instance_count, max_instances, 1, "instance")?;
+        bump(&mut self.memory_count, max_memories, memories, "memory")?;
+        bump(&mut self.table_count, max_tables, tables, "table")?;
+
+        Ok(())
+    }
+
+    fn limits(&self) -> (usize, usize, usize) {
+        self.limiter
+            .as_ref()
+            .map(|l| (l.instances(), l.memories(), l.tables()))
+            .unwrap_or((
+                crate::limits::DEFAULT_INSTANCE_LIMIT,
+                crate::limits::DEFAULT_MEMORY_LIMIT,
+                crate::limits::DEFAULT_TABLE_LIMIT,
+            ))
+    }
+
+    pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
+        // Look up the trampoline with the store's trampolines (from `Func`).
+        if let Some(trampoline) = self.host_trampolines.get(&anyfunc.type_index) {
+            return *trampoline;
+        }
+
+        // Look up the trampoline with the registered modules
+        if let Some(trampoline) = self.modules.lookup_trampoline(anyfunc) {
+            return trampoline;
+        }
+
+        panic!("trampoline missing")
+    }
+
+    #[cfg(feature = "async")]
+    pub fn async_cx(&self) -> AsyncCx {
+        debug_assert!(self.async_support());
+        AsyncCx {
+            current_suspend: self.async_state.current_suspend.get(),
+            current_poll_cx: self.async_state.current_poll_cx.get(),
+        }
+    }
+
+    pub fn fuel_consumed(&self) -> Option<u64> {
+        if !self.engine.config().tunables.consume_fuel {
+            return None;
+        }
+        let consumed = unsafe { *self.interrupts.fuel_consumed.get() };
+        Some(u64::try_from(self.fuel_adj + consumed).unwrap())
+    }
+
+    fn out_of_fuel_trap(&mut self) {
+        self.out_of_gas_behavior = OutOfGas::Trap;
+    }
+
+    fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
         assert!(
             self.async_support(),
             "cannot use `out_of_fuel_async_yield` without enabling async support in the config"
         );
-        self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
+        self.out_of_gas_behavior = OutOfGas::InjectFuel {
             injection_count,
             fuel_to_inject,
-        });
+        };
     }
 
-    #[inline]
-    pub(crate) fn async_support(&self) -> bool {
-        self.inner.engine.config().async_support
-    }
-
-    /// Blocks on the asynchronous computation represented by `future` and
-    /// produces the result here, in-line.
+    /// Yields execution to the caller on out-of-gas
     ///
-    /// This function is designed to only work when it's currently executing on
-    /// a native fiber. This fiber provides the ability for us to handle the
-    /// future's `Pending` state as "jump back to whomever called the fiber in
-    /// an asynchronous fashion and propagate `Pending`". This tight coupling
-    /// with `on_fiber` below is what powers the asynchronicity of calling wasm.
-    /// Note that the asynchronous part only applies to host functions, wasm
-    /// itself never really does anything asynchronous at this time.
-    ///
-    /// This function takes a `future` and will (appear to) synchronously wait
-    /// on the result. While this function is executing it will fiber switch
-    /// to-and-from the original frame calling `on_fiber` which should be a
-    /// guarantee due to how async stores are configured.
-    ///
-    /// The return value here is either the output of the future `T`, or a trap
-    /// which represents that the asynchronous computation was cancelled. It is
-    /// not recommended to catch the trap and try to keep executing wasm, so
-    /// we've tried to liberally document this.
+    /// This only works on async futures and stores, and assumes that we're
+    /// executing on a fiber. This will yield execution back to the caller once
+    /// and when we come back we'll continue with `fuel_to_inject` more fuel.
     #[cfg(feature = "async")]
-    pub(crate) fn block_on<T>(
-        &self,
-        mut future: Pin<&mut dyn Future<Output = T>>,
-    ) -> Result<T, Trap> {
-        debug_assert!(self.async_support());
+    fn out_of_gas_yield(&mut self, fuel_to_inject: u64) -> Result<(), Trap> {
+        // Small future that yields once and then returns ()
+        #[derive(Default)]
+        struct Yield {
+            yielded: bool,
+        }
 
-        // Take our current `Suspend` context which was configured as soon as
-        // our fiber started. Note that we must load it at the front here and
-        // save it on our stack frame. While we're polling the future other
-        // fibers may be started for recursive computations, and the current
-        // suspend context is only preserved at the edges of the fiber, not
-        // during the fiber itself.
-        //
-        // For a little bit of extra safety we also replace the current value
-        // with null to try to catch any accidental bugs on our part early.
-        // This is all pretty unsafe so we're trying to be careful...
-        //
-        // Note that there should be a segfaulting test  in `async_functions.rs`
-        // if this `Reset` is removed.
-        let suspend = self.inner.current_suspend.replace(ptr::null());
-        let _reset = Reset(&self.inner.current_suspend, suspend);
-        assert!(!suspend.is_null());
+        impl Future for Yield {
+            type Output = ();
 
-        loop {
-            let future_result = unsafe {
-                let current_poll_cx = self.inner.current_poll_cx.replace(ptr::null_mut());
-                let _reset = Reset(&self.inner.current_poll_cx, current_poll_cx);
-                assert!(!current_poll_cx.is_null());
-                future.as_mut().poll(&mut *current_poll_cx)
-            };
-            match future_result {
-                Poll::Ready(t) => break Ok(t),
-                Poll::Pending => {}
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+                if self.yielded {
+                    Poll::Ready(())
+                } else {
+                    // Flag ourselves as yielded to return next time, and also
+                    // flag the waker that we're already ready to get
+                    // re-enqueued for another poll.
+                    self.yielded = true;
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
+                }
             }
+        }
 
-            unsafe {
-                let before = wasmtime_runtime::TlsRestore::take()
-                    .map_err(|e| Trap::from_runtime(self, e))?;
-                let res = (*suspend).suspend(());
-                before.replace().map_err(|e| Trap::from_runtime(self, e))?;
-                res?;
+        let mut future = Yield::default();
+        let result = unsafe { self.async_cx().block_on(Pin::new_unchecked(&mut future)) };
+        match result {
+            // If this finished successfully then we were resumed normally via a
+            // `poll`, so inject some more fuel and keep going.
+            Ok(()) => {
+                self.add_fuel(fuel_to_inject).unwrap();
+                Ok(())
             }
+            // If the future was dropped while we were yielded, then we need to
+            // clean up this fiber. Do so by raising a trap which will abort all
+            // wasm and get caught on the other side to clean things up.
+            Err(trap) => Err(trap),
         }
     }
 
+    fn add_fuel(&mut self, fuel: u64) -> Result<()> {
+        anyhow::ensure!(
+            self.engine().config().tunables.consume_fuel,
+            "fuel is not configured in this store"
+        );
+
+        // Fuel is stored as an i64, so we need to cast it. If the provided fuel
+        // value overflows that just assume that i64::max will suffice. Wasm
+        // execution isn't fast enough to burn through i64::max fuel in any
+        // reasonable amount of time anyway.
+        let fuel = i64::try_from(fuel).unwrap_or(i64::max_value());
+        let adj = self.fuel_adj;
+        let consumed_ptr = unsafe { &mut *self.interrupts.fuel_consumed.get() };
+
+        match (consumed_ptr.checked_sub(fuel), adj.checked_add(fuel)) {
+            // If we succesfully did arithmetic without overflowing then we can
+            // just update our fields.
+            (Some(consumed), Some(adj)) => {
+                self.fuel_adj = adj;
+                *consumed_ptr = consumed;
+            }
+
+            // Otherwise something overflowed. Make sure that we preserve the
+            // amount of fuel that's already consumed, but otherwise assume that
+            // we were given infinite fuel.
+            _ => {
+                self.fuel_adj = i64::max_value();
+                *consumed_ptr = (*consumed_ptr + adj) - i64::max_value();
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn signal_handler(&self) -> Option<*const SignalHandler<'static>> {
+        let handler = self.signal_handler.as_ref()?;
+        Some(&**handler as *const _)
+    }
+
+    pub fn vminterrupts(&self) -> *mut VMInterrupts {
+        &*self.interrupts as *const VMInterrupts as *mut VMInterrupts
+    }
+
+    pub unsafe fn insert_vmexternref(&mut self, r: VMExternRef) {
+        self.externref_activations_table
+            .insert_with_gc(r, &self.modules)
+    }
+
+    pub fn default_callee(&self) -> *mut VMContext {
+        self.default_callee.vmctx_ptr()
+    }
+}
+
+impl StoreOpaqueSend<'_> {
     /// Executes a synchronous computation `func` asynchronously on a new fiber.
     ///
     /// This function will convert the synchronous `func` into an asynchronous
@@ -670,57 +847,136 @@ impl Store {
     /// necessary to suspend the fiber later on and poll sub-futures. It's hoped
     /// that the various comments are illuminating as to what's going on here.
     #[cfg(feature = "async")]
-    pub(crate) async fn on_fiber<R>(&self, func: impl FnOnce() -> R) -> Result<R, Trap> {
-        let config = self.inner.engine.config();
+    pub async fn on_fiber<R>(
+        &mut self,
+        func: impl FnOnce(&mut StoreOpaque<'_>) -> R + Send,
+    ) -> Result<R, Trap> {
+        let config = self.engine.config();
 
         debug_assert!(self.async_support());
         debug_assert!(config.async_stack_size > 0);
 
-        let stack = self
-            .inner
-            .engine
-            .allocator()
-            .allocate_fiber_stack()
+        let mut slot = None;
+        let future = {
+            let current_poll_cx = self.async_state.current_poll_cx.get();
+            let current_suspend = self.async_state.current_suspend.get();
+            let stack = self
+                .engine
+                .allocator()
+                .allocate_fiber_stack()
+                .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
+
+            let engine = self.engine().clone();
+            let slot = &mut slot;
+            let fiber = wasmtime_fiber::Fiber::new(stack, move |keep_going, suspend| {
+                // First check and see if we were interrupted/dropped, and only
+                // continue if we haven't been.
+                keep_going?;
+
+                // Configure our store's suspension context for the rest of the
+                // execution of this fiber. Note that a raw pointer is stored here
+                // which is only valid for the duration of this closure.
+                // Consequently we at least replace it with the previous value when
+                // we're done. This reset is also required for correctness because
+                // otherwise our value will overwrite another active fiber's value.
+                // There should be a test that segfaults in `async_functions.rs` if
+                // this `Replace` is removed.
+                unsafe {
+                    let _reset = Reset(current_suspend, *current_suspend);
+                    *current_suspend = suspend;
+
+                    *slot = Some(func(&mut self.opaque()));
+                    Ok(())
+                }
+            })
             .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
 
-        let mut slot = None;
-        let fiber = wasmtime_fiber::Fiber::new(stack, |keep_going, suspend| {
-            // First check and see if we were interrupted/dropped, and only
-            // continue if we haven't been.
-            keep_going?;
-
-            // Configure our store's suspension context for the rest of the
-            // execution of this fiber. Note that a raw pointer is stored here
-            // which is only valid for the duration of this closure.
-            // Consequently we at least replace it with the previous value when
-            // we're done. This reset is also required for correctness because
-            // otherwise our value will overwrite another active fiber's value.
-            // There should be a test that segfaults in `async_functions.rs` if
-            // this `Replace` is removed.
-            let prev = self.inner.current_suspend.replace(suspend);
-            let _reset = Reset(&self.inner.current_suspend, prev);
-
-            slot = Some(func());
-            Ok(())
-        })
-        .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
-
-        // Once we have the fiber representing our synchronous computation, we
-        // wrap that in a custom future implementation which does the
-        // translation from the future protocol to our fiber API.
-        FiberFuture { fiber, store: self }.await?;
+            // Once we have the fiber representing our synchronous computation, we
+            // wrap that in a custom future implementation which does the
+            // translation from the future protocol to our fiber API.
+            FiberFuture {
+                fiber,
+                current_poll_cx,
+                engine,
+            }
+        };
+        future.await?;
 
         return Ok(slot.unwrap());
 
         struct FiberFuture<'a> {
             fiber: wasmtime_fiber::Fiber<'a, Result<(), Trap>, (), Result<(), Trap>>,
-            store: &'a Store,
+            current_poll_cx: *mut *mut Context<'static>,
+            engine: Engine,
         }
+
+        // This is surely the most dangerous `unsafe impl Send` in the entire
+        // crate. There are two members in `FiberFuture` which cause it to not
+        // be `Send`. One is `current_poll_cx` and is entirely uninteresting.
+        // This is just used to manage `Context` pointers across `await` points
+        // in the future, and requires raw pointers to get it to happen easily.
+        // Nothing too weird about the `Send`-ness, values aren't actually
+        // crossing threads.
+        //
+        // The really interesting piece is `fiber`. Now the "fiber" here is
+        // actual honest-to-god Rust code which we're moving around. What we're
+        // doing is the equivalent of moving our thread's stack to another OS
+        // thread. Turns out we, in general, have no idea what's on the stack
+        // and would generally have no way to verify that this is actually safe
+        // to do!
+        //
+        // Thankfully, though, Wasmtime has the power. Without being glib it's
+        // actually worth examining what's on the stack. It's unfortunately not
+        // super-local to this function itself. Our closure to `Fiber::new` runs
+        // `func`, which is given to us from the outside. Thankfully, though, we
+        // have tight control over this. Usage of `on_fiber` is typically done
+        // *just* before entering WebAssembly itself, so we'll have a few stack
+        // frames of Rust code (all in Wasmtime itself) before we enter wasm.
+        //
+        // Once we've entered wasm, well then we have a whole bunch of wasm
+        // frames on the stack. We've got this nifty thing called Cranelift,
+        // though, which allows us to also have complete control over everything
+        // on the stack!
+        //
+        // Finally, when wasm switches back to the fiber's starting pointer
+        // (this future we're returning) then it means wasm has reentered Rust.
+        // Suspension can only happen via the `block_on` function of an
+        // `AsyncCx`. This, conveniently, also happens entirely in Wasmtime
+        // controlled code!
+        //
+        // There's an extremely important point that should be called out here.
+        // User-provided futures **are not on the stack** during suspension
+        // points. This is extremely crucial because we in general cannot reason
+        // about Send/Sync for stack-local variables since rustc doesn't analyze
+        // them at all. With our construction, though, we are guaranteed that
+        // Wasmtime owns all stack frames between the stack of a fiber and when
+        // the fiber suspends (and it could move across threads). At this time
+        // the only user-provided piece of data on the stack is the future
+        // itself given to us. Lo-and-behold as you might notice the future is
+        // required to be `Send`!
+        //
+        // What this all boils down to is that we, as the authors of Wasmtime,
+        // need to be extremely careful that on the async fiber stack we only
+        // store Send things. For example we can't start using `Rc` willy nilly
+        // by accident and leave a copy in TLS somewhere. (similarly we have to
+        // be ready for TLS to change while we're executing wasm code between
+        // suspension points).
+        //
+        // While somewhat onerous it shouldn't be too too hard (the TLS bit is
+        // the hardest bit so far). This does mean, though, that no user should
+        // ever have to worry about the `Send`-ness of Wasmtime. If rustc says
+        // it's ok, then it's ok.
+        //
+        // With all that in mind we unsafely assert here that wasmtime is
+        // correct. We declare the fiber as only containing Send data on its
+        // stack, despite not knowing for sure at compile time that this is
+        // correct. That's what `unsafe` in Rust is all about, though, right?
+        unsafe impl Send for FiberFuture<'_> {}
 
         impl Future for FiberFuture<'_> {
             type Output = Result<(), Trap>;
 
-            fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
                 // We need to carry over this `cx` into our fiber's runtime
                 // for when it tries to poll sub-futures that are created. Doing
                 // this must be done unsafely, however, since `cx` is only alive
@@ -736,20 +992,21 @@ impl Store {
                 // On exit from this function, though, we reset the polling
                 // context back to what it was to signify that `Store` no longer
                 // has access to this pointer.
-                let cx =
-                    unsafe { std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx) };
-                let prev = self.store.inner.current_poll_cx.replace(cx);
-                let _reset = Reset(&self.store.inner.current_poll_cx, prev);
+                unsafe {
+                    let _reset = Reset(self.current_poll_cx, *self.current_poll_cx);
+                    *self.current_poll_cx =
+                        std::mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx);
 
-                // After that's set up we resume execution of the fiber, which
-                // may also start the fiber for the first time. This either
-                // returns `Ok` saying the fiber finished (yay!) or it returns
-                // `Err` with the payload passed to `suspend`, which in our case
-                // is `()`. If `Err` is returned that means the fiber polled a
-                // future but it said "Pending", so we propagate that here.
-                match self.fiber.resume(Ok(())) {
-                    Ok(result) => Poll::Ready(result),
-                    Err(()) => Poll::Pending,
+                    // After that's set up we resume execution of the fiber, which
+                    // may also start the fiber for the first time. This either
+                    // returns `Ok` saying the fiber finished (yay!) or it returns
+                    // `Err` with the payload passed to `suspend`, which in our case
+                    // is `()`. If `Err` is returned that means the fiber polled a
+                    // future but it said "Pending", so we propagate that here.
+                    match self.fiber.resume(Ok(())) {
+                        Ok(result) => Poll::Ready(result),
+                        Err(()) => Poll::Pending,
+                    }
                 }
             }
         }
@@ -781,17 +1038,125 @@ impl Store {
                 }
 
                 unsafe {
-                    self.store
-                        .engine()
+                    self.engine
                         .allocator()
                         .deallocate_fiber_stack(self.fiber.stack());
                 }
             }
         }
     }
+}
 
-    /// Immediately raise a trap on an out-of-gas condition.
-    fn out_of_gas_trap(&self) -> ! {
+#[cfg(feature = "async")]
+pub struct AsyncCx {
+    current_suspend: *mut *const wasmtime_fiber::Suspend<Result<(), Trap>, (), Result<(), Trap>>,
+    current_poll_cx: *mut *mut Context<'static>,
+}
+
+#[cfg(feature = "async")]
+impl AsyncCx {
+    /// Blocks on the asynchronous computation represented by `future` and
+    /// produces the result here, in-line.
+    ///
+    /// This function is designed to only work when it's currently executing on
+    /// a native fiber. This fiber provides the ability for us to handle the
+    /// future's `Pending` state as "jump back to whomever called the fiber in
+    /// an asynchronous fashion and propagate `Pending`". This tight coupling
+    /// with `on_fiber` below is what powers the asynchronicity of calling wasm.
+    /// Note that the asynchronous part only applies to host functions, wasm
+    /// itself never really does anything asynchronous at this time.
+    ///
+    /// This function takes a `future` and will (appear to) synchronously wait
+    /// on the result. While this function is executing it will fiber switch
+    /// to-and-from the original frame calling `on_fiber` which should be a
+    /// guarantee due to how async stores are configured.
+    ///
+    /// The return value here is either the output of the future `T`, or a trap
+    /// which represents that the asynchronous computation was cancelled. It is
+    /// not recommended to catch the trap and try to keep executing wasm, so
+    /// we've tried to liberally document this.
+    pub unsafe fn block_on<U>(
+        &self,
+        mut future: Pin<&mut (dyn Future<Output = U> + Send)>,
+    ) -> Result<U, Trap> {
+        // Take our current `Suspend` context which was configured as soon as
+        // our fiber started. Note that we must load it at the front here and
+        // save it on our stack frame. While we're polling the future other
+        // fibers may be started for recursive computations, and the current
+        // suspend context is only preserved at the edges of the fiber, not
+        // during the fiber itself.
+        //
+        // For a little bit of extra safety we also replace the current value
+        // with null to try to catch any accidental bugs on our part early.
+        // This is all pretty unsafe so we're trying to be careful...
+        //
+        // Note that there should be a segfaulting test  in `async_functions.rs`
+        // if this `Reset` is removed.
+        let suspend = *self.current_suspend;
+        let _reset = Reset(self.current_suspend, suspend);
+        *self.current_suspend = ptr::null();
+        assert!(!suspend.is_null());
+
+        loop {
+            let future_result = {
+                let poll_cx = *self.current_poll_cx;
+                let _reset = Reset(self.current_poll_cx, poll_cx);
+                *self.current_poll_cx = ptr::null_mut();
+                assert!(!poll_cx.is_null());
+                future.as_mut().poll(&mut *poll_cx)
+            };
+
+            match future_result {
+                Poll::Ready(t) => break Ok(t),
+                Poll::Pending => {}
+            }
+
+            let before = wasmtime_runtime::TlsRestore::take().map_err(Trap::from_runtime)?;
+            let res = (*suspend).suspend(());
+            before.replace().map_err(Trap::from_runtime)?;
+            res?;
+        }
+    }
+}
+
+unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
+    fn vminterrupts(&self) -> *mut VMInterrupts {
+        <StoreInner<T>>::vminterrupts(self)
+    }
+
+    fn externref_activations_table(
+        &mut self,
+    ) -> (
+        &mut VMExternRefActivationsTable,
+        &dyn wasmtime_runtime::ModuleInfoLookup,
+    ) {
+        (&mut self.externref_activations_table, &self.modules)
+    }
+
+    fn limiter(&mut self) -> Option<&mut dyn wasmtime_runtime::ResourceLimiter> {
+        self.limiter.as_mut().map(|l| &mut **l)
+    }
+
+    fn out_of_gas(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+        return match &mut self.out_of_gas_behavior {
+            OutOfGas::Trap => Err(Box::new(OutOfGasError)),
+            #[cfg(feature = "async")]
+            OutOfGas::InjectFuel {
+                injection_count,
+                fuel_to_inject,
+            } => {
+                if *injection_count == 0 {
+                    return Err(Box::new(OutOfGasError));
+                }
+                *injection_count -= 1;
+                let fuel = *fuel_to_inject;
+                StoreContextMut(self).opaque().out_of_gas_yield(fuel)?;
+                Ok(())
+            }
+            #[cfg(not(feature = "async"))]
+            OutOfGas::InjectFuel { .. } => unreachable!(),
+        };
+
         #[derive(Debug)]
         struct OutOfGasError;
 
@@ -802,139 +1167,58 @@ impl Store {
         }
 
         impl std::error::Error for OutOfGasError {}
-        unsafe {
-            wasmtime_runtime::raise_lib_trap(wasmtime_runtime::Trap::User(Box::new(OutOfGasError)))
-        }
-    }
-
-    /// Yields execution to the caller on out-of-gas
-    ///
-    /// This only works on async futures and stores, and assumes that we're
-    /// executing on a fiber. This will yield execution back to the caller once
-    /// and when we come back we'll continue with `fuel_to_inject` more fuel.
-    #[cfg(feature = "async")]
-    fn out_of_gas_yield(&self, fuel_to_inject: u64) {
-        // Small future that yields once and then returns ()
-        #[derive(Default)]
-        struct Yield {
-            yielded: bool,
-        }
-
-        impl Future for Yield {
-            type Output = ();
-
-            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-                if self.yielded {
-                    Poll::Ready(())
-                } else {
-                    // Flag ourselves as yielded to return next time, and also
-                    // flag the waker that we're already ready to get
-                    // re-enqueued for another poll.
-                    self.yielded = true;
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                }
-            }
-        }
-
-        let mut future = Yield::default();
-        match self.block_on(unsafe { Pin::new_unchecked(&mut future) }) {
-            // If this finished successfully then we were resumed normally via a
-            // `poll`, so inject some more fuel and keep going.
-            Ok(()) => self.add_fuel(fuel_to_inject).unwrap(),
-            // If the future was dropped while we were yielded, then we need to
-            // clean up this fiber. Do so by raising a trap which will abort all
-            // wasm and get caught on the other side to clean things up.
-            Err(trap) => unsafe { wasmtime_runtime::raise_user_trap(trap.into()) },
-        }
-    }
-
-    fn limits(&self) -> (usize, usize, usize) {
-        self.inner
-            .limiter
-            .as_ref()
-            .map(|l| (l.instances(), l.memories(), l.tables()))
-            .unwrap_or((
-                DEFAULT_INSTANCE_LIMIT,
-                DEFAULT_MEMORY_LIMIT,
-                DEFAULT_TABLE_LIMIT,
-            ))
     }
 }
 
-unsafe impl TrapInfo for Store {
-    #[inline]
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn custom_signal_handler(&self, call: &dyn Fn(&SignalHandler) -> bool) -> bool {
-        if let Some(handler) = &*self.inner.signal_handler.borrow() {
-            return call(handler);
-        }
-        false
-    }
-
-    fn out_of_gas(&self) {
-        match self.inner.out_of_gas_behavior.get() {
-            OutOfGas::Trap => self.out_of_gas_trap(),
-            #[cfg(feature = "async")]
-            OutOfGas::InjectFuel {
-                injection_count,
-                fuel_to_inject,
-            } => {
-                if injection_count == 0 {
-                    self.out_of_gas_trap();
-                }
-                self.inner.out_of_gas_behavior.set(OutOfGas::InjectFuel {
-                    injection_count: injection_count - 1,
-                    fuel_to_inject,
-                });
-                self.out_of_gas_yield(fuel_to_inject);
-            }
-            #[cfg(not(feature = "async"))]
-            OutOfGas::InjectFuel { .. } => unreachable!(),
-        }
-    }
-
-    #[inline]
-    fn interrupts(&self) -> &VMInterrupts {
-        &self.inner.interrupts
+impl<T: Default> Default for Store<T> {
+    fn default() -> Store<T> {
+        Store::new(&Engine::default(), T::default())
     }
 }
 
-impl Default for Store {
-    fn default() -> Store {
-        Store::new(&Engine::default())
-    }
-}
-
-impl fmt::Debug for Store {
+impl<T: fmt::Debug> fmt::Debug for Store<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let inner = &*self.inner as *const StoreInner;
-        f.debug_struct("Store").field("inner", &inner).finish()
+        let inner = &**self.inner as *const StoreInner<T>;
+        f.debug_struct("Store")
+            .field("inner", &inner)
+            .field("data", &self.inner.data)
+            .finish()
     }
 }
 
-impl Drop for StoreInner {
+impl<T> Drop for Store<T> {
     fn drop(&mut self) {
+        // for documentation on this `unsafe`, see `into_data`.
+        unsafe {
+            ManuallyDrop::drop(&mut self.inner.data);
+            ManuallyDrop::drop(&mut self.inner);
+        }
+    }
+}
+
+impl<T: ?Sized> Drop for StoreInner<T> {
+    fn drop(&mut self) {
+        // NB it's important that this destructor does not access `self.data`.
+        // That is deallocated by `Drop for Store<T>` above.
+
         let allocator = self.engine.allocator();
-        let ondemand = OnDemandInstanceAllocator::default();
-        for instance in self.instances.borrow().iter() {
-            unsafe {
+        unsafe {
+            let ondemand = OnDemandInstanceAllocator::default();
+            for instance in self.instances.iter() {
                 if instance.ondemand {
                     ondemand.deallocate(&instance.handle);
                 } else {
                     allocator.deallocate(&instance.handle);
                 }
             }
+            ondemand.deallocate(&self.default_callee);
         }
     }
 }
 
-impl wasmtime_runtime::ModuleInfoLookup for StoreInner {
+impl wasmtime_runtime::ModuleInfoLookup for ModuleRegistry {
     fn lookup(&self, pc: usize) -> Option<Arc<dyn ModuleInfo>> {
-        self.modules.borrow().lookup_module(pc)
+        self.lookup_module(pc)
     }
 }
 
@@ -946,13 +1230,6 @@ impl wasmtime_runtime::ModuleInfoLookup for StoreInner {
 pub struct InterruptHandle {
     interrupts: Arc<VMInterrupts>,
 }
-
-// The `VMInterrupts` type is a pod-type with no destructor, and we only access
-// `interrupts` from other threads, so add in these trait impls which are
-// otherwise not available due to the `fuel_consumed` variable in
-// `VMInterrupts`.
-unsafe impl Send for InterruptHandle {}
-unsafe impl Sync for InterruptHandle {}
 
 impl InterruptHandle {
     /// Flags that execution within this handle's original [`Store`] should be
@@ -967,10 +1244,12 @@ impl InterruptHandle {
     }
 }
 
-struct Reset<'a, T: Copy>(&'a Cell<T>, T);
+struct Reset<T: Copy>(*mut T, T);
 
-impl<T: Copy> Drop for Reset<'_, T> {
+impl<T: Copy> Drop for Reset<T> {
     fn drop(&mut self) {
-        self.0.set(self.1);
+        unsafe {
+            *self.0 = self.1;
+        }
     }
 }

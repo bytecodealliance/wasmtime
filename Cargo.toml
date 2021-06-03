@@ -77,7 +77,6 @@ members = [
   "crates/wiggle",
   "crates/wiggle/generate",
   "crates/wiggle/macro",
-  "crates/wiggle/wasmtime",
   "crates/wasi-common",
   "crates/wasi-common/cap-std-sync",
   "crates/wasi-common/tokio",

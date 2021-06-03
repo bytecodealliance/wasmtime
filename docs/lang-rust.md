@@ -55,10 +55,9 @@ use std::error::Error;
 use wasmtime::*;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // An engine stores and configures global compilation settings like
+    // optimization level, enabled wasm features, etc.
     let engine = Engine::default();
-    // A `Store` is a sort of "global object" in a sense, but for now it suffices
-    // to say that it's generally passed to most constructors.
-    let store = Store::new(&engine);
 
 # if false {
     // We start off by creating a `Module` which represents a compiled form
@@ -68,24 +67,30 @@ fn main() -> Result<(), Box<dyn Error>> {
 # }
 # let module = Module::new(&engine, r#"(module (func (export "answer") (result i32) i32.const 42))"#)?;
 
-    // After we have a compiled `Module` we can then instantiate it, creating
+    // A `Store` is what will own instances, functions, globals, etc. All wasm
+    // items are stored within a `Store`, and it's what we'll always be using to
+    // interact with the wasm world. Custom data can be stored in stores but for
+    // now we just use `()`.
+    let mut store = Store::new(&engine, ());
+
+    // With a compiled `Module` we can then instantiate it, creating
     // an `Instance` which we can actually poke at functions on.
-    let instance = Instance::new(&store, &module, &[])?;
+    let instance = Instance::new(&mut store, &module, &[])?;
 
     // The `Instance` gives us access to various exported functions and items,
     // which we access here to pull out our `answer` exported function and
     // run it.
-    let answer = instance.get_func("answer")
+    let answer = instance.get_func(&mut store, "answer")
         .expect("`answer` was not an exported function");
 
     // There's a few ways we can call the `answer` `Func` value. The easiest
     // is to statically assert its signature with `typed` (in this case
     // asserting it takes no arguments and returns one i32) and then call it.
-    let answer = answer.typed::<(), i32>()?;
+    let answer = answer.typed::<(), i32, _>(&store)?;
 
     // And finally we can call our function! Note that the error propagation
     // with `?` is done to handle the case where the wasm function traps.
-    let result = answer.call(())?;
+    let result = answer.call(&mut store, ())?;
     println!("Answer: {:?}", result);
     Ok(())
 }
@@ -142,30 +147,50 @@ looks like this:
 use std::error::Error;
 use wasmtime::*;
 
+struct Log {
+    integers_logged: Vec<u32>,
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let engine = Engine::default();
-    let store = Store::new(&engine);
 # if false {
     let module = Module::from_file(&engine, "hello.wat")?;
 # }
 # let module = Module::new(&engine, r#"(module (import "" "log" (func $log (param i32))) (import "" "double" (func $double (param i32) (result i32))) (func (export "run") i32.const 0 call $log i32.const 1 call $log i32.const 2 call $double call $log))"#)?;
 
-    // First we can create our `log` function, which will simply print out the
-    // parameter it receives.
-    let log = Func::wrap(&store, |param: i32| {
+    // For host-provided functions it's recommended to use a `Linker` which does
+    // name-based resolution of functions.
+    let mut linker = Linker::new(&engine);
+
+    // First we create our simple "double" function which will only multiply its
+    // input by two and return it.
+    linker.func_wrap("", "double", |param: i32| param * 2);
+
+    // Next we define a `log` function. Note that we're using a
+    // Wasmtime-provided `Caller` argument to access the state on the `Store`,
+    // which allows us to record the logged information.
+    linker.func_wrap("", "log", |mut caller: Caller<'_, Log>, param: u32| {
         println!("log: {}", param);
+        caller.data_mut().integers_logged.push(param);
     });
 
-    // Next we can create our double function which doubles the input it receives.
-    let double = Func::wrap(&store, |param: i32| param * 2);
+    // As above, instantiation always happens within a `Store`. This means to
+    // actually instantiate with our `Linker` we'll need to create a store. Note
+    // that we're also initializing the store with our custom data here too.
+    //
+    // Afterwards we use the `linker` to create the instance.
+    let data = Log { integers_logged: Vec::new() };
+    let mut store = Store::new(&engine, data);
+    let instance = linker.instantiate(&mut store, &module)?;
 
-    // When instantiating the module we now need to provide the imports to the
-    // instantiation process. This is the second slice argument, where each
-    // entry in the slice must line up with the imports in the module.
-    let instance = Instance::new(&store, &module, &[log.into(), double.into()])?;
+    // Like before, we can get the run function and execute it.
+    let run = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    run.call(&mut store, ())?;
 
-    let run = instance.get_typed_func::<(), ()>("run")?;
-    Ok(run.call(())?)
+    // We can also inspect what integers were logged:
+    println!("logged integers: {:?}", store.data().integers_logged);
+
+    Ok(())
 }
 ```
 

@@ -2,7 +2,7 @@ use anyhow::Context;
 use std::path::Path;
 use wasi_common::pipe::WritePipe;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::tokio::{Wasi, WasiCtxBuilder};
+use wasmtime_wasi::tokio::{add_to_linker, WasiCtxBuilder};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     run(data, bin_name, workspace, false)
@@ -31,9 +31,10 @@ fn run(
         .block_on(async move {
             let mut config = Config::new();
             config.async_support(true);
-            Wasi::add_to_config(&mut config);
             let engine = Engine::new(&config)?;
-            let store = Store::new(&engine);
+            let module = Module::new(&engine, &data).context("failed to create wasm module")?;
+            let mut linker = Linker::new(&engine);
+            add_to_linker(&mut linker, |cx| cx)?;
 
             // Create our wasi context.
             let mut builder = WasiCtxBuilder::new();
@@ -62,15 +63,14 @@ fn run(
             // does not.
             builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-            Wasi::set_context(&store, builder.build())
-                .map_err(|_| anyhow::anyhow!("wasi set_context failed"))?;
+            let mut store = Store::new(&engine, builder.build());
 
-            let module =
-                Module::new(store.engine(), &data).context("failed to create wasm module")?;
-            let linker = Linker::new(&store);
-            let instance = linker.instantiate_async(&module).await?;
-            let start = instance.get_typed_func::<(), ()>("_start")?;
-            start.call_async(()).await.map_err(anyhow::Error::from)
+            let instance = linker.instantiate_async(&mut store, &module).await?;
+            let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+            start
+                .call_async(&mut store, ())
+                .await
+                .map_err(anyhow::Error::from)
         });
 
     match r {

@@ -1,5 +1,6 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
-use crate::{ExternRef, Func, Store, Trap, ValType};
+use crate::store::StoreOpaque;
+use crate::{AsContextMut, ExternRef, Func, Trap, ValType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
@@ -12,20 +13,19 @@ use wasmtime_runtime::{VMContext, VMFunctionBody};
 /// The function within a [`TypedFunc`] is statically known to have `Params` as its
 /// parameters and `Results` as its results.
 ///
-/// This structure is created via [`Func::typed`] or [`Func::typed_unchecked`].
+/// This structure is created via [`Func::typed`] or [`TypedFunc::new_unchecked`].
 /// For more documentation about this see those methods.
-#[repr(transparent)]
+#[repr(transparent)] // here for the C API
 pub struct TypedFunc<Params, Results> {
     _a: marker::PhantomData<fn(Params) -> Results>,
     func: Func,
 }
 
+impl<Params, Results> Copy for TypedFunc<Params, Results> {}
+
 impl<Params, Results> Clone for TypedFunc<Params, Results> {
     fn clone(&self) -> TypedFunc<Params, Results> {
-        TypedFunc {
-            _a: marker::PhantomData,
-            func: self.func.clone(),
-        }
+        *self
     }
 }
 
@@ -34,6 +34,25 @@ where
     Params: WasmParams,
     Results: WasmResults,
 {
+    /// An unchecked version of [`Func::typed`] which does not perform a
+    /// typecheck and simply assumes that the type declared here matches the
+    /// type of this function.
+    ///
+    /// The semantics of this function are the same as [`Func::typed`] except
+    /// that no error is returned because no typechecking is done.
+    ///
+    /// # Unsafety
+    ///
+    /// This function only safe to call if `typed` would otherwise return `Ok`
+    /// for the same `Params` and `Results` specified. If `typed` would return
+    /// an error then the returned `TypedFunc` is memory unsafe to invoke.
+    pub unsafe fn new_unchecked(func: Func) -> TypedFunc<Params, Results> {
+        TypedFunc {
+            _a: marker::PhantomData,
+            func,
+        }
+    }
+
     /// Returns the underlying [`Func`] that this is wrapping, losing the static
     /// type information in the process.
     pub fn func(&self) -> &Func {
@@ -51,12 +70,13 @@ where
     ///
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to an asynchronous store.
-    pub fn call(&self, params: Params) -> Result<Results, Trap> {
+    pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results, Trap> {
+        let mut store = store.as_context_mut().opaque();
         assert!(
-            !cfg!(feature = "async") || !self.func.store().async_support(),
+            !cfg!(feature = "async") || !store.async_support(),
             "must use `call_async` with async stores"
         );
-        unsafe { self._call(params) }
+        unsafe { self._call(&mut store, params) }
     }
 
     /// Invokes this WebAssembly function with the specified parameters.
@@ -72,55 +92,65 @@ where
     /// connected to a synchronous store.
     #[cfg(feature = "async")]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
-    pub async fn call_async(&self, params: Params) -> Result<Results, Trap> {
+    pub async fn call_async<T>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Results, Trap>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut().opaque_send();
         assert!(
-            self.func.store().async_support(),
+            store.async_support(),
             "must use `call` with non-async stores"
         );
-        self.func
-            .store()
-            .on_fiber(|| unsafe { self._call(params) })
+        store
+            .on_fiber(|store| unsafe { self._call(store, params) })
             .await?
     }
 
-    unsafe fn _call(&self, params: Params) -> Result<Results, Trap> {
+    unsafe fn _call(&self, store: &mut StoreOpaque<'_>, params: Params) -> Result<Results, Trap> {
         // Validate that all runtime values flowing into this store indeed
         // belong within this store, otherwise it would be unsafe for store
         // values to cross each other.
-        if !params.compatible_with_store(&self.func.instance.store) {
-            return Err(Trap::new(
-                "attempt to pass cross-`Store` value to Wasm as function argument",
-            ));
-        }
+        let params = match params.into_abi(store) {
+            Some(abi) => abi,
+            None => {
+                return Err(Trap::new(
+                    "attempt to pass cross-`Store` value to Wasm as function argument",
+                ))
+            }
+        };
 
-        let params = MaybeUninit::new(params);
-        let mut ret = MaybeUninit::uninit();
-        let mut called = false;
-        let mut returned = false;
-        let result = invoke_wasm_and_catch_traps(&self.func.instance.store, || {
-            called = true;
-            let params = ptr::read(params.as_ptr());
-            let anyfunc = self.func.export.anyfunc.as_ref();
-            let result = params.invoke::<Results>(
-                &self.func.instance.store,
+        // Try to capture only a single variable (a tuple) in the closure below.
+        // This means the size of the closure is one pointer and is much more
+        // efficient to move in memory. This closure is actually invoked on the
+        // other side of a C++ shim, so it can never be inlined enough to make
+        // the memory go away, so the size matters here for performance.
+        let mut captures = (
+            self.func.caller_checked_anyfunc(store),
+            MaybeUninit::uninit(),
+            params,
+            false,
+        );
+
+        let result = invoke_wasm_and_catch_traps(store, |callee| {
+            let (anyfunc, ret, params, returned) = &mut captures;
+            let anyfunc = anyfunc.as_ref();
+            let result = Params::invoke::<Results>(
                 anyfunc.func_ptr.as_ptr(),
                 anyfunc.vmctx,
-                ptr::null_mut(),
+                callee,
+                *params,
             );
             ptr::write(ret.as_mut_ptr(), result);
-            returned = true
+            *returned = true
         });
-
-        // This can happen if we early-trap due to interrupts or other
-        // pre-flight checks, so we need to be sure the parameters are at least
-        // dropped at some point.
-        if !called {
-            drop(params.assume_init());
-        }
+        let (_, ret, _, returned) = captures;
         debug_assert_eq!(result.is_ok(), returned);
         result?;
-
-        Ok(ret.assume_init())
+        Ok(Results::from_abi(store, ret.assume_init()))
     }
 }
 
@@ -132,7 +162,7 @@ where
 /// stable over time.
 ///
 /// For more information see [`Func::wrap`] and [`Func::typed`]
-pub unsafe trait WasmTy {
+pub unsafe trait WasmTy: Send {
     #[doc(hidden)]
     type Abi: Copy;
     #[doc(hidden)]
@@ -147,11 +177,11 @@ pub unsafe trait WasmTy {
     #[doc(hidden)]
     fn valtype() -> ValType;
     #[doc(hidden)]
-    fn compatible_with_store(&self, store: &Store) -> bool;
+    fn compatible_with_store(&self, store: &StoreOpaque) -> bool;
     #[doc(hidden)]
-    fn into_abi(self, store: &Store) -> Self::Abi;
+    fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi;
     #[doc(hidden)]
-    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self;
+    unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self;
 }
 
 macro_rules! primitives {
@@ -163,15 +193,15 @@ macro_rules! primitives {
                 ValType::$ty
             }
             #[inline]
-            fn compatible_with_store(&self, _: &Store) -> bool {
+            fn compatible_with_store(&self, _: &StoreOpaque) -> bool {
                 true
             }
             #[inline]
-            fn into_abi(self, _store: &Store) -> Self::Abi {
+            fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
                 self
             }
             #[inline]
-            unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
+            unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
                 abi
             }
         }
@@ -196,18 +226,16 @@ unsafe impl WasmTy for Option<ExternRef> {
     }
 
     #[inline]
-    fn compatible_with_store(&self, _store: &Store) -> bool {
+    fn compatible_with_store(&self, _store: &StoreOpaque) -> bool {
         true
     }
 
     #[inline]
-    fn into_abi(self, store: &Store) -> Self::Abi {
+    fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
         if let Some(x) = self {
             let abi = x.inner.as_raw();
             unsafe {
-                store
-                    .externref_activations_table()
-                    .insert_with_gc(x.inner, store.module_info_lookup());
+                store.insert_vmexternref(x.inner);
             }
             abi
         } else {
@@ -216,7 +244,7 @@ unsafe impl WasmTy for Option<ExternRef> {
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, _store: &Store) -> Self {
+    unsafe fn from_abi(abi: Self::Abi, _store: &mut StoreOpaque) -> Self {
         if abi.is_null() {
             None
         } else {
@@ -236,26 +264,26 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
-    fn compatible_with_store<'a>(&self, store: &Store) -> bool {
+    fn compatible_with_store<'a>(&self, store: &StoreOpaque) -> bool {
         if let Some(f) = self {
-            Store::same(&store, f.store())
+            store.store_data().contains(f.0)
         } else {
             true
         }
     }
 
     #[inline]
-    fn into_abi(self, _store: &Store) -> Self::Abi {
+    fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
         if let Some(f) = self {
-            f.caller_checked_anyfunc().as_ptr()
+            f.caller_checked_anyfunc(store).as_ptr()
         } else {
             ptr::null_mut()
         }
     }
 
     #[inline]
-    unsafe fn from_abi(abi: Self::Abi, store: &Store) -> Self {
-        Func::from_caller_checked_anyfunc(&store, abi)
+    unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self {
+        Func::from_caller_checked_anyfunc(store, abi)
     }
 }
 
@@ -264,19 +292,20 @@ unsafe impl WasmTy for Option<Func> {
 ///
 /// This is implemented for bare types that can be passed to wasm as well as
 /// tuples of those types.
-pub unsafe trait WasmParams {
+pub unsafe trait WasmParams: Send {
+    #[doc(hidden)]
+    type Abi: Copy;
     #[doc(hidden)]
     fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()>;
     #[doc(hidden)]
-    fn compatible_with_store(&self, store: &Store) -> bool;
+    fn into_abi(self, store: &mut StoreOpaque) -> Option<Self::Abi>;
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
-        self,
-        store: &Store,
         func: *const VMFunctionBody,
         vmctx1: *mut VMContext,
         vmctx2: *mut VMContext,
-    ) -> R;
+        abi: Self::Abi,
+    ) -> R::ResultAbi;
 }
 
 // Forward an impl from `T` to `(T,)` for convenience if there's only one
@@ -285,20 +314,22 @@ unsafe impl<T> WasmParams for T
 where
     T: WasmTy,
 {
+    type Abi = <(T,) as WasmParams>::Abi;
+
     fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()> {
-        <(T,)>::typecheck(params)
+        <(T,) as WasmParams>::typecheck(params)
     }
-    fn compatible_with_store(&self, store: &Store) -> bool {
-        <T as WasmTy>::compatible_with_store(self, store)
+    #[inline]
+    fn into_abi(self, store: &mut StoreOpaque) -> Option<Self::Abi> {
+        <(T,) as WasmParams>::into_abi((self,), store)
     }
     unsafe fn invoke<R: WasmResults>(
-        self,
-        store: &Store,
         func: *const VMFunctionBody,
         vmctx1: *mut VMContext,
         vmctx2: *mut VMContext,
-    ) -> R {
-        <(T,)>::invoke((self,), store, func, vmctx1, vmctx2)
+        abi: Self::Abi,
+    ) -> R::ResultAbi {
+        <(T,) as WasmParams>::invoke::<R>(func, vmctx1, vmctx2, abi)
     }
 }
 
@@ -306,6 +337,8 @@ macro_rules! impl_wasm_params {
     ($n:tt $($t:ident)*) => {
         #[allow(non_snake_case)]
         unsafe impl<$($t: WasmTy,)*> WasmParams for ($($t,)*) {
+            type Abi = ($($t::Abi,)*);
+
             fn typecheck(mut params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()> {
                 let mut _n = 0;
                 $(
@@ -322,28 +355,34 @@ macro_rules! impl_wasm_params {
                 }
             }
 
-            fn compatible_with_store(&self, _store: &Store) -> bool {
+            fn into_abi(self, _store: &mut StoreOpaque) -> Option<Self::Abi> {
                 let ($($t,)*) = self;
-                $($t.compatible_with_store(_store)&&)* true
+                $(
+                    let $t = if $t.compatible_with_store(_store) {
+                        $t.into_abi(_store)
+                    } else {
+                        return None;
+                    };
+                )*
+                Some(($($t,)*))
             }
 
             unsafe fn invoke<R: WasmResults>(
-                self,
-                store: &Store,
                 func: *const VMFunctionBody,
                 vmctx1: *mut VMContext,
                 vmctx2: *mut VMContext,
-            ) -> R {
+                abi: Self::Abi,
+            ) -> R::ResultAbi {
                 let fnptr = mem::transmute::<
                     *const VMFunctionBody,
                     unsafe extern "C" fn(
                         *mut VMContext,
                         *mut VMContext,
                         $($t::Abi,)*
-                        R::Retptr,
-                    ) -> R::Abi,
+                        <R::ResultAbi as HostAbi>::Retptr,
+                    ) -> <R::ResultAbi as HostAbi>::Abi,
                 >(func);
-                let ($($t,)*) = self;
+                let ($($t,)*) = abi;
                 // Use the `call` function to acquire a `retptr` which we'll
                 // forward to the native function. Once we have it we also
                 // convert all our arguments to abi arguments to go to the raw
@@ -351,8 +390,8 @@ macro_rules! impl_wasm_params {
                 //
                 // Upon returning `R::call` will convert all the returns back
                 // into `R`.
-                R::call(store, |retptr| {
-                    fnptr(vmctx1, vmctx2, $($t.into_abi(store),)* retptr)
+                <R::ResultAbi as HostAbi>::call(|retptr| {
+                    fnptr(vmctx1, vmctx2, $($t,)* retptr)
                 })
             }
         }
@@ -369,11 +408,9 @@ for_each_function_signature!(impl_wasm_params);
 /// `TypedFunc` is not currently supported.
 pub unsafe trait WasmResults: WasmParams {
     #[doc(hidden)]
-    type Abi: Copy;
+    type ResultAbi: HostAbi;
     #[doc(hidden)]
-    type Retptr: Copy;
-    #[doc(hidden)]
-    unsafe fn call(store: &Store, f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self;
+    unsafe fn from_abi(store: &mut StoreOpaque, abi: Self::ResultAbi) -> Self;
 }
 
 // Forwards from a bare type `T` to the 1-tuple type `(T,)`
@@ -381,11 +418,10 @@ unsafe impl<T: WasmTy> WasmResults for T
 where
     (T::Abi,): HostAbi,
 {
-    type Abi = <(T,) as WasmResults>::Abi;
-    type Retptr = <(T,) as WasmResults>::Retptr;
+    type ResultAbi = <(T,) as WasmResults>::ResultAbi;
 
-    unsafe fn call(store: &Store, f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
-        <(T,) as WasmResults>::call(store, f).0
+    unsafe fn from_abi(store: &mut StoreOpaque, abi: Self::ResultAbi) -> Self {
+        <(T,) as WasmResults>::from_abi(store, abi).0
     }
 }
 
@@ -395,15 +431,10 @@ macro_rules! impl_wasm_results {
         unsafe impl<$($t: WasmTy,)*> WasmResults for ($($t,)*)
             where ($($t::Abi,)*): HostAbi
         {
-            type Abi = <($($t::Abi,)*) as HostAbi>::Abi;
-            type Retptr = <($($t::Abi,)*) as HostAbi>::Retptr;
+            type ResultAbi = ($($t::Abi,)*);
 
-            unsafe fn call(store: &Store, f: impl FnOnce(Self::Retptr) -> Self::Abi) -> Self {
-                // Delegate via the host abi to figure out what the actual ABI
-                // for dealing with this tuple type is, and then we can re-tuple
-                // everything and create actual values via `from_abi` after the
-                // call is complete.
-                let ($($t,)*) = <($($t::Abi,)*) as HostAbi>::call(f);
+            unsafe fn from_abi(store: &mut StoreOpaque, abi: Self::ResultAbi) -> Self {
+                let ($($t,)*) = abi;
                 ($($t::from_abi($t, store),)*)
             }
         }

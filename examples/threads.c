@@ -124,11 +124,11 @@ int main(int argc, const char *argv[]) {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t binary;
-  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &binary);
+  wasmtime_error_t *error = wasmtime_wat2wasm(wat.data, wat.size, &binary);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
-  
+
   // Compile and share.
   own wasm_store_t* store = wasm_store_new(engine);
   own wasm_module_t* module = wasm_module_new(store, &binary);

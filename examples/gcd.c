@@ -30,8 +30,9 @@ int main() {
   // Set up our context
   wasm_engine_t *engine = wasm_engine_new();
   assert(engine != NULL);
-  wasm_store_t *store = wasm_store_new(engine);
+  wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   assert(store != NULL);
+  wasmtime_context_t *context = wasmtime_store_context(store);
 
   // Load our input file to parse it next
   FILE* file = fopen("examples/gcd.wat", "r");
@@ -52,52 +53,51 @@ int main() {
 
   // Parse the wat into the binary wasm format
   wasm_byte_vec_t wasm;
-  wasmtime_error_t *error = wasmtime_wat2wasm(&wat, &wasm);
+  wasmtime_error_t *error = wasmtime_wat2wasm(wat.data, wat.size, &wasm);
   if (error != NULL)
     exit_with_error("failed to parse wat", error, NULL);
   wasm_byte_vec_delete(&wat);
 
   // Compile and instantiate our module
-  wasm_module_t *module = NULL;
-  error = wasmtime_module_new(engine, &wasm, &module);
+  wasmtime_module_t *module = NULL;
+  error = wasmtime_module_new(engine, (uint8_t*) wasm.data, wasm.size, &module);
   if (module == NULL)
     exit_with_error("failed to compile module", error, NULL);
   wasm_byte_vec_delete(&wasm);
+
   wasm_trap_t *trap = NULL;
-  wasm_instance_t *instance = NULL;
-  wasm_extern_vec_t imports = WASM_EMPTY_VEC;
-  error = wasmtime_instance_new(store, module, &imports, &instance, &trap);
-  if (instance == NULL)
+  wasmtime_instance_t instance;
+  error = wasmtime_instance_new(context, module, NULL, 0, &instance, &trap);
+  if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
 
   // Lookup our `gcd` export function
-  wasm_extern_vec_t externs;
-  wasm_instance_exports(instance, &externs);
-  assert(externs.size == 1);
-  wasm_func_t *gcd = wasm_extern_as_func(externs.data[0]);
-  assert(gcd != NULL);
+  wasmtime_extern_t gcd;
+  bool ok = wasmtime_instance_export_get(context, &instance, "gcd", 3, &gcd);
+  assert(ok);
+  assert(gcd.kind == WASMTIME_EXTERN_FUNC);
 
   // And call it!
   int a = 6;
   int b = 27;
-  wasm_val_t params[2] = { WASM_I32_VAL(a), WASM_I32_VAL(b) };
-  wasm_val_t results[1];
-  wasm_val_vec_t params_vec = WASM_ARRAY_VEC(params);
-  wasm_val_vec_t results_vec = WASM_ARRAY_VEC(results);
-  error = wasmtime_func_call(gcd, &params_vec, &results_vec, &trap);
+  wasmtime_val_t params[2];
+  params[0].kind = WASMTIME_I32;
+  params[0].of.i32 = a;
+  params[1].kind = WASMTIME_I32;
+  params[1].of.i32 = b;
+  wasmtime_val_t results[1];
+  error = wasmtime_func_call(context, &gcd.of.func, params, 2, results, 1, &trap);
   if (error != NULL || trap != NULL)
     exit_with_error("failed to call gcd", error, trap);
-  assert(results[0].kind == WASM_I32);
+  assert(results[0].kind == WASMTIME_I32);
 
   printf("gcd(%d, %d) = %d\n", a, b, results[0].of.i32);
 
   // Clean up after ourselves at this point
   ret = 0;
 
-  wasm_extern_vec_delete(&externs);
-  wasm_instance_delete(instance);
-  wasm_module_delete(module);
-  wasm_store_delete(store);
+  wasmtime_module_delete(module);
+  wasmtime_store_delete(store);
   wasm_engine_delete(engine);
   return ret;
 }

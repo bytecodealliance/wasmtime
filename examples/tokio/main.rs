@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Error};
-use std::future::Future;
+use anyhow::Error;
+use std::sync::Arc;
 use tokio::time::Duration;
 use wasmtime::{Config, Engine, Linker, Module, Store};
 // For this example we want to use the async version of wasmtime_wasi.
 // Notably, this version of wasi uses a scheduler that will async yield
 // when sleeping in `poll_oneoff`.
-use wasmtime_wasi::tokio::{Wasi, WasiCtxBuilder};
+use wasmtime_wasi::{tokio::WasiCtxBuilder, WasiCtx};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -42,6 +42,7 @@ async fn main() -> Result<(), Error> {
 struct Environment {
     engine: Engine,
     module: Module,
+    linker: Arc<Linker<WasiCtx>>,
 }
 
 impl Environment {
@@ -52,13 +53,21 @@ impl Environment {
         config.async_support(true);
         config.consume_fuel(true);
 
-        // Install the host functions for `Wasi`.
-        Wasi::add_to_config(&mut config);
-
         let engine = Engine::new(&config)?;
         let module = Module::from_file(&engine, "target/wasm32-wasi/debug/tokio-wasi.wasm")?;
 
-        Ok(Self { engine, module })
+        // A `Linker` is shared in the environment amongst all stores, and this
+        // linker is used to instantiate the `module` above. This example only
+        // adds WASI functions to the linker, notably the async versions built
+        // on tokio.
+        let mut linker = Linker::new(&engine);
+        wasmtime_wasi::tokio::add_to_linker(&mut linker, |cx| cx)?;
+
+        Ok(Self {
+            engine,
+            module,
+            linker: Arc::new(linker),
+        })
     }
 }
 
@@ -76,87 +85,29 @@ impl Inputs {
     }
 }
 
-fn run_wasm(inputs: Inputs) -> impl Future<Output = Result<(), Error>> {
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
-    // IMPORTANT: The current wasmtime API is very challenging to use safely
-    // on an async runtime. This RFC describes a redesign of the API that will
-    // resolve these safety issues:
-    // https://github.com/alexcrichton/rfcs-2/blob/new-api/accepted/new-api.md
-
-    // This is a "marker type future" which simply wraps some other future and
-    // the only purpose it serves is to forward the implementation of `Future`
-    // as well as have `unsafe impl Send` for itself, regardless of the
-    // underlying type.
-    //
-    // Note that the qctual safety of this relies on the fact that the inputs
-    // here are `Send`, the outputs (just () in this case) are `Send`, and the
-    // future itself is safe tu resume on other threads.
-    //
-    // For an in-depth discussion of the safety of moving Wasmtime's `Store`
-    // between threads, see
-    // https://docs.wasmtime.dev/examples-rust-multithreading.html.
-    struct UnsafeSend<T>(T);
-
-    // Note the `where` cause specifically ensures the output of the future to
-    // be `Send` is required. We specifically dont require `T` to be `Send`
-    // since that's the whole point of this function, but we require that
-    // everything used to construct `T` is `Send` below.
-    unsafe impl<T> Send for UnsafeSend<T>
-    where
-        T: Future,
-        T::Output: Send,
-    {
-    }
-    impl<T: Future> Future for UnsafeSend<T> {
-        type Output = T::Output;
-        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T::Output> {
-            // Note that this `unsafe` is unrelated to `Send`, it only has to do with "pin
-            // projection" and should be safe since it's all we do with the `Pin`.
-            unsafe { self.map_unchecked_mut(|p| &mut p.0).poll(cx) }
-        }
-    }
-
-    // This is a crucial assertion that needs to be here. The compiler
-    // typically checks this for us, but do to our `UnsafeSend` type the
-    // compiler isn't automatically checking  this. The assertion here must
-    // assert that all arguments to this function are indeed `Send` because
-    // we're closing over them and sending them to other threads. It's only
-    // everything *internal* to the computation of this function which doesn't
-    // have to be `Send`.
-    fn assert_send<T: Send>(_t: &T) {}
-    assert_send(&inputs);
-
-    // Wrap up the `_run_wasm` function, which is *not* `Send`, but is safe to
-    // resume on other threads.
-    UnsafeSend(_run_wasm(inputs))
-}
-
-async fn _run_wasm(inputs: Inputs) -> Result<(), Error> {
-    let store = Store::new(&inputs.env.engine);
+async fn run_wasm(inputs: Inputs) -> Result<(), Error> {
+    let wasi = WasiCtxBuilder::new()
+        // Let wasi print to this process's stdout.
+        .inherit_stdout()
+        // Set an environment variable so the wasm knows its name.
+        .env("NAME", &inputs.name)?
+        .build();
+    let mut store = Store::new(&inputs.env.engine, wasi);
 
     // WebAssembly execution will be paused for an async yield every time it
     // consumes 10000 fuel. Fuel will be refilled u32::MAX times.
     store.out_of_fuel_async_yield(u32::MAX, 10000);
 
-    Wasi::set_context(
-        &store,
-        WasiCtxBuilder::new()
-            // Let wasi print to this process's stdout.
-            .inherit_stdout()
-            // Set an environment variable so the wasm knows its name.
-            .env("NAME", &inputs.name)?
-            .build(),
-    )
-    .map_err(|_| anyhow!("setting wasi context"))?;
-
-    let linker = Linker::new(&store);
-
-    // Instantiate
-    let instance = linker.instantiate_async(&inputs.env.module).await?;
+    // Instantiate into our own unique store using the shared linker, afterwards
+    // acquiring the `_start` function for the module and executing it.
+    let instance = inputs
+        .env
+        .linker
+        .instantiate_async(&mut store, &inputs.env.module)
+        .await?;
     instance
-        .get_typed_func::<(), ()>("_start")?
-        .call_async(())
+        .get_typed_func::<(), (), _>(&mut store, "_start")?
+        .call_async(&mut store, ())
         .await?;
 
     Ok(())

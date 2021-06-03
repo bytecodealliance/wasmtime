@@ -32,9 +32,9 @@ extern "C" {
  * \brief Convenience alias for #wasi_config_t
  *
  * \struct wasi_config_t
- * \brief Opaque type used to create a #wasi_instance_t.
+ * \brief TODO
  *
- * \fn void wasi_config_delete(own wasi_config_t *);
+ * \fn void wasi_config_delete(wasi_config_t *);
  * \brief Deletes a configuration object.
  */
 WASI_DECLARE_OWN(config)
@@ -145,64 +145,6 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t* config);
  * `guest_path` is the name by which it will be known in wasm.
  */
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t* config, const char* path, const char* guest_path);
-
-/**
- * \typedef wasi_instance_t
- * \brief Convenience alias for #wasi_instance_t
- *
- * \struct wasi_instance_t
- * \brief Opaque type representing a WASI instance.
- *
- * \fn void wasi_instance_delete(own wasi_instance_t *);
- * \brief Deletes an instance object.
- */
-WASI_DECLARE_OWN(instance)
-
-/**
- * \brief Creates a new WASI instance from the specified configuration.
- *
- * \param store the store which functions will be attached to
- * \param name the WASI module name that is being instantiated, currently either
- * `wasi_unstable` or `wasi_snapshot_preview`.
- * \param config the configuration object which has settings for how WASI APIs
- * will behave.
- * \param trap a location, if `NULL` is returned, that contains information
- * about why instantiation failed.
- *
- * \return a #wasi_instance_t owned by the caller on success or `NULL` on
- * failure.
- *
- * Note that this function takes ownership of the `config` argument whether this
- * function succeeds or not. Ownership of the #wasi_instance_t and #wasm_trap_t
- * are transferred to the caller.
- *
- * With a #wasi_instance_t you'll likely call either
- * #wasmtime_linker_define_wasi or #wasi_instance_bind_import afterwards.
- */
-WASI_API_EXTERN own wasi_instance_t* wasi_instance_new(
-  wasm_store_t* store,
-  const char* name,
-  own wasi_config_t* config,
-  own wasm_trap_t** trap
-);
-
-/**
- * \brief Extracts a matching item for the given import from a #wasi_instance_t.
- *
- * \param instance the WASI instance an export is extracted from
- * \param import the desired import type that is being extracted, typically
- * acquired from #wasm_module_imports.
- *
- * \return a #wasm_extern_t which can be used to satisfy the `import`
- * requested, or `NULL` if the provided `instance` cannot satisfy `import`.
- *
- * This function does not take ownership of its arguments, and the lifetime of
- * the #wasm_extern_t is tied to the #wasi_instance_t argument.
- */
-WASI_API_EXTERN const wasm_extern_t* wasi_instance_bind_import(
-  const wasi_instance_t* instance,
-  const wasm_importtype_t* import
-);
 
 #undef own
 

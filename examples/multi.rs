@@ -15,38 +15,30 @@ fn main() -> Result<()> {
 
     println!("Initializing...");
     let engine = Engine::default();
-    let store = Store::new(&engine);
+    let mut store = Store::new(&engine, ());
 
     // Compile.
     println!("Compiling module...");
     let module = Module::from_file(&engine, "examples/multi.wat")?;
 
-    // Create external print functions.
+    // Create a host function which takes multiple parameters and returns
+    // multiple results.
     println!("Creating callback...");
-    let callback_type = FuncType::new(
-        [ValType::I32, ValType::I64].iter().cloned(),
-        [ValType::I64, ValType::I32].iter().cloned(),
-    );
-    let callback_func = Func::new(&store, callback_type, |_, args, results| {
-        println!("Calling back...");
-        println!("> {} {}", args[0].unwrap_i32(), args[1].unwrap_i64());
-
-        results[0] = Val::I64(args[1].unwrap_i64() + 1);
-        results[1] = Val::I32(args[0].unwrap_i32() + 1);
-        Ok(())
+    let callback_func = Func::wrap(&mut store, |a: i32, b: i64| -> (i64, i32) {
+        (b + 1, a + 1)
     });
 
     // Instantiate.
     println!("Instantiating module...");
-    let instance = Instance::new(&store, &module, &[callback_func.into()])?;
+    let instance = Instance::new(&mut store, &module, &[callback_func.into()])?;
 
     // Extract exports.
     println!("Extracting export...");
-    let g = instance.get_typed_func::<(i32, i64), (i64, i32)>("g")?;
+    let g = instance.get_typed_func::<(i32, i64), (i64, i32), _>(&mut store, "g")?;
 
     // Call `$g`.
     println!("Calling export \"g\"...");
-    let (a, b) = g.call((1, 3))?;
+    let (a, b) = g.call(&mut store, (1, 3))?;
 
     println!("Printing result...");
     println!("> {} {}", a, b);
@@ -60,9 +52,10 @@ fn main() -> Result<()> {
         .get_typed_func::<
         (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64),
         (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64),
+        _,
         >
-        ("round_trip_many")?;
-    let results = round_trip_many.call((0, 1, 2, 3, 4, 5, 6, 7, 8, 9))?;
+        (&mut store, "round_trip_many")?;
+    let results = round_trip_many.call(&mut store, (0, 1, 2, 3, 4, 5, 6, 7, 8, 9))?;
 
     println!("Printing result...");
     println!("> {:?}", results);
@@ -71,6 +64,9 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+// Note that this example is not supported in the off-by-default feature of the
+// old x86 compiler backend for Cranelift. Wasmtime's default configuration
+// supports this example, however.
 #[cfg(feature = "old-x86-backend")]
 fn main() -> Result<()> {
     Ok(())

@@ -4,10 +4,10 @@ pub(crate) const DEFAULT_MEMORY_LIMIT: usize = 10000;
 
 /// Used by hosts to limit resource consumption of instances at runtime.
 ///
-/// [`Store::new_with_limits`](crate::Store::new_with_limits) can be used
+/// [`Store::limiter`](crate::Store::limiter) can be used
 /// with a resource limiter to take into account non-WebAssembly resource
 /// usage to determine if a linear memory or table should be grown.
-pub trait ResourceLimiter {
+pub trait ResourceLimiter: Send + Sync + 'static {
     /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
     ///
     /// * `current` is the current size of the linear memory in WebAssembly page units.
@@ -23,7 +23,7 @@ pub trait ResourceLimiter {
     ///
     /// Returning `true` when a maximum has been exceeded will have no effect as the linear memory
     /// will not be grown.
-    fn memory_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+    fn memory_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// Notifies the resource limiter that an instance's table has been requested to grow.
     ///
@@ -39,7 +39,7 @@ pub trait ResourceLimiter {
     ///
     /// Returning `true` when a maximum has been exceeded will have no effect as the table will
     /// not be grown.
-    fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// The maximum number of instances that can be created for a [`Store`](crate::Store).
     ///
@@ -72,11 +72,11 @@ pub trait ResourceLimiter {
 pub(crate) struct ResourceLimiterProxy<T>(pub T);
 
 impl<T: ResourceLimiter> wasmtime_runtime::ResourceLimiter for ResourceLimiterProxy<T> {
-    fn memory_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
+    fn memory_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
         self.0.memory_growing(current, desired, maximum)
     }
 
-    fn table_growing(&self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
+    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
         self.0.table_growing(current, desired, maximum)
     }
 
@@ -180,14 +180,14 @@ impl Default for StoreLimits {
 }
 
 impl ResourceLimiter for StoreLimits {
-    fn memory_growing(&self, _current: u32, desired: u32, _maximum: Option<u32>) -> bool {
+    fn memory_growing(&mut self, _current: u32, desired: u32, _maximum: Option<u32>) -> bool {
         match self.memory_pages {
             Some(limit) if desired > limit => false,
             _ => true,
         }
     }
 
-    fn table_growing(&self, _current: u32, desired: u32, _maximum: Option<u32>) -> bool {
+    fn table_growing(&mut self, _current: u32, desired: u32, _maximum: Option<u32>) -> bool {
         match self.table_elements {
             Some(limit) if desired > limit => false,
             _ => true,

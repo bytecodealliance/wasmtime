@@ -1,7 +1,7 @@
 //! The module that implements the `wasmtime run` command.
 
 use crate::{CommonOptions, WasiModules};
-use anyhow::{bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use std::thread;
 use std::time::Duration;
 use std::{
@@ -11,16 +11,13 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::sync::{Dir, Wasi, WasiCtxBuilder};
+use wasmtime_wasi::sync::{Dir, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
-use wasmtime_wasi_nn::{WasiNn, WasiNnCtx};
+use wasmtime_wasi_nn::WasiNnCtx;
 
 #[cfg(feature = "wasi-crypto")]
-use wasmtime_wasi_crypto::{
-    WasiCryptoAsymmetricCommon, WasiCryptoCommon, WasiCryptoCtx, WasiCryptoSignatures,
-    WasiCryptoSymmetric,
-};
+use wasmtime_wasi_crypto::WasiCryptoCtx;
 
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
@@ -140,16 +137,17 @@ impl RunCommand {
             config.interruptable(true);
         }
         let engine = Engine::new(&config)?;
-        let store = Store::new(&engine);
+        let mut store = Store::new(&engine, Host::default());
 
         // Make wasi available by default.
         let preopen_dirs = self.compute_preopen_dirs()?;
         let argv = self.compute_argv();
 
-        let mut linker = Linker::new(&store);
+        let mut linker = Linker::new(&engine);
         linker.allow_unknown_exports(self.allow_unknown_exports);
 
         populate_with_wasi(
+            &mut store,
             &mut linker,
             preopen_dirs,
             &argv,
@@ -163,7 +161,7 @@ impl RunCommand {
             let module = Module::from_file(&engine, path)?;
 
             // Add the module's functions to the linker.
-            linker.module(name, &module).context(format!(
+            linker.module(&mut store, name, &module).context(format!(
                 "failed to process preload `{}` at `{}`",
                 name,
                 path.display()
@@ -172,7 +170,7 @@ impl RunCommand {
 
         // Load the main wasm module.
         match self
-            .load_main_module(&mut linker)
+            .load_main_module(&mut store, &mut linker)
             .with_context(|| format!("failed to run main module `{}`", self.module.display()))
         {
             Ok(()) => (),
@@ -256,9 +254,9 @@ impl RunCommand {
         result
     }
 
-    fn load_main_module(&self, linker: &mut Linker) -> Result<()> {
+    fn load_main_module(&self, store: &mut Store<Host>, linker: &mut Linker<Host>) -> Result<()> {
         if let Some(timeout) = self.wasm_timeout {
-            let handle = linker.store().interrupt_handle()?;
+            let handle = store.interrupt_handle()?;
             thread::spawn(move || {
                 thread::sleep(timeout);
                 handle.interrupt();
@@ -267,30 +265,39 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
         // Use "" as a default module name.
-        let module = Module::from_file(linker.store().engine(), &self.module)?;
+        let module = Module::from_file(linker.engine(), &self.module)?;
         linker
-            .module("", &module)
+            .module(&mut *store, "", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;
 
         // If a function to invoke was given, invoke it.
         if let Some(name) = self.invoke.as_ref() {
-            self.invoke_export(linker, name)
+            self.invoke_export(store, linker, name)
         } else {
-            let func = linker.get_default("")?;
-            self.invoke_func(func, None)
+            let func = linker.get_default(&mut *store, "")?;
+            self.invoke_func(store, func, None)
         }
     }
 
-    fn invoke_export(&self, linker: &Linker, name: &str) -> Result<()> {
-        let func = match linker.get_one_by_name("", Some(name))?.into_func() {
+    fn invoke_export(
+        &self,
+        store: &mut Store<Host>,
+        linker: &Linker<Host>,
+        name: &str,
+    ) -> Result<()> {
+        let func = match linker
+            .get(&mut *store, "", Some(name))
+            .ok_or_else(|| anyhow!("no export named `{}` found", name))?
+            .into_func()
+        {
             Some(func) => func,
             None => bail!("export of `{}` wasn't a function", name),
         };
-        self.invoke_func(func, Some(name))
+        self.invoke_func(store, func, Some(name))
     }
 
-    fn invoke_func(&self, func: Func, name: Option<&str>) -> Result<()> {
-        let ty = func.ty();
+    fn invoke_func(&self, store: &mut Store<Host>, func: Func, name: Option<&str>) -> Result<()> {
+        let ty = func.ty(&store);
         if ty.params().len() > 0 {
             eprintln!(
                 "warning: using `--invoke` with a function that takes arguments \
@@ -324,7 +331,7 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = func.call(&values).with_context(|| {
+        let results = func.call(store, &values).with_context(|| {
             if let Some(name) = name {
                 format!("failed to invoke `{}`", name)
             } else {
@@ -354,24 +361,34 @@ impl RunCommand {
     }
 }
 
+#[derive(Default)]
+struct Host {
+    wasi: Option<wasmtime_wasi::WasiCtx>,
+    #[cfg(feature = "wasi-nn")]
+    wasi_nn: Option<WasiNnCtx>,
+    #[cfg(feature = "wasi-crypto")]
+    wasi_crypto: Option<WasiCryptoCtx>,
+}
+
 /// Populates the given `Linker` with WASI APIs.
 fn populate_with_wasi(
-    linker: &mut Linker,
+    store: &mut Store<Host>,
+    linker: &mut Linker<Host>,
     preopen_dirs: Vec<(String, Dir)>,
     argv: &[String],
     vars: &[(String, String)],
     wasi_modules: &WasiModules,
 ) -> Result<()> {
-    // Add the current snapshot to the linker.
-    let mut builder = WasiCtxBuilder::new();
-    builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
-
-    for (name, dir) in preopen_dirs.into_iter() {
-        builder = builder.preopened_dir(dir, name)?;
-    }
-
     if wasi_modules.wasi_common {
-        Wasi::new(linker.store(), builder.build()).add_to_linker(linker)?;
+        wasmtime_wasi::add_to_linker(linker, |host| host.wasi.as_mut().unwrap())?;
+
+        let mut builder = WasiCtxBuilder::new();
+        builder = builder.inherit_stdio().args(argv)?.envs(vars)?;
+
+        for (name, dir) in preopen_dirs.into_iter() {
+            builder = builder.preopened_dir(dir, name)?;
+        }
+        store.data_mut().wasi = Some(builder.build());
     }
 
     if wasi_modules.wasi_nn {
@@ -381,10 +398,8 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-nn")]
         {
-            use std::cell::RefCell;
-            use std::rc::Rc;
-            let wasi_nn = WasiNn::new(linker.store(), Rc::new(RefCell::new(WasiNnCtx::new()?)));
-            wasi_nn.add_to_linker(linker)?;
+            wasmtime_wasi_nn::add_to_linker(linker, |host| host.wasi_nn.as_mut().unwrap())?;
+            store.data_mut().wasi_nn = Some(WasiNnCtx::new()?);
         }
     }
 
@@ -395,14 +410,8 @@ fn populate_with_wasi(
         }
         #[cfg(feature = "wasi-crypto")]
         {
-            use std::cell::RefCell;
-            use std::rc::Rc;
-            let cx_crypto = Rc::new(RefCell::new(WasiCryptoCtx::new()));
-            WasiCryptoCommon::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-            WasiCryptoAsymmetricCommon::new(linker.store(), cx_crypto.clone())
-                .add_to_linker(linker)?;
-            WasiCryptoSignatures::new(linker.store(), cx_crypto.clone()).add_to_linker(linker)?;
-            WasiCryptoSymmetric::new(linker.store(), cx_crypto).add_to_linker(linker)?;
+            wasmtime_wasi_crypto::add_to_linker(linker, |host| host.wasi_crypto.as_mut().unwrap())?;
+            store.data_mut().wasi_crypto = Some(WasiCryptoCtx::new());
         }
     }
 

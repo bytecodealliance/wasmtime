@@ -1,8 +1,4 @@
-use crate::wasm_val_t;
-use std::any::Any;
-use std::mem::MaybeUninit;
 use std::os::raw::c_void;
-use std::ptr;
 use wasmtime::{ExternRef, Func, Val};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
@@ -54,6 +50,11 @@ pub extern "C" fn wasm_ref_copy(r: Option<&wasm_ref_t>) -> Option<Box<wasm_ref_t
     r.map(|r| Box::new(r.clone()))
 }
 
+fn abort(name: &str) -> ! {
+    eprintln!("`{}` is not implemented", name);
+    std::process::abort();
+}
+
 #[no_mangle]
 pub extern "C" fn wasm_ref_same(a: Option<&wasm_ref_t>, b: Option<&wasm_ref_t>) -> bool {
     match (a.map(|a| &a.r), b.map(|b| &b.r)) {
@@ -72,8 +73,7 @@ pub extern "C" fn wasm_ref_get_host_info(_ref: Option<&wasm_ref_t>) -> *mut c_vo
 
 #[no_mangle]
 pub extern "C" fn wasm_ref_set_host_info(_ref: Option<&wasm_ref_t>, _info: *mut c_void) {
-    eprintln!("`wasm_ref_set_host_info` is not implemented");
-    std::process::abort();
+    abort("wasm_ref_set_host_info")
 }
 
 #[no_mangle]
@@ -82,63 +82,162 @@ pub extern "C" fn wasm_ref_set_host_info_with_finalizer(
     _info: *mut c_void,
     _finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
-    eprintln!("`wasm_ref_set_host_info_with_finalizer` is not implemented");
-    std::process::abort();
-}
-
-type wasmtime_externref_finalizer_t = extern "C" fn(*mut c_void);
-
-struct CExternRef {
-    data: *mut c_void,
-    finalizer: Option<wasmtime_externref_finalizer_t>,
-}
-
-impl Drop for CExternRef {
-    fn drop(&mut self) {
-        if let Some(f) = self.finalizer {
-            f(self.data);
-        }
-    }
+    abort("wasm_ref_set_host_info_with_finalizer")
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_new(data: *mut c_void, valp: &mut MaybeUninit<wasm_val_t>) {
-    wasmtime_externref_new_with_finalizer(data, None, valp)
+pub extern "C" fn wasm_ref_as_extern(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_extern_t> {
+    abort("wasm_ref_as_extern")
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_new_with_finalizer(
-    data: *mut c_void,
-    finalizer: Option<wasmtime_externref_finalizer_t>,
-    valp: &mut MaybeUninit<wasm_val_t>,
+pub extern "C" fn wasm_ref_as_extern_const(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_extern_t> {
+    abort("wasm_ref_as_extern_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_foreign(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_foreign_t> {
+    abort("wasm_ref_as_foreign")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_foreign_const(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_foreign_t> {
+    abort("wasm_ref_as_foreign_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_func(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_func_t> {
+    abort("wasm_ref_as_func")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_func_const(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_func_t> {
+    abort("wasm_ref_as_func_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_global(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_global_t> {
+    abort("wasm_ref_as_global")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_global_const(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_global_t> {
+    abort("wasm_ref_as_global_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_instance(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_instance_t> {
+    abort("wasm_ref_as_instance")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_instance_const(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_instance_t> {
+    abort("wasm_ref_as_instance_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_memory(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_memory_t> {
+    abort("wasm_ref_as_memory")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_memory_const(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_memory_t> {
+    abort("wasm_ref_as_memory_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_module(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_module_t> {
+    abort("wasm_ref_as_module")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_module_const(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_module_t> {
+    abort("wasm_ref_as_module_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_table(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_table_t> {
+    abort("wasm_ref_as_table")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_table_const(
+    _ref: Option<&wasm_ref_t>,
+) -> Option<&crate::wasm_table_t> {
+    abort("wasm_ref_as_table_const")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_trap(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_trap_t> {
+    abort("wasm_ref_as_trap")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_ref_as_trap_const(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_trap_t> {
+    abort("wasm_ref_as_trap_const")
+}
+
+#[derive(Clone)]
+#[repr(C)]
+pub struct wasm_foreign_t {}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_new(_store: &crate::wasm_store_t) -> Box<wasm_foreign_t> {
+    abort("wasm_foreign_new")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_delete(_foreign: Box<wasm_foreign_t>) {}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_copy(r: &wasm_foreign_t) -> Box<wasm_foreign_t> {
+    Box::new(r.clone())
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_same(_a: &wasm_foreign_t, _b: &wasm_foreign_t) -> bool {
+    abort("wasm_foreign_same")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_get_host_info(_foreign: &wasm_foreign_t) -> *mut c_void {
+    std::ptr::null_mut()
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_set_host_info(_foreign: &wasm_foreign_t, _info: *mut c_void) {
+    abort("wasm_foreign_set_host_info")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_set_host_info_with_finalizer(
+    _foreign: &wasm_foreign_t,
+    _info: *mut c_void,
+    _finalizer: Option<extern "C" fn(*mut c_void)>,
 ) {
-    crate::initialize(
-        valp,
-        wasm_val_t::from_val(Val::ExternRef(Some(ExternRef::new(CExternRef {
-            data,
-            finalizer,
-        })))),
-    );
+    abort("wasm_foreign_set_host_info_with_finalizer")
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_externref_data(
-    val: &wasm_val_t,
-    datap: &mut MaybeUninit<*mut c_void>,
-) -> bool {
-    match val.val() {
-        Val::ExternRef(None) => {
-            crate::initialize(datap, ptr::null_mut());
-            true
-        }
-        Val::ExternRef(Some(x)) => {
-            let data = match x.data().downcast_ref::<CExternRef>() {
-                Some(r) => r.data,
-                None => x.data() as *const dyn Any as *mut c_void,
-            };
-            crate::initialize(datap, data);
-            true
-        }
-        _ => false,
-    }
+pub extern "C" fn wasm_foreign_as_ref(_: &wasm_foreign_t) -> &wasm_ref_t {
+    abort("wasm_foreign_as_ref")
+}
+
+#[no_mangle]
+pub extern "C" fn wasm_foreign_as_ref_const(_: &wasm_foreign_t) -> Option<&wasm_ref_t> {
+    abort("wasm_foreign_as_ref_const")
 }

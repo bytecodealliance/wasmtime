@@ -5,38 +5,30 @@
 
 use anyhow::Result;
 use wasmtime::*;
-use wasmtime_wasi::sync::{Wasi, WasiCtxBuilder};
+use wasmtime_wasi::sync::WasiCtxBuilder;
 
 fn main() -> Result<()> {
-    tracing_subscriber::FmtSubscriber::builder()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .with_ansi(true)
-        .init();
-
     // Define the WASI functions globally on the `Config`.
-    let mut config = Config::default();
-    Wasi::add_to_config(&mut config);
+    let engine = Engine::default();
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::add_to_linker(&mut linker, |s| s)?;
 
-    let store = Store::new(&Engine::new(&config)?);
-
-    // Set the WASI context in the store; all instances in the store share this context.
-    // `WasiCtxBuilder` provides a number of ways to configure what the target program
-    // will have access to.
-    assert!(Wasi::set_context(
-        &store,
-        WasiCtxBuilder::new()
-            .inherit_stdio()
-            .inherit_args()?
-            .build()
-    )
-    .is_ok());
-
-    let mut linker = Linker::new(&store);
+    // Create a WASI context and put it in a Store; all instances in the store
+    // share this context. `WasiCtxBuilder` provides a number of ways to
+    // configure what the target program will have access to.
+    let wasi = WasiCtxBuilder::new()
+        .inherit_stdio()
+        .inherit_args()?
+        .build();
+    let mut store = Store::new(&engine, wasi);
 
     // Instantiate our module with the imports we've created, and run it.
-    let module = Module::from_file(store.engine(), "target/wasm32-wasi/debug/wasi.wasm")?;
-    linker.module("", &module)?;
-    linker.get_default("")?.typed::<(), ()>()?.call(())?;
+    let module = Module::from_file(&engine, "target/wasm32-wasi/debug/wasi.wasm")?;
+    linker.module(&mut store, "", &module)?;
+    linker
+        .get_default(&mut store, "")?
+        .typed::<(), (), _>(&store)?
+        .call(&mut store, ())?;
 
     Ok(())
 }

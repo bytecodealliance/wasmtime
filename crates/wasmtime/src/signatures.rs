@@ -24,15 +24,6 @@ pub struct SignatureCollection {
 }
 
 impl SignatureCollection {
-    /// Creates a new, empty signature collection given a signature registry.
-    pub fn new(registry: &SignatureRegistry) -> Self {
-        Self {
-            registry: registry.0.clone(),
-            signatures: PrimaryMap::new(),
-            trampolines: HashMap::new(),
-        }
-    }
-
     /// Creates a signature collection for a module given the module's signatures
     /// and trampolines.
     pub fn new_for_module(
@@ -72,27 +63,6 @@ impl SignatureCollection {
         self.trampolines
             .get(&index)
             .map(|(_, trampoline)| *trampoline)
-    }
-
-    /// Registers a single function with the collection.
-    ///
-    /// Returns the shared signature index for the function.
-    pub fn register(
-        &mut self,
-        ty: &WasmFuncType,
-        trampoline: VMTrampoline,
-    ) -> VMSharedSignatureIndex {
-        let index = self.registry.write().unwrap().register(ty);
-
-        let entry = match self.trampolines.entry(index) {
-            Entry::Occupied(e) => e.into_mut(),
-            Entry::Vacant(e) => e.insert((0, trampoline)),
-        };
-
-        // Increment the ref count
-        entry.0 += 1;
-
-        index
     }
 }
 
@@ -258,5 +228,19 @@ impl SignatureRegistry {
             .entries
             .get(index.bits() as usize)
             .and_then(|e| e.as_ref().map(|e| &e.ty).cloned())
+    }
+
+    /// Registers a single function with the collection.
+    ///
+    /// Returns the shared signature index for the function.
+    pub fn register(&self, ty: &WasmFuncType) -> VMSharedSignatureIndex {
+        self.0.write().unwrap().register(ty)
+    }
+
+    /// Registers a single function with the collection.
+    ///
+    /// Returns the shared signature index for the function.
+    pub unsafe fn unregister(&self, sig: VMSharedSignatureIndex) {
+        self.0.write().unwrap().unregister_entry(sig, 1)
     }
 }

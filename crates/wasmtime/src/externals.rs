@@ -1,14 +1,13 @@
-use crate::memory::Memory;
-use crate::trampoline::{generate_global_export, generate_table_export, StoreInstanceHandle};
-use crate::values::{from_checked_anyfunc, into_checked_anyfunc, Val};
+use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::trampoline::{generate_global_export, generate_table_export};
+use crate::values::{from_checked_anyfunc, into_checked_anyfunc};
 use crate::{
-    ExternRef, ExternType, Func, GlobalType, Instance, Module, Mutability, Store, TableType, Trap,
-    ValType,
+    AsContext, AsContextMut, ExternRef, ExternType, Func, GlobalType, Instance, Memory, Module,
+    Mutability, TableType, Trap, Val, ValType,
 };
 use anyhow::{anyhow, bail, Result};
 use std::mem;
 use std::ptr;
-use wasmtime_environ::wasm;
 use wasmtime_runtime::{self as runtime, InstanceHandle};
 
 // Externals
@@ -27,7 +26,7 @@ pub enum Extern {
     /// A WebAssembly `global` which acts like a `Cell<T>` of sorts, supporting
     /// `get` and `set` operations.
     Global(Global),
-    /// A WebAssembly `table` which is an array of `Val` types.
+    /// A WebAssembly `table` which is an array of `Val` reference types.
     Table(Table),
     /// A WebAssembly linear memory.
     Memory(Memory),
@@ -99,20 +98,28 @@ impl Extern {
     }
 
     /// Returns the type associated with this `Extern`.
-    pub fn ty(&self) -> ExternType {
+    ///
+    /// The `store` argument provided must own this `Extern` and is used to look
+    /// up type information.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this item does not belong to the `store` provided.
+    pub fn ty(&self, store: impl AsContext) -> ExternType {
+        let store = store.as_context();
         match self {
-            Extern::Func(ft) => ExternType::Func(ft.ty()),
-            Extern::Memory(ft) => ExternType::Memory(ft.ty()),
-            Extern::Table(tt) => ExternType::Table(tt.ty()),
-            Extern::Global(gt) => ExternType::Global(gt.ty()),
-            Extern::Instance(i) => ExternType::Instance(i.ty()),
+            Extern::Func(ft) => ExternType::Func(ft.ty(store)),
+            Extern::Memory(ft) => ExternType::Memory(ft.ty(store)),
+            Extern::Table(tt) => ExternType::Table(tt.ty(store)),
+            Extern::Global(gt) => ExternType::Global(gt.ty(store)),
+            Extern::Instance(i) => ExternType::Instance(i.ty(store)),
             Extern::Module(m) => ExternType::Module(m.ty()),
         }
     }
 
     pub(crate) unsafe fn from_wasmtime_export(
-        wasmtime_export: &wasmtime_runtime::Export,
-        store: &Store,
+        wasmtime_export: wasmtime_runtime::Export,
+        store: &mut StoreOpaque<'_>,
     ) -> Extern {
         match wasmtime_export {
             wasmtime_runtime::Export::Function(f) => {
@@ -127,27 +134,20 @@ impl Extern {
             wasmtime_runtime::Export::Table(t) => {
                 Extern::Table(Table::from_wasmtime_table(t, store))
             }
-            wasmtime_runtime::Export::Instance(i) => {
-                Extern::Instance(Instance::from_wasmtime(i, store))
-            }
-            wasmtime_runtime::Export::Module(m) => {
-                Extern::Module(m.downcast_ref::<Module>().unwrap().clone())
-            }
         }
     }
 
-    pub(crate) fn comes_from_same_store(&self, store: &Store) -> bool {
-        let my_store = match self {
-            Extern::Func(f) => f.store(),
-            Extern::Global(g) => &g.instance.store,
-            Extern::Memory(m) => &m.instance.store,
-            Extern::Table(t) => &t.instance.store,
-            Extern::Instance(i) => i.store(),
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque<'_>) -> bool {
+        match self {
+            Extern::Func(f) => f.comes_from_same_store(store),
+            Extern::Global(g) => store.store_data().contains(g.0),
+            Extern::Memory(m) => m.comes_from_same_store(store),
+            Extern::Table(t) => store.store_data().contains(t.0),
+            Extern::Instance(i) => i.comes_from_same_store(store),
             // Modules don't live in stores right now, so they're compatible
             // with all stores.
-            Extern::Module(_) => return true,
-        };
-        Store::same(my_store, store)
+            Extern::Module(_) => true,
+        }
     }
 
     pub(crate) fn desc(&self) -> &'static str {
@@ -158,17 +158,6 @@ impl Extern {
             Extern::Global(_) => "global",
             Extern::Instance(_) => "instance",
             Extern::Module(_) => "module",
-        }
-    }
-
-    pub(crate) fn wasmtime_export(&self) -> wasmtime_runtime::Export {
-        match self {
-            Extern::Func(f) => f.wasmtime_export().clone().into(),
-            Extern::Global(f) => f.wasmtime_export().clone().into(),
-            Extern::Table(f) => f.wasmtime_export().clone().into(),
-            Extern::Memory(f) => f.wasmtime_export().clone().into(),
-            Extern::Instance(f) => wasmtime_runtime::Export::Instance(f.wasmtime_export().clone()),
-            Extern::Module(f) => wasmtime_runtime::Export::Module(Box::new(f.clone())),
         }
     }
 }
@@ -216,72 +205,97 @@ impl From<Module> for Extern {
 /// instructions will modify and read global values in a wasm module. Globals
 /// can either be imported or exported from wasm modules.
 ///
-/// If you're familiar with Rust already you can think of a `Global` as a sort
-/// of `Rc<Cell<Val>>`, more or less.
-///
-/// # `Global` and `Clone`
-///
-/// Globals are internally reference counted so you can `clone` a `Global`. The
-/// cloning process only performs a shallow clone, so two cloned `Global`
-/// instances are equivalent in their functionality.
-#[derive(Clone)]
-pub struct Global {
-    instance: StoreInstanceHandle,
-    wasmtime_export: wasmtime_runtime::ExportGlobal,
-}
+/// A [`Global`] "belongs" to the store that it was originally created within
+/// (either via [`Global::new`] or via instantiating a [`Module`]). Operations
+/// on a [`Global`] only work with the store it belongs to, and if another store
+/// is passed in by accident then methods will panic.
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
+pub struct Global(Stored<wasmtime_runtime::ExportGlobal>);
 
 impl Global {
     /// Creates a new WebAssembly `global` value with the provide type `ty` and
     /// initial value `val`.
     ///
-    /// The `store` argument provided is used as a general global cache for
-    /// information, and otherwise the `ty` and `val` arguments are used to
-    /// initialize the global.
+    /// The `store` argument will be the owner of the [`Global`] returned. Using
+    /// the returned [`Global`] other items in the store may access this global.
+    /// For example this could be provided as an argument to
+    /// [`Instance::new`](crate::Instance::new) or
+    /// [`Linker::define`](crate::Linker::define).
     ///
     /// # Errors
     ///
     /// Returns an error if the `ty` provided does not match the type of the
-    /// value `val`.
-    pub fn new(store: &Store, ty: GlobalType, val: Val) -> Result<Global> {
+    /// value `val`, or if `val` comes from a different store than `store`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    ///
+    /// let ty = GlobalType::new(ValType::I32, Mutability::Const);
+    /// let i32_const = Global::new(&mut store, ty, 1i32.into())?;
+    /// let ty = GlobalType::new(ValType::F64, Mutability::Var);
+    /// let f64_mut = Global::new(&mut store, ty, 2.0f64.into())?;
+    ///
+    /// let module = Module::new(
+    ///     &engine,
+    ///     "(module
+    ///         (global (import \"\" \"i32-const\") i32)
+    ///         (global (import \"\" \"f64-mut\") (mut f64))
+    ///     )"
+    /// )?;
+    ///
+    /// let mut linker = Linker::new(&engine);
+    /// linker.define("", "i32-const", i32_const)?;
+    /// linker.define("", "f64-mut", f64_mut)?;
+    ///
+    /// let instance = linker.instantiate(&mut store, &module)?;
+    /// // ...
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(mut store: impl AsContextMut, ty: GlobalType, val: Val) -> Result<Global> {
+        Global::_new(&mut store.as_context_mut().opaque(), ty, val)
+    }
+
+    fn _new(store: &mut StoreOpaque<'_>, ty: GlobalType, val: Val) -> Result<Global> {
         if !val.comes_from_same_store(store) {
             bail!("cross-`Store` globals are not supported");
         }
         if val.ty() != *ty.content() {
             bail!("value provided does not match the type of this global");
         }
-        let (instance, wasmtime_export) = generate_global_export(store, &ty, val)?;
-        Ok(Global {
-            instance,
-            wasmtime_export,
-        })
-    }
-
-    /// Returns the underlying type of this `global`.
-    pub fn ty(&self) -> GlobalType {
-        // The original export is coming from wasmtime_runtime itself we should
-        // support all the types coming out of it, so assert such here.
-        GlobalType::from_wasmtime_global(&self.wasmtime_export.global)
-    }
-
-    /// Returns the value type of this `global`.
-    pub fn val_type(&self) -> ValType {
-        ValType::from_wasm_type(&self.wasmtime_export.global.wasm_ty)
-    }
-
-    /// Returns the underlying mutability of this `global`.
-    pub fn mutability(&self) -> Mutability {
-        if self.wasmtime_export.global.mutability {
-            Mutability::Var
-        } else {
-            Mutability::Const
+        unsafe {
+            let wasmtime_export = generate_global_export(store, &ty, val)?;
+            Ok(Global::from_wasmtime_global(wasmtime_export, store))
         }
     }
 
+    /// Returns the underlying type of this `global`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub fn ty(&self, store: impl AsContext) -> GlobalType {
+        let store = store.as_context();
+        let ty = &store[self.0].global;
+        GlobalType::from_wasmtime_global(&ty)
+    }
+
     /// Returns the current [`Val`] of this global.
-    pub fn get(&self) -> Val {
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub fn get(&self, mut store: impl AsContextMut) -> Val {
         unsafe {
-            let definition = &mut *self.wasmtime_export.definition;
-            match self.val_type() {
+            let store = store.as_context_mut();
+            let definition = &*store[self.0].definition;
+            match self.ty(&store).content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
@@ -293,7 +307,7 @@ impl Global {
                         .map(|inner| ExternRef { inner }),
                 ),
                 ValType::FuncRef => {
-                    from_checked_anyfunc(definition.as_anyfunc() as *mut _, &self.instance.store)
+                    from_checked_anyfunc(definition.as_anyfunc() as *mut _, &mut store.opaque())
                 }
                 ty => unimplemented!("Global::get for {:?}", ty),
             }
@@ -304,21 +318,29 @@ impl Global {
     ///
     /// # Errors
     ///
-    /// Returns an error if this global has a different type than `Val`, or if
-    /// it's not a mutable global.
-    pub fn set(&self, val: Val) -> Result<()> {
-        if self.mutability() != Mutability::Var {
+    /// Returns an error if this global has a different type than `Val`, if
+    /// it's not a mutable global, or if `val` comes from a different store than
+    /// the one provided.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this global.
+    pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
+        let store = store.as_context_mut();
+        let ty = self.ty(&store);
+        if ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
         }
-        let ty = self.val_type();
-        if val.ty() != ty {
+        let ty = ty.content();
+        if val.ty() != *ty {
             bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
-        if !val.comes_from_same_store(&self.instance.store) {
+        let mut store = store.opaque();
+        if !val.comes_from_same_store(&store) {
             bail!("cross-`Store` values are not supported");
         }
         unsafe {
-            let definition = &mut *self.wasmtime_export.definition;
+            let definition = &mut *store[self.0].definition;
             match val {
                 Val::I32(i) => *definition.as_i32_mut() = i,
                 Val::I64(i) => *definition.as_i64_mut() = i,
@@ -326,14 +348,10 @@ impl Global {
                 Val::F64(f) => *definition.as_u64_mut() = f,
                 Val::FuncRef(f) => {
                     *definition.as_anyfunc_mut() = f.map_or(ptr::null(), |f| {
-                        f.caller_checked_anyfunc().as_ptr() as *const _
+                        f.caller_checked_anyfunc(&mut store).as_ptr() as *const _
                     });
                 }
                 Val::ExternRef(x) => {
-                    // In case the old value's `Drop` implementation is
-                    // re-entrant and tries to touch this global again, do a
-                    // replace, and then drop. This way no one can observe a
-                    // halfway-deinitialized value.
                     let old = mem::replace(definition.as_externref_mut(), x.map(|x| x.inner));
                     drop(old);
                 }
@@ -344,66 +362,45 @@ impl Global {
     }
 
     pub(crate) unsafe fn from_wasmtime_global(
-        wasmtime_export: &wasmtime_runtime::ExportGlobal,
-        store: &Store,
+        wasmtime_export: wasmtime_runtime::ExportGlobal,
+        store: &mut StoreOpaque<'_>,
     ) -> Global {
-        Global {
-            instance: store.existing_vmctx(wasmtime_export.vmctx),
-            wasmtime_export: wasmtime_export.clone(),
-        }
+        Global(store.store_data_mut().insert(wasmtime_export))
     }
 
-    pub(crate) fn wasmtime_ty(&self) -> &wasmtime_environ::wasm::Global {
-        &self.wasmtime_export.global
+    pub(crate) fn wasmtime_ty<'a>(
+        &self,
+        data: &'a StoreData,
+    ) -> &'a wasmtime_environ::wasm::Global {
+        &data[self.0].global
     }
 
-    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMGlobalImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque<'_>) -> wasmtime_runtime::VMGlobalImport {
         wasmtime_runtime::VMGlobalImport {
-            from: self.wasmtime_export.definition,
+            from: store[self.0].definition,
         }
-    }
-
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportGlobal {
-        &self.wasmtime_export
     }
 }
 
 /// A WebAssembly `table`, or an array of values.
 ///
 /// Like [`Memory`] a table is an indexed array of values, but unlike [`Memory`]
-/// it's an array of WebAssembly values rather than bytes. One of the most
-/// common usages of a table is a function table for wasm modules, where each
-/// element has the `Func` type.
+/// it's an array of WebAssembly reference type values rather than bytes. One of
+/// the most common usages of a table is a function table for wasm modules (a
+/// `funcref` table), where each element has the `ValType::FuncRef` type.
 ///
-/// Tables, like globals, are not threadsafe and can only be used on one thread.
-/// Tables can be grown in size and each element can be read/written.
-///
-/// # `Table` and `Clone`
-///
-/// Tables are internally reference counted so you can `clone` a `Table`. The
-/// cloning process only performs a shallow clone, so two cloned `Table`
-/// instances are equivalent in their functionality.
-#[derive(Clone)]
-pub struct Table {
-    instance: StoreInstanceHandle,
-    wasmtime_export: wasmtime_runtime::ExportTable,
-}
-
-fn set_table_item(
-    instance: &InstanceHandle,
-    table_index: wasm::DefinedTableIndex,
-    item_index: u32,
-    item: runtime::TableElement,
-) -> Result<()> {
-    instance
-        .table_set(table_index, item_index, item)
-        .map_err(|()| anyhow!("table element index out of bounds"))
-}
+/// A [`Table`] "belongs" to the store that it was originally created within
+/// (either via [`Table::new`] or via instantiating a [`Module`]). Operations
+/// on a [`Table`] only work with the store it belongs to, and if another store
+/// is passed in by accident then methods will panic.
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)] // here for the C API
+pub struct Table(Stored<wasmtime_runtime::ExportTable>);
 
 impl Table {
-    /// Creates a new `Table` with the given parameters.
+    /// Creates a new [`Table`] with the given parameters.
     ///
-    /// * `store` - a global cache to store information in
+    /// * `store` - the owner of the resulting [`Table`]
     /// * `ty` - the type of this table, containing both the element type as
     ///   well as the initial size and maximum size, if any.
     /// * `init` - the initial value to fill all table entries with, if the
@@ -411,9 +408,48 @@ impl Table {
     ///
     /// # Errors
     ///
-    /// Returns an error if `init` does not match the element type of the table.
-    pub fn new(store: &Store, ty: TableType, init: Val) -> Result<Table> {
-        let (instance, wasmtime_export) = generate_table_export(store, &ty)?;
+    /// Returns an error if `init` does not match the element type of the table,
+    /// or if `init` does not belong to the `store` provided.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use wasmtime::*;
+    /// # fn main() -> anyhow::Result<()> {
+    /// let engine = Engine::default();
+    /// let mut store = Store::new(&engine, ());
+    ///
+    /// let ty = TableType::new(ValType::FuncRef, Limits::new(2, None));
+    /// let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
+    ///
+    /// let module = Module::new(
+    ///     &engine,
+    ///     "(module
+    ///         (table (import \"\" \"\") 2 funcref)
+    ///         (func $f (result i32)
+    ///             i32.const 10)
+    ///         (elem (i32.const 0) (func $f))
+    ///     )"
+    /// )?;
+    ///
+    /// let instance = Instance::new(&mut store, &module, &[table.into()])?;
+    /// // ...
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn new(mut store: impl AsContextMut, ty: TableType, init: Val) -> Result<Table> {
+        Table::_new(&mut store.as_context_mut().opaque(), ty, init)
+    }
+
+    fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
+        if init.ty() != *ty.element() {
+            bail!(
+                "table initialization value type {:?} does not have expected type {:?}",
+                init.ty(),
+                ty.element(),
+            );
+        }
+        let wasmtime_export = generate_table_export(store, &ty)?;
 
         let init: runtime::TableElement = match ty.element() {
             ValType::FuncRef => into_checked_anyfunc(init, store)?.into(),
@@ -428,41 +464,54 @@ impl Table {
         };
 
         // Initialize entries with the init value.
-        let definition = unsafe { &*wasmtime_export.definition };
-        let index = instance.table_index(definition);
-        for i in 0..definition.current_elements {
-            set_table_item(&instance, index, i, init.clone())?;
-        }
+        unsafe {
+            let table = Table::from_wasmtime_table(wasmtime_export, store);
+            (*table.wasmtime_table(store))
+                .fill(0, init, ty.limits().min())
+                .map_err(Trap::from_runtime)?;
 
-        Ok(Table {
-            instance,
-            wasmtime_export,
-        })
+            Ok(table)
+        }
     }
 
     /// Returns the underlying type of this table, including its element type as
     /// well as the maximum/minimum lower bounds.
-    pub fn ty(&self) -> TableType {
-        TableType::from_wasmtime_table(&self.wasmtime_export.table.table)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
+    pub fn ty(&self, store: impl AsContext) -> TableType {
+        let store = store.as_context();
+        let ty = &store[self.0].table.table;
+        TableType::from_wasmtime_table(ty)
     }
 
-    fn wasmtime_table_index(&self) -> wasm::DefinedTableIndex {
-        unsafe { self.instance.table_index(&*self.wasmtime_export.definition) }
+    fn wasmtime_table(&self, store: &mut StoreOpaque<'_>) -> *mut runtime::Table {
+        unsafe {
+            let export = &store[self.0];
+            let mut handle = InstanceHandle::from_vmctx(export.vmctx);
+            let idx = handle.table_index(&*export.definition);
+            handle.get_defined_table(idx)
+        }
     }
 
     /// Returns the table element value at `index`.
     ///
     /// Returns `None` if `index` is out of bounds.
-    pub fn get(&self, index: u32) -> Option<Val> {
-        let table_index = self.wasmtime_table_index();
-        let item = self.instance.table_get(table_index, index)?;
-        match item {
-            runtime::TableElement::FuncRef(f) => {
-                Some(unsafe { from_checked_anyfunc(f, &self.instance.store) })
-            }
-            runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
-            runtime::TableElement::ExternRef(Some(x)) => {
-                Some(Val::ExternRef(Some(ExternRef { inner: x })))
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
+    pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Val> {
+        let mut store = store.as_context_mut().opaque();
+        let table = self.wasmtime_table(&mut store);
+        unsafe {
+            match (*table).get(index)? {
+                runtime::TableElement::FuncRef(f) => Some(from_checked_anyfunc(f, &mut store)),
+                runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
+                runtime::TableElement::ExternRef(Some(x)) => {
+                    Some(Val::ExternRef(Some(ExternRef { inner: x })))
+                }
             }
         }
     }
@@ -471,24 +520,33 @@ impl Table {
     ///
     /// # Errors
     ///
-    /// Returns an error if `index` is out of bounds or if `val` does not have
-    /// the right type to be stored in this table.
-    pub fn set(&self, index: u32, val: Val) -> Result<()> {
-        if !val.comes_from_same_store(&self.instance.store) {
-            bail!("cross-`Store` values are not supported in tables");
+    /// Returns an error if `index` is out of bounds, if `val` does not have
+    /// the right type to be stored in this table, or if `val` belongs to a
+    /// different store.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
+    pub fn set(&self, mut store: impl AsContextMut, index: u32, val: Val) -> Result<()> {
+        let ty = self.ty(&store).element().clone();
+        let mut store = store.as_context_mut().opaque();
+        let val = val.into_table_element(&mut store, ty)?;
+        let table = self.wasmtime_table(&mut store);
+        unsafe {
+            (*table)
+                .set(index, val)
+                .map_err(|()| anyhow!("table element index out of bounds"))
         }
-        let table_index = self.wasmtime_table_index();
-        set_table_item(
-            &self.instance,
-            table_index,
-            index,
-            val.into_table_element()?,
-        )
     }
 
     /// Returns the current size of this table.
-    pub fn size(&self) -> u32 {
-        unsafe { (*self.wasmtime_export.definition).current_elements }
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
+    pub fn size(&self, store: impl AsContext) -> u32 {
+        let store = store.as_context();
+        unsafe { (*store[self.0].definition).current_elements }
     }
 
     /// Grows the size of this table by `delta` more elements, initialization
@@ -500,32 +558,26 @@ impl Table {
     ///
     /// Returns an error if the table cannot be grown by `delta`, for example
     /// if it would cause the table to exceed its maximum size. Also returns an
-    /// error if `init` is not of the right type.
-    pub fn grow(&self, delta: u32, init: Val) -> Result<u32> {
-        let index = self.wasmtime_table_index();
-        let orig_size = match self.ty().element() {
-            ValType::FuncRef => {
-                let init = into_checked_anyfunc(init, &self.instance.store)?;
-                self.instance.defined_table_grow(index, delta, init.into())
+    /// error if `init` is not of the right type or if `init` does not belong to
+    /// `store`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this table.
+    pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
+        let ty = self.ty(&store).element().clone();
+        let mut store = store.as_context_mut().opaque();
+        let init = init.into_table_element(&mut store, ty)?;
+        let table = self.wasmtime_table(&mut store);
+        unsafe {
+            match (*table).grow(delta, init, store.limiter()) {
+                Some(size) => {
+                    let vm = (*table).vmtable();
+                    *store[self.0].definition = vm;
+                    Ok(size)
+                }
+                None => bail!("failed to grow table by `{}`", delta),
             }
-            ValType::ExternRef => {
-                let init = match init {
-                    Val::ExternRef(Some(x)) => Some(x.inner),
-                    Val::ExternRef(None) => None,
-                    _ => bail!("incorrect init value for growing table"),
-                };
-                self.instance.defined_table_grow(
-                    index,
-                    delta,
-                    runtime::TableElement::ExternRef(init),
-                )
-            }
-            _ => unreachable!("only `funcref` and `externref` tables are supported"),
-        };
-        if let Some(size) = orig_size {
-            Ok(size)
-        } else {
-            bail!("failed to grow table by `{}`", delta)
         }
     }
 
@@ -536,32 +588,30 @@ impl Table {
     ///
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn copy(
+        mut store: impl AsContextMut,
         dst_table: &Table,
         dst_index: u32,
         src_table: &Table,
         src_index: u32,
         len: u32,
     ) -> Result<()> {
-        if !Store::same(&dst_table.instance.store, &src_table.instance.store) {
-            bail!("cross-`Store` table copies are not supported");
-        }
-
-        if dst_table.ty() != src_table.ty() {
+        if dst_table.ty(&store).element() != src_table.ty(&store).element() {
             bail!("tables do not have the same element type");
         }
 
-        // NB: We must use the `dst_table`'s `wasmtime_handle` for the
-        // `dst_table_index` and vice versa for `src_table` since each table can
-        // come from different modules.
-        let dst_table_index = dst_table.wasmtime_table_index();
-        let dst_table_index = dst_table.instance.get_defined_table(dst_table_index);
+        let mut store = store.as_context_mut().opaque();
 
-        let src_table_index = src_table.wasmtime_table_index();
-        let src_table_index = src_table.instance.get_defined_table(src_table_index);
-
-        runtime::Table::copy(dst_table_index, src_table_index, dst_index, src_index, len)
-            .map_err(|e| Trap::from_runtime(&dst_table.instance.store, e))?;
+        let dst = dst_table.wasmtime_table(&mut store);
+        let src = src_table.wasmtime_table(&mut store);
+        unsafe {
+            runtime::Table::copy(dst, src, dst_index, src_index, len)
+                .map_err(Trap::from_runtime)?;
+        }
         Ok(())
     }
 
@@ -577,48 +627,40 @@ impl Table {
     /// * the region to be filled is out of bounds, or
     ///
     /// * `val` comes from a different `Store` from this table.
-    pub fn fill(&self, dst: u32, val: Val, len: u32) -> Result<()> {
-        if !val.comes_from_same_store(&self.instance.store) {
-            bail!("cross-`Store` table fills are not supported");
-        }
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own either `dst_table` or `src_table`.
+    pub fn fill(&self, mut store: impl AsContextMut, dst: u32, val: Val, len: u32) -> Result<()> {
+        let ty = self.ty(&store).element().clone();
+        let mut store = store.as_context_mut().opaque();
+        let val = val.into_table_element(&mut store, ty)?;
 
-        // Ensure the fill value is the correct type
-        if self.ty().element() != &val.ty() {
-            bail!("mismatched element fill type");
+        let table = self.wasmtime_table(&mut store);
+        unsafe {
+            (*table).fill(dst, val, len).map_err(Trap::from_runtime)?;
         }
-
-        let table_index = self.wasmtime_table_index();
-        self.instance
-            .handle
-            .defined_table_fill(table_index, dst, val.into_table_element()?, len)
-            .map_err(|e| Trap::from_runtime(&self.instance.store, e))?;
 
         Ok(())
     }
 
     pub(crate) unsafe fn from_wasmtime_table(
-        wasmtime_export: &wasmtime_runtime::ExportTable,
-        store: &Store,
+        wasmtime_export: wasmtime_runtime::ExportTable,
+        store: &mut StoreOpaque<'_>,
     ) -> Table {
-        Table {
-            instance: store.existing_vmctx(wasmtime_export.vmctx),
-            wasmtime_export: wasmtime_export.clone(),
-        }
+        Table(store.store_data_mut().insert(wasmtime_export))
     }
 
-    pub(crate) fn wasmtime_ty(&self) -> &wasmtime_environ::wasm::Table {
-        &self.wasmtime_export.table.table
+    pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::wasm::Table {
+        &data[self.0].table.table
     }
 
-    pub(crate) fn vmimport(&self) -> wasmtime_runtime::VMTableImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque<'_>) -> wasmtime_runtime::VMTableImport {
+        let export = &store[self.0];
         wasmtime_runtime::VMTableImport {
-            from: self.wasmtime_export.definition,
-            vmctx: self.wasmtime_export.vmctx,
+            from: export.definition,
+            vmctx: export.vmctx,
         }
-    }
-
-    pub(crate) fn wasmtime_export(&self) -> &wasmtime_runtime::ExportTable {
-        &self.wasmtime_export
     }
 }
 
@@ -651,8 +693,12 @@ impl<'instance> Export<'instance> {
     }
 
     /// Return the `ExternType` of this export.
-    pub fn ty(&self) -> ExternType {
-        self.definition.ty()
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this `Extern`.
+    pub fn ty(&self, store: impl AsContext) -> ExternType {
+        self.definition.ty(store)
     }
 
     /// Consume this `Export` and return the contained `Extern`.
@@ -682,5 +728,17 @@ impl<'instance> Export<'instance> {
     /// or `None` otherwise.
     pub fn into_global(self) -> Option<Global> {
         self.definition.into_global()
+    }
+
+    /// Consume this `Export` and return the contained `Instance`, if it's a
+    /// instance, or `None` otherwise.
+    pub fn into_instance(self) -> Option<Instance> {
+        self.definition.into_instance()
+    }
+
+    /// Consume this `Export` and return the contained `Module`, if it's a
+    /// module, or `None` otherwise.
+    pub fn into_module(self) -> Option<Module> {
+        self.definition.into_module()
     }
 }

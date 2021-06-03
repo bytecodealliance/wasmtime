@@ -9,11 +9,11 @@ wiggle::from_witx!({
 impl_errno!(types::Errno);
 
 impl<'a> records::Records for WasiCtx<'a> {
-    fn sum_of_pair(&self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {
+    fn sum_of_pair(&mut self, an_pair: &types::PairInts) -> Result<i64, types::Errno> {
         Ok(an_pair.first as i64 + an_pair.second as i64)
     }
 
-    fn sum_of_pair_of_ptrs(&self, an_pair: &types::PairIntPtrs) -> Result<i64, types::Errno> {
+    fn sum_of_pair_of_ptrs(&mut self, an_pair: &types::PairIntPtrs) -> Result<i64, types::Errno> {
         let first = an_pair
             .first
             .read()
@@ -25,7 +25,7 @@ impl<'a> records::Records for WasiCtx<'a> {
         Ok(first as i64 + second as i64)
     }
 
-    fn sum_of_int_and_ptr(&self, an_pair: &types::PairIntAndPtr) -> Result<i64, types::Errno> {
+    fn sum_of_int_and_ptr(&mut self, an_pair: &types::PairIntAndPtr) -> Result<i64, types::Errno> {
         let first = an_pair
             .first
             .read()
@@ -34,7 +34,7 @@ impl<'a> records::Records for WasiCtx<'a> {
         Ok(first as i64 + second)
     }
 
-    fn return_pair_ints(&self) -> Result<types::PairInts, types::Errno> {
+    fn return_pair_ints(&mut self) -> Result<types::PairInts, types::Errno> {
         Ok(types::PairInts {
             first: 10,
             second: 20,
@@ -42,7 +42,7 @@ impl<'a> records::Records for WasiCtx<'a> {
     }
 
     fn return_pair_of_ptrs<'b>(
-        &self,
+        &mut self,
         first: &GuestPtr<'b, i32>,
         second: &GuestPtr<'b, i32>,
     ) -> Result<types::PairIntPtrs<'b>, types::Errno> {
@@ -52,7 +52,10 @@ impl<'a> records::Records for WasiCtx<'a> {
         })
     }
 
-    fn sum_array<'b>(&self, record_of_list: &types::RecordOfList<'b>) -> Result<u16, types::Errno> {
+    fn sum_array<'b>(
+        &mut self,
+        record_of_list: &types::RecordOfList<'b>,
+    ) -> Result<u16, types::Errno> {
         // my kingdom for try blocks
         fn aux(record_of_list: &types::RecordOfList) -> Result<u16, wiggle::GuestError> {
             let mut s = 0;
@@ -99,7 +102,7 @@ impl SumOfPairExercise {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         host_memory
@@ -111,7 +114,7 @@ impl SumOfPairExercise {
             .write(self.input.second)
             .expect("input ref_mut");
         let sum_err = records::sum_of_pair(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input_loc.ptr as i32,
             self.return_loc.ptr as i32,
@@ -187,7 +190,7 @@ impl SumPairPtrsExercise {
             .boxed()
     }
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         host_memory
@@ -209,7 +212,7 @@ impl SumPairPtrsExercise {
             .expect("input_struct ref");
 
         let res = records::sum_of_pair_of_ptrs(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input_struct_loc.ptr as i32,
             self.return_loc.ptr as i32,
@@ -275,7 +278,7 @@ impl SumIntAndPtrExercise {
             .boxed()
     }
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         host_memory
@@ -292,7 +295,7 @@ impl SumIntAndPtrExercise {
             .expect("input_struct ref");
 
         let res = records::sum_of_int_and_ptr(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input_struct_loc.ptr as i32,
             self.return_loc.ptr as i32,
@@ -332,10 +335,10 @@ impl ReturnPairInts {
     }
 
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
-        let err = records::return_pair_ints(&ctx, &host_memory, self.return_loc.ptr as i32);
+        let err = records::return_pair_ints(&mut ctx, &host_memory, self.return_loc.ptr as i32);
 
         assert_eq!(err, Ok(types::Errno::Ok as i32), "return struct errno");
 
@@ -397,7 +400,7 @@ impl ReturnPairPtrsExercise {
             .boxed()
     }
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         host_memory
@@ -410,7 +413,7 @@ impl ReturnPairPtrsExercise {
             .expect("input_second ref");
 
         let res = records::return_pair_of_ptrs(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input_first_loc.ptr as i32,
             self.input_second_loc.ptr as i32,
@@ -498,7 +501,7 @@ impl SumArrayExercise {
             .boxed()
     }
     pub fn test(&self) {
-        let ctx = WasiCtx::new();
+        let mut ctx = WasiCtx::new();
         let host_memory = HostMemory::new();
 
         // Write inputs to memory as an array
@@ -522,7 +525,7 @@ impl SumArrayExercise {
 
         // Call wiggle-generated func
         let res = records::sum_array(
-            &ctx,
+            &mut ctx,
             &host_memory,
             self.input_struct_loc.ptr as i32,
             self.output_loc.ptr as i32,

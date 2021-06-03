@@ -1,8 +1,8 @@
 use anyhow::Context;
 use std::path::Path;
 use wasi_common::pipe::WritePipe;
-use wasmtime::{Linker, Module, Store};
-use wasmtime_wasi::sync::{Wasi, WasiCtxBuilder};
+use wasmtime::{Engine, Linker, Module, Store};
+use wasmtime_wasi::sync::{add_to_linker, WasiCtxBuilder};
 
 pub fn instantiate(data: &[u8], bin_name: &str, workspace: Option<&Path>) -> anyhow::Result<()> {
     run(data, bin_name, workspace, false)
@@ -25,7 +25,10 @@ fn run(
     let stderr = WritePipe::new_in_memory();
 
     let r = {
-        let store = Store::default();
+        let engine = Engine::default();
+        let module = Module::new(&engine, &data).context("failed to create wasm module")?;
+        let mut linker = Linker::new(&engine);
+        add_to_linker(&mut linker, |cx| cx)?;
 
         // Create our wasi context.
         // Additionally register any preopened directories if we have them.
@@ -53,16 +56,10 @@ fn run(
         // cap-std-sync does not yet support the sync family of fdflags
         builder = builder.env("NO_FDFLAGS_SYNC_SUPPORT", "1")?;
 
-        let wasi = Wasi::new(&store, builder.build());
-
-        let mut linker = Linker::new(&store);
-
-        wasi.add_to_linker(&mut linker)?;
-
-        let module = Module::new(store.engine(), &data).context("failed to create wasm module")?;
-        let instance = linker.instantiate(&module)?;
-        let start = instance.get_typed_func::<(), ()>("_start")?;
-        start.call(()).map_err(anyhow::Error::from)
+        let mut store = Store::new(&engine, builder.build());
+        let instance = linker.instantiate(&mut store, &module)?;
+        let start = instance.get_typed_func::<(), (), _>(&mut store, "_start")?;
+        start.call(&mut store, ()).map_err(anyhow::Error::from)
     };
 
     match r {

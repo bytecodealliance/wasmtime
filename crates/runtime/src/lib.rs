@@ -20,6 +20,8 @@
     )
 )]
 
+use std::error::Error;
+
 mod export;
 mod externref;
 mod imports;
@@ -40,15 +42,15 @@ pub use crate::imports::Imports;
 pub use crate::instance::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
     InstantiationError, LinkError, ModuleLimits, OnDemandInstanceAllocator,
-    PoolingAllocationStrategy, PoolingInstanceAllocator, ResourceLimiter, RuntimeInstance,
+    PoolingAllocationStrategy, PoolingInstanceAllocator, ResourceLimiter,
 };
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
 pub use crate::mmap::Mmap;
 pub use crate::table::{Table, TableElement};
 pub use crate::traphandlers::{
-    catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, with_last_info,
-    SignalHandler, TlsRestore, Trap, TrapInfo,
+    catch_traps, init_traps, raise_lib_trap, raise_user_trap, resume_panic, SignalHandler,
+    TlsRestore, Trap,
 };
 pub use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMGlobalDefinition,
@@ -79,4 +81,42 @@ pub fn pointer_type() -> wasmtime_environ::ir::Type {
     } else {
         unreachable!()
     }
+}
+
+/// Dynamic runtime functionality needed by this crate throughout the execution
+/// of a wasm instance.
+///
+/// This trait is used to store a raw pointer trait object within each
+/// `VMContext`. This raw pointer trait object points back to the
+/// `wasmtime::Store` internally but is type-erased so this `wasmtime_runtime`
+/// crate doesn't need the entire `wasmtime` crate to build.
+///
+/// Note that this is an extra-unsafe trait because no heed is paid to the
+/// lifetime of this store or the Send/Sync-ness of this store. All of that must
+/// be respected by embedders (e.g. the `wasmtime::Store` structure). The theory
+/// is that `wasmtime::Store` handles all this correctly.
+pub unsafe trait Store {
+    /// Returns the raw pointer in memory where this store's shared
+    /// `VMInterrupts` structure is located.
+    ///
+    /// Used to configure `VMContext` initialization and store the right pointer
+    /// in the `VMContext`.
+    fn vminterrupts(&self) -> *mut VMInterrupts;
+
+    /// Returns the externref management structures necessary for this store.
+    ///
+    /// The first element returned is the table in which externrefs are stored
+    /// throughout wasm execution, and the second element is how to look up
+    /// module information for gc requests.
+    fn externref_activations_table(
+        &mut self,
+    ) -> (&mut VMExternRefActivationsTable, &dyn ModuleInfoLookup);
+
+    /// Returns a reference to the store's limiter for limiting resources, if any.
+    fn limiter(&mut self) -> Option<&mut dyn ResourceLimiter>;
+
+    /// Callback invoked whenever fuel runs out by a wasm instance. If an error
+    /// is returned that's raised as a trap. Otherwise wasm execution will
+    /// continue as normal.
+    fn out_of_gas(&mut self) -> Result<(), Box<dyn Error + Send + Sync>>;
 }

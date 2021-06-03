@@ -3,7 +3,6 @@ use crate::file::WasiFile;
 use crate::Error;
 use bitflags::bitflags;
 use cap_std::time::{Duration, Instant};
-use std::cell::Cell;
 
 bitflags! {
     pub struct RwEventFlags: u32 {
@@ -12,24 +11,21 @@ bitflags! {
 }
 
 pub struct RwSubscription<'a> {
-    pub file: &'a mut dyn WasiFile,
-    status: Cell<Option<Result<(u64, RwEventFlags), Error>>>,
+    pub file: &'a dyn WasiFile,
+    status: Option<Result<(u64, RwEventFlags), Error>>,
 }
 
 impl<'a> RwSubscription<'a> {
-    pub fn new(file: &'a mut dyn WasiFile) -> Self {
-        Self {
-            file,
-            status: Cell::new(None),
-        }
+    pub fn new(file: &'a dyn WasiFile) -> Self {
+        Self { file, status: None }
     }
-    pub fn complete(&self, size: u64, flags: RwEventFlags) {
-        self.status.set(Some(Ok((size, flags))))
+    pub fn complete(&mut self, size: u64, flags: RwEventFlags) {
+        self.status = Some(Ok((size, flags)))
     }
-    pub fn error(&self, error: Error) {
-        self.status.set(Some(Err(error)))
+    pub fn error(&mut self, error: Error) {
+        self.status = Some(Err(error))
     }
-    pub fn result(&self) -> Option<Result<(u64, RwEventFlags), Error>> {
+    pub fn result(&mut self) -> Option<Result<(u64, RwEventFlags), Error>> {
         self.status.take()
     }
 }
@@ -72,8 +68,8 @@ pub enum SubscriptionResult {
 impl SubscriptionResult {
     pub fn from_subscription(s: Subscription) -> Option<SubscriptionResult> {
         match s {
-            Subscription::Read(s) => s.result().map(SubscriptionResult::Read),
-            Subscription::Write(s) => s.result().map(SubscriptionResult::Write),
+            Subscription::Read(mut s) => s.result().map(SubscriptionResult::Read),
+            Subscription::Write(mut s) => s.result().map(SubscriptionResult::Write),
             Subscription::MonotonicClock(s) => s.result().map(SubscriptionResult::MonotonicClock),
         }
     }

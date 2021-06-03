@@ -7,6 +7,7 @@
 //! Using the pooling instance allocator can speed up module instantiation
 //! when modules can be constrained based on configurable limits.
 
+use super::borrow_limiter;
 use super::{
     initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, InstantiationError, ResourceLimiter,
@@ -14,11 +15,10 @@ use super::{
 use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
 use rand::Rng;
-use std::cell::RefCell;
 use std::cmp::min;
 use std::convert::TryFrom;
+use std::marker;
 use std::mem;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
     entity::{EntitySet, PrimaryMap},
@@ -290,12 +290,12 @@ impl Default for PoolingAllocationStrategy {
 #[derive(Debug)]
 struct InstancePool {
     mapping: Mmap,
-    offsets: VMOffsets,
     instance_size: usize,
     max_instances: usize,
     free_list: Mutex<Vec<usize>>,
     memories: MemoryPool,
     tables: TablePool,
+    empty_module: Arc<Module>,
 }
 
 impl InstancePool {
@@ -334,18 +334,17 @@ impl InstancePool {
 
         let pool = Self {
             mapping,
-            offsets,
             instance_size,
             max_instances,
             free_list: Mutex::new((0..max_instances).collect()),
             memories: MemoryPool::new(module_limits, instance_limits)?,
             tables: TablePool::new(module_limits, instance_limits)?,
+            empty_module: Arc::new(Module::default()),
         };
 
         // Use a default module to initialize the instances to start
-        let module = Arc::new(Module::default());
         for i in 0..instance_limits.count as usize {
-            pool.initialize(i, &module);
+            pool.initialize(module_limits, i);
         }
 
         Ok(pool)
@@ -356,7 +355,7 @@ impl InstancePool {
         &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
     }
 
-    fn initialize(&self, index: usize, module: &Arc<Module>) {
+    fn initialize(&self, limits: &ModuleLimits, index: usize) {
         unsafe {
             let instance = self.instance(index);
 
@@ -364,14 +363,19 @@ impl InstancePool {
             std::ptr::write(
                 instance as _,
                 Instance {
-                    module: module.clone(),
-                    offsets: self.offsets,
-                    memories: PrimaryMap::with_capacity(self.offsets.num_defined_memories as usize),
-                    tables: PrimaryMap::with_capacity(self.offsets.num_defined_tables as usize),
-                    dropped_elements: RefCell::new(EntitySet::new()),
-                    dropped_data: RefCell::new(EntitySet::new()),
+                    module: self.empty_module.clone(),
+                    offsets: VMOffsets::new(
+                        std::mem::size_of::<*const u8>() as u8,
+                        &self.empty_module,
+                    ),
+                    memories: PrimaryMap::with_capacity(limits.memories as usize),
+                    tables: PrimaryMap::with_capacity(limits.tables as usize),
+                    dropped_elements: EntitySet::new(),
+                    dropped_data: EntitySet::new(),
                     host_state: Box::new(()),
-                    vmctx: VMContext {},
+                    vmctx: VMContext {
+                        _marker: marker::PhantomPinned,
+                    },
                 },
             );
         }
@@ -391,18 +395,19 @@ impl InstancePool {
         );
         instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
+        let mut limiter = req.store.and_then(|s| (*s).limiter());
         Self::set_instance_memories(
             instance,
             self.memories.get(index),
             self.memories.max_wasm_pages,
-            req.limiter,
+            borrow_limiter(&mut limiter),
         )?;
 
         Self::set_instance_tables(
             instance,
-            self.tables.get(index),
+            self.tables.get(index).map(|x| x as *mut usize),
             self.tables.max_elements,
-            req.limiter,
+            borrow_limiter(&mut limiter),
         )?;
 
         initialize_vmcontext(instance, req);
@@ -452,7 +457,7 @@ impl InstancePool {
 
         // Decommit any linear memories that were used
         for (memory, base) in instance.memories.values_mut().zip(self.memories.get(index)) {
-            let memory = mem::take(memory);
+            let mut memory = mem::take(memory);
             debug_assert!(memory.is_static());
 
             // Reset any faulted guard pages as the physical memory may be reused for another instance in the future
@@ -460,14 +465,15 @@ impl InstancePool {
             memory
                 .reset_guard_pages()
                 .expect("failed to reset guard pages");
+            drop(&mut memory); // require mutable on all platforms, not just uffd
 
-            let size = (memory.size() * WASM_PAGE_SIZE) as usize;
+            let size = (memory.size() as usize) * (WASM_PAGE_SIZE as usize);
             drop(memory);
             decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
         }
 
         instance.memories.clear();
-        instance.dropped_data.borrow_mut().clear();
+        instance.dropped_data.clear();
 
         // Decommit any tables that were used
         for (table, base) in instance.tables.values_mut().zip(self.tables.get(index)) {
@@ -484,10 +490,21 @@ impl InstancePool {
         }
 
         instance.tables.clear();
-        instance.dropped_elements.borrow_mut().clear();
+        instance.dropped_elements.clear();
+
+        // Drop all `global` values which need a destructor, such as externref
+        // values which now need their reference count dropped.
+        instance.drop_globals();
 
         // Drop any host state
         instance.host_state = Box::new(());
+
+        // And finally reset the module/offsets back to their original. This
+        // should put everything back in a relatively pristine state for each
+        // fresh allocation later on.
+        instance.module = self.empty_module.clone();
+        instance.offsets =
+            VMOffsets::new(std::mem::size_of::<*const u8>() as u8, &self.empty_module);
 
         self.free_list.lock().unwrap().push(index);
     }
@@ -496,7 +513,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
         max_pages: u32,
-        limiter: Option<&Rc<dyn ResourceLimiter>>,
+        mut limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -505,30 +522,34 @@ impl InstancePool {
         for plan in
             (&module.memory_plans.values().as_slice()[module.num_imported_memories..]).iter()
         {
+            let memory = unsafe {
+                std::slice::from_raw_parts_mut(
+                    memories.next().unwrap(),
+                    (max_pages as usize) * (WASM_PAGE_SIZE as usize),
+                )
+            };
             instance.memories.push(
                 Memory::new_static(
                     plan,
-                    memories.next().unwrap(),
-                    max_pages,
+                    memory,
                     commit_memory_pages,
-                    limiter,
+                    borrow_limiter(&mut limiter),
                 )
                 .map_err(InstantiationError::Resource)?,
             );
         }
 
-        let mut dropped_data = instance.dropped_data.borrow_mut();
-        debug_assert!(dropped_data.is_empty());
-        dropped_data.resize(module.passive_data.len());
+        debug_assert!(instance.dropped_data.is_empty());
+        instance.dropped_data.resize(module.passive_data.len());
 
         Ok(())
     }
 
     fn set_instance_tables(
         instance: &mut Instance,
-        mut tables: impl Iterator<Item = *mut u8>,
+        mut tables: impl Iterator<Item = *mut usize>,
         max_elements: u32,
-        limiter: Option<&Rc<dyn ResourceLimiter>>,
+        mut limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -537,18 +558,23 @@ impl InstancePool {
         for plan in (&module.table_plans.values().as_slice()[module.num_imported_tables..]).iter() {
             let base = tables.next().unwrap();
 
-            commit_table_pages(base, max_elements as usize * mem::size_of::<*mut u8>())
-                .map_err(InstantiationError::Resource)?;
+            commit_table_pages(
+                base as *mut u8,
+                max_elements as usize * mem::size_of::<*mut u8>(),
+            )
+            .map_err(InstantiationError::Resource)?;
 
+            let table = unsafe { std::slice::from_raw_parts_mut(base, max_elements as usize) };
             instance.tables.push(
-                Table::new_static(plan, base as _, max_elements, limiter)
+                Table::new_static(plan, table, borrow_limiter(&mut limiter))
                     .map_err(InstantiationError::Resource)?,
             );
         }
 
-        let mut dropped_elements = instance.dropped_elements.borrow_mut();
-        debug_assert!(dropped_elements.is_empty());
-        dropped_elements.resize(module.passive_elements.len());
+        debug_assert!(instance.dropped_elements.is_empty());
+        instance
+            .dropped_elements
+            .resize(module.passive_elements.len());
 
         Ok(())
     }
@@ -595,7 +621,7 @@ impl MemoryPool {
         }
 
         // The maximum module memory page count cannot exceed the memory reservation size
-        if (module_limits.memory_pages * WASM_PAGE_SIZE) as u64
+        if u64::from(module_limits.memory_pages) * u64::from(WASM_PAGE_SIZE)
             > instance_limits.memory_reservation_size
         {
             bail!(
@@ -957,21 +983,22 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 
     unsafe fn initialize(
         &self,
-        handle: &InstanceHandle,
+        handle: &mut InstanceHandle,
+        module: &Module,
         is_bulk_memory: bool,
     ) -> Result<(), InstantiationError> {
-        let instance = handle.instance();
+        let instance = handle.instance_mut();
 
         cfg_if::cfg_if! {
             if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-                match &instance.module.memory_initialization {
+                match &module.memory_initialization {
                     wasmtime_environ::MemoryInitialization::Paged{ out_of_bounds, .. } => {
                         if !is_bulk_memory {
-                            super::check_init_bounds(instance)?;
+                            super::check_init_bounds(instance, module)?;
                         }
 
                         // Initialize the tables
-                        super::initialize_tables(instance)?;
+                        super::initialize_tables(instance, module)?;
 
                         // Don't initialize the memory; the fault handler will back the pages when accessed
 
@@ -984,10 +1011,10 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 
                         Ok(())
                     },
-                    _ => initialize_instance(instance, is_bulk_memory)
+                    _ => initialize_instance(instance, module, is_bulk_memory)
                 }
             } else {
-                initialize_instance(instance, is_bulk_memory)
+                initialize_instance(instance, module, is_bulk_memory)
             }
         }
     }
@@ -1355,19 +1382,6 @@ mod test {
 
         let instances = InstancePool::new(&module_limits, &instance_limits)?;
 
-        assert_eq!(
-            instances.offsets.pointer_size,
-            std::mem::size_of::<*const u8>() as u8
-        );
-        assert_eq!(instances.offsets.num_signature_ids, 0);
-        assert_eq!(instances.offsets.num_imported_functions, 0);
-        assert_eq!(instances.offsets.num_imported_tables, 0);
-        assert_eq!(instances.offsets.num_imported_memories, 0);
-        assert_eq!(instances.offsets.num_imported_globals, 0);
-        assert_eq!(instances.offsets.num_defined_functions, 0);
-        assert_eq!(instances.offsets.num_defined_tables, 1);
-        assert_eq!(instances.offsets.num_defined_memories, 1);
-        assert_eq!(instances.offsets.num_defined_globals, 0);
         // As of April 2021, the instance struct's size is largely below the size of a single page,
         // so it's safe to assume it's been rounded to the size of a single memory page here.
         assert_eq!(instances.instance_size, region::page::size());
@@ -1395,10 +1409,7 @@ mod test {
                             },
                             shared_signatures: VMSharedSignatureIndex::default().into(),
                             host_state: Box::new(()),
-                            interrupts: std::ptr::null(),
-                            externref_activations_table: std::ptr::null_mut(),
-                            module_info_lookup: None,
-                            limiter: None,
+                            store: None,
                         },
                     )
                     .expect("allocation should succeed"),
@@ -1420,10 +1431,7 @@ mod test {
                 },
                 shared_signatures: VMSharedSignatureIndex::default().into(),
                 host_state: Box::new(()),
-                interrupts: std::ptr::null(),
-                externref_activations_table: std::ptr::null_mut(),
-                module_info_lookup: None,
-                limiter: None,
+                store: None,
             },
         ) {
             Err(InstantiationError::Limit(3)) => {}
