@@ -73,7 +73,7 @@ where
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results, Trap> {
         let mut store = store.as_context_mut().opaque();
         assert!(
-            !cfg!(feature = "async") || !store.async_support(),
+            !store.async_support(),
             "must use `call_async` with async stores"
         );
         unsafe { self._call(&mut store, params) }
