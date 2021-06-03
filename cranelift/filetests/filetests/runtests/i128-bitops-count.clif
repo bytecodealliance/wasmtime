@@ -1,30 +1,49 @@
 test run
+target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 target x86_64 machinst
 
-function %ctz(i64, i64) -> i8 {
+function %ctz_i128(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = iconcat v0, v1
-    v3 = ctz.i128 v2
-    v4 = ireduce.i8 v3
-    return v4
-}
-; run: %ctz(0x00000000_00000000, 0x00000001_00000000) == 96
-; run: %ctz(0x00000000_00010000, 0x00000001_00000000) == 16
-; run: %ctz(0x00000000_00010000, 0x00000000_00000000) == 16
-; run: %ctz(0x00000000_00000000, 0x00000000_00000000) == 128
 
-function %clz(i64, i64) -> i8 {
+    v3 = ctz v2
+
+    v4, v5 = isplit v3
+    v6 = iadd v4, v5
+    return v6
+}
+; run: %ctz_i128(0x00000000_00000000, 0x00000000_00000000) == 128
+; run: %ctz_i128(0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000) == 0
+; run: %ctz_i128(0x00000000_00000000, 0xFFFFFFFF_FFFFFFFF) == 64
+; run: %ctz_i128(0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == 0
+; run: %ctz_i128(0xFFFFFFFF_00000000, 0xF0000000_00000000) == 32
+; run: %ctz_i128(0xF0000000_00000000, 0xFF000000_00000000) == 60
+; run: %ctz_i128(0x00000001_00000000, 0x00000000_00000000) == 32
+; run: %ctz_i128(0x00000000_00000000, 0x00000001_00000000) == 96
+; run: %ctz_i128(0x00000000_00010000, 0x00000001_00000000) == 16
+; run: %ctz_i128(0x00000000_00010000, 0x00000000_00000000) == 16
+
+function %clz_i128(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = iconcat v0, v1
-    v3 = clz.i128 v2
-    v4 = ireduce.i8 v3
-    return v4
+
+    v3 = clz v2
+
+    v4, v5 = isplit v3
+    v6 = iadd v4, v5
+    return v6
 }
-; run: %clz(0x00000000_00000000, 0x00000001_00000000) == 31
-; run: %clz(0x00000000_00010000, 0x00000001_00000000) == 31
-; run: %clz(0x00000000_00010000, 0x00000000_00000000) == 111
-; run: %clz(0x00000000_00000000, 0x00000000_00000000) == 128
+; run: %clz_i128(0x00000000_00000000, 0x00000000_00000000) == 128
+; run: %clz_i128(0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000) == 64
+; run: %clz_i128(0x00000000_00000000, 0xFFFFFFFF_FFFFFFFF) == 0
+; run: %clz_i128(0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == 0
+; run: %clz_i128(0xFFFFFFFF_FFFFFFFF, 0x40000000_00000000) == 1
+; run: %clz_i128(0xFFFFFFFF_FFFFFFFF, 0x20000000_00000000) == 2
+; run: %clz_i128(0x00000000_00000000, 0x00000000_80000000) == 32
+; run: %clz_i128(0x00000000_00000000, 0x00000001_00000000) == 31
+; run: %clz_i128(0x00000000_00010000, 0x00000001_00000000) == 31
+; run: %clz_i128(0x00000000_00010000, 0x00000000_00000000) == 111
 
 function %popcnt_i128(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -36,9 +55,9 @@ block0(v0: i64, v1: i64):
     v6 = iadd v4, v5
     return v6
 }
-; run: %popcnt_i128(0, 0) == 0
-; run: %popcnt_i128(-1, 0) == 64
-; run: %popcnt_i128(0, -1) == 64
-; run: %popcnt_i128(-1, -1) == 128
+; run: %popcnt_i128(0x00000000_00000000, 0x00000000_00000000) == 0
+; run: %popcnt_i128(0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000) == 64
+; run: %popcnt_i128(0x00000000_00000000, 0xFFFFFFFF_FFFFFFFF) == 64
+; run: %popcnt_i128(0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == 128
 ; run: %popcnt_i128(0x55555555_55555555, 0x55555555_55555555) == 64
 ; run: %popcnt_i128(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == 96

@@ -1,0 +1,24 @@
+test run
+target aarch64
+
+; TODO: Move this test into i128-bitops-count.clif when x86_64 supports it
+function %cls_i128(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+
+    v3 = cls v2
+
+    v4, v5 = isplit v3
+    v6 = iadd v4, v5
+    return v6
+}
+; run: %cls_i128(0x00000000_00000000, 0x00000000_00000000) == 127
+; run: %cls_i128(0xFFFFFFFF_FFFFFFFF, 0x00000000_00000000) == 63
+; run: %cls_i128(0x00000000_00000000, 0xFFFFFFFF_FFFFFFFF) == 63
+; run: %cls_i128(0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == 127
+; run: %cls_i128(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 0
+; run: %cls_i128(0xFFFFFFFF_FFFFFFFF, 0x3FFFFFFF_FFFFFFFF) == 1
+; run: %cls_i128(0x7FFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == 63
+; run: %cls_i128(0x80000000_00000000, 0xC0000000_00000000) == 1
+; run: %cls_i128(0x00000000_00000000, 0xC0000000_00000000) == 1
+; run: %cls_i128(0x80000000_00000000, 0x80000000_00000000) == 0
