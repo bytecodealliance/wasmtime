@@ -1,6 +1,10 @@
 test run
+; target aarch64 TODO: Not yet implemented on aarch64
+; target s390x TODO: Not yet implemented on s390x
 set enable_simd
 target x86_64 machinst skylake
+set enable_simd
+target x86_64 legacy skylake
 
 function %iadd_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0:i32x4, v1:i32x4):

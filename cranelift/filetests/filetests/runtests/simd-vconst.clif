@@ -1,0 +1,40 @@
+test run
+; target s390x TODO: Not yet implemented on s390x
+; target aarch64 TODO: Not yet implemented on aarch64
+set enable_simd
+target x86_64 machinst
+set enable_simd
+target x86_64 legacy
+set enable_simd
+target x86_64 legacy skylake
+
+
+function %vconst_zeroes() -> b1 {
+block0:
+    v0 = vconst.i8x16 0x00
+    v1 = extractlane v0, 4
+    v2 = icmp_imm eq v1, 0
+    return v2
+}
+; run
+
+function %vconst_ones() -> b1 {
+block0:
+    v0 = vconst.i8x16 0xffffffffffffffffffffffffffffffff
+    v1 = extractlane v0, 2
+    v2 = icmp_imm eq v1, 0xff
+    return v2
+}
+; run
+
+
+function %splat_i64x2() -> b1 {
+block0:
+    v0 = iconst.i64 -1
+    v1 = splat.i64x2 v0
+    v2 = vconst.i64x2 [-1 -1]
+    v3 = icmp eq v1, v2
+    v8 = vall_true v3
+    return v8
+}
+; run

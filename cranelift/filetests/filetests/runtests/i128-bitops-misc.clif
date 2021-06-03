@@ -1,4 +1,5 @@
 test run
+; target s390x TODO: Not yet implemented on s390x
 target x86_64 machinst
 
 function %ctz(i64, i64) -> i8 {

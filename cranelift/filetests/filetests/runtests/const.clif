@@ -1,0 +1,155 @@
+test run
+target aarch64
+target arm
+target s390x
+target x86_64 machinst
+target x86_64 legacy
+
+function %i8_iconst_0() -> i8 {
+block0:
+    v1 = iconst.i8 0
+    return v1
+}
+; run: %i8_iconst_0() == 0
+
+function %i8_iconst_1() -> i8 {
+block0:
+    v1 = iconst.i8 1
+    return v1
+}
+; run: %i8_iconst_1() == 1
+
+function %i8_iconst_neg_one() -> i8 {
+block0:
+    v1 = iconst.i8 -1
+    return v1
+}
+; run: %i8_iconst_neg_one() == -1
+
+
+function %i16_iconst_0() -> i16 {
+block0:
+    v1 = iconst.i16 0
+    return v1
+}
+; run: %i16_iconst_0() == 0
+
+function %i16_iconst_1() -> i16 {
+block0:
+    v1 = iconst.i16 1
+    return v1
+}
+; run: %i16_iconst_1() == 1
+
+function %i16_iconst_neg_one() -> i16 {
+block0:
+    v1 = iconst.i16 -1
+    return v1
+}
+; run: %i16_iconst_neg_one() == -1
+
+
+function %i32_iconst_0() -> i32 {
+block0:
+    v1 = iconst.i32 0
+    return v1
+}
+; run: %i32_iconst_0() == 0
+
+function %i32_iconst_1() -> i32 {
+block0:
+    v1 = iconst.i32 1
+    return v1
+}
+; run: %i32_iconst_1() == 1
+
+function %i32_iconst_neg_one() -> i32 {
+block0:
+    v1 = iconst.i32 -1
+    return v1
+}
+; run: %i32_iconst_neg_one() == -1
+
+
+function %i64_iconst_0() -> i64 {
+block0:
+    v1 = iconst.i64 0
+    return v1
+}
+; run: %i64_iconst_0() == 0
+
+function %i64_iconst_1() -> i64 {
+block0:
+    v1 = iconst.i64 1
+    return v1
+}
+; run: %i64_iconst_1() == 1
+
+function %i64_iconst_neg_one() -> i64 {
+block0:
+    v1 = iconst.i64 -1
+    return v1
+}
+; run: %i64_iconst_neg_one() == -1
+
+
+
+function %b8_bconst_false() -> b8 {
+block0:
+    v1 = bconst.b8 false
+    return v1
+}
+; run: %b8_bconst_false() == false
+
+function %b8_bconst_true() -> b8 {
+block0:
+    v1 = bconst.b8 true
+    return v1
+}
+; run: %b8_bconst_true() == true
+
+
+function %b16_bconst_false() -> b16 {
+block0:
+    v1 = bconst.b16 false
+    return v1
+}
+; run: %b16_bconst_false() == false
+
+function %b16_bconst_true() -> b16 {
+block0:
+    v1 = bconst.b16 true
+    return v1
+}
+; run: %b16_bconst_true() == true
+
+
+function %b32_bconst_false() -> b32 {
+block0:
+    v1 = bconst.b32 false
+    return v1
+}
+; run: %b32_bconst_false() == false
+
+function %b32_bconst_true() -> b32 {
+block0:
+    v1 = bconst.b32 true
+    return v1
+}
+; run: %b32_bconst_true() == true
+
+
+function %b64_bconst_false() -> b64 {
+block0:
+    v1 = bconst.b64 false
+    return v1
+}
+; run: %b64_bconst_false() == false
+
+; this verifies that returning b64 immediates does not result in a segmentation fault, see https://github.com/bytecodealliance/cranelift/issues/911
+function %b64_bconst_true() -> b64 {
+block0:
+    v1 = bconst.b64 true
+    return v1
+}
+; run: %b64_bconst_true() == true

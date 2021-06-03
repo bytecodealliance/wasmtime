@@ -1,4 +1,8 @@
 test run
+target aarch64
+target arm
+target s390x
+target x86_64 machinst
 target x86_64 legacy
 
 function u0:0() -> b1 {

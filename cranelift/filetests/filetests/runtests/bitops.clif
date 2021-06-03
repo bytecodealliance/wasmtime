@@ -1,0 +1,17 @@
+test run
+target aarch64
+target arm
+target s390x
+; target x86_64 machinst TODO: Not yet implemented on x86_64
+target x86_64 legacy
+
+
+function %bnot_band() -> b1 {
+block0:
+    v1 = bconst.b1 false
+    v2 = bconst.b1 true
+    v3 = bnot v1
+    v4 = band v3, v2
+    return v4
+}
+; run

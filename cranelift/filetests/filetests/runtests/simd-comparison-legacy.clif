@@ -1,0 +1,44 @@
+test run
+set enable_simd
+target x86_64 legacy
+
+function %maxs_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1] ; 1 will be greater than -1 == 0xff with
+    ; signed max
+    v1 = vconst.i8x16 [0xff 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+    v2 = x86_pmaxs v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %maxu_i16x8() -> b1 {
+block0:
+    v0 = vconst.i16x8 [0 1 1 1 1 1 1 1]
+    v1 = vconst.i16x8 [-1 1 1 1 1 1 1 1] ; -1 == 0xff will be greater with unsigned max
+    v2 = x86_pmaxu v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %mins_i32x4() -> b1 {
+block0:
+    v0 = vconst.i32x4 [0 1 1 1]
+    v1 = vconst.i32x4 [-1 1 1 1] ; -1 == 0xff will be less with signed min
+    v2 = x86_pmins v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
+
+function %minu_i8x16() -> b1 {
+block0:
+    v0 = vconst.i8x16 [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1] ; 1 < 2 with unsiged min
+    v1 = vconst.i8x16 [2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2]
+    v2 = x86_pminu v0, v1
+    v8 = vall_true v2
+    return v8
+}
+; run
