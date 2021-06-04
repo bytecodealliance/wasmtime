@@ -3193,6 +3193,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::TlsValue => unimplemented!("tls_value"),
         Opcode::FcvtLowFromSint => unimplemented!("FcvtLowFromSint"),
+        Opcode::FvpromoteLow => unimplemented!("FvpromoteLow"),
+        Opcode::Fvdemote => unimplemented!("Fvdemote"),
     }
 
     Ok(())

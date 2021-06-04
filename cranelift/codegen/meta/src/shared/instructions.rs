@@ -4223,6 +4223,69 @@ pub(crate) fn define(
         .constraints(vec![WiderOrEq(Float.clone(), FloatTo.clone())]),
     );
 
+    let F64x2 = &TypeVar::new(
+        "F64x2",
+        "A SIMD vector type consisting of 2 lanes of 64-bit floats",
+        TypeSetBuilder::new()
+            .floats(64..64)
+            .simd_lanes(2..2)
+            .includes_scalars(false)
+            .build(),
+    );
+    let F32x4 = &TypeVar::new(
+        "F32x4",
+        "A SIMD vector type consisting of 4 lanes of 32-bit floats",
+        TypeSetBuilder::new()
+            .floats(32..32)
+            .simd_lanes(4..4)
+            .includes_scalars(false)
+            .build(),
+    );
+
+    let x = &Operand::new("x", F64x2);
+    let a = &Operand::new("a", F32x4);
+
+    ig.push(
+        Inst::new(
+            "fvdemote",
+            r#"
+                Convert `x` to a smaller floating point format.
+
+                Each lane in `x` is converted to the destination floating point format
+                by rounding to nearest, ties to even.
+
+                Cranelift currently only supports two floating point formats
+                - `f32` and `f64`. This may change in the future.
+
+                Fvdemote differs from fdemote in that with fvdemote it targets vectors.
+                Fvdemote is constrained to having the input type being F64x2 and the result
+                type being F32x4. The result lane that was the upper half of the input lane
+                is initialized to zero.
+                "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "fvpromote_low",
+            r#"
+        Converts packed single precision floating point to packed double precision floating point.
+
+        Considering only the lower half of the register, the low lanes in `x` are interpreted as
+        single precision floats that are then converted to a double precision floats.
+
+        The result type will have half the number of vector lanes as the input. Fvpromote_low is
+        constrained to input F32x4 with a result type of F64x2.
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![a])
+        .operands_out(vec![x]),
+    );
+
     let x = &Operand::new("x", Float);
     let a = &Operand::new("a", IntTo);
 

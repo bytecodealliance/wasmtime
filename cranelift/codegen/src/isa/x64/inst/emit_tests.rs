@@ -3913,6 +3913,18 @@ fn test_x64_emit() {
         "vpopcntb %xmm2, %xmm8",
     ));
 
+    insns.push((
+        Inst::xmm_unary_rm_r(SseOpcode::Cvtpd2ps, RegMem::reg(xmm7), w_xmm7),
+        "660F5AFF",
+        "cvtpd2ps %xmm7, %xmm7",
+    ));
+
+    insns.push((
+        Inst::xmm_unary_rm_r(SseOpcode::Cvtps2pd, RegMem::reg(xmm11), w_xmm9),
+        "450F5ACB",
+        "cvtps2pd %xmm11, %xmm9",
+    ));
+
     // Xmm to int conversions, and conversely.
 
     insns.push((
