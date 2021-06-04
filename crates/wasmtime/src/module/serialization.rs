@@ -329,7 +329,7 @@ impl<'a> SerializedModule<'a> {
         Ok(bytes)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    pub fn from_bytes(bytes: &[u8], check_version: bool) -> Result<Self> {
         if !bytes.starts_with(HEADER) {
             bail!("bytes are not a compatible serialized wasmtime module");
         }
@@ -345,12 +345,14 @@ impl<'a> SerializedModule<'a> {
             bail!("serialized data is malformed");
         }
 
-        let version = std::str::from_utf8(&bytes[1..1 + version_len])?;
-        if version != env!("CARGO_PKG_VERSION") {
-            bail!(
-                "Module was compiled with incompatible Wasmtime version '{}'",
-                version
-            );
+        if check_version {
+            let version = std::str::from_utf8(&bytes[1..1 + version_len])?;
+            if version != env!("CARGO_PKG_VERSION") {
+                bail!(
+                    "Module was compiled with incompatible Wasmtime version '{}'",
+                    version
+                );
+            }
         }
 
         Ok(bincode_options()
