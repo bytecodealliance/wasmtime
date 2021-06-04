@@ -719,8 +719,8 @@ impl Func {
     where
         T: Send,
     {
-        store.as_context_mut().0.exiting_native_hook()?;
         let my_ty = self.ty(&store);
+        store.as_context_mut().0.exiting_native_hook()?;
         let r = self
             ._call_async(store.as_context_mut().opaque_send(), my_ty, params)
             .await;
