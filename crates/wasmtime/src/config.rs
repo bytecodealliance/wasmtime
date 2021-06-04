@@ -1096,9 +1096,9 @@ impl Config {
     }
 
     /// Configure whether deserialized modules should validate version
-    /// information. This only effects [`crate::Module::from_bytes`], which is
+    /// information. This only effects [`crate::Module::deserialize()`], which is
     /// used to load compiled code from trusted sources.  When true,
-    /// [`crate::Module::from_bytes`] verifies that the wasmtime crate's
+    /// [`crate::Module::deserialize()`] verifies that the wasmtime crate's
     /// `CARGO_PKG_VERSION` matches with the version in the binary, which was
     /// produced by [`crate::Module::serialize`] or
     /// [`crate::Engine::precompile_module`].
