@@ -1781,11 +1781,11 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::F64x2PromoteLowF32x4 => {
             let a = pop1_with_bitcast(state, F32X4, builder);
-            state.push1(builder.ins().fpromote_low(F64X2, a));
+            state.push1(builder.ins().fvpromote_low(a));
         }
         Operator::F32x4DemoteF64x2Zero => {
             let a = pop1_with_bitcast(state, F64X2, builder);
-            state.push1(builder.ins().fvdemote(F32X4, a));
+            state.push1(builder.ins().fvdemote(a));
         }
         Operator::I32x4TruncSatF32x4S => {
             let a = pop1_with_bitcast(state, F32X4, builder);
