@@ -681,7 +681,10 @@ impl Func {
             "must use `call_async` when async support is enabled on the config",
         );
         let my_ty = self.ty(&store);
-        self.call_impl(&mut store.as_context_mut().opaque(), my_ty, params)
+        store.as_context_mut().0.exiting_native_hook()?;
+        let r = self.call_impl(&mut store.as_context_mut().opaque(), my_ty, params);
+        store.as_context_mut().0.entering_native_hook()?;
+        r
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -716,9 +719,13 @@ impl Func {
     where
         T: Send,
     {
+        store.as_context_mut().0.exiting_native_hook()?;
         let my_ty = self.ty(&store);
-        self._call_async(store.as_context_mut().opaque_send(), my_ty, params)
-            .await
+        let r = self
+            ._call_async(store.as_context_mut().opaque_send(), my_ty, params)
+            .await;
+        store.as_context_mut().0.entering_native_hook()?;
+        r
     }
 
     #[cfg(feature = "async")]
