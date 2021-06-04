@@ -1,11 +1,47 @@
-use anyhow::Result;
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::thread;
 use std::time::{Duration, Instant};
 use wasmtime::*;
 
-#[test]
-fn measure_execution_time() -> Result<()> {
-    let iterations = 1000;
+fn measure_execution_time(c: &mut Criterion) {
+    c.bench_function("lazy initialization at call", move |b| {
+        let (engine, module) = test_engine();
+        b.iter_custom(move |iters| {
+            (0..iters)
+                .into_iter()
+                .map(|_| lazy_thread_instantiate(engine.clone(), module.clone()))
+                .sum()
+        })
+    });
+
+    c.bench_function("eager initialization", move |b| {
+        let (engine, module) = test_engine();
+        b.iter_custom(move |iters| {
+            (0..iters)
+                .into_iter()
+                .map(|_| {
+                    let (init, _call) = eager_thread_instantiate(engine.clone(), module.clone());
+                    init
+                })
+                .sum()
+        })
+    });
+    c.bench_function("call after eager initialization", move |b| {
+        let (engine, module) = test_engine();
+        b.iter_custom(move |iters| {
+            (0..iters)
+                .into_iter()
+                .map(|_| {
+                    let (_init, call) = eager_thread_instantiate(engine.clone(), module.clone());
+                    call
+                })
+                .sum()
+        })
+    });
+}
+
+fn test_engine() -> (Engine, Module) {
+    let pool_count = 1000;
 
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
@@ -15,33 +51,14 @@ fn measure_execution_time() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits {
-            count: iterations * 2,
+            count: pool_count,
             memory_reservation_size: 1,
         },
     });
 
-    let engine = Engine::new(&config)?;
-    let module = Module::new(&engine, r#"(module (memory 1) (func (export "f")))"#)?;
-
-    let lazy_call_time: Duration = (0..iterations)
-        .into_iter()
-        .map(|_| lazy_thread_instantiate(engine.clone(), module.clone()))
-        .sum();
-
-    let (eager_init_total, eager_call_total): (Duration, Duration) = (0..iterations)
-        .into_iter()
-        .map(|_| eager_thread_instantiate(engine.clone(), module.clone()))
-        .fold(
-            (Duration::default(), Duration::default()),
-            |(s1, s2), (d1, d2)| (s1 + d1, s2 + d2),
-        );
-
-    println!(
-        "lazy call: {:?}, eager init: {:?}, eager call: {:?}",
-        lazy_call_time, eager_init_total, eager_call_total
-    );
-
-    Ok(())
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(&engine, r#"(module (memory 1) (func (export "f")))"#).unwrap();
+    (engine, module)
 }
 
 fn lazy_thread_instantiate(engine: Engine, module: Module) -> Duration {
@@ -77,3 +94,6 @@ fn eager_thread_instantiate(engine: Engine, module: Module) -> (Duration, Durati
     .join()
     .expect("thread joins")
 }
+
+criterion_group!(benches, measure_execution_time);
+criterion_main!(benches);

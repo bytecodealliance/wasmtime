@@ -24,7 +24,6 @@ mod pooling_allocator;
 mod stack_overflow;
 mod store;
 mod table;
-mod thread_eager_init;
 mod traps;
 mod wast;
 

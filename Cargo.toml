@@ -120,3 +120,7 @@ debug = false # FIXME(#1813)
 [[bench]]
 name = "instantiation"
 harness = false
+
+[[bench]]
+name = "thread_eager_init"
+harness = false
