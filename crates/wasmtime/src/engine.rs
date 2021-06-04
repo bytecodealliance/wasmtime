@@ -63,8 +63,23 @@ impl Engine {
         })
     }
 
-    /// Eagerly initialize thread-local functionality shared by all [`Engine`]s. This
-    /// will be performed lazily by the runtime if users do not perform it eagerly.
+    /// Eagerly initialize thread-local functionality shared by all [`Engine`]s.
+    ///
+    /// Wasmtime's implementation on some platforms may involve per-thread
+    /// setup that needs to happen whenever WebAssembly is invoked. This setup
+    /// can take on the order of a few hundred microseconds, whereas the
+    /// overhead of calling WebAssembly is otherwise on the order of a few
+    /// nanoseconds. This setup cost is paid once per-OS-thread. If your
+    /// application is sensitive to the latencies of WebAssembly function
+    /// calls, even those that happen first on a thread, then this function
+    /// can be used to improve the consistency of each call into WebAssembly
+    /// by explicitly frontloading the cost of the one-time setup per-thread.
+    ///
+    /// Note that this function is not required to be called in any embedding.
+    /// Wasmtime will automatically initialize thread-local-state as necessary
+    /// on calls into WebAssembly. This is provided for use cases where the
+    /// latency of WebAssembly calls are extra-important, which is not
+    /// necessarily true of all embeddings.
     pub fn tls_eager_initialize() -> Result<(), Trap> {
         wasmtime_runtime::tls_eager_initialize().map_err(Trap::from_runtime)
     }
