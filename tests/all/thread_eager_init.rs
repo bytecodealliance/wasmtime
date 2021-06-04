@@ -12,7 +12,6 @@ fn measure_execution_time() -> Result<()> {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 1,
-            table_elements: 10,
             ..Default::default()
         },
         instance_limits: InstanceLimits {
@@ -22,14 +21,14 @@ fn measure_execution_time() -> Result<()> {
     });
 
     let engine = Engine::new(&config)?;
-    let module = Module::new(&engine, r#"(module (memory 1) (table 10 funcref))"#)?;
+    let module = Module::new(&engine, r#"(module (memory 1) (func (export "f")))"#)?;
 
-    let lazy_total_time: Duration = (0..iterations)
+    let lazy_call_time: Duration = (0..iterations)
         .into_iter()
         .map(|_| lazy_thread_instantiate(engine.clone(), module.clone()))
         .sum();
 
-    let (eager_init_total, eager_inst_total): (Duration, Duration) = (0..iterations)
+    let (eager_init_total, eager_call_total): (Duration, Duration) = (0..iterations)
         .into_iter()
         .map(|_| eager_thread_instantiate(engine.clone(), module.clone()))
         .fold(
@@ -38,8 +37,8 @@ fn measure_execution_time() -> Result<()> {
         );
 
     println!(
-        "lazy total: {:?}, eager init: {:?}, eager inst: {:?}",
-        lazy_total_time, eager_init_total, eager_inst_total
+        "lazy call: {:?}, eager init: {:?}, eager call: {:?}",
+        lazy_call_time, eager_init_total, eager_call_total
     );
 
     Ok(())
@@ -48,9 +47,13 @@ fn measure_execution_time() -> Result<()> {
 fn lazy_thread_instantiate(engine: Engine, module: Module) -> Duration {
     thread::spawn(move || {
         let mut store = Store::new(&engine, ());
-        let start = Instant::now();
-        Instance::new(&mut store, &module, &[]).expect("instantiate");
-        start.elapsed()
+        let inst = Instance::new(&mut store, &module, &[]).expect("instantiate");
+        let f = inst.get_func(&mut store, "f").expect("get f");
+        let f = f.typed::<(), (), _>(&store).expect("type f");
+
+        let call = Instant::now();
+        f.call(&mut store, ()).expect("call f");
+        call.elapsed()
     })
     .join()
     .expect("thread joins")
@@ -63,9 +66,13 @@ fn eager_thread_instantiate(engine: Engine, module: Module) -> (Duration, Durati
         let init_duration = init_start.elapsed();
 
         let mut store = Store::new(&engine, ());
-        let inst_start = Instant::now();
-        Instance::new(&mut store, &module, &[]).expect("instantiate");
-        (init_duration, inst_start.elapsed())
+        let inst = Instance::new(&mut store, &module, &[]).expect("instantiate");
+        let f = inst.get_func(&mut store, "f").expect("get f");
+        let f = f.typed::<(), (), _>(&store).expect("type f");
+
+        let call = Instant::now();
+        f.call(&mut store, ()).expect("call f");
+        (init_duration, call.elapsed())
     })
     .join()
     .expect("thread joins")
