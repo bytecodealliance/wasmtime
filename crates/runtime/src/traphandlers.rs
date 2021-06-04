@@ -391,12 +391,12 @@ mod tls {
         /// lazily by the runtime if users do not perform it eagerly.
         pub fn initialize() -> Result<(), Trap> {
             PTR.with(|p| {
-                let (state, mut initialized) = p.get();
-                if !initialized {
-                    super::super::sys::lazy_per_thread_init()?;
-                    initialized = true;
+                let (state, initialized) = p.get();
+                if initialized {
+                    return Ok(());
                 }
-                p.set((state, initialized));
+                super::super::sys::lazy_per_thread_init()?;
+                p.set((state, true));
                 Ok(())
             })
         }
