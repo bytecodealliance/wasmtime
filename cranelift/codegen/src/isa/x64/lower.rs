@@ -4154,6 +4154,58 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 dst,
             ));
         }
+        Opcode::FcvtLowFromUint => {
+            // Algorithm uses unpcklps to help create a float that is equivalent
+            // 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent
+            // every value of the mantissa represents a corresponding uint32 number.
+            // When we subtract 0x1.0p52 we are left with double(src).
+            let src = put_input_in_reg(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let uint_mask = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
+
+            ctx.emit(Inst::gen_move(dst, src, types::I32X4));
+
+            static UINT_MASK: [u8; 16] = [
+                0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00,
+            ];
+
+            let uint_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK));
+
+            ctx.emit(Inst::xmm_load_const(
+                uint_mask_const,
+                uint_mask,
+                types::I32X4,
+            ));
+
+            // Creates 0x1.0p52 + double(src)
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Unpcklps,
+                RegMem::from(uint_mask),
+                dst,
+            ));
+
+            static UINT_MASK_HIGH: [u8; 16] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x30, 0x43,
+            ];
+
+            let uint_mask_high_const =
+                ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH));
+            let uint_mask_high = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
+            ctx.emit(Inst::xmm_load_const(
+                uint_mask_high_const,
+                uint_mask_high,
+                types::I32X4,
+            ));
+
+            // 0x1.0p52 + double(src) - 0x1.0p52
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Subpd,
+                RegMem::from(uint_mask_high),
+                dst,
+            ));
+        }
         Opcode::FcvtFromUint => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();

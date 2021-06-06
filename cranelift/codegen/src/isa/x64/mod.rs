@@ -4,6 +4,8 @@ use self::inst::EmitInfo;
 
 use super::TargetIsa;
 use crate::ir::{condcodes::IntCC, Function};
+#[cfg(feature = "unwind")]
+use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_universe_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
@@ -11,11 +13,9 @@ use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
 use core::hash::{Hash, Hasher};
+
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::Triple;
-
-#[cfg(feature = "unwind")]
-use crate::isa::unwind::systemv;
 
 mod abi;
 pub mod encoding;

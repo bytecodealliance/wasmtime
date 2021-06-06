@@ -635,6 +635,7 @@ pub enum SseOpcode {
     Subsd,
     Ucomiss,
     Ucomisd,
+    Unpcklps,
     Xorps,
     Xorpd,
 }
@@ -675,6 +676,7 @@ impl SseOpcode {
             | SseOpcode::Subps
             | SseOpcode::Subss
             | SseOpcode::Ucomiss
+            | SseOpcode::Unpcklps
             | SseOpcode::Xorps => SSE,
 
             SseOpcode::Addpd
@@ -993,6 +995,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Subsd => "subsd",
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
+            SseOpcode::Unpcklps => "unpcklps",
             SseOpcode::Xorps => "xorps",
             SseOpcode::Xorpd => "xorpd",
         };
