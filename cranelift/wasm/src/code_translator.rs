@@ -1778,6 +1778,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().fcvt_low_from_sint(F64X2, a));
         }
+        Operator::F64x2ConvertLowI32x4U => {
+            let a = pop1_with_bitcast(state, I32X4, builder);
+            state.push1(builder.ins().fcvt_low_from_uint(F64X2, a));
+        }
         Operator::F64x2PromoteLowF32x4 => {
             let a = pop1_with_bitcast(state, F32X4, builder);
             state.push1(builder.ins().fvpromote_low(a));
@@ -1921,8 +1925,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8ExtAddPairwiseI8x16S
         | Operator::I16x8ExtAddPairwiseI8x16U
         | Operator::I32x4ExtAddPairwiseI16x8S
-        | Operator::I32x4ExtAddPairwiseI16x8U
-        | Operator::F64x2ConvertLowI32x4U => {
+        | Operator::I32x4ExtAddPairwiseI16x8U => {
             return Err(wasm_unsupported!("proposed simd operator {:?}", op));
         }
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {

@@ -4457,6 +4457,27 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "fcvt_low_from_uint",
+            r#"
+
+        Converts packed unsigned 32-bit integers to packed double precision floating point.
+
+        Considering only the low half of the register, each lane in `x` is interpreted as a
+        unsigned 32-bit integer that is then converted to a double precision float. This
+        which are converted to occupy twice the number of bits. No rounding should be needed
+        for the resulting float.
+
+        The result type will have half the number of vector lanes as the input.
+
+        "#,
+            &formats.unary,
+        )
+        .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
     let WideInt = &TypeVar::new(
         "WideInt",
         "An integer type with lanes from `i16` upwards",
