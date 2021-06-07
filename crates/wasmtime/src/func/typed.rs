@@ -74,7 +74,7 @@ where
         store.as_context_mut().0.exiting_native_hook()?;
         let mut store_opaque = store.as_context_mut().opaque();
         assert!(
-            !cfg!(feature = "async") || !store_opaque.async_support(),
+            !store_opaque.async_support(),
             "must use `call_async` with async stores"
         );
         let r = unsafe { self._call(&mut store_opaque, params) };

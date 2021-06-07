@@ -291,6 +291,7 @@ pub struct Config {
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
+    pub(crate) deserialize_check_wasmtime_version: bool,
 }
 
 impl Config {
@@ -326,6 +327,7 @@ impl Config {
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             async_support: false,
+            deserialize_check_wasmtime_version: true,
         };
         ret.cranelift_debug_verifier(false);
         ret.cranelift_opt_level(OptLevel::Speed);
@@ -1090,6 +1092,20 @@ impl Config {
         self.tunables.dynamic_memory_offset_guard_size = guard_size;
         self.tunables.static_memory_offset_guard_size =
             cmp::max(guard_size, self.tunables.static_memory_offset_guard_size);
+        self
+    }
+
+    /// Configure whether deserialized modules should validate version
+    /// information. This only effects [`crate::Module::deserialize()`], which is
+    /// used to load compiled code from trusted sources.  When true,
+    /// [`crate::Module::deserialize()`] verifies that the wasmtime crate's
+    /// `CARGO_PKG_VERSION` matches with the version in the binary, which was
+    /// produced by [`crate::Module::serialize`] or
+    /// [`crate::Engine::precompile_module`].
+    ///
+    /// This value defaults to true.
+    pub fn deserialize_check_wasmtime_version(&mut self, check: bool) -> &mut Self {
+        self.deserialize_check_wasmtime_version = check;
         self
     }
 

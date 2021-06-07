@@ -308,3 +308,35 @@ fn alias_one() -> Result<()> {
     assert!(linker.get(&mut store, "c", Some("d")).is_some());
     Ok(())
 }
+
+#[test]
+fn instance_pre() -> Result<()> {
+    let engine = Engine::default();
+    let mut linker = Linker::new(&engine);
+    linker.func_wrap("", "", || {})?;
+
+    let module = Module::new(&engine, r#"(module (import "" "" (func)))"#)?;
+    let instance_pre = linker.instantiate_pre(&mut Store::new(&engine, ()), &module)?;
+    instance_pre.instantiate(&mut Store::new(&engine, ()))?;
+    instance_pre.instantiate(&mut Store::new(&engine, ()))?;
+
+    let mut store = Store::new(&engine, ());
+    let global = Global::new(
+        &mut store,
+        GlobalType::new(ValType::I32, Mutability::Const),
+        1.into(),
+    )?;
+    linker.define("", "g", global)?;
+
+    let module = Module::new(
+        &engine,
+        r#"(module
+            (import "" "" (func))
+            (import "" "g" (global i32))
+        )"#,
+    )?;
+    let instance_pre = linker.instantiate_pre(&mut store, &module)?;
+    instance_pre.instantiate(&mut store)?;
+    instance_pre.instantiate(&mut store)?;
+    Ok(())
+}

@@ -1,3 +1,4 @@
+use crate::linker::Definition;
 use crate::store::{InstanceId, StoreData, StoreOpaque, StoreOpaqueSend, Stored};
 use crate::types::matching;
 use crate::{
@@ -9,7 +10,8 @@ use std::mem;
 use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{
-    EntityIndex, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex, TableIndex,
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex,
+    TableIndex,
 };
 use wasmtime_environ::Initializer;
 use wasmtime_runtime::{
@@ -96,32 +98,14 @@ impl Instance {
         module: &Module,
         imports: &[Extern],
     ) -> Result<Instance, Error> {
-        Instance::_new(&mut store.as_context_mut().opaque(), module, imports)
-    }
-
-    fn _new(
-        store: &mut StoreOpaque<'_>,
-        module: &Module,
-        imports: &[Extern],
-    ) -> Result<Instance, Error> {
-        assert!(
-            !store.async_support(),
-            "cannot use `new` when async support is enabled on the config"
-        );
-
-        // NB: this is the same code as `Instance::new_async`. It's intentionally
-        // small but should be kept in sync (modulo the async bits).
-        let mut i = Instantiator::new(store, module, imports)?;
-        loop {
-            if let Some((id, instance)) = i.step(store)? {
-                if let Some(start) = store.instance(id).module().start_func {
-                    Instantiator::start_raw(store, id, start)?;
-                }
-                if let Some(instance) = instance {
-                    break Ok(instance);
-                }
-            }
-        }
+        // This unsafety comes from `Instantiator::new` where we must typecheck
+        // first, which we are sure to do here.
+        let mut i = unsafe {
+            let mut cx = store.as_context_mut().opaque();
+            typecheck_externs(&mut cx, module, imports)?;
+            Instantiator::new(&mut cx, module, ImportSource::Externs(imports))?
+        };
+        i.run(store.as_context_mut().opaque())
     }
 
     /// Same as [`Instance::new`], except for usage in [asynchronous stores].
@@ -151,37 +135,13 @@ impl Instance {
     where
         T: Send,
     {
-        Instance::_new_async(store.as_context_mut().opaque_send(), module, imports).await
-    }
-
-    #[cfg(feature = "async")]
-    async fn _new_async<'a>(
-        mut store: StoreOpaqueSend<'a>,
-        module: &Module,
-        imports: &[Extern],
-    ) -> Result<Instance, Error> {
-        assert!(
-            store.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
-        );
-
-        // NB: this is the same code as `Instance::new`. It's intentionally
-        // small but should be kept in sync (modulo the async bits).
-        let mut i = Instantiator::new(&mut store.opaque(), module, imports)?;
-        loop {
-            let step = i.step(&mut store.opaque())?;
-            if let Some((id, instance)) = step {
-                let start = store.instance(id).module().start_func;
-                if let Some(start) = start {
-                    store
-                        .on_fiber(|store| Instantiator::start_raw(store, id, start))
-                        .await??;
-                }
-                if let Some(instance) = instance {
-                    break Ok(instance);
-                }
-            }
-        }
+        // See `new` for unsafety comments
+        let mut i = unsafe {
+            let mut cx = store.as_context_mut().opaque();
+            typecheck_externs(&mut cx, module, imports)?;
+            Instantiator::new(&mut cx, module, ImportSource::Externs(imports))?
+        };
+        i.run_async(store.as_context_mut().opaque_send()).await
     }
 
     pub(crate) fn from_wasmtime(handle: RuntimeInstance, store: &mut StoreOpaque) -> Instance {
@@ -336,7 +296,8 @@ struct ImportsBuilder<'a> {
 }
 
 enum ImportSource<'a> {
-    Runtime(&'a [Extern]),
+    Externs(&'a [Extern]),
+    Definitions(&'a [Definition]),
     Outer { initializer: usize },
 }
 
@@ -345,31 +306,80 @@ impl<'a> Instantiator<'a> {
     /// directives of a module.
     ///
     /// This doesn't do much work itself beyond setting things up.
-    fn new(
+    ///
+    /// # Unsafety
+    ///
+    /// This function is unsafe for a few reasons:
+    ///
+    /// * This assumes that `imports` has already been typechecked and is of the
+    ///   appropriate length. It is memory unsafe if the types of `imports` are
+    ///   not what `module` expects.
+    ///
+    /// * The `imports` must be safely able to get inserted into `store`. This
+    ///   only applies if `ImportSource::Definitions` is used because this will
+    ///   internally call `Definition::to_extern` which requires that any
+    ///   host functions in the list were created with an original `T` as the
+    ///   store that's being inserted into.
+    ///
+    /// * The `imports` must all come from the `store` specified.
+    unsafe fn new(
         store: &mut StoreOpaque<'_>,
         module: &Module,
-        imports: &'a [Extern],
+        imports: ImportSource<'a>,
     ) -> Result<Instantiator<'a>> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
         }
 
-        // Perform some pre-flight checks before we get into the meat of
-        // instantiation.
-        let expected = module.compiled_module().module().imports().count();
-        if expected != imports.len() {
-            bail!("expected {} imports, found {}", expected, imports.len());
-        }
-        for import in imports {
-            if !import.comes_from_same_store(&store) {
-                bail!("cross-`Store` instantiation is not currently supported");
-            }
-        }
-
         Ok(Instantiator {
             in_progress: Vec::new(),
-            cur: ImportsBuilder::new(module, ImportSource::Runtime(imports)),
+            cur: ImportsBuilder::new(module, imports),
         })
+    }
+
+    fn run(&mut self, mut store: StoreOpaque<'_>) -> Result<Instance, Error> {
+        assert!(
+            !store.async_support(),
+            "cannot use `new` when async support is enabled on the config"
+        );
+
+        // NB: this is the same code as `run_async`. It's intentionally
+        // small but should be kept in sync (modulo the async bits).
+        loop {
+            if let Some((id, instance)) = self.step(&mut store)? {
+                if let Some(start) = store.instance(id).module().start_func {
+                    Instantiator::start_raw(&mut store, id, start)?;
+                }
+                if let Some(instance) = instance {
+                    break Ok(instance);
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "async")]
+    async fn run_async(&mut self, mut store: StoreOpaqueSend<'_>) -> Result<Instance, Error> {
+        assert!(
+            store.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
+        );
+
+        // NB: this is the same code as `run`. It's intentionally
+        // small but should be kept in sync (modulo the async bits).
+        loop {
+            let step = self.step(&mut store.opaque())?;
+            if let Some((id, instance)) = step {
+                let start = store.instance(id).module().start_func;
+                if let Some(start) = start {
+                    store
+                        .on_fiber(|store| Instantiator::start_raw(store, id, start))
+                        .await??;
+                }
+                if let Some(instance) = instance {
+                    break Ok(instance);
+                }
+            }
+        }
     }
 
     /// Processes the next initializer for the next instance being created
@@ -410,7 +420,7 @@ impl<'a> Instantiator<'a> {
             .initializers
             .get(self.cur.initializer - 1)
         {
-            Some(Initializer::Import { index, name, field }) => {
+            Some(Initializer::Import { name, field, .. }) => {
                 match &mut self.cur.src {
                     // If imports are coming from the runtime-provided list
                     // (e.g. the root module being instantiated) then we
@@ -418,26 +428,17 @@ impl<'a> Instantiator<'a> {
                     //
                     // Note the `unwrap` here should be ok given the validation
                     // above in `Instantiation::new`.
-                    ImportSource::Runtime(list) => {
+                    ImportSource::Externs(list) => {
                         let (head, remaining) = list.split_first().unwrap();
                         *list = remaining;
-                        let expected_ty =
-                            self.cur.module.compiled_module().module().type_of(*index);
-                        matching::MatchCx {
-                            signatures: self.cur.module.signatures(),
-                            types: self.cur.module.types(),
-                            store_data: store.store_data(),
-                            engine: store.engine(),
-                        }
-                        .extern_(&expected_ty, head)
-                        .with_context(|| {
-                            let extra = match field {
-                                Some(name) => format!("::{}", name),
-                                None => String::new(),
-                            };
-                            format!("incompatible import type for `{}{}`", name, extra)
-                        })?;
                         self.cur.push(head.clone(), store);
+                    }
+                    ImportSource::Definitions(list) => {
+                        let (head, remaining) = list.split_first().unwrap();
+                        *list = remaining;
+                        // This unsafety is encapsulated with
+                        // `Instantiator::new`, documented above.
+                        self.cur.push(unsafe { head.to_extern(store) }, store);
                     }
 
                     // Otherwise if arguments are coming from our outer
@@ -738,25 +739,157 @@ impl<'a> ImportsBuilder<'a> {
 
 pub(crate) type RuntimeInstance = Arc<indexmap::IndexMap<String, Extern>>;
 
-/// An internal structure to this crate to build an `Instance` from a list of
-/// items with names. This is intended to stay private for now, it'll need an
-/// audit of APIs if publicly exported.
-#[derive(Default)]
-pub(crate) struct InstanceBuilder {
-    items: RuntimeInstance,
+/// An instance, pre-instantiation, that is ready to be instantiated.
+///
+/// This structure represents an instance *just before* it was instantiated,
+/// after all type-checking and imports have been resolved. The only thing left
+/// to do for this instance is to actually run the process of instantiation.
+///
+/// Note that an `InstancePre` may not be tied to any particular [`Store`] if
+/// none of the imports it closed over are tied to any particular [`Store`].
+///
+/// This structure is created through the [`Linker::instantiate_pre`] method,
+/// which also has some more information and examples.
+///
+/// [`Store`]: crate::Store
+/// [`Linker::instantiate_pre`]: crate::Linker::instantiate_pre
+pub struct InstancePre<T> {
+    module: Module,
+    items: Vec<Definition>,
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-impl InstanceBuilder {
-    pub(crate) fn new() -> InstanceBuilder {
-        InstanceBuilder::default()
+impl<T> InstancePre<T> {
+    pub(crate) unsafe fn new(
+        store: &mut StoreOpaque,
+        module: &Module,
+        items: Vec<Definition>,
+    ) -> Result<InstancePre<T>> {
+        typecheck_defs(store, module, &items)?;
+        Ok(InstancePre {
+            module: module.clone(),
+            items,
+            _marker: std::marker::PhantomData,
+        })
     }
 
-    pub(crate) fn insert(&mut self, name: &str, item: impl Into<Extern>) {
-        let items = Arc::get_mut(&mut self.items).unwrap();
-        items.insert(name.to_string(), item.into());
+    /// Instantiates this instance, creating a new instance within the provided
+    /// `store`.
+    ///
+    /// This function will run the actual process of instantiation to
+    /// completion. This will use all of the previously-closed-over items as
+    /// imports to instantiate the module that this was originally created with.
+    ///
+    /// For more information about instantiation see [`Instance::new`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if any import closed over by this [`InstancePre`] isn't owned by
+    /// `store`, or if `store` has async support enabled.
+    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        let mut store = store.as_context_mut().opaque();
+        // For the unsafety here the typecheck happened at creation time of this
+        // structure and then othrewise the `T` of `InstancePre<T>` connects any
+        // host functions we have in our definition list to the `store` that was
+        // passed in.
+        unsafe {
+            self.ensure_comes_from_same_store(&store)?;
+            Instantiator::new(
+                &mut store,
+                &self.module,
+                ImportSource::Definitions(&self.items),
+            )?
+            .run(store)
+        }
     }
 
-    pub(crate) fn finish(self, store: &mut StoreOpaque) -> Instance {
-        Instance::from_wasmtime(self.items, store)
+    /// Creates a new instance, running the start function asynchronously
+    /// instead of inline.
+    ///
+    /// For more information about asynchronous instantiation see the
+    /// documentation on [`Instance::new_async`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if any import closed over by this [`InstancePre`] isn't owned by
+    /// `store`, or if `store` does not have async support enabled.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn instantiate_async(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+    ) -> Result<Instance>
+    where
+        T: Send,
+    {
+        // For the unsafety here see above
+        let mut i = unsafe {
+            let mut store = store.as_context_mut().opaque();
+            self.ensure_comes_from_same_store(&store)?;
+            Instantiator::new(
+                &mut store,
+                &self.module,
+                ImportSource::Definitions(&self.items),
+            )?
+        };
+        i.run_async(store.as_context_mut().opaque_send()).await
     }
+
+    fn ensure_comes_from_same_store(&self, store: &StoreOpaque<'_>) -> Result<()> {
+        for import in self.items.iter() {
+            if !import.comes_from_same_store(store) {
+                bail!("cross-`Store` instantiation is not currently supported");
+            }
+        }
+        Ok(())
+    }
+}
+
+fn typecheck_externs(store: &mut StoreOpaque, module: &Module, imports: &[Extern]) -> Result<()> {
+    for import in imports {
+        if !import.comes_from_same_store(store) {
+            bail!("cross-`Store` instantiation is not currently supported");
+        }
+    }
+    typecheck(store, module, imports, |cx, ty, item| cx.extern_(ty, item))
+}
+
+fn typecheck_defs(store: &mut StoreOpaque, module: &Module, imports: &[Definition]) -> Result<()> {
+    for import in imports {
+        if !import.comes_from_same_store(store) {
+            bail!("cross-`Store` instantiation is not currently supported");
+        }
+    }
+    typecheck(store, module, imports, |cx, ty, item| {
+        cx.definition(ty, item)
+    })
+}
+
+fn typecheck<I>(
+    store: &mut StoreOpaque,
+    module: &Module,
+    imports: &[I],
+    check: impl Fn(&matching::MatchCx<'_>, &EntityType, &I) -> Result<()>,
+) -> Result<()> {
+    let env_module = module.compiled_module().module();
+    let expected = env_module.imports().count();
+    if expected != imports.len() {
+        bail!("expected {} imports, found {}", expected, imports.len());
+    }
+    let cx = matching::MatchCx {
+        signatures: module.signatures(),
+        types: module.types(),
+        store_data: store.store_data(),
+        engine: store.engine(),
+    };
+    for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {
+        check(&cx, &expected_ty, actual).with_context(|| {
+            let extra = match field {
+                Some(name) => format!("::{}", name),
+                None => String::new(),
+            };
+            format!("incompatible import type for `{}{}`", name, extra)
+        })?;
+    }
+    Ok(())
 }

@@ -1,3 +1,4 @@
+use crate::linker::Definition;
 use crate::store::StoreData;
 use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Context, Result};
@@ -5,6 +6,7 @@ use wasmtime_environ::wasm::{
     EntityType, Global, InstanceTypeIndex, Memory, ModuleTypeIndex, SignatureIndex, Table,
 };
 use wasmtime_jit::TypeTables;
+use wasmtime_runtime::VMSharedSignatureIndex;
 
 pub struct MatchCx<'a> {
     pub signatures: &'a SignatureCollection,
@@ -73,8 +75,24 @@ impl MatchCx<'_> {
     }
 
     pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
+        self.vmshared_signature_index(expected, actual.sig_index(self.store_data))
+    }
+
+    pub(crate) fn host_func(
+        &self,
+        expected: SignatureIndex,
+        actual: &crate::func::HostFunc,
+    ) -> Result<()> {
+        self.vmshared_signature_index(expected, actual.sig_index())
+    }
+
+    pub fn vmshared_signature_index(
+        &self,
+        expected: SignatureIndex,
+        actual: VMSharedSignatureIndex,
+    ) -> Result<()> {
         let matches = match self.signatures.shared_signature(expected) {
-            Some(idx) => actual.sig_index(self.store_data) == idx,
+            Some(idx) => actual == idx,
             // If our expected signature isn't registered, then there's no way
             // that `actual` can match it.
             None => false,
@@ -294,5 +312,45 @@ impl MatchCx<'_> {
             },
             EntityType::Event(_) => unimplemented!(),
         }
+    }
+
+    /// Validates that the `expected` type matches the type of `actual`
+    pub(crate) fn definition(&self, expected: &EntityType, actual: &Definition) -> Result<()> {
+        match actual {
+            Definition::Extern(e) => self.extern_(expected, e),
+            Definition::HostFunc(f) => match expected {
+                EntityType::Function(expected) => self.host_func(*expected, f),
+                _ => bail!("expected {}, but found func", entity_desc(expected)),
+            },
+            Definition::Instance(items) => match expected {
+                EntityType::Instance(expected) => {
+                    for (name, expected) in self.types.instance_signatures[*expected].exports.iter()
+                    {
+                        match items.get(name) {
+                            Some(item) => {
+                                self.definition(expected, item).with_context(|| {
+                                    format!("instance export {:?} incompatible", name)
+                                })?;
+                            }
+                            None => bail!("instance type missing export {:?}", name),
+                        }
+                    }
+                    Ok(())
+                }
+                _ => bail!("expected {}, but found instance", entity_desc(expected)),
+            },
+        }
+    }
+}
+
+fn entity_desc(ty: &EntityType) -> &'static str {
+    match ty {
+        EntityType::Global(_) => "global",
+        EntityType::Table(_) => "table",
+        EntityType::Memory(_) => "memory",
+        EntityType::Function(_) => "func",
+        EntityType::Instance(_) => "instance",
+        EntityType::Module(_) => "module",
+        EntityType::Event(_) => "event",
     }
 }

@@ -4057,12 +4057,32 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtss2sd, src, dst));
         }
 
+        Opcode::FvpromoteLow => {
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            ctx.emit(Inst::xmm_unary_rm_r(
+                SseOpcode::Cvtps2pd,
+                RegMem::from(src),
+                dst,
+            ));
+        }
+
         Opcode::Fdemote => {
             // We can't guarantee the RHS (if a load) is 128-bit aligned, so we
             // must avoid merging a load here.
             let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             ctx.emit(Inst::xmm_unary_rm_r(SseOpcode::Cvtsd2ss, src, dst));
+        }
+
+        Opcode::Fvdemote => {
+            let src = RegMem::reg(put_input_in_reg(ctx, inputs[0]));
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            ctx.emit(Inst::xmm_unary_rm_r(
+                SseOpcode::Cvtpd2ps,
+                RegMem::from(src),
+                dst,
+            ));
         }
 
         Opcode::FcvtFromSint => {

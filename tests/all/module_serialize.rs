@@ -24,6 +24,13 @@ fn test_version_mismatch() -> Result<()> {
             .starts_with("Module was compiled with incompatible Wasmtime version")),
     }
 
+    // Test deserialize_check_wasmtime_version, which disables the logic which rejects the above.
+    let mut config = Config::new();
+    config.deserialize_check_wasmtime_version(false);
+    let engine = Engine::new(&config).unwrap();
+    unsafe { Module::deserialize(&engine, &buffer) }
+        .expect("module with corrupt version should deserialize when check is disabled");
+
     Ok(())
 }
 
