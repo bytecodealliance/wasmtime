@@ -251,7 +251,13 @@ impl UnboxedValues {
             ir::types::I64 => DataValue::I64(ptr::read(p as *const i64)),
             ir::types::F32 => DataValue::F32(ptr::read(p as *const Ieee32)),
             ir::types::F64 => DataValue::F64(ptr::read(p as *const Ieee64)),
-            _ if ty.is_bool() => DataValue::B(ptr::read(p as *const bool)),
+            _ if ty.is_bool() => match ty.bytes() {
+                1 => DataValue::B(ptr::read(p as *const i8) != 0),
+                2 => DataValue::B(ptr::read(p as *const i16) != 0),
+                4 => DataValue::B(ptr::read(p as *const i32) != 0),
+                8 => DataValue::B(ptr::read(p as *const i64) != 0),
+                _ => unimplemented!(),
+            },
             _ if ty.is_vector() && ty.bytes() == 16 => {
                 DataValue::V128(ptr::read(p as *const [u8; 16]))
             }
