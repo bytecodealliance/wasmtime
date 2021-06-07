@@ -258,11 +258,13 @@ impl<T> Store<T> {
     }
 
     /// Access the underlying data owned by this `Store`.
+    #[inline]
     pub fn data(&self) -> &T {
         self.inner.data()
     }
 
     /// Access the underlying data owned by this `Store`.
+    #[inline]
     pub fn data_mut(&mut self) -> &mut T {
         self.inner.data_mut()
     }
@@ -634,10 +636,12 @@ impl<'a, T> StoreContextMut<'a, T> {
 }
 
 impl<T> StoreInner<T> {
+    #[inline]
     fn data(&self) -> &T {
         &self.data
     }
 
+    #[inline]
     fn data_mut(&mut self) -> &mut T {
         &mut self.data
     }
@@ -694,10 +698,12 @@ impl StoreInnermost {
 
         Ok(())
     }
+    #[inline]
     pub fn async_support(&self) -> bool {
         self.engine().config().async_support
     }
 
+    #[inline]
     pub fn engine(&self) -> &Engine {
         &self.engine
     }
@@ -785,6 +791,7 @@ impl StoreInnermost {
     }
 
     #[cfg(feature = "async")]
+    #[inline]
     pub fn async_cx(&self) -> AsyncCx {
         debug_assert!(self.async_support());
         AsyncCx {
@@ -896,11 +903,13 @@ impl StoreInnermost {
         Ok(())
     }
 
+    #[inline]
     pub fn signal_handler(&self) -> Option<*const SignalHandler<'static>> {
         let handler = self.signal_handler.as_ref()?;
         Some(&**handler as *const _)
     }
 
+    #[inline]
     pub fn vminterrupts(&self) -> *mut VMInterrupts {
         &*self.interrupts as *const VMInterrupts as *mut VMInterrupts
     }
@@ -910,6 +919,7 @@ impl StoreInnermost {
             .insert_with_gc(r, &self.modules)
     }
 
+    #[inline]
     pub fn default_callee(&self) -> *mut VMContext {
         self.default_callee.vmctx_ptr()
     }
