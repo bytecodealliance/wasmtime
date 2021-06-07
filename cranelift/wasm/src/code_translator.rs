@@ -1843,7 +1843,22 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I16X8, builder);
             state.push1(builder.ins().uwiden_high(a))
         }
-
+        Operator::I64x2ExtendLowI32x4S => {
+            let a = pop1_with_bitcast(state, I32X4, builder);
+            state.push1(builder.ins().swiden_low(a))
+        }
+        Operator::I64x2ExtendHighI32x4S => {
+            let a = pop1_with_bitcast(state, I32X4, builder);
+            state.push1(builder.ins().swiden_high(a))
+        }
+        Operator::I64x2ExtendLowI32x4U => {
+            let a = pop1_with_bitcast(state, I32X4, builder);
+            state.push1(builder.ins().uwiden_low(a))
+        }
+        Operator::I64x2ExtendHighI32x4U => {
+            let a = pop1_with_bitcast(state, I32X4, builder);
+            state.push1(builder.ins().uwiden_high(a))
+        }
         Operator::F32x4Ceil | Operator::F64x2Ceil => {
             // This is something of a misuse of `type_of`, because that produces the return type
             // of `op`.  In this case we want the arg type, but we know it's the same as the
@@ -1871,11 +1886,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let arg = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().popcnt(arg));
         }
-        Operator::I64x2ExtendLowI32x4S
-        | Operator::I64x2ExtendHighI32x4S
-        | Operator::I64x2ExtendLowI32x4U
-        | Operator::I64x2ExtendHighI32x4U
-        | Operator::I16x8Q15MulrSatS
+        Operator::I16x8Q15MulrSatS
         | Operator::I16x8ExtMulLowI8x16S
         | Operator::I16x8ExtMulHighI8x16S
         | Operator::I16x8ExtMulLowI8x16U

@@ -4009,18 +4009,18 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
-    let I8or16xN = &TypeVar::new(
-        "I8or16xN",
-        "A SIMD vector type containing integer lanes 8 or 16 bits wide.",
+    let I8or16or32xN = &TypeVar::new(
+        "I8or16or32xN",
+        "A SIMD vector type containing integer lanes 8, 16, or 32 bits wide.",
         TypeSetBuilder::new()
-            .ints(8..16)
-            .simd_lanes(8..16)
+            .ints(8..32)
+            .simd_lanes(4..16)
             .includes_scalars(false)
             .build(),
     );
 
-    let x = &Operand::new("x", I8or16xN);
-    let a = &Operand::new("a", &I8or16xN.merge_lanes());
+    let x = &Operand::new("x", I8or16or32xN);
+    let a = &Operand::new("a", &I8or16or32xN.merge_lanes());
 
     ig.push(
         Inst::new(
