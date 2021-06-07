@@ -338,6 +338,39 @@ impl Memory {
         }
     }
 
+    /// Same as [`Memory::data_mut`], but also returns the `T` from the
+    /// [`StoreContextMut`].
+    ///
+    /// This method can be used when you want to simultaneously work with the
+    /// `T` in the store as well as the memory behind this [`Memory`]. Using
+    /// [`Memory::data_mut`] would consider the entire store borrowed, whereas
+    /// this method allows the Rust compiler to see that the borrow of this
+    /// memory and the borrow of `T` are disjoint.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this memory doesn't belong to `store`.
+    pub fn data_and_store_mut<'a, T: 'a>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> (&'a mut [u8], &'a mut T) {
+        // Note the unsafety here. Our goal is to simultaneously borrow the
+        // memory and custom data from `store`, and the store it's connected
+        // to. Rust will not let us do that, however, because we must call two
+        // separate methods (both of which borrow the whole `store`) and one of
+        // our borrows is mutable (the custom data).
+        //
+        // This operation, however, is safe because these borrows do not overlap
+        // and in the process of borrowing them mutability doesn't actually
+        // touch anything. This is akin to mutably borrowing two indices in an
+        // array, which is safe so long as the indices are separate.
+        unsafe {
+            let mut store = store.into();
+            let data = &mut *(store.data_mut() as *mut T);
+            (self.data_mut(store), data)
+        }
+    }
+
     /// Returns the base pointer, in the host's address space, that the memory
     /// is located at.
     ///

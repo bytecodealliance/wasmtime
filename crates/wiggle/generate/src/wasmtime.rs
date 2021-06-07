@@ -118,25 +118,9 @@ fn generate_func(
                 return Err(#rt::wasmtime_crate::Trap::new("missing required memory export"));
             }
         };
-        // Note the unsafety here. Our goal is to simultaneously borrow the
-        // memory and custom data from `caller`, and the store it's connected
-        // to. Rust will not let us do that, however, because we must call two
-        // separate methods (both of which borrow the whole `caller`) and one of
-        // our borrows is mutable (the custom data).
-        //
-        // This operation, however, is safe because these borrows do not overlap
-        // and in the process of borrowing them mutability doesn't actually
-        // touch anything. This is akin to mutably borrowing two indices in an
-        // array, which is safe so long as the indices are separate.
-        //
-        // TODO: depending on how common this is for other users to run into we
-        // may wish to consider adding a dedicated method for this. For now the
-        // future of `GuestPtr` may be a bit hazy, so let's just get this
-        // working from the previous iteration for now.
-        let (ctx, mem) = unsafe {
-            let mem = &mut *(mem.data_mut(&mut caller) as *mut [u8]);
-            (get_cx(caller.data_mut()), #rt::wasmtime::WasmtimeGuestMemory::new(mem))
-        };
+        let (mem , ctx) = mem.data_and_store_mut(&mut caller);
+        let ctx = get_cx(ctx);
+        let mem = #rt::wasmtime::WasmtimeGuestMemory::new(mem);
         match #abi_func(ctx, &mem #(, #arg_names)*) #await_ {
             Ok(r) => Ok(<#ret_ty>::from(r)),
             Err(#rt::Trap::String(err)) => Err(#rt::wasmtime_crate::Trap::new(err)),
