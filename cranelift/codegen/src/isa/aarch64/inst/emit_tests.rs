@@ -153,6 +153,26 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
+            alu_op: ALUOp::AndS32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        },
+        "4100036A",
+        "ands w1, w2, w3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::AndS64,
+            rd: writable_xreg(4),
+            rn: xreg(5),
+            rm: xreg(6),
+        },
+        "A40006EA",
+        "ands x4, x5, x6",
+    ));
+    insns.push((
+        Inst::AluRRR {
             alu_op: ALUOp::SubS32,
             rd: writable_zero_reg(),
             rn: xreg(2),
@@ -650,6 +670,34 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRRShift {
+            alu_op: ALUOp::AndS32,
+            rd: writable_xreg(10),
+            rn: xreg(11),
+            rm: xreg(12),
+            shiftop: ShiftOpAndAmt::new(
+                ShiftOp::LSL,
+                ShiftOpShiftImm::maybe_from_shift(23).unwrap(),
+            ),
+        },
+        "6A5D0C6A",
+        "ands w10, w11, w12, LSL 23",
+    ));
+    insns.push((
+        Inst::AluRRRShift {
+            alu_op: ALUOp::AndS64,
+            rd: writable_xreg(10),
+            rn: xreg(11),
+            rm: xreg(12),
+            shiftop: ShiftOpAndAmt::new(
+                ShiftOp::LSL,
+                ShiftOpShiftImm::maybe_from_shift(23).unwrap(),
+            ),
+        },
+        "6A5D0CEA",
+        "ands x10, x11, x12, LSL 23",
+    ));
+    insns.push((
+        Inst::AluRRRShift {
             alu_op: ALUOp::Eor32,
             rd: writable_xreg(10),
             rn: xreg(11),
@@ -1014,6 +1062,26 @@ fn test_aarch64_binemit() {
         },
         "C7381592",
         "and x7, x6, #288221580125796352",
+    ));
+    insns.push((
+        Inst::AluRRImmLogic {
+            alu_op: ALUOp::AndS32,
+            rd: writable_xreg(21),
+            rn: xreg(27),
+            imml: ImmLogic::maybe_from_u64(0x80003fff, I32).unwrap(),
+        },
+        "753B0172",
+        "ands w21, w27, #2147500031",
+    ));
+    insns.push((
+        Inst::AluRRImmLogic {
+            alu_op: ALUOp::AndS64,
+            rd: writable_xreg(7),
+            rn: xreg(6),
+            imml: ImmLogic::maybe_from_u64(0x3fff80003fff800, I64).unwrap(),
+        },
+        "C73815F2",
+        "ands x7, x6, #288221580125796352",
     ));
     insns.push((
         Inst::AluRRImmLogic {
