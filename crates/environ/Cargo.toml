@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-environ"
-version = "0.27.0"
+version = "0.28.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Standalone environment support for WebAsssembly code in Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -12,9 +12,9 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../../cranelift/codegen", version = "0.74.0", features = ["enable-serde"] }
-cranelift-entity = { path = "../../cranelift/entity", version = "0.74.0", features = ["enable-serde"] }
-cranelift-wasm = { path = "../../cranelift/wasm", version = "0.74.0", features = ["enable-serde"] }
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.75.0", features = ["enable-serde"] }
+cranelift-entity = { path = "../../cranelift/entity", version = "0.75.0", features = ["enable-serde"] }
+cranelift-wasm = { path = "../../cranelift/wasm", version = "0.75.0", features = ["enable-serde"] }
 wasmparser = "0.78"
 indexmap = { version = "1.0.2", features = ["serde-1"] }
 thiserror = "1.0.4"

@@ -4,6 +4,49 @@
 
 ## Unreleased
 
+## 0.28.0
+
+Released 2021-06-09.
+
+### Changed
+
+* Breaking: Wasmtime's embedding API has been redesigned, as specified in [RFC
+  11]. Rust users can now enjoy easier times with `Send` and `Sync`, and all
+  users can now more clearly manage memory, especially in the C API. Language
+  embeddings have been updated to the new API as well.
+  [#2897](https://github.com/bytecodealliance/wasmtime/pull/2897)
+
+[RFC 11]: https://github.com/bytecodealliance/rfcs/pull/11
+
+### Added
+
+* A new `InstancePre` type, created with `Linker::instantiate_pre`, has been
+  added to perform type-checking of an instance once and reduce the work done
+  for each instantiation of a module:
+  [#2962](https://github.com/bytecodealliance/wasmtime/pull/2962)
+
+* Deserialization of a module can now optionally skip checking the wasmtime
+  version string:
+  [#2945](https://github.com/bytecodealliance/wasmtime/pull/2945)
+
+* A method has been exposed to frontload per-thread initialization costs if the
+  latency of every last wasm call is important:
+  [#2946](https://github.com/bytecodealliance/wasmtime/pull/2946)
+
+* Hooks have been added for entry/exit into wasm code to allow embeddings to
+  track time and other properties about execution in a wasm environment:
+  [#2952](https://github.com/bytecodealliance/wasmtime/pull/2952)
+
+* A [C++ embedding of Wasmtime has been written][cpp].
+
+[RFC 11]: https://github.com/bytecodealliance/rfcs/pull/11
+[cpp]: https://github.com/bytecodealliance/wasmtime-cpp
+
+### Fixed
+
+* Multiple returns on macOS AArch64 have been fixed:
+  [#2956](https://github.com/bytecodealliance/wasmtime/pull/2956)
+
 ## 0.27.0
 
 Released 2021-05-21.
@@ -120,7 +163,7 @@ Released 2021-04-05.
   [#2757](https://github.com/bytecodealliance/wasmtime/pull/2757),
   [#2759](https://github.com/bytecodealliance/wasmtime/pull/2759)
 
-* Improvements related to Module Linking: compile fewer trampolines; 
+* Improvements related to Module Linking: compile fewer trampolines;
 
   [#2774](https://github.com/bytecodealliance/wasmtime/pull/2774)
 
