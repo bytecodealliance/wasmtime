@@ -681,7 +681,10 @@ impl Func {
             "must use `call_async` when async support is enabled on the config",
         );
         let my_ty = self.ty(&store);
-        self.call_impl(&mut store.as_context_mut().opaque(), my_ty, params)
+        store.as_context_mut().0.exiting_native_hook()?;
+        let r = self.call_impl(&mut store.as_context_mut().opaque(), my_ty, params);
+        store.as_context_mut().0.entering_native_hook()?;
+        r
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -717,8 +720,12 @@ impl Func {
         T: Send,
     {
         let my_ty = self.ty(&store);
-        self._call_async(store.as_context_mut().opaque_send(), my_ty, params)
-            .await
+        store.as_context_mut().0.exiting_native_hook()?;
+        let r = self
+            ._call_async(store.as_context_mut().opaque_send(), my_ty, params)
+            .await;
+        store.as_context_mut().0.entering_native_hook()?;
+        r
     }
 
     #[cfg(feature = "async")]
@@ -843,6 +850,7 @@ impl Func {
         values_vec: *mut u128,
         func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
     ) -> Result<(), Trap> {
+        caller.store.0.entering_native_hook()?;
         // We have a dynamic guarantee that `values_vec` has the right
         // number of arguments and the right types of arguments. As a result
         // we should be able to safely run through them all and read them.
@@ -883,6 +891,7 @@ impl Func {
             }
         }
 
+        caller.store.0.exiting_native_hook()?;
         Ok(())
     }
 
@@ -1173,7 +1182,7 @@ pub unsafe trait WasmRet {
     // explicitly, used when wrapping async functions which always bottom-out
     // in a function that returns a trap because futures can be cancelled.
     #[doc(hidden)]
-    type Fallible: WasmRet;
+    type Fallible: WasmRet<Abi = Self::Abi, Retptr = Self::Retptr>;
     #[doc(hidden)]
     fn into_fallible(self) -> Self::Fallible;
     #[doc(hidden)]
@@ -1689,12 +1698,19 @@ macro_rules! impl_into_func {
 
                         let ret = {
                             panic::catch_unwind(AssertUnwindSafe(|| {
+                                if let Err(trap) = caller.store.0.entering_native_hook() {
+                                    return R::fallible_from_trap(trap);
+                                }
                                 let mut _store = caller.sub_caller().store.opaque();
                                 $(let $args = $args::from_abi($args, &mut _store);)*
-                                func(
+                                let r = func(
                                     caller.sub_caller(),
                                     $( $args, )*
-                                )
+                                );
+                                if let Err(trap) = caller.store.0.exiting_native_hook() {
+                                    return R::fallible_from_trap(trap);
+                                }
+                                r.into_fallible()
                             }))
                         };
 

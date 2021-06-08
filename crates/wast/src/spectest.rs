@@ -3,7 +3,7 @@ use wasmtime::*;
 
 /// Return an instance implementing the "spectest" interface used in the
 /// spec testsuite.
-pub fn link_spectest(linker: &mut Linker<()>, store: &mut Store<()>) -> Result<()> {
+pub fn link_spectest<T>(linker: &mut Linker<T>, store: &mut Store<T>) -> Result<()> {
     linker.func_wrap("spectest", "print", || {})?;
     linker.func_wrap("spectest", "print_i32", |val: i32| println!("{}: i32", val))?;
     linker.func_wrap("spectest", "print_i64", |val: i64| println!("{}: i64", val))?;

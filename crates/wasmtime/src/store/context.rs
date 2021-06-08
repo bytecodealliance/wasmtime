@@ -1,4 +1,4 @@
-use crate::store::{Store, StoreInner};
+use crate::store::{Store, StoreInner, StoreInnermost};
 use std::ops::{Deref, DerefMut};
 
 /// A temporary handle to a [`&Store<T>`][`Store`].
@@ -17,7 +17,7 @@ pub struct StoreContext<'a, T>(pub(super) &'a StoreInner<T>);
 /// methods if desired.  For more information, see [`Store`].
 // NB the repr(transparent) here is for the same reason as above.
 #[repr(transparent)]
-pub struct StoreContextMut<'a, T>(pub(super) &'a mut StoreInner<T>);
+pub struct StoreContextMut<'a, T>(pub(crate) &'a mut StoreInner<T>);
 
 impl<'a, T> StoreContextMut<'a, T> {
     /// One of the unsafe lynchpins of Wasmtime.
@@ -210,7 +210,7 @@ impl<'a, T: AsContextMut> From<&'a mut T> for StoreContextMut<'a, T::Data> {
 #[doc(hidden)] // this is part of `WasmTy`, but a hidden part, so hide this
 pub struct StoreOpaque<'a> {
     /// The actual pointer to the `StoreInner` internals.
-    inner: &'a mut StoreInner<dyn Opaque + 'a>,
+    inner: &'a mut StoreInnermost,
 
     /// A raw trait object that can be used to invoke functions with. Note that
     /// this is a pointer which aliases with `inner` above, so extreme care
@@ -224,7 +224,7 @@ impl<T> Opaque for T {}
 
 // Deref impls to forward all methods on `StoreOpaque` to `StoreInner`.
 impl<'a> Deref for StoreOpaque<'a> {
-    type Target = StoreInner<dyn Opaque + 'a>;
+    type Target = StoreInnermost;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -241,7 +241,7 @@ impl<'a> DerefMut for StoreOpaque<'a> {
 
 pub struct StoreOpaqueSend<'a> {
     /// The actual pointer to the `StoreInner` internals.
-    inner: &'a mut StoreInner<dyn Opaque + Send + 'a>,
+    inner: &'a mut StoreInnermost,
     pub traitobj: *mut dyn wasmtime_runtime::Store,
 }
 
@@ -259,7 +259,7 @@ impl StoreOpaqueSend<'_> {
 }
 
 impl<'a> Deref for StoreOpaqueSend<'a> {
-    type Target = StoreInner<dyn Opaque + Send + 'a>;
+    type Target = StoreInnermost;
 
     #[inline]
     fn deref(&self) -> &Self::Target {

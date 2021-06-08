@@ -416,10 +416,10 @@ impl Memory {
     /// # }
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32) -> Result<u32> {
-        let mut store = store.as_context_mut().opaque();
-        let mem = self.wasmtime_memory(&mut store);
+        let mem = self.wasmtime_memory(&mut store.as_context_mut().opaque());
+        let store = store.as_context_mut();
         unsafe {
-            match (*mem).grow(delta, store.limiter()) {
+            match (*mem).grow(delta, store.0.limiter()) {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
                     *store[self.0].definition = vm;

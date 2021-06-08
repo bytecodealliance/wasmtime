@@ -217,8 +217,8 @@ fn limit_instances() -> Result<()> {
             )
         "#,
     )?;
-    let mut store = Store::new(&engine, ());
-    store.limiter(StoreLimitsBuilder::new().instances(10).build());
+    let mut store = Store::new(&engine, StoreLimitsBuilder::new().instances(10).build());
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
     let err = Instance::new(&mut store, &module, &[]).err().unwrap();
     assert!(
         err.to_string().contains("resource limit exceeded"),
@@ -253,8 +253,8 @@ fn limit_memories() -> Result<()> {
             )
         "#,
     )?;
-    let mut store = Store::new(&engine, ());
-    store.limiter(StoreLimitsBuilder::new().memories(10).build());
+    let mut store = Store::new(&engine, StoreLimitsBuilder::new().memories(10).build());
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
     let err = Instance::new(&mut store, &module, &[]).err().unwrap();
     assert!(
         err.to_string().contains("resource limit exceeded"),
@@ -288,8 +288,8 @@ fn limit_tables() -> Result<()> {
             )
         "#,
     )?;
-    let mut store = Store::new(&engine, ());
-    store.limiter(StoreLimitsBuilder::new().tables(10).build());
+    let mut store = Store::new(&engine, StoreLimitsBuilder::new().tables(10).build());
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
     let err = Instance::new(&mut store, &module, &[]).err().unwrap();
     assert!(
         err.to_string().contains("resource limit exceeded"),

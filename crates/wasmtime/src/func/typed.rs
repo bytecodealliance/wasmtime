@@ -71,12 +71,15 @@ where
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to an asynchronous store.
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results, Trap> {
-        let mut store = store.as_context_mut().opaque();
+        store.as_context_mut().0.exiting_native_hook()?;
+        let mut store_opaque = store.as_context_mut().opaque();
         assert!(
-            !store.async_support(),
+            !store_opaque.async_support(),
             "must use `call_async` with async stores"
         );
-        unsafe { self._call(&mut store, params) }
+        let r = unsafe { self._call(&mut store_opaque, params) };
+        store.as_context_mut().0.entering_native_hook()?;
+        r
     }
 
     /// Invokes this WebAssembly function with the specified parameters.
@@ -100,14 +103,17 @@ where
     where
         T: Send,
     {
-        let mut store = store.as_context_mut().opaque_send();
+        store.as_context_mut().0.exiting_native_hook()?;
+        let mut store_opaque = store.as_context_mut().opaque_send();
         assert!(
-            store.async_support(),
+            store_opaque.async_support(),
             "must use `call` with non-async stores"
         );
-        store
+        let r = store_opaque
             .on_fiber(|store| unsafe { self._call(store, params) })
-            .await?
+            .await?;
+        store.as_context_mut().0.entering_native_hook()?;
+        r
     }
 
     unsafe fn _call(&self, store: &mut StoreOpaque<'_>, params: Params) -> Result<Results, Trap> {
