@@ -87,6 +87,9 @@ pub enum ALUOp {
     /// Add with carry
     Adc32,
     Adc64,
+    /// Add with carry, settings flags
+    AdcS32,
+    AdcS64,
     /// Subtract with carry
     Sbc32,
     Sbc64,
@@ -3212,6 +3215,8 @@ impl Inst {
                 ALUOp::Lsl64 => ("lsl", OperandSize::Size64),
                 ALUOp::Adc32 => ("adc", OperandSize::Size32),
                 ALUOp::Adc64 => ("adc", OperandSize::Size64),
+                ALUOp::AdcS32 => ("adcs", OperandSize::Size32),
+                ALUOp::AdcS64 => ("adcs", OperandSize::Size64),
                 ALUOp::Sbc32 => ("sbc", OperandSize::Size32),
                 ALUOp::Sbc64 => ("sbc", OperandSize::Size64),
             }

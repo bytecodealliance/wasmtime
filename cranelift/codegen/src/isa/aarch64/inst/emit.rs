@@ -599,6 +599,8 @@ impl MachInstEmit for Inst {
                     ALUOp::Add64 => 0b10001011_000,
                     ALUOp::Adc32 => 0b00011010_000,
                     ALUOp::Adc64 => 0b10011010_000,
+                    ALUOp::AdcS32 => 0b00111010_000,
+                    ALUOp::AdcS64 => 0b10111010_000,
                     ALUOp::Sub32 => 0b01001011_000,
                     ALUOp::Sub64 => 0b11001011_000,
                     ALUOp::Sbc32 => 0b01011010_000,
