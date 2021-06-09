@@ -1,5 +1,9 @@
 test run
+; target aarch64 TODO: Not yet implemented on aarch64
+; target s390x TODO: Not yet implemented on s390x
+target x86_64 machinst
 target x86_64 legacy
+
 
 function %br_false() -> b1 {
 block0:

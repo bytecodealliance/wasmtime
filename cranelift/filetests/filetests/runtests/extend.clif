@@ -1,7 +1,11 @@
 test run
+target aarch64
+target arm
+target s390x
+; target x86_64 machinst TODO: Not yet implemented on x86_64
 target i686 legacy
 
-function u0:0() -> b1 {
+function %uextend() -> b1 {
 block0:
     v0 = iconst.i32 0xffff_ee00
     v1 = uextend.i64 v0
@@ -13,7 +17,7 @@ block0:
 }
 ; run
 
-function u0:1() -> b1 {
+function %sextend() -> b1 {
 block0:
     v0 = iconst.i32 0xffff_ee00
     v1 = sextend.i64 v0

@@ -1,4 +1,7 @@
 test run
+target aarch64
+target arm
+target s390x
 set avoid_div_traps=false
 target x86_64 machinst
 
