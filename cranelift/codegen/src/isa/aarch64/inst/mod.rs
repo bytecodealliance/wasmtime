@@ -52,6 +52,8 @@ pub enum ALUOp {
     OrrNot64,
     And32,
     And64,
+    AndS32,
+    AndS64,
     AndNot32,
     AndNot64,
     /// XOR (AArch64 calls this "EOR")
@@ -3186,6 +3188,8 @@ impl Inst {
                 ALUOp::Orr64 => ("orr", OperandSize::Size64),
                 ALUOp::And32 => ("and", OperandSize::Size32),
                 ALUOp::And64 => ("and", OperandSize::Size64),
+                ALUOp::AndS32 => ("ands", OperandSize::Size32),
+                ALUOp::AndS64 => ("ands", OperandSize::Size64),
                 ALUOp::Eor32 => ("eor", OperandSize::Size32),
                 ALUOp::Eor64 => ("eor", OperandSize::Size64),
                 ALUOp::AddS32 => ("adds", OperandSize::Size32),

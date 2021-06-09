@@ -293,3 +293,224 @@ block0:
 ; nextln: sbfx w0, w0, #0, #1
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+function %bnot_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot v0
+    return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn x0, xzr, x0
+; nextln: orn x1, xzr, x1
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %band_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = band v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: and x0, x0, x2
+; nextln: and x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %bor_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bor v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orr x0, x0, x2
+; nextln: orr x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %bxor_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bxor v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: eor x0, x0, x2
+; nextln: eor x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %band_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = band_not v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: bic x0, x0, x2
+; nextln: bic x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %bor_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bor_not v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn x0, x0, x2
+; nextln: orn x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %bxor_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bxor_not v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: eon x0, x0, x2
+; nextln: eon x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %ishl_i128_i8(i128, i8) -> i128 {
+block0(v0: i128, v1: i8):
+    v2 = ishl.i128 v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn w3, wzr, w2
+; nextln: lsr x4, x0, #1
+; nextln: lsl x1, x1, x2
+; nextln: lsr x3, x4, x3
+; nextln: lsl x0, x0, x2
+; nextln: ands xzr, x2, #64
+; nextln: orr x1, x1, x3
+; nextln: csel x1, x0, x1, ne
+; nextln: csel x0, xzr, x0, ne
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %ishl_i128_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = ishl.i128 v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn w3, wzr, w2
+; nextln: lsr x4, x0, #1
+; nextln: lsl x1, x1, x2
+; nextln: lsr x3, x4, x3
+; nextln: lsl x0, x0, x2
+; nextln: ands xzr, x2, #64
+; nextln: orr x1, x1, x3
+; nextln: csel x1, x0, x1, ne
+; nextln: csel x0, xzr, x0, ne
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %ushr_i128_i8(i128, i8) -> i128 {
+block0(v0: i128, v1: i8):
+    v2 = ushr.i128 v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn w3, wzr, w2
+; nextln: lsl x4, x1, #1
+; nextln: lsr x0, x0, x2
+; nextln: lsl x3, x4, x3
+; nextln: lsr x1, x1, x2
+; nextln: ands xzr, x2, #64
+; nextln: orr x0, x0, x3
+; nextln: csel x2, xzr, x1, ne
+; nextln: csel x0, x1, x0, ne
+; nextln: mov x1, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %ushr_i128_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = ushr.i128 v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn w3, wzr, w2
+; nextln: lsl x4, x1, #1
+; nextln: lsr x0, x0, x2
+; nextln: lsl x3, x4, x3
+; nextln: lsr x1, x1, x2
+; nextln: ands xzr, x2, #64
+; nextln: orr x0, x0, x3
+; nextln: csel x2, xzr, x1, ne
+; nextln: csel x0, x1, x0, ne
+; nextln: mov x1, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %sshr_i128_i8(i128, i8) -> i128 {
+block0(v0: i128, v1: i8):
+    v2 = sshr.i128 v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn w3, wzr, w2
+; nextln: lsl x4, x1, #1
+; nextln: lsr x0, x0, x2
+; nextln: lsl x4, x4, x3
+; nextln: asr x3, x1, x2
+; nextln: ands xzr, x2, #64
+; nextln: asr x1, x1, #63
+; nextln: orr x0, x0, x4
+; nextln: csel x1, x1, x3, ne
+; nextln: csel x0, x3, x0, ne
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %sshr_i128_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = sshr.i128 v0, v1
+    return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orn w3, wzr, w2
+; nextln: lsl x4, x1, #1
+; nextln: lsr x0, x0, x2
+; nextln: lsl x4, x4, x3
+; nextln: asr x3, x1, x2
+; nextln: ands xzr, x2, #64
+; nextln: asr x1, x1, #63
+; nextln: orr x0, x0, x4
+; nextln: csel x1, x1, x3, ne
+; nextln: csel x0, x3, x0, ne
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
