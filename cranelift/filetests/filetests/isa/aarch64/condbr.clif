@@ -15,6 +15,197 @@ block0(v0: i64, v1: i64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
+function %icmp_eq_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp eq v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: eor x0, x0, x2
+; nextln: eor x1, x1, x3
+; nextln: adds xzr, x0, x1
+; nextln: cset x0, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %icmp_ne_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ne v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: eor x0, x0, x2
+; nextln: eor x1, x1, x3
+; nextln: adds xzr, x0, x1
+; nextln: cset x0, ne
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %icmp_slt_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp slt v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, lo
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, lt
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %icmp_ult_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ult v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, lo
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, lo
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %icmp_sle_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sle v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, ls
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, le
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %icmp_ule_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ule v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, ls
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, ls
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %icmp_sgt_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sgt v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hi
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, gt
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %icmp_ugt_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp ugt v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hi
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, hi
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %icmp_sge_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp sge v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hs
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, ge
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %icmp_uge_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp uge v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hs
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, hs
+; nextln: csel x0, x0, x1, eq
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %icmp_of_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp of v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: adds xzr, x0, x2
+; nextln: adcs xzr, x1, x3
+; nextln: cset x0, vs
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %icmp_nof_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp nof v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: adds xzr, x0, x2
+; nextln: adcs xzr, x1, x3
+; nextln: cset x0, vc
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
 function %f(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = ifcmp v0, v1

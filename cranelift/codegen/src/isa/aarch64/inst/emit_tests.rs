@@ -72,6 +72,26 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
+            alu_op: ALUOp::AdcS32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        },
+        "4100033A",
+        "adcs w1, w2, w3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::AdcS64,
+            rd: writable_xreg(4),
+            rn: xreg(5),
+            rm: xreg(6),
+        },
+        "A40006BA",
+        "adcs x4, x5, x6",
+    ));
+    insns.push((
+        Inst::AluRRR {
             alu_op: ALUOp::Sub32,
             rd: writable_xreg(1),
             rn: xreg(2),
@@ -109,6 +129,26 @@ fn test_aarch64_binemit() {
         },
         "A40006DA",
         "sbc x4, x5, x6",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::SbcS32,
+            rd: writable_xreg(1),
+            rn: xreg(2),
+            rm: xreg(3),
+        },
+        "4100037A",
+        "sbcs w1, w2, w3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::SbcS64,
+            rd: writable_xreg(4),
+            rn: xreg(5),
+            rm: xreg(6),
+        },
+        "A40006FA",
+        "sbcs x4, x5, x6",
     ));
 
     insns.push((
