@@ -93,6 +93,9 @@ pub enum ALUOp {
     /// Subtract with carry
     Sbc32,
     Sbc64,
+    /// Subtract with carry, settings flags
+    SbcS32,
+    SbcS64,
 }
 
 /// An ALU operation with three arguments.
@@ -3219,6 +3222,8 @@ impl Inst {
                 ALUOp::AdcS64 => ("adcs", OperandSize::Size64),
                 ALUOp::Sbc32 => ("sbc", OperandSize::Size32),
                 ALUOp::Sbc64 => ("sbc", OperandSize::Size64),
+                ALUOp::SbcS32 => ("sbcs", OperandSize::Size32),
+                ALUOp::SbcS64 => ("sbcs", OperandSize::Size64),
             }
         }
 
