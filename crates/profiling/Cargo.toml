@@ -1,6 +1,6 @@
 [package]
 name = "wasmtime-profiling"
-version = "0.27.0"
+version = "0.28.0"
 authors = ["The Wasmtime Project Developers"]
 description = "Runtime library support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -19,8 +19,8 @@ libc = { version = "0.2.60", default-features = false }
 scroll = { version = "0.10.1", features = ["derive"], optional = true }
 serde = { version = "1.0.99", features = ["derive"] }
 target-lexicon = "0.12.0"
-wasmtime-environ = { path = "../environ", version = "0.27.0" }
-wasmtime-runtime = { path = "../runtime", version = "0.27.0" }
+wasmtime-environ = { path = "../environ", version = "0.28.0" }
+wasmtime-runtime = { path = "../runtime", version = "0.28.0" }
 ittapi-rs = { version = "0.1.5", optional = true }
 
 [dependencies.object]

@@ -93,6 +93,7 @@ the implementation:
 
 * **[Rust]** - the [`wasmtime` crate]
 * **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers]
+* **[C++]** - the [`wasmtime-cpp` repository][wasmtime-cpp]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
 * **[Go]** - the [`wasmtime-go` repository]
@@ -107,6 +108,7 @@ the implementation:
 [`Wasmtime` NuGet package]: https://www.nuget.org/packages/Wasmtime
 [Go]: https://bytecodealliance.github.io/wasmtime/lang-go.html
 [`wasmtime-go` repository]: https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go
+[wasmtime-cpp]: https://github.com/bytecodealliance/wasmtime-cpp
 
 ## Documentation
 
