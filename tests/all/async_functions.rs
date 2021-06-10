@@ -428,11 +428,11 @@ fn async_with_pooling_stacks() {
             table_elements: 0,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_reservation_size: 1,
-        },
+        instance_limits: InstanceLimits { count: 1 },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(0);
+    config.static_memory_maximum_size(65536);
 
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
@@ -457,11 +457,11 @@ fn async_host_func_with_pooling_stacks() -> Result<()> {
             table_elements: 0,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_reservation_size: 1,
-        },
+        instance_limits: InstanceLimits { count: 1 },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(0);
+    config.static_memory_maximum_size(65536);
 
     let mut store = Store::new(&Engine::new(&config)?, ());
     let mut linker = Linker::new(store.engine());

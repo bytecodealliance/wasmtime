@@ -3,7 +3,6 @@
 
 use anyhow::{bail, Result};
 use more_asserts::assert_le;
-use more_asserts::assert_lt;
 use std::io;
 use std::ptr;
 use std::slice;
@@ -176,8 +175,8 @@ impl Mmap {
         let page_size = region::page::size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
-        assert_lt!(len, self.len);
-        assert_lt!(start, self.len - len);
+        assert_le!(len, self.len);
+        assert_le!(start, self.len - len);
 
         // Commit the accessible size.
         let ptr = self.ptr as *const u8;
@@ -199,8 +198,8 @@ impl Mmap {
         let page_size = region::page::size();
         assert_eq!(start & (page_size - 1), 0);
         assert_eq!(len & (page_size - 1), 0);
-        assert_lt!(len, self.len);
-        assert_lt!(start, self.len - len);
+        assert_le!(len, self.len);
+        assert_le!(start, self.len - len);
 
         // Commit the accessible size.
         let ptr = self.ptr as *const u8;

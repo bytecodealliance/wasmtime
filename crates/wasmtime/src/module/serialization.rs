@@ -495,6 +495,7 @@ impl<'a> SerializedModule<'a> {
             interruptable,
             consume_fuel,
             static_memory_bound_is_maximum,
+            guard_before_linear_memory,
         } = self.tunables;
 
         let other = compiler.tunables();
@@ -530,6 +531,11 @@ impl<'a> SerializedModule<'a> {
             static_memory_bound_is_maximum,
             other.static_memory_bound_is_maximum,
             "pooling allocation support",
+        )?;
+        Self::check_bool(
+            guard_before_linear_memory,
+            other.guard_before_linear_memory,
+            "guard before linear memory",
         )?;
 
         Ok(())

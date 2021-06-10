@@ -59,6 +59,7 @@ tracing-subscriber = "0.2.16"
 wast = "36.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
+winapi = { version = "0.3.9", features = ['memoryapi'] }
 
 [build-dependencies]
 anyhow = "1.0.19"

@@ -32,6 +32,10 @@ pub struct Tunables {
 
     /// Whether or not to treat the static memory bound as the maximum for unbounded heaps.
     pub static_memory_bound_is_maximum: bool,
+
+    /// Whether or not linear memory allocations will have a guard region at the
+    /// beginning of the allocation in addition to the end.
+    pub guard_before_linear_memory: bool,
 }
 
 impl Default for Tunables {
@@ -68,6 +72,7 @@ impl Default for Tunables {
             interruptable: false,
             consume_fuel: false,
             static_memory_bound_is_maximum: false,
+            guard_before_linear_memory: true,
         }
     }
 }

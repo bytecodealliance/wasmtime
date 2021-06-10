@@ -165,7 +165,8 @@ struct FaultLocator {
 impl FaultLocator {
     fn new(instances: &InstancePool) -> Self {
         let instances_start = instances.mapping.as_ptr() as usize;
-        let memories_start = instances.memories.mapping.as_ptr() as usize;
+        let memories_start =
+            instances.memories.mapping.as_ptr() as usize + instance.memories.initial_memory_offset;
         let memories_end = memories_start + instances.memories.mapping.len();
 
         // Should always have instances
@@ -494,6 +495,7 @@ mod test {
                     },
                     style: MemoryStyle::Static { bound: 1 },
                     offset_guard_size: 0,
+                    pre_guard_size: 0,
                 });
             }
 
