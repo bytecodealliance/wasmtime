@@ -166,7 +166,7 @@ impl FaultLocator {
     fn new(instances: &InstancePool) -> Self {
         let instances_start = instances.mapping.as_ptr() as usize;
         let memories_start =
-            instances.memories.mapping.as_ptr() as usize + instance.memories.initial_memory_offset;
+            instances.memories.mapping.as_ptr() as usize + instances.memories.initial_memory_offset;
         let memories_end = memories_start + instances.memories.mapping.len();
 
         // Should always have instances
