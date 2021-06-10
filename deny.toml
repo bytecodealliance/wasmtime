@@ -37,10 +37,9 @@ deny = []
 # Skip some multiple-versions checks, until they can be fixed.
 skip = [
     { name = "ansi_term" }, # transitive dependencies only
-    { name = "cfg-if" }, # transitive dependencies use 0.1
     { name = "env_logger" }, # pretty_env_logger and file-per-thread-logger depend on 0.7
     { name = "humantime" }, # caused by env_logger
     { name = "wast" }, # old one pulled in by witx
-    { name = "itertools" }, # 0.9 pulled in by zstd-sys
+    { name = "itertools" }, # 0.9 pulled in by criterion-plot
     { name = "quick-error" }, # transitive dependencies
 ]
