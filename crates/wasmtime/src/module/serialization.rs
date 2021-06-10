@@ -673,7 +673,6 @@ mod test {
         Ok(())
     }
 
-    #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_isa_flags_mismatch() -> Result<()> {
         let engine = Engine::default();

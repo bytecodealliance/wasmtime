@@ -1,3 +1,4 @@
+use super::skip_pooling_allocator_tests;
 use anyhow::Result;
 use wasmtime::*;
 
@@ -187,8 +188,11 @@ fn memory_guard_page_trap() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
 fn memory_zeroed() -> Result<()> {
+    if skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
@@ -357,8 +361,11 @@ fn table_init() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(target_arch = "aarch64", ignore)] // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
 fn table_zeroed() -> Result<()> {
+    if skip_pooling_allocator_tests() {
+        return Ok(());
+    }
+
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,

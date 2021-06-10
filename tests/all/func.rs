@@ -455,9 +455,6 @@ fn func_write_nothing() -> anyhow::Result<()> {
 }
 
 #[test]
-// Note: Cranelift only supports refrerence types (used in the wasm in this
-// test) on x64.
-#[cfg(target_arch = "x86_64")]
 fn return_cross_store_value() -> anyhow::Result<()> {
     let wasm = wat::parse_str(
         r#"
@@ -490,9 +487,6 @@ fn return_cross_store_value() -> anyhow::Result<()> {
 }
 
 #[test]
-// Note: Cranelift only supports refrerence types (used in the wasm in this
-// test) on x64.
-#[cfg(target_arch = "x86_64")]
 fn pass_cross_store_arg() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(true);
