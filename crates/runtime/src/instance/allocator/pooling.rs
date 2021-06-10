@@ -1554,13 +1554,7 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_pool() -> Result<()> {
-        let pool = StackPool::new(
-            &InstanceLimits {
-                count: 10,
-                memory_reservation_size: 0,
-            },
-            1,
-        )?;
+        let pool = StackPool::new(&InstanceLimits { count: 10 }, 1)?;
 
         let native_page_size = region::page::size();
         assert_eq!(pool.stack_size, 2 * native_page_size);
@@ -1689,11 +1683,9 @@ mod test {
                 memory_pages: 0,
                 ..Default::default()
             },
-            InstanceLimits {
-                count: 1,
-                memory_reservation_size: 1,
-            },
+            InstanceLimits { count: 1 },
             4096,
+            &Tunables::default(),
         )?;
 
         unsafe {
