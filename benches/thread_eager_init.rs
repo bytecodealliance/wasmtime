@@ -98,10 +98,7 @@ fn test_setup() -> (Engine, Module) {
             memory_pages: 1,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: pool_count,
-            memory_reservation_size: 1,
-        },
+        instance_limits: InstanceLimits { count: pool_count },
     });
     let engine = Engine::new(&config).unwrap();
 
