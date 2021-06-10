@@ -1126,6 +1126,7 @@ mod test {
                 maximum: None,
                 shared: false,
             },
+            pre_guard_size: 0,
             offset_guard_size: 0,
         });
 
@@ -1241,6 +1242,7 @@ mod test {
                 maximum: None,
                 shared: false,
             },
+            pre_guard_size: 0,
             offset_guard_size: 0,
         });
         assert_eq!(
@@ -1314,6 +1316,7 @@ mod test {
                 maximum: None,
                 shared: false,
             },
+            pre_guard_size: 0,
             offset_guard_size: 0,
         });
         assert_eq!(
@@ -1339,6 +1342,7 @@ mod test {
                 shared: false,
             },
             offset_guard_size: 0,
+            pre_guard_size: 0,
         });
         assert_eq!(
             limits.validate(&module).map_err(|e| e.to_string()),
@@ -1377,12 +1381,16 @@ mod test {
             table_elements: 10,
             memory_pages: 1,
         };
-        let instance_limits = InstanceLimits {
-            count: 3,
-            memory_reservation_size: WASM_PAGE_SIZE as u64,
-        };
+        let instance_limits = InstanceLimits { count: 3 };
 
-        let instances = InstancePool::new(&module_limits, &instance_limits)?;
+        let instances = InstancePool::new(
+            &module_limits,
+            &instance_limits,
+            &Tunables {
+                static_memory_bound: 1,
+                ..Tunables::default()
+            },
+        )?;
 
         // As of April 2021, the instance struct's size is largely below the size of a single page,
         // so it's safe to assume it's been rounded to the size of a single memory page here.
@@ -1466,9 +1474,11 @@ mod test {
                 table_elements: 0,
                 memory_pages: 1,
             },
-            &InstanceLimits {
-                count: 5,
-                memory_reservation_size: WASM_PAGE_SIZE as u64,
+            &InstanceLimits { count: 5 },
+            &Tunables {
+                static_memory_bound: 1,
+                static_memory_offset_guard_size: 0,
+                ..Tunables::default()
             },
         )?;
 
@@ -1512,10 +1522,7 @@ mod test {
                 table_elements: 100,
                 memory_pages: 0,
             },
-            &InstanceLimits {
-                count: 7,
-                memory_reservation_size: WASM_PAGE_SIZE as u64,
-            },
+            &InstanceLimits { count: 7 },
         )?;
 
         let host_page_size = region::page::size();
@@ -1611,7 +1618,8 @@ mod test {
                     count: 0,
                     ..Default::default()
                 },
-                4096
+                4096,
+                &Tunables::default(),
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1628,11 +1636,12 @@ mod test {
                     memory_pages: 0x10001,
                     ..Default::default()
                 },
-                InstanceLimits {
-                    count: 1,
-                    memory_reservation_size: 1,
+                InstanceLimits { count: 1 },
+                4096,
+                &Tunables {
+                    static_memory_bound: 1,
+                    ..Tunables::default()
                 },
-                4096
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1649,15 +1658,17 @@ mod test {
                     memory_pages: 2,
                     ..Default::default()
                 },
-                InstanceLimits {
-                    count: 1,
-                    memory_reservation_size: 1,
-                },
+                InstanceLimits { count: 1 },
                 4096,
+                &Tunables {
+                    static_memory_bound: 1,
+                    static_memory_offset_guard_size: 0,
+                    ..Tunables::default()
+                },
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
-            "module memory page limit of 2 pages exceeds the memory reservation size limit of 65536 bytes"
+            "module memory page limit of 2 pages exceeds maximum static memory limit of 1 pages"
         );
     }
 
