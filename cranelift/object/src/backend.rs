@@ -585,6 +585,11 @@ impl ObjectModule {
                 32,
             ),
             Reloc::X86GOTPCRel4 => (RelocationKind::GotRelative, RelocationEncoding::Generic, 32),
+            Reloc::Arm64Call => (
+                RelocationKind::Relative,
+                RelocationEncoding::AArch64Call,
+                26,
+            ),
             Reloc::ElfX86_64TlsGd => {
                 assert_eq!(
                     self.object.format(),
@@ -614,7 +619,7 @@ impl ObjectModule {
                 )
             }
             // FIXME
-            _ => unimplemented!(),
+            reloc => unimplemented!("{:?}", reloc),
         };
         ObjectRelocRecord {
             offset: record.offset,

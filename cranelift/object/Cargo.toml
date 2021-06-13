@@ -12,7 +12,7 @@ edition = "2018"
 [dependencies]
 cranelift-module = { path = "../module", version = "0.75.0" }
 cranelift-codegen = { path = "../codegen", version = "0.75.0", default-features = false, features = ["std"] }
-object = { version = "0.25.0", default-features = false, features = ["write"] }
+object = { version = "0.25.3", default-features = false, features = ["write"] }
 target-lexicon = "0.12"
 anyhow = "1.0"
 log = { version = "0.4.6", default-features = false }
