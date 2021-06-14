@@ -230,8 +230,7 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", _) if platform_is_s390x() => return true,
 
             // These are new instructions that are not really implemented in any backend.
-            ("simd", "simd_i8x16_arith2")
-            | ("simd", "simd_conversions")
+            ("simd", "simd_conversions")
             | ("simd", "simd_i16x8_extadd_pairwise_i8x16")
             | ("simd", "simd_i16x8_extmul_i8x16")
             | ("simd", "simd_i16x8_q15mulr_sat_s")
