@@ -4441,10 +4441,10 @@ pub(crate) fn define(
         Inst::new(
             "fcvt_low_from_sint",
             r#"
-        Converts packed signed doubleword integers to packed double precision floating point.
+        Converts packed signed 32-bit integers to packed double precision floating point.
 
         Considering only the low half of the register, each lane in `x` is interpreted as a
-        signed doubleword integer that is then converted to a double precision float. This
+        signed 32-bit integer that is then converted to a double precision float. This
         instruction differs from fcvt_from_sint in that it converts half the number of lanes
         which are converted to occupy twice the number of bits. No rounding should be needed
         for the resulting float.
@@ -4466,6 +4466,7 @@ pub(crate) fn define(
 
         Considering only the low half of the register, each lane in `x` is interpreted as a
         unsigned 32-bit integer that is then converted to a double precision float. This
+        instruction differs from fcvt_from_uint in that it converts half the number of lanes
         which are converted to occupy twice the number of bits. No rounding should be needed
         for the resulting float.
 
