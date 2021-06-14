@@ -692,6 +692,64 @@ fn collect_address_addends<C: LowerCtx<I = Inst>>(
     (result64, result32, offset)
 }
 
+/// Lower the address of a pair load or store.
+pub(crate) fn lower_pair_address<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    roots: &[InsnInput],
+    offset: i32,
+) -> PairAMode {
+    // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
+    // extends and addition ops. We update these as we consume address
+    // components, so they represent the remaining addends not yet handled.
+    let (addends64, addends32, args_offset) = collect_address_addends(ctx, roots);
+    let offset = args_offset + (offset as i64);
+
+    trace!(
+        "lower_pair_address: addends64 {:?}, addends32 {:?}, offset {}",
+        addends64,
+        addends32,
+        offset
+    );
+
+    // Pairs basically only have reg + imm formats so we only have to worry about those
+
+    let imm7_offset = SImm7Scaled::maybe_from_i64(offset, I64);
+    match (&addends64[..], &addends32[..], imm7_offset) {
+        (&[add64], &[], Some(offset)) => PairAMode::SignedOffset(add64, offset),
+        (&[], &[add32], Some(offset)) => {
+            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+            let (reg, extendop) = add32;
+            let signed = match extendop {
+                ExtendOp::SXTW => true,
+                ExtendOp::UXTW => false,
+                _ => unreachable!(),
+            };
+            ctx.emit(Inst::Extend {
+                rd: tmp,
+                rn: reg,
+                signed,
+                from_bits: 32,
+                to_bits: 64,
+            });
+            PairAMode::SignedOffset(tmp.to_reg(), offset)
+        }
+        (&[], &[], Some(offset)) => PairAMode::SignedOffset(zero_reg(), offset),
+
+        (_, _, _) => {
+            // This is the general case, we just grab all addends and sum them into a register
+            let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
+            lower_add_addends(ctx, addr, addends64, addends32);
+
+            let imm7 = imm7_offset.unwrap_or_else(|| {
+                lower_add_immediate(ctx, addr, addr.to_reg(), offset);
+                SImm7Scaled::maybe_from_i64(0, I64).unwrap()
+            });
+
+            PairAMode::SignedOffset(addr.to_reg(), imm7)
+        }
+    }
+}
+
 /// Lower the address of a load or store.
 pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
@@ -792,36 +850,23 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     // If there is any offset, load that first into `addr`, and add the `reg`
     // that we kicked out of the `AMode`; otherwise, start with that reg.
     if offset != 0 {
-        // If we can fit offset or -offset in an imm12, use an add-imm
-        // to combine the reg and offset. Otherwise, load value first then add.
-        if let Some(imm12) = Imm12::maybe_from_u64(offset as u64) {
-            ctx.emit(Inst::AluRRImm12 {
-                alu_op: ALUOp::Add64,
-                rd: addr,
-                rn: reg,
-                imm12,
-            });
-        } else if let Some(imm12) = Imm12::maybe_from_u64(offset.wrapping_neg() as u64) {
-            ctx.emit(Inst::AluRRImm12 {
-                alu_op: ALUOp::Sub64,
-                rd: addr,
-                rn: reg,
-                imm12,
-            });
-        } else {
-            lower_constant_u64(ctx, addr, offset as u64);
-            ctx.emit(Inst::AluRRR {
-                alu_op: ALUOp::Add64,
-                rd: addr,
-                rn: addr.to_reg(),
-                rm: reg,
-            });
-        }
+        lower_add_immediate(ctx, addr, reg, offset)
     } else {
         ctx.emit(Inst::gen_move(addr, reg, I64));
     }
 
     // Now handle reg64 and reg32-extended components.
+    lower_add_addends(ctx, addr, addends64, addends32);
+
+    memarg
+}
+
+fn lower_add_addends<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    rd: Writable<Reg>,
+    addends64: AddressAddend64List,
+    addends32: AddressAddend32List,
+) {
     for reg in addends64 {
         // If the register is the stack reg, we must move it to another reg
         // before adding it.
@@ -834,8 +879,8 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
         };
         ctx.emit(Inst::AluRRR {
             alu_op: ALUOp::Add64,
-            rd: addr,
-            rn: addr.to_reg(),
+            rd,
+            rn: rd.to_reg(),
             rm: reg,
         });
     }
@@ -843,14 +888,42 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
         assert!(reg != stack_reg());
         ctx.emit(Inst::AluRRRExtend {
             alu_op: ALUOp::Add64,
-            rd: addr,
-            rn: addr.to_reg(),
+            rd,
+            rn: rd.to_reg(),
             rm: reg,
             extendop,
         });
     }
+}
 
-    memarg
+/// Adds into `rd` a signed imm pattern matching the best instruction for it.
+// TODO: This function is duplicated in ctx.gen_add_imm
+fn lower_add_immediate<C: LowerCtx<I = Inst>>(ctx: &mut C, dst: Writable<Reg>, src: Reg, imm: i64) {
+    // If we can fit offset or -offset in an imm12, use an add-imm
+    // Otherwise, lower the constant first then add.
+    if let Some(imm12) = Imm12::maybe_from_u64(imm as u64) {
+        ctx.emit(Inst::AluRRImm12 {
+            alu_op: ALUOp::Add64,
+            rd: dst,
+            rn: src,
+            imm12,
+        });
+    } else if let Some(imm12) = Imm12::maybe_from_u64(imm.wrapping_neg() as u64) {
+        ctx.emit(Inst::AluRRImm12 {
+            alu_op: ALUOp::Sub64,
+            rd: dst,
+            rn: src,
+            imm12,
+        });
+    } else {
+        lower_constant_u64(ctx, dst, imm as u64);
+        ctx.emit(Inst::AluRRR {
+            alu_op: ALUOp::Add64,
+            rd: dst,
+            rn: dst.to_reg(),
+            rm: src,
+        });
+    }
 }
 
 pub(crate) fn lower_constant_u64<C: LowerCtx<I = Inst>>(
@@ -1248,7 +1321,10 @@ fn load_op_to_ty(op: Opcode) -> Option<Type> {
 
 /// Helper to lower a load instruction; this is used in several places, because
 /// a load can sometimes be merged into another operation.
-pub(crate) fn lower_load<C: LowerCtx<I = Inst>, F: FnMut(&mut C, Writable<Reg>, Type, AMode)>(
+pub(crate) fn lower_load<
+    C: LowerCtx<I = Inst>,
+    F: FnMut(&mut C, ValueRegs<Writable<Reg>>, Type, AMode),
+>(
     ctx: &mut C,
     ir_inst: IRInst,
     inputs: &[InsnInput],
@@ -1261,7 +1337,7 @@ pub(crate) fn lower_load<C: LowerCtx<I = Inst>, F: FnMut(&mut C, Writable<Reg>, 
 
     let off = ctx.data(ir_inst).load_store_offset().unwrap();
     let mem = lower_address(ctx, elem_ty, &inputs[..], off);
-    let rd = get_output_reg(ctx, output).only_reg().unwrap();
+    let rd = get_output_reg(ctx, output);
 
     f(ctx, rd, elem_ty, mem);
 }

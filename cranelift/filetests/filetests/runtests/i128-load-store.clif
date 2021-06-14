@@ -1,0 +1,91 @@
+test run
+target x86_64 machinst
+target aarch64
+
+function %i128_stack_store_load(i64, i64) -> b1 {
+    ss0 = explicit_slot 16
+
+block0(v0: i64,v1: i64):
+    v2 = iconcat v0, v1
+
+    stack_store.i128 v2, ss0
+    v3 = stack_load.i128 ss0
+
+    v4 = icmp.i128 eq v2, v3
+    return v4
+}
+; run: %i128_stack_store_load(0, 0) == true
+; run: %i128_stack_store_load(-1, -1) == true
+; run: %i128_stack_store_load(-1, 0) == true
+; run: %i128_stack_store_load(0, -1) == true
+; run: %i128_stack_store_load(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == true
+; run: %i128_stack_store_load(0x06060606_06060606, 0xA00A00A0_0A00A00A) == true
+; run: %i128_stack_store_load(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == true
+
+
+function %i128_stack_store_load_offset(i64, i64) -> b1 {
+    ss0 = explicit_slot 16, offset 16
+
+block0(v0: i64,v1: i64):
+    v2 = iconcat v0, v1
+
+    stack_store.i128 v2, ss0
+    v3 = stack_load.i128 ss0
+
+    v4 = icmp.i128 eq v2, v3
+    return v4
+}
+; run: %i128_stack_store_load_offset(0, 0) == true
+; run: %i128_stack_store_load_offset(-1, -1) == true
+; run: %i128_stack_store_load_offset(-1, 0) == true
+; run: %i128_stack_store_load_offset(0, -1) == true
+; run: %i128_stack_store_load_offset(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == true
+; run: %i128_stack_store_load_offset(0x06060606_06060606, 0xA00A00A0_0A00A00A) == true
+; run: %i128_stack_store_load_offset(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == true
+
+
+function %i128_stack_store_load_inst_offset(i64, i64) -> b1 {
+    ss0 = explicit_slot 16
+    ss1 = explicit_slot 16
+    ss2 = explicit_slot 16
+
+block0(v0: i64,v1: i64):
+    v2 = iconcat v0, v1
+
+    stack_store.i128 v2, ss1+16
+    v3 = stack_load.i128 ss1+16
+
+    v4 = icmp.i128 eq v2, v3
+    return v4
+}
+; run: %i128_stack_store_load_inst_offset(0, 0) == true
+; run: %i128_stack_store_load_inst_offset(-1, -1) == true
+; run: %i128_stack_store_load_inst_offset(-1, 0) == true
+; run: %i128_stack_store_load_inst_offset(0, -1) == true
+; run: %i128_stack_store_load_inst_offset(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == true
+; run: %i128_stack_store_load_inst_offset(0x06060606_06060606, 0xA00A00A0_0A00A00A) == true
+; run: %i128_stack_store_load_inst_offset(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == true
+
+
+; Some arches (aarch64) try to encode the offset into the load/store instructions
+; test that we spill if the offset is too large and doesn't fit in the instruction
+function %i128_stack_store_load_big_offset(i64, i64) -> b1 {
+    ss0 = explicit_slot 100000
+    ss1 = explicit_slot 8
+
+block0(v0: i64,v1: i64):
+    v2 = iconcat v0, v1
+
+    stack_store.i128 v2, ss0
+    v3 = stack_load.i128 ss0
+
+    v4 = icmp.i128 eq v2, v3
+    return v4
+}
+; run: %i128_stack_store_load_big_offset(0, 0) == true
+; run: %i128_stack_store_load_big_offset(-1, -1) == true
+; run: %i128_stack_store_load_big_offset(-1, 0) == true
+; run: %i128_stack_store_load_big_offset(0, -1) == true
+; run: %i128_stack_store_load_big_offset(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == true
+; run: %i128_stack_store_load_big_offset(0x06060606_06060606, 0xA00A00A0_0A00A00A) == true
+; run: %i128_stack_store_load_big_offset(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == true

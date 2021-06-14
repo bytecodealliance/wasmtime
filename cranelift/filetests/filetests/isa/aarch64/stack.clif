@@ -276,3 +276,167 @@ block0(v0: b1):
 
   return v0, v137
 }
+
+
+
+function %i128_stack_store(i128) {
+ss0 = explicit_slot 16
+
+block0(v0: i128):
+  stack_store.i128 v0, ss0
+  return
+}
+; TODO: Codegen improvement opportunities: This should be just a stp x0, x1, [sp, #-16]
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #16
+; nextln: mov x2, sp
+; nextln: stp x0, x1, [x2]
+; nextln: add sp, sp, #16
+; nextln: ldp fp, lr, [sp], #16
+
+
+function %i128_stack_store_slot_offset(i128) {
+ss0 = explicit_slot 16, offset 16
+
+block0(v0: i128):
+  stack_store.i128 v0, ss0
+  return
+}
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #16
+; nextln: mov x2, sp
+; nextln: stp x0, x1, [x2]
+; nextln: add sp, sp, #16
+; nextln: ldp fp, lr, [sp], #16
+
+
+function %i128_stack_store_inst_offset(i128) {
+ss0 = explicit_slot 16
+ss1 = explicit_slot 16
+
+block0(v0: i128):
+  stack_store.i128 v0, ss1+16
+  return
+}
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #32
+; nextln: add x2, sp, #32
+; nextln: stp x0, x1, [x2]
+; nextln: add sp, sp, #32
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_stack_store_big(i128) {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0(v0: i128):
+  stack_store.i128 v0, ss0
+  return
+}
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
+; nextln: sub sp, sp, x16, UXTX
+; nextln: mov x2, sp
+; nextln: stp x0, x1, [x2]
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
+; nextln: add sp, sp, x16, UXTX
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+
+function %i128_stack_load() -> i128 {
+ss0 = explicit_slot 16
+
+block0:
+  v0 = stack_load.i128 ss0
+  return v0
+}
+; TODO: Codegen improvement opportunities: This should be just a ldp x0, x1, [sp, #-16]
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #16
+; nextln: mov x0, sp
+; nextln: ldp x1, x0, [x0]
+; nextln: mov x2, x0
+; nextln: mov x0, x1
+; nextln: mov x1, x2
+; nextln: add sp, sp, #16
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_stack_load_slot_offset() -> i128 {
+ss0 = explicit_slot 16, offset 16
+
+block0:
+  v0 = stack_load.i128 ss0
+  return v0
+}
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #16
+; nextln: mov x0, sp
+; nextln: ldp x1, x0, [x0]
+; nextln: mov x2, x0
+; nextln: mov x0, x1
+; nextln: mov x1, x2
+; nextln: add sp, sp, #16
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+
+function %i128_stack_load_inst_offset() -> i128 {
+ss0 = explicit_slot 16
+ss1 = explicit_slot 16
+
+block0:
+  v0 = stack_load.i128 ss1+16
+  return v0
+}
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sub sp, sp, #32
+; nextln: add x0, sp, #32
+; nextln: ldp x1, x0, [x0]
+; nextln: mov x2, x0
+; nextln: mov x0, x1
+; nextln: mov x1, x2
+; nextln: add sp, sp, #32
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+
+function %i128_stack_load_big() -> i128 {
+ss0 = explicit_slot 100000
+ss1 = explicit_slot 8
+
+block0:
+  v0 = stack_load.i128 ss0
+  return v0
+}
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
+; nextln: sub sp, sp, x16, UXTX
+; nextln: mov x0, sp
+; nextln: ldp x1, x0, [x0]
+; nextln: mov x2, x0
+; nextln: mov x0, x1
+; nextln: mov x1, x2
+; nextln: movz w16, #34480
+; nextln: movk w16, #1, LSL #16
+; nextln: add sp, sp, x16, UXTX
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

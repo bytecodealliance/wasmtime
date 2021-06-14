@@ -1180,56 +1180,71 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 .memflags(insn)
                 .expect("Load instruction should have memflags");
 
-            lower_load(
-                ctx,
-                insn,
-                &inputs[..],
-                outputs[0],
-                |ctx, rd, elem_ty, mem| {
-                    let is_float = ty_has_float_or_vec_representation(elem_ty);
-                    ctx.emit(match (ty_bits(elem_ty), sign_extend, is_float) {
-                        (1, _, _) => Inst::ULoad8 { rd, mem, flags },
-                        (8, false, _) => Inst::ULoad8 { rd, mem, flags },
-                        (8, true, _) => Inst::SLoad8 { rd, mem, flags },
-                        (16, false, _) => Inst::ULoad16 { rd, mem, flags },
-                        (16, true, _) => Inst::SLoad16 { rd, mem, flags },
-                        (32, false, false) => Inst::ULoad32 { rd, mem, flags },
-                        (32, true, false) => Inst::SLoad32 { rd, mem, flags },
-                        (32, _, true) => Inst::FpuLoad32 { rd, mem, flags },
-                        (64, _, false) => Inst::ULoad64 { rd, mem, flags },
-                        // Note that we treat some of the vector loads as scalar floating-point loads,
-                        // which is correct in a little endian environment.
-                        (64, _, true) => Inst::FpuLoad64 { rd, mem, flags },
-                        (128, _, _) => Inst::FpuLoad128 { rd, mem, flags },
-                        _ => panic!("Unsupported size in load"),
-                    });
-
-                    let vec_extend = match op {
-                        Opcode::Sload8x8 => Some(VecExtendOp::Sxtl8),
-                        Opcode::Sload8x8Complex => Some(VecExtendOp::Sxtl8),
-                        Opcode::Uload8x8 => Some(VecExtendOp::Uxtl8),
-                        Opcode::Uload8x8Complex => Some(VecExtendOp::Uxtl8),
-                        Opcode::Sload16x4 => Some(VecExtendOp::Sxtl16),
-                        Opcode::Sload16x4Complex => Some(VecExtendOp::Sxtl16),
-                        Opcode::Uload16x4 => Some(VecExtendOp::Uxtl16),
-                        Opcode::Uload16x4Complex => Some(VecExtendOp::Uxtl16),
-                        Opcode::Sload32x2 => Some(VecExtendOp::Sxtl32),
-                        Opcode::Sload32x2Complex => Some(VecExtendOp::Sxtl32),
-                        Opcode::Uload32x2 => Some(VecExtendOp::Uxtl32),
-                        Opcode::Uload32x2Complex => Some(VecExtendOp::Uxtl32),
-                        _ => None,
-                    };
-
-                    if let Some(t) = vec_extend {
-                        ctx.emit(Inst::VecExtend {
-                            t,
-                            rd,
-                            rn: rd.to_reg(),
-                            high_half: false,
+            let out_ty = ctx.output_ty(insn, 0);
+            if out_ty == I128 {
+                let off = ctx.data(insn).load_store_offset().unwrap();
+                let mem = lower_pair_address(ctx, &inputs[..], off);
+                let dst = get_output_reg(ctx, outputs[0]);
+                ctx.emit(Inst::LoadP64 {
+                    rt: dst.regs()[0],
+                    rt2: dst.regs()[1],
+                    mem,
+                    flags,
+                });
+            } else {
+                lower_load(
+                    ctx,
+                    insn,
+                    &inputs[..],
+                    outputs[0],
+                    |ctx, dst, elem_ty, mem| {
+                        let rd = dst.only_reg().unwrap();
+                        let is_float = ty_has_float_or_vec_representation(elem_ty);
+                        ctx.emit(match (ty_bits(elem_ty), sign_extend, is_float) {
+                            (1, _, _) => Inst::ULoad8 { rd, mem, flags },
+                            (8, false, _) => Inst::ULoad8 { rd, mem, flags },
+                            (8, true, _) => Inst::SLoad8 { rd, mem, flags },
+                            (16, false, _) => Inst::ULoad16 { rd, mem, flags },
+                            (16, true, _) => Inst::SLoad16 { rd, mem, flags },
+                            (32, false, false) => Inst::ULoad32 { rd, mem, flags },
+                            (32, true, false) => Inst::SLoad32 { rd, mem, flags },
+                            (32, _, true) => Inst::FpuLoad32 { rd, mem, flags },
+                            (64, _, false) => Inst::ULoad64 { rd, mem, flags },
+                            // Note that we treat some of the vector loads as scalar floating-point loads,
+                            // which is correct in a little endian environment.
+                            (64, _, true) => Inst::FpuLoad64 { rd, mem, flags },
+                            (128, _, true) => Inst::FpuLoad128 { rd, mem, flags },
+                            _ => panic!("Unsupported size in load"),
                         });
-                    }
-                },
-            );
+
+                        let vec_extend = match op {
+                            Opcode::Sload8x8 => Some(VecExtendOp::Sxtl8),
+                            Opcode::Sload8x8Complex => Some(VecExtendOp::Sxtl8),
+                            Opcode::Uload8x8 => Some(VecExtendOp::Uxtl8),
+                            Opcode::Uload8x8Complex => Some(VecExtendOp::Uxtl8),
+                            Opcode::Sload16x4 => Some(VecExtendOp::Sxtl16),
+                            Opcode::Sload16x4Complex => Some(VecExtendOp::Sxtl16),
+                            Opcode::Uload16x4 => Some(VecExtendOp::Uxtl16),
+                            Opcode::Uload16x4Complex => Some(VecExtendOp::Uxtl16),
+                            Opcode::Sload32x2 => Some(VecExtendOp::Sxtl32),
+                            Opcode::Sload32x2Complex => Some(VecExtendOp::Sxtl32),
+                            Opcode::Uload32x2 => Some(VecExtendOp::Uxtl32),
+                            Opcode::Uload32x2Complex => Some(VecExtendOp::Uxtl32),
+                            _ => None,
+                        };
+
+                        if let Some(t) = vec_extend {
+                            let rd = dst.only_reg().unwrap();
+                            ctx.emit(Inst::VecExtend {
+                                t,
+                                rd,
+                                rn: rd.to_reg(),
+                                high_half: false,
+                            });
+                        }
+                    },
+                );
+            }
         }
 
         Opcode::Store
@@ -1253,19 +1268,30 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 .memflags(insn)
                 .expect("Store instruction should have memflags");
 
-            let mem = lower_address(ctx, elem_ty, &inputs[1..], off);
-            let rd = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let dst = put_input_in_regs(ctx, inputs[0]);
 
-            ctx.emit(match (ty_bits(elem_ty), is_float) {
-                (1, _) | (8, _) => Inst::Store8 { rd, mem, flags },
-                (16, _) => Inst::Store16 { rd, mem, flags },
-                (32, false) => Inst::Store32 { rd, mem, flags },
-                (32, true) => Inst::FpuStore32 { rd, mem, flags },
-                (64, false) => Inst::Store64 { rd, mem, flags },
-                (64, true) => Inst::FpuStore64 { rd, mem, flags },
-                (128, _) => Inst::FpuStore128 { rd, mem, flags },
-                _ => panic!("Unsupported size in store"),
-            });
+            if elem_ty == I128 {
+                let mem = lower_pair_address(ctx, &inputs[1..], off);
+                ctx.emit(Inst::StoreP64 {
+                    rt: dst.regs()[0],
+                    rt2: dst.regs()[1],
+                    mem,
+                    flags,
+                });
+            } else {
+                let rd = dst.only_reg().unwrap();
+                let mem = lower_address(ctx, elem_ty, &inputs[1..], off);
+                ctx.emit(match (ty_bits(elem_ty), is_float) {
+                    (1, _) | (8, _) => Inst::Store8 { rd, mem, flags },
+                    (16, _) => Inst::Store16 { rd, mem, flags },
+                    (32, false) => Inst::Store32 { rd, mem, flags },
+                    (32, true) => Inst::FpuStore32 { rd, mem, flags },
+                    (64, false) => Inst::Store64 { rd, mem, flags },
+                    (64, true) => Inst::FpuStore64 { rd, mem, flags },
+                    (128, _) => Inst::FpuStore128 { rd, mem, flags },
+                    _ => panic!("Unsupported size in store"),
+                });
+            }
         }
 
         Opcode::StackAddr => {
