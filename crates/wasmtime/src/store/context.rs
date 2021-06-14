@@ -9,7 +9,7 @@ use std::ops::{Deref, DerefMut};
 // representation of this `struct` is a pointer for now. If the representation
 // changes then the C API will need to be updated
 #[repr(transparent)]
-pub struct StoreContext<'a, T>(pub(super) &'a StoreInner<T>);
+pub struct StoreContext<'a, T>(pub(crate) &'a StoreInner<T>);
 
 /// A temporary handle to a [`&mut Store<T>`][`Store`].
 ///
@@ -219,8 +219,11 @@ pub struct StoreOpaque<'a> {
     pub traitobj: *mut dyn wasmtime_runtime::Store,
 }
 
-pub trait Opaque {}
-impl<T> Opaque for T {}
+impl<'a> StoreOpaque<'a> {
+    pub fn into_inner(self) -> &'a StoreInnermost {
+        self.inner
+    }
+}
 
 // Deref impls to forward all methods on `StoreOpaque` to `StoreInner`.
 impl<'a> Deref for StoreOpaque<'a> {

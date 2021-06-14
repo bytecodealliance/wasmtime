@@ -629,10 +629,6 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0
             .out_of_fuel_async_yield(injection_count, fuel_to_inject)
     }
-
-    pub(crate) fn store_data(self) -> &'a StoreData {
-        self.0.store_data()
-    }
 }
 
 impl<T> StoreInner<T> {

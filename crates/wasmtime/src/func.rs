@@ -1,6 +1,6 @@
 use crate::store::{StoreData, StoreOpaque, StoreOpaqueSend, Stored};
 use crate::{
-    AsContext, AsContextMut, Engine, Extern, FuncType, InterruptHandle, StoreContext,
+    AsContext, AsContextMut, Engine, Extern, FuncType, Instance, InterruptHandle, StoreContext,
     StoreContextMut, Trap, Val, ValType,
 };
 use anyhow::{bail, Context as _, Result};
@@ -1514,19 +1514,21 @@ impl<T> Caller<'_, T> {
     /// It's recommended to take care when calling this API and gracefully
     /// handling a `None` return value.
     pub fn get_export(&mut self, name: &str) -> Option<Extern> {
-        unsafe {
-            let index = self.caller.module().exports.get(name)?;
-            match index {
-                // Only allow memory/functions for now to emulate what interface
-                // types will once provide
-                EntityIndex::Memory(_) | EntityIndex::Function(_) => {
-                    Some(Extern::from_wasmtime_export(
-                        self.caller.lookup_by_declaration(&index),
-                        &mut self.store.as_context_mut().opaque(),
-                    ))
-                }
-                _ => None,
-            }
+        // All instances created have a `host_state` with a pointer pointing
+        // back to themselves. If this caller doesn't have that `host_state`
+        // then it probably means it was a host-created object like `Func::new`
+        // which doesn't have any exports we want to return anyway.
+        match self
+            .caller
+            .host_state()
+            .downcast_ref::<Instance>()?
+            .get_export(&mut self.store, name)?
+        {
+            Extern::Func(f) => Some(Extern::Func(f)),
+            Extern::Memory(f) => Some(Extern::Memory(f)),
+            // Intentionally ignore other Extern items here since this API is
+            // supposed to be a temporary stop-gap until interface types.
+            _ => None,
         }
     }
 
