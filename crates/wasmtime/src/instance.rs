@@ -231,26 +231,60 @@ impl Instance {
             }
         }
 
-        // TODO: can remove this intermediate `Vec` allocation if we could
-        // return an iterator which is one of two other iterators. Something
-        // like this exists in `itertools` but it may not be the most important
-        // thing to remove this allocation in the grand scheme of things.
         let inner = store.into_inner();
-        match &inner.store_data()[self.0] {
-            InstanceData::Synthetic(names) => names
-                .iter()
-                .map(|(k, v)| Export::new(k, v.clone()))
-                .collect::<Vec<_>>()
-                .into_iter(),
+        return match &inner.store_data()[self.0] {
+            InstanceData::Synthetic(names) => {
+                Either::A(names.iter().map(|(k, v)| Export::new(k, v.clone())))
+            }
             InstanceData::Instantiated { exports, id, .. } => {
                 let module = inner.instance(*id).module();
-                module
-                    .exports
-                    .iter()
-                    .zip(exports)
-                    .map(|((name, _), export)| Export::new(name, export.clone().unwrap()))
-                    .collect::<Vec<_>>()
-                    .into_iter()
+                Either::B(
+                    module
+                        .exports
+                        .iter()
+                        .zip(exports)
+                        .map(|((name, _), export)| Export::new(name, export.clone().unwrap())),
+                )
+            }
+        };
+
+        enum Either<A, B> {
+            A(A),
+            B(B),
+        }
+
+        impl<A, B> Iterator for Either<A, B>
+        where
+            A: Iterator,
+            B: Iterator<Item = A::Item>,
+        {
+            type Item = A::Item;
+
+            fn next(&mut self) -> Option<A::Item> {
+                match self {
+                    Either::A(a) => a.next(),
+                    Either::B(b) => b.next(),
+                }
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                match self {
+                    Either::A(a) => a.size_hint(),
+                    Either::B(b) => b.size_hint(),
+                }
+            }
+        }
+
+        impl<A, B> ExactSizeIterator for Either<A, B>
+        where
+            A: ExactSizeIterator,
+            B: ExactSizeIterator<Item = A::Item>,
+        {
+            fn len(&self) -> usize {
+                match self {
+                    Either::A(a) => a.len(),
+                    Either::B(b) => b.len(),
+                }
             }
         }
     }
