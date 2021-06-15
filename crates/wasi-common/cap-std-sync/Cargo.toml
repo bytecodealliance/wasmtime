@@ -9,7 +9,7 @@ keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
-include = ["src/**/*", "LICENSE" ]
+include = ["src/**/*", "README.md", "LICENSE" ]
 
 [dependencies]
 wasi-common = { path = "../", version = "0.28.0" }
