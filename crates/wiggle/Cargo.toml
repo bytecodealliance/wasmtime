@@ -8,7 +8,7 @@ description = "Runtime components of wiggle code generator"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm"]
 repository = "https://github.com/bytecodealliance/wasmtime"
-include = ["src/**/*", "LICENSE"]
+include = ["src/**/*", "README.md", "LICENSE"]
 
 [dependencies]
 thiserror = "1"
