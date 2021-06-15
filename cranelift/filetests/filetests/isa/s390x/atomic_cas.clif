@@ -1,0 +1,25 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ATOMIC_CAS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %atomic_cas_i64(i64, i64, i64) -> i64 {
+block0(v0: i64, v1: i64, v2: i64):
+  v3 = atomic_cas.i64 v2, v0, v1
+  return v3
+}
+
+; check:  csg %r2, %r3, 0(%r4)
+; nextln: br %r14
+
+function %atomic_cas_i32(i32, i32, i64) -> i32 {
+block0(v0: i32, v1: i32, v2: i64):
+  v3 = atomic_cas.i32 v2, v0, v1
+  return v3
+}
+
+; check:  cs %r2, %r3, 0(%r4)
+; nextln: br %r14
+

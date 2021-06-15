@@ -181,6 +181,56 @@ pub fn mem_emit(
     }
 }
 
+pub fn mem_rs_emit(
+    rd: Reg,
+    rn: Reg,
+    mem: &MemArg,
+    opcode_rs: Option<u16>,
+    opcode_rsy: Option<u16>,
+    add_trap: bool,
+    sink: &mut MachBuffer<Inst>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState,
+) {
+    let (mem_insts, mem) = mem_finalize(
+        mem,
+        state,
+        opcode_rs.is_some(),
+        opcode_rsy.is_some(),
+        false,
+        false,
+    );
+    for inst in mem_insts.into_iter() {
+        inst.emit(sink, emit_info, state);
+    }
+
+    if add_trap && mem.can_trap() {
+        let srcloc = state.cur_srcloc();
+        if srcloc != SourceLoc::default() {
+            sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
+        }
+    }
+
+    match &mem {
+        &MemArg::BXD12 {
+            base, index, disp, ..
+        } => {
+            assert!(index == zero_reg());
+            put(sink, &enc_rs(opcode_rs.unwrap(), rd, rn, base, disp.bits()));
+        }
+        &MemArg::BXD20 {
+            base, index, disp, ..
+        } => {
+            assert!(index == zero_reg());
+            put(
+                sink,
+                &enc_rsy(opcode_rsy.unwrap(), rd, rn, base, disp.bits()),
+            );
+        }
+        _ => unreachable!(),
+    }
+}
+
 pub fn mem_imm8_emit(
     imm: u8,
     mem: &MemArg,
@@ -1299,6 +1349,53 @@ impl MachInstEmit for Inst {
                     srcloc,
                     trap_code,
                 );
+            }
+
+            &Inst::AtomicRmw {
+                alu_op,
+                rd,
+                rn,
+                ref mem,
+            } => {
+                let opcode = match alu_op {
+                    ALUOp::Add32 => 0xebf8, // LAA
+                    ALUOp::Add64 => 0xebe8, // LAAG
+                    ALUOp::And32 => 0xebf4, // LAN
+                    ALUOp::And64 => 0xebe4, // LANG
+                    ALUOp::Orr32 => 0xebf6, // LAO
+                    ALUOp::Orr64 => 0xebe6, // LAOG
+                    ALUOp::Xor32 => 0xebf7, // LAX
+                    ALUOp::Xor64 => 0xebe7, // LAXG
+                    _ => unreachable!(),
+                };
+
+                let rd = rd.to_reg();
+                mem_rs_emit(
+                    rd,
+                    rn,
+                    mem,
+                    None,
+                    Some(opcode),
+                    true,
+                    sink,
+                    emit_info,
+                    state,
+                );
+            }
+            &Inst::AtomicCas32 { rd, rn, ref mem } | &Inst::AtomicCas64 { rd, rn, ref mem } => {
+                let (opcode_rs, opcode_rsy) = match self {
+                    &Inst::AtomicCas32 { .. } => (Some(0xba), Some(0xeb14)), // CS(Y)
+                    &Inst::AtomicCas64 { .. } => (None, Some(0xeb30)),       // CSG
+                    _ => unreachable!(),
+                };
+
+                let rd = rd.to_reg();
+                mem_rs_emit(
+                    rd, rn, mem, opcode_rs, opcode_rsy, true, sink, emit_info, state,
+                );
+            }
+            &Inst::Fence => {
+                put(sink, &enc_e(0x07e0));
             }
 
             &Inst::Load32 { rd, ref mem }

@@ -1,0 +1,125 @@
+test compile
+target s390x
+
+function %atomic_store_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  atomic_store.i64 little v0, v1
+  return
+}
+
+; check:  strvg %r2, 0(%r3)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_i64_sym(i64) {
+  gv0 = symbol colocated %sym
+block0(v0: i64):
+  v1 = symbol_value.i64 gv0
+  atomic_store.i64 little v0, v1
+  return
+}
+
+; check:  larl %r1, %sym + 0 ; strvg %r2, 0(%r1)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_imm_i64(i64) {
+block0(v0: i64):
+  v1 = iconst.i64 12345
+  atomic_store.i64 little v1, v0
+  return
+}
+
+; check:  lghi %r3, 12345
+; nextln: strvg %r3, 0(%r2)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  atomic_store.i32 little v0, v1
+  return
+}
+
+; check:  strv %r2, 0(%r3)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_i32_sym(i32) {
+  gv0 = symbol colocated %sym
+block0(v0: i32):
+  v1 = symbol_value.i64 gv0
+  atomic_store.i32 little v0, v1
+  return
+}
+
+; check:  larl %r1, %sym + 0 ; strv %r2, 0(%r1)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_imm_i32(i64) {
+block0(v0: i64):
+  v1 = iconst.i32 12345
+  atomic_store.i32 little v1, v0
+  return
+}
+
+; check:  lhi %r3, 12345
+; nextln: strv %r3, 0(%r2)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_i16(i16, i64) {
+block0(v0: i16, v1: i64):
+  atomic_store.i16 little v0, v1
+  return
+}
+
+; check:  strvh %r2, 0(%r3)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_i16_sym(i16) {
+  gv0 = symbol colocated %sym
+block0(v0: i16):
+  v1 = symbol_value.i64 gv0
+  atomic_store.i16 little v0, v1
+  return
+}
+
+; check:  larl %r1, %sym + 0 ; strvh %r2, 0(%r1)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_imm_i16(i64) {
+block0(v0: i64):
+  v1 = iconst.i16 12345
+  atomic_store.i16 little v1, v0
+  return
+}
+
+; check:  mvhhi 0(%r2), 14640
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_i8(i8, i64) {
+block0(v0: i8, v1: i64):
+  atomic_store.i8 little v0, v1
+  return
+}
+
+; check:  stc %r2, 0(%r3)
+; nextln: bcr 14, 0
+; nextln: br %r14
+
+function %atomic_store_imm_i8(i64) {
+block0(v0: i64):
+  v1 = iconst.i8 123
+  atomic_store.i8 little v1, v0
+  return
+}
+
+; check:  mvi 0(%r2), 123
+; nextln: bcr 14, 0
+; nextln: br %r14
+

@@ -1,0 +1,114 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ATOMIC_RMW (ADD)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %atomic_rmw_add_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = atomic_rmw.i64 add v0, v1
+  return v2
+}
+
+; check:  laag %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+function %atomic_rmw_add_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = atomic_rmw.i32 add v0, v1
+  return v2
+}
+
+; check:  laa %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ATOMIC_RMW (SUB)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %atomic_rmw_sub_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = atomic_rmw.i64 sub v0, v1
+  return v2
+}
+
+; check:  lcgr %r3, %r3
+; nextln: laag %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+function %atomic_rmw_sub_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = atomic_rmw.i32 sub v0, v1
+  return v2
+}
+
+; check:  lcr %r3, %r3
+; nextln: laa %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ATOMIC_RMW (AND)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %atomic_rmw_and_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = atomic_rmw.i64 and v0, v1
+  return v2
+}
+
+; check:  lang %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+function %atomic_rmw_and_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = atomic_rmw.i32 and v0, v1
+  return v2
+}
+
+; check:  lan %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ATOMIC_RMW (OR)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %atomic_rmw_or_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = atomic_rmw.i64 or v0, v1
+  return v2
+}
+
+; check:  laog %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+function %atomic_rmw_or_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = atomic_rmw.i32 or v0, v1
+  return v2
+}
+
+; check:  lao %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ATOMIC_RMW (XOR)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %atomic_rmw_xor_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = atomic_rmw.i64 xor v0, v1
+  return v2
+}
+
+; check:  laxg %r2, %r3, 0(%r2)
+; nextln: br %r14
+
+function %atomic_rmw_xor_i32(i64, i32) -> i32 {
+block0(v0: i64, v1: i32):
+  v2 = atomic_rmw.i32 xor v0, v1
+  return v2
+}
+
+; check:  lax %r2, %r3, 0(%r2)
+; nextln: br %r14
