@@ -14,7 +14,8 @@ const TIMEOUT: Duration = Duration::from_millis(200); // Required for slow execu
 async fn empty_file_readable() -> Result<(), Error> {
     let clocks = clocks_ctx();
 
-    let workspace = unsafe { cap_tempfile::tempdir().expect("create tempdir") };
+    let workspace =
+        cap_tempfile::tempdir(cap_tempfile::ambient_authority()).expect("create tempdir");
     workspace.create_dir("d").context("create dir")?;
     let d = workspace.open_dir("d").context("open dir")?;
     let d = Dir::from_cap_std(d);
@@ -66,7 +67,8 @@ async fn empty_file_readable() -> Result<(), Error> {
 async fn empty_file_writable() -> Result<(), Error> {
     let clocks = clocks_ctx();
 
-    let workspace = unsafe { cap_tempfile::tempdir().expect("create tempdir") };
+    let workspace =
+        cap_tempfile::tempdir(cap_tempfile::ambient_authority()).expect("create tempdir");
     workspace.create_dir("d").context("create dir")?;
     let d = workspace.open_dir("d").context("open dir")?;
     let d = Dir::from_cap_std(d);

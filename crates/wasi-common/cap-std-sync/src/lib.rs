@@ -42,6 +42,7 @@ pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
 use cap_rand::RngCore;
+use cap_std::ambient_authority;
 use std::path::Path;
 use wasi_common::{table::Table, Error, WasiCtx, WasiFile};
 
@@ -123,5 +124,5 @@ impl WasiCtxBuilder {
 }
 
 pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
-    Box::new(unsafe { cap_rand::rngs::OsRng::default() })
+    Box::new(cap_rand::rngs::OsRng::default(ambient_authority()))
 }

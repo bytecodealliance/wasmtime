@@ -1,6 +1,7 @@
 //! The module that implements the `wasmtime run` command.
 
 use crate::{CommonOptions, WasiModules};
+use ambient_authority::ambient_authority;
 use anyhow::{anyhow, bail, Context as _, Result};
 use std::thread;
 use std::time::Duration;
@@ -215,7 +216,7 @@ impl RunCommand {
         for dir in self.dirs.iter() {
             preopen_dirs.push((
                 dir.clone(),
-                unsafe { Dir::open_ambient_dir(dir) }
+                Dir::open_ambient_dir(dir, ambient_authority())
                     .with_context(|| format!("failed to open directory '{}'", dir))?,
             ));
         }
@@ -223,7 +224,7 @@ impl RunCommand {
         for (guest, host) in self.map_dirs.iter() {
             preopen_dirs.push((
                 guest.clone(),
-                unsafe { Dir::open_ambient_dir(host) }
+                Dir::open_ambient_dir(host, ambient_authority())
                     .with_context(|| format!("failed to open directory '{}'", host))?,
             ));
         }

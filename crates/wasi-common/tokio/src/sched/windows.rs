@@ -1,4 +1,5 @@
 use crate::block_on_dummy_executor;
+use io_lifetimes::AsHandle;
 use std::os::windows::io::{AsRawHandle, RawHandle};
 use wasi_cap_std_sync::sched::windows::poll_oneoff_;
 use wasi_common::{file::WasiFile, sched::Poll, Error};
@@ -21,24 +22,28 @@ fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
         Some(
             a.downcast_ref::<crate::file::File>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else if a.is::<crate::stdio::Stdin>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdin>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else if a.is::<crate::stdio::Stdout>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdout>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else if a.is::<crate::stdio::Stderr>() {
         Some(
             a.downcast_ref::<crate::stdio::Stderr>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else {

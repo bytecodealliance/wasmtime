@@ -244,13 +244,14 @@ pub extern "C" fn wasm_bench_create(
 ) -> ExitCode {
     let result = (|| -> Result<_> {
         let working_dir = config.working_dir()?;
-        let working_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(&working_dir) }
-            .with_context(|| {
-                format!(
-                    "failed to preopen the working directory: {}",
-                    working_dir.display(),
-                )
-            })?;
+        let working_dir =
+            cap_std::fs::Dir::open_ambient_dir(&working_dir, cap_std::ambient_authority())
+                .with_context(|| {
+                    format!(
+                        "failed to preopen the working directory: {}",
+                        working_dir.display(),
+                    )
+                })?;
 
         let stdout_path = config.stdout_path()?;
         let stderr_path = config.stderr_path()?;
@@ -271,20 +272,20 @@ pub extern "C" fn wasm_bench_create(
 
                 let stdout = std::fs::File::create(&stdout_path)
                     .with_context(|| format!("failed to create {}", stdout_path.display()))?;
-                let stdout = unsafe { cap_std::fs::File::from_std(stdout) };
+                let stdout = cap_std::fs::File::from_std(stdout, cap_std::ambient_authority());
                 let stdout = wasi_cap_std_sync::file::File::from_cap_std(stdout);
                 cx = cx.stdout(Box::new(stdout));
 
                 let stderr = std::fs::File::create(&stderr_path)
                     .with_context(|| format!("failed to create {}", stderr_path.display()))?;
-                let stderr = unsafe { cap_std::fs::File::from_std(stderr) };
+                let stderr = cap_std::fs::File::from_std(stderr, cap_std::ambient_authority());
                 let stderr = wasi_cap_std_sync::file::File::from_cap_std(stderr);
                 cx = cx.stderr(Box::new(stderr));
 
                 if let Some(stdin_path) = &stdin_path {
                     let stdin = std::fs::File::open(stdin_path)
                         .with_context(|| format!("failed to open {}", stdin_path.display()))?;
-                    let stdin = unsafe { cap_std::fs::File::from_std(stdin) };
+                    let stdin = cap_std::fs::File::from_std(stdin, cap_std::ambient_authority());
                     let stdin = wasi_cap_std_sync::file::File::from_cap_std(stdin);
                     cx = cx.stdin(Box::new(stdin));
                 }

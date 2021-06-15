@@ -1,4 +1,5 @@
 use cap_std::time::Duration;
+use io_lifetimes::AsFd;
 use std::convert::TryInto;
 use std::os::unix::io::{AsRawFd, RawFd};
 use wasi_common::{
@@ -97,19 +98,31 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 fn wasi_file_raw_fd(f: &dyn WasiFile) -> Option<RawFd> {
     let a = f.as_any();
     if a.is::<crate::file::File>() {
-        Some(a.downcast_ref::<crate::file::File>().unwrap().as_raw_fd())
+        Some(
+            a.downcast_ref::<crate::file::File>()
+                .unwrap()
+                .as_fd()
+                .as_raw_fd(),
+        )
     } else if a.is::<crate::stdio::Stdin>() {
-        Some(a.downcast_ref::<crate::stdio::Stdin>().unwrap().as_raw_fd())
+        Some(
+            a.downcast_ref::<crate::stdio::Stdin>()
+                .unwrap()
+                .as_fd()
+                .as_raw_fd(),
+        )
     } else if a.is::<crate::stdio::Stdout>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdout>()
                 .unwrap()
+                .as_fd()
                 .as_raw_fd(),
         )
     } else if a.is::<crate::stdio::Stderr>() {
         Some(
             a.downcast_ref::<crate::stdio::Stderr>()
                 .unwrap()
+                .as_fd()
                 .as_raw_fd(),
         )
     } else {

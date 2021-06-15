@@ -22,9 +22,10 @@ anyhow = "1.0"
 thiserror = "1.0"
 wiggle = { path = "../wiggle", default-features = false, version = "0.28.0" }
 tracing = "0.1.19"
-cap-std = "0.13"
-cap-rand = "0.13"
+cap-std = "0.15.2"
+cap-rand = "0.15.2"
 bitflags = "1.2"
+io-lifetimes = "0.2.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
