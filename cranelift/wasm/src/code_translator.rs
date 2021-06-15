@@ -552,7 +552,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::Try { .. }
         | Operator::Catch { .. }
         | Operator::Throw { .. }
-        | Operator::Unwind
         | Operator::Rethrow { .. }
         | Operator::Delegate { .. }
         | Operator::CatchAll => {

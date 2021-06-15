@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 anyhow = "1.0.19"
 wasmtime = { path = "../wasmtime", version = "0.28.0", default-features = false }
-wast = "35.0.2"
+wast = "36.0.0"
 
 [badges]
 maintenance = { status = "actively-developed" }
