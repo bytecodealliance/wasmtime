@@ -190,9 +190,6 @@ fn x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
     }
 
     match (testsuite, testname) {
-        ("simd", "simd_i16x8_extadd_pairwise_i8x16") => return true,
-        ("simd", "simd_i32x4_extadd_pairwise_i16x8") => return true,
-        ("simd", _) => return false,
         _ => {}
     }
     false
@@ -220,11 +217,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", _) if cfg!(feature = "old-x86-backend") => return true,
             // No simd support yet for s390x.
             ("simd", _) if platform_is_s390x() => return true,
-
-            // These are new instructions that are not really implemented in any backend.
-            ("simd", "simd_i16x8_extadd_pairwise_i8x16")
-            | ("simd", "simd_i32x4_extadd_pairwise_i16x8") => return true,
-
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
