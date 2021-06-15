@@ -1,0 +1,17 @@
+test compile
+target s390x
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; FENCE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %fence() {
+block0:
+  fence
+  return
+}
+
+; check:  bcr 14, 0
+; nextln: br %r14
+
+

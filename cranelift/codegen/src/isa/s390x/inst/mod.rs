@@ -404,6 +404,30 @@ pub enum Inst {
         trap_code: TrapCode,
     },
 
+    /// An atomic read-modify-write operation with a memory in-/out operand,
+    /// a register destination, and a register source.
+    /// a memory source.
+    AtomicRmw {
+        alu_op: ALUOp,
+        rd: Writable<Reg>,
+        rn: Reg,
+        mem: MemArg,
+    },
+    /// A 32-bit atomic compare-and-swap operation.
+    AtomicCas32 {
+        rd: Writable<Reg>,
+        rn: Reg,
+        mem: MemArg,
+    },
+    /// A 64-bit atomic compare-and-swap operation.
+    AtomicCas64 {
+        rd: Writable<Reg>,
+        rn: Reg,
+        mem: MemArg,
+    },
+    /// A memory fence operation.
+    Fence,
+
     /// A 32-bit load.
     Load32 {
         rd: Writable<Reg>,
@@ -1190,6 +1214,24 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::CmpTrapRUImm16 { rn, .. } => {
             collector.add_use(rn);
         }
+        &Inst::AtomicRmw {
+            rd, rn, ref mem, ..
+        } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+            memarg_regs(mem, collector);
+        }
+        &Inst::AtomicCas32 {
+            rd, rn, ref mem, ..
+        }
+        | &Inst::AtomicCas64 {
+            rd, rn, ref mem, ..
+        } => {
+            collector.add_mod(rd);
+            collector.add_use(rn);
+            memarg_regs(mem, collector);
+        }
+        &Inst::Fence => {}
         &Inst::Load32 { rd, ref mem, .. }
         | &Inst::Load32ZExt8 { rd, ref mem, .. }
         | &Inst::Load32SExt8 { rd, ref mem, .. }
@@ -1588,6 +1630,38 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         &mut Inst::CmpTrapRUImm16 { ref mut rn, .. } => {
             map_use(mapper, rn);
         }
+
+        &mut Inst::AtomicRmw {
+            ref mut rd,
+            ref mut rn,
+            ref mut mem,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+            map_mem(mapper, mem);
+        }
+        &mut Inst::AtomicCas32 {
+            ref mut rd,
+            ref mut rn,
+            ref mut mem,
+            ..
+        } => {
+            map_mod(mapper, rd);
+            map_use(mapper, rn);
+            map_mem(mapper, mem);
+        }
+        &mut Inst::AtomicCas64 {
+            ref mut rd,
+            ref mut rn,
+            ref mut mem,
+            ..
+        } => {
+            map_mod(mapper, rd);
+            map_use(mapper, rn);
+            map_mem(mapper, mem);
+        }
+        &mut Inst::Fence => {}
 
         &mut Inst::Load32 {
             ref mut rd,
@@ -2735,6 +2809,61 @@ impl Inst {
                 let cond = cond.show_rru(mb_rru);
                 format!("{}{} {}, {}", op, cond, rn, imm)
             }
+            &Inst::AtomicRmw {
+                alu_op,
+                rd,
+                rn,
+                ref mem,
+            } => {
+                let op = match alu_op {
+                    ALUOp::Add32 => "laa",
+                    ALUOp::Add64 => "laag",
+                    ALUOp::And32 => "lan",
+                    ALUOp::And64 => "lang",
+                    ALUOp::Orr32 => "lao",
+                    ALUOp::Orr64 => "laog",
+                    ALUOp::Xor32 => "lax",
+                    ALUOp::Xor64 => "laxg",
+                    _ => unreachable!(),
+                };
+
+                let (mem_str, mem) =
+                    mem_finalize_for_show(mem, mb_rru, state, false, true, false, false);
+
+                let rd = rd.to_reg().show_rru(mb_rru);
+                let rn = rn.show_rru(mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}{} {}, {}, {}", mem_str, op, rd, rn, mem)
+            }
+            &Inst::AtomicCas32 { rd, rn, ref mem } | &Inst::AtomicCas64 { rd, rn, ref mem } => {
+                let (opcode_rs, opcode_rsy) = match self {
+                    &Inst::AtomicCas32 { .. } => (Some("cs"), Some("csy")),
+                    &Inst::AtomicCas64 { .. } => (None, Some("csg")),
+                    _ => unreachable!(),
+                };
+
+                let (mem_str, mem) = mem_finalize_for_show(
+                    mem,
+                    mb_rru,
+                    state,
+                    opcode_rs.is_some(),
+                    opcode_rsy.is_some(),
+                    false,
+                    false,
+                );
+
+                let op = match &mem {
+                    &MemArg::BXD12 { .. } => opcode_rs,
+                    &MemArg::BXD20 { .. } => opcode_rsy,
+                    _ => unreachable!(),
+                };
+
+                let rd = rd.to_reg().show_rru(mb_rru);
+                let rn = rn.show_rru(mb_rru);
+                let mem = mem.show_rru(mb_rru);
+                format!("{}{} {}, {}, {}", mem_str, op.unwrap(), rd, rn, mem)
+            }
+            &Inst::Fence => "bcr 14, 0".to_string(),
             &Inst::Load32 { rd, ref mem }
             | &Inst::Load32ZExt8 { rd, ref mem }
             | &Inst::Load32SExt8 { rd, ref mem }
