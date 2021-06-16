@@ -50,6 +50,7 @@
   - [Disclosure Policy](./security-disclosure.md)
   - [Sandboxing](./security-sandboxing.md)
 - [Contributing](contributing.md)
+  - [Architecture](./contributing-architecture.md)
   - [Building](./contributing-building.md)
   - [Testing](./contributing-testing.md)
   - [Fuzzing](./contributing-fuzzing.md)
