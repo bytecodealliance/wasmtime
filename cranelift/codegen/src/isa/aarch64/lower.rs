@@ -1471,6 +1471,50 @@ pub(crate) fn emit_shr_i128<C: LowerCtx<I = Inst>>(
     });
 }
 
+pub(crate) fn emit_clz_i128<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    src: ValueRegs<Reg>,
+    dst: ValueRegs<Writable<Reg>>,
+) {
+    let src_lo = src.regs()[0];
+    let src_hi = src.regs()[1];
+    let dst_lo = dst.regs()[0];
+    let dst_hi = dst.regs()[1];
+
+    // clz dst_hi, src_hi
+    // clz dst_lo, src_lo
+    // lsr tmp, dst_hi, #6
+    // madd dst_lo, dst_lo, tmp, dst_hi
+    // mov  dst_hi, 0
+
+    let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+
+    ctx.emit(Inst::BitRR {
+        rd: dst_hi,
+        rn: src_hi,
+        op: BitOp::Clz64,
+    });
+    ctx.emit(Inst::BitRR {
+        rd: dst_lo,
+        rn: src_lo,
+        op: BitOp::Clz64,
+    });
+    ctx.emit(Inst::AluRRImmShift {
+        alu_op: ALUOp::Lsr64,
+        rd: tmp,
+        rn: dst_hi.to_reg(),
+        immshift: ImmShift::maybe_from_u64(6).unwrap(),
+    });
+    ctx.emit(Inst::AluRRRR {
+        alu_op: ALUOp3::MAdd64,
+        rd: dst_lo,
+        rn: dst_lo.to_reg(),
+        rm: tmp.to_reg(),
+        ra: dst_hi.to_reg(),
+    });
+    lower_constant_u64(ctx, dst_hi, 0);
+}
+
 //=============================================================================
 // Lowering-backend trait implementation.
 

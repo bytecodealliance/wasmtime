@@ -133,3 +133,21 @@ return v7, v8
 
 ; run: %bxor_not_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210, 0x01234567_89ABCDEF) == [0, 0]
 ; run: %bxor_not_i128(0x8FA50A64_8FA50A64, 0x9440A07D_9440A07D, 0xB0A51B75_B0A51B75, 0xB575A07D_B575A07D) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
+
+
+function %bitrev_i128(i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+
+    v3 = bitrev v2
+
+    v4, v5 = isplit v3
+    return v4, v5
+}
+; run: %bitrev_i128(0, 0) == [0, 0]
+; run: %bitrev_i128(-1, -1) == [-1, -1]
+; run: %bitrev_i128(-1, 0) == [0, -1]
+; run: %bitrev_i128(0, -1) == [-1, 0]
+; run: %bitrev_i128(0x00000000_00000000, 0x80000000_00000000) == [1, 0]
+; run: %bitrev_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == [0x084C2A6E_195D3B7F, 0xF7B3D591_E6A2C480]
+; run: %bitrev_i128(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == [0x7777FF03_FFFF537B, 0xFFFF537B_7777FF03]

@@ -52,6 +52,19 @@ block0(v0: i64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
+function %a(i128) -> i128 {
+block0(v0: i128):
+    v1 = bitrev v0
+    return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: rbit x2, x0
+; nextln: rbit x0, x1
+; nextln: mov x1, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
 
 function %b(i8) -> i8 {
 block0(v0: i8):
@@ -103,6 +116,22 @@ block0(v0: i64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
+function %b(i128) -> i128 {
+block0(v0: i128):
+    v1 = clz v0
+    return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: clz x1, x1
+; nextln: clz x0, x0
+; nextln: lsr x2, x1, #6
+; nextln: madd x0, x0, x2, x1
+; nextln: movz x1, #0
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
 function %c(i8) -> i8 {
 block0(v0: i8):
     v1 = cls v0
@@ -150,6 +179,26 @@ block0(v0: i64):
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: cls x0, x0
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %c(i128) -> i128 {
+block0(v0: i128):
+    v1 = cls v0
+    return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: cls x2, x0
+; nextln: cls x3, x1
+; nextln: eon x0, x1, x0
+; nextln: lsr x0, x0, #63
+; nextln: madd x0, x2, x0, x0
+; nextln: subs xzr, x3, #63
+; nextln: csel x0, x0, xzr, eq
+; nextln: add x0, x0, x3
+; nextln: movz x1, #0
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
@@ -206,6 +255,42 @@ block0(v0: i64):
 ; nextln: clz x0, x0
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+function %d(i128) -> i128 {
+block0(v0: i128):
+    v1 = ctz v0
+    return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: rbit x0, x0
+; nextln: rbit x1, x1
+; nextln: clz x0, x0
+; nextln: clz x1, x1
+; nextln: lsr x2, x0, #6
+; nextln: madd x0, x1, x2, x0
+; nextln: movz x1, #0
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %d(i128) -> i128 {
+block0(v0: i128):
+    v1 = popcnt v0
+    return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: fmov d0, x0
+; nextln: mov v0.d[1], x1
+; nextln: cnt v0.16b, v0.16b
+; nextln: addv b0, v0.16b
+; nextln: umov w0, v0.b[0]
+; nextln: movz x1, #0
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
 
 function %d(i64) -> i64 {
 block0(v0: i64):
