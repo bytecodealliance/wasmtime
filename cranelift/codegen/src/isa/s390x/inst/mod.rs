@@ -34,6 +34,18 @@ mod emit_tests;
 //=============================================================================
 // Instructions (top level): definition
 
+/// Supported instruction sets
+#[allow(non_camel_case_types)]
+#[derive(Debug)]
+pub(crate) enum InstructionSet {
+    /// Baseline ISA for cranelift is z14.
+    Base,
+    /// Miscellaneous-Instruction-Extensions Facility 2 (z15)
+    MIE2,
+    /// Vector-Enhancements Facility 2 (z15)
+    VXRS_EXT2,
+}
+
 /// An ALU operation. This can be paired with several instruction formats
 /// below (see `Inst`) in any combination.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -70,6 +82,17 @@ pub enum ALUOp {
     XorNot64,
 }
 
+impl ALUOp {
+    pub(crate) fn available_from(&self) -> InstructionSet {
+        match self {
+            ALUOp::AndNot32 | ALUOp::AndNot64 => InstructionSet::MIE2,
+            ALUOp::OrrNot32 | ALUOp::OrrNot64 => InstructionSet::MIE2,
+            ALUOp::XorNot32 | ALUOp::XorNot64 => InstructionSet::MIE2,
+            _ => InstructionSet::Base,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UnaryOp {
     Abs32,
@@ -80,6 +103,15 @@ pub enum UnaryOp {
     Neg64Ext32,
     PopcntByte,
     PopcntReg,
+}
+
+impl UnaryOp {
+    pub(crate) fn available_from(&self) -> InstructionSet {
+        match self {
+            UnaryOp::PopcntReg => InstructionSet::MIE2,
+            _ => InstructionSet::Base,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -941,18 +973,6 @@ pub enum Inst {
     },
 }
 
-fn count_zero_half_words(mut value: u64) -> usize {
-    let mut count = 0;
-    for _ in 0..4 {
-        if value & 0xffff == 0 {
-            count += 1;
-        }
-        value >>= 16;
-    }
-
-    count
-}
-
 #[test]
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
@@ -961,6 +981,135 @@ fn inst_size_test() {
 }
 
 impl Inst {
+    /// Retrieve the ISA feature set in which the instruction is available.
+    fn available_in_isa(&self) -> InstructionSet {
+        match self {
+            // These instructions are part of the baseline ISA for cranelift (z14)
+            Inst::Nop0
+            | Inst::Nop2
+            | Inst::AluRRSImm16 { .. }
+            | Inst::AluRR { .. }
+            | Inst::AluRX { .. }
+            | Inst::AluRSImm16 { .. }
+            | Inst::AluRSImm32 { .. }
+            | Inst::AluRUImm32 { .. }
+            | Inst::AluRUImm16Shifted { .. }
+            | Inst::AluRUImm32Shifted { .. }
+            | Inst::ShiftRR { .. }
+            | Inst::SMulWide { .. }
+            | Inst::UMulWide { .. }
+            | Inst::SDivMod32 { .. }
+            | Inst::SDivMod64 { .. }
+            | Inst::UDivMod32 { .. }
+            | Inst::UDivMod64 { .. }
+            | Inst::Flogr { .. }
+            | Inst::CmpRR { .. }
+            | Inst::CmpRX { .. }
+            | Inst::CmpRSImm16 { .. }
+            | Inst::CmpRSImm32 { .. }
+            | Inst::CmpRUImm32 { .. }
+            | Inst::CmpTrapRR { .. }
+            | Inst::CmpTrapRSImm16 { .. }
+            | Inst::CmpTrapRUImm16 { .. }
+            | Inst::AtomicRmw { .. }
+            | Inst::AtomicCas32 { .. }
+            | Inst::AtomicCas64 { .. }
+            | Inst::Fence
+            | Inst::Load32 { .. }
+            | Inst::Load32ZExt8 { .. }
+            | Inst::Load32SExt8 { .. }
+            | Inst::Load32ZExt16 { .. }
+            | Inst::Load32SExt16 { .. }
+            | Inst::Load64 { .. }
+            | Inst::Load64ZExt8 { .. }
+            | Inst::Load64SExt8 { .. }
+            | Inst::Load64ZExt16 { .. }
+            | Inst::Load64SExt16 { .. }
+            | Inst::Load64ZExt32 { .. }
+            | Inst::Load64SExt32 { .. }
+            | Inst::LoadRev16 { .. }
+            | Inst::LoadRev32 { .. }
+            | Inst::LoadRev64 { .. }
+            | Inst::Store8 { .. }
+            | Inst::Store16 { .. }
+            | Inst::Store32 { .. }
+            | Inst::Store64 { .. }
+            | Inst::StoreImm8 { .. }
+            | Inst::StoreImm16 { .. }
+            | Inst::StoreImm32SExt16 { .. }
+            | Inst::StoreImm64SExt16 { .. }
+            | Inst::StoreRev16 { .. }
+            | Inst::StoreRev32 { .. }
+            | Inst::StoreRev64 { .. }
+            | Inst::LoadMultiple64 { .. }
+            | Inst::StoreMultiple64 { .. }
+            | Inst::Mov32 { .. }
+            | Inst::Mov64 { .. }
+            | Inst::Mov32Imm { .. }
+            | Inst::Mov32SImm16 { .. }
+            | Inst::Mov64SImm16 { .. }
+            | Inst::Mov64SImm32 { .. }
+            | Inst::Mov64UImm16Shifted { .. }
+            | Inst::Mov64UImm32Shifted { .. }
+            | Inst::Insert64UImm16Shifted { .. }
+            | Inst::Insert64UImm32Shifted { .. }
+            | Inst::Extend { .. }
+            | Inst::CMov32 { .. }
+            | Inst::CMov64 { .. }
+            | Inst::CMov32SImm16 { .. }
+            | Inst::CMov64SImm16 { .. }
+            | Inst::FpuMove32 { .. }
+            | Inst::FpuMove64 { .. }
+            | Inst::FpuCMov32 { .. }
+            | Inst::FpuCMov64 { .. }
+            | Inst::MovToFpr { .. }
+            | Inst::MovFromFpr { .. }
+            | Inst::FpuRR { .. }
+            | Inst::FpuRRR { .. }
+            | Inst::FpuRRRR { .. }
+            | Inst::FpuCopysign { .. }
+            | Inst::FpuCmp32 { .. }
+            | Inst::FpuCmp64 { .. }
+            | Inst::FpuLoad32 { .. }
+            | Inst::FpuStore32 { .. }
+            | Inst::FpuLoad64 { .. }
+            | Inst::FpuStore64 { .. }
+            | Inst::LoadFpuConst32 { .. }
+            | Inst::LoadFpuConst64 { .. }
+            | Inst::FpuToInt { .. }
+            | Inst::IntToFpu { .. }
+            | Inst::FpuRound { .. }
+            | Inst::FpuVecRRR { .. }
+            | Inst::Call { .. }
+            | Inst::CallInd { .. }
+            | Inst::Ret { .. }
+            | Inst::EpiloguePlaceholder
+            | Inst::Jump { .. }
+            | Inst::CondBr { .. }
+            | Inst::TrapIf { .. }
+            | Inst::OneWayCondBr { .. }
+            | Inst::IndirectBr { .. }
+            | Inst::Debugtrap
+            | Inst::Trap { .. }
+            | Inst::JTSequence { .. }
+            | Inst::LoadExtNameFar { .. }
+            | Inst::LoadAddr { .. }
+            | Inst::VirtualSPOffsetAdj { .. }
+            | Inst::ValueLabelMarker { .. }
+            | Inst::Unwind { .. } => InstructionSet::Base,
+
+            // These depend on the opcode
+            Inst::AluRRR { alu_op, .. } => alu_op.available_from(),
+            Inst::UnaryRR { op, .. } => op.available_from(),
+
+            // These are all part of VXRS_EXT2
+            Inst::FpuLoadRev32 { .. }
+            | Inst::FpuStoreRev32 { .. }
+            | Inst::FpuLoadRev64 { .. }
+            | Inst::FpuStoreRev64 { .. } => InstructionSet::VXRS_EXT2,
+        }
+    }
+
     /// Create a 64-bit move instruction.
     pub fn mov64(to_reg: Writable<Reg>, from_reg: Reg) -> Inst {
         assert!(to_reg.to_reg().get_class() == from_reg.get_class());

@@ -210,7 +210,14 @@ block0(v0: i64):
     return v1
 }
 
-; check:  popcnt %r2, %r2, 8
+; check:  popcnt %r2, %r2
+; nextln: sllg %r3, %r2, 32
+; nextln: agr %r2, %r3
+; nextln: sllg %r3, %r2, 16
+; nextln: agr %r2, %r3
+; nextln: sllg %r3, %r2, 8
+; nextln: agr %r2, %r3
+; nextln: srlg %r2, %r2, 56
 ; nextln: br %r14
 
 function %popcnt_i32(i32) -> i32 {
@@ -219,8 +226,12 @@ block0(v0: i32):
     return v1
 }
 
-; check:  llgfr %r2, %r2
-; nextln: popcnt %r2, %r2, 8
+; check:  popcnt %r2, %r2
+; nextln: sllk %r3, %r2, 16
+; nextln: ar %r2, %r3
+; nextln: sllk %r3, %r2, 8
+; nextln: ar %r2, %r3
+; nextln: srlk %r2, %r2, 24
 ; nextln: br %r14
 
 function %popcnt_i16(i16) -> i16 {
@@ -229,8 +240,10 @@ block0(v0: i16):
     return v1
 }
 
-; check:  llghr %r2, %r2
-; nextln: popcnt %r2, %r2, 8
+; check:  popcnt %r2, %r2
+; nextln: sllk %r3, %r2, 8
+; nextln: ar %r2, %r3
+; nextln: srlk %r2, %r2, 8
 ; nextln: br %r14
 
 function %popcnt_i8(i8) -> i8 {
