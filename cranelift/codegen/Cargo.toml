@@ -28,7 +28,7 @@ peepmatic-traits = { path = "../peepmatic/crates/traits", optional = true, versi
 peepmatic-runtime = { path = "../peepmatic/crates/runtime", optional = true, version = "0.75.0" }
 regalloc = { version = "0.0.31" }
 souper-ir = { version = "2.1.0", optional = true }
-wast = { version = "35.0.0", optional = true }
+wast = { version = "36.0.0", optional = true }
 # It is a goal of the cranelift-codegen crate to have minimal external dependencies.
 # Please don't add any unless they are essential to the task of creating binary
 # machine code. Integration tests that need external dependencies can be
