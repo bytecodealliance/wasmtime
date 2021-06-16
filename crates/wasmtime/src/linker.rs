@@ -82,6 +82,20 @@ pub struct Linker<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
+impl<T> Clone for Linker<T> {
+    fn clone(&self) -> Linker<T> {
+        Linker {
+            engine: self.engine.clone(),
+            string2idx: self.string2idx.clone(),
+            strings: self.strings.clone(),
+            map: self.map.clone(),
+            allow_shadowing: self.allow_shadowing,
+            allow_unknown_exports: self.allow_unknown_exports,
+            _marker: self._marker,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Hash, PartialEq, Eq)]
 struct ImportKey {
     name: usize,
