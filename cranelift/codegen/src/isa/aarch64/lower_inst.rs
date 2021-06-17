@@ -1,7 +1,7 @@
 //! Lower a single Cranelift instruction into vcode.
 
 use crate::binemit::CodeOffset;
-use crate::ir::condcodes::{FloatCC, IntCC};
+use crate::ir::condcodes::FloatCC;
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
 use crate::ir::{InstructionData, Opcode, TrapCode};
@@ -1528,8 +1528,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             {
                 let condcode = ctx.data(icmp_insn).cond_code().unwrap();
                 let cond = lower_condcode(condcode);
-                let is_signed = condcode_is_signed(condcode);
-                lower_icmp_or_ifcmp_to_flags(ctx, icmp_insn, is_signed);
+                lower_icmp(ctx, icmp_insn, condcode, IcmpOutput::Flags)?;
                 cond
             } else if let Some(fcmp_insn) =
                 maybe_input_insn_via_conv(ctx, flag_input, Opcode::Fcmp, Opcode::Bint)
@@ -1577,11 +1576,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Selectif | Opcode::SelectifSpectreGuard => {
             let condcode = ctx.data(insn).cond_code().unwrap();
             let cond = lower_condcode(condcode);
-            let is_signed = condcode_is_signed(condcode);
             // Verification ensures that the input is always a
             // single-def ifcmp.
             let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-            lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
+            lower_icmp(ctx, ifcmp_insn, condcode, IcmpOutput::Flags)?;
 
             // csel.COND rd, rn, rm
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -1648,14 +1646,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Trueif => {
             let condcode = ctx.data(insn).cond_code().unwrap();
-            let cond = lower_condcode(condcode);
-            let is_signed = condcode_is_signed(condcode);
             // Verification ensures that the input is always a
             // single-def ifcmp.
             let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-            lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            materialize_bool_result(ctx, insn, rd, cond);
+            lower_icmp(ctx, ifcmp_insn, condcode, IcmpOutput::Register(rd))?;
         }
 
         Opcode::Trueff => {
@@ -1847,126 +1842,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Icmp => {
             let condcode = ctx.data(insn).cond_code().unwrap();
-            let cond = lower_condcode(condcode);
-            let is_signed = condcode_is_signed(condcode);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ctx.input_ty(insn, 0);
-            let bits = ty_bits(ty);
-            let narrow_mode = match (bits <= 32, is_signed) {
-                (true, true) => NarrowValueMode::SignExtend32,
-                (true, false) => NarrowValueMode::ZeroExtend32,
-                (false, true) => NarrowValueMode::SignExtend64,
-                (false, false) => NarrowValueMode::ZeroExtend64,
-            };
-
-            if ty == I128 {
-                let lhs = put_input_in_regs(ctx, inputs[0]);
-                let rhs = put_input_in_regs(ctx, inputs[1]);
-
-                let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
-                let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
-
-                match condcode {
-                    IntCC::Equal | IntCC::NotEqual => {
-                        // eor     tmp1, lhs_lo, rhs_lo
-                        // eor     tmp2, lhs_hi, rhs_hi
-                        // adds    xzr, tmp1, tmp2
-                        // cset    dst, {eq, ne}
-
-                        ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::Eor64,
-                            rd: tmp1,
-                            rn: lhs.regs()[0],
-                            rm: rhs.regs()[0],
-                        });
-                        ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::Eor64,
-                            rd: tmp2,
-                            rn: lhs.regs()[1],
-                            rm: rhs.regs()[1],
-                        });
-                        ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::AddS64,
-                            rd: writable_zero_reg(),
-                            rn: tmp1.to_reg(),
-                            rm: tmp2.to_reg(),
-                        });
-                        materialize_bool_result(ctx, insn, rd, cond);
-                    }
-                    IntCC::Overflow | IntCC::NotOverflow => {
-                        // We can do an 128bit add while throwing away the results
-                        // and check the overflow flags at the end.
-                        //
-                        // adds    xzr, lhs_lo, rhs_lo
-                        // adcs    xzr, lhs_hi, rhs_hi
-                        // cset    dst, {vs, vc}
-
-                        ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::AddS64,
-                            rd: writable_zero_reg(),
-                            rn: lhs.regs()[0],
-                            rm: rhs.regs()[0],
-                        });
-                        ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::AdcS64,
-                            rd: writable_zero_reg(),
-                            rn: lhs.regs()[1],
-                            rm: rhs.regs()[1],
-                        });
-                        materialize_bool_result(ctx, insn, rd, cond);
-                    }
-                    _ => {
-                        // cmp     lhs_lo, rhs_lo
-                        // cset    tmp1, low_cc
-                        // cmp     lhs_hi, rhs_hi
-                        // cset    tmp2, cond
-                        // csel    dst, tmp1, tmp2, eq
-
-                        let low_cc = match condcode {
-                            IntCC::SignedGreaterThanOrEqual | IntCC::UnsignedGreaterThanOrEqual => {
-                                Cond::Hs
-                            }
-                            IntCC::SignedGreaterThan | IntCC::UnsignedGreaterThan => Cond::Hi,
-                            IntCC::SignedLessThanOrEqual | IntCC::UnsignedLessThanOrEqual => {
-                                Cond::Ls
-                            }
-                            IntCC::SignedLessThan | IntCC::UnsignedLessThan => Cond::Lo,
-                            _ => unreachable!(),
-                        };
-
-                        ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::SubS64,
-                            rd: writable_zero_reg(),
-                            rn: lhs.regs()[0],
-                            rm: rhs.regs()[0],
-                        });
-                        materialize_bool_result(ctx, insn, tmp1, low_cc);
-                        ctx.emit(Inst::AluRRR {
-                            alu_op: ALUOp::SubS64,
-                            rd: writable_zero_reg(),
-                            rn: lhs.regs()[1],
-                            rm: rhs.regs()[1],
-                        });
-                        materialize_bool_result(ctx, insn, tmp2, cond);
-                        ctx.emit(Inst::CSel {
-                            cond: Cond::Eq,
-                            rd,
-                            rn: tmp1.to_reg(),
-                            rm: tmp2.to_reg(),
-                        });
-                    }
-                }
-            } else if !ty.is_vector() {
-                let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
-                let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
-                ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
-                materialize_bool_result(ctx, insn, rd, cond);
-            } else {
-                let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                let rm = put_input_in_reg(ctx, inputs[1], narrow_mode);
-                lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
-            }
+            lower_icmp(ctx, insn, condcode, IcmpOutput::Register(rd))?;
         }
 
         Opcode::Fcmp => {
@@ -2020,11 +1897,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else if op == Opcode::Trapif {
                 let condcode = ctx.data(insn).cond_code().unwrap();
                 let cond = lower_condcode(condcode);
-                let is_signed = condcode_is_signed(condcode);
 
                 // Verification ensures that the input is always a single-def ifcmp.
                 let ifcmp_insn = maybe_input_insn(ctx, inputs[0], Opcode::Ifcmp).unwrap();
-                lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
+                lower_icmp(ctx, ifcmp_insn, condcode, IcmpOutput::Flags)?;
                 cond
             } else {
                 let condcode = ctx.data(insn).fp_cond_code().unwrap();
@@ -3525,11 +3401,10 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 {
                     let condcode = ctx.data(icmp_insn).cond_code().unwrap();
                     let cond = lower_condcode(condcode);
-                    let is_signed = condcode_is_signed(condcode);
                     let negated = op0 == Opcode::Brz;
                     let cond = if negated { cond.invert() } else { cond };
 
-                    lower_icmp_or_ifcmp_to_flags(ctx, icmp_insn, is_signed);
+                    lower_icmp(ctx, icmp_insn, condcode, IcmpOutput::Flags)?;
                     ctx.emit(Inst::CondBr {
                         taken,
                         not_taken,
@@ -3621,13 +3496,12 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 let cond = lower_condcode(condcode);
                 let kind = CondBrKind::Cond(cond);
 
-                let is_signed = condcode_is_signed(condcode);
                 let flag_input = InsnInput {
                     insn: branches[0],
                     input: 0,
                 };
                 if let Some(ifcmp_insn) = maybe_input_insn(ctx, flag_input, Opcode::Ifcmp) {
-                    lower_icmp_or_ifcmp_to_flags(ctx, ifcmp_insn, is_signed);
+                    lower_icmp(ctx, ifcmp_insn, condcode, IcmpOutput::Flags)?;
                     ctx.emit(Inst::CondBr {
                         taken,
                         not_taken,
