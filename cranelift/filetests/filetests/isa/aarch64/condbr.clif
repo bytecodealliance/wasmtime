@@ -253,3 +253,49 @@ block1:
 ; check: movz x0, #1
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+
+function %i128_brz(i128){
+block0(v0: i128):
+    brz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orr x0, x0, x1
+; nextln: cbz x0, label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_brnz(i128){
+block0(v0: i128):
+    brnz v0, block1
+    jump block1
+
+block1:
+    nop
+    return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: orr x0, x0, x1
+; nextln: cbnz x0, label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret

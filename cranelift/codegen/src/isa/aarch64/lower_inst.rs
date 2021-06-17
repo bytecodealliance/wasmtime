@@ -3515,6 +3515,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
 
         match op0 {
             Opcode::Brz | Opcode::Brnz => {
+                let ty = ctx.input_ty(branches[0], 0);
                 let flag_input = InsnInput {
                     insn: branches[0],
                     input: 0,
@@ -3549,14 +3550,19 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                         kind: CondBrKind::Cond(cond),
                     });
                 } else {
-                    let rt = put_input_in_reg(
-                        ctx,
-                        InsnInput {
-                            insn: branches[0],
-                            input: 0,
-                        },
-                        NarrowValueMode::ZeroExtend64,
-                    );
+                    let rt = if ty == I128 {
+                        let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+                        let input = put_input_in_regs(ctx, flag_input);
+                        ctx.emit(Inst::AluRRR {
+                            alu_op: ALUOp::Orr64,
+                            rd: tmp,
+                            rn: input.regs()[0],
+                            rm: input.regs()[1],
+                        });
+                        tmp.to_reg()
+                    } else {
+                        put_input_in_reg(ctx, flag_input, NarrowValueMode::ZeroExtend64)
+                    };
                     let kind = match op0 {
                         Opcode::Brz => CondBrKind::Zero(rt),
                         Opcode::Brnz => CondBrKind::NotZero(rt),

@@ -1,42 +1,45 @@
 test run
-; target aarch64 TODO: Not yet implemented on aarch64
+target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 target x86_64 machinst
 target x86_64 legacy
 
 
-function %br_false() -> b1 {
-block0:
-    v10 = iconst.i64 0x42
-    v11 = iconst.i64 0x00
-    v0 = iconcat v10, v11
-    brz v0, block2
+function %i128_br(i64, i64) -> b1 {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+    brz v2, block2
     jump block1
 
 block1:
-    v1 = bconst.b1 true
-    return v1
+    v3 = bconst.b1 true
+    return v3
 
 block2:
-    v2 = bconst.b1 false
-    return v2
+    v4 = bconst.b1 false
+    return v4
 }
-; run
+; run: %i128_br(0, 0) == false
+; run: %i128_br(-1, 0) == true
+; run: %i128_br(0, -1) == true
+; run: %i128_br(-1, -1) == true
 
-function %br_true() -> b1 {
-block0:
-    v10 = iconst.i64 0x00
-    v11 = iconst.i64 0x00
-    v0 = iconcat v10, v11
-    brz v0, block2
+
+function %i128_brnz(i64, i64) -> b1 {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+    brnz v2, block2
     jump block1
 
 block1:
-    v1 = bconst.b1 false
-    return v1
+    v3 = bconst.b1 true
+    return v3
 
 block2:
-    v2 = bconst.b1 true
-    return v2
+    v4 = bconst.b1 false
+    return v4
 }
-; run
+; run: %i128_brnz(0, 0) == true
+; run: %i128_brnz(-1, 0) == false
+; run: %i128_brnz(0, -1) == false
+; run: %i128_brnz(-1, -1) == false
