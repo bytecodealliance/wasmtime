@@ -386,3 +386,130 @@ block0(v0: i64, v1: i64, v2: i64):
 ; nextln: ldrsh x0, [x0]
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+
+function %i128(i64) -> i128 {
+block0(v0: i64):
+  v1 = load.i128 v0
+  store.i128 v1, v0
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x1, x0
+; nextln: ldp x2, x1, [x1]
+; nextln: stp x2, x1, [x0]
+; nextln: mov x0, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_imm_offset(i64) -> i128 {
+block0(v0: i64):
+  v1 = load.i128 v0+16
+  store.i128 v1, v0+16
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x1, x0
+; nextln: ldp x2, x1, [x1, #16]
+; nextln: stp x2, x1, [x0, #16]
+; nextln: mov x0, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_imm_offset_large(i64) -> i128 {
+block0(v0: i64):
+  v1 = load.i128 v0+504
+  store.i128 v1, v0+504
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x1, x0
+; nextln: ldp x2, x1, [x1, #504]
+; nextln: stp x2, x1, [x0, #504]
+; nextln: mov x0, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_imm_offset_negative_large(i64) -> i128 {
+block0(v0: i64):
+  v1 = load.i128 v0-512
+  store.i128 v1, v0-512
+  return v1
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x1, x0
+; nextln: ldp x2, x1, [x1, #-512]
+; nextln: stp x2, x1, [x0, #-512]
+; nextln: mov x0, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_add_offset(i64) -> i128 {
+block0(v0: i64):
+  v1 = iadd_imm v0, 32
+  v2 = load.i128 v1
+  store.i128 v2, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x1, x0
+; nextln: ldp x2, x1, [x1, #32]
+; nextln: stp x2, x1, [x0, #32]
+; nextln: mov x0, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_32bit_sextend_simple(i32) -> i128 {
+block0(v0: i32):
+  v1 = sextend.i64 v0
+  v2 = load.i128 v1
+  store.i128 v2, v1
+  return v2
+}
+
+; TODO: We should be able to deduplicate the sxtw instruction
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: sxtw x1, w0
+; nextln: ldp x2, x1, [x1]
+; nextln: sxtw x0, w0
+; nextln: stp x2, x1, [x0]
+; nextln: mov x0, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_32bit_sextend(i64, i32) -> i128 {
+block0(v0: i64, v1: i32):
+  v2 = sextend.i64 v1
+  v3 = iadd.i64 v0, v2
+  v4 = iadd_imm.i64 v3, 24
+  v5 = load.i128 v4
+  store.i128 v5, v4
+  return v5
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: mov x2, x0
+; nextln: add x2, x2, x1, SXTW
+; nextln: ldp x3, x2, [x2, #24]
+; nextln: add x0, x0, x1, SXTW
+; nextln: stp x3, x2, [x0, #24]
+; nextln: mov x0, x3
+; nextln: mov x1, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

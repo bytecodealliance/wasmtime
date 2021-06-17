@@ -701,7 +701,7 @@ pub(crate) fn lower_pair_address<C: LowerCtx<I = Inst>>(
     // Collect addends through an arbitrary tree of 32-to-64-bit sign/zero
     // extends and addition ops. We update these as we consume address
     // components, so they represent the remaining addends not yet handled.
-    let (addends64, addends32, args_offset) = collect_address_addends(ctx, roots);
+    let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
     let offset = args_offset + (offset as i64);
 
     trace!(
@@ -713,41 +713,40 @@ pub(crate) fn lower_pair_address<C: LowerCtx<I = Inst>>(
 
     // Pairs basically only have reg + imm formats so we only have to worry about those
 
-    let imm7_offset = SImm7Scaled::maybe_from_i64(offset, I64);
-    match (&addends64[..], &addends32[..], imm7_offset) {
-        (&[add64], &[], Some(offset)) => PairAMode::SignedOffset(add64, offset),
-        (&[], &[add32], Some(offset)) => {
-            let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
-            let (reg, extendop) = add32;
-            let signed = match extendop {
-                ExtendOp::SXTW => true,
-                ExtendOp::UXTW => false,
-                _ => unreachable!(),
-            };
-            ctx.emit(Inst::Extend {
-                rd: tmp,
-                rn: reg,
-                signed,
-                from_bits: 32,
-                to_bits: 64,
-            });
-            PairAMode::SignedOffset(tmp.to_reg(), offset)
-        }
-        (&[], &[], Some(offset)) => PairAMode::SignedOffset(zero_reg(), offset),
+    let base_reg = if let Some(reg64) = addends64.pop() {
+        reg64
+    } else if let Some((reg32, extendop)) = addends32.pop() {
+        let tmp = ctx.alloc_tmp(I64).only_reg().unwrap();
+        let signed = match extendop {
+            ExtendOp::SXTW => true,
+            ExtendOp::UXTW => false,
+            _ => unreachable!(),
+        };
+        ctx.emit(Inst::Extend {
+            rd: tmp,
+            rn: reg32,
+            signed,
+            from_bits: 32,
+            to_bits: 64,
+        });
+        tmp.to_reg()
+    } else {
+        zero_reg()
+    };
 
-        (_, _, _) => {
-            // This is the general case, we just grab all addends and sum them into a register
-            let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
-            lower_add_addends(ctx, addr, addends64, addends32);
+    let addr = ctx.alloc_tmp(I64).only_reg().unwrap();
+    ctx.emit(Inst::gen_move(addr, base_reg, I64));
 
-            let imm7 = imm7_offset.unwrap_or_else(|| {
-                lower_add_immediate(ctx, addr, addr.to_reg(), offset);
-                SImm7Scaled::maybe_from_i64(0, I64).unwrap()
-            });
+    // We have the base register, if we have any others, we need to add them
+    lower_add_addends(ctx, addr, addends64, addends32);
 
-            PairAMode::SignedOffset(addr.to_reg(), imm7)
-        }
-    }
+    // Figure out what offset we should emit
+    let imm7 = SImm7Scaled::maybe_from_i64(offset, I64).unwrap_or_else(|| {
+        lower_add_immediate(ctx, addr, addr.to_reg(), offset);
+        SImm7Scaled::maybe_from_i64(0, I64).unwrap()
+    });
+
+    PairAMode::SignedOffset(addr.to_reg(), imm7)
 }
 
 /// Lower the address of a load or store.
