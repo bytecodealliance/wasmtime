@@ -1,9 +1,10 @@
 use crate::linker::Definition;
+use crate::signatures::SignatureCollection;
 use crate::store::{InstanceId, StoreData, StoreOpaque, StoreOpaqueSend, Stored};
 use crate::types::matching;
 use crate::{
-    AsContext, AsContextMut, Engine, Export, Extern, Func, Global, InstanceType, Memory, Module,
-    StoreContextMut, Table, Trap, TypedFunc,
+    AsContext, AsContextMut, Engine, Export, Extern, ExternType, Func, Global, InstanceType,
+    Memory, Module, StoreContextMut, Table, Trap, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
@@ -14,6 +15,7 @@ use wasmtime_environ::wasm::{
     TableIndex,
 };
 use wasmtime_environ::Initializer;
+use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstantiationError, VMContext, VMFunctionBody,
     VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
@@ -34,7 +36,28 @@ use wasmtime_runtime::{
 /// available as [`Instance::new`].
 #[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
-pub struct Instance(Stored<RuntimeInstance>);
+pub struct Instance(Stored<InstanceData>);
+
+pub(crate) enum InstanceData {
+    /// This variant is used for instances created through instantiation of a
+    /// module, e.g. `Instance::new` or various linker methods.
+    Instantiated {
+        /// The id of the instance within the store, used to find the original
+        /// `InstanceHandle`.
+        id: InstanceId,
+        /// A lazily-populated list of exports of this instance. The order of
+        /// exports here matches the order of the exports in the the original
+        /// module.
+        exports: Vec<Option<Extern>>,
+        /// The type information of the module that this was instantiated with.
+        types: Arc<TypeTables>,
+        signatures: Arc<SignatureCollection>,
+    },
+
+    /// This variant is used for synthetically created instances via `Linker`
+    /// APIs. This is only used for the module linking proposal at this time.
+    Synthetic(Arc<indexmap::IndexMap<String, Extern>>),
+}
 
 impl Instance {
     /// Creates a new [`Instance`] from the previously compiled [`Module`] and
@@ -144,7 +167,7 @@ impl Instance {
         i.run_async(store.as_context_mut().opaque_send()).await
     }
 
-    pub(crate) fn from_wasmtime(handle: RuntimeInstance, store: &mut StoreOpaque) -> Instance {
+    pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
         Instance(store.store_data_mut().insert(handle))
     }
 
@@ -155,15 +178,25 @@ impl Instance {
     /// Panics if `store` does not own this instance.
     pub fn ty(&self, store: impl AsContext) -> InstanceType {
         let store = store.as_context();
-        let items = &store[self.0];
         let mut ty = InstanceType::new();
-        for (name, item) in items.iter() {
-            ty.add_named_export(name, item.ty(&store));
+        match &store[self.0] {
+            InstanceData::Synthetic(items) => {
+                for (name, item) in items.iter() {
+                    ty.add_named_export(name, item.ty(&store));
+                }
+            }
+            InstanceData::Instantiated { id, types, .. } => {
+                let module = store.0.instance(*id).module();
+                for (name, idx) in module.exports.iter() {
+                    let export_ty = module.type_of(*idx);
+                    ty.add_named_export(name, ExternType::from_wasmtime(types, &export_ty));
+                }
+            }
         }
         ty
     }
 
-    pub(crate) fn items<'a>(&self, store: &'a StoreData) -> &'a RuntimeInstance {
+    pub(crate) fn data<'a>(&self, store: &'a StoreData) -> &'a InstanceData {
         &store[self.0]
     }
 
@@ -180,10 +213,80 @@ impl Instance {
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        let items = &store.into().store_data()[self.0];
-        items
-            .iter()
-            .map(|(name, item)| Export::new(name, item.clone()))
+        self._exports(store.into().opaque())
+    }
+
+    fn _exports<'a>(
+        &'a self,
+        mut store: StoreOpaque<'a>,
+    ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
+        // If this is an `Instantiated` instance then all the `exports` may not
+        // be filled in. Fill them all in now if that's the case.
+        if let InstanceData::Instantiated { exports, id, .. } = &store[self.0] {
+            if exports.iter().any(|e| e.is_none()) {
+                let module = Arc::clone(store.instance(*id).module());
+                for name in module.exports.keys() {
+                    self._get_export(&mut store, name);
+                }
+            }
+        }
+
+        let inner = store.into_inner();
+        return match &inner.store_data()[self.0] {
+            InstanceData::Synthetic(names) => {
+                Either::A(names.iter().map(|(k, v)| Export::new(k, v.clone())))
+            }
+            InstanceData::Instantiated { exports, id, .. } => {
+                let module = inner.instance(*id).module();
+                Either::B(
+                    module
+                        .exports
+                        .iter()
+                        .zip(exports)
+                        .map(|((name, _), export)| Export::new(name, export.clone().unwrap())),
+                )
+            }
+        };
+
+        enum Either<A, B> {
+            A(A),
+            B(B),
+        }
+
+        impl<A, B> Iterator for Either<A, B>
+        where
+            A: Iterator,
+            B: Iterator<Item = A::Item>,
+        {
+            type Item = A::Item;
+
+            fn next(&mut self) -> Option<A::Item> {
+                match self {
+                    Either::A(a) => a.next(),
+                    Either::B(b) => b.next(),
+                }
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                match self {
+                    Either::A(a) => a.size_hint(),
+                    Either::B(b) => b.size_hint(),
+                }
+            }
+        }
+
+        impl<A, B> ExactSizeIterator for Either<A, B>
+        where
+            A: ExactSizeIterator,
+            B: ExactSizeIterator<Item = A::Item>,
+        {
+            fn len(&self) -> usize {
+                match self {
+                    Either::A(a) => a.len(),
+                    Either::B(b) => b.len(),
+                }
+            }
+        }
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -196,9 +299,35 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn get_export(&self, store: impl AsContextMut, name: &str) -> Option<Extern> {
-        let store = store.as_context();
-        store[self.0].get(name).cloned()
+    pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
+        self._get_export(&mut store.as_context_mut().opaque(), name)
+    }
+
+    fn _get_export(&self, store: &mut StoreOpaque<'_>, name: &str) -> Option<Extern> {
+        match &store[self.0] {
+            // Synthetic instances always have their entire list of exports
+            // already specified.
+            InstanceData::Synthetic(names) => names.get(name).cloned(),
+
+            // Instantiated instances will lazily fill in exports, so we process
+            // all that lazy logic here.
+            InstanceData::Instantiated { id, exports, .. } => {
+                let instance = store.instance(*id);
+                let (i, _, index) = instance.module().exports.get_full(name)?;
+                if let Some(export) = &exports[i] {
+                    return Some(export.clone());
+                }
+                let item = unsafe {
+                    Extern::from_wasmtime_export(instance.lookup_by_declaration(index), store)
+                };
+                let exports = match &mut store[self.0] {
+                    InstanceData::Instantiated { exports, .. } => exports,
+                    _ => unreachable!(),
+                };
+                exports[i] = Some(item.clone());
+                Some(item)
+            }
+        }
     }
 
     /// Looks up an exported [`Func`] value by name.
@@ -346,11 +475,11 @@ impl<'a> Instantiator<'a> {
         // NB: this is the same code as `run_async`. It's intentionally
         // small but should be kept in sync (modulo the async bits).
         loop {
-            if let Some((id, instance)) = self.step(&mut store)? {
-                if let Some(start) = store.instance(id).module().start_func {
-                    Instantiator::start_raw(&mut store, id, start)?;
+            if let Some((instance, start, toplevel)) = self.step(&mut store)? {
+                if let Some(start) = start {
+                    Instantiator::start_raw(&mut store, instance, start)?;
                 }
-                if let Some(instance) = instance {
+                if toplevel {
                     break Ok(instance);
                 }
             }
@@ -368,14 +497,13 @@ impl<'a> Instantiator<'a> {
         // small but should be kept in sync (modulo the async bits).
         loop {
             let step = self.step(&mut store.opaque())?;
-            if let Some((id, instance)) = step {
-                let start = store.instance(id).module().start_func;
+            if let Some((instance, start, toplevel)) = step {
                 if let Some(start) = start {
                     store
-                        .on_fiber(|store| Instantiator::start_raw(store, id, start))
+                        .on_fiber(|store| Instantiator::start_raw(store, instance, start))
                         .await??;
                 }
-                if let Some(instance) = instance {
+                if toplevel {
                     break Ok(instance);
                 }
             }
@@ -405,7 +533,7 @@ impl<'a> Instantiator<'a> {
     fn step(
         &mut self,
         store: &mut StoreOpaque<'_>,
-    ) -> Result<Option<(InstanceId, Option<Instance>)>> {
+    ) -> Result<Option<(Instance, Option<FuncIndex>, bool)>> {
         if self.cur.initializer == 0 {
             store.bump_resource_counts(&self.cur.module)?;
         }
@@ -484,7 +612,7 @@ impl<'a> Instantiator<'a> {
             // type-checking since only valid modules should reach this point.
             Some(Initializer::AliasInstanceExport { instance, export }) => {
                 let instance = self.cur.instances[*instance];
-                let export = store[instance.0][export].clone();
+                let export = instance._get_export(store, export).unwrap();
                 self.cur.push(export, store);
             }
 
@@ -550,24 +678,26 @@ impl<'a> Instantiator<'a> {
             // Note that in all cases we return the raw instance handle to get
             // the start function executed by the outer context.
             None => {
-                let instance = self.instantiate_raw(store)?;
-                let items = self.runtime_instance(store, instance);
-                let items = match self.in_progress.pop() {
+                let (instance, start) = self.instantiate_raw(store)?;
+                let toplevel = match self.in_progress.pop() {
                     Some(imports) => {
                         self.cur = imports;
-                        self.cur.instances.push(items);
-                        None
+                        self.cur.instances.push(instance);
+                        false
                     }
-                    None => Some(items),
+                    None => true,
                 };
-                return Ok(Some((instance, items)));
+                return Ok(Some((instance, start, toplevel)));
             }
         }
 
         Ok(None)
     }
 
-    fn instantiate_raw(&mut self, store: &mut StoreOpaque<'_>) -> Result<InstanceId> {
+    fn instantiate_raw(
+        &mut self,
+        store: &mut StoreOpaque<'_>,
+    ) -> Result<(Instance, Option<FuncIndex>)> {
         let compiled_module = self.cur.module.compiled_module();
 
         // Register the module just before instantiation to ensure we keep the module
@@ -575,26 +705,34 @@ impl<'a> Instantiator<'a> {
         store.modules_mut().register(&self.cur.module);
 
         unsafe {
-            let mut instance = store
-                .engine()
-                .allocator()
-                .allocate(InstanceAllocationRequest {
-                    module: compiled_module.module().clone(),
-                    finished_functions: compiled_module.finished_functions(),
-                    imports: self.cur.build(),
-                    shared_signatures: self.cur.module.signatures().as_module_map().into(),
-                    host_state: Box::new(()),
-                    store: Some(store.traitobj),
-                })?;
+            // The first thing we do is issue an instance allocation request
+            // to the instance allocator. This, on success, will give us an
+            // instance handle.
+            //
+            // Note that the `host_state` here is a pointer back to the
+            // `Instance` we'll be returning from this function. This is a
+            // circular reference so we can't construct it before we construct
+            // this instance, so we determine what the ID is and then assert
+            // it's the same later when we do actually insert it.
+            let instance_to_be = store.store_data().next_id::<InstanceData>();
+            let mut instance_handle =
+                store
+                    .engine()
+                    .allocator()
+                    .allocate(InstanceAllocationRequest {
+                        module: compiled_module.module().clone(),
+                        finished_functions: compiled_module.finished_functions(),
+                        imports: self.cur.build(),
+                        shared_signatures: self.cur.module.signatures().as_module_map().into(),
+                        host_state: Box::new(Instance(instance_to_be)),
+                        store: Some(store.traitobj),
+                    })?;
 
-            // After we've created the `InstanceHandle` we still need to run
-            // initialization to set up data/elements/etc. We do this after
-            // adding the `InstanceHandle` to the store though. This is required
-            // for safety because the start function (for example) may trap, but
-            // element initializers may have run which placed elements into
-            // other instance's tables. This means that from this point on,
-            // regardless of whether initialization is successful, we need to
-            // keep the instance alive.
+            // The instance still has lots of setup, for example
+            // data/elements/start/etc. This can all fail, but even on failure
+            // the instance may persist some state via previous successful
+            // initialization. For this reason once we have an instance handle
+            // we immediately insert it into the store to keep it alive.
             //
             // Note that we `clone` the instance handle just to make easier
             // working the the borrow checker here easier. Technically the `&mut
@@ -602,12 +740,69 @@ impl<'a> Instantiator<'a> {
             // conflicts with the borrow on `store.engine`) but this doesn't
             // matter in practice since initialization isn't even running any
             // code here anyway.
-            let id = store.add_instance(instance.clone(), false);
+            let id = store.add_instance(instance_handle.clone(), false);
+
+            // Additionally, before we start doing fallible instantiation, we
+            // do one more step which is to insert an `InstanceData`
+            // corresponding to this instance. This `InstanceData` can be used
+            // via `Caller::get_export` if our instance's state "leaks" into
+            // other instances, even if we don't return successfully from this
+            // function.
+            //
+            // We don't actually load all exports from the instance at this
+            // time, instead preferring to lazily load them as they're demanded.
+            // For module/instance exports, though, those aren't actually
+            // stored in the instance handle so we need to immediately handle
+            // those here.
+            let instance = {
+                let exports = compiled_module
+                    .module()
+                    .exports
+                    .values()
+                    .map(|index| {
+                        // Note that instances and modules are not handled by
+                        // `wasmtime_runtime`, they're handled by us in this crate. That
+                        // means we need to handle that here, otherwise we defer to the
+                        // instance to load the values.
+                        match *index {
+                            EntityIndex::Instance(i) => {
+                                Some(Extern::Instance(self.cur.instances[i].clone()))
+                            }
+                            EntityIndex::Module(i) => {
+                                Some(Extern::Module(self.cur.modules[i].clone()))
+                            }
+                            _ => None,
+                        }
+                    })
+                    .collect();
+                let data = InstanceData::Instantiated {
+                    id,
+                    exports,
+                    types: Arc::clone(self.cur.module.types()),
+                    signatures: Arc::clone(self.cur.module.signatures()),
+                };
+                Instance::from_wasmtime(data, store)
+            };
+
+            // double-check our guess of what the new instance's ID would be
+            // was actually correct.
+            assert_eq!(instance.0, instance_to_be);
+
+            // Now that we've recorded all information we need to about this
+            // instance within a `Store` we can start performing fallible
+            // initialization. Note that we still defer the `start` function to
+            // later since that may need to run asynchronously.
+            //
+            // If this returns an error (or if the start function traps) then
+            // any other initialization which may have succeeded which placed
+            // items from this instance into other instances should be ok when
+            // those items are loaded and run we'll have all the metadata to
+            // look at them.
             store
                 .engine()
                 .allocator()
                 .initialize(
-                    &mut instance,
+                    &mut instance_handle,
                     compiled_module.module(),
                     store.engine().config().features.bulk_memory,
                 )
@@ -618,18 +813,18 @@ impl<'a> Instantiator<'a> {
                     }
                 })?;
 
-            Ok(id)
+            Ok((instance, compiled_module.module().start_func))
         }
     }
 
-    fn start_raw(
-        store: &mut StoreOpaque<'_>,
-        instance: InstanceId,
-        start: FuncIndex,
-    ) -> Result<()> {
+    fn start_raw(store: &mut StoreOpaque<'_>, instance: Instance, start: FuncIndex) -> Result<()> {
+        let id = match &store[instance.0] {
+            InstanceData::Instantiated { id, .. } => *id,
+            InstanceData::Synthetic(_) => return Ok(()),
+        };
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
-        let instance = store.instance(instance);
+        let instance = store.instance(id);
         let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
             wasmtime_runtime::Export::Function(f) => f,
             _ => unreachable!(), // valid modules shouldn't hit this
@@ -646,45 +841,6 @@ impl<'a> Instantiator<'a> {
             })?;
         }
         Ok(())
-    }
-
-    fn runtime_instance(&mut self, store: &mut StoreOpaque<'_>, instance: InstanceId) -> Instance {
-        // We use an unsafe `clone()` here to work around the borrow checker.
-        // Technically our instance is a borrow of `store`, but we need the
-        // borrow again later when calling `Extern::from_wasmtime_export` (and a
-        // mutable one at that).
-        //
-        // The mutability in `from_wasmtime_export` only mutates `StoreData`
-        // since we're adding ids, but it definitely doesn't deallocate
-        // `instance` (nothing does that except `Drop` for `Store`), so this in
-        // theory should be safe.
-        let instance = unsafe { store.instance(instance).clone() };
-
-        // FIXME(#2916) we should ideally just store the `InstanceId` within the
-        // store itself. There should be no reason we have to allocate a hash
-        // map here and allocate a bunch of strings, that's quite wasteful if
-        // only one or two exports are used. Additionally this can push items
-        // into the `Store` which never end up getting used.
-        let exports = instance
-            .module()
-            .exports
-            .iter()
-            .map(|(name, index)| {
-                // Note that instances and modules are not handled by
-                // `wasmtime_runtime`, they're handled by us in this crate. That
-                // means we need to handle that here, otherwise we defer to the
-                // instance to load the values.
-                let item = match index {
-                    EntityIndex::Instance(i) => Extern::Instance(self.cur.instances[*i].clone()),
-                    EntityIndex::Module(i) => Extern::Module(self.cur.modules[*i].clone()),
-                    index => unsafe {
-                        Extern::from_wasmtime_export(instance.lookup_by_declaration(index), store)
-                    },
-                };
-                (name.clone(), item)
-            })
-            .collect();
-        Instance::from_wasmtime(Arc::new(exports), store)
     }
 }
 
@@ -736,8 +892,6 @@ impl<'a> ImportsBuilder<'a> {
         }
     }
 }
-
-pub(crate) type RuntimeInstance = Arc<indexmap::IndexMap<String, Extern>>;
 
 /// An instance, pre-instantiation, that is ready to be instantiated.
 ///
@@ -879,7 +1033,7 @@ fn typecheck<I>(
     let cx = matching::MatchCx {
         signatures: module.signatures(),
         types: module.types(),
-        store_data: store.store_data(),
+        store: store,
         engine: store.engine(),
     };
     for ((name, field, expected_ty), actual) in env_module.imports().zip(imports) {

@@ -3,7 +3,7 @@ use crate::{StoreContext, StoreContextMut};
 use std::fmt;
 use std::marker;
 use std::num::NonZeroU64;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
 
 // This is defined here, in a private submodule, so we can explicitly reexport
@@ -18,35 +18,22 @@ pub struct StoreData {
     funcs: Vec<crate::func::FuncData>,
     tables: Vec<wasmtime_runtime::ExportTable>,
     globals: Vec<wasmtime_runtime::ExportGlobal>,
-    instances: Vec<crate::instance::RuntimeInstance>,
+    instances: Vec<crate::instance::InstanceData>,
     memories: Vec<wasmtime_runtime::ExportMemory>,
 }
 
 pub trait StoredData: Sized {
-    fn get<'a>(id: Stored<Self>, data: &'a StoreData) -> &'a Self;
-    fn insert(self, data: &mut StoreData) -> Stored<Self>;
-    fn assert_contained(id: Stored<Self>, data: &StoreData);
+    fn list(data: &StoreData) -> &Vec<Self>;
+    fn list_mut(data: &mut StoreData) -> &mut Vec<Self>;
 }
 
 macro_rules! impl_store_data {
     ($($field:ident => $t:ty,)*) => ($(
         impl StoredData for $t {
             #[inline]
-            fn get<'a>(id: Stored<Self>, data: &'a StoreData) -> &'a Self {
-                assert!(id.store_id() == data.id,
-                "object used with the wrong store");
-                &data.$field[id.index()]
-            }
-
-            fn insert(self, data: &mut StoreData) -> Stored<Self> {
-                let index = data.$field.len();
-                data.$field.push(self);
-                Stored::new(data.id, index)
-            }
-
-            fn assert_contained(id: Stored<Self>, data: &StoreData) {
-                assert!(id.index() < data.$field.len());
-            }
+            fn list(data: &StoreData) -> &Vec<Self> { &data.$field }
+            #[inline]
+            fn list_mut(data: &mut StoreData) -> &mut Vec<Self> { &mut data.$field }
         }
     )*)
 }
@@ -55,7 +42,7 @@ impl_store_data! {
     funcs => crate::func::FuncData,
     tables => wasmtime_runtime::ExportTable,
     globals => wasmtime_runtime::ExportGlobal,
-    instances => crate::instance::RuntimeInstance,
+    instances => crate::instance::InstanceData,
     memories => wasmtime_runtime::ExportMemory,
 }
 
@@ -85,7 +72,17 @@ impl StoreData {
     where
         T: StoredData,
     {
-        data.insert(self)
+        let list = T::list_mut(self);
+        let index = list.len();
+        list.push(data);
+        Stored::new(self.id, index)
+    }
+
+    pub fn next_id<T>(&self) -> Stored<T>
+    where
+        T: StoredData,
+    {
+        Stored::new(self.id, T::list(self).len())
     }
 
     pub fn contains<T>(&self, id: Stored<T>) -> bool
@@ -98,7 +95,7 @@ impl StoreData {
         // this should be true as an invariant of our API, but double-check with
         // debug assertions enabled.
         if cfg!(debug_assertions) {
-            T::assert_contained(id, self);
+            assert!(id.index() < T::list(self).len());
         }
         true
     }
@@ -112,7 +109,25 @@ where
 
     #[inline]
     fn index(&self, index: Stored<T>) -> &Self::Output {
-        T::get(index, self)
+        assert!(
+            index.store_id() == self.id,
+            "object used with the wrong store"
+        );
+        &T::list(self)[index.index()]
+    }
+}
+
+impl<T> IndexMut<Stored<T>> for StoreData
+where
+    T: StoredData,
+{
+    #[inline]
+    fn index_mut(&mut self, index: Stored<T>) -> &mut Self::Output {
+        assert!(
+            index.store_id() == self.id,
+            "object used with the wrong store"
+        );
+        &mut T::list_mut(self)[index.index()]
     }
 }
 
@@ -154,6 +169,15 @@ where
         self.store_data().index(index)
     }
 }
+impl<I> IndexMut<I> for StoreOpaque<'_>
+where
+    StoreData: IndexMut<I>,
+{
+    #[inline]
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        self.store_data_mut().index_mut(index)
+    }
+}
 
 #[repr(C)] // used by reference in the C API
 pub struct Stored<T> {
@@ -177,6 +201,12 @@ impl<T> Stored<T> {
 
     fn index(&self) -> usize {
         self.index
+    }
+}
+
+impl<T> PartialEq for Stored<T> {
+    fn eq(&self, other: &Stored<T>) -> bool {
+        self.store_id == other.store_id && self.index == other.index
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::func::HostFunc;
-use crate::instance::InstancePre;
+use crate::instance::{InstanceData, InstancePre};
 use crate::store::StoreOpaque;
 use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
@@ -1083,7 +1083,7 @@ impl Definition {
                         .map(|(name, item)| (name.clone(), item.to_extern(store)))
                         .collect(),
                 );
-                Instance::from_wasmtime(items, store).into()
+                Instance::from_wasmtime(InstanceData::Synthetic(items), store).into()
             }
         }
     }

@@ -1,5 +1,6 @@
+use crate::instance::InstanceData;
 use crate::linker::Definition;
-use crate::store::StoreData;
+use crate::store::StoreInnermost;
 use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Context, Result};
 use wasmtime_environ::wasm::{
@@ -11,13 +12,13 @@ use wasmtime_runtime::VMSharedSignatureIndex;
 pub struct MatchCx<'a> {
     pub signatures: &'a SignatureCollection,
     pub types: &'a TypeTables,
-    pub store_data: &'a StoreData,
+    pub store: &'a StoreInnermost,
     pub engine: &'a Engine,
 }
 
 impl MatchCx<'_> {
     pub fn global(&self, expected: &Global, actual: &crate::Global) -> Result<()> {
-        self.global_ty(expected, actual.wasmtime_ty(self.store_data))
+        self.global_ty(expected, actual.wasmtime_ty(self.store.store_data()))
     }
 
     fn global_ty(&self, expected: &Global, actual: &Global) -> Result<()> {
@@ -32,7 +33,7 @@ impl MatchCx<'_> {
     }
 
     pub fn table(&self, expected: &Table, actual: &crate::Table) -> Result<()> {
-        self.table_ty(expected, actual.wasmtime_ty(self.store_data))
+        self.table_ty(expected, actual.wasmtime_ty(self.store.store_data()))
     }
 
     fn table_ty(&self, expected: &Table, actual: &Table) -> Result<()> {
@@ -54,7 +55,7 @@ impl MatchCx<'_> {
     }
 
     pub fn memory(&self, expected: &Memory, actual: &crate::Memory) -> Result<()> {
-        self.memory_ty(expected, actual.wasmtime_ty(self.store_data))
+        self.memory_ty(expected, actual.wasmtime_ty(self.store.store_data()))
     }
 
     fn memory_ty(&self, expected: &Memory, actual: &Memory) -> Result<()> {
@@ -75,7 +76,7 @@ impl MatchCx<'_> {
     }
 
     pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
-        self.vmshared_signature_index(expected, actual.sig_index(self.store_data))
+        self.vmshared_signature_index(expected, actual.sig_index(self.store.store_data()))
     }
 
     pub(crate) fn host_func(
@@ -105,14 +106,35 @@ impl MatchCx<'_> {
     }
 
     pub fn instance(&self, expected: InstanceTypeIndex, actual: &crate::Instance) -> Result<()> {
-        let items = actual.items(self.store_data);
         for (name, expected) in self.types.instance_signatures[expected].exports.iter() {
-            match items.get(name) {
-                Some(item) => {
-                    self.extern_(expected, item)
-                        .with_context(|| format!("instance export {:?} incompatible", name))?;
+            match actual.data(self.store.store_data()) {
+                InstanceData::Synthetic(names) => match names.get(name) {
+                    Some(item) => {
+                        self.extern_(expected, item)
+                            .with_context(|| format!("instance export {:?} incompatible", name))?;
+                    }
+                    None => bail!("instance type missing export {:?}", name),
+                },
+                InstanceData::Instantiated {
+                    id,
+                    types,
+                    signatures,
+                    ..
+                } => {
+                    let module = self.store.instance(*id).module();
+                    match module.exports.get(name) {
+                        Some(index) => {
+                            let actual_ty = module.type_of(*index);
+                            self.extern_ty_matches(expected, &actual_ty, signatures, types)
+                                .with_context(|| {
+                                    format!("instance export {:?} incompatible", name)
+                                })?;
+                        }
+                        None => bail!("instance type missing export {:?}", name),
+                    }
+
+                    // let
                 }
-                None => bail!("instance type missing export {:?}", name),
             }
         }
         Ok(())
@@ -169,7 +191,7 @@ impl MatchCx<'_> {
             MatchCx {
                 signatures: actual_signatures,
                 types: actual_types,
-                store_data: self.store_data,
+                store: self.store,
                 engine: self.engine,
             }
             .extern_ty_matches(&actual_ty, expected_ty, self.signatures, self.types)

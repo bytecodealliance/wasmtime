@@ -143,7 +143,7 @@ impl Instance {
             .cast()
     }
 
-    pub(crate) fn module(&self) -> &Module {
+    pub(crate) fn module(&self) -> &Arc<Module> {
         &self.module
     }
 
@@ -957,7 +957,7 @@ impl InstanceHandle {
     }
 
     /// Return a reference to a module.
-    pub fn module(&self) -> &Module {
+    pub fn module(&self) -> &Arc<Module> {
         self.instance().module()
     }
 
