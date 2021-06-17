@@ -290,7 +290,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  nngrk %r2, %r2, %r3
+; check:  ngr %r2, %r3
+; nextln: xilf %r2, 4294967295
+; nextln: xihf %r2, 4294967295
 ; nextln: br %r14
 
 function %band_not_i32(i32, i32) -> i32 {
@@ -299,7 +301,8 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  nnrk %r2, %r2, %r3
+; check:  nr %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %band_not_i16(i16, i16) -> i16 {
@@ -308,7 +311,8 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nnrk %r2, %r2, %r3
+; check:  nr %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %band_not_i8(i8, i8) -> i8 {
@@ -317,7 +321,8 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nnrk %r2, %r2, %r3
+; check:  nr %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -330,7 +335,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  nogrk %r2, %r2, %r3
+; check:  ogr %r2, %r3
+; nextln: xilf %r2, 4294967295
+; nextln: xihf %r2, 4294967295
 ; nextln: br %r14
 
 function %bor_not_i32(i32, i32) -> i32 {
@@ -339,7 +346,8 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  nork %r2, %r2, %r3
+; check:  or %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %bor_not_i16(i16, i16) -> i16 {
@@ -348,7 +356,8 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nork %r2, %r2, %r3
+; check:  or %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %bor_not_i8(i8, i8) -> i8 {
@@ -357,7 +366,8 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nork %r2, %r2, %r3
+; check:  or %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -370,7 +380,9 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  nxgrk %r2, %r2, %r3
+; check:  xgr %r2, %r3
+; nextln: xilf %r2, 4294967295
+; nextln: xihf %r2, 4294967295
 ; nextln: br %r14
 
 function %bxor_not_i32(i32, i32) -> i32 {
@@ -379,7 +391,8 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  nxrk %r2, %r2, %r3
+; check:  xr %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %bxor_not_i16(i16, i16) -> i16 {
@@ -388,7 +401,8 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nxrk %r2, %r2, %r3
+; check:  xr %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %bxor_not_i8(i8, i8) -> i8 {
@@ -397,7 +411,8 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nxrk %r2, %r2, %r3
+; check:  xr %r2, %r3
+; nextln: xilf %r2, 4294967295
 ; nextln: br %r14
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -410,7 +425,8 @@ block0(v0: i64):
   return v1
 }
 
-; check:  nogrk %r2, %r2, %r2
+; check:  xilf %r2, 4294967295
+; nextln: xihf %r2, 4294967295
 ; nextln: br %r14
 
 function %bnot_i32(i32) -> i32 {
@@ -419,7 +435,7 @@ block0(v0: i32):
   return v1
 }
 
-; check:  nork %r2, %r2, %r2
+; check:  xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %bnot_i16(i16) -> i16 {
@@ -428,7 +444,7 @@ block0(v0: i16):
   return v1
 }
 
-; check:  nork %r2, %r2, %r2
+; check:  xilf %r2, 4294967295
 ; nextln: br %r14
 
 function %bnot_i8(i8) -> i8 {
@@ -437,7 +453,7 @@ block0(v0: i8):
   return v1
 }
 
-; check:  nork %r2, %r2, %r2
+; check:  xilf %r2, 4294967295
 ; nextln: br %r14
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -451,7 +467,9 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; check:  ngr %r3, %r2
-; nextln: nngrk %r2, %r4, %r2
+; nextln: ngrk %r2, %r4, %r2
+; nextln: xilf %r2, 4294967295
+; nextln: xihf %r2, 4294967295
 ; nextln: ogr %r2, %r3
 ; nextln: br %r14
 
@@ -462,7 +480,8 @@ block0(v0: i32, v1: i32, v2: i32):
 }
 
 ; check:  nr %r3, %r2
-; nextln: nnrk %r2, %r4, %r2
+; nextln: nrk %r2, %r4, %r2
+; nextln: xilf %r2, 4294967295
 ; nextln: or %r2, %r3
 ; nextln: br %r14
 
@@ -473,7 +492,8 @@ block0(v0: i16, v1: i16, v2: i16):
 }
 
 ; check:  nr %r3, %r2
-; nextln: nnrk %r2, %r4, %r2
+; nextln: nrk %r2, %r4, %r2
+; nextln: xilf %r2, 4294967295
 ; nextln: or %r2, %r3
 ; nextln: br %r14
 
@@ -484,7 +504,8 @@ block0(v0: i8, v1: i8, v2: i8):
 }
 
 ; check:  nr %r3, %r2
-; nextln: nnrk %r2, %r4, %r2
+; nextln: nrk %r2, %r4, %r2
+; nextln: xilf %r2, 4294967295
 ; nextln: or %r2, %r3
 ; nextln: br %r14
 

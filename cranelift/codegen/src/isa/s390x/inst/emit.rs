@@ -5,6 +5,7 @@ use crate::ir::condcodes::IntCC;
 use crate::ir::MemFlags;
 use crate::ir::{SourceLoc, TrapCode};
 use crate::isa::s390x::inst::*;
+use crate::isa::s390x::settings as s390x_settings;
 use core::convert::TryFrom;
 use log::debug;
 use regalloc::{Reg, RegClass};
@@ -905,17 +906,20 @@ impl EmitState {
 }
 
 /// Constant state used during function compilation.
-pub struct EmitInfo(settings::Flags);
+pub struct EmitInfo {
+    flags: settings::Flags,
+    isa_flags: s390x_settings::Flags,
+}
 
 impl EmitInfo {
-    pub(crate) fn new(flags: settings::Flags) -> Self {
-        Self(flags)
+    pub(crate) fn new(flags: settings::Flags, isa_flags: s390x_settings::Flags) -> Self {
+        Self { flags, isa_flags }
     }
 }
 
 impl MachInstEmitInfo for EmitInfo {
     fn flags(&self) -> &settings::Flags {
-        &self.0
+        &self.flags
     }
 }
 
@@ -924,6 +928,25 @@ impl MachInstEmit for Inst {
     type Info = EmitInfo;
 
     fn emit(&self, sink: &mut MachBuffer<Inst>, emit_info: &Self::Info, state: &mut EmitState) {
+        // Verify that we can emit this Inst in the current ISA
+        let matches_isa_flags = |iset_requirement: &InstructionSet| -> bool {
+            match iset_requirement {
+                // Baseline ISA is z14
+                InstructionSet::Base => true,
+                // Miscellaneous-Instruction-Extensions Facility 2 (z15)
+                InstructionSet::MIE2 => emit_info.isa_flags.has_mie2(),
+                // Vector-Enhancements Facility 2 (z15)
+                InstructionSet::VXRS_EXT2 => emit_info.isa_flags.has_vxrs_ext2(),
+            }
+        };
+        let isa_requirements = self.available_in_isa();
+        if !matches_isa_flags(&isa_requirements) {
+            panic!(
+                "Cannot emit inst '{:?}' for target; failed to match ISA requirements: {:?}",
+                self, isa_requirements
+            )
+        }
+
         // N.B.: we *must* not exceed the "worst-case size" used to compute
         // where to insert islands, except when islands are explicitly triggered
         // (with an `EmitIsland`). We check this in debug builds. This is `mut`

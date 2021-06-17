@@ -57,7 +57,7 @@ impl S390xBackend {
         func: &Function,
         flags: shared_settings::Flags,
     ) -> CodegenResult<VCode<inst::Inst>> {
-        let emit_info = EmitInfo::new(flags.clone());
+        let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
         let abi = Box::new(abi::S390xABICallee::new(func, flags)?);
         compile::compile::<S390xBackend>(func, self, abi, emit_info)
     }

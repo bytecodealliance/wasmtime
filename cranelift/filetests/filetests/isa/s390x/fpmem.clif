@@ -1,0 +1,81 @@
+test compile
+target s390x
+
+function %load_f64(i64) -> f64 {
+block0(v0: i64):
+  v1 = load.f64 v0
+  return v1
+}
+
+; check:  ld %f0, 0(%r2)
+; nextln: br %r14
+
+function %load_f32(i64) -> f32 {
+block0(v0: i64):
+  v1 = load.f32 v0
+  return v1
+}
+
+; check:  le %f0, 0(%r2)
+; nextln: br %r14
+
+function %load_f64_little(i64) -> f64 {
+block0(v0: i64):
+  v1 = load.f64 little v0
+  return v1
+}
+
+; check:  lrvg %r2, 0(%r2)
+; nextln: ldgr %f0, %r2
+; nextln: br %r14
+
+function %load_f32_little(i64) -> f32 {
+block0(v0: i64):
+  v1 = load.f32 little v0
+  return v1
+}
+
+; check:  lrv %r2, 0(%r2)
+; nextln: sllg %r2, %r2, 32
+; nextln: ldgr %f0, %r2
+; nextln: br %r14
+
+function %store_f64(f64, i64) {
+block0(v0: f64, v1: i64):
+  store.f64 v0, v1
+  return
+}
+
+; check:  std %f0, 0(%r2)
+; nextln: br %r14
+
+function %store_f32(f32, i64) {
+block0(v0: f32, v1: i64):
+  store.f32 v0, v1
+  return
+}
+
+; check:  ste %f0, 0(%r2)
+; nextln: br %r14
+
+function %store_f64_little(f64, i64) {
+block0(v0: f64, v1: i64):
+  store.f64 little v0, v1
+  return
+}
+
+; check:  lgdr %r3, %f0
+; nextln: strvg %r3, 0(%r2)
+; nextln: br %r14
+
+function %store_f32_little(f32, i64) {
+block0(v0: f32, v1: i64):
+  store.f32 little v0, v1
+  return
+}
+
+; check:  lgdr %r3, %f0
+; nextln: srlg %r3, %r3, 32
+; nextln: strv %r3, 0(%r2)
+; nextln: br %r14
+

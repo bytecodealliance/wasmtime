@@ -1,5 +1,6 @@
 use crate::ir::MemFlags;
 use crate::isa::s390x::inst::*;
+use crate::isa::s390x::settings as s390x_settings;
 use crate::isa::test_utils;
 use crate::settings;
 use alloc::vec::Vec;
@@ -7767,8 +7768,14 @@ fn test_s390x_binemit() {
     ));
 
     let flags = settings::Flags::new(settings::builder());
+
+    use crate::settings::Configurable;
+    let mut isa_flag_builder = s390x_settings::builder();
+    isa_flag_builder.enable("arch13").unwrap();
+    let isa_flags = s390x_settings::Flags::new(&flags, isa_flag_builder);
+
     let rru = create_reg_universe(&flags);
-    let emit_info = EmitInfo::new(flags);
+    let emit_info = EmitInfo::new(flags, isa_flags);
     for (insn, expected_encoding, expected_printing) in insns {
         println!(
             "S390x: {:?}, {}, {}",

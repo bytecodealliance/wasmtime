@@ -1,0 +1,44 @@
+test compile
+target s390x arch13
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; POPCNT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %popcnt_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = popcnt v0
+    return v1
+}
+
+; check:  popcnt %r2, %r2, 8
+; nextln: br %r14
+
+function %popcnt_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = popcnt v0
+    return v1
+}
+
+; check:  llgfr %r2, %r2
+; nextln: popcnt %r2, %r2, 8
+; nextln: br %r14
+
+function %popcnt_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = popcnt v0
+    return v1
+}
+
+; check:  llghr %r2, %r2
+; nextln: popcnt %r2, %r2, 8
+; nextln: br %r14
+
+function %popcnt_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = popcnt v0
+    return v1
+}
+
+; check: popcnt %r2, %r2
+; nextln: br %r14
