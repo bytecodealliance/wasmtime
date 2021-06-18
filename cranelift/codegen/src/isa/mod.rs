@@ -84,12 +84,6 @@ pub(crate) mod aarch64;
 #[cfg(feature = "s390x")]
 mod s390x;
 
-#[cfg(feature = "riscv")]
-mod legacy;
-
-#[cfg(feature = "riscv")]
-use legacy::riscv;
-
 pub mod unwind;
 
 mod call_conv;
@@ -121,9 +115,6 @@ macro_rules! isa_builder {
 /// by `variant` if available.
 pub fn lookup_variant(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
-        Architecture::Riscv32 { .. } | Architecture::Riscv64 { .. } => {
-            isa_builder!(riscv, (feature = "riscv"), triple)
-        }
         Architecture::X86_64 => {
             isa_builder!(x64, (feature = "x86"), triple)
         }

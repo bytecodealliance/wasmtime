@@ -13,18 +13,11 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
-#[cfg(any(feature = "x86", feature = "riscv"))]
-use crate::bitset::BitSet;
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::types::{I32, I64};
 use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
-
-#[cfg(feature = "riscv")]
-use crate::predicates;
-#[cfg(feature = "riscv")]
-use alloc::vec::Vec;
 
 use crate::timing;
 use alloc::collections::BTreeSet;
@@ -37,8 +30,6 @@ mod libcall;
 mod split;
 mod table;
 
-#[cfg(any(feature = "x86", feature = "riscv"))]
-use self::call::expand_call;
 use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
 pub(crate) use self::libcall::expand_as_libcall;
