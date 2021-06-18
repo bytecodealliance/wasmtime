@@ -70,7 +70,6 @@ fn find_funcs(store: &mut Store<()>, instance: &Instance) -> Vec<TestFunc> {
 fn test_traps(store: &mut Store<()>, funcs: &[TestFunc], addr: u32, mem: &Memory) {
     let mem_size = mem.data_size(&store) as u64;
     for func in funcs {
-        // println!("width={}, offset={}", func.width, func.offset);
         let result = func.func.call(&mut *store, addr);
         let base = u64::from(func.offset) + u64::from(addr);
         let range = base..base + u64::from(func.width);
@@ -103,11 +102,9 @@ fn offsets_static_dynamic_oh_my() -> Result<()> {
     }
 
     engines.par_iter().for_each(|engine| {
-        println!("{:?}", engine.config());
         let module = module(&engine).unwrap();
 
         for limits in [Limits::new(1, Some(2)), Limits::new(1, None)].iter() {
-            // println!("limits {:?}", limits);
             let mut store = Store::new(&engine, ());
             let mem = Memory::new(&mut store, MemoryType::new(limits.clone())).unwrap();
             let instance = Instance::new(&mut store, &module, &[mem.into()]).unwrap();

@@ -156,7 +156,7 @@ struct FaultLocator {
     instances_start: usize,
     instance_size: usize,
     max_instances: usize,
-    unguarded_memories_start: usize,
+    memories_mapping_start: usize,
     memories_start: usize,
     memories_end: usize,
     memory_size: usize,
@@ -177,7 +177,7 @@ impl FaultLocator {
         Self {
             instances_start,
             instance_size: instances.instance_size,
-            unguarded_memories_start: instances.memories.mapping.as_ptr() as usize,
+            memories_mapping_start: instances.memories.mapping.as_ptr() as usize,
             max_instances: instances.max_instances,
             memories_start,
             memories_end,
@@ -348,7 +348,7 @@ fn fault_handler_thread(uffd: Uffd, locator: FaultLocator) -> Result<()> {
 
                 let (start, end) = (start as usize, end as usize);
 
-                if start == locator.unguarded_memories_start && end == locator.memories_end {
+                if start == locator.memories_mapping_start && end == locator.memories_end {
                     break;
                 } else {
                     panic!("unexpected memory region unmapped");
