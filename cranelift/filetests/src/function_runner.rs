@@ -47,8 +47,8 @@ impl SingleFunctionCompiler {
     }
 
     /// Build a [SingleFunctionCompiler] using the host machine's ISA and the passed flags.
-    pub fn with_host_isa(flags: settings::Flags, variant: BackendVariant) -> Self {
-        let builder = builder_with_options(variant, true)
+    pub fn with_host_isa(flags: settings::Flags) -> Self {
+        let builder = builder_with_options(true)
             .expect("Unable to build a TargetIsa for the current host");
         let isa = builder.finish(flags);
         Self::new(isa)
@@ -58,7 +58,7 @@ impl SingleFunctionCompiler {
     /// ISA.
     pub fn with_default_host_isa() -> Self {
         let flags = settings::Flags::new(settings::builder());
-        Self::with_host_isa(flags, BackendVariant::Any)
+        Self::with_host_isa(flags)
     }
 
     /// Compile the passed [Function] to a `CompiledFunction`. This function will:

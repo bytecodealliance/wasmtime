@@ -109,26 +109,3 @@ check:        DW_AT_decl_line	(10)
     )
 }
 
-#[test]
-#[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_arch = "x86_64",
-    target_pointer_width = "64",
-    // Ignore test on new backend. This is a specific test with hardcoded
-    // offsets and the new backend compiles the return basic-block at a different
-    // offset, causing mismatches.
-    feature = "old-x86-backend",
-))]
-fn test_debug_dwarf5_translate_lines() -> Result<()> {
-    check_line_program(
-        "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
-        r##"
-check:   Address            Line   Column File   ISA Discriminator Flags
-check: 0x000000000000013c     15      3      1   0             0
-# The important point is that the following offset must be _after_ the `ret` instruction.
-# FIXME: this +1 increment might vary on other archs.
-nextln: 0x000000000000013d     15      3      1   0             0  end_sequence
-    "##,
-    )
-}

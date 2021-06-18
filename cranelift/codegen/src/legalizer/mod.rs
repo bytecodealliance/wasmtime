@@ -21,9 +21,9 @@ use crate::ir::types::{I32, I64};
 use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
 
-#[cfg(any(feature = "x86", feature = "riscv"))]
+#[cfg(feature = "riscv")]
 use crate::predicates;
-#[cfg(any(feature = "x86", feature = "riscv"))]
+#[cfg(feature = "riscv")]
 use alloc::vec::Vec;
 
 use crate::timing;

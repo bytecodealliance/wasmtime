@@ -525,7 +525,6 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg_attr(feature = "old-x86-backend", ignore)]
 fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(false);
@@ -569,7 +568,6 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg(not(feature = "old-x86-backend"))]
 fn typed_multiple_results() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -647,7 +645,6 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg(not(feature = "old-x86-backend"))]
 fn wrap_multiple_results() -> anyhow::Result<()> {
     fn test<T>(store: &mut Store<()>, t: T) -> anyhow::Result<()>
     where
