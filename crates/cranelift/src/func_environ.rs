@@ -1257,6 +1257,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             MemoryPlan {
                 style: MemoryStyle::Dynamic,
                 offset_guard_size,
+                pre_guard_size: _,
                 memory: _,
             } => {
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
@@ -1276,6 +1277,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             MemoryPlan {
                 style: MemoryStyle::Static { bound },
                 offset_guard_size,
+                pre_guard_size: _,
                 memory: _,
             } => (
                 Uimm64::new(offset_guard_size),

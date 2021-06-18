@@ -15,7 +15,6 @@ use super::{
 use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
 use rand::Rng;
-use std::cmp::min;
 use std::convert::TryFrom;
 use std::marker;
 use std::mem;
@@ -234,21 +233,12 @@ impl Default for ModuleLimits {
 pub struct InstanceLimits {
     /// The maximum number of concurrent instances supported.
     pub count: u32,
-
-    /// The maximum size, in bytes, of host address space to reserve for each linear memory of an instance.
-    pub memory_reservation_size: u64,
 }
 
 impl Default for InstanceLimits {
     fn default() -> Self {
         // See doc comments for `wasmtime::InstanceLimits` for these default values
-        Self {
-            count: 1000,
-            #[cfg(target_pointer_width = "32")]
-            memory_reservation_size: 10 * (1 << 20), // 10 MiB,
-            #[cfg(target_pointer_width = "64")]
-            memory_reservation_size: 6 * (1 << 30), // 6 GiB,
-        }
+        Self { count: 1000 }
     }
 }
 
@@ -299,7 +289,11 @@ struct InstancePool {
 }
 
 impl InstancePool {
-    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
+    fn new(
+        module_limits: &ModuleLimits,
+        instance_limits: &InstanceLimits,
+        tunables: &Tunables,
+    ) -> Result<Self> {
         let page_size = region::page::size();
 
         // Calculate the maximum size of an Instance structure given the limits
@@ -337,7 +331,7 @@ impl InstancePool {
             instance_size,
             max_instances,
             free_list: Mutex::new((0..max_instances).collect()),
-            memories: MemoryPool::new(module_limits, instance_limits)?,
+            memories: MemoryPool::new(module_limits, instance_limits, tunables)?,
             tables: TablePool::new(module_limits, instance_limits)?,
             empty_module: Arc::new(Module::default()),
         };
@@ -598,20 +592,29 @@ impl Drop for InstancePool {
 /// Each instance index into the pool returns an iterator over the base addresses
 /// of the instance's linear memories.
 ///
-///
 /// The userfault handler relies on how memories are stored in the mapping,
 /// so make sure the uffd implementation is kept up-to-date.
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
+    // The size, in bytes, of each linear memory's reservation plus the guard
+    // region allocated for it.
     memory_size: usize,
+    // The size, in bytes, of the offset to the first linear memory in this
+    // pool. This is here to help account for the first region of guard pages,
+    // if desired, before the first linear memory.
+    initial_memory_offset: usize,
     max_memories: usize,
     max_instances: usize,
     max_wasm_pages: u32,
 }
 
 impl MemoryPool {
-    fn new(module_limits: &ModuleLimits, instance_limits: &InstanceLimits) -> Result<Self> {
+    fn new(
+        module_limits: &ModuleLimits,
+        instance_limits: &InstanceLimits,
+        tunables: &Tunables,
+    ) -> Result<Self> {
         // The maximum module memory page count cannot exceed 65536 pages
         if module_limits.memory_pages > 0x10000 {
             bail!(
@@ -621,19 +624,20 @@ impl MemoryPool {
         }
 
         // The maximum module memory page count cannot exceed the memory reservation size
-        if u64::from(module_limits.memory_pages) * u64::from(WASM_PAGE_SIZE)
-            > instance_limits.memory_reservation_size
-        {
+        if module_limits.memory_pages > tunables.static_memory_bound {
             bail!(
-                "module memory page limit of {} pages exceeds the memory reservation size limit of {} bytes",
+                "module memory page limit of {} pages exceeds maximum static memory limit of {} pages",
                 module_limits.memory_pages,
-                instance_limits.memory_reservation_size
+                tunables.static_memory_bound,
             );
         }
 
         let memory_size = if module_limits.memory_pages > 0 {
-            usize::try_from(instance_limits.memory_reservation_size)
-                .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?
+            usize::try_from(
+                u64::from(tunables.static_memory_bound) * u64::from(WASM_PAGE_SIZE)
+                    + tunables.static_memory_offset_guard_size,
+            )
+            .map_err(|_| anyhow!("memory reservation size exceeds addressable memory"))?
         } else {
             0
         };
@@ -646,10 +650,29 @@ impl MemoryPool {
 
         let max_instances = instance_limits.count as usize;
         let max_memories = module_limits.memories as usize;
+        let initial_memory_offset = if tunables.guard_before_linear_memory {
+            usize::try_from(tunables.static_memory_offset_guard_size).unwrap()
+        } else {
+            0
+        };
 
+        // The entire allocation here is the size of each memory times the
+        // max memories per instance times the number of instances allowed in
+        // this pool, plus guard regions.
+        //
+        // Note, though, that guard regions are required to be after each linear
+        // memory. If the `guard_before_linear_memory` setting is specified,
+        // then due to the contiguous layout of linear memories the guard pages
+        // after one memory are also guard pages preceding the next linear
+        // memory. This means that we only need to handle pre-guard-page sizes
+        // specially for the first linear memory, hence the
+        // `initial_memory_offset` variable here. If guards aren't specified
+        // before linear memories this is set to `0`, otherwise it's set to
+        // the same size as guard regions for other memories.
         let allocation_size = memory_size
             .checked_mul(max_memories)
             .and_then(|c| c.checked_mul(max_instances))
+            .and_then(|c| c.checked_add(initial_memory_offset))
             .ok_or_else(|| {
                 anyhow!("total size of memory reservation exceeds addressable memory")
             })?;
@@ -661,6 +684,7 @@ impl MemoryPool {
         let pool = Self {
             mapping,
             memory_size,
+            initial_memory_offset,
             max_memories,
             max_instances,
             max_wasm_pages: module_limits.memory_pages,
@@ -677,9 +701,9 @@ impl MemoryPool {
         debug_assert!(instance_index < self.max_instances);
 
         let base: *mut u8 = unsafe {
-            self.mapping
-                .as_mut_ptr()
-                .add(instance_index * self.memory_size * self.max_memories) as _
+            self.mapping.as_mut_ptr().add(
+                self.initial_memory_offset + instance_index * self.memory_size * self.max_memories,
+            ) as _
         };
 
         let size = self.memory_size;
@@ -903,25 +927,15 @@ impl PoolingInstanceAllocator {
     pub fn new(
         strategy: PoolingAllocationStrategy,
         module_limits: ModuleLimits,
-        mut instance_limits: InstanceLimits,
+        instance_limits: InstanceLimits,
         stack_size: usize,
+        tunables: &Tunables,
     ) -> Result<Self> {
         if instance_limits.count == 0 {
             bail!("the instance count limit cannot be zero");
         }
 
-        // Round the memory reservation size to the nearest Wasm page size
-        instance_limits.memory_reservation_size = u64::try_from(round_up_to_pow2(
-            usize::try_from(instance_limits.memory_reservation_size).unwrap(),
-            WASM_PAGE_SIZE as usize,
-        ))
-        .unwrap();
-
-        // Cap the memory reservation size to 8 GiB (maximum 4 GiB accessible + 4 GiB of guard region)
-        instance_limits.memory_reservation_size =
-            min(instance_limits.memory_reservation_size, 0x200000000);
-
-        let instances = InstancePool::new(&module_limits, &instance_limits)?;
+        let instances = InstancePool::new(&module_limits, &instance_limits, tunables)?;
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         let _fault_handler = imp::PageFaultHandler::new(&instances)?;
@@ -956,18 +970,6 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     }
 
     fn adjust_tunables(&self, tunables: &mut Tunables) {
-        let memory_reservation_size = self.instance_limits.memory_reservation_size;
-
-        // For reservation sizes larger than 4 GiB, use a guard region to elide bounds checks
-        if memory_reservation_size >= 0x100000000 {
-            tunables.static_memory_bound = 0x10000; // in Wasm pages
-            tunables.static_memory_offset_guard_size = memory_reservation_size - 0x100000000;
-        } else {
-            tunables.static_memory_bound =
-                u32::try_from(memory_reservation_size).unwrap() / WASM_PAGE_SIZE;
-            tunables.static_memory_offset_guard_size = 0;
-        }
-
         // Treat the static memory bound as the maximum for unbounded Wasm memories
         // Because we guarantee a module cannot compile unless it fits in the limits of
         // the pool allocator, this ensures all memories are treated as static (i.e. immovable).
@@ -1124,6 +1126,7 @@ mod test {
                 maximum: None,
                 shared: false,
             },
+            pre_guard_size: 0,
             offset_guard_size: 0,
         });
 
@@ -1239,6 +1242,7 @@ mod test {
                 maximum: None,
                 shared: false,
             },
+            pre_guard_size: 0,
             offset_guard_size: 0,
         });
         assert_eq!(
@@ -1312,6 +1316,7 @@ mod test {
                 maximum: None,
                 shared: false,
             },
+            pre_guard_size: 0,
             offset_guard_size: 0,
         });
         assert_eq!(
@@ -1337,6 +1342,7 @@ mod test {
                 shared: false,
             },
             offset_guard_size: 0,
+            pre_guard_size: 0,
         });
         assert_eq!(
             limits.validate(&module).map_err(|e| e.to_string()),
@@ -1375,12 +1381,16 @@ mod test {
             table_elements: 10,
             memory_pages: 1,
         };
-        let instance_limits = InstanceLimits {
-            count: 3,
-            memory_reservation_size: WASM_PAGE_SIZE as u64,
-        };
+        let instance_limits = InstanceLimits { count: 3 };
 
-        let instances = InstancePool::new(&module_limits, &instance_limits)?;
+        let instances = InstancePool::new(
+            &module_limits,
+            &instance_limits,
+            &Tunables {
+                static_memory_bound: 1,
+                ..Tunables::default()
+            },
+        )?;
 
         // As of April 2021, the instance struct's size is largely below the size of a single page,
         // so it's safe to assume it's been rounded to the size of a single memory page here.
@@ -1464,9 +1474,11 @@ mod test {
                 table_elements: 0,
                 memory_pages: 1,
             },
-            &InstanceLimits {
-                count: 5,
-                memory_reservation_size: WASM_PAGE_SIZE as u64,
+            &InstanceLimits { count: 5 },
+            &Tunables {
+                static_memory_bound: 1,
+                static_memory_offset_guard_size: 0,
+                ..Tunables::default()
             },
         )?;
 
@@ -1510,10 +1522,7 @@ mod test {
                 table_elements: 100,
                 memory_pages: 0,
             },
-            &InstanceLimits {
-                count: 7,
-                memory_reservation_size: WASM_PAGE_SIZE as u64,
-            },
+            &InstanceLimits { count: 7 },
         )?;
 
         let host_page_size = region::page::size();
@@ -1545,13 +1554,7 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_pool() -> Result<()> {
-        let pool = StackPool::new(
-            &InstanceLimits {
-                count: 10,
-                memory_reservation_size: 0,
-            },
-            1,
-        )?;
+        let pool = StackPool::new(&InstanceLimits { count: 10 }, 1)?;
 
         let native_page_size = region::page::size();
         assert_eq!(pool.stack_size, 2 * native_page_size);
@@ -1609,7 +1612,8 @@ mod test {
                     count: 0,
                     ..Default::default()
                 },
-                4096
+                4096,
+                &Tunables::default(),
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1626,11 +1630,12 @@ mod test {
                     memory_pages: 0x10001,
                     ..Default::default()
                 },
-                InstanceLimits {
-                    count: 1,
-                    memory_reservation_size: 1,
+                InstanceLimits { count: 1 },
+                4096,
+                &Tunables {
+                    static_memory_bound: 1,
+                    ..Tunables::default()
                 },
-                4096
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1647,15 +1652,17 @@ mod test {
                     memory_pages: 2,
                     ..Default::default()
                 },
-                InstanceLimits {
-                    count: 1,
-                    memory_reservation_size: 1,
-                },
+                InstanceLimits { count: 1 },
                 4096,
+                &Tunables {
+                    static_memory_bound: 1,
+                    static_memory_offset_guard_size: 0,
+                    ..Tunables::default()
+                },
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
-            "module memory page limit of 2 pages exceeds the memory reservation size limit of 65536 bytes"
+            "module memory page limit of 2 pages exceeds maximum static memory limit of 1 pages"
         );
     }
 
@@ -1676,11 +1683,9 @@ mod test {
                 memory_pages: 0,
                 ..Default::default()
             },
-            InstanceLimits {
-                count: 1,
-                memory_reservation_size: 1,
-            },
+            InstanceLimits { count: 1 },
             4096,
+            &Tunables::default(),
         )?;
 
         unsafe {

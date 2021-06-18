@@ -11,11 +11,11 @@ fn successful_instantiation() -> Result<()> {
             table_elements: 10,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_reservation_size: 1,
-        },
+        instance_limits: InstanceLimits { count: 1 },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(0);
+    config.static_memory_maximum_size(65536);
 
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module (memory 1) (table 10 funcref))"#)?;
@@ -37,11 +37,11 @@ fn memory_limit() -> Result<()> {
             table_elements: 10,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_reservation_size: 196608,
-        },
+        instance_limits: InstanceLimits { count: 1 },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(65536);
+    config.static_memory_maximum_size(3 * 65536);
 
     let engine = Engine::new(&config)?;
 
@@ -197,11 +197,11 @@ fn memory_zeroed() -> Result<()> {
             table_elements: 0,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_reservation_size: 1,
-        },
+        instance_limits: InstanceLimits { count: 1 },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(0);
+    config.static_memory_maximum_size(65536);
 
     let engine = Engine::new(&config)?;
 
@@ -240,11 +240,11 @@ fn table_limit() -> Result<()> {
             table_elements: TABLE_ELEMENTS,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_reservation_size: 1,
-        },
+        instance_limits: InstanceLimits { count: 1 },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(0);
+    config.static_memory_maximum_size(65536);
 
     let engine = Engine::new(&config)?;
 
@@ -367,11 +367,11 @@ fn table_zeroed() -> Result<()> {
             table_elements: 10,
             ..Default::default()
         },
-        instance_limits: InstanceLimits {
-            count: 1,
-            memory_reservation_size: 1,
-        },
+        instance_limits: InstanceLimits { count: 1 },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(0);
+    config.static_memory_maximum_size(65536);
 
     let engine = Engine::new(&config)?;
 
@@ -413,9 +413,11 @@ fn instantiation_limit() -> Result<()> {
         },
         instance_limits: InstanceLimits {
             count: INSTANCE_LIMIT,
-            memory_reservation_size: 1,
         },
     });
+    config.dynamic_memory_guard_size(0);
+    config.static_memory_guard_size(0);
+    config.static_memory_maximum_size(65536);
 
     let engine = Engine::new(&config)?;
     let module = Module::new(&engine, r#"(module)"#)?;

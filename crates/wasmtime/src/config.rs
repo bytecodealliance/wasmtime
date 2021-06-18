@@ -145,38 +145,14 @@ impl Into<wasmtime_runtime::ModuleLimits> for ModuleLimits {
 pub struct InstanceLimits {
     /// The maximum number of concurrent instances supported (default is 1000).
     pub count: u32,
-
-    /// The maximum size, in bytes, of host address space to reserve for each linear memory of an instance.
-    ///
-    /// Note: this value has important performance ramifications.
-    ///
-    /// On 64-bit platforms, the default for this value will be 6 GiB.  A value of less than 4 GiB will
-    /// force runtime bounds checking for memory accesses and thus will negatively impact performance.
-    /// Any value above 4 GiB will start eliding bounds checks provided the `offset` of the memory access is
-    /// less than (`memory_reservation_size` - 4 GiB).  A value of 8 GiB will completely elide *all* bounds
-    /// checks; consequently, 8 GiB will be the maximum supported value. The default of 6 GiB reserves
-    /// less host address space for each instance, but a memory access with an offset above 2 GiB will incur
-    /// runtime bounds checks.
-    ///
-    /// On 32-bit platforms, the default for this value will be 10 MiB. A 32-bit host has very limited address
-    /// space to reserve for a lot of concurrent instances.  As a result, runtime bounds checking will be used
-    /// for all memory accesses.  For better runtime performance, a 64-bit host is recommended.
-    ///
-    /// This value will be rounded up by the WebAssembly page size (64 KiB).
-    pub memory_reservation_size: u64,
 }
 
 impl Default for InstanceLimits {
     fn default() -> Self {
-        let wasmtime_runtime::InstanceLimits {
-            count,
-            memory_reservation_size,
-        } = wasmtime_runtime::InstanceLimits::default();
+        let wasmtime_runtime::InstanceLimits { count } =
+            wasmtime_runtime::InstanceLimits::default();
 
-        Self {
-            count,
-            memory_reservation_size,
-        }
+        Self { count }
     }
 }
 
@@ -185,15 +161,9 @@ impl Default for InstanceLimits {
 #[doc(hidden)]
 impl Into<wasmtime_runtime::InstanceLimits> for InstanceLimits {
     fn into(self) -> wasmtime_runtime::InstanceLimits {
-        let Self {
-            count,
-            memory_reservation_size,
-        } = self;
+        let Self { count } = self;
 
-        wasmtime_runtime::InstanceLimits {
-            count,
-            memory_reservation_size,
-        }
+        wasmtime_runtime::InstanceLimits { count }
     }
 }
 
@@ -916,11 +886,11 @@ impl Config {
 
     /// Sets the instance allocation strategy to use.
     ///
-    /// When using the pooling instance allocation strategy, all linear memories will be created as "static".
-    ///
-    /// This means the [`Config::static_memory_maximum_size`] and [`Config::static_memory_guard_size`] options
-    /// will be ignored in favor of [`InstanceLimits::memory_reservation_size`] when the pooling instance
-    /// allocation strategy is used.
+    /// When using the pooling instance allocation strategy, all linear memories
+    /// will be created as "static" and the
+    /// [`Config::static_memory_maximum_size`] and
+    /// [`Config::static_memory_guard_size`] options will be used to configure
+    /// the virtual memory allocations of linear memories.
     pub fn allocation_strategy(&mut self, strategy: InstanceAllocationStrategy) -> &mut Self {
         self.allocation_strategy = strategy;
         self
@@ -928,6 +898,9 @@ impl Config {
 
     /// Configures the maximum size, in bytes, where a linear memory is
     /// considered static, above which it'll be considered dynamic.
+    ///
+    /// > Note: this value has important performance ramifications, be sure to
+    /// > understand what this value does before tweaking it and benchmarking.
     ///
     /// This function configures the threshold for wasm memories whether they're
     /// implemented as a dynamically relocatable chunk of memory or a statically
@@ -1004,6 +977,13 @@ impl Config {
     /// For 32-bit platforms this value defaults to 1GB. This means that wasm
     /// memories whose maximum size is less than 1GB will be allocated
     /// statically, otherwise they'll be considered dynamic.
+    ///
+    /// ## Static Memory and Pooled Instance Allocation
+    ///
+    /// When using the pooling instance allocator memories are considered to
+    /// always be static memories, they are never dynamic. This setting
+    /// configures the size of linear memory to reserve for each memory in the
+    /// pooling allocator.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
         let max_pages = max_size / u64::from(wasmtime_environ::WASM_PAGE_SIZE);
         self.tunables.static_memory_bound = u32::try_from(max_pages).unwrap_or(u32::max_value());
@@ -1012,6 +992,9 @@ impl Config {
 
     /// Configures the size, in bytes, of the guard region used at the end of a
     /// static memory's address space reservation.
+    ///
+    /// > Note: this value has important performance ramifications, be sure to
+    /// > understand what this value does before tweaking it and benchmarking.
     ///
     /// All WebAssembly loads/stores are bounds-checked and generate a trap if
     /// they're out-of-bounds. Loads and stores are often very performance
@@ -1095,6 +1078,31 @@ impl Config {
         self
     }
 
+    /// Indicates whether a guard region is present before allocations of
+    /// linear memory.
+    ///
+    /// Guard regions before linear memories are never used during normal
+    /// operation of WebAssembly modules, even if they have out-of-bounds
+    /// loads. The only purpose for a preceding guard region in linear memory
+    /// is extra protection against possible bugs in code generators like
+    /// Cranelift. This setting does not affect performance in any way, but will
+    /// result in larger virtual memory reservations for linear memories (it
+    /// won't actually ever use more memory, just use more of the address
+    /// space).
+    ///
+    /// The size of the guard region before linear memory is the same as the
+    /// guard size that comes after linear memory, which is configured by
+    /// [`Config::static_memory_guard_size`] and
+    /// [`Config::dynamic_memory_guard_size`].
+    ///
+    /// ## Default
+    ///
+    /// This value defaults to `true`.
+    pub fn guard_before_linear_memory(&mut self, guard: bool) -> &mut Self {
+        self.tunables.guard_before_linear_memory = guard;
+        self
+    }
+
     /// Configure whether deserialized modules should validate version
     /// information. This only effects [`crate::Module::deserialize()`], which is
     /// used to load compiled code from trusted sources.  When true,
@@ -1149,6 +1157,7 @@ impl Config {
                 module_limits.into(),
                 instance_limits.into(),
                 stack_size,
+                &self.tunables,
             )?)),
         }
     }
@@ -1180,6 +1189,23 @@ impl fmt::Debug for Config {
             .field("wasm_simd", &self.features.simd)
             .field("wasm_multi_value", &self.features.multi_value)
             .field("wasm_module_linking", &self.features.module_linking)
+            .field(
+                "static_memory_maximum_size",
+                &(u64::from(self.tunables.static_memory_bound)
+                    * u64::from(wasmtime_environ::WASM_PAGE_SIZE)),
+            )
+            .field(
+                "static_memory_guard_size",
+                &self.tunables.static_memory_offset_guard_size,
+            )
+            .field(
+                "dynamic_memory_guard_size",
+                &self.tunables.dynamic_memory_offset_guard_size,
+            )
+            .field(
+                "guard_before_linear_memory",
+                &self.tunables.guard_before_linear_memory,
+            )
             .field(
                 "flags",
                 &settings::Flags::new(self.flags.clone()).to_string(),

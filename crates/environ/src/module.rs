@@ -63,6 +63,8 @@ pub struct MemoryPlan {
     pub memory: Memory,
     /// Our chosen implementation style.
     pub style: MemoryStyle,
+    /// Chosen size of a guard page before the linear memory allocation.
+    pub pre_guard_size: u64,
     /// Our chosen offset-guard size.
     pub offset_guard_size: u64,
 }
@@ -75,6 +77,11 @@ impl MemoryPlan {
             memory,
             style,
             offset_guard_size,
+            pre_guard_size: if tunables.guard_before_linear_memory {
+                offset_guard_size
+            } else {
+                0
+            },
         }
     }
 }

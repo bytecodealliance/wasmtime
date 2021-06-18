@@ -72,6 +72,7 @@ pub struct Config {
     static_memory_maximum_size: Option<u32>,
     static_memory_guard_size: Option<u32>,
     dynamic_memory_guard_size: Option<u32>,
+    guard_before_linear_memory: bool,
 }
 
 impl Config {
@@ -82,6 +83,7 @@ impl Config {
             .static_memory_maximum_size(self.static_memory_maximum_size.unwrap_or(0).into())
             .static_memory_guard_size(self.static_memory_guard_size.unwrap_or(0).into())
             .dynamic_memory_guard_size(self.dynamic_memory_guard_size.unwrap_or(0).into())
+            .guard_before_linear_memory(self.guard_before_linear_memory)
             .cranelift_nan_canonicalization(self.canonicalize_nans)
             .cranelift_opt_level(self.opt_level.to_wasmtime())
             .interruptable(self.interruptable)

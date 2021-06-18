@@ -156,6 +156,7 @@ struct FaultLocator {
     instances_start: usize,
     instance_size: usize,
     max_instances: usize,
+    memories_mapping_start: usize,
     memories_start: usize,
     memories_end: usize,
     memory_size: usize,
@@ -165,8 +166,10 @@ struct FaultLocator {
 impl FaultLocator {
     fn new(instances: &InstancePool) -> Self {
         let instances_start = instances.mapping.as_ptr() as usize;
-        let memories_start = instances.memories.mapping.as_ptr() as usize;
-        let memories_end = memories_start + instances.memories.mapping.len();
+        let memories_start =
+            instances.memories.mapping.as_ptr() as usize + instances.memories.initial_memory_offset;
+        let memories_end =
+            instances.memories.mapping.as_ptr() as usize + instances.memories.mapping.len();
 
         // Should always have instances
         debug_assert!(instances_start != 0);
@@ -174,6 +177,7 @@ impl FaultLocator {
         Self {
             instances_start,
             instance_size: instances.instance_size,
+            memories_mapping_start: instances.memories.mapping.as_ptr() as usize,
             max_instances: instances.max_instances,
             memories_start,
             memories_end,
@@ -344,7 +348,7 @@ fn fault_handler_thread(uffd: Uffd, locator: FaultLocator) -> Result<()> {
 
                 let (start, end) = (start as usize, end as usize);
 
-                if start == locator.memories_start && end == locator.memories_end {
+                if start == locator.memories_mapping_start && end == locator.memories_end {
                     break;
                 } else {
                     panic!("unexpected memory region unmapped");
@@ -437,7 +441,9 @@ mod test {
         PoolingAllocationStrategy, VMSharedSignatureIndex,
     };
     use std::sync::Arc;
-    use wasmtime_environ::{entity::PrimaryMap, wasm::Memory, MemoryPlan, MemoryStyle, Module};
+    use wasmtime_environ::{
+        entity::PrimaryMap, wasm::Memory, MemoryPlan, MemoryStyle, Module, Tunables,
+    };
 
     #[cfg(target_pointer_width = "64")]
     #[test]
@@ -455,13 +461,16 @@ mod test {
             table_elements: 0,
             memory_pages: 2,
         };
-        let instance_limits = InstanceLimits {
-            count: 3,
-            memory_reservation_size: (WASM_PAGE_SIZE * 10) as u64,
+        let instance_limits = InstanceLimits { count: 3 };
+        let tunables = Tunables {
+            static_memory_bound: 10,
+            static_memory_offset_guard_size: 0,
+            guard_before_linear_memory: false,
+            ..Tunables::default()
         };
 
-        let instances =
-            InstancePool::new(&module_limits, &instance_limits).expect("should allocate");
+        let instances = InstancePool::new(&module_limits, &instance_limits, &tunables)
+            .expect("should allocate");
 
         let locator = FaultLocator::new(&instances);
 
@@ -494,6 +503,7 @@ mod test {
                     },
                     style: MemoryStyle::Static { bound: 1 },
                     offset_guard_size: 0,
+                    pre_guard_size: 0,
                 });
             }
 

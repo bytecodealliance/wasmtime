@@ -15,6 +15,7 @@ mod instance;
 mod invoke_func_via_table;
 mod limits;
 mod linker;
+mod memory;
 mod memory_creator;
 mod module;
 mod module_linking;

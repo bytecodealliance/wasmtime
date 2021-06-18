@@ -32,35 +32,38 @@ pub struct Tunables {
 
     /// Whether or not to treat the static memory bound as the maximum for unbounded heaps.
     pub static_memory_bound_is_maximum: bool,
+
+    /// Whether or not linear memory allocations will have a guard region at the
+    /// beginning of the allocation in addition to the end.
+    pub guard_before_linear_memory: bool,
 }
 
 impl Default for Tunables {
     fn default() -> Self {
         Self {
-            #[cfg(target_pointer_width = "32")]
-            /// Size in wasm pages of the bound for static memories.
-            static_memory_bound: 0x4000,
+            // 64-bit has tons of address space to static memories can have 4gb
+            // address space reservations liberally by default, allowing us to
+            // help eliminate bounds checks.
+            //
+            // Coupled with a 2 GiB address space guard it lets us translate
+            // wasm offsets into x86 offsets as aggressively as we can.
             #[cfg(target_pointer_width = "64")]
-            /// Size in wasm pages of the bound for static memories.
-            ///
-            /// When we allocate 4 GiB of address space, we can avoid the
-            /// need for explicit bounds checks.
             static_memory_bound: 0x1_0000,
-
-            #[cfg(target_pointer_width = "32")]
-            /// Size in bytes of the offset guard for static memories.
-            static_memory_offset_guard_size: 0x1_0000,
             #[cfg(target_pointer_width = "64")]
-            /// Size in bytes of the offset guard for static memories.
-            ///
-            /// Allocating 2 GiB of address space lets us translate wasm
-            /// offsets into x86 offsets as aggressively as we can.
             static_memory_offset_guard_size: 0x8000_0000,
 
-            /// Size in bytes of the offset guard for dynamic memories.
-            ///
-            /// Allocate a small guard to optimize common cases but without
-            /// wasting too much memory.
+            // For 32-bit we scale way down to 10MB of reserved memory. This
+            // impacts performance severely but allows us to have more than a
+            // few instances running around.
+            #[cfg(target_pointer_width = "32")]
+            static_memory_bound: (10 * (1 << 20)) / crate::WASM_PAGE_SIZE,
+            #[cfg(target_pointer_width = "32")]
+            static_memory_offset_guard_size: 0x1_0000,
+
+            // Size in bytes of the offset guard for dynamic memories.
+            //
+            // Allocate a small guard to optimize common cases but without
+            // wasting too much memory.
             dynamic_memory_offset_guard_size: 0x1_0000,
 
             generate_native_debuginfo: false,
@@ -68,6 +71,7 @@ impl Default for Tunables {
             interruptable: false,
             consume_fuel: false,
             static_memory_bound_is_maximum: false,
+            guard_before_linear_memory: true,
         }
     }
 }

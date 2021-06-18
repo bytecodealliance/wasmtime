@@ -54,8 +54,9 @@ pub struct MmapMemory {
     // The optional maximum size in wasm pages of this linear memory.
     maximum: Option<u32>,
 
-    // Size in bytes of extra guard pages after the end to optimize loads and stores with
-    // constant offsets.
+    // Size in bytes of extra guard pages before the start and after the end to
+    // optimize loads and stores with constant offsets.
+    pre_guard_size: usize,
     offset_guard_size: usize,
 }
 
@@ -75,6 +76,7 @@ impl MmapMemory {
         assert!(plan.memory.maximum.is_none() || plan.memory.maximum.unwrap() <= WASM_MAX_PAGES);
 
         let offset_guard_bytes = plan.offset_guard_size as usize;
+        let pre_guard_bytes = plan.pre_guard_size as usize;
 
         let minimum_pages = match plan.style {
             MemoryStyle::Dynamic => plan.memory.minimum,
@@ -84,18 +86,27 @@ impl MmapMemory {
             }
         } as usize;
         let minimum_bytes = minimum_pages.checked_mul(WASM_PAGE_SIZE as usize).unwrap();
-        let request_bytes = minimum_bytes.checked_add(offset_guard_bytes).unwrap();
+        let request_bytes = pre_guard_bytes
+            .checked_add(minimum_bytes)
+            .unwrap()
+            .checked_add(offset_guard_bytes)
+            .unwrap();
         let mapped_pages = plan.memory.minimum as usize;
-        let mapped_bytes = mapped_pages * WASM_PAGE_SIZE as usize;
+        let accessible_bytes = mapped_pages * WASM_PAGE_SIZE as usize;
 
-        let mmap = WasmMmap {
-            alloc: Mmap::accessible_reserved(mapped_bytes, request_bytes)?,
+        let mut mmap = WasmMmap {
+            alloc: Mmap::accessible_reserved(0, request_bytes)?,
             size: plan.memory.minimum,
         };
+        if accessible_bytes > 0 {
+            mmap.alloc
+                .make_accessible(pre_guard_bytes, accessible_bytes)?;
+        }
 
         Ok(Self {
             mmap: mmap.into(),
             maximum: plan.memory.maximum,
+            pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
         })
     }
@@ -149,24 +160,28 @@ impl RuntimeLinearMemory for MmapMemory {
         let prev_bytes = usize::try_from(prev_pages).unwrap() * WASM_PAGE_SIZE as usize;
         let new_bytes = usize::try_from(new_pages).unwrap() * WASM_PAGE_SIZE as usize;
 
-        if new_bytes > self.mmap.alloc.len() - self.offset_guard_size {
+        if new_bytes > self.mmap.alloc.len() - self.offset_guard_size - self.pre_guard_size {
             // If the new size is within the declared maximum, but needs more memory than we
             // have on hand, it's a dynamic heap and it can move.
-            let guard_bytes = self.offset_guard_size;
-            let request_bytes = new_bytes.checked_add(guard_bytes)?;
+            let request_bytes = self
+                .pre_guard_size
+                .checked_add(new_bytes)?
+                .checked_add(self.offset_guard_size)?;
 
-            let mut new_mmap = Mmap::accessible_reserved(new_bytes, request_bytes).ok()?;
+            let mut new_mmap = Mmap::accessible_reserved(0, request_bytes).ok()?;
+            new_mmap
+                .make_accessible(self.pre_guard_size, new_bytes)
+                .ok()?;
 
-            let copy_len = self.mmap.alloc.len() - self.offset_guard_size;
-            new_mmap.as_mut_slice()[..copy_len]
-                .copy_from_slice(&self.mmap.alloc.as_slice()[..copy_len]);
+            new_mmap.as_mut_slice()[self.pre_guard_size..][..prev_bytes]
+                .copy_from_slice(&self.mmap.alloc.as_slice()[self.pre_guard_size..][..prev_bytes]);
 
             self.mmap.alloc = new_mmap;
         } else if delta_bytes > 0 {
             // Make the newly allocated pages accessible.
             self.mmap
                 .alloc
-                .make_accessible(prev_bytes, delta_bytes)
+                .make_accessible(self.pre_guard_size + prev_bytes, delta_bytes)
                 .ok()?;
         }
 
@@ -178,7 +193,7 @@ impl RuntimeLinearMemory for MmapMemory {
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     fn vmmemory(&self) -> VMMemoryDefinition {
         VMMemoryDefinition {
-            base: self.mmap.alloc.as_mut_ptr(),
+            base: unsafe { self.mmap.alloc.as_mut_ptr().add(self.pre_guard_size) },
             current_length: self.mmap.size as usize * WASM_PAGE_SIZE as usize,
         }
     }
