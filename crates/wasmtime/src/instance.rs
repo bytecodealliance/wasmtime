@@ -1,6 +1,6 @@
 use crate::linker::Definition;
 use crate::signatures::SignatureCollection;
-use crate::store::{InstanceId, StoreData, StoreOpaque, StoreOpaqueSend, Stored};
+use crate::store::{InstanceId, StoreData, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
     AsContext, AsContextMut, Engine, Export, Extern, ExternType, Func, Global, InstanceType,
@@ -128,7 +128,7 @@ impl Instance {
             typecheck_externs(&mut cx, module, imports)?;
             Instantiator::new(&mut cx, module, ImportSource::Externs(imports))?
         };
-        i.run(store.as_context_mut().opaque())
+        i.run(&mut store.as_context_mut())
     }
 
     /// Same as [`Instance::new`], except for usage in [asynchronous stores].
@@ -164,7 +164,7 @@ impl Instance {
             typecheck_externs(&mut cx, module, imports)?;
             Instantiator::new(&mut cx, module, ImportSource::Externs(imports))?
         };
-        i.run_async(store.as_context_mut().opaque_send()).await
+        i.run_async(&mut store.as_context_mut()).await
     }
 
     pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
@@ -466,18 +466,20 @@ impl<'a> Instantiator<'a> {
         })
     }
 
-    fn run(&mut self, mut store: StoreOpaque<'_>) -> Result<Instance, Error> {
+    fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<Instance, Error> {
         assert!(
-            !store.async_support(),
+            !store.0.async_support(),
             "cannot use `new` when async support is enabled on the config"
         );
 
         // NB: this is the same code as `run_async`. It's intentionally
         // small but should be kept in sync (modulo the async bits).
         loop {
-            if let Some((instance, start, toplevel)) = self.step(&mut store)? {
+            if let Some((instance, start, toplevel)) =
+                self.step(&mut store.as_context_mut().opaque())?
+            {
                 if let Some(start) = start {
-                    Instantiator::start_raw(&mut store, instance, start)?;
+                    Instantiator::start_raw(store, instance, start)?;
                 }
                 if toplevel {
                     break Ok(instance);
@@ -487,16 +489,19 @@ impl<'a> Instantiator<'a> {
     }
 
     #[cfg(feature = "async")]
-    async fn run_async(&mut self, mut store: StoreOpaqueSend<'_>) -> Result<Instance, Error> {
+    async fn run_async<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<Instance, Error>
+    where
+        T: Send,
+    {
         assert!(
-            store.async_support(),
+            store.0.async_support(),
             "cannot use `new_async` without enabling async support on the config"
         );
 
         // NB: this is the same code as `run`. It's intentionally
         // small but should be kept in sync (modulo the async bits).
         loop {
-            let step = self.step(&mut store.opaque())?;
+            let step = self.step(&mut store.as_context_mut().opaque())?;
             if let Some((instance, start, toplevel)) = step {
                 if let Some(start) = start {
                     store
@@ -817,14 +822,18 @@ impl<'a> Instantiator<'a> {
         }
     }
 
-    fn start_raw(store: &mut StoreOpaque<'_>, instance: Instance, start: FuncIndex) -> Result<()> {
-        let id = match &store[instance.0] {
+    fn start_raw<T>(
+        store: &mut StoreContextMut<'_, T>,
+        instance: Instance,
+        start: FuncIndex,
+    ) -> Result<()> {
+        let id = match &store.0.store_data()[instance.0] {
             InstanceData::Instantiated { id, .. } => *id,
             InstanceData::Synthetic(_) => return Ok(()),
         };
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
-        let instance = store.instance(id);
+        let instance = store.0.instance(id);
         let f = match instance.lookup_by_declaration(&EntityIndex::Function(start)) {
             wasmtime_runtime::Export::Function(f) => f,
             _ => unreachable!(), // valid modules shouldn't hit this
@@ -941,20 +950,20 @@ impl<T> InstancePre<T> {
     /// Panics if any import closed over by this [`InstancePre`] isn't owned by
     /// `store`, or if `store` has async support enabled.
     pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
-        let mut store = store.as_context_mut().opaque();
         // For the unsafety here the typecheck happened at creation time of this
         // structure and then othrewise the `T` of `InstancePre<T>` connects any
         // host functions we have in our definition list to the `store` that was
         // passed in.
-        unsafe {
+        let mut instantiator = unsafe {
+            let mut store = store.as_context_mut().opaque();
             self.ensure_comes_from_same_store(&store)?;
             Instantiator::new(
                 &mut store,
                 &self.module,
                 ImportSource::Definitions(&self.items),
             )?
-            .run(store)
-        }
+        };
+        instantiator.run(&mut store.as_context_mut())
     }
 
     /// Creates a new instance, running the start function asynchronously
@@ -986,7 +995,7 @@ impl<T> InstancePre<T> {
                 ImportSource::Definitions(&self.items),
             )?
         };
-        i.run_async(store.as_context_mut().opaque_send()).await
+        i.run_async(&mut store.as_context_mut()).await
     }
 
     fn ensure_comes_from_same_store(&self, store: &StoreOpaque<'_>) -> Result<()> {

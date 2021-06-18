@@ -200,6 +200,43 @@ async fn call_linked_func_async() -> Result<(), Error> {
     Ok(())
 }
 
+#[test]
+fn instantiate() -> Result<(), Error> {
+    let mut store = Store::<State>::default();
+    store.entering_native_code_hook(State::entering_native);
+    store.exiting_native_code_hook(State::exiting_native);
+
+    let m = Module::new(store.engine(), "(module)")?;
+    Instance::new(&mut store, &m, &[])?;
+    assert_eq!(store.data().switches_into_native, 0);
+
+    let m = Module::new(store.engine(), "(module (func) (start 0))")?;
+    Instance::new(&mut store, &m, &[])?;
+    assert_eq!(store.data().switches_into_native, 1);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn instantiate_async() -> Result<(), Error> {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, State::default());
+    store.entering_native_code_hook(State::entering_native);
+    store.exiting_native_code_hook(State::exiting_native);
+
+    let m = Module::new(store.engine(), "(module)")?;
+    Instance::new_async(&mut store, &m, &[]).await?;
+    assert_eq!(store.data().switches_into_native, 0);
+
+    let m = Module::new(store.engine(), "(module (func) (start 0))")?;
+    Instance::new_async(&mut store, &m, &[]).await?;
+    assert_eq!(store.data().switches_into_native, 1);
+
+    Ok(())
+}
+
 enum Context {
     Native,
     Vm,
