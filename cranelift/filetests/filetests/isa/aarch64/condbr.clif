@@ -299,3 +299,311 @@ block1:
 ; check: Block 3:
 ; check: ldp fp, lr, [sp], #16
 ; nextln: ret
+
+
+
+function %i128_bricmp_eq(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp eq v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: eor x0, x0, x2
+; nextln: eor x1, x1, x3
+; nextln: adds xzr, x0, x1
+; nextln: b.eq label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_bricmp_ne(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp ne v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: eor x0, x0, x2
+; nextln: eor x1, x1, x3
+; nextln: adds xzr, x0, x1
+; nextln: b.ne label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_bricmp_slt(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp slt v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, lo
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, lt
+; nextln: csel x0, x0, x1, eq
+; nextln: subs xzr, xzr, x0
+; nextln: b.lt label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_bricmp_ult(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp ult v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, lo
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, lo
+; nextln: csel x0, x0, x1, eq
+; nextln: subs xzr, xzr, x0
+; nextln: b.lo label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_bricmp_sle(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp sle v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, ls
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, le
+; nextln: csel x0, x0, x1, eq
+; nextln: movz x1, #1
+; nextln: subs xzr, x1, x0
+; nextln: b.le label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_bricmp_ule(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp ule v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, ls
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, ls
+; nextln: csel x0, x0, x1, eq
+; nextln: movz x1, #1
+; nextln: subs xzr, x1, x0
+; nextln: b.ls label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_bricmp_sgt(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp sgt v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hi
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, gt
+; nextln: csel x0, x0, x1, eq
+; nextln: subs xzr, x0, xzr
+; nextln: b.gt label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_bricmp_ugt(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp ugt v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hi
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, hi
+; nextln: csel x0, x0, x1, eq
+; nextln: subs xzr, x0, xzr
+; nextln: b.hi label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+
+function %i128_bricmp_sge(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp sge v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hs
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, ge
+; nextln: csel x0, x0, x1, eq
+; nextln: movz x1, #1
+; nextln: subs xzr, x0, x1
+; nextln: b.ge label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_bricmp_uge(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp uge v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: subs xzr, x0, x2
+; nextln: cset x0, hs
+; nextln: subs xzr, x1, x3
+; nextln: cset x1, hs
+; nextln: csel x0, x0, x1, eq
+; nextln: movz x1, #1
+; nextln: subs xzr, x0, x1
+; nextln: b.hs label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_bricmp_of(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp of v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: adds xzr, x0, x2
+; nextln: adcs xzr, x1, x3
+; nextln: b.vs label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %i128_bricmp_nof(i128, i128) {
+block0(v0: i128, v1: i128):
+  br_icmp nof v0, v1, block1
+  jump block1
+
+block1:
+  return
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: adds xzr, x0, x2
+; nextln: adcs xzr, x1, x3
+; nextln: b.vc label1 ; b label2
+; check: Block 1:
+; check: b label3
+; check: Block 2:
+; check: b label3
+; check: Block 3:
+; check: ldp fp, lr, [sp], #16
+; nextln: ret

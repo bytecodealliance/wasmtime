@@ -5,24 +5,24 @@ target x86_64 machinst
 target x86_64 legacy
 
 
-function %i128_br(i64, i64) -> b1 {
+function %i128_brz(i64, i64) -> b1 {
 block0(v0: i64, v1: i64):
     v2 = iconcat v0, v1
     brz v2, block2
     jump block1
 
 block1:
-    v3 = bconst.b1 true
+    v3 = bconst.b1 false
     return v3
 
 block2:
-    v4 = bconst.b1 false
+    v4 = bconst.b1 true
     return v4
 }
-; run: %i128_br(0, 0) == false
-; run: %i128_br(-1, 0) == true
-; run: %i128_br(0, -1) == true
-; run: %i128_br(-1, -1) == true
+; run: %i128_brz(0, 0) == true
+; run: %i128_brz(-1, 0) == false
+; run: %i128_brz(0, -1) == false
+; run: %i128_brz(-1, -1) == false
 
 
 function %i128_brnz(i64, i64) -> b1 {
@@ -32,14 +32,14 @@ block0(v0: i64, v1: i64):
     jump block1
 
 block1:
-    v3 = bconst.b1 true
+    v3 = bconst.b1 false
     return v3
 
 block2:
-    v4 = bconst.b1 false
+    v4 = bconst.b1 true
     return v4
 }
-; run: %i128_brnz(0, 0) == true
-; run: %i128_brnz(-1, 0) == false
-; run: %i128_brnz(0, -1) == false
-; run: %i128_brnz(-1, -1) == false
+; run: %i128_brnz(0, 0) == false
+; run: %i128_brnz(-1, 0) == true
+; run: %i128_brnz(0, -1) == true
+; run: %i128_brnz(-1, -1) == true

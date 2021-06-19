@@ -3455,35 +3455,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
                 let cond = lower_condcode(condcode);
                 let kind = CondBrKind::Cond(cond);
 
-                let is_signed = condcode_is_signed(condcode);
-                let ty = ctx.input_ty(branches[0], 0);
-                let bits = ty_bits(ty);
-                let narrow_mode = match (bits <= 32, is_signed) {
-                    (true, true) => NarrowValueMode::SignExtend32,
-                    (true, false) => NarrowValueMode::ZeroExtend32,
-                    (false, true) => NarrowValueMode::SignExtend64,
-                    (false, false) => NarrowValueMode::ZeroExtend64,
-                };
-                let rn = put_input_in_reg(
-                    ctx,
-                    InsnInput {
-                        insn: branches[0],
-                        input: 0,
-                    },
-                    narrow_mode,
-                );
-                let rm = put_input_in_rse_imm12(
-                    ctx,
-                    InsnInput {
-                        insn: branches[0],
-                        input: 1,
-                    },
-                    narrow_mode,
-                );
-
-                let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
-                let rd = writable_zero_reg();
-                ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+                lower_icmp(ctx, branches[0], condcode, IcmpOutput::Flags)?;
                 ctx.emit(Inst::CondBr {
                     taken,
                     not_taken,

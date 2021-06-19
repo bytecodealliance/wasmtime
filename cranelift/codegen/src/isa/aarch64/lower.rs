@@ -1263,23 +1263,14 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                 }
             }
             _ => {
-                // The currently generated ASM does not correctly set the flags, so we assert here
-                // to ensure that we don't silently lower incorrect code.
-                assert_ne!(IcmpOutput::Flags, output, "Unable to lower icmp to flags");
-
                 // cmp     lhs_lo, rhs_lo
-                // cset    tmp1, low_cc
+                // cset    tmp1, unsigned_cond
                 // cmp     lhs_hi, rhs_hi
                 // cset    tmp2, cond
                 // csel    dst, tmp1, tmp2, eq
 
-                let low_cc = match condcode {
-                    IntCC::SignedGreaterThanOrEqual | IntCC::UnsignedGreaterThanOrEqual => Cond::Hs,
-                    IntCC::SignedGreaterThan | IntCC::UnsignedGreaterThan => Cond::Hi,
-                    IntCC::SignedLessThanOrEqual | IntCC::UnsignedLessThanOrEqual => Cond::Ls,
-                    IntCC::SignedLessThan | IntCC::UnsignedLessThan => Cond::Lo,
-                    _ => unreachable!(),
-                };
+                let rd = output.reg().unwrap_or(tmp1);
+                let unsigned_cond = lower_condcode(condcode.unsigned());
 
                 ctx.emit(Inst::AluRRR {
                     alu_op: ALUOp::SubS64,
@@ -1287,7 +1278,7 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                     rn: lhs.regs()[0],
                     rm: rhs.regs()[0],
                 });
-                materialize_bool_result(ctx, insn, tmp1, low_cc);
+                materialize_bool_result(ctx, insn, tmp1, unsigned_cond);
                 ctx.emit(Inst::AluRRR {
                     alu_op: ALUOp::SubS64,
                     rd: writable_zero_reg(),
@@ -1301,6 +1292,38 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                     rn: tmp1.to_reg(),
                     rm: tmp2.to_reg(),
                 });
+
+                if output == IcmpOutput::Flags {
+                    // We only need to guarantee that the flags for `cond` are correct, so we can
+                    // compare rd with 0 or 1
+
+                    // If we are doing compare or equal, we want to compare with 1 instead of zero
+                    if condcode.without_equal() != condcode {
+                        lower_constant_u64(ctx, tmp2, 1);
+                    }
+
+                    let xzr = zero_reg();
+                    let rd = rd.to_reg();
+                    let tmp2 = tmp2.to_reg();
+                    let (rn, rm) = match condcode {
+                        IntCC::SignedGreaterThanOrEqual => (rd, tmp2),
+                        IntCC::UnsignedGreaterThanOrEqual => (rd, tmp2),
+                        IntCC::SignedLessThanOrEqual => (tmp2, rd),
+                        IntCC::UnsignedLessThanOrEqual => (tmp2, rd),
+                        IntCC::SignedGreaterThan => (rd, xzr),
+                        IntCC::UnsignedGreaterThan => (rd, xzr),
+                        IntCC::SignedLessThan => (xzr, rd),
+                        IntCC::UnsignedLessThan => (xzr, rd),
+                        _ => unreachable!(),
+                    };
+
+                    ctx.emit(Inst::AluRRR {
+                        alu_op: ALUOp::SubS64,
+                        rd: writable_zero_reg(),
+                        rn,
+                        rm,
+                    });
+                }
             }
         }
     } else if !ty.is_vector() {
