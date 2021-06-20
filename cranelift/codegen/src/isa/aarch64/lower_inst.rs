@@ -613,9 +613,30 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let to_bits = ty_bits(output_ty) as u8;
             let to_bits = std::cmp::max(32, to_bits);
             assert!(from_bits <= to_bits);
-            if from_bits < to_bits {
-                let signed = op == Opcode::Sextend;
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+            let signed = op == Opcode::Sextend;
+            let dst = get_output_reg(ctx, outputs[0]);
+            let src =
+                if let Some(extract_insn) = maybe_input_insn(ctx, inputs[0], Opcode::Extractlane) {
+                    put_input_in_regs(
+                        ctx,
+                        InsnInput {
+                            insn: extract_insn,
+                            input: 0,
+                        },
+                    )
+                } else {
+                    put_input_in_regs(ctx, inputs[0])
+                };
+
+            let needs_extend = from_bits < to_bits && to_bits <= 64;
+            // For i128, we want to extend the lower half, except if it is already 64 bits.
+            let needs_lower_extend = to_bits > 64 && from_bits < 64;
+            let pass_through_lower = to_bits > 64 && !needs_lower_extend;
+
+            if needs_extend || needs_lower_extend {
+                let rn = src.regs()[0];
+                let rd = dst.regs()[0];
 
                 if let Some(extract_insn) = maybe_input_insn(ctx, inputs[0], Opcode::Extractlane) {
                     let idx =
@@ -624,11 +645,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         } else {
                             unreachable!();
                         };
-                    let input = InsnInput {
-                        insn: extract_insn,
-                        input: 0,
-                    };
-                    let rn = put_input_in_reg(ctx, input, NarrowValueMode::None);
+
                     let size = VectorSize::from_ty(ctx.input_ty(extract_insn, 0));
 
                     if signed {
@@ -654,8 +671,23 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rn,
                         signed,
                         from_bits,
-                        to_bits,
+                        to_bits: std::cmp::min(64, to_bits),
                     });
+                }
+            } else if pass_through_lower {
+                ctx.emit(Inst::gen_move(dst.regs()[0], src.regs()[0], I64));
+            }
+
+            if output_ty == I128 {
+                if signed {
+                    ctx.emit(Inst::AluRRImmShift {
+                        alu_op: ALUOp::Asr64,
+                        rd: dst.regs()[1],
+                        rn: dst.regs()[0].to_reg(),
+                        immshift: ImmShift::maybe_from_u64(63).unwrap(),
+                    });
+                } else {
+                    lower_constant_u64(ctx, dst.regs()[1], 0);
                 }
             }
         }
