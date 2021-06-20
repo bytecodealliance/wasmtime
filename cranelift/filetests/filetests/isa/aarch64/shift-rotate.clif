@@ -6,6 +6,39 @@ target aarch64
 ;; ROR, variable
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+function %i128_rotr(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = rotr.i128 v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x3, #128
+; nextln: sub x5, x3, x2
+; nextln: orn w4, wzr, w2
+; nextln: lsl x6, x1, #1
+; nextln: lsr x3, x0, x2
+; nextln: lsl x6, x6, x4
+; nextln: lsr x4, x1, x2
+; nextln: ands xzr, x2, #64
+; nextln: orr x2, x3, x6
+; nextln: csel x3, xzr, x4, ne
+; nextln: csel x4, x4, x2, ne
+; nextln: orn w2, wzr, w5
+; nextln: lsr x6, x0, #1
+; nextln: lsl x1, x1, x5
+; nextln: lsr x2, x6, x2
+; nextln: lsl x0, x0, x5
+; nextln: ands xzr, x5, #64
+; nextln: orr x1, x1, x2
+; nextln: csel x1, x0, x1, ne
+; nextln: csel x0, xzr, x0, ne
+; nextln: orr x0, x0, x4
+; nextln: orr x1, x1, x3
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
 function %f0(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
   v2 = rotr.i64 v0, v1
@@ -69,6 +102,42 @@ block0(v0: i8, v1: i8):
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ROL, variable
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %i128_rotl(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+  v2 = rotl.i128 v0, v1
+  return v2
+}
+
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: movz x3, #128
+; nextln: sub x5, x3, x2
+; nextln: orn w4, wzr, w2
+; nextln: lsr x6, x0, #1
+; nextln: lsl x3, x1, x2
+; nextln: lsr x6, x6, x4
+; nextln: lsl x4, x0, x2
+; nextln: ands xzr, x2, #64
+; nextln: orr x2, x3, x6
+; nextln: csel x3, x4, x2, ne
+; nextln: csel x4, xzr, x4, ne
+; nextln: orn w2, wzr, w5
+; nextln: lsl x6, x1, #1
+; nextln: lsr x0, x0, x5
+; nextln: lsl x2, x6, x2
+; nextln: lsr x1, x1, x5
+; nextln: ands xzr, x5, #64
+; nextln: orr x2, x0, x2
+; nextln: csel x0, xzr, x1, ne
+; nextln: csel x1, x1, x2, ne
+; nextln: orr x1, x1, x4
+; nextln: orr x0, x0, x3
+; nextln: mov x2, x0
+; nextln: mov x0, x1
+; nextln: mov x1, x2
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
 
 function %f4(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):

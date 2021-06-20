@@ -878,6 +878,61 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
             let ty_bits_size = ty_bits(ty) as u8;
 
+            // TODO: We can do much better codegen if we have a constant amt
+            if ty == I128 {
+                let dst = get_output_reg(ctx, outputs[0]);
+                let src = put_input_in_regs(ctx, inputs[0]);
+                let amt_src = put_input_in_regs(ctx, inputs[1]).regs()[0];
+
+                let tmp = ctx.alloc_tmp(I128);
+                let inv_amt = ctx.alloc_tmp(I64).only_reg().unwrap();
+
+                lower_constant_u64(ctx, inv_amt, 128);
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Sub64,
+                    rd: inv_amt,
+                    rn: inv_amt.to_reg(),
+                    rm: amt_src,
+                });
+
+                if is_rotl {
+                    // rotl
+                    // (shl.i128 tmp, amt)
+                    // (ushr.i128 dst, 128-amt)
+
+                    emit_shl_i128(ctx, src, tmp, amt_src);
+                    emit_shr_i128(
+                        ctx,
+                        src,
+                        dst,
+                        inv_amt.to_reg(),
+                        /* is_signed = */ false,
+                    );
+                } else {
+                    // rotr
+                    // (ushr.i128 tmp, amt)
+                    // (shl.i128 dst, 128-amt)
+
+                    emit_shr_i128(ctx, src, tmp, amt_src, /* is_signed = */ false);
+                    emit_shl_i128(ctx, src, dst, inv_amt.to_reg());
+                }
+
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Orr64,
+                    rd: dst.regs()[0],
+                    rn: dst.regs()[0].to_reg(),
+                    rm: tmp.regs()[0].to_reg(),
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Orr64,
+                    rd: dst.regs()[1],
+                    rn: dst.regs()[1].to_reg(),
+                    rm: tmp.regs()[1].to_reg(),
+                });
+
+                return Ok(());
+            }
+
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(
                 ctx,
