@@ -1,4 +1,3 @@
-use crate::cdsl::cpu_modes::CpuMode;
 use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::recipes::Recipes;
@@ -54,15 +53,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let inst_group = InstructionGroupBuilder::new(&mut shared_defs.all_instructions).build();
 
-    let mut a64 = CpuMode::new("A64");
-
-    // TODO refine these.
-    let expand_flags = shared_defs.transform_groups.by_name("expand_flags");
-    let narrow_flags = shared_defs.transform_groups.by_name("narrow_flags");
-    a64.legalize_monomorphic(expand_flags);
-    a64.legalize_default(narrow_flags);
-
-    let cpu_modes = vec![a64];
+    let cpu_modes = vec![];
 
     // TODO implement arm64 recipes.
     let recipes = Recipes::new();
