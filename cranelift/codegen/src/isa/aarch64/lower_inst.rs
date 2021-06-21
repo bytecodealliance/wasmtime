@@ -1181,86 +1181,108 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Popcnt => {
-            let out_regs = get_output_reg(ctx, outputs[0]);
-            let in_regs = put_input_in_regs(ctx, inputs[0]);
             let ty = ty.unwrap();
-            let size = if ty == I128 {
-                ScalarSize::Size64
-            } else {
-                ScalarSize::from_operand_size(OperandSize::from_ty(ty))
-            };
 
-            let vec_size = if ty == I128 {
-                VectorSize::Size8x16
-            } else {
-                VectorSize::Size8x8
-            };
+            if ty.is_vector() {
+                let lane_type = ty.lane_type();
+                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
 
-            let tmp = ctx.alloc_tmp(I8X16).only_reg().unwrap();
+                if lane_type != I8 {
+                    return Err(CodegenError::Unsupported(format!(
+                        "Unsupported SIMD vector lane type: {:?}",
+                        lane_type
+                    )));
+                }
 
-            // fmov tmp, in_lo
-            // if ty == i128:
-            //     mov tmp.d[1], in_hi
-            //
-            // cnt tmp.16b, tmp.16b / cnt tmp.8b, tmp.8b
-            // addv tmp, tmp.16b / addv tmp, tmp.8b / addp tmp.8b, tmp.8b, tmp.8b / (no instruction for 8-bit inputs)
-            //
-            // umov out_lo, tmp.b[0]
-            // if ty == i128:
-            //     mov out_hi, 0
-
-            ctx.emit(Inst::MovToFpu {
-                rd: tmp,
-                rn: in_regs.regs()[0],
-                size,
-            });
-
-            if ty == I128 {
-                ctx.emit(Inst::MovToVec {
-                    rd: tmp,
-                    rn: in_regs.regs()[1],
-                    idx: 1,
-                    size: VectorSize::Size64x2,
+                ctx.emit(Inst::VecMisc {
+                    op: VecMisc2::Cnt,
+                    rd,
+                    rn,
+                    size: VectorSize::from_ty(ty),
                 });
-            }
+            } else {
+                let out_regs = get_output_reg(ctx, outputs[0]);
+                let in_regs = put_input_in_regs(ctx, inputs[0]);
+                let size = if ty == I128 {
+                    ScalarSize::Size64
+                } else {
+                    ScalarSize::from_operand_size(OperandSize::from_ty(ty))
+                };
 
-            ctx.emit(Inst::VecMisc {
-                op: VecMisc2::Cnt,
-                rd: tmp,
-                rn: tmp.to_reg(),
-                size: vec_size,
-            });
+                let vec_size = if ty == I128 {
+                    VectorSize::Size8x16
+                } else {
+                    VectorSize::Size8x8
+                };
 
-            match ScalarSize::from_ty(ty) {
-                ScalarSize::Size8 => {}
-                ScalarSize::Size16 => {
-                    // ADDP is usually cheaper than ADDV.
-                    ctx.emit(Inst::VecRRR {
-                        alu_op: VecALUOp::Addp,
+                let tmp = ctx.alloc_tmp(I8X16).only_reg().unwrap();
+
+                // fmov tmp, in_lo
+                // if ty == i128:
+                //     mov tmp.d[1], in_hi
+                //
+                // cnt tmp.16b, tmp.16b / cnt tmp.8b, tmp.8b
+                // addv tmp, tmp.16b / addv tmp, tmp.8b / addp tmp.8b, tmp.8b, tmp.8b / (no instruction for 8-bit inputs)
+                //
+                // umov out_lo, tmp.b[0]
+                // if ty == i128:
+                //     mov out_hi, 0
+
+                ctx.emit(Inst::MovToFpu {
+                    rd: tmp,
+                    rn: in_regs.regs()[0],
+                    size,
+                });
+
+                if ty == I128 {
+                    ctx.emit(Inst::MovToVec {
                         rd: tmp,
-                        rn: tmp.to_reg(),
-                        rm: tmp.to_reg(),
-                        size: VectorSize::Size8x8,
+                        rn: in_regs.regs()[1],
+                        idx: 1,
+                        size: VectorSize::Size64x2,
                     });
                 }
-                ScalarSize::Size32 | ScalarSize::Size64 | ScalarSize::Size128 => {
-                    ctx.emit(Inst::VecLanes {
-                        op: VecLanesOp::Addv,
-                        rd: tmp,
-                        rn: tmp.to_reg(),
-                        size: vec_size,
-                    });
-                }
-            }
 
-            ctx.emit(Inst::MovFromVec {
-                rd: out_regs.regs()[0],
-                rn: tmp.to_reg(),
-                idx: 0,
-                size: VectorSize::Size8x16,
-            });
-            if ty == I128 {
-                lower_constant_u64(ctx, out_regs.regs()[1], 0);
+                ctx.emit(Inst::VecMisc {
+                    op: VecMisc2::Cnt,
+                    rd: tmp,
+                    rn: tmp.to_reg(),
+                    size: vec_size,
+                });
+
+                match ScalarSize::from_ty(ty) {
+                    ScalarSize::Size8 => {}
+                    ScalarSize::Size16 => {
+                        // ADDP is usually cheaper than ADDV.
+                        ctx.emit(Inst::VecRRR {
+                            alu_op: VecALUOp::Addp,
+                            rd: tmp,
+                            rn: tmp.to_reg(),
+                            rm: tmp.to_reg(),
+                            size: VectorSize::Size8x8,
+                        });
+                    }
+                    ScalarSize::Size32 | ScalarSize::Size64 | ScalarSize::Size128 => {
+                        ctx.emit(Inst::VecLanes {
+                            op: VecLanesOp::Addv,
+                            rd: tmp,
+                            rn: tmp.to_reg(),
+                            size: vec_size,
+                        });
+                    }
+                }
+
+                ctx.emit(Inst::MovFromVec {
+                    rd: out_regs.regs()[0],
+                    rn: tmp.to_reg(),
+                    idx: 0,
+                    size: VectorSize::Size8x16,
+                });
+
+                if ty == I128 {
+                    lower_constant_u64(ctx, out_regs.regs()[1], 0);
+                }
             }
         }
 
