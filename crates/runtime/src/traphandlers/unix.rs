@@ -1,4 +1,4 @@
-use crate::traphandlers::{tls, Trap, Unwind};
+use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
 use std::cell::RefCell;
 use std::convert::TryInto;
 use std::io;
@@ -99,7 +99,7 @@ unsafe extern "C" fn trap_handler(
             return true;
         }
         info.capture_backtrace(pc);
-        Unwind(jmp_buf)
+        wasmtime_longjmp(jmp_buf)
     });
 
     if handled {

@@ -1,4 +1,4 @@
-use crate::traphandlers::{tls, Trap, Unwind};
+use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
 use std::io;
 use winapi::um::errhandlingapi::*;
 use winapi::um::minwinbase::*;
@@ -69,7 +69,7 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
             EXCEPTION_CONTINUE_EXECUTION
         } else {
             info.capture_backtrace(ip);
-            Unwind(jmp_buf)
+            wasmtime_longjmp(jmp_buf)
         }
     })
 }

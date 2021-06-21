@@ -9,5 +9,5 @@ fn main() {
             None,
         )
         .file("src/helpers.c")
-        .compile("helpers");
+        .compile("wasmtime-helpers");
 }
