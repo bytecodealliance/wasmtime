@@ -1,4 +1,4 @@
-use crate::store::{StoreData, StoreOpaque, StoreOpaqueSend, Stored};
+use crate::store::{StoreData, StoreInnermost, StoreOpaque, Stored};
 use crate::{
     AsContext, AsContextMut, Engine, Extern, FuncType, Instance, InterruptHandle, StoreContext,
     StoreContextMut, Trap, Val, ValType,
@@ -681,10 +681,7 @@ impl Func {
             "must use `call_async` when async support is enabled on the config",
         );
         let my_ty = self.ty(&store);
-        store.as_context_mut().0.exiting_native_hook()?;
-        let r = self.call_impl(&mut store.as_context_mut().opaque(), my_ty, params);
-        store.as_context_mut().0.entering_native_hook()?;
-        r
+        self.call_impl(&mut store.as_context_mut(), my_ty, params)
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -719,105 +716,110 @@ impl Func {
     where
         T: Send,
     {
-        let my_ty = self.ty(&store);
-        store.as_context_mut().0.exiting_native_hook()?;
-        let r = self
-            ._call_async(store.as_context_mut().opaque_send(), my_ty, params)
-            .await;
-        store.as_context_mut().0.entering_native_hook()?;
-        r
-    }
-
-    #[cfg(feature = "async")]
-    async fn _call_async(
-        &self,
-        mut store: StoreOpaqueSend<'_>,
-        my_ty: FuncType,
-        params: &[Val],
-    ) -> Result<Box<[Val]>> {
+        let mut store = store.as_context_mut();
         assert!(
-            store.async_support(),
+            store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config",
         );
+        let my_ty = self.ty(&store);
         let result = store
             .on_fiber(|store| self.call_impl(store, my_ty, params))
             .await??;
         Ok(result)
     }
 
-    fn call_impl(
+    fn call_impl<T>(
         &self,
-        store: &mut StoreOpaque<'_>,
+        store: &mut StoreContextMut<'_, T>,
         my_ty: FuncType,
         params: &[Val],
     ) -> Result<Box<[Val]>> {
-        let data = &store[self.0];
-        let trampoline = data.trampoline();
-        let anyfunc = data.export().anyfunc;
-        // We need to perform a dynamic check that the arguments given to us
-        // match the signature of this function and are appropriate to pass to
-        // this function. This involves checking to make sure we have the right
-        // number and types of arguments as well as making sure everything is
-        // from the same `Store`.
-        if my_ty.params().len() != params.len() {
-            bail!(
-                "expected {} arguments, got {}",
-                my_ty.params().len(),
-                params.len()
-            );
-        }
-
-        let mut values_vec = vec![0; max(params.len(), my_ty.results().len())];
-
-        // Store the argument values into `values_vec`.
-        let param_tys = my_ty.params();
-        for ((arg, slot), ty) in params.iter().cloned().zip(&mut values_vec).zip(param_tys) {
-            if arg.ty() != ty {
-                bail!(
-                    "argument type mismatch: found {} but expected {}",
-                    arg.ty(),
-                    ty
-                );
-            }
-            if !arg.comes_from_same_store(store) {
-                bail!("cross-`Store` values are not currently supported");
-            }
-            unsafe {
-                arg.write_value_to(store, slot);
-            }
-        }
+        let mut values_vec = write_params(&mut store.as_context_mut().opaque(), &my_ty, params)?;
 
         // Call the trampoline.
         unsafe {
-            let anyfunc = anyfunc.as_ref();
+            let data = &store.0.store_data()[self.0];
+            let trampoline = data.trampoline();
+            let anyfunc = data.export().anyfunc;
             invoke_wasm_and_catch_traps(store, |callee| {
                 trampoline(
-                    anyfunc.vmctx,
+                    (*anyfunc.as_ptr()).vmctx,
                     callee,
-                    anyfunc.func_ptr.as_ptr(),
+                    (*anyfunc.as_ptr()).func_ptr.as_ptr(),
                     values_vec.as_mut_ptr(),
                 )
             })?;
         }
 
-        // Load the return values out of `values_vec`.
-        let mut results = Vec::with_capacity(my_ty.results().len());
-        for (index, ty) in my_ty.results().enumerate() {
-            unsafe {
-                let ptr = values_vec.as_ptr().add(index);
-                results.push(Val::read_value_from(store, ptr, ty));
+        return Ok(read_results(
+            &mut store.as_context_mut().opaque(),
+            &my_ty,
+            &values_vec,
+        ));
+
+        fn write_params(
+            store: &mut StoreOpaque<'_>,
+            ty: &FuncType,
+            params: &[Val],
+        ) -> Result<Vec<u128>> {
+            // We need to perform a dynamic check that the arguments given to us
+            // match the signature of this function and are appropriate to pass to
+            // this function. This involves checking to make sure we have the right
+            // number and types of arguments as well as making sure everything is
+            // from the same `Store`.
+            if ty.params().len() != params.len() {
+                bail!(
+                    "expected {} arguments, got {}",
+                    ty.params().len(),
+                    params.len()
+                );
             }
+
+            let mut values_vec = vec![0; max(params.len(), ty.results().len())];
+
+            // Store the argument values into `values_vec`.
+            let param_tys = ty.params();
+            for ((arg, slot), ty) in params.iter().cloned().zip(&mut values_vec).zip(param_tys) {
+                if arg.ty() != ty {
+                    bail!(
+                        "argument type mismatch: found {} but expected {}",
+                        arg.ty(),
+                        ty
+                    );
+                }
+                if !arg.comes_from_same_store(store) {
+                    bail!("cross-`Store` values are not currently supported");
+                }
+                unsafe {
+                    arg.write_value_to(store, slot);
+                }
+            }
+
+            Ok(values_vec)
         }
 
-        Ok(results.into())
+        fn read_results(
+            store: &mut StoreOpaque<'_>,
+            ty: &FuncType,
+            values_vec: &[u128],
+        ) -> Box<[Val]> {
+            let mut results = Vec::with_capacity(ty.results().len());
+            for (index, ty) in ty.results().enumerate() {
+                unsafe {
+                    let ptr = &values_vec[index];
+                    results.push(Val::read_value_from(store, ptr, ty));
+                }
+            }
+            results.into()
+        }
     }
 
     #[inline]
     pub(crate) fn caller_checked_anyfunc(
         &self,
-        store: &StoreOpaque,
+        store: &StoreInnermost,
     ) -> NonNull<VMCallerCheckedAnyfunc> {
-        store[self.0].export().anyfunc
+        store.store_data()[self.0].export().anyfunc
     }
 
     pub(crate) unsafe fn from_wasmtime_function(
@@ -1033,28 +1035,39 @@ impl Func {
 ///
 /// The `closure` provided receives a default "callee" `VMContext` parameter it
 /// can pass to the called wasm function, if desired.
-#[inline]
-pub(crate) fn invoke_wasm_and_catch_traps(
-    store: &mut StoreOpaque<'_>,
+pub(crate) fn invoke_wasm_and_catch_traps<T>(
+    store: &mut StoreContextMut<'_, T>,
     closure: impl FnMut(*mut VMContext),
 ) -> Result<(), Trap> {
     unsafe {
-        let exit = if store.externref_activations_table().stack_canary().is_some() {
+        let exit = if store
+            .0
+            .externref_activations_table()
+            .stack_canary()
+            .is_some()
+        {
             false
         } else {
             enter_wasm(store)?;
             true
         };
 
+        if let Err(trap) = store.0.exiting_native_hook() {
+            if exit {
+                exit_wasm(store);
+            }
+            return Err(trap);
+        }
         let result = wasmtime_runtime::catch_traps(
-            store.vminterrupts(),
-            store.signal_handler(),
-            store.default_callee(),
+            store.0.vminterrupts(),
+            store.0.signal_handler(),
+            store.0.default_callee(),
             closure,
         );
         if exit {
             exit_wasm(store);
         }
+        store.0.entering_native_hook()?;
         result.map_err(Trap::from_runtime)
     }
 }
@@ -1076,8 +1089,7 @@ pub(crate) fn invoke_wasm_and_catch_traps(
 ///
 /// This function may fail if the the stack limit can't be set because an
 /// interrupt already happened.
-#[inline]
-fn enter_wasm(store: &mut StoreOpaque<'_>) -> Result<(), Trap> {
+fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<(), Trap> {
     let stack_pointer = psm::stack_pointer() as usize;
 
     // Determine the stack pointer where, after which, any wasm code will
@@ -1107,7 +1119,7 @@ fn enter_wasm(store: &mut StoreOpaque<'_>) -> Result<(), Trap> {
     // synchronize with any other memory it's hoped that the choice of `Relaxed`
     // here should be correct for our use case.
     let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
-    let interrupts = store.interrupts();
+    let interrupts = store.0.interrupts();
     match interrupts.stack_limit.swap(wasm_stack_limit, Relaxed) {
         wasmtime_environ::INTERRUPTED => {
             // This means that an interrupt happened before we actually
@@ -1123,18 +1135,19 @@ fn enter_wasm(store: &mut StoreOpaque<'_>) -> Result<(), Trap> {
         n => debug_assert_eq!(usize::max_value(), n),
     }
     store
+        .0
         .externref_activations_table()
         .set_stack_canary(Some(stack_pointer));
 
     Ok(())
 }
 
-#[inline]
-fn exit_wasm(store: &mut StoreOpaque<'_>) {
-    store.externref_activations_table().set_stack_canary(None);
+fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>) {
+    store.0.externref_activations_table().set_stack_canary(None);
 
     // see docs above for why this uses `Relaxed`
     store
+        .0
         .interrupts()
         .stack_limit
         .store(usize::max_value(), Relaxed);

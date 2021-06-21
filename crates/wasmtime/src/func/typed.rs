@@ -1,6 +1,6 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
 use crate::store::StoreOpaque;
-use crate::{AsContextMut, ExternRef, Func, Trap, ValType};
+use crate::{AsContextMut, ExternRef, Func, StoreContextMut, Trap, ValType};
 use anyhow::{bail, Result};
 use std::marker;
 use std::mem::{self, MaybeUninit};
@@ -71,15 +71,12 @@ where
     /// This function will panic if it is called when the underlying [`Func`] is
     /// connected to an asynchronous store.
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results, Trap> {
-        store.as_context_mut().0.exiting_native_hook()?;
-        let mut store_opaque = store.as_context_mut().opaque();
+        let mut store = store.as_context_mut();
         assert!(
-            !store_opaque.async_support(),
+            !store.0.async_support(),
             "must use `call_async` with async stores"
         );
-        let r = unsafe { self._call(&mut store_opaque, params) };
-        store.as_context_mut().0.entering_native_hook()?;
-        r
+        unsafe { self._call(&mut store, params) }
     }
 
     /// Invokes this WebAssembly function with the specified parameters.
@@ -103,24 +100,25 @@ where
     where
         T: Send,
     {
-        store.as_context_mut().0.exiting_native_hook()?;
-        let mut store_opaque = store.as_context_mut().opaque_send();
+        let mut store = store.as_context_mut();
         assert!(
-            store_opaque.async_support(),
+            store.0.async_support(),
             "must use `call` with non-async stores"
         );
-        let r = store_opaque
+        store
             .on_fiber(|store| unsafe { self._call(store, params) })
-            .await?;
-        store.as_context_mut().0.entering_native_hook()?;
-        r
+            .await?
     }
 
-    unsafe fn _call(&self, store: &mut StoreOpaque<'_>, params: Params) -> Result<Results, Trap> {
+    unsafe fn _call<T>(
+        &self,
+        store: &mut StoreContextMut<'_, T>,
+        params: Params,
+    ) -> Result<Results, Trap> {
         // Validate that all runtime values flowing into this store indeed
         // belong within this store, otherwise it would be unsafe for store
         // values to cross each other.
-        let params = match params.into_abi(store) {
+        let params = match params.into_abi(&mut store.as_context_mut().opaque()) {
             Some(abi) => abi,
             None => {
                 return Err(Trap::new(
@@ -135,7 +133,7 @@ where
         // other side of a C++ shim, so it can never be inlined enough to make
         // the memory go away, so the size matters here for performance.
         let mut captures = (
-            self.func.caller_checked_anyfunc(store),
+            self.func.caller_checked_anyfunc(store.0),
             MaybeUninit::uninit(),
             params,
             false,
@@ -156,7 +154,10 @@ where
         let (_, ret, _, returned) = captures;
         debug_assert_eq!(result.is_ok(), returned);
         result?;
-        Ok(Results::from_abi(store, ret.assume_init()))
+        Ok(Results::from_abi(
+            &mut store.as_context_mut().opaque(),
+            ret.assume_init(),
+        ))
     }
 }
 

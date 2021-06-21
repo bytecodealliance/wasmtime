@@ -921,7 +921,7 @@ impl StoreInnermost {
     }
 }
 
-impl StoreOpaqueSend<'_> {
+impl<T> StoreContextMut<'_, T> {
     /// Executes a synchronous computation `func` asynchronously on a new fiber.
     ///
     /// This function will convert the synchronous `func` into an asynchronous
@@ -932,21 +932,23 @@ impl StoreOpaqueSend<'_> {
     /// necessary to suspend the fiber later on and poll sub-futures. It's hoped
     /// that the various comments are illuminating as to what's going on here.
     #[cfg(feature = "async")]
-    pub async fn on_fiber<R>(
+    pub(crate) async fn on_fiber<R>(
         &mut self,
-        func: impl FnOnce(&mut StoreOpaque<'_>) -> R + Send,
-    ) -> Result<R, Trap> {
-        let config = self.engine.config();
-
-        debug_assert!(self.async_support());
+        func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send,
+    ) -> Result<R, Trap>
+    where
+        T: Send,
+    {
+        let config = self.engine().config();
+        debug_assert!(self.0.async_support());
         debug_assert!(config.async_stack_size > 0);
 
         let mut slot = None;
         let future = {
-            let current_poll_cx = self.async_state.current_poll_cx.get();
-            let current_suspend = self.async_state.current_suspend.get();
+            let current_poll_cx = self.0.async_state.current_poll_cx.get();
+            let current_suspend = self.0.async_state.current_suspend.get();
             let stack = self
-                .engine
+                .engine()
                 .allocator()
                 .allocate_fiber_stack()
                 .map_err(|e| Trap::from(anyhow::Error::from(e)))?;
@@ -970,7 +972,7 @@ impl StoreOpaqueSend<'_> {
                     let _reset = Reset(current_suspend, *current_suspend);
                     *current_suspend = suspend;
 
-                    *slot = Some(func(&mut self.opaque()));
+                    *slot = Some(func(self));
                     Ok(())
                 }
             })
