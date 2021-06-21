@@ -1226,12 +1226,43 @@ pub(crate) fn maybe_input_insn_via_conv<C: LowerCtx<I = Inst>>(
     None
 }
 
-pub(crate) fn lower_icmp_or_ifcmp_to_flags<C: LowerCtx<I = Inst>>(
+/// Specifies what [lower_icmp] should do when lowering
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum IcmpOutput {
+    /// Only sets flags, discarding the results
+    Flags,
+    /// Materializes the results into a register. The flags set may be incorrect
+    Register(Writable<Reg>),
+}
+
+impl IcmpOutput {
+    pub fn reg(&self) -> Option<Writable<Reg>> {
+        match self {
+            IcmpOutput::Flags => None,
+            IcmpOutput::Register(reg) => Some(*reg),
+        }
+    }
+}
+
+/// Lower an icmp comparision
+///
+/// We can lower into the status flags, or materialize the result into a register
+/// This is controlled by the `output` parameter.
+pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     insn: IRInst,
-    is_signed: bool,
-) {
-    debug!("lower_icmp_or_ifcmp_to_flags: insn {}", insn);
+    condcode: IntCC,
+    output: IcmpOutput,
+) -> CodegenResult<()> {
+    debug!(
+        "lower_icmp: insn {}, condcode: {}, output: {:?}",
+        insn, condcode, output
+    );
+
+    let rd = output.reg().unwrap_or(writable_zero_reg());
+    let inputs = insn_inputs(ctx, insn);
+    let cond = lower_condcode(condcode);
+    let is_signed = condcode_is_signed(condcode);
     let ty = ctx.input_ty(insn, 0);
     let bits = ty_bits(ty);
     let narrow_mode = match (bits <= 32, is_signed) {
@@ -1240,14 +1271,149 @@ pub(crate) fn lower_icmp_or_ifcmp_to_flags<C: LowerCtx<I = Inst>>(
         (false, true) => NarrowValueMode::SignExtend64,
         (false, false) => NarrowValueMode::ZeroExtend64,
     };
-    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
-    let ty = ctx.input_ty(insn, 0);
-    let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-    let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
-    debug!("lower_icmp_or_ifcmp_to_flags: rn = {:?} rm = {:?}", rn, rm);
-    let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
-    let rd = writable_zero_reg();
-    ctx.emit(alu_inst_imm12(alu_op, rd, rn, rm));
+
+    if ty == I128 {
+        let lhs = put_input_in_regs(ctx, inputs[0]);
+        let rhs = put_input_in_regs(ctx, inputs[1]);
+
+        let tmp1 = ctx.alloc_tmp(I64).only_reg().unwrap();
+        let tmp2 = ctx.alloc_tmp(I64).only_reg().unwrap();
+
+        match condcode {
+            IntCC::Equal | IntCC::NotEqual => {
+                // eor     tmp1, lhs_lo, rhs_lo
+                // eor     tmp2, lhs_hi, rhs_hi
+                // adds    xzr, tmp1, tmp2
+                // cset    dst, {eq, ne}
+
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Eor64,
+                    rd: tmp1,
+                    rn: lhs.regs()[0],
+                    rm: rhs.regs()[0],
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::Eor64,
+                    rd: tmp2,
+                    rn: lhs.regs()[1],
+                    rm: rhs.regs()[1],
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::AddS64,
+                    rd: writable_zero_reg(),
+                    rn: tmp1.to_reg(),
+                    rm: tmp2.to_reg(),
+                });
+
+                if let IcmpOutput::Register(rd) = output {
+                    materialize_bool_result(ctx, insn, rd, cond);
+                }
+            }
+            IntCC::Overflow | IntCC::NotOverflow => {
+                // We can do an 128bit add while throwing away the results
+                // and check the overflow flags at the end.
+                //
+                // adds    xzr, lhs_lo, rhs_lo
+                // adcs    xzr, lhs_hi, rhs_hi
+                // cset    dst, {vs, vc}
+
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::AddS64,
+                    rd: writable_zero_reg(),
+                    rn: lhs.regs()[0],
+                    rm: rhs.regs()[0],
+                });
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::AdcS64,
+                    rd: writable_zero_reg(),
+                    rn: lhs.regs()[1],
+                    rm: rhs.regs()[1],
+                });
+
+                if let IcmpOutput::Register(rd) = output {
+                    materialize_bool_result(ctx, insn, rd, cond);
+                }
+            }
+            _ => {
+                // cmp     lhs_lo, rhs_lo
+                // cset    tmp1, unsigned_cond
+                // cmp     lhs_hi, rhs_hi
+                // cset    tmp2, cond
+                // csel    dst, tmp1, tmp2, eq
+
+                let rd = output.reg().unwrap_or(tmp1);
+                let unsigned_cond = lower_condcode(condcode.unsigned());
+
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::SubS64,
+                    rd: writable_zero_reg(),
+                    rn: lhs.regs()[0],
+                    rm: rhs.regs()[0],
+                });
+                materialize_bool_result(ctx, insn, tmp1, unsigned_cond);
+                ctx.emit(Inst::AluRRR {
+                    alu_op: ALUOp::SubS64,
+                    rd: writable_zero_reg(),
+                    rn: lhs.regs()[1],
+                    rm: rhs.regs()[1],
+                });
+                materialize_bool_result(ctx, insn, tmp2, cond);
+                ctx.emit(Inst::CSel {
+                    cond: Cond::Eq,
+                    rd,
+                    rn: tmp1.to_reg(),
+                    rm: tmp2.to_reg(),
+                });
+
+                if output == IcmpOutput::Flags {
+                    // We only need to guarantee that the flags for `cond` are correct, so we can
+                    // compare rd with 0 or 1
+
+                    // If we are doing compare or equal, we want to compare with 1 instead of zero
+                    if condcode.without_equal() != condcode {
+                        lower_constant_u64(ctx, tmp2, 1);
+                    }
+
+                    let xzr = zero_reg();
+                    let rd = rd.to_reg();
+                    let tmp2 = tmp2.to_reg();
+                    let (rn, rm) = match condcode {
+                        IntCC::SignedGreaterThanOrEqual => (rd, tmp2),
+                        IntCC::UnsignedGreaterThanOrEqual => (rd, tmp2),
+                        IntCC::SignedLessThanOrEqual => (tmp2, rd),
+                        IntCC::UnsignedLessThanOrEqual => (tmp2, rd),
+                        IntCC::SignedGreaterThan => (rd, xzr),
+                        IntCC::UnsignedGreaterThan => (rd, xzr),
+                        IntCC::SignedLessThan => (xzr, rd),
+                        IntCC::UnsignedLessThan => (xzr, rd),
+                        _ => unreachable!(),
+                    };
+
+                    ctx.emit(Inst::AluRRR {
+                        alu_op: ALUOp::SubS64,
+                        rd: writable_zero_reg(),
+                        rn,
+                        rm,
+                    });
+                }
+            }
+        }
+    } else if !ty.is_vector() {
+        let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
+        let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
+        let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
+        ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
+
+        if let IcmpOutput::Register(rd) = output {
+            materialize_bool_result(ctx, insn, rd, cond);
+        }
+    } else {
+        let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
+        let rm = put_input_in_reg(ctx, inputs[1], narrow_mode);
+        lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
+    }
+
+    Ok(())
 }
 
 pub(crate) fn lower_fcmp_or_ffcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {

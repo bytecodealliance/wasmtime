@@ -1,0 +1,321 @@
+test run
+target aarch64
+
+function %i128_bricmp_eq(i64, i64, i64, i64) -> b1 {
+block0(v0: i64, v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 eq v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+    return v7
+}
+; run: %i128_bricmp_eq(0, 0, 0, 0) == true
+; run: %i128_bricmp_eq(-1, -1, -1, -1) == true
+; run: %i128_bricmp_eq(-1, -1, 0, 0) == false
+; run: %i128_bricmp_eq(-1, -1, 0, -1) == false
+; run: %i128_bricmp_eq(-1, 0, -1, -1) == false
+; run: %i128_bricmp_eq(0, -1, -1, -1) == false
+; run: %i128_bricmp_eq(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE, 0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == true
+; run: %i128_bricmp_eq(0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x00000000_00000001) == false
+; run: %i128_bricmp_eq(0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x00000000_00000001, 0x00000000_00000001) == false
+
+function %i128_bricmp_ne(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 ne v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+  return v7
+}
+; run: %i128_bricmp_ne(0, 0, 0, 0) == false
+; run: %i128_bricmp_ne(-1, -1, -1, -1) == false
+; run: %i128_bricmp_ne(-1, -1, 0, 0) == true
+; run: %i128_bricmp_ne(-1, -1, 0, -1) == true
+; run: %i128_bricmp_ne(-1, 0, -1, -1) == true
+; run: %i128_bricmp_ne(0, -1, -1, -1) == true
+; run: %i128_bricmp_ne(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE, 0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == false
+; run: %i128_bricmp_ne(0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x00000000_00000001) == true
+; run: %i128_bricmp_ne(0xFFFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x00000000_00000001, 0x00000000_00000001) == true
+
+
+function %i128_bricmp_slt(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 slt v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+  return v7
+}
+; run: %i128_bricmp_slt(0, 0, 0, 0) == false
+; run: %i128_bricmp_slt(1, 0, 1, 0) == false
+; run: %i128_bricmp_slt(0, 0, 1, 0) == true
+; run: %i128_bricmp_slt(-1, -1, 0, 0) == true
+; run: %i128_bricmp_slt(0, 0, -1, -1) == false
+; run: %i128_bricmp_slt(-1, -1, -1, -1) == false
+; run: %i128_bricmp_slt(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == true
+; run: %i128_bricmp_slt(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == true
+; run: %i128_bricmp_slt(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == false
+
+function %i128_bricmp_ult(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 ult v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+    return v7
+}
+; run: %i128_bricmp_ult(0, 0, 0, 0) == false
+; run: %i128_bricmp_ult(1, 0, 1, 0) == false
+; run: %i128_bricmp_ult(0, 0, 1, 0) == true
+; run: %i128_bricmp_ult(-1, -1, 0, 0) == false
+; run: %i128_bricmp_ult(0, 0, -1, -1) == true
+; run: %i128_bricmp_ult(-1, -1, -1, -1) == false
+; run: %i128_bricmp_ult(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == true
+; run: %i128_bricmp_ult(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == true
+; run: %i128_bricmp_ult(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == false
+
+function %i128_bricmp_sle(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 sle v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+  return v7
+}
+; run: %i128_bricmp_sle(0, 0, 0, 0) == true
+; run: %i128_bricmp_sle(1, 0, 1, 0) == true
+; run: %i128_bricmp_sle(0, 0, 1, 0) == true
+; run: %i128_bricmp_sle(-1, -1, 0, 0) == true
+; run: %i128_bricmp_sle(0, 0, -1, -1) == false
+; run: %i128_bricmp_sle(-1, -1, -1, -1) == true
+; run: %i128_bricmp_sle(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == true
+; run: %i128_bricmp_sle(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == true
+; run: %i128_bricmp_sle(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == false
+
+function %i128_bricmp_ule(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 ule v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+    return v7
+}
+; run: %i128_bricmp_ule(0, 0, 0, 0) == true
+; run: %i128_bricmp_ule(1, 0, 1, 0) == true
+; run: %i128_bricmp_ule(0, 0, 1, 0) == true
+; run: %i128_bricmp_ule(-1, -1, 0, 0) == false
+; run: %i128_bricmp_ule(0, 0, -1, -1) == true
+; run: %i128_bricmp_ule(-1, -1, -1, -1) == true
+; run: %i128_bricmp_ule(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == true
+; run: %i128_bricmp_ule(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == true
+; run: %i128_bricmp_ule(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == false
+
+function %i128_bricmp_sgt(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 sgt v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+  return v7
+}
+; run: %i128_bricmp_sgt(0, 0, 0, 0) == false
+; run: %i128_bricmp_sgt(1, 0, 1, 0) == false
+; run: %i128_bricmp_sgt(0, 0, 1, 0) == false
+; run: %i128_bricmp_sgt(-1, -1, 0, 0) == false
+; run: %i128_bricmp_sgt(0, 0, -1, -1) == true
+; run: %i128_bricmp_sgt(-1, -1, -1, -1) == false
+; run: %i128_bricmp_sgt(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == false
+; run: %i128_bricmp_sgt(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == false
+; run: %i128_bricmp_sgt(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == true
+
+function %i128_bricmp_ugt(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 ugt v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+    return v7
+}
+; run: %i128_bricmp_ugt(0, 0, 0, 0) == false
+; run: %i128_bricmp_ugt(1, 0, 1, 0) == false
+; run: %i128_bricmp_ugt(0, 0, 1, 0) == false
+; run: %i128_bricmp_ugt(-1, -1, 0, 0) == true
+; run: %i128_bricmp_ugt(0, 0, -1, -1) == false
+; run: %i128_bricmp_ugt(-1, -1, -1, -1) == false
+; run: %i128_bricmp_ugt(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == false
+; run: %i128_bricmp_ugt(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == false
+; run: %i128_bricmp_ugt(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == true
+
+function %i128_bricmp_sge(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 sge v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+  return v7
+}
+; run: %i128_bricmp_sge(0, 0, 0, 0) == true
+; run: %i128_bricmp_sge(1, 0, 1, 0) == true
+; run: %i128_bricmp_sge(0, 0, 1, 0) == false
+; run: %i128_bricmp_sge(-1, -1, 0, 0) == false
+; run: %i128_bricmp_sge(0, 0, -1, -1) == true
+; run: %i128_bricmp_sge(-1, -1, -1, -1) == true
+; run: %i128_bricmp_sge(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == false
+; run: %i128_bricmp_sge(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == false
+; run: %i128_bricmp_sge(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == true
+
+function %i128_bricmp_uge(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 uge v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+    return v7
+}
+; run: %i128_bricmp_uge(0, 0, 0, 0) == true
+; run: %i128_bricmp_uge(1, 0, 1, 0) == true
+; run: %i128_bricmp_uge(0, 0, 1, 0) == false
+; run: %i128_bricmp_uge(-1, -1, 0, 0) == true
+; run: %i128_bricmp_uge(0, 0, -1, -1) == false
+; run: %i128_bricmp_uge(-1, -1, -1, -1) == true
+; run: %i128_bricmp_uge(0xFFFFFFFF_FFFFFFFD, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF, 0xFFFFFFFF_FFFFFFFF) == false
+; run: %i128_bricmp_uge(0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE, 0x00000000_00000000, 0xDECAFFFF_DECAFFFF) == false
+; run: %i128_bricmp_uge(0x00000000_00000000, 0xDECAFFFF_DECAFFFF, 0x00000000_00000000, 0xC0FFEEEE_C0FFEEEE) == true
+
+function %i128_bricmp_of(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 of v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+    return v7
+}
+; run: %i128_bricmp_of(0, 0, 0, 0) == false
+; run: %i128_bricmp_of(0, 0, 1, 0) == false
+; run: %i128_bricmp_of(0, 0, -1, -1) == false
+; run: %i128_bricmp_of(-1, -1, -1, -1) == false
+; run: %i128_bricmp_of(0x00000000_00000000, 0x80000000_00000000, 0, 0) == false
+; run: %i128_bricmp_of(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0, 0) == false
+; run: %i128_bricmp_of(1, 0, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == true
+; run: %i128_bricmp_of(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 1, 0) == true
+; run: %i128_bricmp_of(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x80000000_00000000) == false
+; run: %i128_bricmp_of(0x00000000_00000000, 0x80000000_00000000, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == false
+; run: %i128_bricmp_of(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x30000000_00000000) == false
+; run: %i128_bricmp_of(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x30000000_00000000) == true
+
+function %i128_bricmp_nof(i64, i64, i64, i64) -> b1 {
+block0(v0: i64,v1: i64,v2: i64,v3: i64):
+    v4 = iconcat v0, v1
+    v5 = iconcat v2, v3
+
+    br_icmp.i128 nof v4, v5, block2
+    jump block1
+
+block1:
+    v6 = bconst.b1 false
+    return v6
+
+block2:
+    v7 = bconst.b1 true
+    return v7
+}
+; run: %i128_bricmp_nof(0, 0, 0, 0) == true
+; run: %i128_bricmp_nof(0, 0, 1, 0) == true
+; run: %i128_bricmp_nof(0, 0, -1, -1) == true
+; run: %i128_bricmp_nof(-1, -1, -1, -1) == true
+; run: %i128_bricmp_nof(0x00000000_00000000, 0x80000000_00000000, 0, 0) == true
+; run: %i128_bricmp_nof(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0, 0) == true
+; run: %i128_bricmp_nof(1, 0, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == false
+; run: %i128_bricmp_nof(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 1, 0) == false
+; run: %i128_bricmp_nof(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x80000000_00000000) == true
+; run: %i128_bricmp_nof(0x00000000_00000000, 0x80000000_00000000, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == true
+; run: %i128_bricmp_nof(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x30000000_00000000) == true
+; run: %i128_bricmp_nof(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x30000000_00000000) == false
