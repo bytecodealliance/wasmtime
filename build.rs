@@ -157,11 +157,9 @@ fn write_testsuite_tests(
     writeln!(out, "#[test]")?;
     if x64_should_panic(testsuite, &testname, strategy) {
         writeln!(out, r#"#[should_panic]"#)?;
-    } else if ignore(testsuite, &testname, strategy) {
+    // Ignore when using QEMU for running tests (limited memory).
+    } else if ignore(testsuite, &testname, strategy) || (pooling && platform_is_emulated()) {
         writeln!(out, "#[ignore]")?;
-    } else if pooling {
-        // Ignore on aarch64 due to using QEMU for running tests (limited memory)
-        writeln!(out, r#"#[cfg_attr(target_arch = "aarch64", ignore)]"#)?;
     }
 
     writeln!(
@@ -253,4 +251,8 @@ fn platform_is_x64() -> bool {
 
 fn platform_is_s390x() -> bool {
     env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
+}
+
+fn platform_is_emulated() -> bool {
+    env::var("WASMTIME_TEST_NO_HOG_MEMORY").unwrap_or_default() == "1"
 }

@@ -1,4 +1,5 @@
 use super::ref_types_module;
+use super::skip_pooling_allocator_tests;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
@@ -237,9 +238,12 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
 #[test]
 fn global_drops_externref() -> anyhow::Result<()> {
     test_engine(&Engine::default())?;
-    test_engine(&Engine::new(
-        Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
-    )?)?;
+
+    if !skip_pooling_allocator_tests() {
+        test_engine(&Engine::new(
+            Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
+        )?)?;
+    }
 
     return Ok(());
 
@@ -284,9 +288,12 @@ fn global_drops_externref() -> anyhow::Result<()> {
 #[cfg(not(feature = "old-x86-backend"))] // uses atomic instrs not implemented here
 fn table_drops_externref() -> anyhow::Result<()> {
     test_engine(&Engine::default())?;
-    test_engine(&Engine::new(
-        Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
-    )?)?;
+
+    if !skip_pooling_allocator_tests() {
+        test_engine(&Engine::new(
+            Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
+        )?)?;
+    }
 
     return Ok(());
 
