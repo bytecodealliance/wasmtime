@@ -1,4 +1,3 @@
-use crate::cdsl::cpu_modes::CpuMode;
 use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::recipes::Recipes;
@@ -55,20 +54,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     let inst_group = InstructionGroupBuilder::new(&mut shared_defs.all_instructions).build();
 
-    // CPU modes for 32-bit ARM and Thumb2.
-    let mut a32 = CpuMode::new("A32");
-    let mut t32 = CpuMode::new("T32");
-
-    // TODO refine these.
-    let narrow_flags = shared_defs.transform_groups.by_name("narrow_flags");
-    a32.legalize_default(narrow_flags);
-    t32.legalize_default(narrow_flags);
-
-    // Make sure that the expand code is used, thus generated.
-    let expand = shared_defs.transform_groups.by_name("expand");
-    a32.legalize_monomorphic(expand);
-
-    let cpu_modes = vec![a32, t32];
+    let cpu_modes = vec![];
 
     // TODO implement arm32 recipes.
     let recipes = Recipes::new();

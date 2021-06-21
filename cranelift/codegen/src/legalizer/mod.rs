@@ -13,6 +13,7 @@
 //! The legalizer does not deal with register allocation constraints. These constraints are derived
 //! from the encoding recipes, and solved later by the register allocator.
 
+#[cfg(any(feature = "x86", feature = "riscv"))]
 use crate::bitset::BitSet;
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
@@ -20,19 +21,9 @@ use crate::ir::types::{I32, I64};
 use crate::ir::{self, InstBuilder, MemFlags};
 use crate::isa::TargetIsa;
 
-#[cfg(any(
-    feature = "x86",
-    feature = "arm32",
-    feature = "arm64",
-    feature = "riscv"
-))]
+#[cfg(any(feature = "x86", feature = "riscv"))]
 use crate::predicates;
-#[cfg(any(
-    feature = "x86",
-    feature = "arm32",
-    feature = "arm64",
-    feature = "riscv"
-))]
+#[cfg(any(feature = "x86", feature = "riscv"))]
 use alloc::vec::Vec;
 
 use crate::timing;
@@ -46,6 +37,7 @@ mod libcall;
 mod split;
 mod table;
 
+#[cfg(any(feature = "x86", feature = "riscv"))]
 use self::call::expand_call;
 use self::globalvalue::expand_global_value;
 use self::heap::expand_heap_addr;
@@ -213,49 +205,126 @@ pub fn legalize_function(func: &mut ir::Function, cfg: &mut ControlFlowGraph, is
 /// Perform a simple legalization by expansion of the function, without
 /// platform-specific transforms.
 pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa: &dyn TargetIsa) {
+    macro_rules! expand_imm_op {
+        ($pos:ident, $inst:ident: $from:ident => $to:ident) => {{
+            let (arg, imm) = match $pos.func.dfg[$inst] {
+                ir::InstructionData::BinaryImm64 {
+                    opcode: _,
+                    arg,
+                    imm,
+                } => (arg, imm),
+                _ => panic!(
+                    concat!("Expected ", stringify!($from), ": {}"),
+                    $pos.func.dfg.display_inst($inst, None)
+                ),
+            };
+            let ty = $pos.func.dfg.value_type(arg);
+            let imm = $pos.ins().iconst(ty, imm);
+            $pos.func.dfg.replace($inst).$to(arg, imm);
+        }};
+
+        ($pos:ident, $inst:ident<$ty:ident>: $from:ident => $to:ident) => {{
+            let (arg, imm) = match $pos.func.dfg[$inst] {
+                ir::InstructionData::BinaryImm64 {
+                    opcode: _,
+                    arg,
+                    imm,
+                } => (arg, imm),
+                _ => panic!(
+                    concat!("Expected ", stringify!($from), ": {}"),
+                    $pos.func.dfg.display_inst($inst, None)
+                ),
+            };
+            let imm = $pos.ins().iconst($ty, imm);
+            $pos.func.dfg.replace($inst).$to(arg, imm);
+        }};
+    }
+
     let mut pos = FuncCursor::new(func);
     let func_begin = pos.position();
     pos.set_position(func_begin);
     while let Some(_block) = pos.next_block() {
         let mut prev_pos = pos.position();
         while let Some(inst) = pos.next_inst() {
-            let expanded = match pos.func.dfg[inst].opcode() {
-                ir::Opcode::BrIcmp
-                | ir::Opcode::GlobalValue
-                | ir::Opcode::HeapAddr
-                | ir::Opcode::StackLoad
-                | ir::Opcode::StackStore
-                | ir::Opcode::TableAddr
-                | ir::Opcode::Trapnz
-                | ir::Opcode::Trapz
-                | ir::Opcode::ResumableTrapnz
-                | ir::Opcode::BandImm
-                | ir::Opcode::BorImm
-                | ir::Opcode::BxorImm
-                | ir::Opcode::IaddImm
-                | ir::Opcode::IfcmpImm
-                | ir::Opcode::ImulImm
-                | ir::Opcode::IrsubImm
-                | ir::Opcode::IshlImm
-                | ir::Opcode::RotlImm
-                | ir::Opcode::RotrImm
-                | ir::Opcode::SdivImm
-                | ir::Opcode::SremImm
-                | ir::Opcode::SshrImm
-                | ir::Opcode::UdivImm
-                | ir::Opcode::UremImm
-                | ir::Opcode::UshrImm
-                | ir::Opcode::IcmpImm => expand(inst, &mut pos.func, cfg, isa),
-                _ => false,
+            match pos.func.dfg[inst].opcode() {
+                // control flow
+                ir::Opcode::BrIcmp => expand_br_icmp(inst, &mut pos.func, cfg, isa),
+                ir::Opcode::Trapnz | ir::Opcode::Trapz | ir::Opcode::ResumableTrapnz => {
+                    expand_cond_trap(inst, &mut pos.func, cfg, isa);
+                }
+
+                // memory and constants
+                ir::Opcode::GlobalValue => expand_global_value(inst, &mut pos.func, cfg, isa),
+                ir::Opcode::HeapAddr => expand_heap_addr(inst, &mut pos.func, cfg, isa),
+                ir::Opcode::StackLoad => expand_stack_load(inst, &mut pos.func, cfg, isa),
+                ir::Opcode::StackStore => expand_stack_store(inst, &mut pos.func, cfg, isa),
+                ir::Opcode::TableAddr => expand_table_addr(inst, &mut pos.func, cfg, isa),
+
+                // bitops
+                ir::Opcode::BandImm => expand_imm_op!(pos, inst: band_imm => band),
+                ir::Opcode::BorImm => expand_imm_op!(pos, inst: bor_imm => bor),
+                ir::Opcode::BxorImm => expand_imm_op!(pos, inst: bxor_imm => bxor),
+                ir::Opcode::IaddImm => expand_imm_op!(pos, inst: iadd_imm => iadd),
+
+                // bitshifting
+                ir::Opcode::IshlImm => expand_imm_op!(pos, inst<I32>: ishl_imm => ishl),
+                ir::Opcode::RotlImm => expand_imm_op!(pos, inst<I32>: rotl_imm => rotl),
+                ir::Opcode::RotrImm => expand_imm_op!(pos, inst<I32>: rotr_imm => rotr),
+                ir::Opcode::SshrImm => expand_imm_op!(pos, inst<I32>: sshr_imm => sshr),
+                ir::Opcode::UshrImm => expand_imm_op!(pos, inst<I32>: ushr_imm => ushr),
+
+                // math
+                ir::Opcode::IrsubImm => {
+                    let (arg, imm) = match pos.func.dfg[inst] {
+                        ir::InstructionData::BinaryImm64 {
+                            opcode: _,
+                            arg,
+                            imm,
+                        } => (arg, imm),
+                        _ => panic!(
+                            "Expected irsub_imm: {}",
+                            pos.func.dfg.display_inst(inst, None)
+                        ),
+                    };
+                    let ty = pos.func.dfg.value_type(arg);
+                    let imm = pos.ins().iconst(ty, imm);
+                    pos.func.dfg.replace(inst).isub(imm, arg); // note: arg order reversed
+                }
+                ir::Opcode::ImulImm => expand_imm_op!(pos, inst: imul_imm => imul),
+                ir::Opcode::SdivImm => expand_imm_op!(pos, inst: sdiv_imm => sdiv),
+                ir::Opcode::SremImm => expand_imm_op!(pos, inst: srem_imm => srem),
+                ir::Opcode::UdivImm => expand_imm_op!(pos, inst: udiv_imm => udiv),
+                ir::Opcode::UremImm => expand_imm_op!(pos, inst: urem_imm => urem),
+
+                // comparisons
+                ir::Opcode::IfcmpImm => expand_imm_op!(pos, inst: ifcmp_imm => ifcmp),
+                ir::Opcode::IcmpImm => {
+                    let (cc, x, y) = match pos.func.dfg[inst] {
+                        ir::InstructionData::IntCompareImm {
+                            opcode: _,
+                            cond,
+                            arg,
+                            imm,
+                        } => (cond, arg, imm),
+                        _ => panic!(
+                            "Expected ircmp_imm: {}",
+                            pos.func.dfg.display_inst(inst, None)
+                        ),
+                    };
+                    let ty = pos.func.dfg.value_type(x);
+                    let y = pos.ins().iconst(ty, y);
+                    pos.func.dfg.replace(inst).icmp(cc, x, y);
+                }
+
+                _ => {
+                    prev_pos = pos.position();
+                    continue;
+                }
             };
 
-            if expanded {
-                // Legalization implementations require fixpoint loop
-                // here. TODO: fix this.
-                pos.set_position(prev_pos);
-            } else {
-                prev_pos = pos.position();
-            }
+            // Legalization implementations require fixpoint loop here.
+            // TODO: fix this.
+            pos.set_position(prev_pos);
         }
     }
 }
