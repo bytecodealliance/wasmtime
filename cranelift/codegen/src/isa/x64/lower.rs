@@ -3217,12 +3217,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::setcc(CC::Z, dst));
         }
 
-        Opcode::Uextend
-        | Opcode::Sextend
-        | Opcode::Bint
-        | Opcode::Breduce
-        | Opcode::Bextend
-        | Opcode::Ireduce => {
+        Opcode::Uextend | Opcode::Sextend | Opcode::Breduce | Opcode::Bextend | Opcode::Ireduce => {
             let src_ty = ctx.input_ty(insn, 0);
             let dst_ty = ctx.output_ty(insn, 0);
 
@@ -3236,7 +3231,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 assert!(src_ty.bits() <= 64);
                 let src = put_input_in_reg(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]);
-                assert!(op == Opcode::Uextend || op == Opcode::Sextend || op == Opcode::Bint);
+                assert!(op == Opcode::Uextend || op == Opcode::Sextend);
                 // Extend to 64 bits first.
 
                 let ext_mode = ExtMode::new(src_ty.bits(), /* dst bits = */ 64);
@@ -3278,15 +3273,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // Sextend requires a sign-extended move, but all the other opcodes are simply a move
                 // from a zero-extended source. Here is why this works, in each case:
                 //
-                // - Bint: Bool-to-int. We always represent a bool as a 0 or 1, so we merely need to
-                // zero-extend here.
-                //
-                // - Breduce, Bextend: changing width of a boolean. We represent a bool as a 0 or 1, so
-                // again, this is a zero-extend / no-op.
+                // - Breduce, Bextend: changing width of a boolean. We
+                //   represent a bool as a 0 or -1, so Breduce can mask, while
+                //   Bextend must sign-extend.
                 //
                 // - Ireduce: changing width of an integer. Smaller ints are stored with undefined
                 // high-order bits, so we can simply do a copy.
-                if src_ty == types::I32 && dst_ty == types::I64 && op != Opcode::Sextend {
+                let is_sextend = match op {
+                    Opcode::Sextend | Opcode::Bextend => true,
+                    _ => false,
+                };
+                if src_ty == types::I32 && dst_ty == types::I64 && !is_sextend {
                     // As a particular x64 extra-pattern matching opportunity, all the ALU opcodes on
                     // 32-bits will zero-extend the upper 32-bits, so we can even not generate a
                     // zero-extended move in this case.
@@ -3324,7 +3321,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 );
 
                 if let Some(ext_mode) = ext_mode {
-                    if op == Opcode::Sextend {
+                    if is_sextend {
                         ctx.emit(Inst::movsx_rm_r(ext_mode, src, dst));
                     } else {
                         ctx.emit(Inst::movzx_rm_r(ext_mode, src, dst));
@@ -3332,6 +3329,32 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 } else {
                     ctx.emit(Inst::mov64_rm_r(src, dst));
                 }
+            }
+        }
+
+        Opcode::Bint => {
+            // Booleans are stored as all-zeroes (0) or all-ones (-1). We AND
+            // out the LSB to give a 0 / 1-valued integer result.
+            let rn = put_input_in_reg(ctx, inputs[0]);
+            let rd = get_output_reg(ctx, outputs[0]);
+            let ty = ctx.output_ty(insn, 0);
+
+            ctx.emit(Inst::gen_move(rd.regs()[0], rn, types::I64));
+            ctx.emit(Inst::alu_rmi_r(
+                OperandSize::Size64,
+                AluRmiROpcode::And,
+                RegMemImm::imm(1),
+                rd.regs()[0],
+            ));
+
+            if ty == types::I128 {
+                let upper = rd.regs()[1];
+                ctx.emit(Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(upper.to_reg()),
+                    upper,
+                ));
             }
         }
 

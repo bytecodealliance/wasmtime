@@ -11,7 +11,7 @@ block0(v0: i64, v1: i64):
     v4 = bint.i64 v3
 ; nextln: cmpq    %rax, %rdi
 ; nextln: setz    %cl
-; nextln: movzbq  %cl, %rcx
+; nextln: andq    $$1, %rcx
 
     v5 = select.i64 v3, v0, v1
 ; nextln: cmpq    %rax, %rdi
@@ -34,7 +34,7 @@ block0(v0: f64, v1: i64):
 ; nextln: setnp   %dil
 ; nextln: setz    %sil
 ; nextln: andl    %edi, %esi
-; nextln: movzbq  %sil, %rsi
+; nextln: andq    $$1, %rsi
 
     v5 = select.f64 v3, v0, v0
 ; nextln: ucomisd %xmm1, %xmm0
