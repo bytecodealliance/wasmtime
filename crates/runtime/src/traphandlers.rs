@@ -14,15 +14,16 @@ use wasmtime_environ::ir;
 
 pub use self::tls::{tls_eager_initialize, TlsRestore};
 
+#[link(name = "wasmtime-helpers")]
 extern "C" {
     #[allow(improper_ctypes)]
-    fn RegisterSetjmp(
+    fn wasmtime_setjmp(
         jmp_buf: *mut *const u8,
         callback: extern "C" fn(*mut u8, *mut VMContext),
         payload: *mut u8,
         callee: *mut VMContext,
     ) -> i32;
-    fn Unwind(jmp_buf: *const u8) -> !;
+    fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
 }
 
 cfg_if::cfg_if! {
@@ -177,7 +178,7 @@ where
     F: FnMut(*mut VMContext),
 {
     return CallThreadState::new(signal_handler).with(vminterrupts, |cx| {
-        RegisterSetjmp(
+        wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
             &mut closure as *mut F as *mut u8,
@@ -251,7 +252,7 @@ impl CallThreadState {
     fn unwind_with(&self, reason: UnwindReason) -> ! {
         unsafe {
             (*self.unwind.get()).as_mut_ptr().write(reason);
-            Unwind(self.jmp_buf.get());
+            wasmtime_longjmp(self.jmp_buf.get());
         }
     }
 
@@ -306,7 +307,7 @@ impl CallThreadState {
         }
 
         // If all that passed then this is indeed a wasm trap, so return the
-        // `jmp_buf` passed to `Unwind` to resume.
+        // `jmp_buf` passed to `wasmtime_longjmp` to resume.
         self.jmp_buf.get()
     }
 

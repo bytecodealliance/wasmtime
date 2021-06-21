@@ -14,7 +14,7 @@
 #define platform_jmp_buf sigjmp_buf
 #endif
 
-int RegisterSetjmp(
+int wasmtime_setjmp(
     void **buf_storage,
     void (*body)(void*, void*),
     void *payload,
@@ -28,7 +28,7 @@ int RegisterSetjmp(
   return 1;
 }
 
-void Unwind(void *JmpBuf) {
+void wasmtime_longjmp(void *JmpBuf) {
   platform_jmp_buf *buf = (platform_jmp_buf*) JmpBuf;
   platform_longjmp(*buf, 1);
 }

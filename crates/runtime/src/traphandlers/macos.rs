@@ -33,7 +33,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::traphandlers::{tls, Trap, Unwind};
+use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
 use mach::exception_types::*;
 use mach::kern_return::*;
 use mach::mach_init::*;
@@ -389,7 +389,7 @@ unsafe extern "C" fn unwind(wasm_pc: *const u8) -> ! {
         state.jmp_buf.get()
     });
     debug_assert!(!jmp_buf.is_null());
-    Unwind(jmp_buf);
+    wasmtime_longjmp(jmp_buf);
 }
 
 thread_local! {
