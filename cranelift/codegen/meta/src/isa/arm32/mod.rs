@@ -1,6 +1,4 @@
-use crate::cdsl::instructions::InstructionPredicateMap;
 use crate::cdsl::isa::TargetIsa;
-use crate::cdsl::recipes::Recipes;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{SettingGroup, SettingGroupBuilder};
 
@@ -52,20 +50,5 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = define_settings(&shared_defs.settings);
     let regs = define_regs();
 
-    let cpu_modes = vec![];
-
-    // TODO implement arm32 recipes.
-    let recipes = Recipes::new();
-
-    // TODO implement arm32 encodings and predicates.
-    let encodings_predicates = InstructionPredicateMap::new();
-
-    TargetIsa::new(
-        "arm32",
-        settings,
-        regs,
-        recipes,
-        cpu_modes,
-        encodings_predicates,
-    )
+    TargetIsa::new("arm32", settings, regs)
 }
