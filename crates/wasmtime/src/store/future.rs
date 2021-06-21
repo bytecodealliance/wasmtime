@@ -6,7 +6,7 @@ use std::pin::Pin;
 use std::ptr;
 use std::task::{Context, Poll};
 
-type FiberResume = Result<(*mut u8, *mut StoreOpaque<'static>), Trap>;
+type FiberResume = Result<(*mut u8, StoreOpaque<'static>), Trap>;
 type FiberResult = ();
 
 pub struct AsyncState {
@@ -151,7 +151,7 @@ where
     // points which don't know the type of return value or closure here, they
     // only have a general store.
     let fiber = wasmtime_fiber::Fiber::new(stack, move |init: FiberResume, suspend| {
-        let (slot, store) = match init {
+        let (slot, mut store) = match init {
             Ok(pair) => pair,
             // we were dropped before we started, just bail out.
             Err(_) => return,
@@ -175,7 +175,7 @@ where
             let _reset = Reset(current_suspend, *current_suspend);
             *current_suspend = suspend;
 
-            *slot.cast() = Some(func(&mut *store));
+            *slot.cast() = Some(func(&mut store));
         }
     });
     let fiber = match fiber {
@@ -353,10 +353,9 @@ where
             // fiber. Also note that the `result` pointer must not move in
             // memory after the first resumption since we currently don't read
             // the resumption value after each time.
-            let mut store = me.store.as_context_mut().opaque();
+            let store = me.store.as_context_mut().opaque();
             let result = ret as *mut Option<R>;
-            let store =
-                std::mem::transmute::<&mut StoreOpaque<'_>, *mut StoreOpaque<'static>>(&mut store);
+            let store = std::mem::transmute::<StoreOpaque<'_>, StoreOpaque<'static>>(store);
             match fiber.0.resume(Ok((result.cast(), store))) {
                 // This means the fiber finished. Upon finishing we run the hook
                 // to come back into native code. If that succeeds then we can
