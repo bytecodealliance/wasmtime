@@ -19,6 +19,7 @@ fn module(engine: &Engine) -> Result<Module> {
             (2, &["i32.load16_s"]),
             (4, &["i32.load" /*, "f32.load"*/]),
             (8, &["i64.load" /*, "f64.load"*/]),
+            #[cfg(not(target_arch = "s390x"))]
             (16, &["v128.load"]),
         ]
         .iter()
