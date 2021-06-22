@@ -1,0 +1,16 @@
+test compile
+target x86_64 machinst
+
+function %f0(b8) -> b64 {
+block0(v0: b8):
+  v1 = bextend.b64 v0
+  return v1
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movsbq  %dil, %rsi
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret

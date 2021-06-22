@@ -463,7 +463,8 @@ block0(v0: b1):
     v1 = bint.i128 v0
     return v1
 
-; check:  movzbq  %dil, %rsi
+; nextln: movq    %rdi, %rsi
+; nextln: andq    $$1, %rsi
 ; nextln: xorq    %rdi, %rdi
 ; nextln: movq    %rsi, %rax
 ; nextln: movq    %rdi, %rdx

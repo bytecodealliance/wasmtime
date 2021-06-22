@@ -1,0 +1,37 @@
+test run
+target aarch64
+target x86_64 machinst
+
+function %bint_b8_i16_true() -> i16 {
+block0:
+  v0 = bconst.b8 true
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b8_i16_true() == 1
+
+
+function %bint_b16_i16_true() -> i16 {
+block0:
+  v0 = bconst.b16 true
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b16_i16_true() == 1
+
+function %bint_b8_i16_false() -> i16 {
+block0:
+  v0 = bconst.b8 false
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b8_i16_false() == 0
+
+
+function %bint_b16_i16_false() -> i16 {
+block0:
+  v0 = bconst.b16 false
+  v1 = bint.i16 v0
+  return v1
+}
+; run: %bint_b16_i16_false() == 0
