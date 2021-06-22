@@ -120,7 +120,7 @@ pub struct FuncEnvironment<'module_environment> {
     builtin_function_signatures: BuiltinFunctionSignatures,
 
     /// Offsets to struct fields accessed by JIT code.
-    pub(crate) offsets: VMOffsets,
+    pub(crate) offsets: VMOffsets<u8>,
 
     tunables: &'module_environment Tunables,
 
@@ -288,7 +288,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         // If this changes that's ok, the `atomic_rmw` below just needs to be
         // preceded with an add instruction of `externref` and the offset.
-        assert_eq!(VMOffsets::vm_extern_data_ref_count(), 0);
+        assert_eq!(self.offsets.vm_extern_data_ref_count(), 0);
         let delta = builder.ins().iconst(pointer_type, delta);
         builder.ins().atomic_rmw(
             pointer_type,

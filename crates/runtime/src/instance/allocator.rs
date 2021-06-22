@@ -22,8 +22,8 @@ use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, GlobalInit, SignatureIndex, WasmType,
 };
 use wasmtime_environ::{
-    ir, MemoryInitialization, MemoryInitializer, Module, ModuleType, TableInitializer, VMOffsets,
-    WASM_PAGE_SIZE,
+    ir, HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, TableInitializer,
+    VMOffsets, WASM_PAGE_SIZE,
 };
 
 mod pooling;
@@ -643,7 +643,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let mut handle = {
             let instance = Instance {
                 module: req.module.clone(),
-                offsets: VMOffsets::new(std::mem::size_of::<*const u8>() as u8, &req.module),
+                offsets: VMOffsets::new(HostPtr, &req.module),
                 memories,
                 tables,
                 dropped_elements: EntitySet::with_capacity(req.module.passive_elements.len()),

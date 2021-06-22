@@ -27,7 +27,7 @@ use wasmtime_environ::wasm::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, EntityIndex,
     FuncIndex, GlobalIndex, MemoryIndex, TableElementType, TableIndex, WasmType,
 };
-use wasmtime_environ::{ir, Module, VMOffsets};
+use wasmtime_environ::{ir, HostPtr, Module, VMOffsets};
 
 mod allocator;
 
@@ -119,7 +119,7 @@ pub(crate) struct Instance {
     module: Arc<Module>,
 
     /// Offsets in the `vmctx` region, precomputed from the `module` above.
-    offsets: VMOffsets,
+    offsets: VMOffsets<HostPtr>,
 
     /// WebAssembly linear memory data.
     ///
