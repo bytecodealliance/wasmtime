@@ -962,6 +962,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::AluRRR { alu_op, rd, rn, rm });
             }
         }
+        Opcode::IaddIfcout => {
+            // This only supports the operands emitted by dynamic_addr.
+            let ty = ty.unwrap();
+            assert!(ty == types::I32 || ty == types::I64);
+            let alu_op = choose_32_64(ty, ALUOp::Add32, ALUOp::Add64);
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let imm = input_matches_uimm32(ctx, inputs[1]).unwrap();
+            ctx.emit(Inst::gen_move(rd, rn, ty));
+            // Note that this will emit AL(G)FI, which sets the condition
+            // code to indicate an (unsigned) carry bit.
+            ctx.emit(Inst::AluRUImm32 { alu_op, rd, imm });
+        }
 
         Opcode::UaddSat | Opcode::SaddSat => unimplemented!(),
         Opcode::UsubSat | Opcode::SsubSat => unimplemented!(),
@@ -2565,17 +2578,39 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Trapif => {
             let condcode = ctx.data(insn).cond_code().unwrap();
-            let cond = Cond::from_intcc(condcode);
+            let mut cond = Cond::from_intcc(condcode);
             let is_signed = condcode_is_signed(condcode);
 
-            // Verification ensures that the input is always a single-def ifcmp.
             let cmp_insn = ctx
                 .get_input_as_source_or_const(inputs[0].insn, inputs[0].input)
                 .inst
                 .unwrap()
                 .0;
-            debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
-            lower_icmp_to_flags(ctx, cmp_insn, is_signed, true);
+            if ctx.data(cmp_insn).opcode() == Opcode::IaddIfcout {
+                // The flags must not have been clobbered by any other instruction between the
+                // iadd_ifcout and this instruction, as verified by the CLIF validator; so we
+                // can simply rely on the condition code here.
+                //
+                // IaddIfcout is implemented via a ADD LOGICAL instruction, which sets the
+                // the condition code as follows:
+                //   0   Result zero; no carry
+                //   1   Result not zero; no carry
+                //   2   Result zero; carry
+                //   3   Result not zero; carry
+                // This means "carry" corresponds to condition code 2 or 3, i.e.
+                // a condition mask of 2 | 1.
+                //
+                // As this does not match any of the encodings used with a normal integer
+                // comparsion, this cannot be represented by any IntCC value.  We need to
+                // remap the IntCC::UnsignedGreaterThan value that we have here as result
+                // of the unsigned_add_overflow_condition call to the correct mask.
+                assert!(condcode == IntCC::UnsignedGreaterThan);
+                cond = Cond::from_mask(2 | 1);
+            } else {
+                // Verification ensures that the input is always a single-def ifcmp
+                debug_assert_eq!(ctx.data(cmp_insn).opcode(), Opcode::Ifcmp);
+                lower_icmp_to_flags(ctx, cmp_insn, is_signed, true);
+            }
 
             let trap_code = ctx.data(insn).trap_code().unwrap();
             ctx.emit_safepoint(Inst::TrapIf { trap_code, cond });
@@ -2894,7 +2929,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::IaddCin
         | Opcode::IaddIfcin
         | Opcode::IaddCout
-        | Opcode::IaddIfcout
         | Opcode::IaddCarry
         | Opcode::IaddIfcarry
         | Opcode::IsubBin

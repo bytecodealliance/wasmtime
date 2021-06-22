@@ -121,7 +121,12 @@ impl MachBackend for S390xBackend {
     }
 
     fn unsigned_add_overflow_condition(&self) -> IntCC {
-        unimplemented!()
+        // The ADD LOGICAL family of instructions set the condition code
+        // differently from normal comparisons, in a way that cannot be
+        // represented by any of the standard IntCC values.  So we use a
+        // dummy value here, which gets remapped to the correct condition
+        // code mask during lowering.
+        IntCC::UnsignedGreaterThan
     }
 
     fn unsigned_sub_overflow_condition(&self) -> IntCC {
