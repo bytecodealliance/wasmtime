@@ -1,29 +1,26 @@
 test run
-; target aarch64 TODO: Not yet implemented on aarch64
+target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 target x86_64 machinst
 target x86_64 legacy
 
-function %i128_uextend() -> b1 {
-block0:
-    v0 = iconst.i64 0xffff_ffff_eeee_0000
+function %i128_uextend_i64(i64) -> i64, i64 {
+block0(v0: i64):
     v1 = uextend.i128 v0
     v2, v3 = isplit v1
-    v4 = icmp_imm eq v2, 0xffff_ffff_eeee_0000
-    v5 = icmp_imm eq v3, 0
-    v6 = band v4, v5
-    return v6
+    return v2, v3
 }
-; run
+; run: %i128_uextend_i64(0) == [0, 0]
+; run: %i128_uextend_i64(-1) == [-1, 0]
+; run: %i128_uextend_i64(0xffff_ffff_eeee_0000) == [0xffff_ffff_eeee_0000, 0]
 
-function %i128_sextend() -> b1 {
-block0:
-    v0 = iconst.i64 0xffff_ffff_eeee_0000
+function %i128_sextend_i64(i64) -> i64, i64 {
+block0(v0: i64):
     v1 = sextend.i128 v0
     v2, v3 = isplit v1
-    v4 = icmp_imm eq v2, 0xffff_ffff_eeee_0000
-    v5 = icmp_imm eq v3, 0xffff_ffff_ffff_ffff
-    v6 = band v4, v5
-    return v6
+    return v2, v3
 }
-; run
+; run: %i128_sextend_i64(0) == [0, 0]
+; run: %i128_sextend_i64(-1) == [-1, -1]
+; run: %i128_sextend_i64(0x7fff_ffff_ffff_ffff) == [0x7fff_ffff_ffff_ffff, 0x0000_0000_0000_0000]
+; run: %i128_sextend_i64(0xffff_ffff_eeee_0000) == [0xffff_ffff_eeee_0000, 0xffff_ffff_ffff_ffff]
