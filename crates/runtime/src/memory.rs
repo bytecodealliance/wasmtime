@@ -155,6 +155,10 @@ impl RuntimeLinearMemory for MmapMemory {
             // Linear memory size would exceed the index range.
             return None;
         }
+        // FIXME: https://github.com/bytecodealliance/wasmtime/issues/3022
+        if new_pages == WASM_MAX_PAGES {
+            return None;
+        }
 
         let delta_bytes = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
         let prev_bytes = usize::try_from(prev_pages).unwrap() * WASM_PAGE_SIZE as usize;
@@ -194,7 +198,8 @@ impl RuntimeLinearMemory for MmapMemory {
     fn vmmemory(&self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: unsafe { self.mmap.alloc.as_mut_ptr().add(self.pre_guard_size) },
-            current_length: self.mmap.size as usize * WASM_PAGE_SIZE as usize,
+            current_length: u32::try_from(self.mmap.size as usize * WASM_PAGE_SIZE as usize)
+                .unwrap(),
         }
     }
 }
@@ -271,6 +276,13 @@ impl Memory {
     }
 
     fn limit_new(plan: &MemoryPlan, limiter: Option<&mut dyn ResourceLimiter>) -> Result<()> {
+        // FIXME: https://github.com/bytecodealliance/wasmtime/issues/3022
+        if plan.memory.minimum == WASM_MAX_PAGES {
+            bail!(
+                "memory minimum size of {} pages exceeds memory limits",
+                plan.memory.minimum
+            );
+        }
         if let Some(limiter) = limiter {
             if !limiter.memory_growing(0, plan.memory.minimum, plan.memory.maximum) {
                 bail!(
@@ -362,6 +374,10 @@ impl Memory {
                 if new_size > maximum.unwrap_or(WASM_MAX_PAGES) {
                     return None;
                 }
+                // FIXME: https://github.com/bytecodealliance/wasmtime/issues/3022
+                if new_size == WASM_MAX_PAGES {
+                    return None;
+                }
 
                 let start = usize::try_from(old_size).unwrap() * WASM_PAGE_SIZE as usize;
                 let len = usize::try_from(delta).unwrap() * WASM_PAGE_SIZE as usize;
@@ -381,7 +397,7 @@ impl Memory {
         match self {
             Memory::Static { base, size, .. } => VMMemoryDefinition {
                 base: base.as_ptr() as *mut _,
-                current_length: *size as usize * WASM_PAGE_SIZE as usize,
+                current_length: u32::try_from(*size as usize * WASM_PAGE_SIZE as usize).unwrap(),
             },
             Memory::Dynamic(mem) => mem.vmmemory(),
         }

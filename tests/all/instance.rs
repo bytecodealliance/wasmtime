@@ -55,7 +55,7 @@ fn linear_memory_limits() -> Result<()> {
     fn test(engine: &Engine) -> Result<()> {
         let wat = r#"
         (module
-            (memory 65535)
+            (memory 65534)
 
             (func (export "foo")  (result i32)
                 i32.const 1
@@ -68,7 +68,7 @@ fn linear_memory_limits() -> Result<()> {
         let instance = Instance::new(&mut store, &module, &[])?;
         let foo = instance.get_typed_func::<(), i32, _>(&mut store, "foo")?;
 
-        assert_eq!(foo.call(&mut store, ())?, 65535);
+        assert_eq!(foo.call(&mut store, ())?, 65534);
         assert_eq!(foo.call(&mut store, ())?, -1);
         Ok(())
     }

@@ -309,7 +309,7 @@ fn check_memory_init_bounds(
         let end = start.checked_add(init.data.len());
 
         match end {
-            Some(end) if end <= memory.current_length => {
+            Some(end) if end <= memory.current_length as usize => {
                 // Initializer is in bounds
             }
             _ => {
@@ -382,8 +382,9 @@ fn initialize_instance(
         MemoryInitialization::Paged { map, out_of_bounds } => {
             for (index, pages) in map {
                 let memory = instance.memory(index);
-                let slice =
-                    unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
+                let slice = unsafe {
+                    slice::from_raw_parts_mut(memory.base, memory.current_length as usize)
+                };
 
                 for (page_index, page) in pages.iter().enumerate() {
                     if let Some(data) = page {
