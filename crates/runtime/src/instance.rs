@@ -8,9 +8,8 @@ use crate::memory::{Memory, RuntimeMemoryCreator};
 use crate::table::{Table, TableElement};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMInterrupts, VMMemoryDefinition, VMMemoryImport,
-    VMSharedSignatureIndex, VMTableDefinition, VMTableImport,
+    VMCallerCheckedAnyfunc, VMContext, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
+    VMInterrupts, VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
 };
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
 use memoffset::offset_of;
@@ -147,53 +146,24 @@ impl Instance {
         &self.module
     }
 
-    /// Return a pointer to the `VMSharedSignatureIndex`s.
-    fn signature_ids_ptr(&self) -> *mut VMSharedSignatureIndex {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_signature_ids_begin()) }
-    }
-
     /// Return the indexed `VMFunctionImport`.
     fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { &*self.imported_functions_ptr().add(index) }
-    }
-
-    /// Return a pointer to the `VMFunctionImport`s.
-    fn imported_functions_ptr(&self) -> *mut VMFunctionImport {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_functions_begin()) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmfunction_import(index)) }
     }
 
     /// Return the index `VMTableImport`.
     fn imported_table(&self, index: TableIndex) -> &VMTableImport {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { &*self.imported_tables_ptr().add(index) }
-    }
-
-    /// Return a pointer to the `VMTableImports`s.
-    fn imported_tables_ptr(&self) -> *mut VMTableImport {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_tables_begin()) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmtable_import(index)) }
     }
 
     /// Return the indexed `VMMemoryImport`.
     fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { &*self.imported_memories_ptr().add(index) }
-    }
-
-    /// Return a pointer to the `VMMemoryImport`s.
-    fn imported_memories_ptr(&self) -> *mut VMMemoryImport {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_memories_begin()) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmmemory_import(index)) }
     }
 
     /// Return the indexed `VMGlobalImport`.
     fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { &*self.imported_globals_ptr().add(index) }
-    }
-
-    /// Return a pointer to the `VMGlobalImport`s.
-    fn imported_globals_ptr(&self) -> *mut VMGlobalImport {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_imported_globals_begin()) }
+        unsafe { &*self.vmctx_plus_offset(self.offsets.vmctx_vmglobal_import(index)) }
     }
 
     /// Return the indexed `VMTableDefinition`.
@@ -211,13 +181,7 @@ impl Instance {
 
     /// Return the indexed `VMTableDefinition`.
     fn table_ptr(&self, index: DefinedTableIndex) -> *mut VMTableDefinition {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { self.tables_ptr().add(index) }
-    }
-
-    /// Return a pointer to the `VMTableDefinition`s.
-    fn tables_ptr(&self) -> *mut VMTableDefinition {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_tables_begin()) }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_vmtable_definition(index)) }
     }
 
     /// Get a locally defined or imported memory.
@@ -244,13 +208,7 @@ impl Instance {
 
     /// Return the indexed `VMMemoryDefinition`.
     fn memory_ptr(&self, index: DefinedMemoryIndex) -> *mut VMMemoryDefinition {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { self.memories_ptr().add(index) }
-    }
-
-    /// Return a pointer to the `VMMemoryDefinition`s.
-    fn memories_ptr(&self) -> *mut VMMemoryDefinition {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_memories_begin()) }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_vmmemory_definition(index)) }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
@@ -260,8 +218,7 @@ impl Instance {
 
     /// Return the indexed `VMGlobalDefinition`.
     fn global_ptr(&self, index: DefinedGlobalIndex) -> *mut VMGlobalDefinition {
-        let index = usize::try_from(index.as_u32()).unwrap();
-        unsafe { self.globals_ptr().add(index) }
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_vmglobal_definition(index)) }
     }
 
     /// Get a raw pointer to the global at the given index regardless whether it
@@ -277,16 +234,6 @@ impl Instance {
         } else {
             self.imported_global(index).from
         }
-    }
-
-    /// Return a pointer to the `VMGlobalDefinition`s.
-    fn globals_ptr(&self) -> *mut VMGlobalDefinition {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_globals_begin()) }
-    }
-
-    /// Return a pointer to the `VMBuiltinFunctionsArray`.
-    fn builtin_functions_ptr(&self) -> *mut VMBuiltinFunctionsArray {
-        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_builtin_functions_begin()) }
     }
 
     /// Return a pointer to the interrupts structure
@@ -410,32 +357,26 @@ impl Instance {
     }
 
     /// Return the table index for the given `VMTableDefinition`.
-    pub(crate) fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
-        let offsets = &self.offsets;
-        let begin = unsafe {
-            (&self.vmctx as *const VMContext as *const u8)
-                .add(usize::try_from(offsets.vmctx_tables_begin()).unwrap())
-        } as *const VMTableDefinition;
-        let end: *const VMTableDefinition = table;
-        // TODO: Use `offset_from` once it stablizes.
+    unsafe fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
         let index = DefinedTableIndex::new(
-            (end as usize - begin as usize) / mem::size_of::<VMTableDefinition>(),
+            usize::try_from(
+                (table as *const VMTableDefinition)
+                    .offset_from(self.table_ptr(DefinedTableIndex::new(0))),
+            )
+            .unwrap(),
         );
         assert_lt!(index.index(), self.tables.len());
         index
     }
 
     /// Return the memory index for the given `VMMemoryDefinition`.
-    pub(crate) fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
-        let offsets = &self.offsets;
-        let begin = unsafe {
-            (&self.vmctx as *const VMContext as *const u8)
-                .add(usize::try_from(offsets.vmctx_memories_begin()).unwrap())
-        } as *const VMMemoryDefinition;
-        let end: *const VMMemoryDefinition = memory;
-        // TODO: Use `offset_from` once it stablizes.
+    unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
         let index = DefinedMemoryIndex::new(
-            (end as usize - begin as usize) / mem::size_of::<VMMemoryDefinition>(),
+            usize::try_from(
+                (memory as *const VMMemoryDefinition)
+                    .offset_from(self.memory_ptr(DefinedMemoryIndex::new(0))),
+            )
+            .unwrap(),
         );
         assert_lt!(index.index(), self.memories.len());
         index
@@ -854,25 +795,13 @@ impl Instance {
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&mut self, table_index: TableIndex) -> *mut Table {
-        if let Some(defined_table_index) = self.module.defined_table_index(table_index) {
-            self.get_defined_table(defined_table_index)
-        } else {
-            self.get_foreign_table(table_index)
-        }
+        let (idx, instance) = self.get_defined_table_index_and_instance(table_index);
+        ptr::addr_of_mut!(instance.tables[idx])
     }
 
     /// Get a locally-defined table.
     pub(crate) fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
         ptr::addr_of_mut!(self.tables[index])
-    }
-
-    /// Get an imported, foreign table.
-    pub(crate) fn get_foreign_table(&mut self, index: TableIndex) -> *mut Table {
-        let import = self.imported_table(index);
-        let foreign_instance = unsafe { (*import.vmctx).instance_mut() };
-        let foreign_table = unsafe { &*import.from };
-        let foreign_index = foreign_instance.table_index(foreign_table);
-        ptr::addr_of_mut!(foreign_instance.tables[foreign_index])
     }
 
     pub(crate) fn get_defined_table_index_and_instance(
@@ -883,10 +812,12 @@ impl Instance {
             (defined_table_index, self)
         } else {
             let import = self.imported_table(index);
-            let foreign_instance = unsafe { (*import.vmctx).instance_mut() };
-            let foreign_table_def = unsafe { &*import.from };
-            let foreign_table_index = foreign_instance.table_index(foreign_table_def);
-            (foreign_table_index, foreign_instance)
+            unsafe {
+                let foreign_instance = (*import.vmctx).instance_mut();
+                let foreign_table_def = &*import.from;
+                let foreign_table_index = foreign_instance.table_index(foreign_table_def);
+                (foreign_table_index, foreign_instance)
+            }
         }
     }
 
@@ -981,7 +912,7 @@ impl InstanceHandle {
     }
 
     /// Return the memory index for the given `VMMemoryDefinition` in this instance.
-    pub fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
+    pub unsafe fn memory_index(&self, memory: &VMMemoryDefinition) -> DefinedMemoryIndex {
         self.instance().memory_index(memory)
     }
 
@@ -991,7 +922,7 @@ impl InstanceHandle {
     }
 
     /// Return the table index for the given `VMTableDefinition` in this instance.
-    pub fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
+    pub unsafe fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
         self.instance().table_index(table)
     }
 
