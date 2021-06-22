@@ -30,6 +30,8 @@ pub mod args;
 pub use self::args::*;
 pub mod emit;
 pub use self::emit::*;
+use crate::isa::aarch64::abi::AArch64MachineDeps;
+
 pub mod unwind;
 
 #[cfg(test)]
@@ -1276,6 +1278,11 @@ pub enum Inst {
         needed_space: CodeOffset,
     },
 
+    /// A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol in x0.
+    ElfTlsGetAddr {
+        symbol: ExternalName,
+    },
+
     /// A definition of a value label.
     ValueLabelMarker {
         reg: Reg,
@@ -2150,6 +2157,12 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::ValueLabelMarker { reg, .. } => {
             collector.add_use(reg);
         }
+
+        &Inst::ElfTlsGetAddr { .. } => {
+            for reg in AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV) {
+                collector.add_def(reg);
+            }
+        }
         &Inst::Unwind { .. } => {}
         &Inst::EmitIsland { .. } => {}
     }
@@ -2959,6 +2972,7 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         }
         &mut Inst::VirtualSPOffsetAdj { .. } => {}
         &mut Inst::EmitIsland { .. } => {}
+        &mut Inst::ElfTlsGetAddr { .. } => {}
         &mut Inst::ValueLabelMarker { ref mut reg, .. } => {
             map_use(mapper, reg);
         }
@@ -4332,6 +4346,10 @@ impl Inst {
                 format!("virtual_sp_offset_adjust {}", offset)
             }
             &Inst::EmitIsland { needed_space } => format!("emit_island {}", needed_space),
+
+            &Inst::ElfTlsGetAddr { ref symbol } => {
+                format!("elf_tls_get_addr {}", symbol)
+            }
 
             &Inst::ValueLabelMarker { label, reg } => {
                 format!("value_label {:?}, {}", label, reg.show_rru(mb_rru))

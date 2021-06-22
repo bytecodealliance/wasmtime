@@ -3,7 +3,7 @@
 use crate::binemit::{CodeOffset, Reloc, StackMap};
 use crate::ir::constant::ConstantData;
 use crate::ir::types::*;
-use crate::ir::{MemFlags, TrapCode};
+use crate::ir::{LibCall, MemFlags, TrapCode};
 use crate::isa::aarch64::inst::*;
 use crate::machinst::ty_bits;
 
@@ -2563,6 +2563,32 @@ impl MachInstEmit for Inst {
                     sink.bind_label(jump_around_label);
                 }
             }
+
+            &Inst::ElfTlsGetAddr { ref symbol } => {
+                // This is the instruction sequence that GCC emits for ELF GD TLS Relocations in aarch64
+                // See: https://gcc.godbolt.org/z/KhMh5Gvra
+
+                // adrp x0, <label>
+                sink.add_reloc(state.cur_srcloc(), Reloc::Aarch64TlsGdAdrPage21, symbol, 0);
+                sink.put4(0x90000000);
+
+                // add x0, x0, <label>
+                sink.add_reloc(state.cur_srcloc(), Reloc::Aarch64TlsGdAddLo12Nc, symbol, 0);
+                sink.put4(0x91000000);
+
+                // bl __tls_get_addr
+                sink.add_reloc(
+                    state.cur_srcloc(),
+                    Reloc::Arm64Call,
+                    &ExternalName::LibCall(LibCall::ElfTlsGetAddr),
+                    0,
+                );
+                sink.put4(0x94000000);
+
+                // nop
+                sink.put4(0xd503201f);
+            }
+
             &Inst::ValueLabelMarker { .. } => {
                 // Nothing; this is only used to compute debug info.
             }

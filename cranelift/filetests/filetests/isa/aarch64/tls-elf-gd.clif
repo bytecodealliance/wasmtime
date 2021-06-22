@@ -1,0 +1,29 @@
+test compile
+set tls_model=elf_gd
+target aarch64
+
+function u0:0(i32) -> i32, i64 {
+gv0 = symbol colocated tls u1:0
+
+block0(v0: i32):
+    v1 = global_value.i64 gv0
+    return v0, v1
+}
+; check: stp fp, lr, [sp, #-16]!
+; nextln: mov fp, sp
+; nextln: str x19, [sp, #-16]!
+; nextln: stp d14, d15, [sp, #-16]!
+; nextln: stp d12, d13, [sp, #-16]!
+; nextln: stp d10, d11, [sp, #-16]!
+; nextln: stp d8, d9, [sp, #-16]!
+; nextln: mov x19, x0
+; nextln: elf_tls_get_addr u1:0
+; nextln: mov x1, x0
+; nextln: mov x0, x19
+; nextln: ldp d8, d9, [sp], #16
+; nextln: ldp d10, d11, [sp], #16
+; nextln: ldp d12, d13, [sp], #16
+; nextln: ldp d14, d15, [sp], #16
+; nextln: ldr x19, [sp], #16
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
