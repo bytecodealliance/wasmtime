@@ -1548,13 +1548,24 @@ fn dirent_bytes(dirent: types::Dirent) -> Vec<u8> {
         std::mem::size_of::<types::Dirent>() as _,
         "Dirent guest repr and host repr should match"
     );
+    assert_eq!(
+        1,
+        std::mem::size_of_val(&dirent.d_type),
+        "Dirent member d_type should be endian-invariant"
+    );
     let size = types::Dirent::guest_size()
         .try_into()
         .expect("Dirent is smaller than 2^32");
     let mut bytes = Vec::with_capacity(size);
     bytes.resize(size, 0);
     let ptr = bytes.as_mut_ptr() as *mut types::Dirent;
-    unsafe { ptr.write_unaligned(dirent) };
+    let guest_dirent = types::Dirent {
+        d_ino: dirent.d_ino.to_le(),
+        d_namlen: dirent.d_namlen.to_le(),
+        d_type: dirent.d_type, // endian-invariant
+        d_next: dirent.d_next.to_le(),
+    };
+    unsafe { ptr.write_unaligned(guest_dirent) };
     bytes
 }
 
