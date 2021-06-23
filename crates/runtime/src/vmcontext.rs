@@ -597,12 +597,6 @@ impl VMBuiltinFunctionsArray {
 
         ptrs[BuiltinFunctionIndex::memory32_grow().index() as usize] =
             wasmtime_memory32_grow as usize;
-        ptrs[BuiltinFunctionIndex::imported_memory32_grow().index() as usize] =
-            wasmtime_imported_memory32_grow as usize;
-        ptrs[BuiltinFunctionIndex::memory32_size().index() as usize] =
-            wasmtime_memory32_size as usize;
-        ptrs[BuiltinFunctionIndex::imported_memory32_size().index() as usize] =
-            wasmtime_imported_memory32_size as usize;
         ptrs[BuiltinFunctionIndex::table_copy().index() as usize] = wasmtime_table_copy as usize;
         ptrs[BuiltinFunctionIndex::table_grow_funcref().index() as usize] =
             wasmtime_table_grow as usize;
@@ -612,8 +606,6 @@ impl VMBuiltinFunctionsArray {
         ptrs[BuiltinFunctionIndex::elem_drop().index() as usize] = wasmtime_elem_drop as usize;
         ptrs[BuiltinFunctionIndex::memory_copy().index() as usize] = wasmtime_memory_copy as usize;
         ptrs[BuiltinFunctionIndex::memory_fill().index() as usize] = wasmtime_memory_fill as usize;
-        ptrs[BuiltinFunctionIndex::imported_memory_fill().index() as usize] =
-            wasmtime_imported_memory_fill as usize;
         ptrs[BuiltinFunctionIndex::memory_init().index() as usize] = wasmtime_memory_init as usize;
         ptrs[BuiltinFunctionIndex::data_drop().index() as usize] = wasmtime_data_drop as usize;
         ptrs[BuiltinFunctionIndex::drop_externref().index() as usize] =
@@ -630,16 +622,10 @@ impl VMBuiltinFunctionsArray {
             wasmtime_table_fill as usize;
         ptrs[BuiltinFunctionIndex::memory_atomic_notify().index() as usize] =
             wasmtime_memory_atomic_notify as usize;
-        ptrs[BuiltinFunctionIndex::imported_memory_atomic_notify().index() as usize] =
-            wasmtime_imported_memory_atomic_notify as usize;
         ptrs[BuiltinFunctionIndex::memory_atomic_wait32().index() as usize] =
             wasmtime_memory_atomic_wait32 as usize;
-        ptrs[BuiltinFunctionIndex::imported_memory_atomic_wait32().index() as usize] =
-            wasmtime_imported_memory_atomic_wait32 as usize;
         ptrs[BuiltinFunctionIndex::memory_atomic_wait64().index() as usize] =
             wasmtime_memory_atomic_wait64 as usize;
-        ptrs[BuiltinFunctionIndex::imported_memory_atomic_wait64().index() as usize] =
-            wasmtime_imported_memory_atomic_wait64 as usize;
         ptrs[BuiltinFunctionIndex::out_of_gas().index() as usize] = wasmtime_out_of_gas as usize;
 
         if cfg!(debug_assertions) {

@@ -386,66 +386,29 @@ impl Instance {
     ///
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages.
-    pub(crate) fn memory_grow(
-        &mut self,
-        memory_index: DefinedMemoryIndex,
-        delta: u32,
-    ) -> Option<u32> {
-        let limiter = unsafe { (*self.store()).limiter() };
-        let memory = self
-            .memories
-            .get_mut(memory_index)
-            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()));
+    pub(crate) fn memory_grow(&mut self, index: MemoryIndex, delta: u32) -> Option<u32> {
+        let (idx, instance) = if let Some(idx) = self.module.defined_memory_index(index) {
+            (idx, self)
+        } else {
+            let import = self.imported_memory(index);
+            unsafe {
+                let foreign_instance = (*import.vmctx).instance_mut();
+                let foreign_memory_def = &*import.from;
+                let foreign_memory_index = foreign_instance.memory_index(foreign_memory_def);
+                (foreign_memory_index, foreign_instance)
+            }
+        };
+        let limiter = unsafe { (*instance.store()).limiter() };
+        let memory = &mut instance.memories[idx];
 
         let result = unsafe { memory.grow(delta, limiter) };
+        let vmmemory = memory.vmmemory();
 
-        // Keep current the VMContext pointers used by compiled wasm code.
-        self.set_memory(memory_index, self.memories[memory_index].vmmemory());
+        // Update the state used by wasm code in case the base pointer and/or
+        // the length changed.
+        instance.set_memory(idx, vmmemory);
 
         result
-    }
-
-    /// Grow imported memory by the specified amount of pages.
-    ///
-    /// Returns `None` if memory can't be grown by the specified amount
-    /// of pages.
-    ///
-    /// # Safety
-    /// This and `imported_memory_size` are currently unsafe because they
-    /// dereference the memory import's pointers.
-    pub(crate) unsafe fn imported_memory_grow(
-        &mut self,
-        memory_index: MemoryIndex,
-        delta: u32,
-    ) -> Option<u32> {
-        let import = self.imported_memory(memory_index);
-        let foreign_instance = (*import.vmctx).instance_mut();
-        let foreign_memory = &*import.from;
-        let foreign_index = foreign_instance.memory_index(foreign_memory);
-
-        foreign_instance.memory_grow(foreign_index, delta)
-    }
-
-    /// Returns the number of allocated wasm pages.
-    pub(crate) fn memory_size(&self, memory_index: DefinedMemoryIndex) -> u32 {
-        self.memories
-            .get(memory_index)
-            .unwrap_or_else(|| panic!("no memory for index {}", memory_index.index()))
-            .size()
-    }
-
-    /// Returns the number of allocated wasm pages in an imported memory.
-    ///
-    /// # Safety
-    /// This and `imported_memory_grow` are currently unsafe because they
-    /// dereference the memory import's pointers.
-    pub(crate) unsafe fn imported_memory_size(&self, memory_index: MemoryIndex) -> u32 {
-        let import = self.imported_memory(memory_index);
-        let foreign_instance = (&mut *import.vmctx).instance();
-        let foreign_memory = &mut *import.from;
-        let foreign_index = foreign_instance.memory_index(foreign_memory);
-
-        foreign_instance.memory_size(foreign_index)
     }
 
     pub(crate) fn table_element_type(&mut self, table_index: TableIndex) -> TableElementType {
@@ -671,14 +634,14 @@ impl Instance {
     /// # Errors
     ///
     /// Returns a `Trap` error if the memory range is out of bounds.
-    pub(crate) fn defined_memory_fill(
-        &self,
-        memory_index: DefinedMemoryIndex,
+    pub(crate) fn memory_fill(
+        &mut self,
+        memory_index: MemoryIndex,
         dst: u32,
         val: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        let memory = self.memory(memory_index);
+        let memory = self.get_memory(memory_index);
 
         if dst
             .checked_add(len)
@@ -698,27 +661,6 @@ impl Instance {
         }
 
         Ok(())
-    }
-
-    /// Perform the `memory.fill` operation on an imported memory.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `Trap` error if the memory range is out of bounds.
-    pub(crate) fn imported_memory_fill(
-        &self,
-        memory_index: MemoryIndex,
-        dst: u32,
-        val: u32,
-        len: u32,
-    ) -> Result<(), Trap> {
-        let import = self.imported_memory(memory_index);
-        unsafe {
-            let foreign_instance = (&*import.vmctx).instance();
-            let foreign_memory = &*import.from;
-            let foreign_index = foreign_instance.memory_index(foreign_memory);
-            foreign_instance.defined_memory_fill(foreign_index, dst, val, len)
-        }
     }
 
     /// Performs the `memory.init` operation.

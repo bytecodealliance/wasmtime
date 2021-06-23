@@ -5,12 +5,6 @@ macro_rules! foreach_builtin_function {
         $mac! {
             /// Returns an index for wasm's `memory.grow` builtin function.
             memory32_grow(vmctx, i32, i32) -> (i32);
-            /// Returns an index for wasm's imported `memory.grow` builtin function.
-            imported_memory32_grow(vmctx, i32, i32) -> (i32);
-            /// Returns an index for wasm's `memory.size` builtin function.
-            memory32_size(vmctx, i32) -> (i32);
-            /// Returns an index for wasm's imported `memory.size` builtin function.
-            imported_memory32_size(vmctx, i32) -> (i32);
             /// Returns an index for wasm's `table.copy` when both tables are locally
             /// defined.
             table_copy(vmctx, i32, i32, i32, i32, i32) -> ();
@@ -20,10 +14,8 @@ macro_rules! foreach_builtin_function {
             elem_drop(vmctx, i32) -> ();
             /// Returns an index for wasm's `memory.copy`
             memory_copy(vmctx, i32, i32, i32, i32, i32) -> ();
-            /// Returns an index for wasm's `memory.fill` for locally defined memories.
+            /// Returns an index for wasm's `memory.fill` instruction.
             memory_fill(vmctx, i32, i32, i32, i32) -> ();
-            /// Returns an index for wasm's `memory.fill` for imported memories.
-            imported_memory_fill(vmctx, i32, i32, i32, i32) -> ();
             /// Returns an index for wasm's `memory.init` instruction.
             memory_init(vmctx, i32, i32, i32, i32, i32) -> ();
             /// Returns an index for wasm's `data.drop` instruction.
@@ -45,18 +37,12 @@ macro_rules! foreach_builtin_function {
             externref_global_get(vmctx, i32) -> (reference);
             /// Returns an index for Wasm's `global.get` instruction for `externref`s.
             externref_global_set(vmctx, i32, reference) -> ();
-            /// Returns an index for wasm's `memory.atomic.notify` for locally defined memories.
+            /// Returns an index for wasm's `memory.atomic.notify` instruction.
             memory_atomic_notify(vmctx, i32, i32, i32) -> (i32);
-            /// Returns an index for wasm's `memory.atomic.notify` for imported memories.
-            imported_memory_atomic_notify(vmctx, i32, i32, i32) -> (i32);
-            /// Returns an index for wasm's `memory.atomic.wait32` for locally defined memories.
+            /// Returns an index for wasm's `memory.atomic.wait32` instruction.
             memory_atomic_wait32(vmctx, i32, i32, i32, i64) -> (i32);
-            /// Returns an index for wasm's `memory.atomic.wait32` for imported memories.
-            imported_memory_atomic_wait32(vmctx, i32, i32, i32, i64) -> (i32);
-            /// Returns an index for wasm's `memory.atomic.wait64` for locally defined memories.
+            /// Returns an index for wasm's `memory.atomic.wait64` instruction.
             memory_atomic_wait64(vmctx, i32, i32, i64, i64) -> (i32);
-            /// Returns an index for wasm's `memory.atomic.wait64` for imported memories.
-            imported_memory_atomic_wait64(vmctx, i32, i32, i64, i64) -> (i32);
             /// Invoked when fuel has run out while executing a function.
             out_of_gas(vmctx) -> ();
         }
