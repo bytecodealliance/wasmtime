@@ -4,8 +4,8 @@ use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport,
-    VMGlobalDefinition, VMGlobalImport, VMMemoryImport, VMSharedSignatureIndex, VMTableImport,
+    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMGlobalDefinition,
+    VMSharedSignatureIndex,
 };
 use crate::Store;
 use anyhow::Result;
@@ -422,7 +422,7 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
     let module = &instance.module;
 
     // Initialize shared signatures
-    let mut ptr = instance.signature_ids_ptr();
+    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_signature_ids_begin());
     for sig in module.types.values() {
         *ptr = match sig {
             ModuleType::Function(sig) => req.shared_signatures.lookup(*sig),
@@ -433,7 +433,7 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
 
     // Initialize the built-in functions
     ptr::write(
-        instance.builtin_functions_ptr() as *mut VMBuiltinFunctionsArray,
+        instance.vmctx_plus_offset(instance.offsets.vmctx_builtin_functions_begin()),
         VMBuiltinFunctionsArray::initialized(),
     );
 
@@ -441,25 +441,25 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
     debug_assert_eq!(req.imports.functions.len(), module.num_imported_funcs);
     ptr::copy(
         req.imports.functions.as_ptr(),
-        instance.imported_functions_ptr() as *mut VMFunctionImport,
+        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_functions_begin()),
         req.imports.functions.len(),
     );
     debug_assert_eq!(req.imports.tables.len(), module.num_imported_tables);
     ptr::copy(
         req.imports.tables.as_ptr(),
-        instance.imported_tables_ptr() as *mut VMTableImport,
+        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_tables_begin()),
         req.imports.tables.len(),
     );
     debug_assert_eq!(req.imports.memories.len(), module.num_imported_memories);
     ptr::copy(
         req.imports.memories.as_ptr(),
-        instance.imported_memories_ptr() as *mut VMMemoryImport,
+        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_memories_begin()),
         req.imports.memories.len(),
     );
     debug_assert_eq!(req.imports.globals.len(), module.num_imported_globals);
     ptr::copy(
         req.imports.globals.as_ptr(),
-        instance.imported_globals_ptr() as *mut VMGlobalImport,
+        instance.vmctx_plus_offset(instance.offsets.vmctx_imported_globals_begin()),
         req.imports.globals.len(),
     );
 
@@ -490,14 +490,14 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
     }
 
     // Initialize the defined tables
-    let mut ptr = instance.tables_ptr();
+    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_tables_begin());
     for i in 0..module.table_plans.len() - module.num_imported_tables {
         ptr::write(ptr, instance.tables[DefinedTableIndex::new(i)].vmtable());
         ptr = ptr.add(1);
     }
 
     // Initialize the defined memories
-    let mut ptr = instance.memories_ptr();
+    let mut ptr = instance.vmctx_plus_offset(instance.offsets.vmctx_memories_begin());
     for i in 0..module.memory_plans.len() - module.num_imported_memories {
         ptr::write(
             ptr,
