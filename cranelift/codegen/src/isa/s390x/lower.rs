@@ -2458,11 +2458,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::TlsValue => {
-            panic!("Thread-local storage support not implemented!");
+            unimplemented!("Thread-local storage support not implemented!");
         }
 
         Opcode::GetPinnedReg | Opcode::SetPinnedReg => {
-            panic!("Pinned register support not implemented!");
+            unimplemented!("Pinned register support not implemented!");
         }
 
         Opcode::Icmp => {
@@ -2679,10 +2679,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty));
             if endianness == Endianness::Little {
-                panic!("Little-endian atomic operations not implemented");
+                unimplemented!("Little-endian atomic operations not implemented");
             }
             if ty_bits(ty) < 32 {
-                panic!("Sub-word atomic operations not implemented");
+                unimplemented!("Sub-word atomic operations not implemented");
             }
             let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
             let (alu_op, rn) = match op {
@@ -2701,7 +2701,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     });
                     (choose_32_64(ty, ALUOp::Add32, ALUOp::Add64), tmp.to_reg())
                 }
-                _ => panic!("AtomicRmw operation type {:?} not implemented", op),
+                _ => unimplemented!("AtomicRmw operation type {:?} not implemented", op),
             };
             let mem = MemArg::reg(addr, flags);
             ctx.emit(Inst::AtomicRmw {
@@ -2721,10 +2721,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty));
             if endianness == Endianness::Little {
-                panic!("Little-endian atomic operations not implemented");
+                unimplemented!("Little-endian atomic operations not implemented");
             }
             if ty_bits(ty) < 32 {
-                panic!("Sub-word atomic operations not implemented");
+                unimplemented!("Sub-word atomic operations not implemented");
             }
             let mem = MemArg::reg(addr, flags);
             ctx.emit(Inst::gen_move(rd, rm, ty));
@@ -2865,13 +2865,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::UwidenLow
         | Opcode::UwidenHigh
         | Opcode::WideningPairwiseDotProductS
+        | Opcode::SqmulRoundSat
         | Opcode::FvpromoteLow
         | Opcode::Fvdemote => {
             // TODO
-            panic!("Vector ops not implemented.");
+            unimplemented!("Vector ops not implemented.");
         }
 
-        Opcode::Isplit | Opcode::Iconcat => panic!("Wide integer ops not implemented."),
+        Opcode::Isplit | Opcode::Iconcat => unimplemented!("Wide integer ops not implemented."),
 
         Opcode::Spill
         | Opcode::Fill

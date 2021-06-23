@@ -311,6 +311,8 @@ pub enum VecALUOp {
     Smull,
     /// Signed multiply long (high halves)
     Smull2,
+    /// Signed saturating rounding doubling multiply returning high half
+    Sqrdmulh,
 }
 
 /// A Vector miscellaneous operation with two registers.
@@ -3980,6 +3982,7 @@ impl Inst {
                     VecALUOp::Zip1 => ("zip1", size),
                     VecALUOp::Smull => ("smull", size),
                     VecALUOp::Smull2 => ("smull2", size),
+                    VecALUOp::Sqrdmulh => ("sqrdmulh", size),
                 };
                 let rd_size = match alu_op {
                     VecALUOp::Umlal | VecALUOp::Smull | VecALUOp::Smull2 => size.widen(),

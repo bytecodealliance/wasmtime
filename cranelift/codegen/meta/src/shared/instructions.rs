@@ -2479,6 +2479,33 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    let I16or32 = &TypeVar::new(
+        "I16or32",
+        "A scalar or vector integer type with 16- or 32-bit numbers",
+        TypeSetBuilder::new().ints(16..32).simd_lanes(4..8).build(),
+    );
+
+    let qx = &Operand::new("x", I16or32);
+    let qy = &Operand::new("y", I16or32);
+    let qa = &Operand::new("a", I16or32);
+
+    ig.push(
+        Inst::new(
+            "sqmul_round_sat",
+            r#"
+        Fixed-point multiplication of numbers in the QN format, where N + 1
+        is the number bitwidth:
+        `a := signed_saturate((x * y + 1 << (Q - 1)) >> Q)`
+
+        Polymorphic over all integer types (scalar and vector) with 16- or
+        32-bit numbers.
+        "#,
+            &formats.binary,
+        )
+        .operands_in(vec![qx, qy])
+        .operands_out(vec![qa]),
+    );
+
     ig.push(
         Inst::new(
             "udiv",
