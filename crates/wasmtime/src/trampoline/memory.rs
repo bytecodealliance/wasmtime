@@ -7,6 +7,7 @@ use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition};
 
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 pub fn create_memory(store: &mut StoreOpaque<'_>, memory: &MemoryType) -> Result<InstanceId> {
@@ -48,7 +49,8 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     fn vmmemory(&self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.mem.as_ptr(),
-            current_length: self.mem.size() as usize * WASM_PAGE_SIZE as usize,
+            current_length: u32::try_from(self.mem.size() as usize * WASM_PAGE_SIZE as usize)
+                .unwrap(),
         }
     }
 }

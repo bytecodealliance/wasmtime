@@ -703,10 +703,10 @@ impl Instance {
 
         if src
             .checked_add(len)
-            .map_or(true, |n| n as usize > src_mem.current_length)
+            .map_or(true, |n| n > src_mem.current_length)
             || dst
                 .checked_add(len)
-                .map_or(true, |m| m as usize > dst_mem.current_length)
+                .map_or(true, |m| m > dst_mem.current_length)
         {
             return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
@@ -741,7 +741,7 @@ impl Instance {
 
         if dst
             .checked_add(len)
-            .map_or(true, |m| m as usize > memory.current_length)
+            .map_or(true, |m| m > memory.current_length)
         {
             return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
@@ -825,7 +825,7 @@ impl Instance {
             .map_or(true, |n| n as usize > data.len())
             || dst
                 .checked_add(len)
-                .map_or(true, |m| m as usize > memory.current_length)
+                .map_or(true, |m| m > memory.current_length)
         {
             return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
