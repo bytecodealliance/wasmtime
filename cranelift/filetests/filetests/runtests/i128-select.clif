@@ -1,0 +1,21 @@
+test run
+target aarch64
+target x86_64 machinst
+
+function %i128_select(i8, i64, i64, i64, i64) -> i64, i64 {
+block0(v0: i8, v1: i64, v2: i64, v3: i64, v4: i64):
+    v5 = icmp_imm ne v0, 0
+
+    v6 = iconcat v1, v2
+    v7 = iconcat v3, v4
+
+    v8 = select.i128 v5, v6, v7
+
+    v9, v10 = isplit v8
+    return v9, v10
+}
+; run: %i128_select(1, 0, 0, 1, 1) == [0, 0]
+; run: %i128_select(0, 0, 0, 1, 1) == [1, 1]
+
+; run: %i128_select(1, 1, 2, 3, 4) == [1, 2]
+; run: %i128_select(0, 1, 2, 3, 4) == [3, 4]
