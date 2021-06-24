@@ -1273,6 +1273,8 @@ impl MachInstEmit for Inst {
                      mov          x28, x26
                    so that we simply write in the destination, the "2nd arg for op".
                 */
+                // TODO: We should not hardcode registers here, a better idea would be to
+                // pass some scratch registers in the AtomicRMW pseudo-instruction, and use those
                 let xzr = zero_reg();
                 let x24 = xreg(24);
                 let x25 = xreg(25);
@@ -1294,25 +1296,90 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
 
-                if op == inst_common::AtomicRmwOp::Xchg {
-                    // mov x28, x26
-                    sink.put4(enc_arith_rrr(0b101_01010_00_0, 0b000000, x28wr, xzr, x26))
-                } else {
-                    // add/sub/and/orr/eor x28, x27, x26
-                    let bits_31_21 = match op {
-                        inst_common::AtomicRmwOp::Add => 0b100_01011_00_0,
-                        inst_common::AtomicRmwOp::Sub => 0b110_01011_00_0,
-                        inst_common::AtomicRmwOp::And => 0b100_01010_00_0,
-                        inst_common::AtomicRmwOp::Or => 0b101_01010_00_0,
-                        inst_common::AtomicRmwOp::Xor => 0b110_01010_00_0,
-                        inst_common::AtomicRmwOp::Nand
-                        | inst_common::AtomicRmwOp::Umin
-                        | inst_common::AtomicRmwOp::Umax
-                        | inst_common::AtomicRmwOp::Smin
-                        | inst_common::AtomicRmwOp::Smax => todo!("{:?}", op),
-                        inst_common::AtomicRmwOp::Xchg => unreachable!(),
-                    };
-                    sink.put4(enc_arith_rrr(bits_31_21, 0b000000, x28wr, x27, x26));
+                match op {
+                    AtomicRmwOp::Xchg => {
+                        // mov x28, x26
+                        Inst::Mov64 { rd: x28wr, rm: x26 }.emit(sink, emit_info, state);
+                    }
+                    AtomicRmwOp::Nand => {
+                        // and x28, x27, x26
+                        // mvn x28, x28
+
+                        Inst::AluRRR {
+                            alu_op: ALUOp::And64,
+                            rd: x28wr,
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        Inst::AluRRR {
+                            alu_op: ALUOp::OrrNot64,
+                            rd: x28wr,
+                            rn: xzr,
+                            rm: x28,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    AtomicRmwOp::Umin
+                    | AtomicRmwOp::Umax
+                    | AtomicRmwOp::Smin
+                    | AtomicRmwOp::Smax => {
+                        // cmp x27, x26
+                        // csel.op x28, x27, x26
+
+                        let cond = match op {
+                            AtomicRmwOp::Umin => Cond::Lo,
+                            AtomicRmwOp::Umax => Cond::Hi,
+                            AtomicRmwOp::Smin => Cond::Lt,
+                            AtomicRmwOp::Smax => Cond::Gt,
+                            _ => unreachable!(),
+                        };
+
+                        Inst::AluRRR {
+                            alu_op: if ty == I64 {
+                                ALUOp::SubS64
+                            } else {
+                                ALUOp::SubS32
+                            },
+                            rd: writable_zero_reg(),
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+
+                        Inst::CSel {
+                            cond,
+                            rd: x28wr,
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
+                    _ => {
+                        // add/sub/and/orr/eor x28, x27, x26
+                        let alu_op = match op {
+                            AtomicRmwOp::Add => ALUOp::Add64,
+                            AtomicRmwOp::Sub => ALUOp::Sub64,
+                            AtomicRmwOp::And => ALUOp::And64,
+                            AtomicRmwOp::Or => ALUOp::Orr64,
+                            AtomicRmwOp::Xor => ALUOp::Eor64,
+                            AtomicRmwOp::Nand
+                            | AtomicRmwOp::Umin
+                            | AtomicRmwOp::Umax
+                            | AtomicRmwOp::Smin
+                            | AtomicRmwOp::Smax
+                            | AtomicRmwOp::Xchg => unreachable!(),
+                        };
+
+                        Inst::AluRRR {
+                            alu_op,
+                            rd: x28wr,
+                            rn: x27,
+                            rm: x26,
+                        }
+                        .emit(sink, emit_info, state);
+                    }
                 }
 
                 let srcloc = state.cur_srcloc();

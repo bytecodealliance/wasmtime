@@ -1,0 +1,237 @@
+test run
+target aarch64
+target x86_64 machinst
+; TODO: Merge this with atomic-rmw.clif when s390x supports it
+
+
+function %atomic_rmw_nand_i64(i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i64 nand v2, v1
+
+    v4 = stack_load.i64 ss0
+    return v4
+}
+; run: %atomic_rmw_nand_i64(0, 0) == -1
+; run: %atomic_rmw_nand_i64(1, 0) == -1
+; run: %atomic_rmw_nand_i64(0, 1) == -1
+; run: %atomic_rmw_nand_i64(1, 1) == -2
+; run: %atomic_rmw_nand_i64(0xC0FFEEEE_DECAFFFF, 0x7DCB5691_7DCB5691) == 0xBF34B97F_A335A96E
+
+function %atomic_rmw_nand_i32(i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32):
+    stack_store.i32 v0, ss0
+
+    v2 = stack_addr.i32 ss0
+    v3 = atomic_rmw.i32 nand v2, v1
+
+    v4 = stack_load.i32 ss0
+    return v4
+}
+; run: %atomic_rmw_nand_i32(0, 0) == -1
+; run: %atomic_rmw_nand_i32(1, 0) == -1
+; run: %atomic_rmw_nand_i32(0, 1) == -1
+; run: %atomic_rmw_nand_i32(1, 1) == -2
+; run: %atomic_rmw_nand_i32(0xC0FFEEEE, 0x7DCB5691) == 0xBF34B97F
+
+
+
+function %atomic_rmw_umin_i64(i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i64 umin v2, v1
+
+    v4 = stack_load.i64 ss0
+    return v4
+}
+; run: %atomic_rmw_umin_i64(0, 0) == 0
+; run: %atomic_rmw_umin_i64(1, 0) == 0
+; run: %atomic_rmw_umin_i64(0, 1) == 0
+; run: %atomic_rmw_umin_i64(1, 1) == 1
+; run: %atomic_rmw_umin_i64(-1, 1) == 1
+; run: %atomic_rmw_umin_i64(-1, -3) == -3
+
+function %atomic_rmw_umin_i32(i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32):
+    stack_store.i32 v0, ss0
+
+    v2 = stack_addr.i32 ss0
+    v3 = atomic_rmw.i32 umin v2, v1
+
+    v4 = stack_load.i32 ss0
+    return v4
+}
+; run: %atomic_rmw_umin_i32(0, 0) == 0
+; run: %atomic_rmw_umin_i32(1, 0) == 0
+; run: %atomic_rmw_umin_i32(0, 1) == 0
+; run: %atomic_rmw_umin_i32(1, 1) == 1
+; run: %atomic_rmw_umin_i32(-1, 1) == 1
+; run: %atomic_rmw_umin_i32(-1, -3) == -3
+
+
+
+function %atomic_rmw_umax_i64(i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i64 umax v2, v1
+
+    v4 = stack_load.i64 ss0
+    return v4
+}
+; run: %atomic_rmw_umax_i64(0, 0) == 0
+; run: %atomic_rmw_umax_i64(1, 0) == 1
+; run: %atomic_rmw_umax_i64(0, 1) == 1
+; run: %atomic_rmw_umax_i64(1, 1) == 1
+; run: %atomic_rmw_umax_i64(-1, 1) == -1
+; run: %atomic_rmw_umax_i64(-1, -3) == -1
+
+function %atomic_rmw_umax_i32(i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32):
+    stack_store.i32 v0, ss0
+
+    v2 = stack_addr.i32 ss0
+    v3 = atomic_rmw.i32 umax v2, v1
+
+    v4 = stack_load.i32 ss0
+    return v4
+}
+; run: %atomic_rmw_umax_i32(0, 0) == 0
+; run: %atomic_rmw_umax_i32(1, 0) == 1
+; run: %atomic_rmw_umax_i32(0, 1) == 1
+; run: %atomic_rmw_umax_i32(1, 1) == 1
+; run: %atomic_rmw_umax_i32(-1, 1) == -1
+; run: %atomic_rmw_umax_i32(-1, -3) == -1
+
+
+
+function %atomic_rmw_smin_i64(i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i64 smin v2, v1
+
+    v4 = stack_load.i64 ss0
+    return v4
+}
+; run: %atomic_rmw_smin_i64(0, 0) == 0
+; run: %atomic_rmw_smin_i64(1, 0) == 0
+; run: %atomic_rmw_smin_i64(0, 1) == 0
+; run: %atomic_rmw_smin_i64(1, 1) == 1
+; run: %atomic_rmw_smin_i64(-1, 1) == -1
+; run: %atomic_rmw_smin_i64(-1, -3) == -3
+
+function %atomic_rmw_smin_i32(i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32):
+    stack_store.i32 v0, ss0
+
+    v2 = stack_addr.i32 ss0
+    v3 = atomic_rmw.i32 smin v2, v1
+
+    v4 = stack_load.i32 ss0
+    return v4
+}
+; run: %atomic_rmw_smin_i32(0, 0) == 0
+; run: %atomic_rmw_smin_i32(1, 0) == 0
+; run: %atomic_rmw_smin_i32(0, 1) == 0
+; run: %atomic_rmw_smin_i32(1, 1) == 1
+; run: %atomic_rmw_smin_i32(-1, -1) == -1
+; run: %atomic_rmw_smin_i32(-1, -3) == -3
+
+
+
+function %atomic_rmw_smax_i64(i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i64 smax v2, v1
+
+    v4 = stack_load.i64 ss0
+    return v4
+}
+; run: %atomic_rmw_smax_i64(0, 0) == 0
+; run: %atomic_rmw_smax_i64(1, 0) == 1
+; run: %atomic_rmw_smax_i64(0, 1) == 1
+; run: %atomic_rmw_smax_i64(1, 1) == 1
+; run: %atomic_rmw_smax_i64(-1, 1) == 1
+; run: %atomic_rmw_smax_i64(-1, -3) == -1
+
+function %atomic_rmw_smax_i32(i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32):
+    stack_store.i32 v0, ss0
+
+    v2 = stack_addr.i32 ss0
+    v3 = atomic_rmw.i32 smax v2, v1
+
+    v4 = stack_load.i32 ss0
+    return v4
+}
+; run: %atomic_rmw_smax_i32(0, 0) == 0
+; run: %atomic_rmw_smax_i32(1, 0) == 1
+; run: %atomic_rmw_smax_i32(0, 1) == 1
+; run: %atomic_rmw_smax_i32(1, 1) == 1
+; run: %atomic_rmw_smax_i32(-1, 1) == 1
+; run: %atomic_rmw_smax_i32(-1, -3) == -1
+
+
+
+function %atomic_rmw_xchg_i64(i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+
+    v2 = stack_addr.i64 ss0
+    v3 = atomic_rmw.i64 xchg v2, v1
+
+    v4 = stack_load.i64 ss0
+    return v4
+}
+; run: %atomic_rmw_xchg_i64(0, 0) == 0
+; run: %atomic_rmw_xchg_i64(1, 0) == 0
+; run: %atomic_rmw_xchg_i64(0, 1) == 1
+; run: %atomic_rmw_xchg_i64(0, 0xC0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
+
+function %atomic_rmw_xchg_i32(i32, i32) -> i32 {
+    ss0 = explicit_slot 4
+
+block0(v0: i32, v1: i32):
+    stack_store.i32 v0, ss0
+
+    v2 = stack_addr.i32 ss0
+    v3 = atomic_rmw.i32 xchg v2, v1
+
+    v4 = stack_load.i32 ss0
+    return v4
+}
+; run: %atomic_rmw_xchg_i32(0, 0) == 0
+; run: %atomic_rmw_xchg_i32(1, 0) == 0
+; run: %atomic_rmw_xchg_i32(0, 1) == 1
+; run: %atomic_rmw_xchg_i32(0, 0xC0FFEEEE) == 0xC0FFEEEE
