@@ -33,19 +33,30 @@ To preface discussion of more nitty-gritty internals, it's important to have a
 few concepts in the back of your head. These are some of the important types and
 their implications in Wasmtime:
 
+* `wasmtime::Engine` - this is a global compilation context which is sort of the
+  "root context". An `Engine` is typically created once per program and is
+  expected to be shared across many threads (internally it's atomically
+  reference counted). Each `Engine` stores configuration values and other
+  cross-thread data such as type interning for `Module` instances. The main
+  thing to remember for `Engine` is that any mutation of its internals typically
+  involves acquiring a lock, whereas for `Store` below no locks are necessary.
+
 * `wasmtime::Store` - this is the concept of a "store" in WebAssembly. While
   there's also a formal definition to go of this it can be thought of as a bag
-  of WebAssembly objects. This includes instances, globals, memories, tables,
-  etc. A `Store` does not implement any form of garbage collection of the
-  internal items (there is a `gc` function but that's just for `externref`
+  of related WebAssembly objects. This includes instances, globals, memories,
+  tables, etc. A `Store` does not implement any form of garbage collection of
+  the internal items (there is a `gc` function but that's just for `externref`
   values). This means that once you create an `Instance` or a `Table` the memory
   is not actually released until the `Store` itself is deallocated. A `Store` is
-  sort of a "context" used for almost all wasm operations. This type contains
-  handle-types which refer back to the `Store`, lots of aliasing going on. The
-  important thing for now, though, is to know that `Store` is a unit of
-  isolation. WebAssembly objects are always entirely contained within a `Store`,
-  and at this time nothing can cross between stores (except scalars if you
-  manually hook it up).
+  sort of a "context" used for almost all wasm operations. `Store` also contains
+  instance handles which recursively refer back to the `Store`, leading to a
+  good bit of aliasing of pointers within the `Store`. The important thing for
+  now, though, is to know that `Store` is a unit of isolation. WebAssembly
+  objects are always entirely contained within a `Store`, and at this time
+  nothing can cross between stores (except scalars if you manually hook it up).
+  In other words, wasm objects from different stores cannot interact with each
+  other. A `Store` cannot be used simultaneously from mulitple threads (almost
+  all operations require `&mut self`).
 
 * `wasmtime_runtime::InstanceHandle` - this is the low-level representation of a
   WebAssembly instance. At the same time this is also used as the representation
@@ -57,7 +68,8 @@ their implications in Wasmtime:
   `InstanceHandle` doesn't know how to deallocate itself and relies on the
   caller to manage its memory. Currently this is either allocated on-demand
   (with `malloc`) or in a pooling fashion (using the pooling allocator). The
-  "deallocate" is different in these two paths (as well as the allocate).
+  `deallocate` method is different in these two paths (as well as the
+  `allocate` method).
 
   An `InstanceHandle` is laid out in memory with some Rust-owned values first
   capturing the dynamic state of memories/tables/etc. Most of these fields are
@@ -223,11 +235,9 @@ Wasmtime as an integer comparison, and the comparison happens on a
 function type.
 
 The scope of interning for `VMSharedSignatureIndex` happens at the
-`wasmtime::Engine` level, which while not discussed in detail here can be
-thought of as a layer above `wasmtime::Store` intended to be shared across
-threads. Modules are compiled into an `Engine`. Insertion of a `Module` into
-n `Engine` will assign a `VMSharedSignatureIndex` to all of the types found
-within the module.
+`wasmtime::Engine` level. Modules are compiled into an `Engine`. Insertion of a
+`Module` into an `Engine` will assign a `VMSharedSignatureIndex` to all of the
+types found within the module.
 
 The `VMSharedSignatureIndex` values for a module are local to that one
 instantiation of a `Module` (and they may change on each insertion of a
@@ -270,13 +280,13 @@ The rough flow of instantiation looks like:
    after it in memory). This does not process any data segments, element
    segments, or the `start` function at this time.
 
-4. At this point the `InstanceHandle` is persisted within the `Store`. This is
-   the "point of no return" of the handle must be retained for the next
-   initialization steps. If an initialization step fails then the instance may
-   still have had its functions, for example, inserted into an imported table
-   via an element segment. This means that even if we fail to initialize this
-   instance its state could still be visible to other instances/objects so we
-   need to keep it alive regardless.
+4. At this point the `InstanceHandle` is stored within the `Store`. This is
+   the "point of no return" where the handle must be kept alive for the same
+   lifetime as the `Store` itself. If an initialization step fails then the
+   instance may still have had its functions, for example, inserted into an
+   imported table via an element segment. This means that even if we fail to
+   initialize this instance its state could still be visible to other
+   instances/objects so we need to keep it alive regardless.
 
 5. The final step is performing wasm-defined instantiation. This involves
    processing element segments, data segments, the `start` function, etc. Most
@@ -396,11 +406,11 @@ next.
 
 WebAssembly tables contain reference types, currently either `funcref` or
 `externref`. A `funcref` in Wasmtime is represented as `*mut
-VMCallerCheckedAnyfunc` and an `externref` is represented as `*mut
-VMExternRef`. Tables are consequently represented as vectors of pointers.
-Table storage memory management by default goes through Rust's `Vec` which uses
-`malloc` and friends for memory. With the pooling allocator this uses
-preallocated memory for storage.
+VMCallerCheckedAnyfunc` and an `externref` is represented as `VMExternRef`
+(which is internally `*mut VMExternData`). Tables are consequently represented
+as vectors of pointers.  Table storage memory management by default goes through
+Rust's `Vec` which uses `malloc` and friends for memory. With the pooling
+allocator this uses preallocated memory for storage.
 
 As mentioned previously `Store` has no form of internal garbage
 collection for wasm objects themselves so a `funcref` table in wasm is pretty
