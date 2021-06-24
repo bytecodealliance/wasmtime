@@ -618,6 +618,30 @@ impl ObjectModule {
                     32,
                 )
             }
+            Reloc::Aarch64TlsGdAdrPage21 => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsGdAdrPrel21 is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADR_PAGE21),
+                    RelocationEncoding::Generic,
+                    21,
+                )
+            }
+            Reloc::Aarch64TlsGdAddLo12Nc => {
+                assert_eq!(
+                    self.object.format(),
+                    object::BinaryFormat::Elf,
+                    "Aarch64TlsGdAddLo12Nc is not supported for this file format"
+                );
+                (
+                    RelocationKind::Elf(object::elf::R_AARCH64_TLSGD_ADD_LO12_NC),
+                    RelocationEncoding::Generic,
+                    12,
+                )
+            }
             // FIXME
             reloc => unimplemented!("{:?}", reloc),
         };
