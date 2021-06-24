@@ -176,7 +176,7 @@ fn read_crate(manifest: &Path) -> Crate {
     } else {
         version.clone()
     };
-    if ["witx", "wasi-crypto"].contains(&&name[..]) {
+    if ["witx", "witx-cli", "wasi-crypto"].contains(&&name[..]) {
         publish = false;
     }
     Crate {
@@ -302,13 +302,15 @@ fn verify(crates: &[Crate]) {
     fs::create_dir_all(".cargo").unwrap();
     fs::write(".cargo/config.toml", vendor.stdout).unwrap();
 
-    // Vendor witx which wasn't vendored because it's a path dependency, but
-    // it'll need to be in our directory registry for crates that depend on it.
-    let witx = crates
+    // Vendor 'witx' and 'witx-cli'. These were not vendored because they are a path dependencies,
+    // but they will need to be in our directory registry for crates that depend on them.
+    for krate in crates
         .iter()
-        .find(|c| c.name == "witx" && c.manifest.iter().any(|p| p == "wasi-common"))
-        .unwrap();
-    verify_and_vendor(&witx);
+        .filter(|Crate { name, .. }| (name == "witx" || name == "witx-cli"))
+        .filter(|c| c.manifest.iter().any(|p| p == "wasi-common"))
+    {
+        verify_and_vendor(&krate);
+    }
 
     // Vendor wasi-crypto which is also a path dependency
     let wasi_crypto = crates.iter().find(|c| c.name == "wasi-crypto").unwrap();
