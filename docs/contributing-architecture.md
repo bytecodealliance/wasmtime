@@ -22,10 +22,15 @@ about breakage between versions of internal crates. This primarily means that
 all the other crates discussed here are considered internal dependencies of
 Wasmtime and don't show up in the public API of Wasmtime at all. To use some
 Cargo terminology, all the `wasmtime-*` crates that `wasmtime` depends on are
-"private" dependencies. While we strive to make the internal crates have proper
-safe/unsafe annotations for their APIs in reality almost everything they do is
-`unsafe` and much of it is not tagged as such. It's an eventual goal though to
-have `unsafe` be properly annotated for all of the internal crates of Wasmtime.
+"private" dependencies.
+
+Additionally at this tiem the safe/unsafe boundary between Wasmtime's internal
+crates is not the most well-defined. There are methods that should be marked
+`unsafe` which aren't, and `unsafe` methods do not have exhaustive documentation
+as to why they are `unsafe`. This is an ongoing matter of improvement, however,
+where the goal is to have safe methods be actually safe in the Rust sense,
+as well as having documentation for `unsafe` methods which clearly lists why
+they are `unsafe`.
 
 ## Important concepts
 
