@@ -302,15 +302,13 @@ fn verify(crates: &[Crate]) {
     fs::create_dir_all(".cargo").unwrap();
     fs::write(".cargo/config.toml", vendor.stdout).unwrap();
 
-    // Vendor 'witx' and 'witx-cli'. These were not vendored because they are a path dependencies,
-    // but they will need to be in our directory registry for crates that depend on them.
-    for krate in crates
+    // Vendor witx which wasn't vendored because it's a path dependency, but
+    // it'll need to be in our directory registry for crates that depend on it.
+    let witx = crates
         .iter()
-        .filter(|Crate { name, .. }| (name == "witx" || name == "witx-cli"))
-        .filter(|c| c.manifest.iter().any(|p| p == "wasi-common"))
-    {
-        verify_and_vendor(&krate);
-    }
+        .find(|c| c.name == "witx" && c.manifest.iter().any(|p| p == "wasi-common"))
+        .unwrap();
+    verify_and_vendor(&witx);
 
     // Vendor wasi-crypto which is also a path dependency
     let wasi_crypto = crates.iter().find(|c| c.name == "wasi-crypto").unwrap();
