@@ -70,17 +70,6 @@ use core::fmt::{Debug, Formatter};
 use core::hash::Hasher;
 use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
 
-#[cfg(feature = "riscv")]
-mod riscv;
-
-// N.B.: the old x86-64 backend (`x86`) and the new one (`x64`) are both
-// included whenever building with x86 support. The new backend is the default,
-// but the old can be requested with `BackendVariant::Legacy`. However, if this
-// crate is built with the `old-x86-backend` feature, then the old backend is
-// default instead.
-#[cfg(feature = "x86")]
-mod x86;
-
 // This module is made public here for benchmarking purposes. No guarantees are
 // made regarding API stability.
 #[cfg(feature = "x86")]
@@ -94,6 +83,15 @@ pub(crate) mod aarch64;
 
 #[cfg(feature = "s390x")]
 mod s390x;
+
+#[cfg(any(feature = "x86", feature = "riscv"))]
+mod legacy;
+
+#[cfg(feature = "x86")]
+use legacy::x86;
+
+#[cfg(feature = "riscv")]
+use legacy::riscv;
 
 pub mod unwind;
 

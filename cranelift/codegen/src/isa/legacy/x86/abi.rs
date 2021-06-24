@@ -1,6 +1,6 @@
 //! x86 ABI implementation.
 
-use super::super::settings as shared_settings;
+use super::super::super::settings as shared_settings;
 use super::registers::{FPR, GPR, RU};
 use super::settings as isa_settings;
 use crate::abi::{legalize_args, ArgAction, ArgAssigner, ValueConversion};

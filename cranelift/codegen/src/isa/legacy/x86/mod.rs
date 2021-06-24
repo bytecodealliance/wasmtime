@@ -178,7 +178,7 @@ impl TargetIsa for Isa {
     fn create_unwind_info(
         &self,
         func: &ir::Function,
-    ) -> CodegenResult<Option<super::unwind::UnwindInfo>> {
+    ) -> CodegenResult<Option<super::super::unwind::UnwindInfo>> {
         abi::create_unwind_info(func, self)
     }
 
