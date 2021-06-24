@@ -176,7 +176,7 @@ fn read_crate(manifest: &Path) -> Crate {
     } else {
         version.clone()
     };
-    if ["witx", "wasi-crypto"].contains(&&name[..]) {
+    if ["witx", "witx-cli", "wasi-crypto"].contains(&&name[..]) {
         publish = false;
     }
     Crate {

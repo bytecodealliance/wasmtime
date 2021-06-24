@@ -73,19 +73,13 @@ members = [
   "cranelift",
   "crates/bench-api",
   "crates/c-api",
-  "crates/fuzzing",
   "crates/misc/run-examples",
-  "crates/wiggle",
-  "crates/wiggle/generate",
-  "crates/wiggle/macro",
-  "crates/wasi-common",
-  "crates/wasi-common/cap-std-sync",
-  "crates/wasi-common/tokio",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
   "examples/tokio/wasm",
   "fuzz",
 ]
+exclude = ['crates/wasi-common/WASI/tools/witx-cli']
 
 [features]
 default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation", "wasi-nn"]
