@@ -1,48 +1,49 @@
 //! Dummy implementations of things that a Wasm module can import.
 
+use anyhow::Result;
 use std::fmt::Write;
 use wasmtime::*;
 
 /// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_linker<'module, T>(store: &mut Store<T>, module: &Module) -> Linker<T> {
+pub fn dummy_linker<'module, T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {
     let mut linker = Linker::new(store.engine());
     linker.allow_shadowing(true);
     for import in module.imports() {
         match import.name() {
             Some(name) => {
                 linker
-                    .define(import.module(), name, dummy_extern(store, import.ty()))
+                    .define(import.module(), name, dummy_extern(store, import.ty())?)
                     .unwrap();
             }
             None => match import.ty() {
                 ExternType::Instance(ty) => {
                     for ty in ty.exports() {
                         linker
-                            .define(import.module(), ty.name(), dummy_extern(store, ty.ty()))
+                            .define(import.module(), ty.name(), dummy_extern(store, ty.ty())?)
                             .unwrap();
                     }
                 }
                 other => {
                     linker
-                        .define_name(import.module(), dummy_extern(store, other))
+                        .define_name(import.module(), dummy_extern(store, other)?)
                         .unwrap();
                 }
             },
         }
     }
-    linker
+    Ok(linker)
 }
 
 /// Construct a dummy `Extern` from its type signature
-pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Extern {
-    match ty {
+pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Result<Extern> {
+    Ok(match ty {
         ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
         ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)),
-        ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)),
+        ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)?),
         ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)),
         ExternType::Module(module_ty) => Extern::Module(dummy_module(store.engine(), module_ty)),
-    }
+    })
 }
 
 /// Construct a dummy function for the given function type
@@ -86,8 +87,8 @@ pub fn dummy_table<T>(store: &mut Store<T>, ty: TableType) -> Table {
 }
 
 /// Construct a dummy memory for the given memory type.
-pub fn dummy_memory<T>(store: &mut Store<T>, ty: MemoryType) -> Memory {
-    Memory::new(store, ty).unwrap()
+pub fn dummy_memory<T>(store: &mut Store<T>, ty: MemoryType) -> Result<Memory> {
+    Memory::new(store, ty)
 }
 
 /// Construct a dummy instance for the given instance type.
@@ -414,7 +415,7 @@ mod tests {
     #[test]
     fn dummy_memory_import() {
         let mut store = store();
-        let memory = dummy_memory(&mut store, MemoryType::new(Limits::at_least(1)));
+        let memory = dummy_memory(&mut store, MemoryType::new(Limits::at_least(1))).unwrap();
         assert_eq!(memory.size(&store), 1);
     }
 

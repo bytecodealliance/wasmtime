@@ -137,7 +137,24 @@ pub fn instantiate_with_config(
         Err(_) if !known_valid => return,
         Err(e) => panic!("failed to compile module: {:?}", e),
     };
-    let linker = dummy_linker(&mut store, &module);
+    let linker = match dummy_linker(&mut store, &module) {
+        Ok(linker) => linker,
+        Err(e) => {
+            eprintln!("Warning: failed to create host imports: {:?}", e);
+
+            // Currently the only error we want to allow here is ones where we
+            // ran out of resources creating imports. For example memory
+            // creation may not succeed if the host is running low on resources.
+            //
+            // Other errors, however, are bugs in creation of the host resource.
+            let string = e.to_string();
+            assert!(
+                string.contains("Insufficient resources")
+                    && string.contains("exceeds memory limits")
+            );
+            return;
+        }
+    };
 
     match linker.instantiate(&mut store, &module) {
         Ok(_) => {}
@@ -227,7 +244,13 @@ pub fn differential_execution(
         // in and with what values. Like the results of exported functions,
         // calls to imports should also yield the same values for each
         // configuration, and we should assert that.
-        let linker = dummy_linker(&mut store, &module);
+        let linker = match dummy_linker(&mut store, &module) {
+            Ok(linker) => linker,
+            Err(e) => {
+                eprintln!("Warning: failed to create host imports: {:?}", e);
+                continue;
+            }
+        };
 
         // Don't unwrap this: there can be instantiation-/link-time errors that
         // aren't caught during validation or compilation. For example, an imported
@@ -397,7 +420,10 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 };
 
                 let store = store.as_mut().unwrap();
-                let linker = dummy_linker(store, module);
+                let linker = match dummy_linker(store, module) {
+                    Ok(linker) => linker,
+                    Err(_) => continue,
+                };
 
                 // Don't unwrap this: there can be instantiation-/link-time errors that
                 // aren't caught during validation or compilation. For example, an imported
