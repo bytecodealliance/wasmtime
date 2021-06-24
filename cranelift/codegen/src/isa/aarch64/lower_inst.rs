@@ -1691,20 +1691,37 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             };
 
             // csel.cond rd, rn, rm
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let rm = put_input_in_reg(ctx, inputs[2], NarrowValueMode::None);
             let ty = ctx.output_ty(insn, 0);
             let bits = ty_bits(ty);
             let is_float = ty_has_float_or_vec_representation(ty);
-            if is_float && bits == 32 {
-                ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm });
-            } else if is_float && bits == 64 {
-                ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm });
-            } else if is_float && bits == 128 {
-                ctx.emit(Inst::VecCSel { cond, rd, rn, rm });
-            } else {
-                ctx.emit(Inst::CSel { cond, rd, rn, rm });
+
+            let dst = get_output_reg(ctx, outputs[0]);
+            let lhs = put_input_in_regs(ctx, inputs[1]);
+            let rhs = put_input_in_regs(ctx, inputs[2]);
+
+            let rd = dst.regs()[0];
+            let rn = lhs.regs()[0];
+            let rm = rhs.regs()[0];
+
+            match (is_float, bits) {
+                (true, 32) => ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm }),
+                (true, 64) => ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm }),
+                (true, 128) => ctx.emit(Inst::VecCSel { cond, rd, rn, rm }),
+                (false, 128) => {
+                    ctx.emit(Inst::CSel {
+                        cond,
+                        rd: dst.regs()[0],
+                        rn: lhs.regs()[0],
+                        rm: rhs.regs()[0],
+                    });
+                    ctx.emit(Inst::CSel {
+                        cond,
+                        rd: dst.regs()[1],
+                        rn: lhs.regs()[1],
+                        rm: rhs.regs()[1],
+                    });
+                }
+                (_, _) => ctx.emit(Inst::CSel { cond, rd, rn, rm }),
             }
         }
 

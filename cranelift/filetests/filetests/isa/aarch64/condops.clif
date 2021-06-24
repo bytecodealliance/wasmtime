@@ -53,3 +53,14 @@ block0(v0: i32, v1: i8, v2: i8):
 
 ; check: subs wzr, w0, #42
 ; nextln: csel x0, x1, x2, eq
+
+
+function %i128_select(b1, i128, i128) -> i128 {
+block0(v0: b1, v1: i128, v2: i128):
+  v3 = select.i128 v0, v1, v2
+  return v3
+}
+
+; check: subs wzr, w0, wzr
+; nextln: csel x0, x2, x4, ne
+; nextln: csel x1, x3, x5, ne
