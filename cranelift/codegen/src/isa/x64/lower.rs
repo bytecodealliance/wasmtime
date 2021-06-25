@@ -5971,6 +5971,43 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         },
 
+        // Unimplemented opcodes below. These are not currently used by Wasm
+        // lowering or other known embeddings, but should be either supported or
+        // removed eventually.
+        Opcode::Uload8x8Complex
+        | Opcode::Sload8x8Complex
+        | Opcode::Uload16x4Complex
+        | Opcode::Sload16x4Complex
+        | Opcode::Uload32x2Complex
+        | Opcode::Sload32x2Complex => {
+            unimplemented!("Vector load {:?} not implemented", op);
+        }
+
+        Opcode::Cls => unimplemented!("Cls not supported"),
+
+        Opcode::Fma => unimplemented!("Fma not supported"),
+
+        Opcode::BorNot | Opcode::BxorNot => {
+            unimplemented!("or-not / xor-not opcodes not implemented");
+        }
+
+        Opcode::Bmask => unimplemented!("Bmask not implemented"),
+
+        Opcode::Trueif | Opcode::Trueff => unimplemented!("trueif / trueff not implemented"),
+
+        Opcode::ConstAddr => unimplemented!("ConstAddr not implemented"),
+
+        Opcode::Vsplit | Opcode::Vconcat => {
+            unimplemented!("Vector split/concat ops not implemented.");
+        }
+
+        // Opcodes that should be removed by legalization. These should
+        // eventually be removed if/when we replace in-situ legalization with
+        // something better.
+        Opcode::Ifcmp | Opcode::Ffcmp => {
+            panic!("Should never reach ifcmp/ffcmp as isel root!");
+        }
+
         Opcode::IaddImm
         | Opcode::ImulImm
         | Opcode::UdivImm
@@ -5996,10 +6033,111 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::RotrImm
         | Opcode::IshlImm
         | Opcode::UshrImm
-        | Opcode::SshrImm => {
+        | Opcode::SshrImm
+        | Opcode::IcmpImm
+        | Opcode::IfcmpImm => {
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
-        _ => unimplemented!("unimplemented lowering for opcode {:?}", op),
+
+        Opcode::StackLoad | Opcode::StackStore => {
+            panic!("Direct stack memory access not supported; should have been legalized");
+        }
+
+        Opcode::GlobalValue => {
+            panic!("global_value should have been removed by legalization!");
+        }
+
+        Opcode::HeapAddr => {
+            panic!("heap_addr should have been removed by legalization!");
+        }
+
+        Opcode::TableAddr => {
+            panic!("table_addr should have been removed by legalization!");
+        }
+
+        Opcode::Safepoint => {
+            panic!("safepoint instructions not used by new backend's safepoints!");
+        }
+
+        Opcode::Spill
+        | Opcode::Fill
+        | Opcode::FillNop
+        | Opcode::Regmove
+        | Opcode::CopySpecial
+        | Opcode::CopyToSsa
+        | Opcode::CopyNop
+        | Opcode::AdjustSpDown
+        | Opcode::AdjustSpUpImm
+        | Opcode::AdjustSpDownImm
+        | Opcode::IfcmpSp
+        | Opcode::Regspill
+        | Opcode::Regfill
+        | Opcode::Copy
+        | Opcode::DummySargT => {
+            panic!("Unused opcode should not be encountered.");
+        }
+
+        Opcode::JumpTableEntry | Opcode::JumpTableBase => {
+            panic!("Should not appear: we handle BrTable directly");
+        }
+
+        Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
+            panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
+        }
+
+        Opcode::Jump
+        | Opcode::Fallthrough
+        | Opcode::Brz
+        | Opcode::Brnz
+        | Opcode::BrIcmp
+        | Opcode::Brif
+        | Opcode::Brff
+        | Opcode::IndirectJumpTableBr
+        | Opcode::BrTable => {
+            panic!("Branch opcode reached non-branch lowering logic!");
+        }
+
+        Opcode::X86Udivmodx
+        | Opcode::X86Sdivmodx
+        | Opcode::X86Umulx
+        | Opcode::X86Smulx
+        | Opcode::X86Cvtt2si
+        | Opcode::X86Fmin
+        | Opcode::X86Fmax
+        | Opcode::X86Push
+        | Opcode::X86Pop
+        | Opcode::X86Bsr
+        | Opcode::X86Bsf
+        | Opcode::X86Pblendw
+        | Opcode::X86Pshufd
+        | Opcode::X86Pshufb
+        | Opcode::X86Pextr
+        | Opcode::X86Pinsr
+        | Opcode::X86Insertps
+        | Opcode::X86Movsd
+        | Opcode::X86Movlhps
+        | Opcode::X86Palignr
+        | Opcode::X86Psll
+        | Opcode::X86Psrl
+        | Opcode::X86Psra
+        | Opcode::X86Ptest
+        | Opcode::X86Pmaxs
+        | Opcode::X86Pmaxu
+        | Opcode::X86Pmins
+        | Opcode::X86Pminu
+        | Opcode::X86Pmullq
+        | Opcode::X86Pmuludq
+        | Opcode::X86Punpckh
+        | Opcode::X86Punpckl
+        | Opcode::X86Vcvtudq2ps
+        | Opcode::X86ElfTlsGetAddr
+        | Opcode::X86MachoTlsGetAddr => {
+            panic!("x86-specific opcode in supposedly arch-neutral IR!");
+        }
+
+        Opcode::Nop => {
+            // Nothing.
+        }
     }
 
     Ok(())
