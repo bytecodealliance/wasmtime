@@ -1,10 +1,87 @@
 use anyhow::Result;
 use arbitrary::Unstructured;
 use cranelift::codegen::ir::types::*;
-use cranelift::codegen::ir::{AbiParam, ExternalName, Function, Signature, Type};
+use cranelift::codegen::ir::{AbiParam, ExternalName, Function, Opcode, Signature, Type};
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift::prelude::{EntityRef, InstBuilder};
+
+fn insert_opcode_arity_0(
+    _fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    _args: &'static [Type],
+    _rets: &'static [Type],
+) -> Result<()> {
+    builder.ins().NullAry(opcode, INVALID);
+    Ok(())
+}
+
+fn insert_opcode_arity_2(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    opcode: Opcode,
+    args: &'static [Type],
+    rets: &'static [Type],
+) -> Result<()> {
+    let arg0 = fgen.get_variable_of_type(builder, args[0])?;
+    let arg0 = builder.use_var(arg0);
+
+    let arg1 = fgen.get_variable_of_type(builder, args[1])?;
+    let arg1 = builder.use_var(arg1);
+
+    let typevar = rets[0];
+    let (inst, dfg) = builder.ins().Binary(opcode, typevar, arg0, arg1);
+
+    let val = dfg.first_result(inst);
+    let var = fgen.create_var(builder, typevar)?;
+    builder.def_var(var, val);
+
+    Ok(())
+}
+
+type OpcodeInserter = fn(
+    fgen: &mut FunctionGenerator,
+    builder: &mut FunctionBuilder,
+    Opcode,
+    &'static [Type],
+    &'static [Type],
+) -> Result<()>;
+
+// TODO: Do we have a way to get this information automatically?
+const OPCODE_SIGNATURES: &'static [(
+    Opcode,
+    &'static [Type], // Args
+    &'static [Type], // Rets
+    OpcodeInserter,
+)] = &[
+    (Opcode::Nop, &[], &[], insert_opcode_arity_0),
+    // Iadd
+    (Opcode::Iadd, &[I8, I8], &[I8], insert_opcode_arity_2),
+    (Opcode::Iadd, &[I16, I16], &[I16], insert_opcode_arity_2),
+    (Opcode::Iadd, &[I32, I32], &[I32], insert_opcode_arity_2),
+    (Opcode::Iadd, &[I64, I64], &[I64], insert_opcode_arity_2),
+    // Isub
+    (Opcode::Isub, &[I8, I8], &[I8], insert_opcode_arity_2),
+    (Opcode::Isub, &[I16, I16], &[I16], insert_opcode_arity_2),
+    (Opcode::Isub, &[I32, I32], &[I32], insert_opcode_arity_2),
+    (Opcode::Isub, &[I64, I64], &[I64], insert_opcode_arity_2),
+    // Imul
+    (Opcode::Imul, &[I8, I8], &[I8], insert_opcode_arity_2),
+    (Opcode::Imul, &[I16, I16], &[I16], insert_opcode_arity_2),
+    (Opcode::Imul, &[I32, I32], &[I32], insert_opcode_arity_2),
+    (Opcode::Imul, &[I64, I64], &[I64], insert_opcode_arity_2),
+    // Udiv
+    (Opcode::Udiv, &[I8, I8], &[I8], insert_opcode_arity_2),
+    (Opcode::Udiv, &[I16, I16], &[I16], insert_opcode_arity_2),
+    (Opcode::Udiv, &[I32, I32], &[I32], insert_opcode_arity_2),
+    (Opcode::Udiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+    // Sdiv
+    (Opcode::Sdiv, &[I8, I8], &[I8], insert_opcode_arity_2),
+    (Opcode::Sdiv, &[I16, I16], &[I16], insert_opcode_arity_2),
+    (Opcode::Sdiv, &[I32, I32], &[I32], insert_opcode_arity_2),
+    (Opcode::Sdiv, &[I64, I64], &[I64], insert_opcode_arity_2),
+];
 
 pub struct FunctionGenerator<'r, 'data>
 where
@@ -67,9 +144,10 @@ where
     }
 
     /// Creates a new var
-    fn create_var(&mut self, ty: Type) -> Result<Variable> {
+    fn create_var(&mut self, builder: &mut FunctionBuilder, ty: Type) -> Result<Variable> {
         let id = self.vars.len();
         let var = Variable::new(id);
+        builder.declare_var(var, ty);
         self.vars.push((ty, var));
         Ok(var)
     }
@@ -109,9 +187,7 @@ where
                 I64 => fgen.u.arbitrary::<i64>()?,
                 _ => unreachable!(),
             };
-            let var = fgen.create_var(ty)?;
-            builder.declare_var(var, ty);
-
+            let var = fgen.create_var(builder, ty)?;
             let val = builder.ins().iconst(ty, imm64);
             builder.def_var(var, val);
 
@@ -148,6 +224,12 @@ where
         Ok(())
     }
 
+    /// Inserts a random instruction into the block
+    fn generate_instruction(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let (op, args, rets, inserter) = *self.u.choose(OPCODE_SIGNATURES)?;
+        inserter(self, builder, op, args, rets)
+    }
+
     pub fn generate(mut self) -> Result<Function> {
         let sig = self.generate_signature()?;
 
@@ -159,20 +241,24 @@ where
 
         let mut block_vars = vec![];
         for param in &sig.params {
-            let var = self.create_var(param.value_type)?;
-            builder.declare_var(var, param.value_type);
-
+            let var = self.create_var(&mut builder, param.value_type)?;
             block_vars.push(var);
         }
         builder.append_block_params_for_function_params(block0);
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
+        // TODO: Cleanup
         for (i, _) in sig.params.iter().enumerate() {
             let var = block_vars[i];
             let block_param = builder.block_params(block0)[i];
             builder.def_var(var, block_param);
             let _ = builder.use_var(block_vars[i]);
+        }
+
+        // TODO: Unconstrain this
+        for _ in 0..self.u.int_in_range(0..=16)? {
+            self.generate_instruction(&mut builder)?;
         }
 
         // TODO: We should make this part of the regular instruction selection

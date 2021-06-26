@@ -54,7 +54,7 @@ fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(data);
 
     let mut fuzzgen = FuzzGen::new(&mut u);
-    let (func, args): (Function, Vec<DataValue>) = match fuzzgen.generate_test() {
+    let testcase = match fuzzgen.generate_test() {
         Ok(test) => test,
 
         // arbitrary Errors mean that the fuzzer didn't give us enough input data
@@ -63,6 +63,9 @@ fuzz_target!(|data: &[u8]| {
         }
         Err(e) => std::panic::panic_any(e),
     };
+
+    let func = testcase.func;
+    let args = &testcase.inputs[0];
 
     let int_res = run_in_interpreter(&func, &args[..]);
     if let RunResult::Error(e) = int_res {
