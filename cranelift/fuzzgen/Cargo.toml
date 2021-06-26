@@ -11,8 +11,8 @@ publish=false
 
 
 [[bin]]
-name = "clif-util"
-path = "src/gen-once.rs"
+name = "gen_testcase"
+path = "src/gen_testcase.rs"
 
 [dependencies]
 cranelift = { path = "../umbrella", version = "0.75.0" }

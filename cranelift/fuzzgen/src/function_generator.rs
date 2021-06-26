@@ -101,7 +101,6 @@ where
 
     fn generate_callconv(&mut self) -> Result<CallConv> {
         // TODO: Generate random CallConvs per target
-        // Ok(CallConv::Fast)
         Ok(CallConv::SystemV)
     }
 
@@ -152,7 +151,6 @@ where
         Ok(var)
     }
 
-    // TODO: Rename this
     fn vars_of_type(&self, ty: Type) -> Vec<Variable> {
         self.vars
             .iter()
