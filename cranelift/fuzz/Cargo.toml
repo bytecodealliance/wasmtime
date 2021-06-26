@@ -1,0 +1,36 @@
+
+[package]
+name = "cranelift-tools-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1.0.0", features = ["derive"] }
+
+[dependencies.cranelift-filetests]
+path = "../filetests"
+
+[dependencies.cranelift-interpreter]
+path = "../interpreter"
+
+[dependencies.cranelift-fuzzgen]
+path = "../fuzzgen"
+
+[dependencies.cranelift]
+path = "../umbrella"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "fuzzgen"
+path = "fuzz_targets/fuzzgen.rs"
+test = false
+doc = false

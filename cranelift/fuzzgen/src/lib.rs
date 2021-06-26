@@ -1,9 +1,17 @@
-use anyhow::{anyhow, Result};
-use arbitrary::{Arbitrary, Unstructured};
+use anyhow::Result;
+use arbitrary::Unstructured;
+use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::{ir::Function, verify_function};
 use cranelift::prelude::isa::CallConv;
 use cranelift::prelude::*;
+
+pub type TestCaseInput = Vec<DataValue>;
+
+pub struct TestCase {
+    pub func: Function,
+    pub inputs: Vec<TestCaseInput>,
+}
 
 pub struct FuzzGen<'a> {
     u: &'a mut Unstructured<'a>,
@@ -17,7 +25,8 @@ impl<'a> FuzzGen<'a> {
 
     fn generate_callconv(&mut self) -> Result<CallConv> {
         // TODO: Generate random CallConvs per target
-        Ok(CallConv::Fast)
+        // Ok(CallConv::Fast)
+        Ok(CallConv::SystemV)
     }
 
     fn generate_type(&mut self) -> Result<Type> {
@@ -108,7 +117,7 @@ impl<'a> FuzzGen<'a> {
 
         // Reuse var
         if self.vars_of_type(ty).len() != 0 {
-            opts.push(|fg, builder, ty| {
+            opts.push(|fg, _, ty| {
                 let opts = fg.vars_of_type(ty);
                 let var = fg.u.choose(&opts[..])?;
                 Ok(*var)
@@ -136,7 +145,7 @@ impl<'a> FuzzGen<'a> {
         Ok(())
     }
 
-    pub fn generate_function(&mut self) -> Result<Function> {
+    fn generate_function(&mut self) -> Result<Function> {
         let sig = self.generate_signature()?;
 
         let mut fn_builder_ctx = FunctionBuilderContext::new();
@@ -163,6 +172,7 @@ impl<'a> FuzzGen<'a> {
             let _ = builder.use_var(block_vars[i]);
         }
 
+        // TODO: We should make this part of the regular instruction selection
         self.generate_return(&mut builder)?;
 
         builder.finalize();
@@ -174,5 +184,39 @@ impl<'a> FuzzGen<'a> {
         }
 
         Ok(func)
+    }
+
+    fn generate_test_inputs(&mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
+        // TODO: More test cases?
+        let num_tests = self.u.int_in_range(1..=10)?;
+        let mut inputs = Vec::with_capacity(num_tests);
+
+        for _ in 0..num_tests {
+            let test_args = signature
+                .params
+                .iter()
+                .map(|p| {
+                    let imm64 = match p.value_type {
+                        I8 => self.u.arbitrary::<i8>()? as i64,
+                        I16 => self.u.arbitrary::<i16>()? as i64,
+                        I32 => self.u.arbitrary::<i32>()? as i64,
+                        I64 => self.u.arbitrary::<i64>()?,
+                        _ => unreachable!(),
+                    };
+                    Ok(DataValue::from_integer(imm64, p.value_type)?)
+                })
+                .collect::<Result<TestCaseInput>>()?;
+
+            inputs.push(test_args);
+        }
+
+        Ok(inputs)
+    }
+
+    pub fn generate_test(&mut self) -> Result<TestCase> {
+        let func = self.generate_function()?;
+        let inputs = self.generate_test_inputs(&func.signature)?;
+
+        Ok(TestCase { func, inputs })
     }
 }
