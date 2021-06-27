@@ -92,17 +92,17 @@ impl SingleFunctionCompiler {
 }
 
 #[derive(Error, Debug)]
-/// TODO
+/// Compilation Error when compiling a function
 pub enum CompilationError {
     #[error("Cross-compilation not currently supported; use the host's default calling convention \
     or remove the specified calling convention in the function signature to use the host's default.")]
-    /// TODO
+    /// This Target ISA is invalid for the current host
     InvalidTargetIsa,
     #[error("Cranelift codegen error")]
-    /// TODO
+    /// Cranelift codegen error
     CodegenError(#[from] CodegenError),
     #[error("Memory mapping error")]
-    /// TODO
+    /// Memory mapping error
     IoError(#[from] std::io::Error),
 }
 
