@@ -1,8 +1,7 @@
-
 [package]
-name = "cranelift-tools-fuzz"
+name = "cranelift-fuzz"
 version = "0.0.0"
-authors = ["Automatically generated"]
+authors = ["The Wasmtime Project Developers"]
 publish = false
 edition = "2018"
 
@@ -13,17 +12,10 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1.0.0", features = ["derive"] }
 
-[dependencies.cranelift-filetests]
-path = "../filetests"
-
-[dependencies.cranelift-interpreter]
-path = "../interpreter"
-
-[dependencies.cranelift-fuzzgen]
-path = "../fuzzgen"
-
-[dependencies.cranelift]
-path = "../umbrella"
+cranelift = { path = "../umbrella" }
+cranelift-filetests = { path = "../filetests" }
+cranelift-interpreter = { path = "../interpreter" }
+cranelift-fuzzgen = { path = "../fuzzgen" }
 
 # Prevent this from interfering with workspaces
 [workspace]

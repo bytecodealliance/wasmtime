@@ -133,6 +133,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "cranelift",
+ "cranelift-filetests",
+ "cranelift-fuzzgen",
+ "cranelift-interpreter",
+ "libfuzzer-sys",
+]
+
+[[package]]
 name = "cranelift-fuzzgen"
 version = "0.75.0"
 dependencies = [
@@ -177,18 +189,6 @@ dependencies = [
  "cranelift-codegen",
  "smallvec",
  "target-lexicon",
-]
-
-[[package]]
-name = "cranelift-tools-fuzz"
-version = "0.0.0"
-dependencies = [
- "arbitrary",
- "cranelift",
- "cranelift-filetests",
- "cranelift-fuzzgen",
- "cranelift-interpreter",
- "libfuzzer-sys",
 ]
 
 [[package]]

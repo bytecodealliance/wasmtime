@@ -1,9 +1,10 @@
 #![no_main]
+
 use libfuzzer_sys::fuzz_target;
 
-use crate::codegen::ir::Function;
 use arbitrary::Unstructured;
 use cranelift::codegen::data_value::DataValue;
+use cranelift::codegen::ir::Function;
 use cranelift::prelude::*;
 use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompiler};
 use cranelift_fuzzgen::*;
