@@ -284,7 +284,7 @@ impl Value for DataValue {
     }
 
     fn div(self, other: Self) -> ValueResult<Self> {
-        binary_match!(/(&self, &other); [I8, I16, I32, I64])
+        binary_match!(/(&self, &other); [I8, I16, I32, I64, U8, U16, U32, U64])
     }
 
     fn rem(self, other: Self) -> ValueResult<Self> {
