@@ -17,12 +17,11 @@ pub struct TestCase {
 
 pub struct FuzzGen<'a> {
     u: &'a mut Unstructured<'a>,
-    vars: Vec<(Type, Variable)>,
 }
 
 impl<'a> FuzzGen<'a> {
     pub fn new(u: &'a mut Unstructured<'a>) -> Self {
-        Self { u, vars: vec![] }
+        Self { u }
     }
 
     fn verify_function(&self, func: &Function) -> Result<()> {
