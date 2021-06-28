@@ -6001,6 +6001,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             unimplemented!("Vector split/concat ops not implemented.");
         }
 
+        Opcode::SqmulRoundSat => unimplemented!("unimplemented lowering for opcode {:?}", op),
+
         // Opcodes that should be removed by legalization. These should
         // eventually be removed if/when we replace in-situ legalization with
         // something better.

@@ -2228,6 +2228,14 @@ impl MachInstEmit for Inst {
                     VecALUOp::Zip1 => (0b01001110_00_0 | enc_size << 1, 0b001110),
                     VecALUOp::Smull => (0b000_01110_00_1 | enc_size << 1, 0b110000),
                     VecALUOp::Smull2 => (0b010_01110_00_1 | enc_size << 1, 0b110000),
+                    VecALUOp::Sqrdmulh => {
+                        debug_assert!(
+                            size.lane_size() == ScalarSize::Size16
+                                || size.lane_size() == ScalarSize::Size32
+                        );
+
+                        (0b001_01110_00_1 | enc_size << 1, 0b101101)
+                    }
                 };
                 let top11 = match alu_op {
                     VecALUOp::Smull | VecALUOp::Smull2 => top11,

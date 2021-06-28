@@ -1650,8 +1650,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("table_addr should have been removed by legalization!");
         }
 
-        Opcode::ConstAddr => unimplemented!(),
-
         Opcode::Nop => {
             // Nothing.
         }
@@ -2684,11 +2682,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Vsplit | Opcode::Vconcat => {
-            // TODO
-            panic!("Vector ops not implemented.");
-        }
-
         Opcode::Isplit => {
             assert_eq!(
                 ctx.input_ty(insn, 0),
@@ -3524,9 +3517,35 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         },
 
-        Opcode::FcvtLowFromSint => unimplemented!("FcvtLowFromSint"),
-        Opcode::FvpromoteLow => unimplemented!("FvpromoteLow"),
-        Opcode::Fvdemote => unimplemented!("Fvdemote"),
+        Opcode::SqmulRoundSat => {
+            let ty = ty.unwrap();
+
+            if !ty.is_vector() || (ty.lane_type() != I16 && ty.lane_type() != I32) {
+                return Err(CodegenError::Unsupported(format!(
+                    "Unsupported type: {:?}",
+                    ty
+                )));
+            }
+
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+
+            ctx.emit(Inst::VecRRR {
+                alu_op: VecALUOp::Sqrdmulh,
+                rd,
+                rn,
+                rm,
+                size: VectorSize::from_ty(ty),
+            });
+        }
+
+        Opcode::ConstAddr
+        | Opcode::FcvtLowFromSint
+        | Opcode::Fvdemote
+        | Opcode::FvpromoteLow
+        | Opcode::Vconcat
+        | Opcode::Vsplit => unimplemented!("lowering {}", op),
     }
 
     Ok(())

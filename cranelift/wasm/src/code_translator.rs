@@ -1885,8 +1885,12 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let arg = pop1_with_bitcast(state, type_of(op), builder);
             state.push1(builder.ins().popcnt(arg));
         }
-        Operator::I16x8Q15MulrSatS
-        | Operator::I16x8ExtMulLowI8x16S
+        Operator::I16x8Q15MulrSatS => {
+            let (a, b) = pop2_with_bitcast(state, I16X8, builder);
+
+            state.push1(builder.ins().sqmul_round_sat(a, b))
+        }
+        Operator::I16x8ExtMulLowI8x16S
         | Operator::I16x8ExtMulHighI8x16S
         | Operator::I16x8ExtMulLowI8x16U
         | Operator::I16x8ExtMulHighI8x16U

@@ -3611,6 +3611,30 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqrdmulh,
+            rd: writable_vreg(31),
+            rn: vreg(0),
+            rm: vreg(31),
+            size: VectorSize::Size16x8,
+        },
+        "1FB47F6E",
+        "sqrdmulh v31.8h, v0.8h, v31.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRR {
+            alu_op: VecALUOp::Sqrdmulh,
+            rd: writable_vreg(7),
+            rn: vreg(7),
+            rm: vreg(23),
+            size: VectorSize::Size32x2,
+        },
+        "E7B4B72E",
+        "sqrdmulh v7.2s, v7.2s, v23.2s",
+    ));
+
+    insns.push((
         Inst::VecMisc {
             op: VecMisc2::Not,
             rd: writable_vreg(20),
