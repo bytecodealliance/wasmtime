@@ -2425,11 +2425,87 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::VecMiscNarrow {
-            op: VecMiscNarrowOp::Xtn,
+        Inst::VecRRLong {
+            op: VecRRLongOp::Fcvtl16,
+            rd: writable_vreg(0),
+            rn: vreg(30),
+            high_half: false,
+        },
+        "C07B210E",
+        "fcvtl v0.4s, v30.4h",
+    ));
+
+    insns.push((
+        Inst::VecRRLong {
+            op: VecRRLongOp::Fcvtl32,
+            rd: writable_vreg(16),
+            rn: vreg(1),
+            high_half: true,
+        },
+        "3078614E",
+        "fcvtl2 v16.2d, v1.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRLong {
+            op: VecRRLongOp::Shll8,
+            rd: writable_vreg(12),
+            rn: vreg(5),
+            high_half: false,
+        },
+        "AC38212E",
+        "shll v12.8h, v5.8b, #8",
+    ));
+
+    insns.push((
+        Inst::VecRRLong {
+            op: VecRRLongOp::Shll16,
+            rd: writable_vreg(9),
+            rn: vreg(1),
+            high_half: true,
+        },
+        "2938616E",
+        "shll2 v9.4s, v1.8h, #16",
+    ));
+
+    insns.push((
+        Inst::VecRRLong {
+            op: VecRRLongOp::Shll32,
+            rd: writable_vreg(1),
+            rn: vreg(10),
+            high_half: false,
+        },
+        "4139A12E",
+        "shll v1.2d, v10.2s, #32",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Xtn16,
+            rd: writable_vreg(25),
+            rn: vreg(17),
+            high_half: false,
+        },
+        "392A210E",
+        "xtn v25.8b, v17.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Xtn32,
+            rd: writable_vreg(3),
+            rn: vreg(10),
+            high_half: true,
+        },
+        "4329614E",
+        "xtn2 v3.8h, v10.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Xtn64,
             rd: writable_vreg(22),
             rn: vreg(8),
-            size: VectorSize::Size32x2,
             high_half: false,
         },
         "1629A10E",
@@ -2437,11 +2513,21 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::VecMiscNarrow {
-            op: VecMiscNarrowOp::Sqxtn,
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Sqxtn16,
+            rd: writable_vreg(7),
+            rn: vreg(22),
+            high_half: true,
+        },
+        "C74A214E",
+        "sqxtn2 v7.16b, v22.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Sqxtn32,
             rd: writable_vreg(31),
             rn: vreg(0),
-            size: VectorSize::Size16x8,
             high_half: true,
         },
         "1F48614E",
@@ -2449,15 +2535,80 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::VecMiscNarrow {
-            op: VecMiscNarrowOp::Sqxtun,
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Sqxtn64,
+            rd: writable_vreg(14),
+            rn: vreg(20),
+            high_half: false,
+        },
+        "8E4AA10E",
+        "sqxtn v14.2s, v20.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Sqxtun16,
             rd: writable_vreg(16),
             rn: vreg(23),
-            size: VectorSize::Size8x16,
             high_half: false,
         },
         "F02A212E",
         "sqxtun v16.8b, v23.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Sqxtun32,
+            rd: writable_vreg(28),
+            rn: vreg(9),
+            high_half: true,
+        },
+        "3C29616E",
+        "sqxtun2 v28.8h, v9.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Sqxtun64,
+            rd: writable_vreg(15),
+            rn: vreg(15),
+            high_half: false,
+        },
+        "EF29A12E",
+        "sqxtun v15.2s, v15.2d",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Uqxtn16,
+            rd: writable_vreg(21),
+            rn: vreg(4),
+            high_half: true,
+        },
+        "9548216E",
+        "uqxtn2 v21.16b, v4.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Uqxtn32,
+            rd: writable_vreg(31),
+            rn: vreg(31),
+            high_half: false,
+        },
+        "FF4B612E",
+        "uqxtn v31.4h, v31.4s",
+    ));
+
+    insns.push((
+        Inst::VecRRNarrow {
+            op: VecRRNarrowOp::Uqxtn64,
+            rd: writable_vreg(11),
+            rn: vreg(12),
+            high_half: true,
+        },
+        "8B49A16E",
+        "uqxtn2 v11.4s, v12.2d",
     ));
 
     insns.push((
@@ -3808,39 +3959,6 @@ fn test_aarch64_binemit() {
         },
         "4109A04E",
         "rev64 v1.4s, v10.4s",
-    ));
-
-    insns.push((
-        Inst::VecMisc {
-            op: VecMisc2::Shll,
-            rd: writable_vreg(12),
-            rn: vreg(5),
-            size: VectorSize::Size8x8,
-        },
-        "AC38212E",
-        "shll v12.8h, v5.8b, #8",
-    ));
-
-    insns.push((
-        Inst::VecMisc {
-            op: VecMisc2::Shll,
-            rd: writable_vreg(9),
-            rn: vreg(1),
-            size: VectorSize::Size16x4,
-        },
-        "2938612E",
-        "shll v9.4s, v1.4h, #16",
-    ));
-
-    insns.push((
-        Inst::VecMisc {
-            op: VecMisc2::Shll,
-            rd: writable_vreg(1),
-            rn: vreg(10),
-            size: VectorSize::Size32x2,
-        },
-        "4139A12E",
-        "shll v1.2d, v10.2s, #32",
     ));
 
     insns.push((

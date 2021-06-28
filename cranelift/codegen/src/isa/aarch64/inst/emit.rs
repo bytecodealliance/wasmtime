@@ -1677,11 +1677,6 @@ impl MachInstEmit for Inst {
                         debug_assert_ne!(VectorSize::Size64x2, size);
                         (0b0, 0b00000, enc_size)
                     }
-                    VecMisc2::Shll => {
-                        debug_assert_ne!(VectorSize::Size64x2, size);
-                        debug_assert!(!size.is_128bits());
-                        (0b1, 0b10011, enc_size)
-                    }
                     VecMisc2::Fcvtzs => {
                         debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
                         (0b0, 0b11011, enc_size)
@@ -2092,24 +2087,49 @@ impl MachInstEmit for Inst {
                         | machreg_to_vec(rd.to_reg()),
                 );
             }
-            &Inst::VecMiscNarrow {
+            &Inst::VecRRLong {
                 op,
                 rd,
                 rn,
-                size,
                 high_half,
             } => {
-                let size = match size.lane_size() {
-                    ScalarSize::Size8 => 0b00,
-                    ScalarSize::Size16 => 0b01,
-                    ScalarSize::Size32 => 0b10,
-                    _ => panic!("Unexpected vector operand lane size!"),
+                let (u, size, bits_12_16) = match op {
+                    VecRRLongOp::Fcvtl16 => (0b0, 0b00, 0b10111),
+                    VecRRLongOp::Fcvtl32 => (0b0, 0b01, 0b10111),
+                    VecRRLongOp::Shll8 => (0b1, 0b00, 0b10011),
+                    VecRRLongOp::Shll16 => (0b1, 0b01, 0b10011),
+                    VecRRLongOp::Shll32 => (0b1, 0b10, 0b10011),
                 };
-                let (u, bits_12_16) = match op {
-                    VecMiscNarrowOp::Xtn => (0b0, 0b10010),
-                    VecMiscNarrowOp::Sqxtn => (0b0, 0b10100),
-                    VecMiscNarrowOp::Sqxtun => (0b1, 0b10010),
+
+                sink.put4(enc_vec_rr_misc(
+                    ((high_half as u32) << 1) | u,
+                    size,
+                    bits_12_16,
+                    rd,
+                    rn,
+                ));
+            }
+            &Inst::VecRRNarrow {
+                op,
+                rd,
+                rn,
+                high_half,
+            } => {
+                let (u, size, bits_12_16) = match op {
+                    VecRRNarrowOp::Xtn16 => (0b0, 0b00, 0b10010),
+                    VecRRNarrowOp::Xtn32 => (0b0, 0b01, 0b10010),
+                    VecRRNarrowOp::Xtn64 => (0b0, 0b10, 0b10010),
+                    VecRRNarrowOp::Sqxtn16 => (0b0, 0b00, 0b10100),
+                    VecRRNarrowOp::Sqxtn32 => (0b0, 0b01, 0b10100),
+                    VecRRNarrowOp::Sqxtn64 => (0b0, 0b10, 0b10100),
+                    VecRRNarrowOp::Sqxtun16 => (0b1, 0b00, 0b10010),
+                    VecRRNarrowOp::Sqxtun32 => (0b1, 0b01, 0b10010),
+                    VecRRNarrowOp::Sqxtun64 => (0b1, 0b10, 0b10010),
+                    VecRRNarrowOp::Uqxtn16 => (0b1, 0b00, 0b10100),
+                    VecRRNarrowOp::Uqxtn32 => (0b1, 0b01, 0b10100),
+                    VecRRNarrowOp::Uqxtn64 => (0b1, 0b10, 0b10100),
                 };
+
                 sink.put4(enc_vec_rr_misc(
                     ((high_half as u32) << 1) | u,
                     size,

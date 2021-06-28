@@ -365,11 +365,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                     // Extract the low half components of rn.
                     //   tmp1 = |c|a|
-                    ctx.emit(Inst::VecMiscNarrow {
-                        op: VecMiscNarrowOp::Xtn,
+                    ctx.emit(Inst::VecRRNarrow {
+                        op: VecRRNarrowOp::Xtn64,
                         rd: tmp1,
                         rn,
-                        size: VectorSize::Size32x2,
                         high_half: false,
                     });
 
@@ -385,21 +384,20 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                     // Extract the low half components of rm.
                     //   tmp2 = |g|e|
-                    ctx.emit(Inst::VecMiscNarrow {
-                        op: VecMiscNarrowOp::Xtn,
+                    ctx.emit(Inst::VecRRNarrow {
+                        op: VecRRNarrowOp::Xtn64,
                         rd: tmp2,
                         rn: rm,
-                        size: VectorSize::Size32x2,
                         high_half: false,
                     });
 
                     // Shift the high half components, into the high half.
                     //   rd = |dg+ch << 32|be+af << 32|
-                    ctx.emit(Inst::VecMisc {
-                        op: VecMisc2::Shll,
+                    ctx.emit(Inst::VecRRLong {
+                        op: VecRRLongOp::Shll32,
                         rd,
                         rn: rd.to_reg(),
-                        size: VectorSize::Size32x2,
+                        high_half: false,
                     });
 
                     // Multiply the low components together, and accumulate with the high
@@ -3439,31 +3437,48 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::Snarrow | Opcode::Unarrow => {
-            let op = if op == Opcode::Snarrow {
-                VecMiscNarrowOp::Sqxtn
-            } else {
-                VecMiscNarrowOp::Sqxtun
+        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
+            let nonzero_high_half = maybe_input_insn(ctx, inputs[1], Opcode::Vconst)
+                .map_or(true, |insn| {
+                    const_param_to_u128(ctx, insn).expect("Invalid immediate bytes") != 0
+                });
+            let op = match (op, ty.unwrap().lane_type()) {
+                (Opcode::Snarrow, I8) => VecRRNarrowOp::Sqxtn16,
+                (Opcode::Snarrow, I16) => VecRRNarrowOp::Sqxtn32,
+                (Opcode::Snarrow, I32) => VecRRNarrowOp::Sqxtn64,
+                (Opcode::Unarrow, I8) => VecRRNarrowOp::Sqxtun16,
+                (Opcode::Unarrow, I16) => VecRRNarrowOp::Sqxtun32,
+                (Opcode::Unarrow, I32) => VecRRNarrowOp::Sqxtun64,
+                (Opcode::Uunarrow, I8) => VecRRNarrowOp::Uqxtn16,
+                (Opcode::Uunarrow, I16) => VecRRNarrowOp::Uqxtn32,
+                (Opcode::Uunarrow, I32) => VecRRNarrowOp::Uqxtn64,
+                (_, lane_type) => {
+                    return Err(CodegenError::Unsupported(format!(
+                        "Unsupported SIMD vector lane type: {:?}",
+                        lane_type
+                    )))
+                }
             };
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let rn2 = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ty = ty.unwrap();
 
-            ctx.emit(Inst::VecMiscNarrow {
+            ctx.emit(Inst::VecRRNarrow {
                 op,
                 rd,
                 rn,
-                size: VectorSize::from_ty(ty),
                 high_half: false,
             });
-            ctx.emit(Inst::VecMiscNarrow {
-                op,
-                rd,
-                rn: rn2,
-                size: VectorSize::from_ty(ty),
-                high_half: true,
-            });
+
+            if nonzero_high_half {
+                let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+
+                ctx.emit(Inst::VecRRNarrow {
+                    op,
+                    rd,
+                    rn,
+                    high_half: true,
+                });
+            }
         }
 
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {

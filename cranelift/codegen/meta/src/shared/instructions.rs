@@ -3985,19 +3985,19 @@ pub(crate) fn define(
         .constraints(vec![WiderOrEq(Int.clone(), IntTo.clone())]),
     );
 
-    let I16or32xN = &TypeVar::new(
-        "I16or32xN",
-        "A SIMD vector type containing integer lanes 16 or 32 bits wide",
+    let I16or32or64xN = &TypeVar::new(
+        "I16or32or64xN",
+        "A SIMD vector type containing integer lanes 16, 32, or 64 bits wide",
         TypeSetBuilder::new()
-            .ints(16..32)
-            .simd_lanes(4..8)
+            .ints(16..64)
+            .simd_lanes(2..8)
             .includes_scalars(false)
             .build(),
     );
 
-    let x = &Operand::new("x", I16or32xN);
-    let y = &Operand::new("y", I16or32xN);
-    let a = &Operand::new("a", &I16or32xN.split_lanes());
+    let x = &Operand::new("x", I16or32or64xN);
+    let y = &Operand::new("y", I16or32or64xN);
+    let a = &Operand::new("a", &I16or32or64xN.split_lanes());
 
     ig.push(
         Inst::new(
@@ -4025,6 +4025,25 @@ pub(crate) fn define(
 
         Note that all input lanes are considered signed: any negative lanes will overflow and be
         replaced with the unsigned minimum, `0x00`.
+
+        The lanes will be concatenated after narrowing. For example, when `x` and `y` are `i32x4`
+        and `x = [x3, x2, x1, x0]` and `y = [y3, y2, y1, y0]`, then after narrowing the value
+        returned is an `i16x8`: `a = [y3', y2', y1', y0', x3', x2', x1', x0']`.
+            "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
+        .operands_out(vec![a]),
+    );
+
+    ig.push(
+        Inst::new(
+            "uunarrow",
+            r#"
+        Combine `x` and `y` into a vector with twice the lanes but half the integer width while
+        saturating overflowing values to the unsigned maximum and minimum.
+
+        Note that all input lanes are considered unsigned.
 
         The lanes will be concatenated after narrowing. For example, when `x` and `y` are `i32x4`
         and `x = [x3, x2, x1, x0]` and `y = [y3, y2, y1, y0]`, then after narrowing the value

@@ -1790,9 +1790,25 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, F32X4, builder);
             state.push1(builder.ins().fcvt_to_sint_sat(I32X4, a))
         }
+        Operator::I32x4TruncSatF64x2SZero => {
+            let a = pop1_with_bitcast(state, F64X2, builder);
+            let converted_a = builder.ins().fcvt_to_sint_sat(I64X2, a);
+            let handle = builder.func.dfg.constants.insert(vec![0u8; 16].into());
+            let zero = builder.ins().vconst(I64X2, handle);
+
+            state.push1(builder.ins().snarrow(converted_a, zero));
+        }
         Operator::I32x4TruncSatF32x4U => {
             let a = pop1_with_bitcast(state, F32X4, builder);
             state.push1(builder.ins().fcvt_to_uint_sat(I32X4, a))
+        }
+        Operator::I32x4TruncSatF64x2UZero => {
+            let a = pop1_with_bitcast(state, F64X2, builder);
+            let converted_a = builder.ins().fcvt_to_uint_sat(I64X2, a);
+            let handle = builder.func.dfg.constants.insert(vec![0u8; 16].into());
+            let zero = builder.ins().vconst(I64X2, handle);
+
+            state.push1(builder.ins().uunarrow(converted_a, zero));
         }
         Operator::I8x16NarrowI16x8S => {
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
@@ -1906,9 +1922,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         | Operator::I16x8ExtAddPairwiseI8x16U
         | Operator::I32x4ExtAddPairwiseI16x8S
         | Operator::I32x4ExtAddPairwiseI16x8U
-        | Operator::F64x2ConvertLowI32x4U
-        | Operator::I32x4TruncSatF64x2SZero
-        | Operator::I32x4TruncSatF64x2UZero => {
+        | Operator::F64x2ConvertLowI32x4U => {
             return Err(wasm_unsupported!("proposed simd operator {:?}", op));
         }
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
