@@ -2682,9 +2682,9 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::I32x4MinU
         | Operator::I32x4MaxS
         | Operator::I32x4MaxU
-        | Operator::F32x4ConvertI32x4S
-        | Operator::F32x4ConvertI32x4U
         | Operator::I32x4Bitmask
+        | Operator::I32x4TruncSatF32x4S
+        | Operator::I32x4TruncSatF32x4U
         | Operator::V128Load32Zero { .. } => I32X4,
 
         Operator::I64x2Splat
@@ -2731,8 +2731,8 @@ fn type_of(operator: &Operator) -> Type {
         | Operator::F32x4Max
         | Operator::F32x4PMin
         | Operator::F32x4PMax
-        | Operator::I32x4TruncSatF32x4S
-        | Operator::I32x4TruncSatF32x4U
+        | Operator::F32x4ConvertI32x4S
+        | Operator::F32x4ConvertI32x4U
         | Operator::F32x4Ceil
         | Operator::F32x4Floor
         | Operator::F32x4Trunc
