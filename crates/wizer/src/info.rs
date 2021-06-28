@@ -76,8 +76,6 @@ enum ModuleInfo<'a> {
 }
 
 struct AliasedModuleInfo {
-    /// This module's id.
-    pub id: usize,
     /// The id of the other module that this is an alias of.
     pub alias_of: usize,
 }
@@ -185,7 +183,6 @@ impl Module {
     pub fn new_aliased(cx: &mut ModuleContext, alias_of: Module) -> Self {
         let id = cx.arena.len();
         cx.arena.push(ModuleInfo::Aliased(AliasedModuleInfo {
-            id,
             alias_of: alias_of.id,
         }));
         Module { id }

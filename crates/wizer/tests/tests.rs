@@ -42,7 +42,7 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
         .define_name("dummy_func", wasmtime::Func::wrap(&store, || {}))?
         .define("env", "f", wasmtime::Func::wrap(&store, || {}))?
         .define_name("dummy_instance", dummy_instance)?;
-    let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build()?;
+    let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build();
     let wasi = wasmtime_wasi::Wasi::new(&store, ctx);
     wasi.add_to_linker(&mut linker)?;
     let instance = linker.instantiate(&module)?;

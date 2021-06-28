@@ -2,6 +2,7 @@
 //!
 //! Forked from `wasmtime/crates/fuzzing/src/oracles/dummy.rs`.
 
+use anyhow::Result;
 use std::fmt::Write;
 use wasmtime::*;
 
@@ -10,7 +11,7 @@ pub fn dummy_imports(
     store: &wasmtime::Store,
     module: &wasmtime::Module,
     linker: &mut wasmtime::Linker,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     log::debug!("Creating dummy imports");
 
     for imp in module.imports() {
@@ -22,7 +23,7 @@ pub fn dummy_imports(
                 }
 
                 linker
-                    .define(imp.module(), name, dummy_extern(store, imp.ty()))
+                    .define(imp.module(), name, dummy_extern(store, imp.ty())?)
                     .unwrap();
             }
             None => match imp.ty() {
@@ -37,7 +38,7 @@ pub fn dummy_imports(
                         }
 
                         linker
-                            .define(imp.module(), ty.name(), dummy_extern(store, ty.ty()))
+                            .define(imp.module(), ty.name(), dummy_extern(store, ty.ty())?)
                             .unwrap();
                     }
                 }
@@ -48,7 +49,7 @@ pub fn dummy_imports(
                     }
 
                     linker
-                        .define_name(imp.module(), dummy_extern(store, other))
+                        .define_name(imp.module(), dummy_extern(store, other)?)
                         .unwrap();
                 }
             },
@@ -59,15 +60,15 @@ pub fn dummy_imports(
 }
 
 /// Construct a dummy `Extern` from its type signature
-pub fn dummy_extern(store: &Store, ty: ExternType) -> Extern {
-    match ty {
+pub fn dummy_extern(store: &Store, ty: ExternType) -> Result<Extern> {
+    Ok(match ty {
         ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
         ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)),
-        ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)),
+        ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)?),
         ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)),
         ExternType::Module(module_ty) => Extern::Module(dummy_module(store, module_ty)),
-    }
+    })
 }
 
 /// Construct a dummy function for the given function type
@@ -112,7 +113,7 @@ pub fn dummy_table(store: &Store, ty: TableType) -> Table {
 }
 
 /// Construct a dummy memory for the given memory type.
-pub fn dummy_memory(store: &Store, ty: MemoryType) -> Memory {
+pub fn dummy_memory(store: &Store, ty: MemoryType) -> Result<Memory> {
     Memory::new(store, ty)
 }
 
@@ -436,7 +437,7 @@ mod tests {
     #[test]
     fn dummy_memory_import() {
         let store = store();
-        let memory = dummy_memory(&store, MemoryType::new(Limits::at_least(1)));
+        let memory = dummy_memory(&store, MemoryType::new(Limits::at_least(1))).unwrap();
         assert_eq!(memory.size(), 1);
     }
 

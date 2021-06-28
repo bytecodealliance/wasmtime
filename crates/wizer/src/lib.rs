@@ -532,7 +532,7 @@ impl Wizer {
                 };
                 ctx = ctx.preopened_dir(preopened, dir)?;
             }
-            let ctx = ctx.build()?;
+            let ctx = ctx.build();
             wasmtime_wasi::Wasi::new(store, ctx).add_to_linker(&mut linker)?;
         }
 
