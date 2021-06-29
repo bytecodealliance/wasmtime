@@ -327,10 +327,25 @@ impl<T> Store<T> {
         inner.limiter = Some(Box::new(limiter));
     }
 
-    /// Configure a function that runs each time WebAssembly code running on this [`Store`] calls
-    /// into native code.
+    /// Configure a function that runs each time the host resumes execution from
+    /// WebAssembly.
     ///
-    /// This function may return a [`Trap`], which terminates execution.
+    /// This hook is called in two circumstances:
+    ///
+    /// * When WebAssembly calls a function defined by the host, this hook is
+    ///   called before other host code runs.
+    /// * When WebAssembly returns back to the host after being called, this
+    ///   hook is called.
+    ///
+    /// This method can be used with [`Store::exiting_native_code_hook`] to track
+    /// execution time of WebAssembly, for example, by starting/stopping timers
+    /// in the enter/exit hooks.
+    ///
+    /// This function may return a [`Trap`]. If a trap is returned when an
+    /// import was called, it is immediately raised as-if the host import had
+    /// returned the trap. If a trap is returned after wasm returns to the host
+    /// then the wasm function's result is ignored and this trap is returned
+    /// instead.
     pub fn entering_native_code_hook(
         &mut self,
         hook: impl FnMut(&mut T) -> Result<(), Trap> + Send + Sync + 'static,
@@ -338,10 +353,25 @@ impl<T> Store<T> {
         self.inner.entering_native_hook = Some(Box::new(hook));
     }
 
-    /// Configure a function that runs before native code running on this [`Store`] returns to
-    /// WebAssembly code.
+    /// Configure a function that runs just before WebAssembly code starts
+    /// executing.
     ///
-    /// This function may return a [`Trap`], which terminates execution.
+    /// The closure provided is called in two circumstances:
+    ///
+    /// * When the host calls a WebAssembly function, the hook is called just
+    ///   before WebAssembly starts executing.
+    /// * When a host function returns back to WebAssembly this hook is called
+    ///   just before the return.
+    ///
+    /// This method can be used with [`Store::entering_native_code_hook`] to track
+    /// execution time of WebAssembly, for example, by starting/stopping timers
+    /// in the enter/exit hooks.
+    ///
+    /// This function may return a [`Trap`]. If a trap is returned when an
+    /// imported host function is returning, then the imported host function's
+    /// result is ignored and the trap is raised. If a trap is returned when
+    /// the host is about to start executing WebAssembly, then no WebAssembly
+    /// code is run and the trap is returned instead.
     pub fn exiting_native_code_hook(
         &mut self,
         hook: impl FnMut(&mut T) -> Result<(), Trap> + Send + Sync + 'static,
