@@ -93,3 +93,9 @@ name = "cranelift-fuzzgen"
 path = "fuzz_targets/cranelift-fuzzgen.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "cranelift-fuzzgen-verify"
+path = "fuzz_targets/cranelift-fuzzgen-verify.rs"
+test = false
+doc = false

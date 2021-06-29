@@ -3,7 +3,7 @@ use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::data_value::DataValue;
 use cranelift::codegen::ir::types::*;
-use cranelift::codegen::{ir::Function, verify_function};
+use cranelift::codegen::ir::Function;
 use cranelift::prelude::*;
 
 mod function_generator;
@@ -41,12 +41,6 @@ where
         Self { u }
     }
 
-    fn verify_function(&self, func: &Function) -> Result<()> {
-        let flags = settings::Flags::new(settings::builder());
-        verify_function(&func, &flags)?;
-        Ok(())
-    }
-
     fn generate_test_inputs(&mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
         // TODO: More test cases?
         let num_tests = self.u.int_in_range(1..=10)?;
@@ -76,8 +70,6 @@ where
 
     pub fn generate_test(mut self) -> Result<TestCase> {
         let func = FunctionGenerator::new(&mut self.u).generate()?;
-        self.verify_function(&func)?;
-
         let inputs = self.generate_test_inputs(&func.signature)?;
 
         Ok(TestCase { func, inputs })
