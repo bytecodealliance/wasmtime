@@ -1,12 +1,12 @@
 # `cranelift-fuzzgen`
 
-This crate implements a generator to create random cranelift modules
+This crate implements a generator to create random Cranelift modules.
 
 ## `gen-testcase`
 
-This is a util that allows you to quickly test changes in the fuzzgen library.
+This is a utility that allows you to quickly test changes in the fuzzgen library.
 
-It can be run without input, in which case it will generate a random cranelift module, a few test cases,
+It can be run without input, in which case it will generate a random Cranelift module, a few test cases,
 and will print the result as a clif file to stdout.
 
 You can run it in this mode by running the following command in the current directory:
