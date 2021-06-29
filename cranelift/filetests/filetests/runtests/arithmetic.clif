@@ -1,0 +1,305 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64 machinst
+
+function %add_i64(i64, i64) -> i64 {
+block0(v0: i64,v1: i64):
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %add_i64(0, 0) == 0
+; run: %add_i64(0, 1) == 1
+; run: %add_i64(-1, 0) == -1
+; run: %add_i64(-1, 1) == 0
+; run: %add_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == -2
+; run: %add_i64(0x7FFFFFFF_FFFFFFFF, 0x80000000_00000000) == -1
+; run: %add_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == -1
+; run: %add_i64(0xA00A00A0_0A00A00A, 0x0BB0BB0B_B0BB0BB0) == 0xABBABBAB_BABBABBA
+; run: %add_i64(0xC0FFEEEE_C0FFEEEE, 0x1DCB1111_1DCB1111) == 0xDECAFFFF_DECAFFFF
+
+function %add_i32(i32, i32) -> i32 {
+block0(v0: i32,v1: i32):
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %add_i32(0, 0) == 0
+; run: %add_i32(0, 1) == 1
+; run: %add_i32(-1, 0) == -1
+; run: %add_i32(-1, 1) == 0
+; run: %add_i32(0x7FFFFFFF, 0x7FFFFFFF) == -2
+; run: %add_i32(0x7FFFFFFF, 0x80000000) == -1
+; run: %add_i32(0x01234567, 0xFEDCBA98) == -1
+; run: %add_i32(0xA00A00A0, 0x0BB0BB0B) == 0xABBABBAB
+; run: %add_i32(0xC0FFEEEE, 0x1DCB1111) == 0xDECAFFFF
+
+function %add_i16(i16, i16) -> i16 {
+block0(v0: i16,v1: i16):
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %add_i16(0, 0) == 0
+; run: %add_i16(0, 1) == 1
+; run: %add_i16(-1, 0) == -1
+; run: %add_i16(-1, 1) == 0
+; run: %add_i16(0x7FFF, 0x7FFF) == -2
+; run: %add_i16(0x7FFF, 0x8000) == -1
+; run: %add_i16(0x0123, 0xFEDC) == -1
+; run: %add_i16(0xA00A, 0x0BB0) == 0xABBA
+; run: %add_i16(0xC0FF, 0x1DCB) == 0xDECA
+
+function %add_i8(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+    v2 = iadd v0, v1
+    return v2
+}
+; run: %add_i8(0, 0) == 0
+; run: %add_i8(0, 1) == 1
+; run: %add_i8(-1, 0) == -1
+; run: %add_i8(-1, 1) == 0
+; run: %add_i8(0x7F, 0x7F) == -2
+; run: %add_i8(0x7F, 0x80) == -1
+; run: %add_i8(0x01, 0xFE) == -1
+; run: %add_i8(0xA0, 0x0B) == 0xAB
+; run: %add_i8(0xC0, 0x1D) == 0xDD
+
+
+function %sub_i64(i64, i64) -> i64 {
+block0(v0: i64,v1: i64):
+    v2 = isub v0, v1
+    return v2
+}
+; run: %sub_i64(0, 0) == 0
+; run: %sub_i64(0, 1) == -1
+; run: %sub_i64(1, 0) == 1
+; run: %sub_i64(-1, 0) == -1
+; run: %sub_i64(-1, 1) == -2
+; run: %sub_i64(0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == 1
+; run: %sub_i64(0xFFFFFFFF_FFFFFFFF, 0xFEDCBA98_76543210) == 0x01234567_89ABCDEF
+; run: %sub_i64(0xABBABBAB_BABBABBA, 0x0BB0BB0B_B0BB0BB0) == 0xA00A00A0_0A00A00A
+; run: %sub_i64(0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF) == 0xE234EEEE_E234EEEF
+
+function %sub_i32(i32, i32) -> i32 {
+block0(v0: i32,v1: i32):
+    v2 = isub v0, v1
+    return v2
+}
+; run: %sub_i32(0, 0) == 0
+; run: %sub_i32(0, 1) == -1
+; run: %sub_i32(1, 0) == 1
+; run: %sub_i32(-1, 0) == -1
+; run: %sub_i32(-1, 1) == -2
+; run: %sub_i32(0x80000000, 0x7FFFFFFF) == 1
+; run: %sub_i32(0xFFFFFFFF, 0xFEDCBA98) == 0x01234567
+; run: %sub_i32(0xABBABBAB, 0x0BB0BB0B) == 0xA00A00A0
+; run: %sub_i32(0xC0FFEEEE, 0xDECAFFFF) == 0xE234EEEF
+
+function %sub_i16(i16, i16) -> i16 {
+block0(v0: i16,v1: i16):
+    v2 = isub v0, v1
+    return v2
+}
+; run: %sub_i16(0, 0) == 0
+; run: %sub_i16(0, 1) == -1
+; run: %sub_i16(1, 0) == 1
+; run: %sub_i16(-1, 0) == -1
+; run: %sub_i16(-1, 1) == -2
+; run: %sub_i16(0x8000, 0x7FFF) == 1
+; run: %sub_i16(0xFFFF, 0xFEDC) == 0x0123
+; run: %sub_i16(0xABBA, 0x0BB0) == 0xA00A
+; run: %sub_i16(0xC0FF, 0xDECA) == 0xE235
+
+function %sub_i8(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+    v2 = isub v0, v1
+    return v2
+}
+; run: %sub_i8(0, 0) == 0
+; run: %sub_i8(0, 1) == -1
+; run: %sub_i8(1, 0) == 1
+; run: %sub_i8(-1, 0) == -1
+; run: %sub_i8(-1, 1) == -2
+; run: %sub_i8(0x80, 0x7F) == 1
+; run: %sub_i8(0xFF, 0xFE) == 0x01
+; run: %sub_i8(0xAB, 0x0B) == 0xA0
+; run: %sub_i8(0xC0, 0xDE) == 0xE2
+
+
+function %mul_i64(i64, i64) -> i64 {
+block0(v0: i64,v1: i64):
+    v2 = imul v0, v1
+    return v2
+}
+; run: %mul_i64(0, 0) == 0
+; run: %mul_i64(0, 1) == 0
+; run: %mul_i64(1, -1) == -1
+; run: %mul_i64(2, 2) == 4
+; run: %mul_i64(0x7FFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == 1
+; run: %mul_i64(0x80000000_00000000, 0x7FFFFFFF_FFFFFFFF) == 0x80000000_00000000
+; run: %mul_i64(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == 0x2236D88F_E5618CF0
+; run: %mul_i64(0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF) == 0xDB6B1E48_19BA1112
+
+function %mul_i32(i32, i32) -> i32 {
+block0(v0: i32,v1: i32):
+    v2 = imul v0, v1
+    return v2
+}
+; run: %mul_i32(0, 0) == 0
+; run: %mul_i32(0, 1) == 0
+; run: %mul_i32(1, -1) == -1
+; run: %mul_i32(2, 2) == 4
+; run: %mul_i32(0x7FFFFFFF, 0x7FFFFFFF) == 1
+; run: %mul_i32(0x80000000, 0x7FFFFFFF) == 0x80000000
+; run: %mul_i32(0x01234567, 0xFEDCBA98) == 0x23E20B28
+; run: %mul_i32(0xC0FFEEEE, 0xDECAFFFF) == 0x19BA1112
+
+function %mul_i16(i16, i16) -> i16 {
+block0(v0: i16,v1: i16):
+    v2 = imul v0, v1
+    return v2
+}
+; run: %mul_i16(0, 0) == 0
+; run: %mul_i16(0, 1) == 0
+; run: %mul_i16(1, -1) == -1
+; run: %mul_i16(2, 2) == 4
+; run: %mul_i16(0x7FFF, 0x7FFF) == 1
+; run: %mul_i16(0x8000, 0x7FFF) == 0x8000
+; run: %mul_i16(0x0123, 0xFEDC) == 0xB414
+; run: %mul_i16(0xC0FF, 0xDECA) == 0x6B36
+
+function %mul_i8(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+    v2 = imul v0, v1
+    return v2
+}
+; run: %mul_i8(0, 0) == 0
+; run: %mul_i8(0, 1) == 0
+; run: %mul_i8(1, -1) == -1
+; run: %mul_i8(2, 2) == 4
+; run: %mul_i8(0x7F, 0x7F) == 1
+; run: %mul_i8(0x80, 0x7F) == 0x80
+; run: %mul_i8(0x01, 0xFE) == 0xFE
+; run: %mul_i8(0xC0, 0xDE) == 0x80
+
+
+function %sdiv_i64(i64, i64) -> i64 {
+block0(v0: i64,v1: i64):
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_i64(0, 1) == 0
+; run: %sdiv_i64(2, 2) == 1
+; run: %sdiv_i64(1, -1) == -1
+; run: %sdiv_i64(3, 2) == 1
+; run: %sdiv_i64(19, 7) == 2
+; run: %sdiv_i64(3, -2) == -1
+; run: %sdiv_i64(-19, 7) == -2
+; run: %sdiv_i64(0xC0FFEEEE_DECAFFFF, 8) == 0xF81FFDDD_DBD96000
+; run: %sdiv_i64(0xC0FFEEEE_DECAFFFF, -8) == 0x7E00222_2426A000
+
+function %sdiv_i32(i32, i32) -> i32 {
+block0(v0: i32,v1: i32):
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_i32(0, 1) == 0
+; run: %sdiv_i32(2, 2) == 1
+; run: %sdiv_i32(1, -1) == -1
+; run: %sdiv_i32(3, 2) == 1
+; run: %sdiv_i32(19, 7) == 2
+; run: %sdiv_i32(3, -2) == -1
+; run: %sdiv_i32(-19, 7) == -2
+; run: %sdiv_i32(0xC0FFEEEE, 8) == 0xF81FFDDE
+; run: %sdiv_i32(0xC0FFEEEE, -8) == 0x7E00222
+
+function %sdiv_i16(i16, i16) -> i16 {
+block0(v0: i16,v1: i16):
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_i16(0, 1) == 0
+; run: %sdiv_i16(2, 2) == 1
+; run: %sdiv_i16(1, -1) == -1
+; run: %sdiv_i16(3, 2) == 1
+; run: %sdiv_i16(19, 7) == 2
+; run: %sdiv_i16(3, -2) == -1
+; run: %sdiv_i16(-19, 7) == -2
+; run: %sdiv_i16(0xC0FF, 8) == 0xF820
+; run: %sdiv_i16(0xC0FF, -8) == 0x07E0
+
+function %sdiv_i8(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+    v2 = sdiv v0, v1
+    return v2
+}
+; run: %sdiv_i8(0, 1) == 0
+; run: %sdiv_i8(2, 2) == 1
+; run: %sdiv_i8(1, -1) == -1
+; run: %sdiv_i8(3, 2) == 1
+; run: %sdiv_i8(19, 7) == 2
+; run: %sdiv_i8(3, -2) == -1
+; run: %sdiv_i8(-19, 7) == -2
+; run: %sdiv_i8(0xC0, 8) == 0xF8
+; run: %sdiv_i8(0xC0, -8) == 0x08
+
+
+function %udiv_i64(i64, i64) -> i64 {
+block0(v0: i64,v1: i64):
+    v2 = udiv v0, v1
+    return v2
+}
+; run: %udiv_i64(0, 1) == 0
+; run: %udiv_i64(2, 2) == 1
+; run: %udiv_i64(1, -1) == 0
+; run: %udiv_i64(3, 2) == 1
+; run: %udiv_i64(19, 7) == 2
+; run: %udiv_i64(3, -2) == 0
+; run: %udiv_i64(-19, 7) == 0x24924924_9249248F
+; run: %udiv_i64(0xC0FFEEEE_DECAFFFF, 8) == 0x181FFDDD_DBD95FFF
+; run: %udiv_i64(0xC0FFEEEE_DECAFFFF, -8) == 0
+
+function %udiv_i32(i32, i32) -> i32 {
+block0(v0: i32,v1: i32):
+    v2 = udiv v0, v1
+    return v2
+}
+; run: %udiv_i32(0, 1) == 0
+; run: %udiv_i32(2, 2) == 1
+; run: %udiv_i32(1, -1) == 0
+; run: %udiv_i32(3, 2) == 1
+; run: %udiv_i32(19, 7) == 2
+; run: %udiv_i32(3, -2) == 0
+; run: %udiv_i32(-19, 7) == 0x24924921
+; run: %udiv_i32(0xC0FFEEEE, 8) == 0x181FFDDD
+; run: %udiv_i32(0xC0FFEEEE, -8) == 0
+
+function %udiv_i16(i16, i16) -> i16 {
+block0(v0: i16,v1: i16):
+    v2 = udiv v0, v1
+    return v2
+}
+; run: %udiv_i16(0, 1) == 0
+; run: %udiv_i16(2, 2) == 1
+; run: %udiv_i16(1, -1) == 0
+; run: %udiv_i16(3, 2) == 1
+; run: %udiv_i16(19, 7) == 2
+; run: %udiv_i16(3, -2) == 0
+; run: %udiv_i16(-19, 7) == 0x248F
+; run: %udiv_i16(0xC0FF, 8) == 0x181F
+; run: %udiv_i16(0xC0FF, -8) == 0
+
+function %udiv_i8(i8, i8) -> i8 {
+block0(v0: i8,v1: i8):
+    v2 = udiv v0, v1
+    return v2
+}
+; run: %udiv_i8(0, 1) == 0
+; run: %udiv_i8(2, 2) == 1
+; run: %udiv_i8(1, -1) == 0
+; run: %udiv_i8(3, 2) == 1
+; run: %udiv_i8(19, 7) == 2
+; run: %udiv_i8(3, -2) == 0
+; run: %udiv_i8(-19, 7) == 0x21
+; run: %udiv_i8(0xC0, 8) == 0x18
+; run: %udiv_i8(0xC0, -8) == 0
