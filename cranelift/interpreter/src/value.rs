@@ -119,6 +119,12 @@ macro_rules! unary_match {
     };
 }
 macro_rules! binary_match {
+    ( $op:ident($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
+        match ($arg1, $arg2) {
+            $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(DataValue::$data_value_ty(a.$op(*b))) } )*
+            _ => unimplemented!()
+        }
+    };
     ( $op:tt($arg1:expr, $arg2:expr); [ $( $data_value_ty:ident ),* ] ) => {
         match ($arg1, $arg2) {
             $( (DataValue::$data_value_ty(a), DataValue::$data_value_ty(b)) => { Ok(DataValue::$data_value_ty(a $op b)) } )*
@@ -272,19 +278,19 @@ impl Value for DataValue {
     }
 
     fn add(self, other: Self) -> ValueResult<Self> {
-        binary_match!(+(&self, &other); [I8, I16, I32, I64]) // TODO: floats must handle NaNs, +/-0
+        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64]) // TODO: floats must handle NaNs, +/-0
     }
 
     fn sub(self, other: Self) -> ValueResult<Self> {
-        binary_match!(-(&self, &other); [I8, I16, I32, I64]) // TODO: floats must handle NaNs, +/-0
+        binary_match!(wrapping_sub(&self, &other); [I8, I16, I32, I64]) // TODO: floats must handle NaNs, +/-0
     }
 
     fn mul(self, other: Self) -> ValueResult<Self> {
-        binary_match!(*(&self, &other); [I8, I16, I32, I64])
+        binary_match!(wrapping_mul(&self, &other); [I8, I16, I32, I64])
     }
 
     fn div(self, other: Self) -> ValueResult<Self> {
-        binary_match!(/(&self, &other); [I8, I16, I32, I64])
+        binary_match!(/(&self, &other); [I8, I16, I32, I64, U8, U16, U32, U64])
     }
 
     fn rem(self, other: Self) -> ValueResult<Self> {
