@@ -11,10 +11,20 @@ use cranelift_interpreter::interpreter::{Interpreter, InterpreterState};
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_interpreter::step::CraneliftTrap;
 
+#[derive(Debug)]
 enum RunResult {
     Success(Vec<DataValue>),
     Trap(CraneliftTrap),
     Error(Box<dyn std::error::Error>),
+}
+
+impl RunResult {
+    pub fn unwrap(self) -> Vec<DataValue> {
+        match self {
+            RunResult::Success(d) => d,
+            _ => panic!("Expected RunResult::Success in unwrap but got: {:?}", self),
+        }
+    }
 }
 
 fn run_in_interpreter(interpreter: &mut Interpreter, args: &[DataValue]) -> RunResult {
@@ -31,7 +41,6 @@ fn run_in_interpreter(interpreter: &mut Interpreter, args: &[DataValue]) -> RunR
 }
 
 fn run_in_host(compiled_fn: &CompiledFunction, args: &[DataValue]) -> RunResult {
-    // TODO: What happens if we trap here?
     let res = compiled_fn.call(args);
     RunResult::Success(res)
 }
@@ -52,23 +61,25 @@ fuzz_target!(|testcase: TestCase| {
 
     for args in &testcase.inputs {
         let int_res = run_in_interpreter(&mut interpreter, args);
-        if let RunResult::Error(e) = int_res {
-            panic!("interpreter failed: {}", e);
+        match int_res {
+            RunResult::Success(_) => {}
+            RunResult::Trap(_) => {
+                // We currently ignore inputs that trap the interpreter
+                // We could catch traps in the host run and compare them to the
+                // interpreter traps, but since we already test trap cases with
+                // wasm tests and wasm-level fuzzing, the amount of effort does
+                // not justify implementing it again here.
+                return;
+            }
+            RunResult::Error(_) => panic!("interpreter failed: {:?}", int_res),
         }
 
         let host_res = run_in_host(&compiled_fn, args);
-        if let RunResult::Error(e) = host_res {
-            panic!("host failed: {}", e);
+        match host_res {
+            RunResult::Success(_) => {}
+            _ => panic!("host failed: {:?}", host_res),
         }
 
-        match (int_res, host_res) {
-            (RunResult::Success(lhs), RunResult::Success(rhs)) if lhs == rhs => {
-                return;
-            }
-            (RunResult::Trap(lhs), RunResult::Trap(rhs)) if lhs == rhs => {
-                return;
-            }
-            _ => panic!("Host and Interpreter disagree"),
-        }
+        assert_eq!(int_res.unwrap(), host_res.unwrap());
     }
 });
