@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use cranelift::codegen::data_value::DataValue;
+use cranelift_codegen::data_value::DataValue;
 use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompiler};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;

@@ -3687,6 +3687,9 @@ name = "wasmtime-fuzz"
 version = "0.0.0"
 dependencies = [
  "cranelift-codegen",
+ "cranelift-filetests",
+ "cranelift-fuzzgen",
+ "cranelift-interpreter",
  "cranelift-reader",
  "cranelift-wasm",
  "libfuzzer-sys",
