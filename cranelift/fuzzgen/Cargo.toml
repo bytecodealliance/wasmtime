@@ -10,10 +10,6 @@ edition = "2018"
 publish=false
 
 
-[[bin]]
-name = "gen_testcase"
-path = "src/gen_testcase.rs"
-
 [dependencies]
 cranelift = { path = "../umbrella", version = "0.75.0" }
 
