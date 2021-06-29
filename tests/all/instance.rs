@@ -56,6 +56,7 @@ fn initializes_linear_memory_paged() -> Result<()> {
 }
 
 #[test]
+#[cfg(not(target_os = "openbsd"))]
 fn linear_memory_limits() -> Result<()> {
     // this test will allocate 4GB of virtual memory space, and may not work in
     // situations like CI QEMU emulation where it triggers SIGKILL.

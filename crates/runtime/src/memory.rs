@@ -112,7 +112,7 @@ impl MmapMemory {
             .and_then(|i| i.checked_add(offset_guard_bytes))
             .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
 
-        let mut mmap = Mmap::accessible_reserved(0, request_bytes)?;
+        let mut mmap = Mmap::accessible_reserved(0, request_bytes, /* iS_stack = */ false)?;
         if minimum > 0 {
             mmap.make_accessible(pre_guard_bytes, minimum)?;
         }
@@ -149,7 +149,8 @@ impl RuntimeLinearMemory for MmapMemory {
                 .checked_add(self.extra_to_reserve_on_growth)?
                 .checked_add(self.offset_guard_size)?;
 
-            let mut new_mmap = Mmap::accessible_reserved(0, request_bytes).ok()?;
+            let mut new_mmap =
+                Mmap::accessible_reserved(0, request_bytes, /* is_stack = */ false).ok()?;
             new_mmap
                 .make_accessible(self.pre_guard_size, new_size)
                 .ok()?;

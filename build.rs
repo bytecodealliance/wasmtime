@@ -159,7 +159,7 @@ fn write_testsuite_tests(
 
     writeln!(out, "#[test]")?;
     // Ignore when using QEMU for running tests (limited memory).
-    if ignore(testsuite, &testname, strategy) {
+    if ignore(testsuite, &testname, strategy) || (pooling && cfg!(target_os = "openbsd")) {
         writeln!(out, "#[ignore]")?;
     }
 

@@ -1,4 +1,5 @@
 use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
+use crate::STACK_MMAP_FLAGS;
 use std::cell::RefCell;
 use std::convert::TryInto;
 use std::io;
@@ -309,8 +310,8 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
         let ptr = libc::mmap(
             null_mut(),
             alloc_size,
-            libc::PROT_NONE,
-            libc::MAP_PRIVATE | libc::MAP_ANON,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANON | STACK_MMAP_FLAGS,
             -1,
             0,
         );
@@ -318,20 +319,23 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
             return Err(Trap::oom());
         }
 
-        // Prepare the stack with readable/writable memory and then register it
+        // Prepare the stack with a guard page and then register it
         // with `sigaltstack`.
         let stack_ptr = (ptr as usize + guard_size) as *mut libc::c_void;
-        let r = libc::mprotect(
-            stack_ptr,
-            MIN_STACK_SIZE,
-            libc::PROT_READ | libc::PROT_WRITE,
-        );
-        assert_eq!(
-            r,
-            0,
-            "mprotect to configure memory for sigaltstack failed: {}",
-            io::Error::last_os_error()
-        );
+        #[cfg(not(target_os = "openbsd"))]
+        {
+            let r = libc::mprotect(
+                stack_ptr,
+                MIN_STACK_SIZE,
+                libc::PROT_READ | libc::PROT_WRITE,
+            );
+            assert_eq!(
+                r,
+                0,
+                "mprotect to configure memory for sigaltstack failed: {}",
+                io::Error::last_os_error()
+            );
+        }
         let new_stack = libc::stack_t {
             ss_sp: stack_ptr,
             ss_flags: 0,

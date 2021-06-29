@@ -289,6 +289,7 @@ struct InstancePool {
 }
 
 impl InstancePool {
+    #[cfg(not(target_os = "openbsd"))]
     fn new(
         module_limits: &ModuleLimits,
         instance_limits: &InstanceLimits,
@@ -323,8 +324,12 @@ impl InstancePool {
             .checked_mul(max_instances)
             .ok_or_else(|| anyhow!("total size of instance data exceeds addressable memory"))?;
 
-        let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
-            .context("failed to create instance pool mapping")?;
+        let mapping = Mmap::accessible_reserved(
+            allocation_size,
+            allocation_size,
+            /* is_stack = */ false,
+        )
+        .context("failed to create instance pool mapping")?;
 
         let pool = Self {
             mapping,
@@ -342,6 +347,15 @@ impl InstancePool {
         }
 
         Ok(pool)
+    }
+
+    #[cfg(target_os = "openbsd")]
+    fn new(
+        module_limits: &ModuleLimits,
+        instance_limits: &InstanceLimits,
+        tunables: &Tunables,
+    ) -> Result<Self> {
+        panic!("Pooling allocator not supported on OpenBSD due to limits in stack mmap'ing.");
     }
 
     unsafe fn instance(&self, index: usize) -> &mut Instance {
@@ -673,7 +687,7 @@ impl MemoryPool {
             })?;
 
         // Create a completely inaccessible region to start
-        let mapping = Mmap::accessible_reserved(0, allocation_size)
+        let mapping = Mmap::accessible_reserved(0, allocation_size, /* is_stack = */ false)
             .context("failed to create memory pool mapping")?;
 
         let pool = Self {
@@ -743,8 +757,12 @@ impl TablePool {
             .and_then(|c| c.checked_mul(max_instances))
             .ok_or_else(|| anyhow!("total size of instance tables exceeds addressable memory"))?;
 
-        let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
-            .context("failed to create table pool mapping")?;
+        let mapping = Mmap::accessible_reserved(
+            allocation_size,
+            allocation_size,
+            /* is_stack = */ false,
+        )
+        .context("failed to create table pool mapping")?;
 
         Ok(Self {
             mapping,
@@ -810,10 +828,11 @@ impl StackPool {
             .checked_mul(max_instances)
             .ok_or_else(|| anyhow!("total size of execution stacks exceeds addressable memory"))?;
 
-        let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
-            .context("failed to create stack pool mapping")?;
+        let mapping =
+            Mmap::accessible_reserved(allocation_size, allocation_size, /* is_stack = */ true)
+                .context("failed to create stack pool mapping")?;
 
-        // Set up the stack guard pages
+        // Set up the stack guard pages.
         if allocation_size > 0 {
             unsafe {
                 for i in 0..max_instances {
@@ -1047,7 +1066,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "openbsd")))]
 mod test {
     use super::*;
     use crate::{Imports, VMSharedSignatureIndex};
