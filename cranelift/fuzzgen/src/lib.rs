@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::function_generator::FunctionGenerator;
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
@@ -6,6 +7,7 @@ use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::Function;
 use cranelift::prelude::*;
 
+mod config;
 mod function_generator;
 
 pub type TestCaseInput = Vec<DataValue>;
@@ -31,6 +33,7 @@ where
     'data: 'r,
 {
     u: &'r mut Unstructured<'data>,
+    config: Config,
 }
 
 impl<'r, 'data> FuzzGen<'r, 'data>
@@ -38,12 +41,14 @@ where
     'data: 'r,
 {
     pub fn new(u: &'r mut Unstructured<'data>) -> Self {
-        Self { u }
+        Self {
+            u,
+            config: Config::default(),
+        }
     }
 
     fn generate_test_inputs(&mut self, signature: &Signature) -> Result<Vec<TestCaseInput>> {
-        // TODO: More test cases?
-        let num_tests = self.u.int_in_range(1..=10)?;
+        let num_tests = self.u.int_in_range(self.config.test_case_inputs.clone())?;
         let mut inputs = Vec::with_capacity(num_tests);
 
         for _ in 0..num_tests {
@@ -69,7 +74,7 @@ where
     }
 
     pub fn generate_test(mut self) -> Result<TestCase> {
-        let func = FunctionGenerator::new(&mut self.u).generate()?;
+        let func = FunctionGenerator::new(&mut self.u, &self.config).generate()?;
         let inputs = self.generate_test_inputs(&func.signature)?;
 
         Ok(TestCase { func, inputs })

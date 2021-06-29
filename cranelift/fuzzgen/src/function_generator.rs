@@ -1,3 +1,4 @@
+use crate::config::Config;
 use anyhow::Result;
 use arbitrary::Unstructured;
 use cranelift::codegen::ir::types::*;
@@ -48,7 +49,7 @@ type OpcodeInserter = fn(
     &'static [Type],
 ) -> Result<()>;
 
-// TODO: Do we have a way to get this information automatically?
+// TODO: Derive this from the `cranelift-meta` generator.
 const OPCODE_SIGNATURES: &'static [(
     Opcode,
     &'static [Type], // Args
@@ -88,6 +89,7 @@ where
     'data: 'r,
 {
     u: &'r mut Unstructured<'data>,
+    config: &'r Config,
     vars: Vec<(Type, Variable)>,
 }
 
@@ -95,8 +97,12 @@ impl<'r, 'data> FunctionGenerator<'r, 'data>
 where
     'data: 'r,
 {
-    pub fn new(u: &'r mut Unstructured<'data>) -> Self {
-        Self { u, vars: vec![] }
+    pub fn new(u: &'r mut Unstructured<'data>, config: &'r Config) -> Self {
+        Self {
+            u,
+            config,
+            vars: vec![],
+        }
     }
 
     fn generate_callconv(&mut self) -> Result<CallConv> {
@@ -130,12 +136,11 @@ where
         let callconv = self.generate_callconv()?;
         let mut sig = Signature::new(callconv);
 
-        // TODO: Unconstrain this
-        for _ in 0..self.u.int_in_range(0..=8)? {
+        for _ in 0..self.u.int_in_range(self.config.signature_params.clone())? {
             sig.params.push(self.generate_abi_param()?);
         }
 
-        for _ in 0..self.u.int_in_range(0..=8)? {
+        for _ in 0..self.u.int_in_range(self.config.signature_rets.clone())? {
             sig.returns.push(self.generate_abi_param()?);
         }
 
@@ -246,7 +251,6 @@ where
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
-        // TODO: Cleanup
         for (i, _) in sig.params.iter().enumerate() {
             let var = block_vars[i];
             let block_param = builder.block_params(block0)[i];
@@ -254,8 +258,10 @@ where
             let _ = builder.use_var(block_vars[i]);
         }
 
-        // TODO: Unconstrain this
-        for _ in 0..self.u.int_in_range(0..=16)? {
+        for _ in 0..self
+            .u
+            .int_in_range(self.config.instructions_per_block.clone())?
+        {
             self.generate_instruction(&mut builder)?;
         }
 
