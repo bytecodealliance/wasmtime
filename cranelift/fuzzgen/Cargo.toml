@@ -18,5 +18,5 @@ path = "src/gen_testcase.rs"
 cranelift = { path = "../umbrella", version = "0.75.0" }
 
 anyhow = "1.0.19"
-arbitrary = { version = "1.0.0", features = ["derive"] }
+arbitrary = "1.0.0"
 rand = "0.8.0"

@@ -2,10 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 
-use arbitrary::Unstructured;
 use cranelift::codegen::data_value::DataValue;
-use cranelift::codegen::ir::Function;
-use cranelift::prelude::*;
 use cranelift_filetests::function_runner::{CompiledFunction, SingleFunctionCompiler};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
@@ -39,20 +36,7 @@ fn run_in_host(compiled_fn: &CompiledFunction, args: &[DataValue]) -> RunResult 
     RunResult::Success(res)
 }
 
-fuzz_target!(|data: &[u8]| {
-    let mut u = Unstructured::new(data);
-
-    let mut fuzzgen = FuzzGen::new(&mut u);
-    let testcase = match fuzzgen.generate_test() {
-        Ok(test) => test,
-
-        // arbitrary Errors mean that the fuzzer didn't give us enough input data
-        Err(e) if e.is::<arbitrary::Error>() => {
-            return;
-        }
-        Err(e) => std::panic::panic_any(e),
-    };
-
+fuzz_target!(|testcase: TestCase| {
     let mut interpreter = {
         let mut env = FunctionStore::default();
         env.add(testcase.func.name.to_string(), &testcase.func);
