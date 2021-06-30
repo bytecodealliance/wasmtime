@@ -2201,9 +2201,9 @@ dependencies = [
 
 [[package]]
 name = "posish"
-version = "0.15.1"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1ae2d51d465d59b35ec50c8c525666692042181b1a9a093b1a1571163293ba1"
+checksum = "c9fd5be0a6fa79962a8e67f67bde3e08c47b21c7fa5b0e0efc3e4788dc952c3e"
 dependencies = [
  "bitflags",
  "cc",
@@ -3356,7 +3356,6 @@ dependencies = [
  "fs-set-times",
  "io-lifetimes",
  "lazy_static",
- "libc",
  "posish",
  "system-interface",
  "tempfile",
@@ -3374,7 +3373,7 @@ dependencies = [
  "cap-rand",
  "cap-std",
  "io-lifetimes",
- "libc",
+ "posish",
  "thiserror",
  "tracing",
  "wiggle",

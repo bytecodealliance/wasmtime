@@ -26,8 +26,7 @@ bitflags = "1.2"
 io-lifetimes = "0.2.0"
 
 [target.'cfg(unix)'.dependencies]
-libc = "0.2"
-posish = "0.15.1"
+posish = "0.15.2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
