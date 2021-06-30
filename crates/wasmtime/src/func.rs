@@ -1606,7 +1606,7 @@ impl<T> Caller<'_, T> {
     ///
     /// For more information see
     /// [`Store::out_of_fuel_async_yield`](crate::Store::out_of_fuel_async_yield)
-    pub fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
+    pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
         self.store
             .out_of_fuel_async_yield(injection_count, fuel_to_inject)
     }
