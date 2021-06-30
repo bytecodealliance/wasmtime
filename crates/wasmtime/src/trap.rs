@@ -264,6 +264,16 @@ impl Trap {
         }
     }
 
+    /// Displays the error reason for this trap.
+    ///
+    /// In particular, it differs from this struct's `Display` by *only*
+    /// showing the reason, and not the full backtrace. This is useful to
+    /// customize the way the trap is reported, for instance to display a short
+    /// message for user-facing errors.
+    pub fn display_reason<'a>(&'a self) -> impl fmt::Display + 'a {
+        &self.inner.reason
+    }
+
     /// Returns a list of function frames in WebAssembly code that led to this
     /// trap happening.
     pub fn trace(&self) -> &[FrameInfo] {
