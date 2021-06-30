@@ -106,7 +106,7 @@ The same effect can be achieved with Rust. Firstly, go ahead and create a new
 binary crate:
 
 ```
-$ cargo new --bin demo
+$ cargo new demo
 ```
 
 You can also clone the Rust code with the crate preset for you from
