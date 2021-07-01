@@ -95,8 +95,8 @@ async fn run_wasm(inputs: Inputs) -> Result<(), Error> {
     let mut store = Store::new(&inputs.env.engine, wasi);
 
     // WebAssembly execution will be paused for an async yield every time it
-    // consumes 10000 fuel. Fuel will be refilled u32::MAX times.
-    store.out_of_fuel_async_yield(u32::MAX, 10000);
+    // consumes 10000 fuel. Fuel will be refilled u64::MAX times.
+    store.out_of_fuel_async_yield(u64::MAX, 10000);
 
     // Instantiate into our own unique store using the shared linker, afterwards
     // acquiring the `_start` function for the module and executing it.
