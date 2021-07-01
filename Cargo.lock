@@ -641,6 +641,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-fuzzgen"
+version = "0.75.0"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "cranelift",
+ "rand 0.8.3",
+]
+
+[[package]]
 name = "cranelift-interpreter"
 version = "0.75.0"
 dependencies = [
@@ -747,6 +757,7 @@ dependencies = [
  "cranelift-entity",
  "cranelift-filetests",
  "cranelift-frontend",
+ "cranelift-fuzzgen",
  "cranelift-interpreter",
  "cranelift-jit",
  "cranelift-module",
@@ -3676,6 +3687,9 @@ name = "wasmtime-fuzz"
 version = "0.0.0"
 dependencies = [
  "cranelift-codegen",
+ "cranelift-filetests",
+ "cranelift-fuzzgen",
+ "cranelift-interpreter",
  "cranelift-reader",
  "cranelift-wasm",
  "libfuzzer-sys",

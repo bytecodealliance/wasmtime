@@ -30,7 +30,7 @@ use std::path::Path;
 use std::time;
 
 mod concurrent;
-mod function_runner;
+pub mod function_runner;
 mod match_directive;
 mod runner;
 mod runone;

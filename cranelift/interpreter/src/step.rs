@@ -664,7 +664,7 @@ impl<'a, V> ControlFlow<'a, V> {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum CraneliftTrap {
     #[error("user code: {0}")]
     User(TrapCode),

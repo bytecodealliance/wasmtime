@@ -1,0 +1,18 @@
+[package]
+name = "cranelift-fuzzgen"
+version = "0.75.0"
+authors = ["The Wasmtime Project Developers"]
+description = "Cranelift module generator"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+readme = "README.md"
+edition = "2018"
+publish = false
+
+
+[dependencies]
+cranelift = { path = "../umbrella", version = "0.75.0" }
+
+anyhow = "1.0.19"
+arbitrary = "1.0.0"
+rand = "0.8.0"

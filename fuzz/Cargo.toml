@@ -12,6 +12,9 @@ cargo-fuzz = true
 cranelift-codegen = { path = "../cranelift/codegen" }
 cranelift-reader = { path = "../cranelift/reader" }
 cranelift-wasm = { path = "../cranelift/wasm" }
+cranelift-filetests = { path = "../cranelift/filetests" }
+cranelift-interpreter = { path = "../cranelift/interpreter" }
+cranelift-fuzzgen = { path = "../cranelift/fuzzgen" }
 libfuzzer-sys = "0.4.0"
 target-lexicon = "0.12"
 peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
@@ -82,5 +85,17 @@ doc = false
 [[bin]]
 name = "instantiate-maybe-invalid"
 path = "fuzz_targets/instantiate-maybe-invalid.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cranelift-fuzzgen"
+path = "fuzz_targets/cranelift-fuzzgen.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cranelift-fuzzgen-verify"
+path = "fuzz_targets/cranelift-fuzzgen-verify.rs"
 test = false
 doc = false
