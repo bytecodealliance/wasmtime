@@ -2860,6 +2860,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::ScalarToVector
         | Opcode::Snarrow
         | Opcode::Unarrow
+        | Opcode::Uunarrow
         | Opcode::SwidenLow
         | Opcode::SwidenHigh
         | Opcode::UwidenLow

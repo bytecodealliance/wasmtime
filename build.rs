@@ -233,7 +233,6 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             | ("simd", "simd_i16x8_extmul_i8x16")
             | ("simd", "simd_i32x4_extadd_pairwise_i16x8")
             | ("simd", "simd_i32x4_extmul_i16x8")
-            | ("simd", "simd_i32x4_trunc_sat_f64x2")
             | ("simd", "simd_i64x2_extmul_i32x4") => return true,
 
             _ => {}

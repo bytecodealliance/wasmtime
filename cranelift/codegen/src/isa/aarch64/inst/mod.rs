@@ -332,8 +332,6 @@ pub enum VecMisc2 {
     Fsqrt,
     /// Reverse elements in 64-bit doublewords
     Rev64,
-    /// Shift left long (by element size)
-    Shll,
     /// Floating-point convert to signed integer, rounding toward zero
     Fcvtzs,
     /// Floating-point convert to unsigned integer, rounding toward zero
@@ -356,15 +354,48 @@ pub enum VecMisc2 {
     Cmeq0,
 }
 
-/// A Vector narrowing operation with two registers.
+/// A vector widening operation with one argument.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum VecMiscNarrowOp {
-    /// Extract Narrow
-    Xtn,
-    /// Signed saturating extract narrow
-    Sqxtn,
-    /// Signed saturating extract unsigned narrow
-    Sqxtun,
+pub enum VecRRLongOp {
+    /// Floating-point convert to higher precision long, 16-bit elements
+    Fcvtl16,
+    /// Floating-point convert to higher precision long, 32-bit elements
+    Fcvtl32,
+    /// Shift left long (by element size), 8-bit elements
+    Shll8,
+    /// Shift left long (by element size), 16-bit elements
+    Shll16,
+    /// Shift left long (by element size), 32-bit elements
+    Shll32,
+}
+
+/// A vector narrowing operation with one argument.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecRRNarrowOp {
+    /// Extract narrow, 16-bit elements
+    Xtn16,
+    /// Extract narrow, 32-bit elements
+    Xtn32,
+    /// Extract narrow, 64-bit elements
+    Xtn64,
+    /// Signed saturating extract narrow, 16-bit elements
+    Sqxtn16,
+    /// Signed saturating extract narrow, 32-bit elements
+    Sqxtn32,
+    /// Signed saturating extract narrow, 64-bit elements
+    Sqxtn64,
+    /// Signed saturating extract unsigned narrow, 16-bit elements
+    Sqxtun16,
+    /// Signed saturating extract unsigned narrow, 32-bit elements
+    Sqxtun32,
+    /// Signed saturating extract unsigned narrow, 64-bit elements
+    Sqxtun64,
+    /// Unsigned saturating extract narrow, 16-bit elements
+    Uqxtn16,
+    /// Unsigned saturating extract narrow, 32-bit elements
+    Uqxtn32,
+    /// Unsigned saturating extract narrow, 64-bit elements
+    Uqxtn64,
 }
 
 /// A vector operation on a pair of elements with one register.
@@ -1029,12 +1060,19 @@ pub enum Inst {
         size: VectorSize,
     },
 
-    /// Vector narrowing operation.
-    VecMiscNarrow {
-        op: VecMiscNarrowOp,
+    /// Vector widening operation.
+    VecRRLong {
+        op: VecRRLongOp,
         rd: Writable<Reg>,
         rn: Reg,
-        size: VectorSize,
+        high_half: bool,
+    },
+
+    /// Vector narrowing operation.
+    VecRRNarrow {
+        op: VecRRNarrowOp,
+        rd: Writable<Reg>,
+        rn: Reg,
         high_half: bool,
     },
 
@@ -2073,7 +2111,11 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_mod(rd);
             collector.add_use(rn);
         }
-        &Inst::VecMiscNarrow {
+        &Inst::VecRRLong { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
+        &Inst::VecRRNarrow {
             rd, rn, high_half, ..
         } => {
             collector.add_use(rn);
@@ -2868,7 +2910,15 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             map_mod(mapper, rd);
             map_use(mapper, rn);
         }
-        &mut Inst::VecMiscNarrow {
+        &mut Inst::VecRRLong {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
+        }
+        &mut Inst::VecRRNarrow {
             ref mut rd,
             ref mut rn,
             high_half,
@@ -3901,29 +3951,132 @@ impl Inst {
                 let rn = show_vreg_element(rn, mb_rru, src_idx, size);
                 format!("mov {}, {}", rd, rn)
             }
-            &Inst::VecMiscNarrow {
+            &Inst::VecRRLong {
                 op,
                 rd,
                 rn,
-                size,
                 high_half,
             } => {
-                let dest_size = if high_half {
-                    assert!(size.is_128bits());
-                    size
-                } else {
-                    size.halve()
+                let (op, rd_size, size, suffix) = match (op, high_half) {
+                    (VecRRLongOp::Fcvtl16, false) => {
+                        ("fcvtl", VectorSize::Size32x4, VectorSize::Size16x4, "")
+                    }
+                    (VecRRLongOp::Fcvtl16, true) => {
+                        ("fcvtl2", VectorSize::Size32x4, VectorSize::Size16x8, "")
+                    }
+                    (VecRRLongOp::Fcvtl32, false) => {
+                        ("fcvtl", VectorSize::Size64x2, VectorSize::Size32x2, "")
+                    }
+                    (VecRRLongOp::Fcvtl32, true) => {
+                        ("fcvtl2", VectorSize::Size64x2, VectorSize::Size32x4, "")
+                    }
+                    (VecRRLongOp::Shll8, false) => {
+                        ("shll", VectorSize::Size16x8, VectorSize::Size8x8, ", #8")
+                    }
+                    (VecRRLongOp::Shll8, true) => {
+                        ("shll2", VectorSize::Size16x8, VectorSize::Size8x16, ", #8")
+                    }
+                    (VecRRLongOp::Shll16, false) => {
+                        ("shll", VectorSize::Size32x4, VectorSize::Size16x4, ", #16")
+                    }
+                    (VecRRLongOp::Shll16, true) => {
+                        ("shll2", VectorSize::Size32x4, VectorSize::Size16x8, ", #16")
+                    }
+                    (VecRRLongOp::Shll32, false) => {
+                        ("shll", VectorSize::Size64x2, VectorSize::Size32x2, ", #32")
+                    }
+                    (VecRRLongOp::Shll32, true) => {
+                        ("shll2", VectorSize::Size64x2, VectorSize::Size32x4, ", #32")
+                    }
                 };
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, dest_size);
-                let rn = show_vreg_vector(rn, mb_rru, size.widen());
-                let op = match (op, high_half) {
-                    (VecMiscNarrowOp::Xtn, false) => "xtn",
-                    (VecMiscNarrowOp::Xtn, true) => "xtn2",
-                    (VecMiscNarrowOp::Sqxtn, false) => "sqxtn",
-                    (VecMiscNarrowOp::Sqxtn, true) => "sqxtn2",
-                    (VecMiscNarrowOp::Sqxtun, false) => "sqxtun",
-                    (VecMiscNarrowOp::Sqxtun, true) => "sqxtun2",
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
+                let rn = show_vreg_vector(rn, mb_rru, size);
+
+                format!("{} {}, {}{}", op, rd, rn, suffix)
+            }
+            &Inst::VecRRNarrow {
+                op,
+                rd,
+                rn,
+                high_half,
+            } => {
+                let (op, rd_size, size) = match (op, high_half) {
+                    (VecRRNarrowOp::Xtn16, false) => {
+                        ("xtn", VectorSize::Size8x8, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Xtn16, true) => {
+                        ("xtn2", VectorSize::Size8x16, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Xtn32, false) => {
+                        ("xtn", VectorSize::Size16x4, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Xtn32, true) => {
+                        ("xtn2", VectorSize::Size16x8, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Xtn64, false) => {
+                        ("xtn", VectorSize::Size32x2, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Xtn64, true) => {
+                        ("xtn2", VectorSize::Size32x4, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Sqxtn16, false) => {
+                        ("sqxtn", VectorSize::Size8x8, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Sqxtn16, true) => {
+                        ("sqxtn2", VectorSize::Size8x16, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Sqxtn32, false) => {
+                        ("sqxtn", VectorSize::Size16x4, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Sqxtn32, true) => {
+                        ("sqxtn2", VectorSize::Size16x8, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Sqxtn64, false) => {
+                        ("sqxtn", VectorSize::Size32x2, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Sqxtn64, true) => {
+                        ("sqxtn2", VectorSize::Size32x4, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Sqxtun16, false) => {
+                        ("sqxtun", VectorSize::Size8x8, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Sqxtun16, true) => {
+                        ("sqxtun2", VectorSize::Size8x16, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Sqxtun32, false) => {
+                        ("sqxtun", VectorSize::Size16x4, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Sqxtun32, true) => {
+                        ("sqxtun2", VectorSize::Size16x8, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Sqxtun64, false) => {
+                        ("sqxtun", VectorSize::Size32x2, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Sqxtun64, true) => {
+                        ("sqxtun2", VectorSize::Size32x4, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Uqxtn16, false) => {
+                        ("uqxtn", VectorSize::Size8x8, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Uqxtn16, true) => {
+                        ("uqxtn2", VectorSize::Size8x16, VectorSize::Size16x8)
+                    }
+                    (VecRRNarrowOp::Uqxtn32, false) => {
+                        ("uqxtn", VectorSize::Size16x4, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Uqxtn32, true) => {
+                        ("uqxtn2", VectorSize::Size16x8, VectorSize::Size32x4)
+                    }
+                    (VecRRNarrowOp::Uqxtn64, false) => {
+                        ("uqxtn", VectorSize::Size32x2, VectorSize::Size64x2)
+                    }
+                    (VecRRNarrowOp::Uqxtn64, true) => {
+                        ("uqxtn2", VectorSize::Size32x4, VectorSize::Size64x2)
+                    }
                 };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
+                let rn = show_vreg_vector(rn, mb_rru, size);
+
                 format!("{} {}, {}", op, rd, rn)
             }
             &Inst::VecRRPair { op, rd, rn } => {
@@ -3999,45 +4152,34 @@ impl Inst {
                 format!("{} {}, {}, {}", op, rd, rn, rm)
             }
             &Inst::VecMisc { op, rd, rn, size } => {
-                let (op, rd_size, size, suffix) = match op {
-                    VecMisc2::Not => {
-                        let size = if size.is_128bits() {
+                let (op, size, suffix) = match op {
+                    VecMisc2::Not => (
+                        "mvn",
+                        if size.is_128bits() {
                             VectorSize::Size8x16
                         } else {
                             VectorSize::Size8x8
-                        };
-
-                        ("mvn", size, size, "")
-                    }
-                    VecMisc2::Neg => ("neg", size, size, ""),
-                    VecMisc2::Abs => ("abs", size, size, ""),
-                    VecMisc2::Fabs => ("fabs", size, size, ""),
-                    VecMisc2::Fneg => ("fneg", size, size, ""),
-                    VecMisc2::Fsqrt => ("fsqrt", size, size, ""),
-                    VecMisc2::Rev64 => ("rev64", size, size, ""),
-                    VecMisc2::Shll => (
-                        "shll",
-                        size.widen(),
-                        size,
-                        match size {
-                            VectorSize::Size8x8 => ", #8",
-                            VectorSize::Size16x4 => ", #16",
-                            VectorSize::Size32x2 => ", #32",
-                            _ => panic!("Unexpected vector size: {:?}", size),
                         },
+                        "",
                     ),
-                    VecMisc2::Fcvtzs => ("fcvtzs", size, size, ""),
-                    VecMisc2::Fcvtzu => ("fcvtzu", size, size, ""),
-                    VecMisc2::Scvtf => ("scvtf", size, size, ""),
-                    VecMisc2::Ucvtf => ("ucvtf", size, size, ""),
-                    VecMisc2::Frintn => ("frintn", size, size, ""),
-                    VecMisc2::Frintz => ("frintz", size, size, ""),
-                    VecMisc2::Frintm => ("frintm", size, size, ""),
-                    VecMisc2::Frintp => ("frintp", size, size, ""),
-                    VecMisc2::Cnt => ("cnt", size, size, ""),
-                    VecMisc2::Cmeq0 => ("cmeq", size, size, ", #0"),
+                    VecMisc2::Neg => ("neg", size, ""),
+                    VecMisc2::Abs => ("abs", size, ""),
+                    VecMisc2::Fabs => ("fabs", size, ""),
+                    VecMisc2::Fneg => ("fneg", size, ""),
+                    VecMisc2::Fsqrt => ("fsqrt", size, ""),
+                    VecMisc2::Rev64 => ("rev64", size, ""),
+                    VecMisc2::Fcvtzs => ("fcvtzs", size, ""),
+                    VecMisc2::Fcvtzu => ("fcvtzu", size, ""),
+                    VecMisc2::Scvtf => ("scvtf", size, ""),
+                    VecMisc2::Ucvtf => ("ucvtf", size, ""),
+                    VecMisc2::Frintn => ("frintn", size, ""),
+                    VecMisc2::Frintz => ("frintz", size, ""),
+                    VecMisc2::Frintm => ("frintm", size, ""),
+                    VecMisc2::Frintp => ("frintp", size, ""),
+                    VecMisc2::Cnt => ("cnt", size, ""),
+                    VecMisc2::Cmeq0 => ("cmeq", size, ", #0"),
                 };
-                let rd = show_vreg_vector(rd.to_reg(), mb_rru, rd_size);
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_vector(rn, mb_rru, size);
                 format!("{} {}, {}{}", op, rd, rn, suffix)
             }

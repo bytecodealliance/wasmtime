@@ -530,6 +530,7 @@ where
             arg(0)?,
             ValueConversionKind::Truncate(ctrl_ty),
         )?),
+        Opcode::Uunarrow => unimplemented!("Uunarrow"),
         Opcode::Uextend => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::ZeroExtend(ctrl_ty),
