@@ -392,7 +392,7 @@ fn iloop_with_fuel() {
 fn fuel_eventually_finishes() {
     let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
     let mut store = Store::new(&engine, ());
-    store.out_of_fuel_async_yield(u32::max_value(), 10);
+    store.out_of_fuel_async_yield(u64::max_value(), 10);
     let module = Module::new(
         &engine,
         "

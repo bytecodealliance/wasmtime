@@ -178,7 +178,7 @@ struct StoreInstance {
 enum OutOfGas {
     Trap,
     InjectFuel {
-        injection_count: u32,
+        injection_count: u64,
         fuel_to_inject: u64,
     },
 }
@@ -558,7 +558,7 @@ impl<T> Store<T> {
     ///
     /// This method will panic if it is not called on a store associated with an [async
     /// config](crate::Config::async_support).
-    pub fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
+    pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
         self.inner
             .out_of_fuel_async_yield(injection_count, fuel_to_inject)
     }
@@ -655,7 +655,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// runs out.
     ///
     /// For more information see [`Store::out_of_fuel_async_yield`]
-    pub fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
+    pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
         self.0
             .out_of_fuel_async_yield(injection_count, fuel_to_inject)
     }
@@ -838,7 +838,7 @@ impl StoreInnermost {
         self.out_of_gas_behavior = OutOfGas::Trap;
     }
 
-    fn out_of_fuel_async_yield(&mut self, injection_count: u32, fuel_to_inject: u64) {
+    fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
         assert!(
             self.async_support(),
             "cannot use `out_of_fuel_async_yield` without enabling async support in the config"
