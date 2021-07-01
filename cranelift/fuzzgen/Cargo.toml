@@ -7,7 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
-publish=false
+publish = false
 
 
 [dependencies]
