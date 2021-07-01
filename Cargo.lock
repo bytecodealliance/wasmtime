@@ -3249,12 +3249,12 @@ dependencies = [
 
 [[package]]
 name = "unsafe-io"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afa405eddb270f365a62386dd1f5d0925f0c0df6921abf95eb1f5bc8519339b1"
+checksum = "f56d1d7067d6e88dfdede7f668ea51800785fc8fcaf82d8fecdeaa678491e629"
 dependencies = [
  "io-lifetimes",
- "rustc_version 0.3.3",
+ "rustc_version 0.4.0",
  "winapi",
 ]
 
