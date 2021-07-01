@@ -2201,9 +2201,9 @@ dependencies = [
 
 [[package]]
 name = "posish"
-version = "0.15.2"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9fd5be0a6fa79962a8e67f67bde3e08c47b21c7fa5b0e0efc3e4788dc952c3e"
+checksum = "1763adf4e26429fd4e075fc46343f77da38d4c711b19f06943e506ce10d67270"
 dependencies = [
  "bitflags",
  "cc",

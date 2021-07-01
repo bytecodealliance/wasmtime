@@ -26,7 +26,7 @@ anyhow = "1"
 io-lifetimes = "0.2.0"
 
 [target.'cfg(unix)'.dependencies]
-posish = "0.15.2"
+posish = "0.15.3"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
