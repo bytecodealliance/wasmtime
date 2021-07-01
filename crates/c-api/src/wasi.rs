@@ -1,6 +1,7 @@
 //! The WASI embedding API definitions for Wasmtime.
 
 use anyhow::Result;
+use cap_std::ambient_authority;
 use std::ffi::CStr;
 use std::fs::File;
 use std::os::raw::{c_char, c_int};
@@ -69,21 +70,21 @@ impl wasi_config_t {
         if self.inherit_stdin {
             builder = builder.inherit_stdin();
         } else if let Some(file) = self.stdin {
-            let file = unsafe { cap_std::fs::File::from_std(file) };
+            let file = cap_std::fs::File::from_std(file, ambient_authority());
             let file = wasi_cap_std_sync::file::File::from_cap_std(file);
             builder = builder.stdin(Box::new(file));
         }
         if self.inherit_stdout {
             builder = builder.inherit_stdout();
         } else if let Some(file) = self.stdout {
-            let file = unsafe { cap_std::fs::File::from_std(file) };
+            let file = cap_std::fs::File::from_std(file, ambient_authority());
             let file = wasi_cap_std_sync::file::File::from_cap_std(file);
             builder = builder.stdout(Box::new(file));
         }
         if self.inherit_stderr {
             builder = builder.inherit_stderr();
         } else if let Some(file) = self.stderr {
-            let file = unsafe { cap_std::fs::File::from_std(file) };
+            let file = cap_std::fs::File::from_std(file, ambient_authority());
             let file = wasi_cap_std_sync::file::File::from_cap_std(file);
             builder = builder.stderr(Box::new(file));
         }
@@ -227,7 +228,7 @@ pub unsafe extern "C" fn wasi_config_preopen_dir(
     };
 
     let dir = match cstr_to_path(path) {
-        Some(p) => match Dir::open_ambient_dir(p) {
+        Some(p) => match Dir::open_ambient_dir(p, ambient_authority()) {
             Ok(d) => d,
             Err(_) => return false,
         },
