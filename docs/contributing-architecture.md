@@ -165,7 +165,7 @@ Compilation is roughly broken down into a few phases:
    (`wasmtime_environ::Module`), compiled JIT code (stored as an ELF image), and
    miscellaneous other information about functions such as platform-agnostic
    unwinding information, per-function trap tables (indicating which JIT
-   instructions can trap and what the trpa means), per-function address maps
+   instructions can trap and what the trap means), per-function address maps
    (mapping from JIT addresses back to wasm offsets), and debug information
    (parsed from DWARF information in the wasm module). These results are inert
    and can't actually be executed, but they're appropriate at this point to
@@ -224,8 +224,8 @@ that specific case because we don't know the ABI of the target function the
 trampoline (with a known ABI) is used and has all the parameters/results passed
 through the stack.
 
-Another point of note is that trampolines not deduplicated at this time. Each
-compiled module contains its own set of trampolines, and if two compiled
+Another point of note is that trampolines are not deduplicated at this time.
+Each compiled module contains its own set of trampolines, and if two compiled
 modules have the same types then they'll have different copies of the same
 trampoline.
 
@@ -396,12 +396,12 @@ memory64 proposal from upstream WebAssembly yet.
 
 The defaults for Wasmtime on 64-bit platforms are:
 
-* 4gb static maximum size (meaning all memories are static)
-* 2gb static guard size (meaning all loads/stores with less than 2gb offset
+* 4GB static maximum size (meaning all memories are static)
+* 2GB static guard size (meaning all loads/stores with less than 2GB offset
   don't need bounds checks)
 * Guard pages before linear memory are enabled.
 
-Altogether this means that linear memories result in an 8gb virtual address
+Altogether this means that linear memories result in an 8GB virtual address
 space reservation by default in Wasmtime. With the pooling allocator where we
 know that linear memories are contiguous this results in a 6GB reservation per
 memory because the guard region after one memory is the guard region before the
@@ -424,10 +424,10 @@ within, they're simply assumed to be valid for as long as the table is in use.
 
 For tables of `externref` the story is more complicated. The `VMExternRef` is a
 version of `Arc<dyn Any>` but specialized in Wasmtime so JIT code knows where
-the offset of the reference count field to directly manipulate it. Furthermore
-tables of `externref` values need to manage the reference count field
-themselves, since the pointer stored in the table is required to have a strong
-reference count allocated to it.
+the offset of the reference count field to directly manipulate it is.
+Furthermore tables of `externref` values need to manage the reference count
+field themselves, since the pointer stored in the table is required to have a
+strong reference count allocated to it.
 
 ## GC and `externref`
 
