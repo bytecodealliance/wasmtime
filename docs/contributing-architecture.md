@@ -24,7 +24,7 @@ Wasmtime and don't show up in the public API of Wasmtime at all. To use some
 Cargo terminology, all the `wasmtime-*` crates that `wasmtime` depends on are
 "private" dependencies.
 
-Additionally at this tiem the safe/unsafe boundary between Wasmtime's internal
+Additionally at this time the safe/unsafe boundary between Wasmtime's internal
 crates is not the most well-defined. There are methods that should be marked
 `unsafe` which aren't, and `unsafe` methods do not have exhaustive documentation
 as to why they are `unsafe`. This is an ongoing matter of improvement, however,
