@@ -98,21 +98,39 @@ pub trait ResourceLimiter {
     }
 }
 
-/// A WebAssembly instance.
+/// A type that roughly corresponds to a WebAssembly instance, but is also used
+/// for host-defined objects.
 ///
-/// This is repr(C) to ensure that the vmctx field is last.
-#[repr(C)]
+/// This structure is is never allocated directly but is instead managed through
+/// an `InstanceHandle`. This structure ends with a `VMContext` which has a
+/// dynamic size corresponding to the `module` configured within. Memory
+/// management of this structure is always externalized.
+///
+/// Instances here can correspond to actual instantiated modules, but it's also
+/// used ubiquitously for host-defined objects. For example creating a
+/// host-defined memory will have a `module` that looks like it exports a single
+/// memory (and similar for other constructs).
+///
+/// This `Instance` type is used as a ubiquitous representation for WebAssembly
+/// values, whether or not they were created on the host or through a module.
+#[repr(C)] // ensure that the vmctx field is last.
 pub(crate) struct Instance {
     /// The `Module` this `Instance` was instantiated from.
     module: Arc<Module>,
 
-    /// Offsets in the `vmctx` region.
+    /// Offsets in the `vmctx` region, precomputed from the `module` above.
     offsets: VMOffsets,
 
     /// WebAssembly linear memory data.
+    ///
+    /// This is where all runtime information about defined linear memories in
+    /// this module lives.
     memories: PrimaryMap<DefinedMemoryIndex, Memory>,
 
     /// WebAssembly table data.
+    ///
+    /// Like memories, this is only for defined tables in the module and
+    /// contains all of their runtime state.
     tables: PrimaryMap<DefinedTableIndex, Table>,
 
     /// Stores the dropped passive element segments in this instantiation by index.
@@ -124,6 +142,9 @@ pub(crate) struct Instance {
     dropped_data: EntitySet<DataIndex>,
 
     /// Hosts can store arbitrary per-instance information here.
+    ///
+    /// Most of the time from Wasmtime this is `Box::new(())`, a noop
+    /// allocation, but some host-defined objects will store their state here.
     host_state: Box<dyn Any + Send + Sync>,
 
     /// Additional context used by compiled wasm code. This field is last, and

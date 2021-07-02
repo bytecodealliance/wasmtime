@@ -8,7 +8,6 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-debug/"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm", "debuginfo"]
-readme = "README.md"
 edition = "2018"
 
 [dependencies]
