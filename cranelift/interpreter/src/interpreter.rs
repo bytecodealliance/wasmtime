@@ -21,11 +21,19 @@ use thiserror::Error;
 /// semantics for each Cranelift instruction (see [step]).
 pub struct Interpreter<'a> {
     state: InterpreterState<'a>,
+    fuel: Option<u64>,
 }
 
 impl<'a> Interpreter<'a> {
     pub fn new(state: InterpreterState<'a>) -> Self {
-        Self { state }
+        Self { state, fuel: None }
+    }
+
+    /// The `fuel` mechanism sets a number of instructions that
+    /// the interpreter can execute before stopping. If this
+    /// value is `None` (the default), no limit is imposed.
+    pub fn with_fuel(self, fuel: Option<u64>) -> Self {
+        Self { fuel, ..self }
     }
 
     /// Call a function by name; this is a helpful proxy for [Interpreter::call_by_index].
@@ -83,6 +91,10 @@ impl<'a> Interpreter<'a> {
         let layout = &function.layout;
         let mut maybe_inst = layout.first_inst(block);
         while let Some(inst) = maybe_inst {
+            if self.consume_fuel() == FuelResult::Stop {
+                return Err(InterpreterError::FuelExhausted);
+            }
+
             let inst_context = DfgInstructionContext::new(inst, &function.dfg);
             match step(&mut self.state, inst_context)? {
                 ControlFlow::Assign(values) => {
@@ -116,6 +128,28 @@ impl<'a> Interpreter<'a> {
         }
         Err(InterpreterError::Unreachable)
     }
+
+    fn consume_fuel(&mut self) -> FuelResult {
+        match self.fuel {
+            Some(0) => FuelResult::Stop,
+            Some(ref mut n) => {
+                *n -= 1;
+                FuelResult::Continue
+            }
+
+            // We do not have fuel enabled, so unconditionally continue
+            None => FuelResult::Continue,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+/// The result of consuming fuel. Signals if the caller should stop or continue.
+pub enum FuelResult {
+    /// We still have `fuel` available and should continue execution.
+    Continue,
+    /// The available `fuel` has been exhausted, we should stop now.
+    Stop,
 }
 
 /// The ways interpretation can fail.
@@ -131,6 +165,8 @@ pub enum InterpreterError {
     UnknownFunctionName(String),
     #[error("value error")]
     ValueError(#[from] ValueError),
+    #[error("fuel exhausted")]
+    FuelExhausted,
 }
 
 /// Maintains the [Interpreter]'s state, implementing the [State] trait.
@@ -333,5 +369,47 @@ mod tests {
         assert!(state.has_iflag(flag));
         state.clear_flags();
         assert!(!state.has_iflag(flag));
+    }
+
+    #[test]
+    fn fuel() {
+        let code = "function %test() -> b1 {
+        block0:
+            v0 = iconst.i32 1
+            v1 = iadd_imm v0, 1
+            return v1
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+
+        // The default interpreter should not enable the fuel mechanism
+        let state = InterpreterState::default().with_function_store(env.clone());
+        let result = Interpreter::new(state)
+            .call_by_name("%test", &[])
+            .unwrap()
+            .unwrap_return();
+        assert_eq!(result, vec![DataValue::I32(2)]);
+
+        // With 2 fuel, we should execute the iconst and iadd, but not the return thus giving a
+        // fuel exhausted error
+        let state = InterpreterState::default().with_function_store(env.clone());
+        let result = Interpreter::new(state)
+            .with_fuel(Some(2))
+            .call_by_name("%test", &[]);
+        match result {
+            Err(InterpreterError::FuelExhausted) => {}
+            _ => panic!("Expected Err(FuelExhausted), but got {:?}", result),
+        }
+
+        // With 3 fuel, we should be able to execute the return instruction, and complete the test
+        let state = InterpreterState::default().with_function_store(env.clone());
+        let result = Interpreter::new(state)
+            .with_fuel(Some(3))
+            .call_by_name("%test", &[])
+            .unwrap()
+            .unwrap_return();
+        assert_eq!(result, vec![DataValue::I32(2)]);
     }
 }
