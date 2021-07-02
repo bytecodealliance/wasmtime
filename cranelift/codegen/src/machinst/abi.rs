@@ -111,24 +111,6 @@ pub trait ABICallee {
     /// Get the address of a stackslot.
     fn stackslot_addr(&self, slot: StackSlot, offset: u32, into_reg: Writable<Reg>) -> Self::I;
 
-    /// Load from a stackslot.
-    fn load_stackslot(
-        &self,
-        slot: StackSlot,
-        offset: u32,
-        ty: Type,
-        into_reg: ValueRegs<Writable<Reg>>,
-    ) -> SmallInstVec<Self::I>;
-
-    /// Store to a stackslot.
-    fn store_stackslot(
-        &self,
-        slot: StackSlot,
-        offset: u32,
-        ty: Type,
-        from_reg: ValueRegs<Reg>,
-    ) -> SmallInstVec<Self::I>;
-
     /// Load from a spillslot.
     fn load_spillslot(
         &self,

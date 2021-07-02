@@ -41,8 +41,6 @@ use std::string::String;
 pub type InsnIndex = u32;
 /// Index referring to a basic block in VCode.
 pub type BlockIndex = u32;
-/// Range of an instructions in VCode.
-pub type InsnRange = core::ops::Range<InsnIndex>;
 
 /// VCodeInst wraps all requirements for a MachInst to be in VCode: it must be
 /// a `MachInst` and it must be able to emit itself at least to a `SizeCodeSink`.
@@ -207,11 +205,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         }
     }
 
-    /// Are there any reference-typed values at all among the vregs?
-    pub fn have_ref_values(&self) -> bool {
-        self.vcode.have_ref_values()
-    }
-
     /// Set the current block as the entry block.
     pub fn set_entry(&mut self, block: BlockIndex) {
         self.vcode.entry = block;
@@ -262,11 +255,6 @@ impl<I: VCodeInst> VCodeBuilder<I> {
                 .safepoint_insns
                 .push(InstIx::new((self.vcode.insts.len() - 1) as u32));
         }
-    }
-
-    /// Get the current source location.
-    pub fn get_srcloc(&self) -> SourceLoc {
-        self.cur_srcloc
     }
 
     /// Set the current source location.
@@ -344,16 +332,6 @@ impl<I: VCodeInst> VCode<I> {
         self.vreg_types[vreg.get_index()]
     }
 
-    /// Are there any reference-typed values at all among the vregs?
-    pub fn have_ref_values(&self) -> bool {
-        self.have_ref_values
-    }
-
-    /// Get the entry block.
-    pub fn entry(&self) -> BlockIndex {
-        self.entry
-    }
-
     /// Get the number of blocks. Block indices will be in the range `0 ..
     /// (self.num_blocks() - 1)`.
     pub fn num_blocks(&self) -> usize {
@@ -363,11 +341,6 @@ impl<I: VCodeInst> VCode<I> {
     /// Stack frame size for the full function's body.
     pub fn frame_size(&self) -> u32 {
         self.abi.frame_size()
-    }
-
-    /// Inbound stack-args size.
-    pub fn stack_args_size(&self) -> u32 {
-        self.abi.stack_args_size()
     }
 
     /// Get the successors for a block.
@@ -884,11 +857,6 @@ impl VCodeConstants {
                 }
             }
         }
-    }
-
-    /// Retrieve a byte slice for the given [VCodeConstant], if available.
-    pub fn get(&self, constant: VCodeConstant) -> Option<&[u8]> {
-        self.constants.get(constant).map(|d| d.as_slice())
     }
 
     /// Return the number of constants inserted.

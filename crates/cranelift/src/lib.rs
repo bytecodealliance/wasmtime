@@ -91,8 +91,8 @@
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use cranelift_codegen::ir::{self, ExternalName};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
-use cranelift_codegen::machinst::buffer::MachSrcLoc;
 use cranelift_codegen::print_errors::pretty_error;
+use cranelift_codegen::MachSrcLoc;
 use cranelift_codegen::{binemit, isa, Context};
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, SignatureIndex, WasmType};
 use std::convert::TryFrom;

@@ -420,24 +420,10 @@ impl BlockLoweringOrder {
         &self.lowered_order[..]
     }
 
-    /// Get the successors for a lowered block, by index in `lowered_order()`'s
-    /// returned slice. Each successsor is paired with the edge-instruction
-    /// (branch) corresponding to this edge.
-    pub fn succs(&self, block: BlockIndex) -> &[(Inst, LoweredBlock)] {
-        let range = self.lowered_succ_ranges[block as usize];
-        &self.lowered_succs[range.0..range.1]
-    }
-
     /// Get the successor indices for a lowered block.
     pub fn succ_indices(&self, block: BlockIndex) -> &[(Inst, BlockIndex)] {
         let range = self.lowered_succ_ranges[block as usize];
         &self.lowered_succ_indices[range.0..range.1]
-    }
-
-    /// Get the lowered block index containing a CLIF block, if any. (May not be
-    /// present if the original CLIF block was unreachable.)
-    pub fn lowered_block_for_bb(&self, bb: Block) -> Option<BlockIndex> {
-        self.orig_map[bb]
     }
 }
 
