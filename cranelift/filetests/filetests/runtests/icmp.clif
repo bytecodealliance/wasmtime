@@ -1,0 +1,17 @@
+test run
+target aarch64
+target s390x
+target x86_64 machinst
+
+; This test is also a regression test for aarch64.
+; We were not correctly handling the fact that the rhs constant value
+; overflows its type when viewed as a signed value, and thus encoding the wrong
+; value into the resulting instruction.
+function %overflow_rhs_const(i8) -> b1 {
+block0(v0: i8):
+    v1 = iconst.i8 192
+    v2 = icmp sge v0, v1
+    return v2
+}
+; run: %test(49) == true
+; run: %test(-65) == false
