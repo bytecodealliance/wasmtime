@@ -115,6 +115,24 @@ impl Value {
     }
 }
 
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(enum_variant) = self.as_enum() {
+            write!(f, "{}={}", self.name, enum_variant)
+        } else if let Some(num) = self.as_num() {
+            write!(f, "{}={}", self.name, num)
+        } else if let Some(b) = self.as_bool() {
+            if b {
+                write!(f, "{}=1", self.name)
+            } else {
+                write!(f, "{}=0", self.name)
+            }
+        } else {
+            unreachable!()
+        }
+    }
+}
+
 /// Collect settings values based on a template.
 #[derive(Clone, Hash)]
 pub struct Builder {
