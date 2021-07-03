@@ -24,6 +24,7 @@ use crate::data_value::DataValue;
 use log::{debug, trace};
 use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
+use std::cmp;
 
 //============================================================================
 // Result enum types.
@@ -154,6 +155,14 @@ impl NarrowValueMode {
             NarrowValueMode::None => false,
             NarrowValueMode::ZeroExtend32 | NarrowValueMode::SignExtend32 => true,
             NarrowValueMode::ZeroExtend64 | NarrowValueMode::SignExtend64 => false,
+        }
+    }
+
+    fn is_signed(&self) -> bool {
+        match self {
+            NarrowValueMode::SignExtend32 | NarrowValueMode::SignExtend64 => true,
+            NarrowValueMode::ZeroExtend32 | NarrowValueMode::ZeroExtend64 => false,
+            NarrowValueMode::None => false,
         }
     }
 }
@@ -438,7 +447,15 @@ pub(crate) fn put_input_in_rse_imm12<C: LowerCtx<I = Inst>>(
 ) -> ResultRSEImm12 {
     if let Some(imm_value) = input_to_const(ctx, input) {
         if let Some(i) = Imm12::maybe_from_u64(imm_value) {
-            return ResultRSEImm12::Imm12(i);
+            let out_ty_bits = ty_bits(ctx.input_ty(input.insn, input.input));
+            let is_negative = (i.bits as u64) & (1 << (cmp::max(out_ty_bits, 1) - 1)) != 0;
+
+            // This condition can happen if we matched a value that overflows the output type of
+            // its `iconst` when viewed as a signed value (i.e. iconst.i8 200).
+            // When that happens we need to lower as a negative value, which we cannot do here.
+            if !(narrow_mode.is_signed() && is_negative) {
+                return ResultRSEImm12::Imm12(i);
+            }
         }
     }
 
