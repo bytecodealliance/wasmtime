@@ -401,7 +401,7 @@ pub use crate::types::*;
 pub use crate::values::*;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "macos")] {
+    if #[cfg(all(target_os = "macos", not(feature = "posix-signals-on-macos")))] {
         // no extensions for macOS at this time
     } else if #[cfg(unix)] {
         pub mod unix;
