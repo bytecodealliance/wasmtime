@@ -1,4 +1,4 @@
-# Go
+# Using WebAssembly from Go
 
 Wasmtime [is available as a Go
 Module](https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go). This guide
@@ -15,6 +15,7 @@ First up you'll want to start a new module:
 $ mkdir hello-wasm
 $ cd hello-wasm
 $ go mod init hello-wasm
+$ go get github.com/bytecodealliance/wasmtime-go
 ```
 
 Next, copy this example WebAssembly text module into your project. It exports a
@@ -39,11 +40,11 @@ func main() {
     store := wasmtime.NewStore(engine)
     module, err := wasmtime.NewModuleFromFile(engine, "gcd.wat")
     check(err)
-    instance, err := wasmtime.NewInstance(store, module, []*wasmtime.Extern{})
+    instance, err := wasmtime.NewInstance(store, module, []wasmtime.AsExtern{})
     check(err)
 
-    gcd := instance.GetExport("gcd").Func()
-    val, err := gcd.Call(6, 27)
+    gcd := instance.GetExport(store, "gcd").Func()
+    val, err := gcd.Call(store, 6, 27)
     check(err)
     fmt.Printf("gcd(6, 27) = %d\n", val.(int32))
 }
