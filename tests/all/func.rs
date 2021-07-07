@@ -884,3 +884,45 @@ fn wasm_ty_roundtrip() -> Result<(), anyhow::Error> {
     foo.call(&mut store, (-1, 1, 2.0, -3, 3, 4.0))?;
     Ok(())
 }
+
+#[test]
+fn typed_funcs_count_params_correctly_in_error_messages() -> anyhow::Result<()> {
+    let mut store = Store::<()>::default();
+    let module = Module::new(
+        store.engine(),
+        r#"
+            (module
+                (func (export "f") (param i32 i32))
+            )
+
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    // Too few parameters.
+    match instance.get_typed_func::<(), (), _>(&mut store, "f") {
+        Ok(_) => panic!("should be wrong signature"),
+        Err(e) => {
+            let msg = format!("{:?}", e);
+            assert!(dbg!(msg).contains("expected 0 types, found 2"))
+        }
+    }
+    match instance.get_typed_func::<(i32,), (), _>(&mut store, "f") {
+        Ok(_) => panic!("should be wrong signature"),
+        Err(e) => {
+            let msg = format!("{:?}", e);
+            assert!(dbg!(msg).contains("expected 1 types, found 2"))
+        }
+    }
+
+    // Too many parameters.
+    match instance.get_typed_func::<(i32, i32, i32), (), _>(&mut store, "f") {
+        Ok(_) => panic!("should be wrong signature"),
+        Err(e) => {
+            let msg = format!("{:?}", e);
+            assert!(dbg!(msg).contains("expected 3 types, found 2"))
+        }
+    }
+
+    Ok(())
+}
