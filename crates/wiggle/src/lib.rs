@@ -38,7 +38,7 @@ pub mod wasmtime_crate {
     pub use wasmtime::*;
 }
 
-/// A trait which abstracts how to get at the region of host memory taht
+/// A trait which abstracts how to get at the region of host memory that
 /// contains guest memory.
 ///
 /// All `GuestPtr` types will contain a handle to this trait, signifying where
@@ -70,11 +70,11 @@ pub mod wasmtime_crate {
 /// `GuestPtr` to safely read and write interior data.
 ///
 /// This type also provides methods for run-time borrow checking of references
-/// into the memory. The safety of this mechanism depends on there being
-/// exactly one associated tracking of borrows for a given WebAssembly memory.
-/// There must be no other reads or writes of WebAssembly the memory by either
-/// Rust or WebAssembly code while there are any outstanding borrows, as given
-/// by `GuestMemory::has_outstanding_borrows()`.
+/// into the memory. The safety of this mechanism depends on there being exactly
+/// one associated tracking of borrows for a given WebAssembly memory. There
+/// must be no other reads or writes of WebAssembly the memory by either Rust or
+/// WebAssembly code while there are any outstanding borrows, as given by
+/// `GuestMemory::has_outstanding_borrows()`.
 ///
 /// # Using References
 ///
@@ -85,11 +85,11 @@ pub mod wasmtime_crate {
 ///
 /// These smart pointers are dynamically borrow-checked by the borrow checker
 /// methods on this trait. While a `GuestSlice` or a `GuestStr` are live, the
-/// [`GuestMemory::has_outstanding_borrows()`] method will always return
-/// `true`. If you need to re-enter the guest or otherwise read or write to
-/// the contents of a WebAssembly memory, all `GuestSlice`s and `GuestStr`s
-/// for the memory must be dropped, at which point
-/// `GuestMemory::has_outstanding_borrows()` will return `false`.
+/// [`GuestMemory::has_outstanding_borrows()`] method will always return `true`.
+/// If you need to re-enter the guest or otherwise read or write to the contents
+/// of a WebAssembly memory, all `GuestSlice`s and `GuestStr`s for the memory
+/// must be dropped, at which point `GuestMemory::has_outstanding_borrows()`
+/// will return `false`.
 pub unsafe trait GuestMemory: Send + Sync {
     /// Returns the base allocation of this guest memory, located in host
     /// memory.
