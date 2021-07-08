@@ -22,7 +22,7 @@ os_pipe = "0.9"
 anyhow = "1.0.19"
 wat = "1.0.37"
 cap-std = "0.13"
-tokio = { version = "1.5.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
 
 [features]
 test_programs = []
