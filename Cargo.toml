@@ -54,7 +54,7 @@ tempfile = "3.1.0"
 test-programs = { path = "crates/test-programs" }
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-runtime = { path = "crates/runtime" }
-tokio = { version = "1.5.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
+tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.2.16"
 wast = "36.0.0"
 criterion = "0.3.4"
