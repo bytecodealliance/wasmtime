@@ -1246,7 +1246,8 @@ pub(crate) fn maybe_input_insn_via_conv<C: LowerCtx<I = Inst>>(
 /// Specifies what [lower_icmp] should do when lowering
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum IcmpOutput {
-    /// Only sets flags, discarding the results
+    /// Set flags, discarding the results. The flag to be used needs to be checked
+    /// in [IcmpResult]
     Flags,
     /// Materializes the results into a register. The flags set may be incorrect
     Register(Writable<Reg>),
@@ -1261,6 +1262,25 @@ impl IcmpOutput {
     }
 }
 
+/// The output of an Icmp lowering.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum IcmpResult {
+    /// The result was output into the flag corresponding with this [IntCC]. Other flags are left in
+    /// an undefined state.
+    Flag(IntCC),
+    /// The result was materialized into the output register.
+    Register,
+}
+
+impl IcmpResult {
+    pub fn unwrap_flag(&self) -> IntCC {
+        match self {
+            IcmpResult::Flag(f) => *f,
+            _ => panic!("Unwrapped flag, but IcmpResult was {:?}", self),
+        }
+    }
+}
+
 /// Lower an icmp comparision
 ///
 /// We can lower into the status flags, or materialize the result into a register
@@ -1270,7 +1290,7 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
     insn: IRInst,
     condcode: IntCC,
     output: IcmpOutput,
-) -> CodegenResult<()> {
+) -> CodegenResult<IcmpResult> {
     debug!(
         "lower_icmp: insn {}, condcode: {}, output: {:?}",
         insn, condcode, output
@@ -1289,7 +1309,7 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
         (false, false) => NarrowValueMode::ZeroExtend64,
     };
 
-    if ty == I128 {
+    let out_condcode = if ty == I128 {
         let lhs = put_input_in_regs(ctx, inputs[0]);
         let rhs = put_input_in_regs(ctx, inputs[1]);
 
@@ -1415,29 +1435,26 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                 }
             }
         }
+        condcode
     } else if !ty.is_vector() {
         let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
         let rm = put_input_in_rse_imm12(ctx, inputs[1], narrow_mode);
 
         let is_overflow = condcode == IntCC::Overflow || condcode == IntCC::NotOverflow;
         let is_small_type = ty == I8 || ty == I16;
-        let (rn, rm) = if is_overflow && is_small_type {
+        let (out_condcode, rn, rm) = if is_overflow && is_small_type {
             // Overflow checks for non native types require additional instructions, other than
             // just the extend op.
             //
-            // TODO: Codegen improvements here:
-            // * Merge the second sxt{h,b} into the sub instruction.
-            // * We can especially improve codegen here if we can return a different flag out of
-            // this function. That way we can tell the caller to use the 'ne' flag and save
-            // the last 3 instructions.
+            // TODO: Codegen improvements: Merge the second sxt{h,b} into the following sub instruction.
             //
             // sxt{h,b}  w0, w0
             // sxt{h,b}  w1, w1
             // sub       w0, w0, w1
             // cmp       w0, w0, sxt{h,b}
-            // cset      w0, ne
-            // mov       w1, #0x80000000
-            // cmp       w1, w0
+            //
+            // This comparision leaves the result in the `ne` flag, so we need to signal that
+            // to the caller
 
             let extend_op = if ty == I8 {
                 ExtendOp::SXTB
@@ -1445,37 +1462,42 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
                 ExtendOp::SXTH
             };
             let tmp1 = ctx.alloc_tmp(I32).only_reg().unwrap();
-            let tmp2 = ctx.alloc_tmp(I32).only_reg().unwrap();
             ctx.emit(alu_inst_imm12(ALUOp::Sub32, tmp1, rn, rm));
-            ctx.emit(alu_inst_imm12(
-                ALUOp::SubS32,
-                writable_zero_reg(),
+
+            let out_condcode = match condcode {
+                IntCC::Overflow => IntCC::NotEqual,
+                IntCC::NotOverflow => IntCC::Equal,
+                _ => unreachable!(),
+            };
+            (
+                out_condcode,
                 tmp1.to_reg(),
                 ResultRSEImm12::RegExtend(tmp1.to_reg(), extend_op),
-            ));
-            ctx.emit(Inst::CSet {
-                rd: tmp2,
-                cond: Cond::Ne,
-            });
-            lower_constant_u64(ctx, tmp1, 0x8000_0000);
-            (tmp1.to_reg(), ResultRSEImm12::Reg(tmp2.to_reg()))
+            )
         } else {
-            (rn, rm)
+            (condcode, rn, rm)
         };
 
         let alu_op = choose_32_64(ty, ALUOp::SubS32, ALUOp::SubS64);
         ctx.emit(alu_inst_imm12(alu_op, writable_zero_reg(), rn, rm));
 
         if let IcmpOutput::Register(rd) = output {
+            let cond = lower_condcode(out_condcode);
             materialize_bool_result(ctx, insn, rd, cond);
         }
+        out_condcode
     } else {
         let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
         let rm = put_input_in_reg(ctx, inputs[1], narrow_mode);
         lower_vector_compare(ctx, rd, rn, rm, ty, cond)?;
-    }
+        condcode
+    };
 
-    Ok(())
+    Ok(match output {
+        // We currently never emit a different register than what was asked for
+        IcmpOutput::Register(_) => IcmpResult::Register,
+        IcmpOutput::Flags => IcmpResult::Flag(out_condcode),
+    })
 }
 
 pub(crate) fn lower_fcmp_or_ffcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
