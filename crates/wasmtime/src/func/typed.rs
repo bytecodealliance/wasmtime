@@ -348,17 +348,23 @@ macro_rules! impl_wasm_params {
 
             fn typecheck(mut params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()> {
                 let mut _n = 0;
+
                 $(
                     match params.next() {
-                        Some(t) => $t::typecheck(t)?,
-                        None => bail!("expected {} types, found {}", $n, _n),
+                        Some(t) => {
+                            _n += 1;
+                            $t::typecheck(t)?
+                        },
+                        None => bail!("expected {} types, found {}", $n, params.len() + _n),
                     }
-                    _n += 1;
                 )*
 
                 match params.next() {
                     None => Ok(()),
-                    Some(_) => bail!("expected {} types, found {}", $n, params.len() + _n),
+                    Some(_) => {
+                        _n += 1;
+                        bail!("expected {} types, found {}", $n, params.len() + _n)
+                    },
                 }
             }
 
