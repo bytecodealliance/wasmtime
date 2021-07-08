@@ -2867,7 +2867,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::UwidenHigh
         | Opcode::WideningPairwiseDotProductS
         | Opcode::SqmulRoundSat
-        | Opcode::FcvtLowFromUint
         | Opcode::FvpromoteLow
         | Opcode::Fvdemote => {
             // TODO

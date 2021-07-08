@@ -1780,7 +1780,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::F64x2ConvertLowI32x4U => {
             let a = pop1_with_bitcast(state, I32X4, builder);
-            state.push1(builder.ins().fcvt_low_from_uint(F64X2, a));
+            let widened_a = builder.ins().uwiden_low(a);
+            state.push1(builder.ins().fcvt_from_uint(F64X2, widened_a));
         }
         Operator::F64x2PromoteLowF32x4 => {
             let a = pop1_with_bitcast(state, F32X4, builder);
