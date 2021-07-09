@@ -3705,7 +3705,7 @@ fn test_aarch64_binemit() {
             rd: writable_vreg(16),
             rn: vreg(12),
             rm: vreg(1),
-            high_half: false
+            high_half: false,
         },
         "90C1210E",
         "smull v16.8h, v12.8b, v1.8b",
@@ -3717,7 +3717,7 @@ fn test_aarch64_binemit() {
             rd: writable_vreg(15),
             rn: vreg(11),
             rm: vreg(2),
-            high_half: false
+            high_half: false,
         },
         "6FC1222E",
         "umull v15.8h, v11.8b, v2.8b",
@@ -3729,7 +3729,7 @@ fn test_aarch64_binemit() {
             rd: writable_vreg(4),
             rn: vreg(8),
             rm: vreg(16),
-            high_half: false
+            high_half: false,
         },
         "0481302E",
         "umlal v4.8h, v8.8b, v16.8b",
