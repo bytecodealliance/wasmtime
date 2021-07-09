@@ -1,5 +1,4 @@
 # Examples
 
-This is an explanation of all examples to come
-
-... more coming soon
+The examples contained in this section explain how to use Wasmtime in several
+common scenarios.
