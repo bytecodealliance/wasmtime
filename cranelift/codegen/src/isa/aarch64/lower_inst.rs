@@ -801,10 +801,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let out_regs = get_output_reg(ctx, outputs[0]);
             let ty = ty.unwrap();
             if ty == I128 {
-                // TODO: We can use immlogic here
                 let src = put_input_in_regs(ctx, inputs[0]);
-                // We can ignore the top half of the shift amount register
-                let amt = put_input_in_regs(ctx, inputs[1]).regs()[0];
+                let amt = lower_shift_amt(ctx, inputs[1], ty, out_regs.regs()[0]).unwrap_reg();
 
                 match op {
                     Opcode::Ishl => emit_shl_i128(ctx, src, out_regs, amt),
@@ -828,7 +826,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => unreachable!(),
                 };
                 let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                let rm = put_input_in_reg_immshift(ctx, inputs[1], ty_bits(ty));
+                let rm = lower_shift_amt(ctx, inputs[1], ty, out_regs.regs()[0]);
                 let alu_op = match op {
                     Opcode::Ishl => choose_32_64(ty, ALUOp::Lsl32, ALUOp::Lsl64),
                     Opcode::Ushr => choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
