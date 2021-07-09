@@ -6,6 +6,7 @@
   - [Running `hello-world.wasm`](./tutorial-run-hello-world.md)
 - [Examples](./examples.md)
   - [Markdown Parser](./examples-markdown.md)
+  - [Debugging WebAssembly](./examples-debugging.md)
   - [Profiling WebAssembly](./examples-profiling.md)
     - [Profiling with Perf](./examples-profiling-perf.md)
     - [Profiling with VTune](./examples-profiling-vtune.md)
