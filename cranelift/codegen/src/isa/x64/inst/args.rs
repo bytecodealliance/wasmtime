@@ -593,6 +593,9 @@ pub enum SseOpcode {
     Pmovzxwd,
     Pmovzxwq,
     Pmovzxdq,
+    Pmuldq,
+    Pmulhw,
+    Pmulhuw,
     Pmulld,
     Pmullw,
     Pmuludq,
@@ -617,7 +620,9 @@ pub enum SseOpcode {
     Psubusw,
     Ptest,
     Punpckhbw,
+    Punpckhwd,
     Punpcklbw,
+    Punpcklwd,
     Pxor,
     Rcpss,
     Roundps,
@@ -742,6 +747,8 @@ impl SseOpcode {
             | SseOpcode::Pminsw
             | SseOpcode::Pminub
             | SseOpcode::Pmovmskb
+            | SseOpcode::Pmulhw
+            | SseOpcode::Pmulhuw
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
             | SseOpcode::Por
@@ -763,7 +770,9 @@ impl SseOpcode {
             | SseOpcode::Psubusb
             | SseOpcode::Psubusw
             | SseOpcode::Punpckhbw
+            | SseOpcode::Punpckhwd
             | SseOpcode::Punpcklbw
+            | SseOpcode::Punpcklwd
             | SseOpcode::Pxor
             | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
@@ -808,6 +817,7 @@ impl SseOpcode {
             | SseOpcode::Pmovzxwd
             | SseOpcode::Pmovzxwq
             | SseOpcode::Pmovzxdq
+            | SseOpcode::Pmuldq
             | SseOpcode::Pmulld
             | SseOpcode::Ptest
             | SseOpcode::Roundps
@@ -953,6 +963,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pmovzxwd => "pmovzxwd",
             SseOpcode::Pmovzxwq => "pmovzxwq",
             SseOpcode::Pmovzxdq => "pmovzxdq",
+            SseOpcode::Pmuldq => "pmuldq",
+            SseOpcode::Pmulhw => "pmulhw",
+            SseOpcode::Pmulhuw => "pmulhuw",
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
@@ -977,7 +990,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Psubusw => "psubusw",
             SseOpcode::Ptest => "ptest",
             SseOpcode::Punpckhbw => "punpckhbw",
+            SseOpcode::Punpckhwd => "punpckhwd",
             SseOpcode::Punpcklbw => "punpcklbw",
+            SseOpcode::Punpcklwd => "punpcklwd",
             SseOpcode::Pxor => "pxor",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundps => "roundps",
