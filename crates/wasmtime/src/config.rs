@@ -528,6 +528,7 @@ impl Config {
     ///
     /// By default this option is 2 MiB.
     #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     pub fn async_stack_size(&mut self, size: usize) -> Result<&mut Self> {
         if size < self.max_wasm_stack {
             bail!("async stack size cannot be less than the maximum wasm stack size");
