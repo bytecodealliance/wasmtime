@@ -15,18 +15,18 @@ wasi-common = { path = "../", version = "0.28.0" }
 wasi-cap-std-sync = { path = "../cap-std-sync", version = "0.28.0" }
 wiggle = { path = "../../wiggle", version = "0.28.0" }
 tokio = { version = "1.8.0", features = [ "rt", "fs", "time", "io-util", "net", "io-std", "rt-multi-thread"] }
-cap-std = "0.15.2"
-cap-fs-ext = "0.15.2"
-cap-time-ext = "0.15.2"
-fs-set-times = "0.5.1"
-system-interface = { version = "0.7.0", features = ["cap_std_impls"] }
+cap-std = "0.16.0"
+cap-fs-ext = "0.16.0"
+cap-time-ext = "0.16.0"
+fs-set-times = "0.6.0"
+system-interface = { version = "0.8.0", features = ["cap_std_impls"] }
 tracing = "0.1.19"
 bitflags = "1.2"
 anyhow = "1"
 io-lifetimes = "0.2.0"
 
 [target.'cfg(unix)'.dependencies]
-posish = "0.15.3"
+posish = "0.16.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
@@ -36,4 +36,4 @@ lazy_static = "1.4"
 tempfile = "3.1.0"
 tokio = { version = "1.8.0", features = [ "macros" ] }
 anyhow = "1"
-cap-tempfile = "0.15.2"
+cap-tempfile = "0.16.0"
