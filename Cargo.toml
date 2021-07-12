@@ -90,6 +90,7 @@ wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
 all-arch = ["wasmtime/all-arch"]
+posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
 
 # Stub feature that does nothing, for Cargo-features compatibility: the new
 # backend is the default now.

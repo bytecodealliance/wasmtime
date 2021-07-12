@@ -81,3 +81,8 @@ uffd = ["wasmtime-runtime/uffd"]
 
 # Enables support for all architectures in JIT and the `wasmtime compile` CLI command.
 all-arch = ["wasmtime-jit/all-arch"]
+
+# Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
+# It is useful for applications that do not bind their own exception ports and
+# need portable signal handling.
+posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]

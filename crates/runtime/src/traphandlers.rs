@@ -27,7 +27,7 @@ extern "C" {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "macos")] {
+    if #[cfg(all(target_os = "macos", not(feature = "posix-signals-on-macos")))] {
         mod macos;
         use macos as sys;
     } else if #[cfg(unix)] {

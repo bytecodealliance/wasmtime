@@ -1,4 +1,7 @@
-#[cfg(target_os = "linux")]
+#[cfg(any(
+    target_os = "linux",
+    all(target_os = "macos", feature = "posix-signals-on-macos")
+))]
 mod tests {
     use anyhow::Result;
     use std::sync::atomic::{AtomicBool, Ordering};
