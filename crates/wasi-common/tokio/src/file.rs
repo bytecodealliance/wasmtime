@@ -5,8 +5,6 @@ use io_lifetimes::AsFd;
 use io_lifetimes::{AsHandle, BorrowedHandle};
 use std::any::Any;
 use std::io;
-#[cfg(windows)]
-use std::os::windows::io::RawHandle;
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error,
