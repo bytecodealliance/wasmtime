@@ -175,7 +175,7 @@ struct FuncEnvironment<'module_environment> {
     module: &'module_environment Module,
 
     /// Offsets to struct fields accessed by JIT code.
-    offsets: VMOffsets,
+    offsets: VMOffsets<u8>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {

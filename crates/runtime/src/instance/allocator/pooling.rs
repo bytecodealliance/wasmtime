@@ -21,7 +21,7 @@ use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
     entity::{EntitySet, PrimaryMap},
-    MemoryStyle, Module, Tunables, VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
+    HostPtr, MemoryStyle, Module, Tunables, VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
 };
 
 cfg_if::cfg_if! {
@@ -298,7 +298,7 @@ impl InstancePool {
 
         // Calculate the maximum size of an Instance structure given the limits
         let offsets = VMOffsets::from(VMOffsetsFields {
-            pointer_size: std::mem::size_of::<*const u8>() as u8,
+            ptr: HostPtr,
             num_signature_ids: module_limits.types,
             num_imported_functions: module_limits.imported_functions,
             num_imported_tables: module_limits.imported_tables,
@@ -358,10 +358,7 @@ impl InstancePool {
                 instance as _,
                 Instance {
                     module: self.empty_module.clone(),
-                    offsets: VMOffsets::new(
-                        std::mem::size_of::<*const u8>() as u8,
-                        &self.empty_module,
-                    ),
+                    offsets: VMOffsets::new(HostPtr, &self.empty_module),
                     memories: PrimaryMap::with_capacity(limits.memories as usize),
                     tables: PrimaryMap::with_capacity(limits.tables as usize),
                     dropped_elements: EntitySet::new(),
@@ -383,10 +380,7 @@ impl InstancePool {
         let instance = self.instance(index);
 
         instance.module = req.module.clone();
-        instance.offsets = VMOffsets::new(
-            std::mem::size_of::<*const u8>() as u8,
-            instance.module.as_ref(),
-        );
+        instance.offsets = VMOffsets::new(HostPtr, instance.module.as_ref());
         instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
         let mut limiter = req.store.and_then(|s| (*s).limiter());
@@ -497,8 +491,7 @@ impl InstancePool {
         // should put everything back in a relatively pristine state for each
         // fresh allocation later on.
         instance.module = self.empty_module.clone();
-        instance.offsets =
-            VMOffsets::new(std::mem::size_of::<*const u8>() as u8, &self.empty_module);
+        instance.offsets = VMOffsets::new(HostPtr, &self.empty_module);
 
         self.free_list.lock().unwrap().push(index);
     }

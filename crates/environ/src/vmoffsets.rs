@@ -52,9 +52,9 @@ fn align(offset: u32, width: u32) -> u32 {
 /// This class computes offsets to fields within `VMContext` and other
 /// related structs that JIT code accesses directly.
 #[derive(Debug, Clone, Copy)]
-pub struct VMOffsets {
+pub struct VMOffsets<P> {
     /// The size in bytes of a pointer on the target.
-    pub pointer_size: u8,
+    pub ptr: P,
     /// The number of signature declarations in the module.
     pub num_signature_ids: u32,
     /// The number of imported functions in the module.
@@ -91,11 +91,34 @@ pub struct VMOffsets {
     size: u32,
 }
 
+/// Trait used for the `ptr` representation of the field of `VMOffsets`
+pub trait PtrSize {
+    /// Returns the pointer size, in bytes, for the target.
+    fn size(&self) -> u8;
+}
+
+/// Type representing the size of a pointer for the current compilation host
+pub struct HostPtr;
+
+impl PtrSize for HostPtr {
+    #[inline]
+    fn size(&self) -> u8 {
+        std::mem::size_of::<usize>() as u8
+    }
+}
+
+impl PtrSize for u8 {
+    #[inline]
+    fn size(&self) -> u8 {
+        *self
+    }
+}
+
 /// Used to construct a `VMOffsets`
 #[derive(Debug, Clone, Copy)]
-pub struct VMOffsetsFields {
+pub struct VMOffsetsFields<P> {
     /// The size in bytes of a pointer on the target.
-    pub pointer_size: u8,
+    pub ptr: P,
     /// The number of signature declarations in the module.
     pub num_signature_ids: u32,
     /// The number of imported functions in the module.
@@ -116,11 +139,11 @@ pub struct VMOffsetsFields {
     pub num_defined_globals: u32,
 }
 
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// Return a new `VMOffsets` instance, for a given pointer size.
-    pub fn new(pointer_size: u8, module: &Module) -> Self {
+    pub fn new(ptr: P, module: &Module) -> Self {
         VMOffsets::from(VMOffsetsFields {
-            pointer_size,
+            ptr,
             num_signature_ids: cast_to_u32(module.types.len()),
             num_imported_functions: cast_to_u32(module.num_imported_funcs),
             num_imported_tables: cast_to_u32(module.num_imported_tables),
@@ -132,12 +155,18 @@ impl VMOffsets {
             num_defined_globals: cast_to_u32(module.globals.len()),
         })
     }
+
+    /// Returns the size, in bytes, of the target
+    #[inline]
+    pub fn pointer_size(&self) -> u8 {
+        self.ptr.size()
+    }
 }
 
-impl From<VMOffsetsFields> for VMOffsets {
-    fn from(fields: VMOffsetsFields) -> VMOffsets {
+impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
+    fn from(fields: VMOffsetsFields<P>) -> VMOffsets<P> {
         let mut ret = Self {
-            pointer_size: fields.pointer_size,
+            ptr: fields.ptr,
             num_signature_ids: fields.num_signature_ids,
             num_imported_functions: fields.num_imported_functions,
             num_imported_tables: fields.num_imported_tables,
@@ -166,15 +195,15 @@ impl From<VMOffsetsFields> for VMOffsets {
         ret.interrupts = 0;
         ret.externref_activations_table = ret
             .interrupts
-            .checked_add(u32::from(fields.pointer_size))
+            .checked_add(u32::from(ret.ptr.size()))
             .unwrap();
         ret.store = ret
             .externref_activations_table
-            .checked_add(u32::from(fields.pointer_size))
+            .checked_add(u32::from(ret.ptr.size()))
             .unwrap();
         ret.signature_ids = ret
             .store
-            .checked_add(u32::from(fields.pointer_size * 2))
+            .checked_add(u32::from(ret.ptr.size() * 2))
             .unwrap();
         ret.imported_functions = ret
             .signature_ids
@@ -257,7 +286,7 @@ impl From<VMOffsetsFields> for VMOffsets {
             .builtin_functions
             .checked_add(
                 BuiltinFunctionIndex::builtin_functions_total_number()
-                    .checked_mul(u32::from(ret.pointer_size))
+                    .checked_mul(u32::from(ret.pointer_size()))
                     .unwrap(),
             )
             .unwrap();
@@ -266,74 +295,73 @@ impl From<VMOffsetsFields> for VMOffsets {
     }
 }
 
-/// Offsets for `VMFunctionImport`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `body` field.
     #[allow(clippy::erasing_op)]
     #[inline]
     pub fn vmfunction_import_body(&self) -> u8 {
-        0 * self.pointer_size
+        0 * self.pointer_size()
     }
 
     /// The offset of the `vmctx` field.
     #[allow(clippy::identity_op)]
     #[inline]
     pub fn vmfunction_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 
     /// Return the size of `VMFunctionImport`.
     #[inline]
     pub fn size_of_vmfunction_import(&self) -> u8 {
-        2 * self.pointer_size
+        2 * self.pointer_size()
     }
 }
 
 /// Offsets for `*const VMFunctionBody`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The size of the `current_elements` field.
     #[allow(clippy::identity_op)]
     pub fn size_of_vmfunction_body_ptr(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 }
 
 /// Offsets for `VMTableImport`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `from` field.
     #[allow(clippy::erasing_op)]
     #[inline]
     pub fn vmtable_import_from(&self) -> u8 {
-        0 * self.pointer_size
+        0 * self.pointer_size()
     }
 
     /// The offset of the `vmctx` field.
     #[allow(clippy::identity_op)]
     #[inline]
     pub fn vmtable_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 
     /// Return the size of `VMTableImport`.
     #[inline]
     pub fn size_of_vmtable_import(&self) -> u8 {
-        2 * self.pointer_size
+        2 * self.pointer_size()
     }
 }
 
 /// Offsets for `VMTableDefinition`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `base` field.
     #[allow(clippy::erasing_op)]
     #[inline]
     pub fn vmtable_definition_base(&self) -> u8 {
-        0 * self.pointer_size
+        0 * self.pointer_size()
     }
 
     /// The offset of the `current_elements` field.
     #[allow(clippy::identity_op)]
     pub fn vmtable_definition_current_elements(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 
     /// The size of the `current_elements` field.
@@ -345,7 +373,7 @@ impl VMOffsets {
     /// Return the size of `VMTableDefinition`.
     #[inline]
     pub fn size_of_vmtable_definition(&self) -> u8 {
-        2 * self.pointer_size
+        2 * self.pointer_size()
     }
 
     /// The type of the `current_elements` field.
@@ -356,42 +384,42 @@ impl VMOffsets {
 }
 
 /// Offsets for `VMMemoryImport`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `from` field.
     #[allow(clippy::erasing_op)]
     #[inline]
     pub fn vmmemory_import_from(&self) -> u8 {
-        0 * self.pointer_size
+        0 * self.pointer_size()
     }
 
     /// The offset of the `vmctx` field.
     #[allow(clippy::identity_op)]
     #[inline]
     pub fn vmmemory_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 
     /// Return the size of `VMMemoryImport`.
     #[inline]
     pub fn size_of_vmmemory_import(&self) -> u8 {
-        2 * self.pointer_size
+        2 * self.pointer_size()
     }
 }
 
 /// Offsets for `VMMemoryDefinition`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `base` field.
     #[allow(clippy::erasing_op)]
     #[inline]
     pub fn vmmemory_definition_base(&self) -> u8 {
-        0 * self.pointer_size
+        0 * self.pointer_size()
     }
 
     /// The offset of the `current_length` field.
     #[allow(clippy::identity_op)]
     #[inline]
     pub fn vmmemory_definition_current_length(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 
     /// The size of the `current_length` field.
@@ -403,7 +431,7 @@ impl VMOffsets {
     /// Return the size of `VMMemoryDefinition`.
     #[inline]
     pub fn size_of_vmmemory_definition(&self) -> u8 {
-        2 * self.pointer_size
+        2 * self.pointer_size()
     }
 
     /// The type of the `current_length` field.
@@ -414,24 +442,24 @@ impl VMOffsets {
 }
 
 /// Offsets for `VMGlobalImport`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `from` field.
     #[allow(clippy::erasing_op)]
     #[inline]
     pub fn vmglobal_import_from(&self) -> u8 {
-        0 * self.pointer_size
+        0 * self.pointer_size()
     }
 
     /// Return the size of `VMGlobalImport`.
     #[allow(clippy::identity_op)]
     #[inline]
     pub fn size_of_vmglobal_import(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 }
 
 /// Offsets for `VMGlobalDefinition`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMGlobalDefinition`; this is the size of the largest value type (i.e. a
     /// V128).
     #[inline]
@@ -441,7 +469,7 @@ impl VMOffsets {
 }
 
 /// Offsets for `VMSharedSignatureIndex`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMSharedSignatureIndex`.
     #[inline]
     pub fn size_of_vmshared_signature_index(&self) -> u8 {
@@ -450,7 +478,7 @@ impl VMOffsets {
 }
 
 /// Offsets for `VMInterrupts`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset of the `stack_limit` field of `VMInterrupts`
     #[inline]
     pub fn vminterrupts_stack_limit(&self) -> u8 {
@@ -460,41 +488,41 @@ impl VMOffsets {
     /// Return the offset of the `fuel_consumed` field of `VMInterrupts`
     #[inline]
     pub fn vminterrupts_fuel_consumed(&self) -> u8 {
-        self.pointer_size
+        self.pointer_size()
     }
 }
 
 /// Offsets for `VMCallerCheckedAnyfunc`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `func_ptr` field.
     #[allow(clippy::erasing_op)]
     #[inline]
     pub fn vmcaller_checked_anyfunc_func_ptr(&self) -> u8 {
-        0 * self.pointer_size
+        0 * self.pointer_size()
     }
 
     /// The offset of the `type_index` field.
     #[allow(clippy::identity_op)]
     #[inline]
     pub fn vmcaller_checked_anyfunc_type_index(&self) -> u8 {
-        1 * self.pointer_size
+        1 * self.pointer_size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
     pub fn vmcaller_checked_anyfunc_vmctx(&self) -> u8 {
-        2 * self.pointer_size
+        2 * self.pointer_size()
     }
 
     /// Return the size of `VMCallerCheckedAnyfunc`.
     #[inline]
     pub fn size_of_vmcaller_checked_anyfunc(&self) -> u8 {
-        3 * self.pointer_size
+        3 * self.pointer_size()
     }
 }
 
 /// Offsets for `VMContext`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset to the `VMInterrupts` structure
     #[inline]
     pub fn vmctx_interrupts(&self) -> u32 {
@@ -717,21 +745,21 @@ impl VMOffsets {
     /// Return the offset to builtin function in `VMBuiltinFunctionsArray` index `index`.
     #[inline]
     pub fn vmctx_builtin_function(&self, index: BuiltinFunctionIndex) -> u32 {
-        self.vmctx_builtin_functions_begin() + index.index() * u32::from(self.pointer_size)
+        self.vmctx_builtin_functions_begin() + index.index() * u32::from(self.pointer_size())
     }
 }
 
 /// Offsets for `VMExternData`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset for `VMExternData::ref_count`.
     #[inline]
-    pub fn vm_extern_data_ref_count() -> u32 {
+    pub fn vm_extern_data_ref_count(&self) -> u32 {
         0
     }
 }
 
 /// Offsets for `VMExternRefActivationsTable`.
-impl VMOffsets {
+impl<P: PtrSize> VMOffsets<P> {
     /// Return the offset for `VMExternRefActivationsTable::next`.
     #[inline]
     pub fn vm_extern_ref_activation_table_next(&self) -> u32 {
@@ -741,7 +769,7 @@ impl VMOffsets {
     /// Return the offset for `VMExternRefActivationsTable::end`.
     #[inline]
     pub fn vm_extern_ref_activation_table_end(&self) -> u32 {
-        self.pointer_size.into()
+        self.pointer_size().into()
     }
 }
 
