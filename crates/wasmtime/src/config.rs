@@ -379,15 +379,12 @@ impl Config {
     ///
     /// To remedy this situation you have a two possible ways to solve this:
     ///
-    /// * First you can spawn futures into a thread pool. Care must be taken for
-    ///   this because Wasmtime futures are not `Send` or `Sync`. If you ensure
-    ///   that the entire state of a `Store` is wrapped up in a single future,
-    ///   though, you can send the whole future at once to a separate thread. By
-    ///   doing this in a thread pool you are relaxing the requirement that
-    ///   `Future::poll` must be fast because your future is executing on a
-    ///   separate thread. This strategy, however, would likely still require
-    ///   some form of cancellation via [`crate::Store::interrupt_handle`] to ensure
-    ///   wasm doesn't take *too* long to execute.
+    /// * First you can spawn futures into a thread pool. By doing this in a
+    ///   thread pool you are relaxing the requirement that `Future::poll` must
+    ///   be fast because your future is executing on a separate thread. This
+    ///   strategy, however, would likely still require some form of
+    ///   cancellation via [`crate::Store::interrupt_handle`] to ensure wasm
+    ///   doesn't take *too* long to execute.
     ///
     /// * Alternatively you can enable the
     ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
@@ -398,8 +395,9 @@ impl Config {
     ///   method, and will get automatically re-polled later. This enables the
     ///   `Future::poll` method to take roughly a fixed amount of time since
     ///   fuel is guaranteed to get consumed while wasm is executing. Note that
-    ///   to prevent infinite execution of wasm you'll still need to use
-    ///   [`crate::Store::interrupt_handle`].
+    ///   to prevent infinite execution of wasm you'll need to use either
+    ///   [`crate::Store::interrupt_handle`] or a normal timeout on futures
+    ///   (which will get triggered due to periodic `poll`s).
     ///
     /// In either case special care needs to be taken when integrating
     /// asynchronous wasm into your application. You should carefully plan where
