@@ -73,7 +73,7 @@ pub use self::data::*;
 ///
 /// You can create a store with default configuration settings using
 /// `Store::default()`. This will create a brand new [`Engine`] with default
-/// ocnfiguration (see [`Config`](crate::Config) for more information).
+/// configuration (see [`Config`](crate::Config) for more information).
 pub struct Store<T> {
     // for comments about `ManuallyDrop`, see `Store::into_data`
     inner: ManuallyDrop<Box<StoreInner<T>>>,
