@@ -600,7 +600,7 @@ fn hint_with_dwarf_info() -> Result<()> {
 wasm trap: unreachable
 wasm backtrace:
     0:   0x1a - <unknown>!start
-note: run with `WASMTIME_BACKTRACE_DETAILS=1` environment variable to display more information
+note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information
 "
     );
     Ok(())
