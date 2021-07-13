@@ -191,12 +191,11 @@ impl<'data> ModuleEnvironment<'data> {
     }
 
     fn register_dwarf_section(&mut self, name: &str, data: &'data [u8]) {
-        if !self.tunables.generate_native_debuginfo && !self.tunables.parse_wasm_debuginfo {
-            self.result.has_unparsed_debuginfo = true;
+        if !name.starts_with(".debug_") {
             return;
         }
-
-        if !name.starts_with(".debug_") {
+        if !self.tunables.generate_native_debuginfo && !self.tunables.parse_wasm_debuginfo {
+            self.result.has_unparsed_debuginfo = true;
             return;
         }
         let info = &mut self.result.debuginfo;
