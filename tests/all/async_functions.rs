@@ -610,3 +610,32 @@ fn resume_separate_thread3() {
     });
     assert!(f.call(&mut store, &[]).is_err());
 }
+
+#[test]
+fn recursive_async() -> Result<()> {
+    let mut store = async_store();
+    let m = Module::new(
+        store.engine(),
+        "(module
+            (func (export \"overflow\") call 0)
+            (func (export \"normal\"))
+        )",
+    )?;
+    let i = run(Instance::new_async(&mut store, &m, &[]))?;
+    let overflow = i.get_typed_func::<(), (), _>(&mut store, "overflow")?;
+    let normal = i.get_typed_func::<(), (), _>(&mut store, "normal")?;
+    let f2 = Func::wrap0_async(&mut store, move |mut caller| {
+        Box::new(async move {
+            // recursive async calls shouldn't immediately stack overflow...
+            normal.call_async(&mut caller, ()).await?;
+
+            // ... but calls that actually stack overflow should indeed stack
+            // overflow
+            let err = overflow.call_async(&mut caller, ()).await.unwrap_err();
+            assert_eq!(err.trap_code(), Some(TrapCode::StackOverflow));
+            Ok(())
+        })
+    });
+    run(f2.call_async(&mut store, &[]))?;
+    Ok(())
+}
