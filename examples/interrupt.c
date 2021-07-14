@@ -118,6 +118,10 @@ int main() {
   printf("Got a trap!...\n");
 
   // `trap` can be inspected here to see the trap message has an interrupt in it
+  wasmtime_trap_code_t code;
+  ok = wasmtime_trap_code(trap, &code);
+  assert(ok);
+  assert(code == WASMTIME_TRAP_CODE_INTERRUPT);
   wasm_trap_delete(trap);
 
   wasmtime_store_delete(store);
