@@ -191,7 +191,6 @@ fn x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
     match (testsuite, testname) {
         ("simd", "simd_i16x8_extadd_pairwise_i8x16") => return true,
-        ("simd", "simd_i16x8_q15mulr_sat_s") => return true,
         ("simd", "simd_i32x4_extadd_pairwise_i16x8") => return true,
         ("simd", "simd_i32x4_trunc_sat_f64x2") => return true,
         ("simd", "simd_int_to_int_extend") => return true,

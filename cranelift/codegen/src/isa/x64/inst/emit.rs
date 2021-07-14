@@ -1510,6 +1510,7 @@ pub(crate) fn emit(
                 SseOpcode::Pminud => (LegacyPrefixes::_66, 0x0F383B, 3),
                 SseOpcode::Pmuldq => (LegacyPrefixes::_66, 0x0F3828, 3),
                 SseOpcode::Pmulhw => (LegacyPrefixes::_66, 0x0FE5, 2),
+                SseOpcode::Pmulhrsw => (LegacyPrefixes::_66, 0x0F380B, 3),
                 SseOpcode::Pmulhuw => (LegacyPrefixes::_66, 0x0FE4, 2),
                 SseOpcode::Pmulld => (LegacyPrefixes::_66, 0x0F3840, 3),
                 SseOpcode::Pmullw => (LegacyPrefixes::_66, 0x0FD5, 2),
@@ -1754,7 +1755,6 @@ pub(crate) fn emit(
             let (prefix, opcode) = match op {
                 SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F29),
                 SseOpcode::Movapd => (LegacyPrefixes::_66, 0x0F29),
-                SseOpcode::Movdqa => (LegacyPrefixes::_66, 0x0F7F),
                 SseOpcode::Movdqu => (LegacyPrefixes::_F3, 0x0F7F),
                 SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F11),
                 SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F11),

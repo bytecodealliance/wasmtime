@@ -6406,6 +6406,42 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         },
 
+        Opcode::SqmulRoundSat => {
+            // Lane-wise saturating rounding multiplication in Q15 format
+            // Optimal lowering taken from instruction proposal https://github.com/WebAssembly/simd/pull/365
+            // y = i16x8.q15mulr_sat_s(a, b) is lowered to:
+            //MOVDQA xmm_y, xmm_a
+            //MOVDQA xmm_tmp, wasm_i16x8_splat(0x8000)
+            //PMULHRSW xmm_y, xmm_b
+            //PCMPEQW xmm_tmp, xmm_y
+            //PXOR xmm_y, xmm_tmp
+            let input_ty = ctx.input_ty(insn, 0);
+            let src1 = put_input_in_reg(ctx, inputs[0]);
+            let src2 = put_input_in_reg(ctx, inputs[1]);
+            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+            ctx.emit(Inst::gen_move(dst, src1, input_ty));
+            static SAT_MASK: [u8; 16] = [
+                0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+                0x00, 0x80,
+            ];
+            let mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&SAT_MASK));
+            let mask = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
+            ctx.emit(Inst::xmm_load_const(mask_const, mask, types::I16X8));
+
+            ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmulhrsw, RegMem::reg(src2), dst));
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Pcmpeqw,
+                RegMem::reg(dst.to_reg()),
+                mask,
+            ));
+            ctx.emit(Inst::xmm_rm_r(
+                SseOpcode::Pxor,
+                RegMem::reg(mask.to_reg()),
+                dst,
+            ));
+        }
+
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or
         // removed eventually.
@@ -6436,8 +6472,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             unimplemented!("Vector split/concat ops not implemented.");
         }
 
-        Opcode::SqmulRoundSat | Opcode::Uunarrow => {
-            unimplemented!("unimplemented lowering for opcode {:?}", op)
+        Opcode::Uunarrow => {
+            unimplemented!("unimplemented lowering for opcode {:?}", op);
         }
 
         // Opcodes that should be removed by legalization. These should
