@@ -1059,7 +1059,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 }
 
 /// This function is called to register state within `Store` whenever
-/// WebAssembly is entered for the first time within the `Store`.
+/// WebAssembly is entered within the `Store`.
 ///
 /// This function sets up various limits such as:
 ///
