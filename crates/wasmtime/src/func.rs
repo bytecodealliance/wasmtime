@@ -1040,22 +1040,10 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     closure: impl FnMut(*mut VMContext),
 ) -> Result<(), Trap> {
     unsafe {
-        let exit = if store
-            .0
-            .externref_activations_table()
-            .stack_canary()
-            .is_some()
-        {
-            false
-        } else {
-            enter_wasm(store)?;
-            true
-        };
+        let exit = enter_wasm(store)?;
 
         if let Err(trap) = store.0.exiting_native_hook() {
-            if exit {
-                exit_wasm(store);
-            }
+            exit_wasm(store, exit);
             return Err(trap);
         }
         let result = wasmtime_runtime::catch_traps(
@@ -1064,17 +1052,14 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
             store.0.default_callee(),
             closure,
         );
-        if exit {
-            exit_wasm(store);
-        }
+        exit_wasm(store, exit);
         store.0.entering_native_hook()?;
         result.map_err(Trap::from_runtime)
     }
 }
 
 /// This function is called to register state within `Store` whenever
-/// WebAssembly is entered for the first time within the `Store`. This isn't
-/// called when wasm is called recursively within the `Store`.
+/// WebAssembly is entered within the `Store`.
 ///
 /// This function sets up various limits such as:
 ///
@@ -1089,7 +1074,29 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 ///
 /// This function may fail if the the stack limit can't be set because an
 /// interrupt already happened.
-fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<(), Trap> {
+fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Trap> {
+    // If this is a recursive call, e.g. our stack canary is already set, then
+    // we may be able to skip this function.
+    //
+    // For synchronous stores there's nothing else to do because all wasm calls
+    // happen synchronously and on the same stack. This means that the previous
+    // stack limit will suffice for the next recursive call.
+    //
+    // For asynchronous stores then each call happens on a separate native
+    // stack. This means that the previous stack limit is no longer relevant
+    // because we're on a separate stack. In this situation we need to
+    // update the stack limit, but we don't need to update the gc stack canary
+    // in this situation.
+    if store
+        .0
+        .externref_activations_table()
+        .stack_canary()
+        .is_some()
+        && !store.0.async_support()
+    {
+        return Ok(None);
+    }
+
     let stack_pointer = psm::stack_pointer() as usize;
 
     // Determine the stack pointer where, after which, any wasm code will
@@ -1120,7 +1127,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<(), Trap> {
     // here should be correct for our use case.
     let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
     let interrupts = store.0.interrupts();
-    match interrupts.stack_limit.swap(wasm_stack_limit, Relaxed) {
+    let prev_stack = match interrupts.stack_limit.swap(wasm_stack_limit, Relaxed) {
         wasmtime_environ::INTERRUPTED => {
             // This means that an interrupt happened before we actually
             // called this function, which means that we're now
@@ -1132,25 +1139,44 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<(), Trap> {
                 backtrace::Backtrace::new_unresolved(),
             ));
         }
-        n => debug_assert_eq!(usize::max_value(), n),
-    }
-    store
-        .0
-        .externref_activations_table()
-        .set_stack_canary(Some(stack_pointer));
+        n => n,
+    };
 
-    Ok(())
+    // The `usize::max_value()` sentinel is present on recursive calls to
+    // asynchronous stores here. In that situation we don't want to keep
+    // updating the stack canary, so only execute this once at the top.
+    if prev_stack == usize::max_value() {
+        debug_assert!(store
+            .0
+            .externref_activations_table()
+            .stack_canary()
+            .is_none());
+        store
+            .0
+            .externref_activations_table()
+            .set_stack_canary(Some(stack_pointer));
+    }
+
+    Ok(Some(prev_stack))
 }
 
-fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>) {
-    store.0.externref_activations_table().set_stack_canary(None);
+fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
+    // If we don't have a previous stack pointer to restore, then there's no
+    // cleanup we need to perform here.
+    let prev_stack = match prev_stack {
+        Some(stack) => stack,
+        None => return,
+    };
+
+    // Only if we're restoring a top-level value do we clear the stack canary
+    // value. Otherwise our purpose here might be restoring a recursive stack
+    // limit but leaving the active canary in place.
+    if prev_stack == usize::max_value() {
+        store.0.externref_activations_table().set_stack_canary(None);
+    }
 
     // see docs above for why this uses `Relaxed`
-    store
-        .0
-        .interrupts()
-        .stack_limit
-        .store(usize::max_value(), Relaxed);
+    store.0.interrupts().stack_limit.store(prev_stack, Relaxed);
 }
 
 /// A trait implemented for types which can be returned from closures passed to
