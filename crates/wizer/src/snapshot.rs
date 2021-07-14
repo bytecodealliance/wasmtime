@@ -234,9 +234,9 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
         }
 
         let mut smallest_gaps = BinaryHeap::<GapIndex>::with_capacity(excess + 1);
-        for i in 0..merged_data_segments.len() - 1 {
+        for (i, w) in merged_data_segments.windows(2).enumerate() {
             debug_assert!(smallest_gaps.len() <= excess);
-            let gap = merged_data_segments[i].gap(&merged_data_segments[i + 1]);
+            let gap = w[0].gap(&w[1]);
             smallest_gaps.push(GapIndex { gap, index: i });
             if smallest_gaps.len() > excess {
                 let entry = smallest_gaps.pop();
