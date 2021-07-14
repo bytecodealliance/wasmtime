@@ -74,7 +74,8 @@ impl Dir {
         let mut f = self.0.open_with(Path::new(path), &opts)?;
         // NONBLOCK does not have an OpenOption either, but we can patch that on with set_fd_flags:
         if fdflags.contains(wasi_common::file::FdFlags::NONBLOCK) {
-            f.set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
+            let set_fd_flags = f.new_set_fd_flags(system_interface::fs::FdFlags::NONBLOCK)?;
+            f.set_fd_flags(set_fd_flags)?;
         }
         Ok(File::from_cap_std(f))
     }
@@ -311,13 +312,14 @@ fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemT
 #[cfg(test)]
 mod test {
     use super::Dir;
+    use cap_std::ambient_authority;
     #[test]
     fn scratch_dir() {
         let tempdir = tempfile::Builder::new()
             .prefix("cap-std-sync")
             .tempdir()
             .expect("create temporary dir");
-        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
+        let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
         run(wasi_common::WasiDir::open_dir(&preopen_dir, false, "."))
@@ -347,7 +349,7 @@ mod test {
             .prefix("cap-std-sync")
             .tempdir()
             .expect("create temporary dir");
-        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
+        let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
 

@@ -1,16 +1,17 @@
 use crate::file::convert_systimespec;
 use fs_set_times::SetTimes;
+use io_lifetimes::AsFilelike;
 use std::any::Any;
 use std::convert::TryInto;
+use std::fs::File;
 use std::io;
 use std::io::{Read, Write};
 use system_interface::io::ReadReady;
 
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd};
+use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
-use std::os::windows::io::{AsRawHandle, RawHandle};
-use unsafe_io::AsUnsafeFile;
+use io_lifetimes::{AsHandle, BorrowedHandle};
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
@@ -43,7 +44,7 @@ impl WasiFile for Stdin {
         Err(Error::badf())
     }
     async fn get_filestat(&self) -> Result<Filestat, Error> {
-        let meta = self.0.as_file_view().metadata()?;
+        let meta = self.0.as_filelike_view::<File>().metadata()?;
         Ok(Filestat {
             device_id: 0,
             inode: 0,
@@ -65,7 +66,7 @@ impl WasiFile for Stdin {
         Err(Error::badf())
     }
     async fn read_vectored<'a>(&self, bufs: &mut [io::IoSliceMut<'a>]) -> Result<u64, Error> {
-        let n = self.0.as_file_view().read_vectored(bufs)?;
+        let n = self.0.as_filelike_view::<File>().read_vectored(bufs)?;
         Ok(n.try_into().map_err(|_| Error::range())?)
     }
     async fn read_vectored_at<'a>(
@@ -111,15 +112,15 @@ impl WasiFile for Stdin {
     }
 }
 #[cfg(windows)]
-impl AsRawHandle for Stdin {
-    fn as_raw_handle(&self) -> RawHandle {
-        self.0.as_raw_handle()
+impl AsHandle for Stdin {
+    fn as_handle(&self) -> BorrowedHandle<'_> {
+        self.0.as_handle()
     }
 }
 #[cfg(unix)]
-impl AsRawFd for Stdin {
-    fn as_raw_fd(&self) -> RawFd {
-        self.0.as_raw_fd()
+impl AsFd for Stdin {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.0.as_fd()
     }
 }
 
@@ -146,7 +147,7 @@ macro_rules! wasi_file_write_impl {
                 Err(Error::badf())
             }
             async fn get_filestat(&self) -> Result<Filestat, Error> {
-                let meta = self.0.as_file_view().metadata()?;
+                let meta = self.0.as_filelike_view::<File>().metadata()?;
                 Ok(Filestat {
                     device_id: 0,
                     inode: 0,
@@ -181,7 +182,7 @@ macro_rules! wasi_file_write_impl {
                 Err(Error::badf())
             }
             async fn write_vectored<'a>(&self, bufs: &[io::IoSlice<'a>]) -> Result<u64, Error> {
-                let n = self.0.as_file_view().write_vectored(bufs)?;
+                let n = self.0.as_filelike_view::<File>().write_vectored(bufs)?;
                 Ok(n.try_into().map_err(|c| Error::range().context(c))?)
             }
             async fn write_vectored_at<'a>(
@@ -217,15 +218,15 @@ macro_rules! wasi_file_write_impl {
             }
         }
         #[cfg(windows)]
-        impl AsRawHandle for $ty {
-            fn as_raw_handle(&self) -> RawHandle {
-                self.0.as_raw_handle()
+        impl AsHandle for $ty {
+            fn as_handle(&self) -> BorrowedHandle<'_> {
+                self.0.as_handle()
             }
         }
         #[cfg(unix)]
-        impl AsRawFd for $ty {
-            fn as_raw_fd(&self) -> RawFd {
-                self.0.as_raw_fd()
+        impl AsFd for $ty {
+            fn as_fd(&self) -> BorrowedFd<'_> {
+                self.0.as_fd()
             }
         }
     };

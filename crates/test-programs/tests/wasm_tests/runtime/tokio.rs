@@ -51,7 +51,8 @@ fn run(
 
             if let Some(workspace) = workspace {
                 println!("preopen: {:?}", workspace);
-                let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(workspace) }?;
+                let preopen_dir =
+                    cap_std::fs::Dir::open_ambient_dir(workspace, cap_std::ambient_authority())?;
                 builder = builder.preopened_dir(preopen_dir, ".")?;
             }
 

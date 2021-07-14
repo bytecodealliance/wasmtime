@@ -111,83 +111,78 @@ impl TryFrom<std::io::Error> for types::Errno {
     type Error = Error;
     fn try_from(err: std::io::Error) -> Result<types::Errno, Error> {
         #[cfg(unix)]
-        fn raw_error_code(code: i32) -> Option<types::Errno> {
-            match code {
-                libc::EPIPE => Some(types::Errno::Pipe),
-                libc::EPERM => Some(types::Errno::Perm),
-                libc::ENOENT => Some(types::Errno::Noent),
-                libc::ENOMEM => Some(types::Errno::Nomem),
-                libc::E2BIG => Some(types::Errno::TooBig),
-                libc::EIO => Some(types::Errno::Io),
-                libc::EBADF => Some(types::Errno::Badf),
-                libc::EBUSY => Some(types::Errno::Busy),
-                libc::EACCES => Some(types::Errno::Acces),
-                libc::EFAULT => Some(types::Errno::Fault),
-                libc::ENOTDIR => Some(types::Errno::Notdir),
-                libc::EISDIR => Some(types::Errno::Isdir),
-                libc::EINVAL => Some(types::Errno::Inval),
-                libc::EEXIST => Some(types::Errno::Exist),
-                libc::EFBIG => Some(types::Errno::Fbig),
-                libc::ENOSPC => Some(types::Errno::Nospc),
-                libc::ESPIPE => Some(types::Errno::Spipe),
-                libc::EMFILE => Some(types::Errno::Mfile),
-                libc::EMLINK => Some(types::Errno::Mlink),
-                libc::ENAMETOOLONG => Some(types::Errno::Nametoolong),
-                libc::ENFILE => Some(types::Errno::Nfile),
-                libc::ENOTEMPTY => Some(types::Errno::Notempty),
-                libc::ELOOP => Some(types::Errno::Loop),
-                libc::EOVERFLOW => Some(types::Errno::Overflow),
-                libc::EILSEQ => Some(types::Errno::Ilseq),
-                libc::ENOTSUP => Some(types::Errno::Notsup),
+        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
+            use posish::io::Error;
+            match Error::from_io_error(err) {
+                Some(Error::PIPE) => Some(types::Errno::Pipe),
+                Some(Error::PERM) => Some(types::Errno::Perm),
+                Some(Error::NOENT) => Some(types::Errno::Noent),
+                Some(Error::NOMEM) => Some(types::Errno::Nomem),
+                Some(Error::TOOBIG) => Some(types::Errno::TooBig),
+                Some(Error::IO) => Some(types::Errno::Io),
+                Some(Error::BADF) => Some(types::Errno::Badf),
+                Some(Error::BUSY) => Some(types::Errno::Busy),
+                Some(Error::ACCES) => Some(types::Errno::Acces),
+                Some(Error::FAULT) => Some(types::Errno::Fault),
+                Some(Error::NOTDIR) => Some(types::Errno::Notdir),
+                Some(Error::ISDIR) => Some(types::Errno::Isdir),
+                Some(Error::INVAL) => Some(types::Errno::Inval),
+                Some(Error::EXIST) => Some(types::Errno::Exist),
+                Some(Error::FBIG) => Some(types::Errno::Fbig),
+                Some(Error::NOSPC) => Some(types::Errno::Nospc),
+                Some(Error::SPIPE) => Some(types::Errno::Spipe),
+                Some(Error::MFILE) => Some(types::Errno::Mfile),
+                Some(Error::MLINK) => Some(types::Errno::Mlink),
+                Some(Error::NAMETOOLONG) => Some(types::Errno::Nametoolong),
+                Some(Error::NFILE) => Some(types::Errno::Nfile),
+                Some(Error::NOTEMPTY) => Some(types::Errno::Notempty),
+                Some(Error::LOOP) => Some(types::Errno::Loop),
+                Some(Error::OVERFLOW) => Some(types::Errno::Overflow),
+                Some(Error::ILSEQ) => Some(types::Errno::Ilseq),
+                Some(Error::NOTSUP) => Some(types::Errno::Notsup),
                 _ => None,
             }
         }
         #[cfg(windows)]
-        fn raw_error_code(code: i32) -> Option<types::Errno> {
+        fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
             use winapi::shared::winerror;
-            match code as u32 {
-                winerror::ERROR_BAD_ENVIRONMENT => Some(types::Errno::TooBig),
-                winerror::ERROR_FILE_NOT_FOUND => Some(types::Errno::Noent),
-                winerror::ERROR_PATH_NOT_FOUND => Some(types::Errno::Noent),
-                winerror::ERROR_TOO_MANY_OPEN_FILES => Some(types::Errno::Nfile),
-                winerror::ERROR_ACCESS_DENIED => Some(types::Errno::Acces),
-                winerror::ERROR_SHARING_VIOLATION => Some(types::Errno::Acces),
-                winerror::ERROR_PRIVILEGE_NOT_HELD => Some(types::Errno::Perm),
-                winerror::ERROR_INVALID_HANDLE => Some(types::Errno::Badf),
-                winerror::ERROR_INVALID_NAME => Some(types::Errno::Noent),
-                winerror::ERROR_NOT_ENOUGH_MEMORY => Some(types::Errno::Nomem),
-                winerror::ERROR_OUTOFMEMORY => Some(types::Errno::Nomem),
-                winerror::ERROR_DIR_NOT_EMPTY => Some(types::Errno::Notempty),
-                winerror::ERROR_NOT_READY => Some(types::Errno::Busy),
-                winerror::ERROR_BUSY => Some(types::Errno::Busy),
-                winerror::ERROR_NOT_SUPPORTED => Some(types::Errno::Notsup),
-                winerror::ERROR_FILE_EXISTS => Some(types::Errno::Exist),
-                winerror::ERROR_BROKEN_PIPE => Some(types::Errno::Pipe),
-                winerror::ERROR_BUFFER_OVERFLOW => Some(types::Errno::Nametoolong),
-                winerror::ERROR_NOT_A_REPARSE_POINT => Some(types::Errno::Inval),
-                winerror::ERROR_NEGATIVE_SEEK => Some(types::Errno::Inval),
-                winerror::ERROR_DIRECTORY => Some(types::Errno::Notdir),
-                winerror::ERROR_ALREADY_EXISTS => Some(types::Errno::Exist),
-                winerror::ERROR_STOPPED_ON_SYMLINK => Some(types::Errno::Loop),
-                winerror::ERROR_DIRECTORY_NOT_SUPPORTED => Some(types::Errno::Isdir),
+            match err.raw_os_error().map(|code| code as u32) {
+                Some(winerror::ERROR_BAD_ENVIRONMENT) => Some(types::Errno::TooBig),
+                Some(winerror::ERROR_FILE_NOT_FOUND) => Some(types::Errno::Noent),
+                Some(winerror::ERROR_PATH_NOT_FOUND) => Some(types::Errno::Noent),
+                Some(winerror::ERROR_TOO_MANY_OPEN_FILES) => Some(types::Errno::Nfile),
+                Some(winerror::ERROR_ACCESS_DENIED) => Some(types::Errno::Acces),
+                Some(winerror::ERROR_SHARING_VIOLATION) => Some(types::Errno::Acces),
+                Some(winerror::ERROR_PRIVILEGE_NOT_HELD) => Some(types::Errno::Perm),
+                Some(winerror::ERROR_INVALID_HANDLE) => Some(types::Errno::Badf),
+                Some(winerror::ERROR_INVALID_NAME) => Some(types::Errno::Noent),
+                Some(winerror::ERROR_NOT_ENOUGH_MEMORY) => Some(types::Errno::Nomem),
+                Some(winerror::ERROR_OUTOFMEMORY) => Some(types::Errno::Nomem),
+                Some(winerror::ERROR_DIR_NOT_EMPTY) => Some(types::Errno::Notempty),
+                Some(winerror::ERROR_NOT_READY) => Some(types::Errno::Busy),
+                Some(winerror::ERROR_BUSY) => Some(types::Errno::Busy),
+                Some(winerror::ERROR_NOT_SUPPORTED) => Some(types::Errno::Notsup),
+                Some(winerror::ERROR_FILE_EXISTS) => Some(types::Errno::Exist),
+                Some(winerror::ERROR_BROKEN_PIPE) => Some(types::Errno::Pipe),
+                Some(winerror::ERROR_BUFFER_OVERFLOW) => Some(types::Errno::Nametoolong),
+                Some(winerror::ERROR_NOT_A_REPARSE_POINT) => Some(types::Errno::Inval),
+                Some(winerror::ERROR_NEGATIVE_SEEK) => Some(types::Errno::Inval),
+                Some(winerror::ERROR_DIRECTORY) => Some(types::Errno::Notdir),
+                Some(winerror::ERROR_ALREADY_EXISTS) => Some(types::Errno::Exist),
+                Some(winerror::ERROR_STOPPED_ON_SYMLINK) => Some(types::Errno::Loop),
+                Some(winerror::ERROR_DIRECTORY_NOT_SUPPORTED) => Some(types::Errno::Isdir),
                 _ => None,
             }
         }
 
-        match err.raw_os_error() {
-            Some(code) => match raw_error_code(code) {
-                Some(errno) => Ok(errno),
-                None => {
-                    Err(anyhow::anyhow!(err).context(format!("Unknown raw OS error: {}", code)))
-                }
-            },
+        match raw_error_code(&err) {
+            Some(errno) => Ok(errno),
             None => match err.kind() {
                 std::io::ErrorKind::NotFound => Ok(types::Errno::Noent),
                 std::io::ErrorKind::PermissionDenied => Ok(types::Errno::Perm),
                 std::io::ErrorKind::AlreadyExists => Ok(types::Errno::Exist),
                 std::io::ErrorKind::InvalidInput => Ok(types::Errno::Ilseq),
-                k => Err(anyhow::anyhow!(err)
-                    .context(format!("No raw OS error. Unhandled kind: {:?}", k))),
+                _ => Err(anyhow::anyhow!(err).context(format!("Unknown OS error"))),
             },
         }
     }

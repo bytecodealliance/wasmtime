@@ -9,6 +9,7 @@
 // taken the time to improve it. See bug #2880.
 
 use anyhow::Context;
+use io_lifetimes::AsHandle;
 use std::ops::Deref;
 use std::os::windows::io::{AsRawHandle, RawHandle};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
@@ -145,24 +146,28 @@ pub fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
         Some(
             a.downcast_ref::<crate::file::File>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else if a.is::<crate::stdio::Stdin>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdin>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else if a.is::<crate::stdio::Stdout>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdout>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else if a.is::<crate::stdio::Stderr>() {
         Some(
             a.downcast_ref::<crate::stdio::Stderr>()
                 .unwrap()
+                .as_handle()
                 .as_raw_handle(),
         )
     } else {

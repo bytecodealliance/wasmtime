@@ -49,7 +49,9 @@ impl WasiFile for File {
         ) {
             return Err(Error::invalid_argument().context("cannot set DSYNC, SYNC, or RSYNC flag"));
         }
-        Ok(self.0.set_fd_flags(to_sysif_fdflags(fdflags))?)
+        let set_fd_flags = self.0.new_set_fd_flags(to_sysif_fdflags(fdflags))?;
+        self.0.set_fd_flags(set_fd_flags)?;
+        Ok(())
     }
     async fn get_filestat(&self) -> Result<Filestat, Error> {
         let meta = self.0.metadata()?;
@@ -151,20 +153,20 @@ pub fn filetype_from(ft: &cap_std::fs::FileType) -> FileType {
 }
 
 #[cfg(windows)]
-use std::os::windows::io::{AsRawHandle, RawHandle};
+use io_lifetimes::{AsHandle, BorrowedHandle};
 #[cfg(windows)]
-impl AsRawHandle for File {
-    fn as_raw_handle(&self) -> RawHandle {
-        self.0.as_raw_handle()
+impl AsHandle for File {
+    fn as_handle(&self) -> BorrowedHandle<'_> {
+        self.0.as_handle()
     }
 }
 
 #[cfg(unix)]
-use std::os::unix::io::{AsRawFd, RawFd};
+use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(unix)]
-impl AsRawFd for File {
-    fn as_raw_fd(&self) -> RawFd {
-        self.0.as_raw_fd()
+impl AsFd for File {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.0.as_fd()
     }
 }
 pub fn convert_systimespec(t: Option<wasi_common::SystemTimeSpec>) -> Option<SystemTimeSpec> {

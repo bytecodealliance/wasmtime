@@ -1,8 +1,10 @@
 use crate::block_on_dummy_executor;
+#[cfg(not(windows))]
+use io_lifetimes::AsFd;
+#[cfg(windows)]
+use io_lifetimes::{AsHandle, BorrowedHandle};
 use std::any::Any;
 use std::io;
-#[cfg(windows)]
-use std::os::windows::io::{AsRawHandle, RawHandle};
 use wasi_common::{
     file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error,
@@ -118,9 +120,9 @@ macro_rules! wasi_file_impl {
                 // mutability to let it own the `Inner`, we are depending on the `&mut self` bound on this
                 // async method to ensure this is the only Future which can access the RawFd during the
                 // lifetime of the AsyncFd.
+                use std::os::unix::io::AsRawFd;
                 use tokio::io::{unix::AsyncFd, Interest};
-                use unsafe_io::os::posish::AsRawFd;
-                let rawfd = self.0.as_raw_fd();
+                let rawfd = self.0.as_fd().as_raw_fd();
                 match AsyncFd::with_interest(rawfd, Interest::READABLE) {
                     Ok(asyncfd) => {
                         let _ = asyncfd.readable().await?;
@@ -148,9 +150,9 @@ macro_rules! wasi_file_impl {
                 // mutability to let it own the `Inner`, we are depending on the `&mut self` bound on this
                 // async method to ensure this is the only Future which can access the RawFd during the
                 // lifetime of the AsyncFd.
+                use std::os::unix::io::AsRawFd;
                 use tokio::io::{unix::AsyncFd, Interest};
-                use unsafe_io::os::posish::AsRawFd;
-                let rawfd = self.0.as_raw_fd();
+                let rawfd = self.0.as_fd().as_raw_fd();
                 match AsyncFd::with_interest(rawfd, Interest::WRITABLE) {
                     Ok(asyncfd) => {
                         let _ = asyncfd.writable().await?;
@@ -172,9 +174,9 @@ macro_rules! wasi_file_impl {
             }
         }
         #[cfg(windows)]
-        impl AsRawHandle for $ty {
-            fn as_raw_handle(&self) -> RawHandle {
-                self.0.as_raw_handle()
+        impl AsHandle for $ty {
+            fn as_handle(&self) -> BorrowedHandle<'_> {
+                self.0.as_handle()
             }
         }
     };

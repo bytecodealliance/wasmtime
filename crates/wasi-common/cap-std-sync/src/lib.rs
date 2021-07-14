@@ -37,6 +37,7 @@ pub mod file;
 pub mod sched;
 pub mod stdio;
 
+pub use cap_std::ambient_authority;
 pub use cap_std::fs::Dir;
 pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
@@ -123,5 +124,5 @@ impl WasiCtxBuilder {
 }
 
 pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
-    Box::new(unsafe { cap_rand::rngs::OsRng::default() })
+    Box::new(cap_rand::rngs::OsRng::default(ambient_authority()))
 }

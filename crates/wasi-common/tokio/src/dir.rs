@@ -126,13 +126,15 @@ impl WasiDir for Dir {
 #[cfg(test)]
 mod test {
     use super::Dir;
+    use cap_std::ambient_authority;
+
     #[tokio::test(flavor = "multi_thread")]
     async fn scratch_dir() {
         let tempdir = tempfile::Builder::new()
             .prefix("cap-std-sync")
             .tempdir()
             .expect("create temporary dir");
-        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
+        let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
         wasi_common::WasiDir::open_dir(&preopen_dir, false, ".")
@@ -165,7 +167,7 @@ mod test {
             .prefix("cap-std-sync")
             .tempdir()
             .expect("create temporary dir");
-        let preopen_dir = unsafe { cap_std::fs::Dir::open_ambient_dir(tempdir.path()) }
+        let preopen_dir = cap_std::fs::Dir::open_ambient_dir(tempdir.path(), ambient_authority())
             .expect("open ambient temporary dir");
         let preopen_dir = Dir::from_cap_std(preopen_dir);
 

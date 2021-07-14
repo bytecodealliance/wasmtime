@@ -11,7 +11,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::sync::{Dir, WasiCtxBuilder};
+use wasmtime_wasi::sync::{ambient_authority, Dir, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
@@ -215,7 +215,7 @@ impl RunCommand {
         for dir in self.dirs.iter() {
             preopen_dirs.push((
                 dir.clone(),
-                unsafe { Dir::open_ambient_dir(dir) }
+                Dir::open_ambient_dir(dir, ambient_authority())
                     .with_context(|| format!("failed to open directory '{}'", dir))?,
             ));
         }
@@ -223,7 +223,7 @@ impl RunCommand {
         for (guest, host) in self.map_dirs.iter() {
             preopen_dirs.push((
                 guest.clone(),
-                unsafe { Dir::open_ambient_dir(host) }
+                Dir::open_ambient_dir(host, ambient_authority())
                     .with_context(|| format!("failed to open directory '{}'", host))?,
             ));
         }

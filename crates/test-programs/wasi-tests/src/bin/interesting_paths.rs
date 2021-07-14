@@ -43,6 +43,7 @@ unsafe fn test_interesting_paths(dir_fd: wasi::Fd, arg: &str) {
         wasi::path_open(dir_fd, 0, "dir/nested/file\0", 0, 0, 0, 0)
             .expect_err("opening a file with a trailing NUL")
             .raw_error(),
+        wasi::ERRNO_INVAL,
         wasi::ERRNO_ILSEQ
     );
 
