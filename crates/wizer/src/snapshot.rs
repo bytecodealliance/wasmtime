@@ -1,7 +1,10 @@
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
-use std::convert::TryFrom;
+use std::{collections::BinaryHeap, convert::TryFrom};
 
 const WASM_PAGE_SIZE: u32 = 65_536;
+
+/// The maximum number of data segments that most engines support.
+const MAX_DATA_SEGMENTS: usize = 100_000;
 
 /// A "snapshot" of Wasm state from its default value after having been initialized.
 pub struct Snapshot<'a> {
@@ -27,6 +30,42 @@ pub struct DataSegment<'a> {
     pub offset: u32,
     /// This segment's (non-zero) data.
     pub data: &'a [u8],
+}
+
+impl<'a> DataSegment<'a> {
+    /// What is the gap between two consecutive data segments?
+    ///
+    /// `self` must be in front of `other` and they must not overlap with each
+    /// other.
+    fn gap(&self, other: &Self) -> u32 {
+        let self_len = u32::try_from(self.data.len()).unwrap();
+        debug_assert!(self.offset + self_len <= other.offset);
+        other.offset - (self.offset + self_len)
+    }
+
+    /// Get a slice of the merged data for two consecutive data segments.
+    ///
+    /// # Safety
+    ///
+    /// Both `self` and `other` must be segments whose data are from the same
+    /// Wasm linear memory.
+    ///
+    /// `self` must be in front of `other` and they must not overlap with each
+    /// other.
+    unsafe fn merge(&self, other: &Self) -> &'a [u8] {
+        debug_assert_eq!(self.memory_index, other.memory_index);
+
+        let gap = self.gap(other);
+        let gap = usize::try_from(gap).unwrap();
+
+        debug_assert_eq!(
+            self.data
+                .as_ptr()
+                .offset(isize::try_from(self.data.len() + gap).unwrap()),
+            other.data.as_ptr(),
+        );
+        std::slice::from_raw_parts(self.data.as_ptr(), self.data.len() + gap + other.data.len())
+    }
 }
 
 /// Snapshot the given instance's globals, memories, and instances from the Wasm
@@ -152,24 +191,71 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
 
         // Only merge segments if they are contiguous or if it is definitely
         // more size efficient than leaving them apart.
-        let distance = b.offset - (a.offset + u32::try_from(a.data.len()).unwrap());
-        if distance > MIN_ACTIVE_SEGMENT_OVERHEAD {
+        let gap = a.gap(b);
+        if gap > MIN_ACTIVE_SEGMENT_OVERHEAD {
             merged_data_segments.push(*b);
             continue;
         }
 
-        // Okay, merge them together into `a` (so that the next iteration
-        // can merge it with its predecessor) and then remove `b`!
-        a.data = unsafe {
-            let distance = usize::try_from(distance).unwrap();
-            debug_assert_eq!(
-                a.data
-                    .as_ptr()
-                    .offset(isize::try_from(a.data.len() + distance).unwrap()),
-                b.data.as_ptr()
-            );
-            std::slice::from_raw_parts(a.data.as_ptr(), a.data.len() + distance + b.data.len())
-        };
+        // Okay, merge them together into `a` (so that the next iteration can
+        // merge it with its predecessor) and then omit `b`!
+        let merged_data = unsafe { a.merge(b) };
+        a.data = merged_data;
+    }
+
+    // Engines apply a limit on how many segments a module may contain, and
+    // Wizer can run afoul of it. In this case, we need to merge data segments
+    // together until our number of data segments fits within the limit.
+    if merged_data_segments.len() >= MAX_DATA_SEGMENTS {
+        // We need to remove `excess` data segments. Find the `excess` smallest
+        // gaps between the start of one segment and the next. We will merge
+        // these segments together. Because they are the smallest gaps, this
+        // will bloat the size of our data segment the least.
+        let excess = merged_data_segments.len() - MAX_DATA_SEGMENTS;
+
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        struct GapIndex {
+            gap: u32,
+            index: usize,
+        }
+        impl Ord for GapIndex {
+            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                // NB: Bigger gaps first.
+                other
+                    .gap
+                    .cmp(&self.gap)
+                    .then_with(|| self.index.cmp(&other.index))
+            }
+        }
+        impl PartialOrd for GapIndex {
+            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                Some(self.cmp(other))
+            }
+        }
+
+        let mut smallest_gaps = BinaryHeap::<GapIndex>::with_capacity(excess + 1);
+        for (i, w) in merged_data_segments.windows(2).enumerate() {
+            debug_assert!(smallest_gaps.len() <= excess);
+            let gap = w[0].gap(&w[1]);
+            smallest_gaps.push(GapIndex { gap, index: i });
+            if smallest_gaps.len() > excess {
+                let entry = smallest_gaps.pop();
+                debug_assert!(entry.unwrap().gap >= gap);
+                debug_assert_eq!(smallest_gaps.len(), excess);
+            }
+        }
+
+        // Now merge the chosen segments together in reverse order so that
+        // merging two segments doesn't mess up the index of the next segments
+        // we will to merge.
+        let mut indices: Vec<_> = smallest_gaps.into_iter().map(|g| g.index).collect();
+        indices.sort_unstable_by(|a, b| a.cmp(b).reverse());
+        for i in indices {
+            let merged_data =
+                unsafe { merged_data_segments[i].merge(&merged_data_segments[i + 1]) };
+            merged_data_segments[i].data = merged_data;
+            merged_data_segments.remove(i + 1);
+        }
     }
 
     (memory_mins, merged_data_segments)
