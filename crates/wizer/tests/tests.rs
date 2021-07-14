@@ -22,6 +22,9 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
          ===========================================================================",
         wasmprinter::print_bytes(&wasm).unwrap()
     );
+    if log::log_enabled!(log::Level::Debug) {
+        std::fs::write("test.wasm", &wasm).unwrap();
+    }
 
     let mut config = wasmtime::Config::new();
     config.cache_config_load_default().unwrap();
@@ -731,6 +734,51 @@ fn data_segment_at_end_of_memory() -> anyhow::Result<()> {
   (func (export "run") (result i32)
     i32.const 0
     i32.load8_u offset=65535
+  )
+)
+"#,
+    )
+}
+
+#[test]
+fn too_many_data_segments_for_engines() -> anyhow::Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  ;; Enough memory to create more segments than engines will allow:
+  ;;
+  ;;     // The maximum number of segments that engines will allow a module to
+  ;;     // have.
+  ;;     let max_segments = 100_000;
+  ;;
+  ;;     // The minimum gap that Wizer won't automatically merge two data
+  ;;     // segments (see `MIN_ACTIVE_SEGMENT_OVERHEAD`).
+  ;;     let wizer_min_gap = 6;
+  ;;
+  ;;     // Wasm page size.
+  ;;     let wasm_page_size = 65_536;
+  ;;
+  ;;     let num_pages = round_up(max_segments * wizer_min_gap / wasm_page_size);
+  (memory 10)
+
+  (func (export "wizer.initialize")
+    (local i32)
+    loop
+      (i32.ge_u (local.get 0) (i32.const 655360)) ;; 10 * wasm_page_size
+      if
+        return
+      end
+
+      (i32.store8 (local.get 0) (i32.const 42))
+      (local.set 0 (i32.add (local.get 0) (i32.const 6)))
+      br 0
+    end
+  )
+  (func (export "run") (result i32)
+    i32.const 0
+    i32.load8_u
   )
 )
 "#,
