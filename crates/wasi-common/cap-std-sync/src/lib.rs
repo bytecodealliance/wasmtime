@@ -37,12 +37,12 @@ pub mod file;
 pub mod sched;
 pub mod stdio;
 
+pub use cap_std::ambient_authority;
 pub use cap_std::fs::Dir;
 pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
 use cap_rand::RngCore;
-use cap_std::ambient_authority;
 use std::path::Path;
 use wasi_common::{table::Table, Error, WasiCtx, WasiFile};
 

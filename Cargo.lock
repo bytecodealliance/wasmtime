@@ -3606,7 +3606,6 @@ dependencies = [
 name = "wasmtime-cli"
 version = "0.28.0"
 dependencies = [
- "ambient-authority",
  "anyhow",
  "criterion",
  "env_logger 0.8.3",

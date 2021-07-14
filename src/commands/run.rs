@@ -1,7 +1,6 @@
 //! The module that implements the `wasmtime run` command.
 
 use crate::{CommonOptions, WasiModules};
-use ambient_authority::ambient_authority;
 use anyhow::{anyhow, bail, Context as _, Result};
 use std::thread;
 use std::time::Duration;
@@ -12,7 +11,7 @@ use std::{
 };
 use structopt::{clap::AppSettings, StructOpt};
 use wasmtime::{Engine, Func, Linker, Module, Store, Trap, Val, ValType};
-use wasmtime_wasi::sync::{Dir, WasiCtxBuilder};
+use wasmtime_wasi::sync::{ambient_authority, Dir, WasiCtxBuilder};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::WasiNnCtx;
