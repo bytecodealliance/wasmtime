@@ -933,7 +933,7 @@ impl From<GuestError> for Trap {
     }
 }
 
-pub fn run_in_dummy_executor<F: std::future::Future>(future: F) -> F::Output {
+pub fn run_in_dummy_executor<F: std::future::Future>(future: F) -> Result<F::Output, Trap> {
     use std::pin::Pin;
     use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
@@ -941,10 +941,9 @@ pub fn run_in_dummy_executor<F: std::future::Future>(future: F) -> F::Output {
     let waker = dummy_waker();
     let mut cx = Context::from_waker(&waker);
     match f.as_mut().poll(&mut cx) {
-        Poll::Ready(val) => return val,
-        Poll::Pending => {
-            panic!("Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store")
-        }
+        Poll::Ready(val) => return Ok(val),
+        Poll::Pending =>
+            return Err(Trap::String("Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store".to_owned()))
     }
 
     fn dummy_waker() -> Waker {
