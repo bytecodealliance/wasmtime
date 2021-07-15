@@ -1,6 +1,6 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
 use once_cell::unsync::OnceCell;
-use wasmtime::Trap;
+use wasmtime::{Trap, TrapCode};
 
 #[repr(C)]
 #[derive(Clone)]
@@ -89,6 +89,30 @@ pub extern "C" fn wasm_trap_trace(raw: &wasm_trap_t, out: &mut wasm_frame_vec_t)
         })
         .collect();
     out.set_buffer(vec);
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut i32) -> bool {
+    match raw.trap.trap_code() {
+        Some(c) => {
+            *code = match c {
+                TrapCode::StackOverflow => 0,
+                TrapCode::MemoryOutOfBounds => 1,
+                TrapCode::HeapMisaligned => 2,
+                TrapCode::TableOutOfBounds => 3,
+                TrapCode::IndirectCallToNull => 4,
+                TrapCode::BadSignature => 5,
+                TrapCode::IntegerOverflow => 6,
+                TrapCode::IntegerDivisionByZero => 7,
+                TrapCode::BadConversionToInteger => 8,
+                TrapCode::UnreachableCodeReached => 9,
+                TrapCode::Interrupt => 10,
+                _ => unreachable!(),
+            };
+            true
+        }
+        None => false,
+    }
 }
 
 #[no_mangle]

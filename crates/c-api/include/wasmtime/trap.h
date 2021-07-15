@@ -14,6 +14,41 @@ extern "C" {
 #endif
 
 /**
+ * \brief Code of an instruction trap.
+ *
+ * See #wasmtime_trap_code_enum for possible values.
+ */
+typedef uint8_t wasmtime_trap_code_t;
+
+/**
+ * \brief Trap codes for instruction traps.
+ */
+enum wasmtime_trap_code_enum {
+  /// The current stack space was exhausted.
+  WASMTIME_TRAP_CODE_STACK_OVERFLOW,
+  /// An out-of-bounds memory access.
+  WASMTIME_TRAP_CODE_MEMORY_OUT_OF_BOUNDS,
+  /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
+  WASMTIME_TRAP_CODE_HEAP_MISALIGNED,
+  /// An out-of-bounds access to a table.
+  WASMTIME_TRAP_CODE_TABLE_OUT_OF_BOUNDS,
+  /// Indirect call to a null table entry.
+  WASMTIME_TRAP_CODE_INDIRECT_CALL_TO_NULL,
+  /// Signature mismatch on indirect call.
+  WASMTIME_TRAP_CODE_BAD_SIGNATURE,
+  /// An integer arithmetic operation caused an overflow.
+  WASMTIME_TRAP_CODE_INTEGER_OVERFLOW,
+  /// An integer division by zero.
+  WASMTIME_TRAP_CODE_INTEGER_DIVISION_BY_ZERO,
+  /// Failed float-to-int conversion.
+  WASMTIME_TRAP_CODE_BAD_CONVERSION_TO_INTEGER,
+  /// Code that was supposed to have been unreachable was reached.
+  WASMTIME_TRAP_CODE_UNREACHABLE_CODE_REACHED,
+  /// Execution has potentially run too long and may be interrupted.
+  WASMTIME_TRAP_CODE_INTERRUPT,
+};
+
+/**
  * \brief Creates a new trap.
  *
  * \param msg the message to associate with this trap
@@ -22,6 +57,17 @@ extern "C" {
  * The #wasm_trap_t returned is owned by the caller.
  */
 WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(const char *msg, size_t msg_len);
+
+/**
+ * \brief Attempts to extract the trap code from this trap.
+ *
+ * Returns `true` if the trap is an instruction trap triggered while
+ * executing Wasm. If `true` is returned then the trap code is returned
+ * through the `code` pointer. If `false` is returned then this is not
+ * an instruction trap -- traps can also be created using wasm_trap_new,
+ * or occur with WASI modules exiting with a certain exit code.
+ */
+WASM_API_EXTERN bool wasmtime_trap_code(const wasm_trap_t*, wasmtime_trap_code_t *code);
 
 /**
  * \brief Attempts to extract a WASI-specific exit status from this trap.

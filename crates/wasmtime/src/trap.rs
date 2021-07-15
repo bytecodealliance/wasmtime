@@ -42,6 +42,14 @@ impl fmt::Display for TrapReason {
 /// A trap code describing the reason for a trap.
 ///
 /// All trap instructions have an explicit trap code.
+///
+/// The code can be accessed from the c-api, where the possible values are translated
+/// into enum values defined there:
+///
+/// * `wasm_trap_code` in c-api/src/trap.rs, and
+/// * `wasmtime_trap_code_enum` in c-api/include/wasmtime/trap.h.
+///
+/// These need to be kept in sync.
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum TrapCode {
