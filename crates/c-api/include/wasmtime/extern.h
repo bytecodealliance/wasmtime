@@ -84,7 +84,7 @@ typedef struct wasmtime_global {
   size_t index;
 } wasmtime_global_t;
 
-/// \brief Disciminant of #wasmtime_extern_t
+/// \brief Discriminant of #wasmtime_extern_t
 typedef uint8_t wasmtime_extern_kind_t;
 
 /// \brief Value of #wasmtime_extern_kind_t meaning that #wasmtime_extern_t is a
