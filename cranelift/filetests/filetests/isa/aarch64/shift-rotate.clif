@@ -237,12 +237,9 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  uxth w0, w0
+; check:  uxth w0, w0
+; nextln:  and w1, w1, #15
 ; nextln:  lsr w0, w0, w1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
 
 function %f11(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -250,12 +247,9 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  uxtb w0, w0
+; check:  uxtb w0, w0
+; nextln:  and w1, w1, #7
 ; nextln:  lsr w0, w0, w1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; LSL, variable
@@ -291,11 +285,8 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
+; check:  and w1, w1, #15
 ; nextln:  lsl w0, w0, w1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
 
 function %f15(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -303,11 +294,8 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
+; check:  and w1, w1, #7
 ; nextln:  lsl w0, w0, w1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ASR, variable
@@ -343,12 +331,8 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  sxth w0, w0
+; check:  and w1, w1, #15
 ; nextln:  asr w0, w0, w1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
 
 function %f19(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
@@ -356,12 +340,8 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  sxtb w0, w0
+; check:  and w1, w1, #7
 ; nextln:  asr w0, w0, w1
-; nextln:  ldp fp, lr, [sp], #16
-; nextln:  ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; immediate forms

@@ -107,6 +107,15 @@ pub(crate) enum ResultRegImmShift {
     ImmShift(ImmShift),
 }
 
+impl ResultRegImmShift {
+    pub fn unwrap_reg(self) -> Reg {
+        match self {
+            ResultRegImmShift::Reg(r) => r,
+            _ => panic!("Unwrapped ResultRegImmShift, expected reg, got: {:?}", self),
+        }
+    }
+}
+
 //============================================================================
 // Lowering: convert instruction inputs to forms that we can use.
 
