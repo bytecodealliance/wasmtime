@@ -3555,12 +3555,62 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::ConstAddr
-        | Opcode::FcvtLowFromSint
-        | Opcode::Fvdemote
-        | Opcode::FvpromoteLow
-        | Opcode::Vconcat
-        | Opcode::Vsplit => unimplemented!("lowering {}", op),
+        Opcode::FcvtLowFromSint => {
+            let ty = ty.unwrap();
+
+            if ty != F64X2 {
+                return Err(CodegenError::Unsupported(format!(
+                    "FcvtLowFromSint: Unsupported type: {:?}",
+                    ty
+                )));
+            }
+
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+
+            ctx.emit(Inst::VecExtend {
+                t: VecExtendOp::Sxtl32,
+                rd,
+                rn,
+                high_half: false,
+            });
+            ctx.emit(Inst::VecMisc {
+                op: VecMisc2::Scvtf,
+                rd,
+                rn: rd.to_reg(),
+                size: VectorSize::Size64x2,
+            });
+        }
+
+        Opcode::FvpromoteLow => {
+            debug_assert_eq!(ty.unwrap(), F64X2);
+
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+
+            ctx.emit(Inst::VecRRLong {
+                op: VecRRLongOp::Fcvtl32,
+                rd,
+                rn,
+                high_half: false,
+            });
+        }
+
+        Opcode::Fvdemote => {
+            debug_assert_eq!(ty.unwrap(), F32X4);
+
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+
+            ctx.emit(Inst::VecRRNarrow {
+                op: VecRRNarrowOp::Fcvtn64,
+                rd,
+                rn,
+                high_half: false,
+            });
+        }
+
+        Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => unimplemented!("lowering {}", op),
     }
 
     Ok(())
