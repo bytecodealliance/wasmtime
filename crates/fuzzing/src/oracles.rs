@@ -172,6 +172,9 @@ pub fn instantiate_with_config(
                 // every single module under the sun due to using name-based resolution
                 // rather than positional-based resolution
                 || string.contains("incompatible import type")
+                // If we ran out of resources instantiating this wasm module that's
+                // ok, no need to consider that a fatal error.
+                || string.contains("Insufficient resources")
             {
                 return;
             }
