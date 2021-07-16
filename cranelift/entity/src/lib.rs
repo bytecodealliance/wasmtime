@@ -150,3 +150,72 @@ pub use self::map::SecondaryMap;
 pub use self::primary::PrimaryMap;
 pub use self::set::EntitySet;
 pub use self::sparse::{SparseMap, SparseMapValue, SparseSet};
+
+/// A collection of tests to ensure that use of the different `entity_impl!` forms will generate
+/// `EntityRef` implementations that behave the same way.
+#[cfg(test)]
+mod tests {
+    /// A macro used to emit some basic tests to show that entities behave as we expect.
+    macro_rules! entity_test {
+        ($entity:ident) => {
+            #[test]
+            fn from_usize_to_u32() {
+                let e = $entity::new(42);
+                assert_eq!(e.as_u32(), 42_u32);
+            }
+
+            #[test]
+            fn from_u32_to_usize() {
+                let e = $entity::from_u32(42);
+                assert_eq!(e.index(), 42_usize);
+            }
+
+            #[test]
+            fn comparisons_work() {
+                let a = $entity::from_u32(42);
+                let b = $entity::new(42);
+                assert_eq!(a, b);
+            }
+
+            #[should_panic]
+            #[test]
+            fn cannot_construct_from_reserved_u32() {
+                use crate::packed_option::ReservedValue;
+                let reserved = $entity::reserved_value().as_u32();
+                let _ = $entity::from_u32(reserved); // panic
+            }
+
+            #[should_panic]
+            #[test]
+            fn cannot_construct_from_reserved_usize() {
+                use crate::packed_option::ReservedValue;
+                let reserved = $entity::reserved_value().index();
+                let _ = $entity::new(reserved); // panic
+            }
+        };
+    }
+
+    /// Test cases for a plain ol' `EntityRef` implementation.
+    mod basic_entity {
+        use crate::EntityRef;
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        struct BasicEntity(u32);
+        entity_impl!(BasicEntity);
+        entity_test!(BasicEntity);
+    }
+
+    /// Test cases for an `EntityRef` implementation that includes a display prefix.
+    mod prefix_entity {
+        use crate::EntityRef;
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        struct PrefixEntity(u32);
+        entity_impl!(PrefixEntity, "prefix-");
+        entity_test!(PrefixEntity);
+
+        #[test]
+        fn display_prefix_works() {
+            let e = PrefixEntity::new(0);
+            assert_eq!(alloc::format!("{}", e), "prefix-0");
+        }
+    }
+}
