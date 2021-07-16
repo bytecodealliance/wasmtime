@@ -301,7 +301,7 @@ mod tests {
             }
         }
 
-        use {crate::EntityRef, self::inner::InnerEntity};
+        use {self::inner::InnerEntity, crate::EntityRef};
         entity_impl!(InnerEntity, "inner-", i, InnerEntity::from(i), u32::from(i));
         entity_test!(InnerEntity);
 
