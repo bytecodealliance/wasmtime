@@ -129,6 +129,68 @@ macro_rules! entity_impl {
             }
         }
     };
+
+    // Alternate form for tuples we can't directly construct; providing "to" and "from" expressions
+    // to turn an index *into* an entity, or get an index *from* an entity.
+    ($entity:ident, $display_prefix:expr, $arg:ident, $to_expr:expr, $from_expr:expr) => {
+        impl $crate::EntityRef for $entity {
+            #[inline]
+            fn new(index: usize) -> Self {
+                debug_assert!(index < ($crate::__core::u32::MAX as usize));
+                let $arg = index as u32;
+                $to_expr
+            }
+
+            #[inline]
+            fn index(self) -> usize {
+                let $arg = self;
+                $from_expr as usize
+            }
+        }
+
+        impl $crate::packed_option::ReservedValue for $entity {
+            #[inline]
+            fn reserved_value() -> $entity {
+                $entity::from_u32($crate::__core::u32::MAX)
+            }
+
+            #[inline]
+            fn is_reserved_value(&self) -> bool {
+                self.as_u32() == $crate::__core::u32::MAX
+            }
+        }
+
+        impl $entity {
+            /// Create a new instance from a `u32`.
+            #[allow(dead_code)]
+            #[inline]
+            pub fn from_u32(x: u32) -> Self {
+                debug_assert!(x < $crate::__core::u32::MAX);
+                let $arg = x;
+                $to_expr
+            }
+
+            /// Return the underlying index value as a `u32`.
+            #[allow(dead_code)]
+            #[inline]
+            pub fn as_u32(self) -> u32 {
+                let $arg = self;
+                $from_expr
+            }
+        }
+
+        impl $crate::__core::fmt::Display for $entity {
+            fn fmt(&self, f: &mut $crate::__core::fmt::Formatter) -> $crate::__core::fmt::Result {
+                write!(f, concat!($display_prefix, "{}"), self.as_u32())
+            }
+        }
+
+        impl $crate::__core::fmt::Debug for $entity {
+            fn fmt(&self, f: &mut $crate::__core::fmt::Formatter) -> $crate::__core::fmt::Result {
+                (self as &dyn $crate::__core::fmt::Display).fmt(f)
+            }
+        }
+    };
 }
 
 pub mod packed_option;
