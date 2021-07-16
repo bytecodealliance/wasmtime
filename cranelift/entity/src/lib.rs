@@ -280,4 +280,35 @@ mod tests {
             assert_eq!(alloc::format!("{}", e), "prefix-0");
         }
     }
+
+    /// Test cases for an `EntityRef` implementation for a type we can only construct through
+    /// other means, such as calls to `core::convert::From<u32>`.
+    mod other_entity {
+        mod inner {
+            #[derive(Clone, Copy, PartialEq, Eq)]
+            pub struct InnerEntity(u32);
+
+            impl From<u32> for InnerEntity {
+                fn from(x: u32) -> Self {
+                    Self(x)
+                }
+            }
+
+            impl From<InnerEntity> for u32 {
+                fn from(x: InnerEntity) -> Self {
+                    x.0
+                }
+            }
+        }
+
+        use {crate::EntityRef, self::inner::InnerEntity};
+        entity_impl!(InnerEntity, "inner-", i, InnerEntity::from(i), u32::from(i));
+        entity_test!(InnerEntity);
+
+        #[test]
+        fn display_prefix_works() {
+            let e = InnerEntity::new(0);
+            assert_eq!(alloc::format!("{}", e), "inner-0");
+        }
+    }
 }
