@@ -108,5 +108,7 @@ where
     Fut: Future<Output = Result<T, Error>>,
     T: Send + 'static,
 {
-    tokio::task::block_in_place(move || wiggle::run_in_dummy_executor(f()))
+    tokio::task::block_in_place(move || {
+        wiggle::run_in_dummy_executor(f()).expect("wrapped operation should be synchronous")
+    })
 }

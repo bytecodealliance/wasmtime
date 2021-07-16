@@ -149,7 +149,7 @@ fn generate_func(
                     #field_str,
                     move |mut caller: #rt::wasmtime_crate::Caller<'_, T> #(, #arg_decls)*| -> Result<#ret_ty, #rt::wasmtime_crate::Trap> {
                         let result = async { #body };
-                        #rt::run_in_dummy_executor(result)
+                        #rt::run_in_dummy_executor(result)?
                     },
                 )?;
             }

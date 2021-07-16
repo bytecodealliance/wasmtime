@@ -27,6 +27,7 @@ maintenance = { status = "actively-developed" }
 wiggle-test = { path = "test-helpers" }
 anyhow = "1"
 proptest = "1.0.0"
+tokio = { version = "1", features = ["rt-multi-thread","time", "macros"] }
 
 [[test]]
 name = "wasmtime_async"
