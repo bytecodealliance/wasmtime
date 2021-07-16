@@ -3923,6 +3923,7 @@ dependencies = [
  "bitflags",
  "proptest",
  "thiserror",
+ "tokio",
  "tracing",
  "wasmtime",
  "wiggle-macro",

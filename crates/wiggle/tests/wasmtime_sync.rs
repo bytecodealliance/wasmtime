@@ -14,6 +14,8 @@ impl wiggle::GuestErrorType for types::Errno {
     }
 }
 
+const TRIGGER_PENDING: u32 = 0;
+
 #[wiggle::async_trait]
 impl atoms::Atoms for Ctx {
     fn int_float_args(&mut self, an_int: u32, an_float: f32) -> Result<(), types::Errno> {
@@ -24,6 +26,22 @@ impl atoms::Atoms for Ctx {
         &mut self,
         an_int: u32,
     ) -> Result<types::AliasToFloat, types::Errno> {
+        if an_int == TRIGGER_PENDING {
+            // Define a Future that is pending forever. This is `futures::future::pending()`
+            // without incurring the dep.
+            use std::future::Future;
+            use std::pin::Pin;
+            use std::task::{Context, Poll};
+            struct Pending;
+            impl Future for Pending {
+                type Output = ();
+                fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+                    Poll::Pending
+                }
+            }
+            // This await will pend, which should cause the dummy executor to Trap.
+            Pending.await;
+        }
         Ok((an_int as f32) * 2.0)
     }
 }
@@ -84,6 +102,32 @@ fn test_async_host_func() {
         .unwrap();
     let result = f32::from_le_bytes(result_bytes);
     assert_eq!((input * 2) as f32, result);
+}
+
+#[test]
+fn test_async_host_func_pending() {
+    let engine = Engine::default();
+    let mut linker = Linker::new(&engine);
+    atoms::add_to_linker(&mut linker, |cx| cx).unwrap();
+    let mut store = store(&engine);
+
+    let shim_mod = shim_module(&engine);
+    let shim_inst = linker.instantiate(&mut store, &shim_mod).unwrap();
+
+    let result_location: i32 = 0;
+
+    // This input triggers the host func pending forever
+    let input: i32 = TRIGGER_PENDING as i32;
+    let trap = shim_inst
+        .get_func(&mut store, "double_int_return_float_shim")
+        .unwrap()
+        .call(&mut store, &[input.into(), result_location.into()])
+        .unwrap_err();
+    assert!(
+        format!("{}", trap).contains("Cannot wait on pending future"),
+        "expected get a pending future Trap from dummy executor, got: {}",
+        trap
+    );
 }
 
 fn store(engine: &Engine) -> Store<Ctx> {

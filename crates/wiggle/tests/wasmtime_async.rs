@@ -1,6 +1,3 @@
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use wasmtime::{Config, Engine, Linker, Module, Store};
 
 wiggle::from_witx!({
@@ -27,23 +24,30 @@ impl atoms::Atoms for Ctx {
         &mut self,
         an_int: u32,
     ) -> Result<types::AliasToFloat, types::Errno> {
+        // Do something inside this test that is Pending for a trivial amount of time,
+        // to make sure we are hooked up to the tokio executor properly.
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         Ok((an_int as f32) * 2.0)
     }
 }
 
-#[test]
-fn test_sync_host_func() {
+#[tokio::test]
+async fn test_sync_host_func() {
     let mut store = async_store();
     let mut linker = Linker::new(store.engine());
     atoms::add_to_linker(&mut linker, |cx| cx).unwrap();
     let shim_mod = shim_module(linker.engine());
-    let shim_inst = run(linker.instantiate_async(&mut store, &shim_mod)).unwrap();
+    let shim_inst = linker
+        .instantiate_async(&mut store, &shim_mod)
+        .await
+        .unwrap();
 
-    let results = run(shim_inst
+    let results = shim_inst
         .get_func(&mut store, "int_float_args_shim")
         .unwrap()
-        .call_async(&mut store, &[0i32.into(), 123.45f32.into()]))
-    .unwrap();
+        .call_async(&mut store, &[0i32.into(), 123.45f32.into()])
+        .await
+        .unwrap();
 
     assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
@@ -53,23 +57,27 @@ fn test_sync_host_func() {
     );
 }
 
-#[test]
-fn test_async_host_func() {
+#[tokio::test]
+async fn test_async_host_func() {
     let mut store = async_store();
     let mut linker = Linker::new(store.engine());
     atoms::add_to_linker(&mut linker, |cx| cx).unwrap();
 
     let shim_mod = shim_module(linker.engine());
-    let shim_inst = run(linker.instantiate_async(&mut store, &shim_mod)).unwrap();
+    let shim_inst = linker
+        .instantiate_async(&mut store, &shim_mod)
+        .await
+        .unwrap();
 
     let input: i32 = 123;
     let result_location: i32 = 0;
 
-    let results = run(shim_inst
+    let results = shim_inst
         .get_func(&mut store, "double_int_return_float_shim")
         .unwrap()
-        .call_async(&mut store, &[input.into(), result_location.into()]))
-    .unwrap();
+        .call_async(&mut store, &[input.into(), result_location.into()])
+        .await
+        .unwrap();
 
     assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
@@ -85,40 +93,6 @@ fn test_async_host_func() {
         .unwrap();
     let result = f32::from_le_bytes(result_bytes);
     assert_eq!((input * 2) as f32, result);
-}
-
-fn run<F: Future>(future: F) -> F::Output {
-    let mut f = Pin::from(Box::new(future));
-    let waker = dummy_waker();
-    let mut cx = Context::from_waker(&waker);
-    loop {
-        match f.as_mut().poll(&mut cx) {
-            Poll::Ready(val) => break val,
-            Poll::Pending => {}
-        }
-    }
-}
-
-fn dummy_waker() -> Waker {
-    return unsafe { Waker::from_raw(clone(5 as *const _)) };
-
-    unsafe fn clone(ptr: *const ()) -> RawWaker {
-        assert_eq!(ptr as usize, 5);
-        const VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
-        RawWaker::new(ptr, &VTABLE)
-    }
-
-    unsafe fn wake(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-
-    unsafe fn wake_by_ref(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
-
-    unsafe fn drop(ptr: *const ()) {
-        assert_eq!(ptr as usize, 5);
-    }
 }
 
 fn async_store() -> Store<Ctx> {
