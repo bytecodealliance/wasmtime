@@ -1705,20 +1705,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         match (input0_ty, input1_ty, output_ty) {
                             (types::I8X16, types::I8X16, types::I16X8) => {
                                 // i16x8.extmul_high_i8x16_s
-
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::gen_move(tmp_reg, lhs, output_ty));
                                 ctx.emit(Inst::xmm_rm_r_imm(
                                     SseOpcode::Palignr,
                                     RegMem::reg(lhs),
-                                    tmp_reg,
+                                    Writable::from_reg(lhs),
                                     8,
                                     OperandSize::Size32,
                                 ));
                                 ctx.emit(Inst::xmm_mov(
                                     SseOpcode::Pmovsxbw,
                                     RegMem::reg(lhs),
-                                    tmp_reg,
+                                    Writable::from_reg(lhs),
                                 ));
 
                                 ctx.emit(Inst::gen_move(dst, rhs, output_ty));
@@ -1729,12 +1726,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                     8,
                                     OperandSize::Size32,
                                 ));
-                                ctx.emit(Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmullw,
-                                    RegMem::reg(tmp_reg.to_reg()),
+                                ctx.emit(Inst::xmm_mov(
+                                    SseOpcode::Pmovsxbw,
+                                    RegMem::reg(dst.to_reg()),
                                     dst,
                                 ));
+                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(lhs), dst));
                             }
                             (types::I16X8, types::I16X8, types::I32X4) => {
                                 // i32x4.extmul_high_i16x8_s
@@ -1882,19 +1879,17 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         match (input0_ty, input1_ty, output_ty) {
                             (types::I8X16, types::I8X16, types::I16X8) => {
                                 // i16x8.extmul_high_i8x16_u
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::gen_move(tmp_reg, lhs, output_ty));
                                 ctx.emit(Inst::xmm_rm_r_imm(
                                     SseOpcode::Palignr,
                                     RegMem::reg(lhs),
-                                    tmp_reg,
+                                    Writable::from_reg(lhs),
                                     8,
                                     OperandSize::Size32,
                                 ));
                                 ctx.emit(Inst::xmm_mov(
                                     SseOpcode::Pmovzxbw,
                                     RegMem::reg(lhs),
-                                    tmp_reg,
+                                    Writable::from_reg(lhs),
                                 ));
                                 ctx.emit(Inst::gen_move(dst, rhs, output_ty));
                                 ctx.emit(Inst::xmm_rm_r_imm(
@@ -1904,12 +1899,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                     8,
                                     OperandSize::Size32,
                                 ));
-                                ctx.emit(Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmullw,
-                                    RegMem::reg(tmp_reg.to_reg()),
+                                ctx.emit(Inst::xmm_mov(
+                                    SseOpcode::Pmovzxbw,
+                                    RegMem::reg(dst.to_reg()),
                                     dst,
                                 ));
+                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(lhs), dst));
                             }
                             (types::I16X8, types::I16X8, types::I32X4) => {
                                 // i32x4.extmul_high_i16x8_u
