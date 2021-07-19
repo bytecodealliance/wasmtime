@@ -139,7 +139,7 @@ fn main() {
     let program = args[0].clone();
 
     if args.len() < 3 {
-        eprintln!("usage: {} <input_file> <output_file>", program);
+        eprintln!("usage: {} <from> <to>", program);
         return;
     }
 
