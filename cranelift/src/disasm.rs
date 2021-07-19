@@ -111,8 +111,27 @@ cfg_if! {
 
         fn get_disassembler(isa: &dyn TargetIsa) -> Result<Capstone> {
             let cs = match isa.triple().architecture {
-                Architecture::Riscv32(_) | Architecture::Riscv64(_) => {
-                    anyhow::bail!("No disassembler for RiscV");
+                Architecture::Riscv32(_) => {
+                    let mut cs = Capstone::new()
+                        .riscv()
+                        .mode(arch::riscv::ArchMode::RiscV32)
+                        .extra_mode(std::iter::once(arch::riscv::ArchExtraMode::RiscVC))
+                        .build()
+                        .map_err(map_caperr)?;
+                    // See the comment of AArch64 below
+                    cs.set_skipdata(true).map_err(map_caperr)?;
+                    cs
+                }
+                Architecture::Riscv64(_) => {
+                    let mut cs = Capstone::new()
+                        .riscv()
+                        .mode(arch::riscv::ArchMode::RiscV64)
+                        .extra_mode(std::iter::once(arch::riscv::ArchExtraMode::RiscVC))
+                        .build()
+                        .map_err(map_caperr)?;
+                    // See the comment of AArch64 below
+                    cs.set_skipdata(true).map_err(map_caperr)?;
+                    cs
                 }
                 Architecture::X86_32(_) => Capstone::new()
                     .x86()
