@@ -8,48 +8,48 @@ use wasmtime::*;
 
 /// Create dummy imports for instantiating the module.
 pub fn dummy_imports(
-    store: &wasmtime::Store,
+    store: &mut crate::Store,
     module: &wasmtime::Module,
-    linker: &mut wasmtime::Linker,
+    linker: &mut crate::Linker,
 ) -> Result<()> {
     log::debug!("Creating dummy imports");
 
     for imp in module.imports() {
         match imp.name() {
             Some(name) => {
-                if linker.get_one_by_name(imp.module(), Some(name)).is_ok() {
+                if linker.get(&mut *store, imp.module(), Some(name)).is_some() {
                     // Already defined, must be part of WASI.
                     continue;
                 }
 
                 linker
-                    .define(imp.module(), name, dummy_extern(store, imp.ty())?)
+                    .define(imp.module(), name, dummy_extern(&mut *store, imp.ty())?)
                     .unwrap();
             }
             None => match imp.ty() {
                 wasmtime::ExternType::Instance(ty) => {
                     for ty in ty.exports() {
                         if linker
-                            .get_one_by_name(imp.module(), Some(ty.name()))
-                            .is_ok()
+                            .get(&mut *store, imp.module(), Some(ty.name()))
+                            .is_some()
                         {
                             // Already defined, must be part of WASI.
                             continue;
                         }
 
                         linker
-                            .define(imp.module(), ty.name(), dummy_extern(store, ty.ty())?)
+                            .define(imp.module(), ty.name(), dummy_extern(&mut *store, ty.ty())?)
                             .unwrap();
                     }
                 }
                 other => {
-                    if linker.get_one_by_name(imp.module(), None).is_ok() {
+                    if linker.get(&mut *store, imp.module(), None).is_some() {
                         // Already defined, must be part of WASI.
                         continue;
                     }
 
                     linker
-                        .define_name(imp.module(), dummy_extern(store, other)?)
+                        .define_name(imp.module(), dummy_extern(&mut *store, other)?)
                         .unwrap();
                 }
             },
@@ -60,7 +60,7 @@ pub fn dummy_imports(
 }
 
 /// Construct a dummy `Extern` from its type signature
-pub fn dummy_extern(store: &Store, ty: ExternType) -> Result<Extern> {
+pub fn dummy_extern(store: &mut crate::Store, ty: ExternType) -> Result<Extern> {
     Ok(match ty {
         ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
@@ -72,7 +72,7 @@ pub fn dummy_extern(store: &Store, ty: ExternType) -> Result<Extern> {
 }
 
 /// Construct a dummy function for the given function type
-pub fn dummy_func(store: &Store, ty: FuncType) -> Func {
+pub fn dummy_func(store: &mut crate::Store, ty: FuncType) -> Func {
     Func::new(store, ty.clone(), move |_, _, results| {
         for (ret_ty, result) in ty.results().zip(results) {
             *result = dummy_value(ret_ty);
@@ -101,19 +101,19 @@ pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Vec<Val> {
 }
 
 /// Construct a dummy global for the given global type.
-pub fn dummy_global(store: &Store, ty: GlobalType) -> Global {
+pub fn dummy_global(store: &mut crate::Store, ty: GlobalType) -> Global {
     let val = dummy_value(ty.content().clone());
     Global::new(store, ty, val).unwrap()
 }
 
 /// Construct a dummy table for the given table type.
-pub fn dummy_table(store: &Store, ty: TableType) -> Table {
+pub fn dummy_table(store: &mut crate::Store, ty: TableType) -> Table {
     let init_val = dummy_value(ty.element().clone());
     Table::new(store, ty, init_val).unwrap()
 }
 
 /// Construct a dummy memory for the given memory type.
-pub fn dummy_memory(store: &Store, ty: MemoryType) -> Result<Memory> {
+pub fn dummy_memory(store: &mut crate::Store, ty: MemoryType) -> Result<Memory> {
     Memory::new(store, ty)
 }
 
@@ -121,7 +121,7 @@ pub fn dummy_memory(store: &Store, ty: MemoryType) -> Result<Memory> {
 ///
 /// This is done by using the expected type to generate a module on-the-fly
 /// which we the instantiate.
-pub fn dummy_instance(store: &Store, ty: InstanceType) -> Instance {
+pub fn dummy_instance(store: &mut crate::Store, ty: InstanceType) -> Instance {
     let mut wat = WatGenerator::new();
     for ty in ty.exports() {
         wat.export(&ty);
@@ -133,7 +133,7 @@ pub fn dummy_instance(store: &Store, ty: InstanceType) -> Instance {
 /// Construct a dummy module for the given module type.
 ///
 /// This is done by using the expected type to generate a module on-the-fly.
-pub fn dummy_module(store: &Store, ty: ModuleType) -> Module {
+pub fn dummy_module(store: &mut crate::Store, ty: ModuleType) -> Module {
     let mut wat = WatGenerator::new();
     for ty in ty.imports() {
         wat.import(&ty);
@@ -405,53 +405,57 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
 
-    fn store() -> Store {
+    fn store() -> crate::Store {
         let mut config = Config::default();
         config.wasm_module_linking(true);
         config.wasm_multi_memory(true);
         let engine = wasmtime::Engine::new(&config).unwrap();
-        Store::new(&engine)
+        Store::new(&engine, None)
     }
 
     #[test]
     fn dummy_table_import() {
-        let store = store();
+        let mut store = store();
         let table = dummy_table(
-            &store,
+            &mut store,
             TableType::new(ValType::ExternRef, Limits::at_least(10)),
         );
-        assert_eq!(table.size(), 10);
+        assert_eq!(table.size(&store), 10);
         for i in 0..10 {
-            assert!(table.get(i).unwrap().unwrap_externref().is_none());
+            assert!(table
+                .get(&mut store, i)
+                .unwrap()
+                .unwrap_externref()
+                .is_none());
         }
     }
 
     #[test]
     fn dummy_global_import() {
-        let store = store();
-        let global = dummy_global(&store, GlobalType::new(ValType::I32, Mutability::Const));
-        assert_eq!(global.val_type(), ValType::I32);
-        assert_eq!(global.mutability(), Mutability::Const);
+        let mut store = store();
+        let global = dummy_global(&mut store, GlobalType::new(ValType::I32, Mutability::Const));
+        assert_eq!(*global.ty(&store).content(), ValType::I32);
+        assert_eq!(global.ty(&store).mutability(), Mutability::Const);
     }
 
     #[test]
     fn dummy_memory_import() {
-        let store = store();
-        let memory = dummy_memory(&store, MemoryType::new(Limits::at_least(1))).unwrap();
-        assert_eq!(memory.size(), 1);
+        let mut store = store();
+        let memory = dummy_memory(&mut store, MemoryType::new(Limits::at_least(1))).unwrap();
+        assert_eq!(memory.size(&store), 1);
     }
 
     #[test]
     fn dummy_function_import() {
-        let store = store();
+        let mut store = store();
         let func_ty = FuncType::new(vec![ValType::I32], vec![ValType::I64]);
-        let func = dummy_func(&store, func_ty.clone());
-        assert_eq!(func.ty(), func_ty);
+        let func = dummy_func(&mut store, func_ty.clone());
+        assert_eq!(func.ty(&store), func_ty);
     }
 
     #[test]
     fn dummy_instance_import() {
-        let store = store();
+        let mut store = store();
 
         let mut instance_ty = InstanceType::new();
 
@@ -491,7 +495,7 @@ mod tests {
         instance_ty.add_named_export("instance0", InstanceType::new().into());
         instance_ty.add_named_export("instance1", InstanceType::new().into());
 
-        let instance = dummy_instance(&store, instance_ty.clone());
+        let instance = dummy_instance(&mut store, instance_ty.clone());
 
         let mut expected_exports = vec![
             "func0",
@@ -509,7 +513,7 @@ mod tests {
         ]
         .into_iter()
         .collect::<HashSet<_>>();
-        for exp in instance.ty().exports() {
+        for exp in instance.ty(&store).exports() {
             let was_expected = expected_exports.remove(exp.name());
             assert!(was_expected);
         }
@@ -518,7 +522,7 @@ mod tests {
 
     #[test]
     fn dummy_module_import() {
-        let store = store();
+        let mut store = store();
 
         let mut module_ty = ModuleType::new();
 
@@ -591,7 +595,7 @@ mod tests {
         module_ty.add_named_import("instance1", None, InstanceType::new().into());
 
         // Create the module.
-        let module = dummy_module(&store, module_ty);
+        let module = dummy_module(&mut store, module_ty);
 
         // Check that we have the expected exports.
         assert!(module.get_export("func0").is_some());

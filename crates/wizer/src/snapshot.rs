@@ -1,5 +1,6 @@
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
+use wasmtime::{AsContext, AsContextMut};
 
 const WASM_PAGE_SIZE: u32 = 65_536;
 
@@ -7,7 +8,7 @@ const WASM_PAGE_SIZE: u32 = 65_536;
 const MAX_DATA_SEGMENTS: usize = 100_000;
 
 /// A "snapshot" of Wasm state from its default value after having been initialized.
-pub struct Snapshot<'a> {
+pub struct Snapshot {
     /// Maps global index to its initialized value.
     pub globals: Vec<wasmtime::Val>,
 
@@ -15,56 +16,59 @@ pub struct Snapshot<'a> {
     pub memory_mins: Vec<u32>,
 
     /// Segments of non-zero memory.
-    pub data_segments: Vec<DataSegment<'a>>,
+    pub data_segments: Vec<DataSegment>,
 
     /// Snapshots for each nested instantiation.
-    pub instantiations: Vec<Snapshot<'a>>,
+    pub instantiations: Vec<Snapshot>,
 }
 
 /// A data segment initializer for a memory.
 #[derive(Clone, Copy)]
-pub struct DataSegment<'a> {
+pub struct DataSegment {
     /// The index of this data segment's memory.
     pub memory_index: u32,
+
+    /// This data segment's initialized memory that it originated from.
+    pub memory: wasmtime::Memory,
+
     /// The offset within the memory that `data` should be copied to.
     pub offset: u32,
-    /// This segment's (non-zero) data.
-    pub data: &'a [u8],
+
+    /// This segment's length.
+    pub len: u32,
 }
 
-impl<'a> DataSegment<'a> {
+impl DataSegment {
+    pub fn data<'a>(&self, ctx: &'a impl AsContext) -> &'a [u8] {
+        let start = usize::try_from(self.offset).unwrap();
+        let end = start + usize::try_from(self.len).unwrap();
+        &self.memory.data(ctx)[start..end]
+    }
+}
+
+impl DataSegment {
     /// What is the gap between two consecutive data segments?
     ///
     /// `self` must be in front of `other` and they must not overlap with each
     /// other.
     fn gap(&self, other: &Self) -> u32 {
-        let self_len = u32::try_from(self.data.len()).unwrap();
-        debug_assert!(self.offset + self_len <= other.offset);
-        other.offset - (self.offset + self_len)
+        debug_assert_eq!(self.memory_index, other.memory_index);
+        debug_assert!(self.offset + self.len <= other.offset);
+        other.offset - (self.offset + self.len)
     }
 
-    /// Get a slice of the merged data for two consecutive data segments.
-    ///
-    /// # Safety
-    ///
-    /// Both `self` and `other` must be segments whose data are from the same
-    /// Wasm linear memory.
+    /// Merge two consecutive data segments.
     ///
     /// `self` must be in front of `other` and they must not overlap with each
     /// other.
-    unsafe fn merge(&self, other: &Self) -> &'a [u8] {
-        debug_assert_eq!(self.memory_index, other.memory_index);
-
+    fn merge(&self, other: &Self) -> DataSegment {
         let gap = self.gap(other);
-        let gap = usize::try_from(gap).unwrap();
 
-        debug_assert_eq!(
-            self.data
-                .as_ptr()
-                .offset(isize::try_from(self.data.len() + gap).unwrap()),
-            other.data.as_ptr(),
-        );
-        std::slice::from_raw_parts(self.data.as_ptr(), self.data.len() + gap + other.data.len())
+        DataSegment {
+            offset: self.offset,
+            len: self.len + gap + other.len,
+            ..*self
+        }
     }
 }
 
@@ -72,14 +76,12 @@ impl<'a> DataSegment<'a> {
 /// defaults.
 //
 // TODO: when we support reference types, we will have to snapshot tables.
-pub fn snapshot<'a>(store: &'a wasmtime::Store, instance: &wasmtime::Instance) -> Snapshot<'a> {
+pub fn snapshot(ctx: &mut impl AsContextMut, instance: &wasmtime::Instance) -> Snapshot {
     log::debug!("Snapshotting the initialized state");
 
-    assert!(wasmtime::Store::same(store, &instance.store()));
-
-    let globals = snapshot_globals(instance);
-    let (memory_mins, data_segments) = snapshot_memories(instance);
-    let instantiations = snapshot_instantiations(store, instance);
+    let globals = snapshot_globals(&mut *ctx, instance);
+    let (memory_mins, data_segments) = snapshot_memories(&mut *ctx, instance);
+    let instantiations = snapshot_instantiations(&mut *ctx, instance);
 
     Snapshot {
         globals,
@@ -90,16 +92,19 @@ pub fn snapshot<'a>(store: &'a wasmtime::Store, instance: &wasmtime::Instance) -
 }
 
 /// Get the initialized values of all globals.
-fn snapshot_globals(instance: &wasmtime::Instance) -> Vec<wasmtime::Val> {
+fn snapshot_globals(
+    ctx: &mut impl AsContextMut,
+    instance: &wasmtime::Instance,
+) -> Vec<wasmtime::Val> {
     log::debug!("Snapshotting global values");
     let mut globals = vec![];
     let mut index = 0;
     loop {
         let name = format!("__wizer_global_{}", index);
-        match instance.get_global(&name) {
+        match instance.get_global(&mut *ctx, &name) {
             None => break,
             Some(global) => {
-                globals.push(global.get());
+                globals.push(global.get(&mut *ctx));
                 index += 1;
             }
         }
@@ -109,7 +114,10 @@ fn snapshot_globals(instance: &wasmtime::Instance) -> Vec<wasmtime::Val> {
 
 /// Find the initialized minimum page size of each memory, as well as all
 /// regions of non-zero memory.
-fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSegment<'a>>) {
+fn snapshot_memories(
+    ctx: &mut impl AsContextMut,
+    instance: &wasmtime::Instance,
+) -> (Vec<u32>, Vec<DataSegment>) {
     log::debug!("Snapshotting memories");
 
     // Find and record non-zero regions of memory (in parallel).
@@ -118,20 +126,15 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
     let mut memory_index = 0;
     loop {
         let name = format!("__wizer_memory_{}", memory_index);
-        let memory = match instance.get_memory(&name) {
+        let memory = match instance.get_memory(&mut *ctx, &name) {
             None => break,
             Some(memory) => memory,
         };
-        memory_mins.push(memory.size());
+        memory_mins.push(memory.size(&*ctx));
 
-        let num_wasm_pages = memory.size();
+        let num_wasm_pages = memory.size(&*ctx);
 
-        let memory: &'a [u8] = unsafe {
-            // Safe because no one else has a (potentially mutable)
-            // view to this memory and we know the memory will live
-            // as long as the store is alive.
-            std::slice::from_raw_parts(memory.data_ptr(), memory.data_size())
-        };
+        let memory_data = memory.data(&*ctx);
 
         // Consider each Wasm page in parallel. Create data segments for each
         // region of non-zero memory.
@@ -140,19 +143,23 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
             let mut start = (i * WASM_PAGE_SIZE) as usize;
             let mut segments = vec![];
             while start < page_end {
-                let nonzero = match memory[start..page_end].iter().position(|byte| *byte != 0) {
+                let nonzero = match memory_data[start..page_end]
+                    .iter()
+                    .position(|byte| *byte != 0)
+                {
                     None => break,
                     Some(i) => i,
                 };
                 start += nonzero;
-                let end = memory[start..page_end]
+                let end = memory_data[start..page_end]
                     .iter()
                     .position(|byte| *byte == 0)
                     .map_or(page_end, |zero| start + zero);
                 segments.push(DataSegment {
                     memory_index,
-                    offset: start as u32,
-                    data: &memory[start..end],
+                    memory,
+                    offset: u32::try_from(start).unwrap(),
+                    len: u32::try_from(end - start).unwrap(),
                 });
                 start = end;
             }
@@ -199,8 +206,8 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
 
         // Okay, merge them together into `a` (so that the next iteration can
         // merge it with its predecessor) and then omit `b`!
-        let merged_data = unsafe { a.merge(b) };
-        a.data = merged_data;
+        let merged = a.merge(b);
+        *a = merged;
     }
 
     remove_excess_segments(&mut merged_data_segments);
@@ -211,7 +218,7 @@ fn snapshot_memories<'a>(instance: &wasmtime::Instance) -> (Vec<u32>, Vec<DataSe
 /// Engines apply a limit on how many segments a module may contain, and Wizer
 /// can run afoul of it. When that happens, we need to merge data segments
 /// together until our number of data segments fits within the limit.
-fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegment<'_>>) {
+fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegment>) {
     if merged_data_segments.len() < MAX_DATA_SEGMENTS {
         return;
     }
@@ -249,9 +256,8 @@ fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegment<'_>>) {
     smallest_gaps.sort_unstable_by(|a, b| a.index.cmp(&b.index).reverse());
     for GapIndex { index, .. } in smallest_gaps {
         let index = usize::try_from(index).unwrap();
-        let merged_data =
-            unsafe { merged_data_segments[index].merge(&merged_data_segments[index + 1]) };
-        merged_data_segments[index].data = merged_data;
+        let merged = merged_data_segments[index].merge(&merged_data_segments[index + 1]);
+        merged_data_segments[index] = merged;
 
         // Okay to use `swap_remove` here because, even though it makes
         // `merged_data_segments` unsorted, the segments are still sorted within
@@ -266,18 +272,18 @@ fn remove_excess_segments(merged_data_segments: &mut Vec<DataSegment<'_>>) {
     merged_data_segments.sort_by_key(|s| (s.memory_index, s.offset));
 }
 
-fn snapshot_instantiations<'a>(
-    store: &'a wasmtime::Store,
+fn snapshot_instantiations(
+    ctx: &mut impl AsContextMut,
     instance: &wasmtime::Instance,
-) -> Vec<Snapshot<'a>> {
+) -> Vec<Snapshot> {
     log::debug!("Snapshotting nested instantiations");
     let mut instantiations = vec![];
     loop {
         let name = format!("__wizer_instance_{}", instantiations.len());
-        match instance.get_export(&name) {
+        match instance.get_export(&mut *ctx, &name) {
             None => break,
             Some(wasmtime::Extern::Instance(instance)) => {
-                instantiations.push(snapshot(store, &instance));
+                instantiations.push(snapshot(&mut *ctx, &instance));
             }
             Some(_) => unreachable!(),
         }

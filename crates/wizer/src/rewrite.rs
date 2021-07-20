@@ -21,15 +21,16 @@ impl Wizer {
     pub(crate) fn rewrite(
         &self,
         cx: &mut ModuleContext<'_>,
+        store: &crate::Store,
         snapshot: &Snapshot,
         renames: &FuncRenames,
     ) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
         if cx.uses_module_linking() {
-            self.rewrite_with_module_linking(cx, snapshot, renames)
+            self.rewrite_with_module_linking(cx, store, snapshot, renames)
         } else {
-            self.rewrite_without_module_linking(cx, snapshot, renames)
+            self.rewrite_without_module_linking(cx, store, snapshot, renames)
         }
     }
 
@@ -38,6 +39,7 @@ impl Wizer {
     fn rewrite_without_module_linking(
         &self,
         cx: &ModuleContext<'_>,
+        store: &crate::Store,
         snapshot: &Snapshot,
         renames: &FuncRenames,
     ) -> Vec<u8> {
@@ -56,7 +58,7 @@ impl Wizer {
                 data_section.active(
                     seg.memory_index,
                     wasm_encoder::Instruction::I32Const(seg.offset as i32),
-                    seg.data.iter().copied(),
+                    seg.data(store).iter().copied(),
                 );
             }
             Some(data_section)
@@ -328,6 +330,7 @@ impl Wizer {
     fn rewrite_with_module_linking(
         &self,
         cx: &mut ModuleContext<'_>,
+        store: &crate::Store,
         snapshot: &Snapshot,
         renames: &FuncRenames,
     ) -> Vec<u8> {
@@ -343,7 +346,7 @@ impl Wizer {
 
         let (code_modules, num_code_modules) = rewrite_code_modules(cx);
 
-        let root_state_module = rewrite_state_module(cx, cx.root(), &snapshot, 0);
+        let root_state_module = rewrite_state_module(cx, store, cx.root(), &snapshot, 0);
         let mut modules = wasm_encoder::ModuleSection::new();
         modules.module(&root_state_module);
         let root_state_module_index = num_code_modules;
@@ -831,6 +834,7 @@ fn make_state_import(
 /// the same for its nested instantiations.
 fn rewrite_state_module(
     cx: &ModuleContext<'_>,
+    store: &crate::Store,
     info: Module,
     snapshot: &Snapshot,
     depth: u32,
@@ -966,6 +970,7 @@ fn rewrite_state_module(
                         // Define the state module for this instantiation.
                         let state_module = rewrite_state_module(
                             cx,
+                            store,
                             *module,
                             &snapshot.instantiations[i],
                             depth + 1,
@@ -1096,7 +1101,7 @@ fn rewrite_state_module(
             data.active(
                 seg.memory_index,
                 wasm_encoder::Instruction::I32Const(seg.offset as i32),
-                seg.data.iter().copied(),
+                seg.data(store).iter().copied(),
             );
         }
         state_module.section(&data);
