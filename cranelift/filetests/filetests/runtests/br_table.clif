@@ -1,0 +1,148 @@
+test interpret
+test run
+target aarch64
+target s390x
+
+
+function %br_table_i8(i8) -> i8 {
+  jt0 = jump_table [block1, block2, block2, block3]
+
+block0(v0: i8):
+  br_table v0, block4, jt0
+
+block1:
+  v1 = iconst.i8 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i8 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i8 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i8 4
+  jump block5(v4)
+
+block5(v5: i8):
+  v6 = iadd.i8 v0, v5
+  return v6
+}
+; run: %br_table_i8(0) == 1
+; run: %br_table_i8(1) == 3
+; run: %br_table_i8(2) == 4
+; run: %br_table_i8(3) == 6
+; run: %br_table_i8(4) == 8
+; run: %br_table_i8(5) == 9
+; run: %br_table_i8(6) == 10
+; run: %br_table_i8(-1) == 3
+
+
+function %br_table_i16(i16) -> i16 {
+  jt0 = jump_table [block1, block2, block2, block3]
+
+block0(v0: i16):
+  br_table v0, block4, jt0
+
+block1:
+  v1 = iconst.i16 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i16 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i16 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i16 4
+  jump block5(v4)
+
+block5(v5: i16):
+  v6 = iadd.i16 v0, v5
+  return v6
+}
+; run: %br_table_i16(0) == 1
+; run: %br_table_i16(1) == 3
+; run: %br_table_i16(2) == 4
+; run: %br_table_i16(3) == 6
+; run: %br_table_i16(4) == 8
+; run: %br_table_i16(5) == 9
+; run: %br_table_i16(6) == 10
+; run: %br_table_i16(-1) == 3
+
+
+function %br_table_i32(i32) -> i32 {
+  jt0 = jump_table [block1, block2, block2, block3]
+
+block0(v0: i32):
+  br_table v0, block4, jt0
+
+block1:
+  v1 = iconst.i32 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i32 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i32 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i32 4
+  jump block5(v4)
+
+block5(v5: i32):
+  v6 = iadd.i32 v0, v5
+  return v6
+}
+; run: %br_table_i32(0) == 1
+; run: %br_table_i32(1) == 3
+; run: %br_table_i32(2) == 4
+; run: %br_table_i32(3) == 6
+; run: %br_table_i32(4) == 8
+; run: %br_table_i32(5) == 9
+; run: %br_table_i32(6) == 10
+; run: %br_table_i32(-1) == 3
+
+
+function %br_table_i64(i64) -> i64 {
+  jt0 = jump_table [block1, block2, block2, block3]
+
+block0(v0: i64):
+  br_table v0, block4, jt0
+
+block1:
+  v1 = iconst.i64 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i64 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i64 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i64 4
+  jump block5(v4)
+
+block5(v5: i64):
+  v6 = iadd.i64 v0, v5
+  return v6
+}
+; run: %br_table_i64(0) == 1
+; run: %br_table_i64(1) == 3
+; run: %br_table_i64(2) == 4
+; run: %br_table_i64(3) == 6
+; run: %br_table_i64(4) == 8
+; run: %br_table_i64(5) == 9
+; run: %br_table_i64(6) == 10
+; run: %br_table_i64(-1) == 3

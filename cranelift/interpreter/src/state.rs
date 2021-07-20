@@ -19,6 +19,8 @@ use thiserror::Error;
 pub trait State<'a, V> {
     /// Retrieve a reference to a [Function].
     fn get_function(&self, func_ref: FuncRef) -> Option<&'a Function>;
+    /// Retrieve a reference to the currently executing [Function].
+    fn get_current_function(&self) -> &'a Function;
     /// Record that an interpreter has called into a new [Function].
     fn push_frame(&mut self, function: &'a Function);
     /// Record that an interpreter has returned from a called [Function].
@@ -90,6 +92,10 @@ where
 {
     fn get_function(&self, _func_ref: FuncRef) -> Option<&'a Function> {
         None
+    }
+
+    fn get_current_function(&self) -> &'a Function {
+        unimplemented!()
     }
 
     fn push_frame(&mut self, _function: &'a Function) {

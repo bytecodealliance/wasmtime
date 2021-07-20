@@ -9,6 +9,7 @@ use cranelift_codegen::ir::{
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
+use std::convert::TryFrom;
 use std::ops::RangeFrom;
 use thiserror::Error;
 
@@ -155,10 +156,25 @@ where
         Opcode::BrIcmp => branch_when(icmp(inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?)?,
         Opcode::Brif => branch_when(state.has_iflag(inst.cond_code().unwrap()))?,
         Opcode::Brff => branch_when(state.has_fflag(inst.fp_cond_code().unwrap()))?,
-        Opcode::BrTable => unimplemented!("BrTable"),
-        Opcode::JumpTableEntry => unimplemented!("JumpTableEntry"),
-        Opcode::JumpTableBase => unimplemented!("JumpTableBase"),
-        Opcode::IndirectJumpTableBr => unimplemented!("IndirectJumpTableBr"),
+        Opcode::BrTable => {
+            if let InstructionData::BranchTable {
+                table, destination, ..
+            } = inst
+            {
+                let jt_data = &state.get_current_function().jump_tables[table];
+
+                // Convert to usize to remove negative indexes from the following operations
+                let jump_target = usize::try_from(arg(0)?.into_int()?)
+                    .ok()
+                    .and_then(|i| jt_data.as_slice().get(i))
+                    .copied()
+                    .unwrap_or(destination);
+
+                ControlFlow::ContinueAt(jump_target, SmallVec::new())
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::Trap => ControlFlow::Trap(CraneliftTrap::User(trap_code())),
         Opcode::Debugtrap => ControlFlow::Trap(CraneliftTrap::Debug),
         Opcode::ResumableTrap => ControlFlow::Trap(CraneliftTrap::Resumable),
@@ -632,6 +648,9 @@ where
         | Opcode::X86Palignr
         | Opcode::X86ElfTlsGetAddr
         | Opcode::X86MachoTlsGetAddr => unimplemented!("x86 instruction: {}", inst.opcode()),
+        Opcode::JumpTableBase | Opcode::JumpTableEntry | Opcode::IndirectJumpTableBr => {
+            unimplemented!("Legacy instruction: {}", inst.opcode())
+        }
     })
 }
 
