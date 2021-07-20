@@ -146,3 +146,8 @@ initialization function. Then we record the Wasm instance's state:
 Then we rewrite the Wasm binary by intializing its globals directly to their
 recorded state, and removing the module's old data segments and replacing them
 with data segments for each of the non-zero regions of memory we recorded.
+
+Want some more details? Check out the talk ["Hit the Ground Running: Wasm
+Snapshots for Fast Start
+Up"](https://fitzgeraldnick.com/2021/05/10/wasm-summit-2021.html) from the 2021
+WebAssembly Summit.
