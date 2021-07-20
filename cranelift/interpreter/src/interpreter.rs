@@ -217,6 +217,10 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         self.functions
             .get_from_func_ref(func_ref, self.frame_stack.last().unwrap().function)
     }
+    fn get_current_function(&self) -> &'a Function {
+        self.current_frame().function
+    }
+
     fn push_frame(&mut self, function: &'a Function) {
         self.frame_stack.push(Frame::new(function));
     }
