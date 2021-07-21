@@ -287,7 +287,9 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::step::CraneliftTrap;
     use cranelift_codegen::ir::immediates::Ieee32;
+    use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
 
     // Most interpreter tests should use the more ergonomic `test interpret` filetest but this
@@ -314,6 +316,28 @@ mod tests {
             .unwrap_return();
 
         assert_eq!(result, vec![DataValue::B(true)])
+    }
+
+    // We don't have a way to check for traps with the current filetest infrastructure
+    #[test]
+    fn udiv_by_zero_traps() {
+        let code = "function %test() -> i32 {
+        block0:
+            v0 = iconst.i32 1
+            v1 = udiv_imm.i32 v0, 0
+            return v1
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+
+        match result {
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerDivisionByZero)) => {}
+            _ => panic!("Unexpected ControlFlow: {:?}", result),
+        }
     }
 
     // This test verifies that functions can refer to each other using the function store. A double indirection is

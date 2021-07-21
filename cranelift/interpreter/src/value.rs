@@ -58,7 +58,7 @@ pub trait Value: Clone + From<DataValue> {
     fn not(self) -> ValueResult<Self>;
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, PartialEq)]
 pub enum ValueError {
     #[error("unable to convert type {1} into class {0}")]
     InvalidType(ValueTypeClass, Type),
@@ -66,9 +66,11 @@ pub enum ValueError {
     InvalidValue(Type),
     #[error("unable to convert to primitive integer")]
     InvalidInteger(#[from] std::num::TryFromIntError),
+    #[error("performed a division by zero")]
+    IntegerDivisionByZero,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ValueTypeClass {
     Integer,
     Boolean,
@@ -173,6 +175,10 @@ impl Value for DataValue {
             DataValue::I16(n) => Ok(n as i64),
             DataValue::I32(n) => Ok(n as i64),
             DataValue::I64(n) => Ok(n),
+            DataValue::U8(n) => Ok(n as i64),
+            DataValue::U16(n) => Ok(n as i64),
+            DataValue::U32(n) => Ok(n as i64),
+            DataValue::U64(n) => Ok(n as i64),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Integer, self.ty())),
         }
     }
@@ -309,10 +315,18 @@ impl Value for DataValue {
     }
 
     fn div(self, other: Self) -> ValueResult<Self> {
+        if other.clone().into_int()? == 0 {
+            return Err(ValueError::IntegerDivisionByZero);
+        }
+
         binary_match!(/(&self, &other); [I8, I16, I32, I64, U8, U16, U32, U64])
     }
 
     fn rem(self, other: Self) -> ValueResult<Self> {
+        if other.clone().into_int()? == 0 {
+            return Err(ValueError::IntegerDivisionByZero);
+        }
+
         binary_match!(%(&self, &other); [I8, I16, I32, I64])
     }
 
