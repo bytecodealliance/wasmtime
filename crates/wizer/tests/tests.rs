@@ -33,28 +33,29 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     config.wasm_module_linking(true);
 
     let engine = wasmtime::Engine::new(&config)?;
-    let store = wasmtime::Store::new(&engine);
+    let wasi_ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build();
+    let mut store = wasmtime::Store::new(&engine, wasi_ctx);
     let module =
         wasmtime::Module::new(store.engine(), wasm).context("Wasm test case failed to compile")?;
 
     let dummy_module = wasmtime::Module::new(store.engine(), &wat::parse_str("(module)")?)?;
-    let dummy_instance = wasmtime::Instance::new(&store, &dummy_module, &[])?;
+    let dummy_instance = wasmtime::Instance::new(&mut store, &dummy_module, &[])?;
 
-    let mut linker = wasmtime::Linker::new(&store);
+    let mut linker = wasmtime::Linker::new(&engine);
     linker
-        .define_name("dummy_func", wasmtime::Func::wrap(&store, || {}))?
-        .define("env", "f", wasmtime::Func::wrap(&store, || {}))?
+        .define_name("dummy_func", wasmtime::Func::wrap(&mut store, || {}))?
+        .define("env", "f", wasmtime::Func::wrap(&mut store, || {}))?
         .define_name("dummy_instance", dummy_instance)?;
-    let ctx = wasi_cap_std_sync::WasiCtxBuilder::new().build();
-    let wasi = wasmtime_wasi::Wasi::new(&store, ctx);
-    wasi.add_to_linker(&mut linker)?;
-    let instance = linker.instantiate(&module)?;
+
+    wasmtime_wasi::add_to_linker(&mut linker, |wasi| wasi)?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
 
     let run = instance
-        .get_func("run")
+        .get_func(&mut store, "run")
         .ok_or_else(|| anyhow::anyhow!("the test Wasm module does not export a `run` function"))?;
 
-    let actual = run.call(args)?;
+    let actual = run.call(&mut store, args)?;
     anyhow::ensure!(actual.len() == 1, "expected one result");
     let actual = match actual[0] {
         wasmtime::Val::I32(x) => x,

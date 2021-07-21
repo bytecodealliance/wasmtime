@@ -24,12 +24,21 @@ use std::fmt::Display;
 use std::path::PathBuf;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
+use wasmtime_wasi::WasiCtx;
 
 const DEFAULT_INHERIT_STDIO: bool = true;
 const DEFAULT_INHERIT_ENV: bool = false;
 const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 const DEFAULT_WASM_MODULE_LINKING: bool = false;
+
+/// We only ever use `Store<T>` with a fixed `T` that is our optional WASI
+/// context.
+pub(crate) type Store = wasmtime::Store<Option<WasiCtx>>;
+
+/// We only ever use `Linker<T>` with a fixed `T` that is our optional WASI
+/// context.
+pub(crate) type Linker = wasmtime::Linker<Option<WasiCtx>>;
 
 /// Wizer: the WebAssembly pre-initializer!
 ///
@@ -321,14 +330,15 @@ impl Wizer {
 
         let config = self.wasmtime_config()?;
         let engine = wasmtime::Engine::new(&config)?;
-        let store = wasmtime::Store::new(&engine);
+        let wasi_ctx = self.wasi_context()?;
+        let mut store = wasmtime::Store::new(&engine, wasi_ctx);
         let module = wasmtime::Module::new(&engine, &instrumented_wasm)
             .context("failed to compile the Wasm module")?;
         self.validate_init_func(&module)?;
 
-        let instance = self.initialize(&store, &module)?;
-        let snapshot = snapshot::snapshot(&store, &instance);
-        let rewritten_wasm = self.rewrite(&mut cx, &snapshot, &renames);
+        let instance = self.initialize(&mut store, &module)?;
+        let snapshot = snapshot::snapshot(&mut store, &instance);
+        let rewritten_wasm = self.rewrite(&mut cx, &mut store, &snapshot, &renames);
 
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&rewritten_wasm) {
@@ -507,46 +517,56 @@ impl Wizer {
         Ok(())
     }
 
+    fn wasi_context(&self) -> anyhow::Result<Option<WasiCtx>> {
+        if !self.allow_wasi {
+            return Ok(None);
+        }
+
+        let mut ctx = wasi_cap_std_sync::WasiCtxBuilder::new();
+        if self.inherit_stdio.unwrap_or(DEFAULT_INHERIT_STDIO) {
+            ctx = ctx.inherit_stdio();
+        }
+        if self.inherit_env.unwrap_or(DEFAULT_INHERIT_ENV) {
+            ctx = ctx.inherit_env()?;
+        }
+        for dir in &self.dirs {
+            log::debug!("Preopening directory: {}", dir.display());
+            let preopened = unsafe {
+                cap_std::fs::Dir::open_ambient_dir(dir)
+                    .with_context(|| format!("failed to open directory: {}", dir.display()))?
+            };
+            ctx = ctx.preopened_dir(preopened, dir)?;
+        }
+        Ok(Some(ctx.build()))
+    }
+
     /// Instantiate the module and call its initialization function.
     fn initialize(
         &self,
-        store: &wasmtime::Store,
+        store: &mut Store,
         module: &wasmtime::Module,
     ) -> anyhow::Result<wasmtime::Instance> {
         log::debug!("Calling the initialization function");
 
-        let mut linker = wasmtime::Linker::new(store);
+        let mut linker = wasmtime::Linker::new(store.engine());
+
         if self.allow_wasi {
-            let mut ctx = wasi_cap_std_sync::WasiCtxBuilder::new();
-            if self.inherit_stdio.unwrap_or(DEFAULT_INHERIT_STDIO) {
-                ctx = ctx.inherit_stdio();
-            }
-            if self.inherit_env.unwrap_or(DEFAULT_INHERIT_ENV) {
-                ctx = ctx.inherit_env()?;
-            }
-            for dir in &self.dirs {
-                log::debug!("Preopening directory: {}", dir.display());
-                let preopened = unsafe {
-                    cap_std::fs::Dir::open_ambient_dir(dir)
-                        .with_context(|| format!("failed to open directory: {}", dir.display()))?
-                };
-                ctx = ctx.preopened_dir(preopened, dir)?;
-            }
-            let ctx = ctx.build();
-            wasmtime_wasi::Wasi::new(store, ctx).add_to_linker(&mut linker)?;
+            wasmtime_wasi::add_to_linker(&mut linker, |ctx: &mut Option<WasiCtx>| {
+                ctx.as_mut().unwrap()
+            })?;
         }
 
-        dummy_imports(&store, &module, &mut linker)?;
+        dummy_imports(&mut *store, &module, &mut linker)?;
 
         let instance = linker
-            .instantiate(module)
+            .instantiate(&mut *store, module)
             .context("failed to instantiate the Wasm module")?;
 
         let init_func = instance
-            .get_typed_func::<(), ()>(&self.init_func)
+            .get_typed_func::<(), (), _>(&mut *store, &self.init_func)
             .expect("checked by `validate_init_func`");
         init_func
-            .call(())
+            .call(&mut *store, ())
             .with_context(|| format!("the `{}` function trapped", self.init_func))?;
 
         Ok(instance)
