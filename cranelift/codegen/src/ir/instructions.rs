@@ -24,6 +24,8 @@ use crate::data_value::DataValue;
 use crate::entity;
 use ir::condcodes::{FloatCC, IntCC};
 
+use super::MemFlags;
+
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in
 /// `dfg.value_lists`.
@@ -391,6 +393,19 @@ impl InstructionData {
             | &InstructionData::Store { offset, .. }
             | &InstructionData::StackStore { offset, .. }
             | &InstructionData::StoreComplex { offset, .. } => Some(offset.into()),
+            _ => None,
+        }
+    }
+
+    /// If this is a load/store instruction, return its memory flags.
+    pub fn memflags(&self) -> Option<MemFlags> {
+        match self {
+            &InstructionData::Load { flags, .. }
+            | &InstructionData::LoadComplex { flags, .. }
+            | &InstructionData::LoadNoOffset { flags, .. }
+            | &InstructionData::Store { flags, .. }
+            | &InstructionData::StoreComplex { flags, .. }
+            | &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
             _ => None,
         }
     }
