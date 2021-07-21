@@ -16,15 +16,16 @@ use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::ir::{self, trapcode::TrapCode, types, Block, FuncRef, JumpTable, SigRef, Type, Value};
-use crate::isa;
-
 use crate::bitset::BitSet;
 use crate::data_value::DataValue;
 use crate::entity;
-use ir::condcodes::{FloatCC, IntCC};
-
-use super::MemFlags;
+use crate::ir::{
+    self,
+    condcodes::{FloatCC, IntCC},
+    trapcode::TrapCode,
+    types, Block, FuncRef, JumpTable, MemFlags, SigRef, Type, Value,
+};
+use crate::isa;
 
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in
