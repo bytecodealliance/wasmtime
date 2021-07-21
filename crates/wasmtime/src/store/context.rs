@@ -94,6 +94,49 @@ pub trait AsContext {
 /// memory or globals. Creation of a [`Func`](crate::Func) will update internal
 /// data structures. This ends up being quite a common bound in Wasmtime, but
 /// typically you can simply pass `&mut store` or `&mut caller` to satisfy it.
+///
+/// # Calling multiple methods that take `&mut impl AsContextMut`
+///
+/// As of Rust 1.53.0, [generic methods that take a generic `&mut T` do not get
+/// "automatic reborrowing"][reborrowing] and therefore you cannot call multiple
+/// generic methods with the same `&mut T` without manually inserting
+/// reborrows. This affects the many `wasmtime` API methods that take `&mut impl
+/// AsContextMut`.
+///
+/// For example, this fails to compile because the context is moved into the
+/// first call:
+///
+/// ```compile_fail
+/// use wasmtime::{AsContextMut, Instance};
+///
+/// fn foo(cx: &mut impl AsContextMut, instance: Instance) {
+///     // `cx` is not reborrowed, but moved into this call.
+///     let my_export = instance.get_export(cx, "my_export");
+///
+///     // Therefore, this use of `cx` is a use-after-move and prohibited by the
+///     // borrow checker.
+///     let other_export = instance.get_export(cx, "other_export");
+/// #   drop((my_export, other_export));
+/// }
+/// ```
+///
+/// To fix this, manually insert reborrows like `&mut *cx` that would otherwise
+/// normally be inserted automatically by the Rust compiler for non-generic
+/// methods:
+///
+/// ```
+/// use wasmtime::{AsContextMut, Instance};
+///
+/// fn foo(cx: &mut impl AsContextMut, instance: Instance) {
+///     let my_export = instance.get_export(&mut *cx, "my_export");
+///
+///     // This works now, since `cx` was reborrowed above, rather than moved!
+///     let other_export = instance.get_export(&mut *cx, "other_export");
+/// #   drop((my_export, other_export));
+/// }
+/// ```
+///
+/// [reborrowing]: https://github.com/rust-lang/rust/issues/85161
 pub trait AsContextMut: AsContext {
     /// Returns the store context that this type provides access to.
     fn as_context_mut(&mut self) -> StoreContextMut<'_, Self::Data>;
