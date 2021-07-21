@@ -55,7 +55,7 @@ fn build_wasm(wat_path: impl AsRef<Path>) -> Result<NamedTempFile> {
 // Very basic use case: compile binary wasm file and run specific function with arguments.
 #[test]
 fn run_wasmtime_simple() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/simple.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
     run_wasmtime(&[
         "run",
         wasm.path().to_str().unwrap(),
@@ -70,7 +70,7 @@ fn run_wasmtime_simple() -> Result<()> {
 // Wasmtime shakk when not enough arguments were provided.
 #[test]
 fn run_wasmtime_simple_fail_no_args() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/simple.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
     assert!(
         run_wasmtime(&[
             "run",
@@ -88,7 +88,7 @@ fn run_wasmtime_simple_fail_no_args() -> Result<()> {
 // Running simple wat
 #[test]
 fn run_wasmtime_simple_wat() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/simple.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
     run_wasmtime(&[
         "run",
         wasm.path().to_str().unwrap(),
@@ -123,7 +123,7 @@ fn run_wasmtime_simple_wat() -> Result<()> {
 // Running a wat that traps.
 #[test]
 fn run_wasmtime_unreachable_wat() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/unreachable.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/unreachable.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
 
     assert_ne!(output.stderr, b"");
@@ -146,7 +146,7 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 // Run a simple WASI hello world, snapshot0 edition.
 #[test]
 fn hello_wasi_snapshot0() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/hello_wasi_snapshot0.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
     let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
@@ -155,7 +155,7 @@ fn hello_wasi_snapshot0() -> Result<()> {
 // Run a simple WASI hello world, snapshot1 edition.
 #[test]
 fn hello_wasi_snapshot1() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/hello_wasi_snapshot1.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
     let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     assert_eq!(stdout, "Hello, world!\n");
     Ok(())
@@ -163,7 +163,7 @@ fn hello_wasi_snapshot1() -> Result<()> {
 
 #[test]
 fn timeout_in_start() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/iloop-start.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/iloop-start.wat")?;
     let output = run_wasmtime_for_output(&[
         "run",
         wasm.path().to_str().unwrap(),
@@ -184,7 +184,7 @@ fn timeout_in_start() -> Result<()> {
 
 #[test]
 fn timeout_in_invoke() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/iloop-invoke.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/iloop-invoke.wat")?;
     let output = run_wasmtime_for_output(&[
         "run",
         wasm.path().to_str().unwrap(),
@@ -206,7 +206,7 @@ fn timeout_in_invoke() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit2_wasi_snapshot0() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/exit2_wasi_snapshot0.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
@@ -215,7 +215,7 @@ fn exit2_wasi_snapshot0() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot1 edition.
 #[test]
 fn exit2_wasi_snapshot1() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/exit2_wasi_snapshot1.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot1.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     assert_eq!(output.status.code().unwrap(), 2);
     Ok(())
@@ -224,7 +224,7 @@ fn exit2_wasi_snapshot1() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit125_wasi_snapshot0() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/exit125_wasi_snapshot0.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
@@ -237,7 +237,7 @@ fn exit125_wasi_snapshot0() -> Result<()> {
 // Exit with a valid non-zero exit code, snapshot1 edition.
 #[test]
 fn exit125_wasi_snapshot1() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/exit125_wasi_snapshot1.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot1.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 1);
@@ -250,7 +250,7 @@ fn exit125_wasi_snapshot1() -> Result<()> {
 // Exit with an invalid non-zero exit code, snapshot0 edition.
 #[test]
 fn exit126_wasi_snapshot0() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/exit126_wasi_snapshot0.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 3);
@@ -265,7 +265,7 @@ fn exit126_wasi_snapshot0() -> Result<()> {
 // Exit with an invalid non-zero exit code, snapshot1 edition.
 #[test]
 fn exit126_wasi_snapshot1() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/exit126_wasi_snapshot1.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot1.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 3);
@@ -280,7 +280,7 @@ fn exit126_wasi_snapshot1() -> Result<()> {
 // Run a minimal command program.
 #[test]
 fn minimal_command() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/minimal-command.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/minimal-command.wat")?;
     let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     assert_eq!(stdout, "");
     Ok(())
@@ -289,7 +289,7 @@ fn minimal_command() -> Result<()> {
 // Run a minimal reactor program.
 #[test]
 fn minimal_reactor() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/minimal-reactor.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/minimal-reactor.wat")?;
     let stdout = run_wasmtime(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     assert_eq!(stdout, "");
     Ok(())
@@ -298,7 +298,7 @@ fn minimal_reactor() -> Result<()> {
 // Attempt to call invoke on a command.
 #[test]
 fn command_invoke() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/minimal-command.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/minimal-command.wat")?;
     run_wasmtime(&[
         "run",
         wasm.path().to_str().unwrap(),
@@ -312,7 +312,7 @@ fn command_invoke() -> Result<()> {
 // Attempt to call invoke on a command.
 #[test]
 fn reactor_invoke() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/minimal-reactor.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/minimal-reactor.wat")?;
     run_wasmtime(&[
         "run",
         wasm.path().to_str().unwrap(),
@@ -326,13 +326,13 @@ fn reactor_invoke() -> Result<()> {
 // Run the greeter test, which runs a preloaded reactor and a command.
 #[test]
 fn greeter() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/greeter_command.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/greeter_command.wat")?;
     let stdout = run_wasmtime(&[
         "run",
         wasm.path().to_str().unwrap(),
         "--disable-cache",
         "--preload",
-        "reactor=tests/wasm/greeter_reactor.wat",
+        "reactor=tests/all/cli_tests/greeter_reactor.wat",
     ])?;
     assert_eq!(
         stdout,
@@ -344,13 +344,13 @@ fn greeter() -> Result<()> {
 // Run the greeter test, but this time preload a command.
 #[test]
 fn greeter_preload_command() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/greeter_reactor.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/greeter_reactor.wat")?;
     let stdout = run_wasmtime(&[
         "run",
         wasm.path().to_str().unwrap(),
         "--disable-cache",
         "--preload",
-        "reactor=tests/wasm/hello_wasi_snapshot1.wat",
+        "reactor=tests/all/cli_tests/hello_wasi_snapshot1.wat",
     ])?;
     assert_eq!(stdout, "Hello _initialize\n");
     Ok(())
@@ -359,13 +359,13 @@ fn greeter_preload_command() -> Result<()> {
 // Run the greeter test, which runs a preloaded reactor and a command.
 #[test]
 fn greeter_preload_callable_command() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/greeter_command.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/greeter_command.wat")?;
     let stdout = run_wasmtime(&[
         "run",
         wasm.path().to_str().unwrap(),
         "--disable-cache",
         "--preload",
-        "reactor=tests/wasm/greeter_callable_command.wat",
+        "reactor=tests/all/cli_tests/greeter_callable_command.wat",
     ])?;
     assert_eq!(stdout, "Hello _start\nHello callable greet\nHello done\n");
     Ok(())
@@ -375,7 +375,7 @@ fn greeter_preload_callable_command() -> Result<()> {
 // See https://github.com/bytecodealliance/wasmtime/issues/1967
 #[test]
 fn exit_with_saved_fprs() -> Result<()> {
-    let wasm = build_wasm("tests/wasm/exit_with_saved_fprs.wat")?;
+    let wasm = build_wasm("tests/all/cli_tests/exit_with_saved_fprs.wat")?;
     let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "--disable-cache"])?;
     assert_eq!(output.status.code().unwrap(), 0);
     assert!(output.stdout.is_empty());
