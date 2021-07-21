@@ -72,6 +72,15 @@ where
     // Indicate that the result of a step is to assign a single value to an instruction's results.
     let assign = |value: V| ControlFlow::Assign(smallvec![value]);
 
+    // Similar to `assign` but converts some errors into traps
+    let assign_or_trap = |value: ValueResult<V>| match value {
+        Ok(v) => Ok(assign(v)),
+        Err(ValueError::IntegerDivisionByZero) => Ok(ControlFlow::Trap(CraneliftTrap::User(
+            TrapCode::IntegerDivisionByZero,
+        ))),
+        Err(e) => Err(e),
+    };
+
     // Interpret a binary instruction with the given `op`, assigning the resulting value to the
     // instruction's results.
     let binary = |op: fn(V, V) -> ValueResult<V>,
@@ -79,18 +88,24 @@ where
                   right: V|
      -> ValueResult<ControlFlow<V>> { Ok(assign(op(left, right)?)) };
 
-    // Same as `binary`, but converts the values to their unsigned form before the operation and
-    // back to signed form afterwards. Since Cranelift types have no notion of signedness, this
-    // enables operations that depend on sign.
-    let binary_unsigned =
+    // Similar to `binary` but converts select `ValueError`'s into trap `ControlFlow`'s
+    let binary_can_trap = |op: fn(V, V) -> ValueResult<V>,
+                           left: V,
+                           right: V|
+     -> ValueResult<ControlFlow<V>> { assign_or_trap(op(left, right)) };
+
+    // Same as `binary_can_trap`, but converts the values to their unsigned form before the
+    // operation and back to signed form afterwards. Since Cranelift types have no notion of
+    // signedness, this enables operations that depend on sign.
+    let binary_unsigned_can_trap =
         |op: fn(V, V) -> ValueResult<V>, left: V, right: V| -> ValueResult<ControlFlow<V>> {
-            Ok(assign(
+            assign_or_trap(
                 op(
                     left.convert(ValueConversionKind::ToUnsigned)?,
                     right.convert(ValueConversionKind::ToUnsigned)?,
-                )?
-                .convert(ValueConversionKind::ToSigned)?,
-            ))
+                )
+                .and_then(|v| v.convert(ValueConversionKind::ToSigned)),
+            )
         };
 
     // Choose whether to assign `left` or `right` to the instruction's result based on a `condition`.
@@ -425,16 +440,16 @@ where
         Opcode::Imul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Umulhi => unimplemented!("Umulhi"),
         Opcode::Smulhi => unimplemented!("Smulhi"),
-        Opcode::Udiv => binary_unsigned(Value::div, arg(0)?, arg(1)?)?,
-        Opcode::Sdiv => binary(Value::div, arg(0)?, arg(1)?)?,
-        Opcode::Urem => binary_unsigned(Value::rem, arg(0)?, arg(1)?)?,
-        Opcode::Srem => binary(Value::rem, arg(0)?, arg(1)?)?,
+        Opcode::Udiv => binary_unsigned_can_trap(Value::div, arg(0)?, arg(1)?)?,
+        Opcode::Sdiv => binary_can_trap(Value::div, arg(0)?, arg(1)?)?,
+        Opcode::Urem => binary_unsigned_can_trap(Value::rem, arg(0)?, arg(1)?)?,
+        Opcode::Srem => binary_can_trap(Value::rem, arg(0)?, arg(1)?)?,
         Opcode::IaddImm => binary(Value::add, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::ImulImm => binary(Value::mul, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::UdivImm => binary_unsigned(Value::div, arg(0)?, imm())?,
-        Opcode::SdivImm => binary(Value::div, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::UremImm => binary_unsigned(Value::rem, arg(0)?, imm())?,
-        Opcode::SremImm => binary(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::UdivImm => binary_unsigned_can_trap(Value::div, arg(0)?, imm())?,
+        Opcode::SdivImm => binary_can_trap(Value::div, arg(0)?, imm_as_ctrl_ty()?)?,
+        Opcode::UremImm => binary_unsigned_can_trap(Value::rem, arg(0)?, imm())?,
+        Opcode::SremImm => binary_can_trap(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::IrsubImm => binary(Value::sub, imm_as_ctrl_ty()?, arg(0)?)?,
         Opcode::IaddCin => unimplemented!("IaddCin"),
         Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
