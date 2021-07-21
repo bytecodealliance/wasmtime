@@ -299,6 +299,13 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
+    ///
+    /// # Why does `get_export` take a mutable context?
+    ///
+    /// This method requires a mutable context because an instance's exports are
+    /// lazily populated, and we cache them as they are accessed. This makes
+    /// instantiating a module faster, but also means this method requires a
+    /// mutable context.
     pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
         self._get_export(&mut store.as_context_mut().opaque(), name)
     }
