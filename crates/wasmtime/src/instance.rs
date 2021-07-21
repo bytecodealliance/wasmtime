@@ -303,19 +303,9 @@ impl Instance {
     /// # Why does `get_export` take a mutable context?
     ///
     /// This method requires a mutable context because an instance's exports are
-    /// lazily populated. While `wasmtime` could use interior mutability to
-    /// paper over this, since getting an export is "logically" a non-mutating
-    /// operation, this would bring with it a new problem. `wasmtime` would have
-    /// to choose whether to use a mutex or `RefCell` for the interior
-    /// mutability; the former implies unnecessasry overhead for single-threaded
-    /// usage, while the latter would prohibit `Store` from implementing `Send`
-    /// and `Sync`, making multi-threaded usage impossible.
-    ///
-    /// Given these trade offs -- and because `wasmtime` will not stop lazily
-    /// populating exports, because this makes instantiation faster -- we
-    /// decided that the best option is to avoid interior mutability and expose
-    /// what's happening under the covers to users via requiring a mutable
-    /// context.
+    /// lazily populated, and we cache them as they are accessed. This makes
+    /// instantiating a module faster, but also means this method requires a
+    /// mutable context.
     pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
         self._get_export(&mut store.as_context_mut().opaque(), name)
     }
