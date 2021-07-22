@@ -4127,6 +4127,18 @@ fn test_x64_emit() {
 
     insns.push((
         Inst::xmm_rm_r_imm(
+            SseOpcode::Shufps,
+            RegMem::reg(xmm1),
+            w_xmm10,
+            136,
+            OperandSize::Size32,
+        ),
+        "440FC6D188",
+        "shufps  $136, %xmm1, %xmm10",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r_imm(
             SseOpcode::Roundps,
             RegMem::reg(xmm7),
             w_xmm8,

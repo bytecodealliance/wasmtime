@@ -6442,6 +6442,84 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
         }
 
+        Opcode::Uunarrow => {
+            if let Some(fcvt_inst) = matches_input(ctx, inputs[0], Opcode::FcvtToUintSat) {
+                //y = i32x4.trunc_sat_f64x2_u_zero(x) is lowered to:
+                //MOVAPD xmm_y, xmm_x
+                //XORPD xmm_tmp, xmm_tmp
+                //MAXPD xmm_y, xmm_tmp
+                //MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
+                //ROUNDPD xmm_y, xmm_y, 0x0B
+                //ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
+                //SHUFPS xmm_y, xmm_xmp, 0x88
+
+                let fcvt_input = InsnInput {
+                    insn: fcvt_inst,
+                    input: 0,
+                };
+                let input_ty = ctx.input_ty(fcvt_inst, 0);
+                let output_ty = ctx.output_ty(insn, 0);
+                let src = put_input_in_reg(ctx, fcvt_input);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+
+                ctx.emit(Inst::gen_move(dst, src, input_ty));
+                let tmp1 = ctx.alloc_tmp(output_ty).only_reg().unwrap();
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::from(tmp1), tmp1));
+                ctx.emit(Inst::xmm_rm_r(SseOpcode::Maxpd, RegMem::from(tmp1), dst));
+
+                // 4294967295.0 is equivalent to 0x41EFFFFFFFE00000
+                static UMAX_MASK: [u8; 16] = [
+                    0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF, 0xEF, 0x41, 0x00, 0x00, 0xE0, 0xFF, 0xFF,
+                    0xFF, 0xEF, 0x41,
+                ];
+                let umax_const = ctx.use_constant(VCodeConstantData::WellKnown(&UMAX_MASK));
+                let umax_mask = ctx.alloc_tmp(types::F64X2).only_reg().unwrap();
+                ctx.emit(Inst::xmm_load_const(umax_const, umax_mask, types::F64X2));
+
+                //MINPD xmm_y, [wasm_f64x2_splat(4294967295.0)]
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Minpd,
+                    RegMem::from(umax_mask),
+                    dst,
+                ));
+                //ROUNDPD xmm_y, xmm_y, 0x0B
+                ctx.emit(Inst::xmm_rm_r_imm(
+                    SseOpcode::Roundpd,
+                    RegMem::reg(dst.to_reg()),
+                    dst,
+                    RoundImm::RoundZero.encode(),
+                    OperandSize::Size32,
+                ));
+                //ADDPD xmm_y, [wasm_f64x2_splat(0x1.0p+52)]
+                static UINT_MASK: [u8; 16] = [
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x30, 0x43,
+                ];
+                let uint_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK));
+                let uint_mask = ctx.alloc_tmp(types::F64X2).only_reg().unwrap();
+                ctx.emit(Inst::xmm_load_const(
+                    uint_mask_const,
+                    uint_mask,
+                    types::F64X2,
+                ));
+                ctx.emit(Inst::xmm_rm_r(
+                    SseOpcode::Addpd,
+                    RegMem::from(uint_mask),
+                    dst,
+                ));
+
+                //SHUFPS xmm_y, xmm_xmp, 0x88
+                ctx.emit(Inst::xmm_rm_r_imm(
+                    SseOpcode::Shufps,
+                    RegMem::reg(tmp1.to_reg()),
+                    dst,
+                    0x88,
+                    OperandSize::Size32,
+                ));
+            } else {
+                println!("Did not match fcvt input!");
+            }
+        }
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or
         // removed eventually.
@@ -6470,10 +6548,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Vsplit | Opcode::Vconcat => {
             unimplemented!("Vector split/concat ops not implemented.");
-        }
-
-        Opcode::Uunarrow => {
-            unimplemented!("unimplemented lowering for opcode {:?}", op);
         }
 
         // Opcodes that should be removed by legalization. These should

@@ -1699,6 +1699,7 @@ pub(crate) fn emit(
                 SseOpcode::Roundss => (LegacyPrefixes::_66, 0x0F3A0A, 3),
                 SseOpcode::Roundpd => (LegacyPrefixes::_66, 0x0F3A09, 3),
                 SseOpcode::Roundsd => (LegacyPrefixes::_66, 0x0F3A0B, 3),
+                SseOpcode::Shufps => (LegacyPrefixes::None, 0x0FC6, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             let rex = RexFlags::from(*size);
