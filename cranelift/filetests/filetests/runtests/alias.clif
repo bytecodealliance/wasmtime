@@ -1,0 +1,30 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64 machinst
+
+function %alias(i8) -> i8 {
+block0(v0: i8):
+    v1 -> v0
+    return v1
+}
+; run: %alias(0) == 0
+; run: %alias(-1) == -1
+
+function %double_alias(i8) -> i8 {
+block0(v0: i8):
+    v1 -> v0
+    v2 -> v1
+    return v2
+}
+; run: %double_alias(0) == 0
+; run: %double_alias(-1) == -1
+
+function %alias_inst() -> i8 {
+block0:
+    v0 = iconst.i8 10
+    v1 -> v0
+    return v1
+}
+; run: %alias_inst() == 10
