@@ -1,7 +1,7 @@
 //! Implements a call frame (activation record) for the Cranelift interpreter.
 
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{Function, Value as ValueRef};
+use cranelift_codegen::ir::{types, Function, Value as ValueRef};
 use cranelift_entity::EntityRef;
 use log::trace;
 
@@ -40,6 +40,22 @@ impl<'a> Frame<'a> {
             .get(name.index())
             .unwrap_or_else(|| panic!("unknown value: {}", name))
             .as_ref()
+            .or_else(|| {
+                // We couldn't find the `name` value directly in `registers`, but it is still
+                // possible that it is aliased to another value.
+
+                // If we are looking up an undefined value it will have an invalid type, return
+                // before trying to resolve it.
+                if self.function.dfg.value_type(name) == types::INVALID {
+                    return None;
+                }
+
+                let alias = self.function.dfg.resolve_aliases(name);
+                self.registers
+                    .get(alias.index())
+                    .unwrap_or_else(|| panic!("unknown value: {}", alias))
+                    .as_ref()
+            })
             .unwrap_or_else(|| panic!("empty slot: {}", name))
     }
 
