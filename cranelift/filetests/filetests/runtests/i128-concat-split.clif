@@ -1,0 +1,17 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64 machinst
+
+function %iconcat_isplit(i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64):
+    v2 = iconcat v0, v1
+    v3, v4 = isplit v2
+    return v3, v4
+}
+; run: %iconcat_isplit(0, 0) == [0, 0]
+; run: %iconcat_isplit(1, 1) == [1, 1]
+; run: %iconcat_isplit(0xFFFFFFFF_FFFFFFFF, 0) == [0xFFFFFFFF_FFFFFFFF, 0]
+; run: %iconcat_isplit(0, 0xFFFFFFFF_FFFFFFFF) == [0, 0xFFFFFFFF_FFFFFFFF]
+; run: %iconcat_isplit(0x01010101_01010101, 0x02020202_02020202) == [0x01010101_01010101, 0x02020202_02020202]

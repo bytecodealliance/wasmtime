@@ -72,6 +72,9 @@ where
     // Indicate that the result of a step is to assign a single value to an instruction's results.
     let assign = |value: V| ControlFlow::Assign(smallvec![value]);
 
+    // Indicate that the result of a step is to assign multiple values to an instruction's results.
+    let assign_multiple = |values: &[V]| ControlFlow::Assign(SmallVec::from(values));
+
     // Similar to `assign` but converts some errors into traps
     let assign_or_trap = |value: ValueResult<V>| match value {
         Ok(v) => Ok(assign(v)),
@@ -147,7 +150,7 @@ where
     };
 
     // Helper for summing a sequence of values.
-    fn sum<V: Value>(head: V, tail: SmallVec<[V; 1]>) -> ValueResult<i64> {
+    fn sum<V: Value>(head: V, tail: SmallVec<[V; 1]>) -> ValueResult<i128> {
         let mut acc = head;
         for t in tail {
             acc = Value::add(acc, t)?;
@@ -615,8 +618,11 @@ where
         Opcode::FcvtLowFromSint => unimplemented!("FcvtLowFromSint"),
         Opcode::FvpromoteLow => unimplemented!("FvpromoteLow"),
         Opcode::Fvdemote => unimplemented!("Fvdemote"),
-        Opcode::Isplit => unimplemented!("Isplit"),
-        Opcode::Iconcat => unimplemented!("Iconcat"),
+        Opcode::Isplit => assign_multiple(&[
+            Value::convert(arg(0)?, ValueConversionKind::Truncate(types::I64))?,
+            Value::convert(arg(0)?, ValueConversionKind::ExtractUpper(types::I64))?,
+        ]),
+        Opcode::Iconcat => assign(Value::concat(arg(0)?, arg(1)?)?),
         Opcode::AtomicRmw => unimplemented!("AtomicRmw"),
         Opcode::AtomicCas => unimplemented!("AtomicCas"),
         Opcode::AtomicLoad => unimplemented!("AtomicLoad"),

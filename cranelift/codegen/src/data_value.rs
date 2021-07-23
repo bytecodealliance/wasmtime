@@ -30,7 +30,7 @@ pub enum DataValue {
 }
 
 impl DataValue {
-    /// Try to cast an immediate integer (a wrapped `i128` on most Cranelift instructions) to the
+    /// Try to cast an immediate integer (a wrapped `i64` on most Cranelift instructions) to the
     /// given Cranelift [Type].
     pub fn from_integer(imm: i128, ty: Type) -> Result<DataValue, DataValueCastFailure> {
         match ty {
