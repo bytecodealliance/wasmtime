@@ -18,24 +18,27 @@ pub enum DataValue {
     I16(i16),
     I32(i32),
     I64(i64),
+    I128(i128),
     U8(u8),
     U16(u16),
     U32(u32),
     U64(u64),
+    U128(u128),
     F32(Ieee32),
     F64(Ieee64),
     V128([u8; 16]),
 }
 
 impl DataValue {
-    /// Try to cast an immediate integer (a wrapped `i64` on most Cranelift instructions) to the
+    /// Try to cast an immediate integer (a wrapped `i128` on most Cranelift instructions) to the
     /// given Cranelift [Type].
-    pub fn from_integer(imm: i64, ty: Type) -> Result<DataValue, DataValueCastFailure> {
+    pub fn from_integer(imm: i128, ty: Type) -> Result<DataValue, DataValueCastFailure> {
         match ty {
             types::I8 => Ok(DataValue::I8(imm as i8)),
             types::I16 => Ok(DataValue::I16(imm as i16)),
             types::I32 => Ok(DataValue::I32(imm as i32)),
-            types::I64 => Ok(DataValue::I64(imm)),
+            types::I64 => Ok(DataValue::I64(imm as i64)),
+            types::I128 => Ok(DataValue::I128(imm)),
             _ => Err(DataValueCastFailure::FromInteger(imm, ty)),
         }
     }
@@ -48,6 +51,7 @@ impl DataValue {
             DataValue::I16(_) | DataValue::U16(_) => types::I16,
             DataValue::I32(_) | DataValue::U32(_) => types::I32,
             DataValue::I64(_) | DataValue::U64(_) => types::I64,
+            DataValue::I128(_) | DataValue::U128(_) => types::I128,
             DataValue::F32(_) => types::F32,
             DataValue::F64(_) => types::F64,
             DataValue::V128(_) => types::I8X16, // A default type.
@@ -100,7 +104,7 @@ impl DataValue {
 #[allow(missing_docs)]
 pub enum DataValueCastFailure {
     TryInto(Type, Type),
-    FromInteger(i64, Type),
+    FromInteger(i128, Type),
 }
 
 // This is manually implementing Error and Display instead of using thiserror to reduce the amount
@@ -157,10 +161,12 @@ build_conversion_impl!(i8, I8, I8);
 build_conversion_impl!(i16, I16, I16);
 build_conversion_impl!(i32, I32, I32);
 build_conversion_impl!(i64, I64, I64);
+build_conversion_impl!(i128, I128, I128);
 build_conversion_impl!(u8, U8, I8);
 build_conversion_impl!(u16, U16, I16);
 build_conversion_impl!(u32, U32, I32);
 build_conversion_impl!(u64, U64, I64);
+build_conversion_impl!(u128, U128, I128);
 build_conversion_impl!(Ieee32, F32, F32);
 build_conversion_impl!(Ieee64, F64, F64);
 build_conversion_impl!([u8; 16], V128, I8X16);
@@ -178,10 +184,12 @@ impl Display for DataValue {
             DataValue::I16(dv) => write!(f, "{}", dv),
             DataValue::I32(dv) => write!(f, "{}", dv),
             DataValue::I64(dv) => write!(f, "{}", dv),
+            DataValue::I128(dv) => write!(f, "{}", dv),
             DataValue::U8(dv) => write!(f, "{}", dv),
             DataValue::U16(dv) => write!(f, "{}", dv),
             DataValue::U32(dv) => write!(f, "{}", dv),
             DataValue::U64(dv) => write!(f, "{}", dv),
+            DataValue::U128(dv) => write!(f, "{}", dv),
             // The Ieee* wrappers here print the expected syntax.
             DataValue::F32(dv) => write!(f, "{}", dv),
             DataValue::F64(dv) => write!(f, "{}", dv),
