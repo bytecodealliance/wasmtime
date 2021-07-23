@@ -56,14 +56,14 @@ where
                 .params
                 .iter()
                 .map(|p| {
-                    let imm64 = match p.value_type {
-                        I8 => self.u.arbitrary::<i8>()? as i64,
-                        I16 => self.u.arbitrary::<i16>()? as i64,
-                        I32 => self.u.arbitrary::<i32>()? as i64,
-                        I64 => self.u.arbitrary::<i64>()?,
+                    let imm = match p.value_type {
+                        I8 => self.u.arbitrary::<i8>()? as i128,
+                        I16 => self.u.arbitrary::<i16>()? as i128,
+                        I32 => self.u.arbitrary::<i32>()? as i128,
+                        I64 => self.u.arbitrary::<i64>()? as i128,
                         _ => unreachable!(),
                     };
-                    Ok(DataValue::from_integer(imm64, p.value_type)?)
+                    Ok(DataValue::from_integer(imm, p.value_type)?)
                 })
                 .collect::<Result<TestCaseInput>>()?;
 

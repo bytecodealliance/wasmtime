@@ -4,7 +4,7 @@
 //! values.
 use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
-use cranelift_codegen::data_value::DataValue;
+use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::{types, Type};
 use thiserror::Error;
@@ -14,8 +14,8 @@ pub type ValueResult<T> = Result<T, ValueError>;
 pub trait Value: Clone + From<DataValue> {
     // Identity.
     fn ty(&self) -> Type;
-    fn int(n: i64, ty: Type) -> ValueResult<Self>;
-    fn into_int(self) -> ValueResult<i64>;
+    fn int(n: i128, ty: Type) -> ValueResult<Self>;
+    fn into_int(self) -> ValueResult<i128>;
     fn float(n: u64, ty: Type) -> ValueResult<Self>;
     fn into_float(self) -> ValueResult<f64>;
     fn is_nan(&self) -> ValueResult<bool>;
@@ -23,6 +23,7 @@ pub trait Value: Clone + From<DataValue> {
     fn into_bool(self) -> ValueResult<bool>;
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self>;
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self>;
+    fn concat(self, other: Self) -> ValueResult<Self>;
 
     // Comparison.
     fn eq(&self, other: &Self) -> ValueResult<bool>;
@@ -66,6 +67,8 @@ pub enum ValueError {
     InvalidValue(Type),
     #[error("unable to convert to primitive integer")]
     InvalidInteger(#[from] std::num::TryFromIntError),
+    #[error("unable to cast data value")]
+    InvalidDataValueCast(#[from] DataValueCastFailure),
     #[error("performed a division by zero")]
     IntegerDivisionByZero,
 }
@@ -95,6 +98,9 @@ pub enum ValueConversionKind {
     /// Truncate the value to fit into the specified [Type]; e.g. in `i16` to `i8`, `0x1234` becomes
     /// `0x34`.
     Truncate(Type),
+    ///  Similar to Truncate, but extracts from the top of the value; e.g. in a `i32` to `u8`,
+    /// `0x12345678` becomes `0x12`.
+    ExtractUpper(Type),
     /// Convert to a larger integer type, extending the sign bit; e.g. in `i8` to `i16`, `0xff`
     /// becomes `0xffff`.
     SignExtend(Type),
@@ -161,7 +167,7 @@ impl Value for DataValue {
         self.ty()
     }
 
-    fn int(n: i64, ty: Type) -> ValueResult<Self> {
+    fn int(n: i128, ty: Type) -> ValueResult<Self> {
         if ty.is_int() && !ty.is_vector() {
             DataValue::from_integer(n, ty).map_err(|_| ValueError::InvalidValue(ty))
         } else {
@@ -169,16 +175,18 @@ impl Value for DataValue {
         }
     }
 
-    fn into_int(self) -> ValueResult<i64> {
+    fn into_int(self) -> ValueResult<i128> {
         match self {
-            DataValue::I8(n) => Ok(n as i64),
-            DataValue::I16(n) => Ok(n as i64),
-            DataValue::I32(n) => Ok(n as i64),
-            DataValue::I64(n) => Ok(n),
-            DataValue::U8(n) => Ok(n as i64),
-            DataValue::U16(n) => Ok(n as i64),
-            DataValue::U32(n) => Ok(n as i64),
-            DataValue::U64(n) => Ok(n as i64),
+            DataValue::I8(n) => Ok(n as i128),
+            DataValue::I16(n) => Ok(n as i128),
+            DataValue::I32(n) => Ok(n as i128),
+            DataValue::I64(n) => Ok(n as i128),
+            DataValue::I128(n) => Ok(n),
+            DataValue::U8(n) => Ok(n as i128),
+            DataValue::U16(n) => Ok(n as i128),
+            DataValue::U32(n) => Ok(n as i128),
+            DataValue::U64(n) => Ok(n as i128),
+            DataValue::U128(n) => Ok(n as i128),
             _ => Err(ValueError::InvalidType(ValueTypeClass::Integer, self.ty())),
         }
     }
@@ -227,15 +235,33 @@ impl Value for DataValue {
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
-            ValueConversionKind::Truncate(ty) => match (self.ty(), ty) {
-                (types::I64, types::I32) => unimplemented!(),
-                (types::I64, types::I16) => unimplemented!(),
-                (types::I64, types::I8) => unimplemented!(),
-                (types::I32, types::I16) => unimplemented!(),
-                (types::I32, types::I8) => unimplemented!(),
-                (types::I16, types::I8) => unimplemented!(),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
-            },
+            ValueConversionKind::Truncate(ty) => {
+                assert!(
+                    ty.is_int(),
+                    "unimplemented conversion: {} -> {:?}",
+                    self.ty(),
+                    kind
+                );
+
+                let mask = (1 << (ty.bytes() * 8)) - 1i128;
+                let truncated = self.into_int()? & mask;
+                Self::from_integer(truncated, ty)?
+            }
+            ValueConversionKind::ExtractUpper(ty) => {
+                assert!(
+                    ty.is_int(),
+                    "unimplemented conversion: {} -> {:?}",
+                    self.ty(),
+                    kind
+                );
+
+                let shift_amt = 128 - (ty.bytes() * 8);
+                let mask = (1 << (ty.bytes() * 8)) - 1i128;
+                let shifted_mask = mask << shift_amt;
+
+                let extracted = (self.into_int()? & shifted_mask) >> shift_amt;
+                Self::from_integer(extracted, ty)?
+            }
             ValueConversionKind::SignExtend(ty) => match (self.ty(), ty) {
                 (types::I8, types::I16) => unimplemented!(),
                 (types::I8, types::I32) => unimplemented!(),
@@ -280,6 +306,15 @@ impl Value for DataValue {
         })
     }
 
+    fn concat(self, other: Self) -> ValueResult<Self> {
+        match (self, other) {
+            (DataValue::I64(lhs), DataValue::I64(rhs)) => Ok(DataValue::I128(
+                (((lhs as u64) as u128) | (((rhs as u64) as u128) << 64)) as i128,
+            )),
+            (lhs, rhs) => unimplemented!("concat: {} -> {}", lhs.ty(), rhs.ty()),
+        }
+    }
+
     fn eq(&self, other: &Self) -> ValueResult<bool> {
         comparison_match!(PartialEq::eq[&self, &other]; [I8, I16, I32, I64, U8, U16, U32, U64, F32, F64])
     }
@@ -303,15 +338,15 @@ impl Value for DataValue {
     }
 
     fn add(self, other: Self) -> ValueResult<Self> {
-        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64]) // TODO: floats must handle NaNs, +/-0
+        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128]) // TODO: floats must handle NaNs, +/-0
     }
 
     fn sub(self, other: Self) -> ValueResult<Self> {
-        binary_match!(wrapping_sub(&self, &other); [I8, I16, I32, I64]) // TODO: floats must handle NaNs, +/-0
+        binary_match!(wrapping_sub(&self, &other); [I8, I16, I32, I64, I128]) // TODO: floats must handle NaNs, +/-0
     }
 
     fn mul(self, other: Self) -> ValueResult<Self> {
-        binary_match!(wrapping_mul(&self, &other); [I8, I16, I32, I64])
+        binary_match!(wrapping_mul(&self, &other); [I8, I16, I32, I64, I128])
     }
 
     fn div(self, other: Self) -> ValueResult<Self> {

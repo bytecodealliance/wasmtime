@@ -1,3 +1,4 @@
+test interpret
 test run
 target aarch64
 ; target s390x TODO: Not yet implemented on s390x
