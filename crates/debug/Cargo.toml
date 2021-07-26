@@ -11,7 +11,7 @@ keywords = ["webassembly", "wasm", "debuginfo"]
 edition = "2018"
 
 [dependencies]
-gimli = "0.24.0"
+gimli = "0.25.0"
 wasmparser = "0.79"
 object = { version = "0.25.0", default-features = false, features = ["read_core", "elf", "write"] }
 wasmtime-environ = { path = "../environ", version = "0.28.0" }

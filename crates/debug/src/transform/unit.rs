@@ -244,6 +244,7 @@ where
 }
 
 pub(crate) fn clone_unit<'a, R>(
+    dwarf: &gimli::Dwarf<R>,
     unit: Unit<R, R::Offset>,
     context: &DebugInputContext<R>,
     addr_tr: &'a AddressTransform,
@@ -302,6 +303,7 @@ where
                 };
 
                 clone_die_attributes(
+                    dwarf,
                     &unit,
                     entry,
                     context,
@@ -369,8 +371,9 @@ where
         current_scope_ranges.update(new_stack_len);
         current_value_range.update(new_stack_len);
         let range_builder = if entry.tag() == gimli::DW_TAG_subprogram {
-            let range_builder =
-                RangeInfoBuilder::from_subprogram_die(&unit, entry, context, addr_tr, cu_low_pc)?;
+            let range_builder = RangeInfoBuilder::from_subprogram_die(
+                dwarf, &unit, entry, context, addr_tr, cu_low_pc,
+            )?;
             if let RangeInfoBuilder::Function(func_index) = range_builder {
                 if let Some(frame_info) = get_function_frame_info(memory_offset, funcs, func_index)
                 {
@@ -387,7 +390,8 @@ where
             let high_pc = entry.attr_value(gimli::DW_AT_high_pc)?;
             let ranges = entry.attr_value(gimli::DW_AT_ranges)?;
             if high_pc.is_some() || ranges.is_some() {
-                let range_builder = RangeInfoBuilder::from(&unit, entry, context, cu_low_pc)?;
+                let range_builder =
+                    RangeInfoBuilder::from(dwarf, &unit, entry, context, cu_low_pc)?;
                 current_scope_ranges.push(new_stack_len, range_builder.get_ranges(addr_tr));
                 Some(range_builder)
             } else {
@@ -443,6 +447,7 @@ where
         die_ref_map.insert(entry.offset(), die_id);
 
         clone_die_attributes(
+            dwarf,
             &unit,
             entry,
             context,
