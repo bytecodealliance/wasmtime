@@ -12,7 +12,6 @@ use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::machinst::{inst_common, MachBuffer, MachInstEmit, MachLabel};
 use core::convert::TryInto;
-use log::debug;
 use regalloc::{Reg, Writable};
 
 /// A small helper to generate a signed conversion instruction.
@@ -2548,7 +2547,7 @@ pub(crate) fn emit(
         }
 
         Inst::VirtualSPOffsetAdj { offset } => {
-            debug!(
+            log::trace!(
                 "virtual sp offset adjusted by {} -> {}",
                 offset,
                 state.virtual_sp_offset + offset

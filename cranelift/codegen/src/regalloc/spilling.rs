@@ -29,7 +29,6 @@ use crate::timing;
 use crate::topo_order::TopoOrder;
 use alloc::vec::Vec;
 use core::fmt;
-use log::debug;
 
 /// Return a top-level register class which contains `unit`.
 fn toprc_containing_regunit(unit: RegUnit, reginfo: &RegInfo) -> RegClass {
@@ -100,7 +99,7 @@ impl Spilling {
         tracker: &mut LiveValueTracker,
     ) {
         let _tt = timing::ra_spilling();
-        debug!("Spilling for:\n{}", func.display(isa));
+        log::trace!("Spilling for:\n{}", func.display(isa));
         let reginfo = isa.register_info();
         let usable_regs = isa.allocatable_registers(func);
         let mut ctx = Context {
@@ -128,7 +127,7 @@ impl<'a> Context<'a> {
     }
 
     fn visit_block(&mut self, block: Block, tracker: &mut LiveValueTracker) {
-        debug!("Spilling {}:", block);
+        log::trace!("Spilling {}:", block);
         self.cur.goto_top(block);
         self.visit_block_header(block, tracker);
         tracker.drop_dead_params();
@@ -205,12 +204,14 @@ impl<'a> Context<'a> {
             if let Affinity::Reg(rci) = lv.affinity {
                 let rc = self.reginfo.rc(rci);
                 'try_take: while let Err(mask) = self.pressure.take_transient(rc) {
-                    debug!("Need {} reg for block param {}", rc, lv.value);
+                    log::trace!("Need {} reg for block param {}", rc, lv.value);
                     match self.spill_candidate(mask, liveins) {
                         Some(cand) => {
-                            debug!(
+                            log::trace!(
                                 "Spilling live-in {} to make room for {} block param {}",
-                                cand, rc, lv.value
+                                cand,
+                                rc,
+                                lv.value
                             );
                             self.spill_reg(cand);
                         }
@@ -218,7 +219,7 @@ impl<'a> Context<'a> {
                             // We can't spill any of the live-in registers, so we have to spill an
                             // block argument. Since the current spill metric would consider all the
                             // block arguments equal, just spill the present register.
-                            debug!("Spilling {} block argument {}", rc, lv.value);
+                            log::trace!("Spilling {} block argument {}", rc, lv.value);
 
                             // Since `spill_reg` will free a register, add the current one here.
                             self.pressure.take(rc);
@@ -236,7 +237,7 @@ impl<'a> Context<'a> {
     }
 
     fn visit_inst(&mut self, inst: Inst, block: Block, tracker: &mut LiveValueTracker) {
-        debug!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
+        log::trace!("Inst {}, {}", self.cur.display_inst(inst), self.pressure);
         debug_assert_eq!(self.cur.current_inst(), Some(inst));
         debug_assert_eq!(self.cur.current_block(), Some(block));
 
@@ -284,7 +285,7 @@ impl<'a> Context<'a> {
                 if op.kind != ConstraintKind::Stack {
                     // Add register def to pressure, spill if needed.
                     while let Err(mask) = self.pressure.take_transient(op.regclass) {
-                        debug!("Need {} reg from {} throughs", op.regclass, throughs.len());
+                        log::trace!("Need {} reg from {} throughs", op.regclass, throughs.len());
                         match self.spill_candidate(mask, throughs) {
                             Some(cand) => self.spill_reg(cand),
                             None => panic!(
@@ -344,7 +345,7 @@ impl<'a> Context<'a> {
 
                 // Only collect the interesting register uses.
                 if reguse.fixed || reguse.tied || reguse.spilled {
-                    debug!("  reguse: {}", reguse);
+                    log::trace!("  reguse: {}", reguse);
                     self.reg_uses.push(reguse);
                 }
             }
@@ -378,7 +379,7 @@ impl<'a> Context<'a> {
                 let mut reguse = RegUse::new(arg, idx, toprc.into());
                 reguse.fixed = true;
 
-                debug!("  reguse: {}", reguse);
+                log::trace!("  reguse: {}", reguse);
                 self.reg_uses.push(reguse);
             }
         }
@@ -452,7 +453,7 @@ impl<'a> Context<'a> {
             if need_copy || ru.spilled {
                 let rc = self.reginfo.rc(ru.rci);
                 while let Err(mask) = self.pressure.take_transient(rc) {
-                    debug!("Copy of {} reg causes spill", rc);
+                    log::trace!("Copy of {} reg causes spill", rc);
                     // Spill a live register that is *not* used by the current instruction.
                     // Spilling a use wouldn't help.
                     //
@@ -535,7 +536,7 @@ impl<'a> Context<'a> {
             let rc = self.reginfo.rc(rci);
             self.pressure.free(rc);
             self.spills.push(value);
-            debug!("Spilled {}:{} -> {}", value, rc, self.pressure);
+            log::trace!("Spilled {}:{} -> {}", value, rc, self.pressure);
         } else {
             panic!("Cannot spill {} that was already on the stack", value);
         }

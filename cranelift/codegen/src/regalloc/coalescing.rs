@@ -22,7 +22,6 @@ use core::cmp;
 use core::fmt;
 use core::iter;
 use core::slice;
-use log::debug;
 
 // # Implementation
 //
@@ -116,7 +115,7 @@ impl Coalescing {
         virtregs: &mut VirtRegs,
     ) {
         let _tt = timing::ra_cssa();
-        debug!("Coalescing for:\n{}", func.display(isa));
+        log::trace!("Coalescing for:\n{}", func.display(isa));
         self.preorder.compute(domtree, &func.layout);
         let mut context = Context {
             isa,
@@ -185,7 +184,7 @@ impl<'a> Context<'a> {
                 continue;
             }
 
-            debug!(
+            log::trace!(
                 " - checking {} params at back-edge {}: {}",
                 num_params,
                 pred_block,
@@ -225,7 +224,7 @@ impl<'a> Context<'a> {
                 if Some(def_block) == self.func.layout.entry_block()
                     && self.func.signature.params[def_num].location.is_stack()
                 {
-                    debug!("-> isolating function stack parameter {}", arg);
+                    log::trace!("-> isolating function stack parameter {}", arg);
                     let new_arg = self.isolate_arg(pred_block, pred_inst, argnum, arg);
                     self.virtregs.union(param, new_arg);
                     continue;
@@ -294,7 +293,7 @@ impl<'a> Context<'a> {
         let inst = pos.built_inst();
         self.liveness.move_def_locally(param, inst);
 
-        debug!(
+        log::trace!(
             "-> inserted {}, following {}({}: {})",
             pos.display_inst(inst),
             block,
@@ -364,7 +363,7 @@ impl<'a> Context<'a> {
 
         pos.func.dfg.inst_variable_args_mut(pred_inst)[argnum] = copy;
 
-        debug!(
+        log::trace!(
             "-> inserted {}, before {}: {}",
             pos.display_inst(inst),
             pred_block,
@@ -380,7 +379,7 @@ impl<'a> Context<'a> {
     /// closure of the relation formed by block parameter-argument pairs found by `union_find_block()`.
     fn finish_union_find(&mut self) {
         self.virtregs.finish_union_find(None);
-        debug!("After union-find phase:{}", self.virtregs);
+        log::trace!("After union-find phase:{}", self.virtregs);
     }
 }
 
@@ -411,7 +410,7 @@ impl<'a> Context<'a> {
     fn check_vreg(&mut self, vreg: VirtReg) -> bool {
         // Order the values according to the dominator pre-order of their definition.
         let values = self.virtregs.sort_values(vreg, self.func, self.preorder);
-        debug!("Checking {} = {}", vreg, DisplayList(values));
+        log::trace!("Checking {} = {}", vreg, DisplayList(values));
 
         // Now push the values in order to the dominator forest.
         // This gives us the closest dominating value def for each of the values.
@@ -432,7 +431,7 @@ impl<'a> Context<'a> {
             // `value`, we only have to check if it overlaps the definition.
             if self.liveness[parent.value].overlaps_def(node.def, node.block, &self.func.layout) {
                 // The two values are interfering, so they can't be in the same virtual register.
-                debug!("-> interference: {} overlaps def of {}", parent, value);
+                log::trace!("-> interference: {} overlaps def of {}", parent, value);
                 return false;
             }
         }
@@ -456,7 +455,7 @@ impl<'a> Context<'a> {
             self.cfg,
             self.preorder,
         );
-        debug!(
+        log::trace!(
             "Synthesizing {} from {} branches and params {}",
             vreg,
             self.vcopies.branches.len(),
@@ -544,7 +543,7 @@ impl<'a> Context<'a> {
         }
 
         let _vreg = self.virtregs.unify(self.values);
-        debug!("-> merged into {} = {}", _vreg, DisplayList(self.values));
+        log::trace!("-> merged into {} = {}", _vreg, DisplayList(self.values));
         true
     }
 
@@ -566,7 +565,7 @@ impl<'a> Context<'a> {
         // registers and the filtered virtual copies.
         let v0 = self.virtregs.congruence_class(&param);
         let v1 = self.virtregs.congruence_class(&arg);
-        debug!(
+        log::trace!(
             " - set 0: {}\n - set 1: {}",
             DisplayList(v0),
             DisplayList(v1)
@@ -618,7 +617,7 @@ impl<'a> Context<'a> {
                 if node.set_id != parent.set_id
                     && self.liveness[parent.value].reaches_use(inst, node.block, &self.func.layout)
                 {
-                    debug!(
+                    log::trace!(
                         " - interference: {} overlaps vcopy at {}:{}",
                         parent,
                         node.block,
@@ -643,7 +642,7 @@ impl<'a> Context<'a> {
                 && self.liveness[parent.value].overlaps_def(node.def, node.block, &self.func.layout)
             {
                 // The two values are interfering.
-                debug!(" - interference: {} overlaps def of {}", parent, node.value);
+                log::trace!(" - interference: {} overlaps def of {}", parent, node.value);
                 return false;
             }
         }

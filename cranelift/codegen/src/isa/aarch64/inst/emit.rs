@@ -10,7 +10,6 @@ use crate::machinst::ty_bits;
 use regalloc::{Reg, RegClass, Writable};
 
 use core::convert::TryFrom;
-use log::debug;
 
 /// Memory label/reference finalization: convert a MemLabel to a PC-relative
 /// offset, possibly emitting relocation(s) as necessary.
@@ -42,7 +41,7 @@ pub fn mem_finalize(
             };
             let adj = match mem {
                 &AMode::NominalSPOffset(..) => {
-                    debug!(
+                    log::trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
                         state.virtual_sp_offset,
@@ -2642,7 +2641,7 @@ impl MachInstEmit for Inst {
                 }
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
-                debug!(
+                log::trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset,

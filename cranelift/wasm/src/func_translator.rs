@@ -79,7 +79,7 @@ impl FuncTranslator {
     ) -> WasmResult<()> {
         let _tt = timing::wasm_translate_function();
         let mut reader = body.get_binary_reader();
-        log::debug!(
+        log::trace!(
             "translate({} bytes, {}{})",
             reader.bytes_remaining(),
             func.name,

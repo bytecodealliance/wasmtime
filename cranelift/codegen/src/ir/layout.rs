@@ -11,7 +11,6 @@ use crate::packed_option::PackedOption;
 use crate::timing;
 use core::cmp;
 use core::iter::{IntoIterator, Iterator};
-use log::debug;
 
 /// The `Layout` struct determines the layout of blocks and instructions in a function. It does not
 /// contain definitions of instructions or blocks, but depends on `Inst` and `Block` entity references
@@ -328,7 +327,7 @@ impl Layout {
                 next_inst = self.insts[inst].next.expand();
             }
         }
-        debug!("Renumbered {} program points", seq / MAJOR_STRIDE);
+        log::trace!("Renumbered {} program points", seq / MAJOR_STRIDE);
     }
 }
 

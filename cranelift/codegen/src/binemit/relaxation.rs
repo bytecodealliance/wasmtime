@@ -38,7 +38,6 @@ use crate::regalloc::RegDiversions;
 use crate::timing;
 use crate::CodegenResult;
 use core::convert::TryFrom;
-use log::debug;
 
 /// Relax branches and compute the final layout of block headers in `func`.
 ///
@@ -334,7 +333,7 @@ fn relax_branch(
     isa: &dyn TargetIsa,
 ) -> CodeOffset {
     let inst = cur.current_inst().unwrap();
-    debug!(
+    log::trace!(
         "Relaxing [{}] {} for {:#x}-{:#x} range",
         encinfo.display(cur.func.encodings[inst]),
         cur.func.dfg.display_inst(inst, isa),
@@ -350,7 +349,7 @@ fn relax_branch(
         .filter(|&enc| {
             let range = encinfo.branch_range(enc).expect("Branch with no range");
             if !range.contains(offset, dest_offset) {
-                debug!("  trying [{}]: out of range", encinfo.display(enc));
+                log::trace!("  trying [{}]: out of range", encinfo.display(enc));
                 false
             } else if encinfo.operand_constraints(enc)
                 != encinfo.operand_constraints(cur.func.encodings[inst])
@@ -360,10 +359,10 @@ fn relax_branch(
                 // which the existing operands don't satisfy. We can't check for
                 // validity directly because we don't have a RegDiversions active so
                 // we don't know which registers are actually in use.
-                debug!("  trying [{}]: constraints differ", encinfo.display(enc));
+                log::trace!("  trying [{}]: constraints differ", encinfo.display(enc));
                 false
             } else {
-                debug!("  trying [{}]: OK", encinfo.display(enc));
+                log::trace!("  trying [{}]: OK", encinfo.display(enc));
                 true
             }
         })

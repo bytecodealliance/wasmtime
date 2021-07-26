@@ -5,7 +5,6 @@ use crate::ir::SourceLoc;
 use crate::isa::arm32::inst::*;
 
 use core::convert::TryFrom;
-use log::debug;
 
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
 /// nominal stack offset) into real addressing modes, possibly by
@@ -25,7 +24,7 @@ pub fn mem_finalize(mem: &AMode, state: &EmitState) -> (SmallVec<[Inst; 4]>, AMo
             };
             let adj = match mem {
                 &AMode::NominalSPOffset(..) => {
-                    debug!(
+                    log::trace!(
                         "mem_finalize: nominal SP offset {} + adj {} -> {}",
                         off,
                         state.virtual_sp_offset,
@@ -809,7 +808,7 @@ impl MachInstEmit for Inst {
                 trap.emit(sink, emit_info, state);
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
-                debug!(
+                log::trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset,

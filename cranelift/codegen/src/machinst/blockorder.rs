@@ -75,7 +75,6 @@ use crate::ir::{Block, Function, Inst, Opcode};
 use crate::machinst::lower::visit_block_succs;
 use crate::machinst::*;
 
-use log::debug;
 use smallvec::SmallVec;
 
 /// Mapping from CLIF BBs to VCode BBs.
@@ -192,7 +191,7 @@ impl LoweredBlock {
 impl BlockLoweringOrder {
     /// Compute and return a lowered block order for `f`.
     pub fn new(f: &Function) -> BlockLoweringOrder {
-        debug!("BlockLoweringOrder: function body {:?}", f);
+        log::trace!("BlockLoweringOrder: function body {:?}", f);
 
         // Step 1: compute the in-edge and out-edge count of every block.
         let mut block_in_count = SecondaryMap::with_default(0);
@@ -411,7 +410,7 @@ impl BlockLoweringOrder {
             lowered_succ_ranges,
             orig_map,
         };
-        debug!("BlockLoweringOrder: {:?}", result);
+        log::trace!("BlockLoweringOrder: {:?}", result);
         result
     }
 

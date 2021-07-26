@@ -6,7 +6,6 @@ use crate::machinst::*;
 use crate::settings;
 use crate::timing;
 
-use log::debug;
 use regalloc::{allocate_registers_with_opts, Algorithm, Options, PrettyPrint};
 
 /// Compile the given function down to VCode with allocated registers, ready
@@ -32,7 +31,7 @@ where
 
     // Creating the vcode string representation may be costly for large functions, so defer its
     // rendering.
-    debug!(
+    log::trace!(
         "vcode from lowering: \n{}",
         DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
     );
@@ -87,7 +86,7 @@ where
             },
         )
         .map_err(|err| {
-            debug!(
+            log::error!(
                 "Register allocation error for vcode\n{}\nError: {:?}",
                 vcode.show_rru(Some(b.reg_universe())),
                 err
@@ -104,7 +103,7 @@ where
         vcode.replace_insns_from_regalloc(result);
     }
 
-    debug!(
+    log::trace!(
         "vcode after regalloc: final version:\n{}",
         DeferredDisplay::new(|| vcode.show_rru(Some(b.reg_universe())))
     );

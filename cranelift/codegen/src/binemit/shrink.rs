@@ -10,7 +10,6 @@ use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::regalloc::RegDiversions;
 use crate::timing;
-use log::debug;
 
 /// Pick the smallest valid encodings for instructions.
 pub fn shrink_instructions(func: &mut Function, isa: &dyn TargetIsa) {
@@ -58,7 +57,7 @@ pub fn shrink_instructions(func: &mut Function, isa: &dyn TargetIsa) {
                 if best_enc != enc {
                     func.encodings[inst] = best_enc;
 
-                    debug!(
+                    log::trace!(
                         "Shrunk [{}] to [{}] in {}, reducing the size from {} to {}",
                         encinfo.display(enc),
                         encinfo.display(best_enc),

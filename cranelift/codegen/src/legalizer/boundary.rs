@@ -32,7 +32,6 @@ use alloc::borrow::Cow;
 use alloc::vec::Vec;
 use core::mem;
 use cranelift_entity::EntityList;
-use log::debug;
 
 /// Legalize all the function signatures in `func`.
 ///
@@ -479,7 +478,7 @@ where
     // Reconstruct how `ty` was legalized into the `arg_type` argument.
     let conversion = legalize_abi_value(ty, &arg_type);
 
-    debug!("convert_from_abi({}): {:?}", ty, conversion);
+    log::trace!("convert_from_abi({}): {:?}", ty, conversion);
 
     // The conversion describes value to ABI argument. We implement the reverse conversion here.
     match conversion {
@@ -488,7 +487,7 @@ where
             let abi_ty = ty.half_width().expect("Invalid type for conversion");
             let lo = convert_from_abi(pos, abi_ty, None, get_arg);
             let hi = convert_from_abi(pos, abi_ty, None, get_arg);
-            debug!(
+            log::trace!(
                 "intsplit {}: {}, {}: {}",
                 lo,
                 pos.func.dfg.value_type(lo),
@@ -877,7 +876,7 @@ pub fn handle_return_abi(inst: Inst, func: &mut Function, cfg: &ControlFlowGraph
     // the legalized signature. These values should simply be propagated from the entry block
     // arguments.
     if special_args > 0 {
-        debug!(
+        log::trace!(
             "Adding {} special-purpose arguments to {}",
             special_args,
             pos.func.dfg.display_inst(inst, None)
