@@ -1448,6 +1448,7 @@ pub(crate) fn emit(
                 SseOpcode::Andnpd => (LegacyPrefixes::_66, 0x0F55, 2),
                 SseOpcode::Blendvps => (LegacyPrefixes::_66, 0x0F3814, 3),
                 SseOpcode::Blendvpd => (LegacyPrefixes::_66, 0x0F3815, 3),
+                SseOpcode::Cvttpd2dq => (LegacyPrefixes::_66, 0x0FE6, 2),
                 SseOpcode::Cvttps2dq => (LegacyPrefixes::_F3, 0x0F5B, 2),
                 SseOpcode::Cvtdq2ps => (LegacyPrefixes::None, 0x0F5B, 2),
                 SseOpcode::Divps => (LegacyPrefixes::None, 0x0F5E, 2),
