@@ -176,7 +176,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "miniz_oxide",
- "object 0.26.0",
+ "object",
  "rustc-demangle",
 ]
 
@@ -722,7 +722,7 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-module",
  "log",
- "object 0.25.3",
+ "object",
  "target-lexicon",
 ]
 
@@ -1890,21 +1890,12 @@ checksum = "17b02fc0ff9a9e4b35b3342880f48e896ebf69f2967921fe8646bf5b7125956a"
 
 [[package]]
 name = "object"
-version = "0.25.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a38f2be3697a57b4060074ff41b44c16870d916ad7877c17696e063257482bc7"
-dependencies = [
- "crc32fast",
- "indexmap",
- "memchr",
-]
-
-[[package]]
-name = "object"
 version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c55827317fb4c08822499848a14237d2874d6f139828893017237e7ab93eb386"
 dependencies = [
+ "crc32fast",
+ "indexmap",
  "memchr",
 ]
 
@@ -3626,7 +3617,7 @@ dependencies = [
  "log",
  "more-asserts",
  "num_cpus",
- "object 0.25.3",
+ "object",
  "pretty_env_logger",
  "rayon",
  "structopt",
@@ -3673,7 +3664,7 @@ dependencies = [
  "anyhow",
  "gimli",
  "more-asserts",
- "object 0.25.3",
+ "object",
  "target-lexicon",
  "thiserror",
  "wasmparser",
@@ -3759,7 +3750,7 @@ dependencies = [
  "gimli",
  "log",
  "more-asserts",
- "object 0.25.3",
+ "object",
  "rayon",
  "region",
  "serde",
@@ -3792,7 +3783,7 @@ version = "0.28.0"
 dependencies = [
  "anyhow",
  "more-asserts",
- "object 0.25.3",
+ "object",
  "target-lexicon",
  "wasmtime-debug",
  "wasmtime-environ",
@@ -3808,7 +3799,7 @@ dependencies = [
  "ittapi-rs",
  "lazy_static",
  "libc",
- "object 0.25.3",
+ "object",
  "scroll",
  "serde",
  "target-lexicon",

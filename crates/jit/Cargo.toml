@@ -33,7 +33,7 @@ anyhow = "1.0"
 cfg-if = "1.0"
 log = "0.4"
 gimli = { version = "0.25.0", default-features = false, features = ["write"] }
-object = { version = "0.25.0", default-features = false, features = ["write"] }
+object = { version = "0.26.0", default-features = false, features = ["write"] }
 serde = { version = "1.0.94", features = ["derive"] }
 addr2line = { version = "0.16.0", default-features = false }
 
