@@ -4413,6 +4413,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
             ctx.emit(Inst::gen_move(dst, rhs, ty));
             let sse_opcode = match (ty, op) {
+                (types::F32, Opcode::FminPseudo) => SseOpcode::Minss,
+                (types::F32, Opcode::FmaxPseudo) => SseOpcode::Maxss,
+                (types::F64, Opcode::FminPseudo) => SseOpcode::Minsd,
+                (types::F64, Opcode::FmaxPseudo) => SseOpcode::Maxsd,
                 (types::F32X4, Opcode::FminPseudo) => SseOpcode::Minps,
                 (types::F32X4, Opcode::FmaxPseudo) => SseOpcode::Maxps,
                 (types::F64X2, Opcode::FminPseudo) => SseOpcode::Minpd,
