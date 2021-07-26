@@ -7,7 +7,6 @@ use crate::ir::{SourceLoc, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use core::convert::TryFrom;
-use log::debug;
 use regalloc::{Reg, RegClass};
 
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
@@ -322,7 +321,7 @@ fn machreg_to_gpr_or_fpr(m: Reg) -> u8 {
 
 /// E-type instructions.
 ///
-///   15    
+///   15
 ///   opcode
 ///        0
 ///
@@ -2056,7 +2055,7 @@ impl MachInstEmit for Inst {
             }
 
             &Inst::VirtualSPOffsetAdj { offset } => {
-                debug!(
+                log::trace!(
                     "virtual sp offset adjusted by {} -> {}",
                     offset,
                     state.virtual_sp_offset + offset

@@ -39,7 +39,6 @@ use crate::verifier::{verify_context, verify_locations, VerifierErrors, Verifier
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;
-use log::debug;
 
 #[cfg(feature = "souper-harvest")]
 use crate::souper_harvest::do_souper_harvest;
@@ -162,7 +161,7 @@ impl Context {
         self.verify_if(isa)?;
 
         let opt_level = isa.flags().opt_level();
-        debug!(
+        log::debug!(
             "Compiling (opt level {:?}):\n{}",
             opt_level,
             self.func.display(isa)
@@ -209,7 +208,7 @@ impl Context {
             }
             let result = self.relax_branches(isa);
 
-            debug!("Compiled:\n{}", self.func.display(isa));
+            log::trace!("Compiled:\n{}", self.func.display(isa));
             result
         }
     }
@@ -377,7 +376,7 @@ impl Context {
             self.verify_if(isa)
         } else {
             legalize_function(&mut self.func, &mut self.cfg, isa);
-            debug!("Legalized:\n{}", self.func.display(isa));
+            log::trace!("Legalized:\n{}", self.func.display(isa));
             self.verify_if(isa)
         }
     }

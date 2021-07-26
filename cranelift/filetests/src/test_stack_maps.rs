@@ -46,7 +46,6 @@ impl SubTest for TestStackMaps {
         text.push_str("Stack maps:\n");
         text.push('\n');
         text.push_str(&sink.text);
-        log::debug!("FITZGEN:\n{}", text);
 
         run_filecheck(&text, context)
     }

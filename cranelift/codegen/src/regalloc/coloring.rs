@@ -59,7 +59,6 @@ use crate::regalloc::register_set::RegisterSet;
 use crate::regalloc::solver::{Solver, SolverError};
 use crate::timing;
 use core::mem;
-use log::debug;
 
 /// Data structures for the coloring pass.
 ///
@@ -136,7 +135,7 @@ impl Coloring {
         tracker: &mut LiveValueTracker,
     ) {
         let _tt = timing::ra_coloring();
-        debug!("Coloring for:\n{}", func.display(isa));
+        log::trace!("Coloring for:\n{}", func.display(isa));
         let mut ctx = Context {
             usable_regs: isa.allocatable_registers(func),
             uses_pinned_reg: isa.flags().enable_pinned_reg(),
@@ -176,7 +175,7 @@ impl<'a> Context<'a> {
 
     /// Visit `block`, assuming that the immediate dominator has already been visited.
     fn visit_block(&mut self, block: Block, tracker: &mut LiveValueTracker) {
-        debug!("Coloring {}:", block);
+        log::trace!("Coloring {}:", block);
         let mut regs = self.visit_block_header(block, tracker);
         tracker.drop_dead_params();
 
@@ -209,7 +208,7 @@ impl<'a> Context<'a> {
             if opcode.is_branch() {
                 // The next instruction is necessarily an unconditional branch.
                 if let Some(branch) = self.cur.next_inst() {
-                    debug!(
+                    log::trace!(
                         "Skip coloring {}\n    from {}\n    with diversions {}",
                         self.cur.display_inst(branch),
                         regs.input.display(&self.reginfo),
@@ -230,7 +229,7 @@ impl<'a> Context<'a> {
                         // Transfer the diversion to the next block.
                         self.divert
                             .save_for_block(&mut self.cur.func.entry_diversions, target);
-                        debug!(
+                        log::trace!(
                             "Set entry-diversion for {} to\n      {}",
                             target,
                             self.divert.display(&self.reginfo)
@@ -273,7 +272,7 @@ impl<'a> Context<'a> {
         // Copy the content of the registered diversions to be reused at the
         // entry of this basic block.
         self.divert.at_block(&self.cur.func.entry_diversions, block);
-        debug!(
+        log::trace!(
             "Start {} with entry-diversion set to\n      {}",
             block,
             self.divert.display(&self.reginfo)
@@ -300,7 +299,7 @@ impl<'a> Context<'a> {
         let mut regs = AvailableRegs::new(&self.usable_regs);
 
         for lv in live.iter().filter(|lv| !lv.is_dead) {
-            debug!(
+            log::trace!(
                 "Live-in: {}:{} in {}",
                 lv.value,
                 lv.affinity.display(&self.reginfo),
@@ -426,7 +425,7 @@ impl<'a> Context<'a> {
         tracker: &mut LiveValueTracker,
         regs: &mut AvailableRegs,
     ) -> bool {
-        debug!(
+        log::trace!(
             "Coloring {}\n    from {}",
             self.cur.display_inst(inst),
             regs.input.display(&self.reginfo),
@@ -490,7 +489,7 @@ impl<'a> Context<'a> {
                     continue;
                 }
 
-                debug!(
+                log::trace!(
                     "    kill {} in {} ({} {})",
                     lv.value,
                     self.reginfo.display_regunit(reg),
@@ -508,7 +507,7 @@ impl<'a> Context<'a> {
         }
 
         // This aligns with the "    from" line at the top of the function.
-        debug!("    glob {}", regs.global.display(&self.reginfo));
+        log::trace!("    glob {}", regs.global.display(&self.reginfo));
 
         // This flag is set when the solver failed to find a solution for the global defines that
         // doesn't interfere with `regs.global`. We need to rewrite all of `inst`s global defines
@@ -564,7 +563,7 @@ impl<'a> Context<'a> {
             .solver
             .quick_solve(&regs.global, is_reload)
             .unwrap_or_else(|_| {
-                debug!("quick_solve failed for {}", self.solver);
+                log::trace!("quick_solve failed for {}", self.solver);
                 self.iterate_solution(
                     throughs,
                     &regs.global,
@@ -606,7 +605,7 @@ impl<'a> Context<'a> {
         regs.input = output_regs;
         for lv in defs {
             let loc = self.cur.func.locations[lv.value];
-            debug!(
+            log::trace!(
                 "    color {} -> {}{}",
                 lv.value,
                 loc.display(&self.reginfo),
@@ -869,7 +868,7 @@ impl<'a> Context<'a> {
                 let toprc = self.reginfo.toprc(rci);
                 let reg = self.divert.reg(lv.value, &self.cur.func.locations);
                 if self.solver.is_fixed_input_conflict(toprc, reg) {
-                    debug!(
+                    log::trace!(
                         "adding var to divert fixed input conflict for {}",
                         toprc.info.display_regunit(reg)
                     );
@@ -895,7 +894,7 @@ impl<'a> Context<'a> {
                 ConstraintKind::FixedReg(reg) | ConstraintKind::FixedTied(reg) => {
                     self.add_fixed_output(lv.value, constraint.regclass, reg, throughs);
                     if !lv.is_local && !global_regs.is_avail(constraint.regclass, reg) {
-                        debug!(
+                        log::trace!(
                             "Fixed output {} in {}:{} is not available in global regs",
                             lv.value,
                             constraint.regclass,
@@ -931,7 +930,7 @@ impl<'a> Context<'a> {
                     let rc = self.reginfo.rc(rci);
                     self.add_fixed_output(lv.value, rc, reg, throughs);
                     if !lv.is_local && !global_regs.is_avail(rc, reg) {
-                        debug!(
+                        log::trace!(
                             "ABI output {} in {}:{} is not available in global regs",
                             lv.value,
                             rc,
@@ -1010,7 +1009,7 @@ impl<'a> Context<'a> {
                         // We need to make sure that fixed output register is compatible with the
                         // global register set.
                         if !lv.is_local && !global_regs.is_avail(constraint.regclass, reg) {
-                            debug!(
+                            log::trace!(
                                 "Tied output {} in {}:{} is not available in global regs",
                                 lv.value,
                                 constraint.regclass,
@@ -1047,7 +1046,7 @@ impl<'a> Context<'a> {
                     debug_assert!(added, "Ran out of registers in {}", rc);
                 }
                 Err(SolverError::Global(_value)) => {
-                    debug!(
+                    log::trace!(
                         "Not enough global registers for {}, trying as local",
                         _value
                     );
@@ -1062,7 +1061,7 @@ impl<'a> Context<'a> {
 
     /// Try to add an `rc` variable to the solver from the `throughs` set.
     fn try_add_var(&mut self, rc: RegClass, throughs: &[LiveValue]) -> bool {
-        debug!("Trying to add a {} reg from {} values", rc, throughs.len());
+        log::trace!("Trying to add a {} reg from {} values", rc, throughs.len());
 
         for lv in throughs {
             if let Affinity::Reg(rci) = lv.affinity {
@@ -1206,7 +1205,7 @@ impl<'a> Context<'a> {
     /// the constraints on the instruction operands.
     ///
     fn replace_global_defines(&mut self, inst: Inst, tracker: &mut LiveValueTracker) {
-        debug!("Replacing global defs on {}", self.cur.display_inst(inst));
+        log::trace!("Replacing global defs on {}", self.cur.display_inst(inst));
 
         // We'll insert copies *after `inst`. Our caller will move the cursor back.
         self.cur.next_inst();
@@ -1253,14 +1252,14 @@ impl<'a> Context<'a> {
             lv.endpoint = copy;
             lv.is_local = true;
 
-            debug!(
+            log::trace!(
                 "  + {} with {} in {}",
                 self.cur.display_inst(copy),
                 local,
                 loc.display(&self.reginfo)
             );
         }
-        debug!("Done: {}", self.cur.display_inst(inst));
+        log::trace!("Done: {}", self.cur.display_inst(inst));
     }
 
     /// Process kills on a ghost instruction.

@@ -4,7 +4,6 @@ use alloc::vec::Vec;
 use core::convert::TryFrom;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::*;
-use log::debug;
 
 type EntryIndex = u128;
 
@@ -77,7 +76,7 @@ impl Switch {
     /// * Between two `ContiguousCaseRange`s there will be at least one entry index.
     /// * No `ContiguousCaseRange`s will be empty.
     fn collect_contiguous_case_ranges(self) -> Vec<ContiguousCaseRange> {
-        debug!("build_contiguous_case_ranges before: {:#?}", self.cases);
+        log::trace!("build_contiguous_case_ranges before: {:#?}", self.cases);
         let mut cases = self.cases.into_iter().collect::<Vec<(_, _)>>();
         cases.sort_by_key(|&(index, _)| index);
 
@@ -100,7 +99,7 @@ impl Switch {
             last_index = Some(index);
         }
 
-        debug!(
+        log::trace!(
             "build_contiguous_case_ranges after: {:#?}",
             contiguous_case_ranges
         );

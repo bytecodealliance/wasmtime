@@ -21,7 +21,6 @@ use crate::isa::aarch64::AArch64Backend;
 use super::lower_inst;
 
 use crate::data_value::DataValue;
-use log::{debug, trace};
 use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
 use std::cmp;
@@ -275,7 +274,7 @@ fn lower_input_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
 ) -> (ValueRegs<Reg>, Type, bool) {
-    debug!("lower_input_to_regs: input {:?}", input);
+    log::trace!("lower_input_to_regs: input {:?}", input);
     let ty = ctx.input_ty(input.insn, input.input);
     let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
     let is_const = inputs.constant.is_some();
@@ -730,7 +729,7 @@ pub(crate) fn lower_pair_address<C: LowerCtx<I = Inst>>(
     let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
     let offset = args_offset + (offset as i64);
 
-    trace!(
+    log::trace!(
         "lower_pair_address: addends64 {:?}, addends32 {:?}, offset {}",
         addends64,
         addends32,
@@ -791,7 +790,7 @@ pub(crate) fn lower_address<C: LowerCtx<I = Inst>>(
     let (mut addends64, mut addends32, args_offset) = collect_address_addends(ctx, roots);
     let mut offset = args_offset + (offset as i64);
 
-    trace!(
+    log::trace!(
         "lower_address: addends64 {:?}, addends32 {:?}, offset {}",
         addends64,
         addends32,
@@ -1194,13 +1193,15 @@ pub(crate) fn maybe_input_insn<C: LowerCtx<I = Inst>>(
     op: Opcode,
 ) -> Option<IRInst> {
     let inputs = c.get_input_as_source_or_const(input.insn, input.input);
-    debug!(
+    log::trace!(
         "maybe_input_insn: input {:?} has options {:?}; looking for op {:?}",
-        input, inputs, op
+        input,
+        inputs,
+        op
     );
     if let Some((src_inst, _)) = inputs.inst {
         let data = c.data(src_inst);
-        debug!(" -> input inst {:?}", data);
+        log::trace!(" -> input inst {:?}", data);
         if data.opcode() == op {
             return Some(src_inst);
         }
@@ -1300,9 +1301,11 @@ pub(crate) fn lower_icmp<C: LowerCtx<I = Inst>>(
     condcode: IntCC,
     output: IcmpOutput,
 ) -> CodegenResult<IcmpResult> {
-    debug!(
+    log::trace!(
         "lower_icmp: insn {}, condcode: {}, output: {:?}",
-        insn, condcode, output
+        insn,
+        condcode,
+        output
     );
 
     let rd = output.reg().unwrap_or(writable_zero_reg());

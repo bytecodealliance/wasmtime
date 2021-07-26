@@ -22,7 +22,6 @@ use crate::regalloc::liveness::Liveness;
 use crate::timing;
 use crate::topo_order::TopoOrder;
 use alloc::vec::Vec;
-use log::debug;
 
 /// Reusable data structures for the reload pass.
 pub struct Reload {
@@ -73,7 +72,7 @@ impl Reload {
         tracker: &mut LiveValueTracker,
     ) {
         let _tt = timing::ra_reload();
-        debug!("Reload for:\n{}", func.display(isa));
+        log::trace!("Reload for:\n{}", func.display(isa));
         let mut ctx = Context {
             cur: EncCursor::new(func, isa),
             encinfo: isa.encoding_info(),
@@ -120,7 +119,7 @@ impl<'a> Context<'a> {
     }
 
     fn visit_block(&mut self, block: Block, tracker: &mut LiveValueTracker) {
-        debug!("Reloading {}:", block);
+        log::trace!("Reloading {}:", block);
         self.visit_block_header(block, tracker);
         tracker.drop_dead_params();
 

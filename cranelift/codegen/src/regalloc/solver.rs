@@ -109,7 +109,6 @@ use core::cmp;
 use core::fmt;
 use core::mem;
 use core::u16;
-use log::debug;
 
 /// A variable in the constraint problem.
 ///
@@ -534,7 +533,7 @@ impl Solver {
     /// In either case, `to` will not be available for variables on the input side of the
     /// instruction.
     pub fn reassign_in(&mut self, value: Value, rc: RegClass, from: RegUnit, to: RegUnit) {
-        debug!(
+        log::trace!(
             "reassign_in({}:{}, {} -> {})",
             value,
             rc,
@@ -547,7 +546,7 @@ impl Solver {
             // added as a variable previously. A fixed constraint beats a variable, so convert it.
             if let Some(idx) = self.vars.iter().position(|v| v.value == value) {
                 let v = self.vars.remove(idx);
-                debug!("-> converting variable {} to a fixed constraint", v);
+                log::trace!("-> converting variable {} to a fixed constraint", v);
                 // The spiller is responsible for ensuring that all constraints on the uses of a
                 // value are compatible.
                 debug_assert!(
@@ -580,7 +579,7 @@ impl Solver {
     /// This function can only be used before calling `inputs_done()`. Afterwards, more input-side
     /// variables can be added by calling `add_killed_var()` and `add_through_var()`
     pub fn add_var(&mut self, value: Value, constraint: RegClass, from: RegUnit) {
-        debug!(
+        log::trace!(
             "add_var({}:{}, from={})",
             value,
             constraint,
@@ -595,7 +594,7 @@ impl Solver {
     ///
     /// This function should be called after `inputs_done()` only. Use `add_var()` before.
     pub fn add_killed_var(&mut self, value: Value, rc: RegClass, from: RegUnit) {
-        debug!(
+        log::trace!(
             "add_killed_var({}:{}, from={})",
             value,
             rc,
@@ -610,7 +609,7 @@ impl Solver {
     ///
     /// This function should be called after `inputs_done()` only. Use `add_var()` before.
     pub fn add_through_var(&mut self, value: Value, rc: RegClass, from: RegUnit) {
-        debug!(
+        log::trace!(
             "add_through_var({}:{}, from={})",
             value,
             rc,
@@ -631,7 +630,7 @@ impl Solver {
             if let Some(v) = self.vars.iter_mut().find(|v| v.value == value) {
                 // We have an existing variable entry for `value`. Combine the constraints.
                 if let Some(rc) = v.constraint.intersect(rc) {
-                    debug!("-> combining constraint with {} yields {}", v, rc);
+                    log::trace!("-> combining constraint with {} yields {}", v, rc);
                     v.constraint = rc;
                     return;
                 } else {
@@ -643,17 +642,17 @@ impl Solver {
 
             // No variable, then it must be a fixed reassignment.
             if let Some(a) = self.assignments.get(value) {
-                debug!("-> already fixed assignment {}", a);
+                log::trace!("-> already fixed assignment {}", a);
                 debug_assert!(rc.contains(a.to), "Incompatible constraints for {}", value);
                 return;
             }
 
-            debug!("{}", self);
+            log::trace!("{}", self);
             panic!("Wrong from register for {}", value);
         }
 
         let new_var = Variable::new_live(value, rc, from, live_through);
-        debug!("-> new var: {}", new_var);
+        log::trace!("-> new var: {}", new_var);
 
         self.regs_in.free(rc, from);
         if self.inputs_done && live_through {
@@ -769,7 +768,7 @@ impl Solver {
         if is_global {
             let mut new_var = Variable::new_live(value, rc, reg, true);
             new_var.is_global = true;
-            debug!("add_tied_input: new tied-global value: {}", new_var);
+            log::trace!("add_tied_input: new tied-global value: {}", new_var);
             self.vars.push(new_var);
             self.regs_in.free(rc, reg);
         } else {
@@ -900,7 +899,7 @@ impl Solver {
             )
         });
 
-        debug!("real_solve for {}", self);
+        log::trace!("real_solve for {}", self);
         self.find_solution(global_regs, is_reload)
     }
 
@@ -1000,7 +999,7 @@ impl Solver {
             .extend(self.assignments.values().filter_map(Move::with_assignment));
 
         if !self.moves.is_empty() {
-            debug!("collect_moves: {}", DisplayList(&self.moves));
+            log::trace!("collect_moves: {}", DisplayList(&self.moves));
         }
     }
 
@@ -1042,7 +1041,7 @@ impl Solver {
                 if let Some((rc, reg)) = m.from_reg() {
                     avail.free(rc, reg);
                 }
-                debug!("move #{}: {}", i, m);
+                log::trace!("move #{}: {}", i, m);
                 i += 1;
                 continue;
             }
@@ -1076,7 +1075,7 @@ impl Solver {
             let m = self.moves[i].clone();
             let toprc = m.rc().toprc();
             if let Some(reg) = avail.iter(toprc).next() {
-                debug!(
+                log::trace!(
                     "breaking cycle at {} with available {} register {}",
                     m,
                     toprc,
@@ -1107,7 +1106,7 @@ impl Solver {
             // a last resort.
             let slot = num_spill_slots;
             num_spill_slots += 1;
-            debug!("breaking cycle at {} with slot {}", m, slot);
+            log::trace!("breaking cycle at {} with slot {}", m, slot);
             let old_to_reg = self.moves[i].change_to_spill(slot);
             self.fills.push(Move::Fill {
                 value: m.value(),

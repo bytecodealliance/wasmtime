@@ -132,7 +132,6 @@ use crate::settings;
 use crate::CodegenResult;
 use crate::{ir, isa};
 use alloc::vec::Vec;
-use log::{debug, trace};
 use regalloc::{RealReg, Reg, RegClass, Set, SpillSlot, Writable};
 use smallvec::{smallvec, SmallVec};
 use std::convert::TryFrom;
@@ -547,7 +546,7 @@ impl ABISig {
             need_stack_return_area,
         )?;
 
-        trace!(
+        log::trace!(
             "ABISig: sig {:?} => args = {:?} rets = {:?} arg stack = {} ret stack = {} stack_ret_arg = {:?}",
             sig,
             args,
@@ -638,7 +637,7 @@ fn get_special_purpose_param_register(
 impl<M: ABIMachineSpec> ABICalleeImpl<M> {
     /// Create a new body ABI instance.
     pub fn new(f: &ir::Function, flags: settings::Flags) -> CodegenResult<Self> {
-        debug!("ABI: func signature {:?}", f.signature);
+        log::trace!("ABI: func signature {:?}", f.signature);
 
         let ir_sig = ensure_struct_return_ptr_is_returned(&f.signature);
         let sig = ABISig::from_func_sig::<M>(&ir_sig, &flags)?;
@@ -1129,14 +1128,14 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         if let Some(i) = self.sig.stack_ret_arg {
             let insts = self.gen_copy_arg_to_regs(i, ValueRegs::one(self.ret_area_ptr.unwrap()));
             let inst = insts.into_iter().next().unwrap();
-            trace!(
+            log::trace!(
                 "gen_retval_area_setup: inst {:?}; ptr reg is {:?}",
                 inst,
                 self.ret_area_ptr.unwrap().to_reg()
             );
             Some(inst)
         } else {
-            trace!("gen_retval_area_setup: not needed");
+            log::trace!("gen_retval_area_setup: not needed");
             None
         }
     }
@@ -1177,7 +1176,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let islot = slot.get() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
-        trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        log::trace!("load_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
 
         // Integer types smaller than word size have been spilled as words below,
         // and therefore must be reloaded in the same type.
@@ -1201,7 +1200,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let islot = slot.get() as i64;
         let spill_off = islot * M::word_bytes() as i64;
         let sp_off = self.stackslots_size as i64 + spill_off;
-        trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
+        log::trace!("store_spillslot: slot {:?} -> sp_off {}", slot, sp_off);
 
         // When reloading from a spill slot, we might have lost information about real integer
         // types. For instance, on the x64 backend, a zero-extension can become spurious and
@@ -1226,7 +1225,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         let virtual_sp_offset = M::get_virtual_sp_offset_from_state(state);
         let nominal_sp_to_fp = M::get_nominal_sp_to_fp(state);
         assert!(virtual_sp_offset >= 0);
-        trace!(
+        log::trace!(
             "spillslots_to_stackmap: slots = {:?}, state = {:?}",
             slots,
             state
@@ -1334,7 +1333,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             insts.push(M::gen_ret());
         }
 
-        debug!("Epilogue: {:?}", insts);
+        log::trace!("Epilogue: {:?}", insts);
         insts
     }
 

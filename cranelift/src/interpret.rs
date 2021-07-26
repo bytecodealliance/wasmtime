@@ -5,7 +5,6 @@ use cranelift_interpreter::environment::FunctionStore;
 use cranelift_interpreter::interpreter::{Interpreter, InterpreterState};
 use cranelift_interpreter::step::ControlFlow;
 use cranelift_reader::{parse_run_command, parse_test, ParseError, ParseOptions};
-use log::debug;
 use std::path::PathBuf;
 use std::{fs, io};
 use structopt::StructOpt;
@@ -76,7 +75,7 @@ impl FileInterpreter {
     /// Construct a file runner from a CLIF file path.
     pub fn from_path(path: impl Into<PathBuf>) -> Result<Self, io::Error> {
         let path = path.into();
-        debug!("New file runner from path: {}:", path.to_string_lossy());
+        log::trace!("New file runner from path: {}:", path.to_string_lossy());
         let contents = fs::read_to_string(&path)?;
         Ok(Self {
             path: Some(path),
@@ -87,7 +86,7 @@ impl FileInterpreter {
     /// Construct a file runner from a CLIF code string. Currently only used for testing.
     #[cfg(test)]
     pub fn from_inline_code(contents: String) -> Self {
-        debug!("New file runner from inline code: {}:", &contents[..20]);
+        log::trace!("New file runner from inline code: {}:", &contents[..20]);
         Self {
             path: None,
             contents,

@@ -23,7 +23,6 @@ use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::convert::TryInto;
-use log::debug;
 use regalloc::{Reg, StackmapRequestInfo, Writable};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
@@ -358,7 +357,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 if value_regs[param].is_invalid() {
                     let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
                     value_regs[param] = regs;
-                    debug!("bb {} param {}: regs {:?}", bb, param, regs);
+                    log::trace!("bb {} param {}: regs {:?}", bb, param, regs);
                 }
             }
             for inst in f.layout.block_insts(bb) {
@@ -367,9 +366,12 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     if value_regs[result].is_invalid() {
                         let regs = alloc_vregs(ty, &mut next_vreg, &mut vcode)?;
                         value_regs[result] = regs;
-                        debug!(
+                        log::trace!(
                             "bb {} inst {} ({:?}): result regs {:?}",
-                            bb, inst, f.dfg[inst], regs,
+                            bb,
+                            inst,
+                            f.dfg[inst],
+                            regs,
                         );
                     }
                 }
@@ -391,7 +393,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         for ret in &vcode.abi().signature().returns.clone() {
             let regs = alloc_vregs(ret.value_type, &mut next_vreg, &mut vcode)?;
             retval_regs.push(regs);
-            debug!("retval gets regs {:?}", regs);
+            log::trace!("retval gets regs {:?}", regs);
         }
 
         // Compute instruction colors, find constant instructions, and find instructions with
@@ -406,16 +408,16 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for inst in f.layout.block_insts(bb) {
                 let side_effect = has_lowering_side_effect(f, inst);
 
-                debug!("bb {} inst {} has color {}", bb, inst, cur_color);
+                log::trace!("bb {} inst {} has color {}", bb, inst, cur_color);
                 if side_effect {
                     side_effect_inst_entry_colors.insert(inst, InstColor::new(cur_color));
-                    debug!(" -> side-effecting; incrementing color for next inst");
+                    log::trace!(" -> side-effecting; incrementing color for next inst");
                     cur_color += 1;
                 }
 
                 // Determine if this is a constant; if so, add to the table.
                 if let Some(c) = is_constant_64bit(f, inst) {
-                    debug!(" -> constant: {}", c);
+                    log::trace!(" -> constant: {}", c);
                     inst_constants.insert(inst, c);
                 }
 
@@ -454,7 +456,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn gen_arg_setup(&mut self) {
         if let Some(entry_bb) = self.f.layout.entry_block() {
-            debug!(
+            log::trace!(
                 "gen_arg_setup: entry BB {} args are:\n{:?}",
                 entry_bb,
                 self.f.dfg.block_params(entry_bb)
@@ -521,7 +523,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     fn lower_edge(&mut self, pred: Block, inst: Inst, succ: Block) -> CodegenResult<()> {
-        debug!("lower_edge: pred {} succ {}", pred, succ);
+        log::trace!("lower_edge: pred {} succ {}", pred, succ);
 
         let num_args = self.f.dfg.block_params(succ).len();
         debug_assert!(num_args == self.f.dfg.inst_variable_args(inst).len());
@@ -558,15 +560,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let dst_regs = self.value_regs[*dst_val];
 
             let input = self.get_value_as_source_or_const(src_val);
-            debug!("jump arg {} is {}", i, src_val);
+            log::trace!("jump arg {} is {}", i, src_val);
             i += 1;
 
             if let Some(c) = input.constant {
-                debug!(" -> constant {}", c);
+                log::trace!(" -> constant {}", c);
                 const_bundles.push((ty, writable_value_regs(dst_regs), c));
             } else {
                 let src_regs = self.put_value_in_regs(src_val);
-                debug!(" -> reg {:?}", src_regs);
+                log::trace!(" -> reg {:?}", src_regs);
                 // Skip self-assignments.  Not only are they pointless, they falsely trigger the
                 // overlap-check below and hence can cause a lot of unnecessary copying through
                 // temporaries.
@@ -702,7 +704,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
             // Are any outputs used at least once?
             let value_needed = self.is_any_inst_result_needed(inst);
-            debug!(
+            log::trace!(
                 "lower_clif_block: block {} inst {} ({:?}) is_branch {} side_effect {} value_needed {}",
                 block,
                 inst,
@@ -732,7 +734,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs its used.
             if has_side_effect || value_needed {
-                debug!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
+                log::trace!("lowering: inst {}: {:?}", inst, self.f.dfg[inst]);
                 backend.lower(self, inst)?;
                 // Emit value-label markers if needed, to later recover debug
                 // mappings.
@@ -758,7 +760,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     fn get_value_labels<'a>(&'a self, val: Value, depth: usize) -> Option<&'a [ValueLabelStart]> {
         if let Some(ref values_labels) = self.f.dfg.values_labels {
-            debug!(
+            log::trace!(
                 "get_value_labels: val {} -> {} -> {:?}",
                 val,
                 self.f.dfg.resolve_aliases(val),
@@ -791,9 +793,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 .map(|&ValueLabelStart { label, .. }| label)
                 .collect::<FxHashSet<_>>();
             for label in labels {
-                debug!(
+                log::trace!(
                     "value labeling: defines val {:?} -> reg {:?} -> label {:?}",
-                    val, reg, label,
+                    val,
+                    reg,
+                    label,
                 );
                 markers.push(I::gen_value_label_marker(label, reg));
             }
@@ -808,7 +812,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             return;
         }
 
-        debug!(
+        log::trace!(
             "value labeling: srcloc {}: inst {}",
             self.srcloc(inst),
             inst
@@ -823,7 +827,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             return;
         }
 
-        debug!("value labeling: block {}", block);
+        log::trace!("value labeling: block {}", block);
         for &arg in self.f.dfg.block_params(block) {
             self.emit_value_label_marks_for_value(arg);
         }
@@ -870,9 +874,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         branches: &SmallVec<[Inst; 2]>,
         targets: &SmallVec<[MachLabel; 2]>,
     ) -> CodegenResult<()> {
-        debug!(
+        log::trace!(
             "lower_clif_branches: block {} branches {:?} targets {:?}",
-            block, branches, targets,
+            block,
+            branches,
+            targets,
         );
         // When considering code-motion opportunities, consider the current
         // program point to be the first branch.
@@ -911,7 +917,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         mut self,
         backend: &B,
     ) -> CodegenResult<(VCode<I>, StackmapRequestInfo)> {
-        debug!("about to lower function: {:?}", self.f);
+        log::trace!("about to lower function: {:?}", self.f);
 
         // Initialize the ABI object, giving it a temp if requested.
         let maybe_tmp = if let Some(temp_ty) = self.vcode.abi().temp_needed() {
@@ -992,15 +998,15 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         // Now that we've emitted all instructions into the VCodeBuilder, let's build the VCode.
         let (vcode, stack_map_info) = self.vcode.build();
-        debug!("built vcode: {:?}", vcode);
+        log::trace!("built vcode: {:?}", vcode);
 
         Ok((vcode, stack_map_info))
     }
 
     fn put_value_in_regs(&mut self, val: Value) -> ValueRegs<Reg> {
-        debug!("put_value_in_reg: val {}", val);
+        log::trace!("put_value_in_reg: val {}", val);
         let mut regs = self.value_regs[val];
-        debug!(" -> regs {:?}", regs);
+        log::trace!(" -> regs {:?}", regs);
         assert!(regs.is_valid());
 
         self.value_lowered_uses[val] += 1;
@@ -1025,9 +1031,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// `get_input()` but starting from the SSA value, which is not exposed to
     /// the backend.
     fn get_value_as_source_or_const(&self, val: Value) -> NonRegInput {
-        debug!(
+        log::trace!(
             "get_input_for_val: val {} at cur_inst {:?} cur_scan_entry_color {:?}",
-            val, self.cur_inst, self.cur_scan_entry_color,
+            val,
+            self.cur_inst,
+            self.cur_scan_entry_color,
         );
         let inst = match self.f.dfg.value_def(val) {
             // OK to merge source instruction if (i) we have a source
@@ -1051,8 +1059,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             //   prior to the sunk instruction) to sink.
             ValueDef::Result(src_inst, result_idx) => {
                 let src_side_effect = has_lowering_side_effect(self.f, src_inst);
-                debug!(" -> src inst {}", src_inst);
-                debug!(" -> has lowering side effect: {}", src_side_effect);
+                log::trace!(" -> src inst {}", src_inst);
+                log::trace!(" -> has lowering side effect: {}", src_side_effect);
                 if !src_side_effect {
                     // Pure instruction: always possible to sink.
                     Some((src_inst, result_idx))

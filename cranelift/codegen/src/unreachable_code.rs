@@ -5,7 +5,6 @@ use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir;
 use crate::timing;
-use log::debug;
 
 /// Eliminate unreachable code.
 ///
@@ -25,14 +24,14 @@ pub fn eliminate_unreachable_code(
             continue;
         }
 
-        debug!("Eliminating unreachable {}", block);
+        log::trace!("Eliminating unreachable {}", block);
         // Move the cursor out of the way and make sure the next lop iteration goes to the right
         // block.
         pos.prev_block();
 
         // Remove all instructions from `block`.
         while let Some(inst) = pos.func.layout.first_inst(block) {
-            debug!(" - {}", pos.func.dfg.display_inst(inst, None));
+            log::trace!(" - {}", pos.func.dfg.display_inst(inst, None));
             pos.func.layout.remove_inst(inst);
         }
 

@@ -79,7 +79,6 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter, Write};
-use log::debug;
 
 pub use self::cssa::verify_cssa;
 pub use self::liveness::verify_liveness;
@@ -2046,7 +2045,7 @@ impl<'a> Verifier<'a> {
         verify_flags(self.func, &self.expected_cfg, self.isa, errors)?;
 
         if !errors.is_empty() {
-            debug!(
+            log::warn!(
                 "Found verifier errors in function:\n{}",
                 pretty_verifier_error(self.func, None, None, errors.clone())
             );
