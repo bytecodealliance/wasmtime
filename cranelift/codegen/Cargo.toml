@@ -21,7 +21,7 @@ target-lexicon = "0.12"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 bincode = { version = "1.2.1", optional = true }
-gimli = { version = "0.24.0", default-features = false, features = ["write"], optional = true }
+gimli = { version = "0.25.0", default-features = false, features = ["write"], optional = true }
 smallvec = { version = "1.6.1" }
 peepmatic = { path = "../peepmatic", optional = true, version = "0.75.0" }
 peepmatic-traits = { path = "../peepmatic/crates/traits", optional = true, version = "0.75.0" }

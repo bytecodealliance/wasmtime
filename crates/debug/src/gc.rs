@@ -120,7 +120,9 @@ fn has_valid_code_range<R: Reader<Offset = usize>>(
         constants::DW_TAG_subprogram => {
             if let Some(ranges_attr) = die.attr_value(constants::DW_AT_ranges)? {
                 let offset = match ranges_attr {
-                    read::AttributeValue::RangeListsRef(val) => val,
+                    read::AttributeValue::RangeListsRef(val) => {
+                        dwarf.ranges_offset_from_raw(unit, val)
+                    }
                     read::AttributeValue::DebugRngListsIndex(index) => {
                         dwarf.ranges_offset(unit, index)?
                     }

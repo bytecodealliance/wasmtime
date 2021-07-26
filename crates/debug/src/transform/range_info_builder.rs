@@ -15,6 +15,7 @@ pub(crate) enum RangeInfoBuilder {
 
 impl RangeInfoBuilder {
     pub(crate) fn from<R>(
+        dwarf: &gimli::Dwarf<R>,
         unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
         context: &DebugInputContext<R>,
@@ -24,6 +25,7 @@ impl RangeInfoBuilder {
         R: Reader,
     {
         if let Some(AttributeValue::RangeListsRef(r)) = entry.attr_value(gimli::DW_AT_ranges)? {
+            let r = dwarf.ranges_offset_from_raw(unit, r);
             return RangeInfoBuilder::from_ranges_ref(unit, r, context, cu_low_pc);
         };
 
@@ -80,6 +82,7 @@ impl RangeInfoBuilder {
     }
 
     pub(crate) fn from_subprogram_die<R>(
+        dwarf: &gimli::Dwarf<R>,
         unit: &Unit<R, R::Offset>,
         entry: &DebuggingInformationEntry<R>,
         context: &DebugInputContext<R>,
@@ -100,6 +103,7 @@ impl RangeInfoBuilder {
             } else if let Some(AttributeValue::RangeListsRef(r)) =
                 entry.attr_value(gimli::DW_AT_ranges)?
             {
+                let r = dwarf.ranges_offset_from_raw(unit, r);
                 let mut ranges = context.rnglists.ranges(
                     r,
                     unit_encoding,

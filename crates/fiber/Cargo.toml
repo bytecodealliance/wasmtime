@@ -27,4 +27,4 @@ features = [
 cc = "1.0"
 
 [dev-dependencies]
-backtrace = "0.3"
+backtrace = "0.3.61"

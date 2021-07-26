@@ -85,6 +85,7 @@ pub fn transform_dwarf(
     while let Some(header) = iter.next().unwrap_or(None) {
         let unit = di.dwarf.unit(header)?;
         if let Some((id, ref_map, pending_refs)) = clone_unit(
+            &di.dwarf,
             unit,
             &context,
             &addr_tr,

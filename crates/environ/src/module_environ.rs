@@ -204,10 +204,9 @@ impl<'data> ModuleEnvironment<'data> {
         let slice = gimli::EndianSlice::new(data, endian);
 
         match name {
-            // Dwarf fields.
+            // `gimli::Dwarf` fields.
             ".debug_abbrev" => dwarf.debug_abbrev = gimli::DebugAbbrev::new(data, endian),
             ".debug_addr" => dwarf.debug_addr = gimli::DebugAddr::from(slice),
-            // TODO aranges?
             ".debug_info" => dwarf.debug_info = gimli::DebugInfo::new(data, endian),
             ".debug_line" => dwarf.debug_line = gimli::DebugLine::new(data, endian),
             ".debug_line_str" => dwarf.debug_line_str = gimli::DebugLineStr::from(slice),
@@ -225,6 +224,9 @@ impl<'data> ModuleEnvironment<'data> {
             ".debug_loclists" => info.debug_loclists = gimli::DebugLocLists::from(slice),
             ".debug_ranges" => info.debug_ranges = gimli::DebugRanges::new(data, endian),
             ".debug_rnglists" => info.debug_rnglists = gimli::DebugRngLists::new(data, endian),
+
+            // We don't use these at the moment.
+            ".debug_aranges" | ".debug_pubnames" | ".debug_pubtypes" => return,
 
             other => {
                 log::warn!("unknown debug section `{}`", other);

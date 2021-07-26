@@ -36,6 +36,7 @@ fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
 }
 
 pub(crate) fn clone_die_attributes<'a, R>(
+    dwarf: &gimli::Dwarf<R>,
     unit: &Unit<R, R::Offset>,
     entry: &DebuggingInformationEntry<R>,
     context: &DebugInputContext<R>,
@@ -63,7 +64,7 @@ where
         // FIXME for CU: currently address_transform operate on a single
         // function range, and when CU spans multiple ranges the
         // transformation may be incomplete.
-        RangeInfoBuilder::from(unit, entry, context, cu_low_pc)?
+        RangeInfoBuilder::from(dwarf, unit, entry, context, cu_low_pc)?
     };
     range_info.build(addr_tr, out_unit, current_scope_id);
 
@@ -139,6 +140,7 @@ where
                 write::AttributeValue::StringRef(out_strings.add(s))
             }
             AttributeValue::RangeListsRef(r) => {
+                let r = dwarf.ranges_offset_from_raw(unit, r);
                 let range_info = RangeInfoBuilder::from_ranges_ref(unit, r, context, cu_low_pc)?;
                 let range_list_id = range_info.build_ranges(addr_tr, &mut out_unit.ranges);
                 write::AttributeValue::RangeListRef(range_list_id)
