@@ -497,6 +497,7 @@ pub enum SseOpcode {
     Cvtsi2sd,
     Cvtss2si,
     Cvtss2sd,
+    Cvttpd2dq,
     Cvttps2dq,
     Cvttss2si,
     Cvttsd2si,
@@ -631,6 +632,7 @@ pub enum SseOpcode {
     Roundss,
     Roundsd,
     Rsqrtss,
+    Shufps,
     Sqrtps,
     Sqrtpd,
     Sqrtss,
@@ -677,6 +679,7 @@ impl SseOpcode {
             | SseOpcode::Orps
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
+            | SseOpcode::Shufps
             | SseOpcode::Sqrtps
             | SseOpcode::Sqrtss
             | SseOpcode::Subps
@@ -700,6 +703,7 @@ impl SseOpcode {
             | SseOpcode::Cvtsd2si
             | SseOpcode::Cvtsi2sd
             | SseOpcode::Cvtss2sd
+            | SseOpcode::Cvttpd2dq
             | SseOpcode::Cvttps2dq
             | SseOpcode::Cvttsd2si
             | SseOpcode::Divpd
@@ -869,6 +873,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Cvtsi2sd => "cvtsi2sd",
             SseOpcode::Cvtss2si => "cvtss2si",
             SseOpcode::Cvtss2sd => "cvtss2sd",
+            SseOpcode::Cvttpd2dq => "cvttpd2dq",
             SseOpcode::Cvttps2dq => "cvttps2dq",
             SseOpcode::Cvttss2si => "cvttss2si",
             SseOpcode::Cvttsd2si => "cvttsd2si",
@@ -1003,6 +1008,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Roundss => "roundss",
             SseOpcode::Roundsd => "roundsd",
             SseOpcode::Rsqrtss => "rsqrtss",
+            SseOpcode::Shufps => "shufps",
             SseOpcode::Sqrtps => "sqrtps",
             SseOpcode::Sqrtpd => "sqrtpd",
             SseOpcode::Sqrtss => "sqrtss",

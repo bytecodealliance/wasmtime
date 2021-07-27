@@ -3762,6 +3762,12 @@ fn test_x64_emit() {
     ));
 
     insns.push((
+        Inst::xmm_rm_r(SseOpcode::Cvttpd2dq, RegMem::reg(xmm15), w_xmm7),
+        "66410FE6FF",
+        "cvttpd2dq %xmm15, %xmm7",
+    ));
+
+    insns.push((
         Inst::xmm_rm_r(SseOpcode::Cvttps2dq, RegMem::reg(xmm9), w_xmm8),
         "F3450F5BC1",
         "cvttps2dq %xmm9, %xmm8",
@@ -4123,6 +4129,18 @@ fn test_x64_emit() {
         ),
         "66440F3A0FC903",
         "palignr $3, %xmm1, %xmm9",
+    ));
+
+    insns.push((
+        Inst::xmm_rm_r_imm(
+            SseOpcode::Shufps,
+            RegMem::reg(xmm1),
+            w_xmm10,
+            136,
+            OperandSize::Size32,
+        ),
+        "440FC6D188",
+        "shufps  $136, %xmm1, %xmm10",
     ));
 
     insns.push((
