@@ -3,7 +3,7 @@ use crate::instance::{InstanceData, InstancePre};
 use crate::store::StoreOpaque;
 use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
-    IntoFunc, Module, Trap, Val,
+    IntoFunc, Module, StoreContextMut, Trap, Val,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use log::warn;
@@ -596,8 +596,46 @@ impl<T> Linker<T> {
     where
         T: 'static,
     {
+        // NB: this is intended to function the same as `Linker::module_async`,
+        // they should be kept in sync.
         match ModuleKind::categorize(module)? {
-            ModuleKind::Command => self.command(store, module_name, module),
+            ModuleKind::Command => {
+                self.command(
+                    store,
+                    module_name,
+                    module,
+                    |store, func_ty, export_name, instance_pre| {
+                        Func::new(
+                            store,
+                            func_ty.clone(),
+                            move |mut caller, params, results| {
+                                // Create a new instance for this command execution.
+                                let instance = instance_pre.instantiate(&mut caller)?;
+
+                                // `unwrap()` everything here because we know the instance contains a
+                                // function export with the given name and signature because we're
+                                // iterating over the module it was instantiated from.
+                                let command_results = instance
+                                    .get_export(&mut caller, &export_name)
+                                    .unwrap()
+                                    .into_func()
+                                    .unwrap()
+                                    .call(&mut caller, params)
+                                    .map_err(|error| error.downcast::<Trap>().unwrap())?;
+
+                                // Copy the return values into the output slice.
+                                for (result, command_result) in
+                                    results.iter_mut().zip(command_results.into_vec())
+                                {
+                                    *result = command_result;
+                                }
+
+                                Ok(())
+                            },
+                        )
+                    },
+                )
+            }
             ModuleKind::Reactor => {
                 let instance = self.instantiate(&mut store, &module)?;
 
@@ -614,47 +652,93 @@ impl<T> Linker<T> {
         }
     }
 
-    fn command(
+    /// Define automatic instantiations of a [`Module`] in this linker.
+    ///
+    /// This is the same as [`Linker::module`], except for async `Store`s.
+    #[cfg(feature = "async")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    pub async fn module_async(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
         module_name: &str,
         module: &Module,
     ) -> Result<&mut Self>
     where
+        T: Send + 'static,
+    {
+        // NB: this is intended to function the same as `Linker::module`, they
+        // should be kept in sync.
+        match ModuleKind::categorize(module)? {
+            ModuleKind::Command => self.command(
+                store,
+                module_name,
+                module,
+                |store, func_ty, export_name, instance_pre| {
+                    let upvars = Arc::new((instance_pre, export_name));
+                    Func::new_async(
+                        store,
+                        func_ty.clone(),
+                        move |mut caller, params, results| {
+                            let upvars = upvars.clone();
+                            Box::new(async move {
+                                let (instance_pre, export_name) = &*upvars;
+                                let instance = instance_pre.instantiate_async(&mut caller).await?;
+
+                                let command_results = instance
+                                    .get_export(&mut caller, &export_name)
+                                    .unwrap()
+                                    .into_func()
+                                    .unwrap()
+                                    .call_async(&mut caller, params)
+                                    .await
+                                    .map_err(|error| error.downcast::<Trap>().unwrap())?;
+
+                                for (result, command_result) in
+                                    results.iter_mut().zip(command_results.into_vec())
+                                {
+                                    *result = command_result;
+                                }
+                                Ok(())
+                            })
+                        },
+                    )
+                },
+            ),
+            ModuleKind::Reactor => {
+                let instance = self.instantiate_async(&mut store, &module).await?;
+
+                if let Some(export) = instance.get_export(&mut store, "_initialize") {
+                    if let Extern::Func(func) = export {
+                        let func = func
+                            .typed::<(), (), _>(&store)
+                            .context("loading the Reactor initialization function")?;
+                        func.call_async(&mut store, ())
+                            .await
+                            .context("calling the Reactor initialization function")?;
+                    }
+                }
+
+                self.instance(store, module_name, instance)
+            }
+        }
+    }
+
+    fn command(
+        &mut self,
+        mut store: impl AsContextMut<Data = T>,
+        module_name: &str,
+        module: &Module,
+        mk_func: impl Fn(&mut StoreContextMut<T>, &FuncType, String, InstancePre<T>) -> Func,
+    ) -> Result<&mut Self>
+    where
         T: 'static,
     {
+        let mut store = store.as_context_mut();
         for export in module.exports() {
             if let Some(func_ty) = export.ty().func() {
                 let instance_pre = self.instantiate_pre(&mut store, module)?;
                 let export_name = export.name().to_owned();
-                let func = Func::new(
-                    &mut store,
-                    func_ty.clone(),
-                    move |mut caller, params, results| {
-                        // Create a new instance for this command execution.
-                        let instance = instance_pre.instantiate(&mut caller)?;
-
-                        // `unwrap()` everything here because we know the instance contains a
-                        // function export with the given name and signature because we're
-                        // iterating over the module it was instantiated from.
-                        let command_results = instance
-                            .get_export(&mut caller, &export_name)
-                            .unwrap()
-                            .into_func()
-                            .unwrap()
-                            .call(&mut caller, params)
-                            .map_err(|error| error.downcast::<Trap>().unwrap())?;
-
-                        // Copy the return values into the output slice.
-                        for (result, command_result) in
-                            results.iter_mut().zip(command_results.into_vec())
-                        {
-                            *result = command_result;
-                        }
-
-                        Ok(())
-                    },
-                );
+                let func = mk_func(&mut store, func_ty, export_name, instance_pre);
                 let key = self.import_key(module_name, Some(export.name()));
                 self.insert(key, Definition::Extern(func.into()))?;
             } else if export.name() == "memory" && export.ty().memory().is_some() {
