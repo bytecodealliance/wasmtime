@@ -81,6 +81,41 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define(
 );
 
 /**
+ * \brief Defines a new function in this linker.
+ *
+ * \param linker the linker the name is being defined in.
+ * \param module the module name the item is defined under.
+ * \param module_len the byte length of `module`
+ * \param name the field name the item is defined under
+ * \param name_len the byte length of `name`
+ * \param ty the type of the function that's being defined
+ * \param cb the host callback to invoke when the function is called
+ * \param data the host-provided data to provide as the first argument to the callback
+ * \param finalizer an optional finalizer for the `data` argument.
+ *
+ * \return On success `NULL` is returned, otherwise an error is returned which
+ * describes why the definition failed.
+ *
+ * For more information about name resolution consult the [Rust
+ * documentation](https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Linker.html#name-resolution).
+ *
+ * Note that this function does not create a #wasmtime_func_t. This creates a
+ * store-independent function within the linker, allowing this function
+ * definition to be used with multiple stores.
+ */
+WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func(
+    wasmtime_linker_t *linker,
+    const char *module,
+    size_t module_len,
+    const char *name,
+    size_t name_len,
+    const wasm_functype_t *ty,
+    wasmtime_func_callback_t cb,
+    void *data,
+    void (*finalizer)(void*)
+);
+
+/**
  * \brief Defines WASI functions in this linker.
  *
  * \param linker the linker the name is being defined in.
