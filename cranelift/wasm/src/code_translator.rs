@@ -1879,6 +1879,37 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().uwiden_high(a))
         }
+        Operator::F32x4Ceil | Operator::F64x2Ceil => {
+            // This is something of a misuse of `type_of`, because that produces the return type
+            // of `op`.  In this case we want the arg type, but we know it's the same as the
+            // return type.  Same for the 3 cases below.
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().ceil(arg));
+        }
+        Operator::F32x4Floor | Operator::F64x2Floor => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().floor(arg));
+        }
+        Operator::F32x4Trunc | Operator::F64x2Trunc => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().trunc(arg));
+        }
+        Operator::F32x4Nearest | Operator::F64x2Nearest => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().nearest(arg));
+        }
+        Operator::I32x4DotI16x8S => {
+            let (a, b) = pop2_with_bitcast(state, I16X8, builder);
+            state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
+        }
+        Operator::I8x16Popcnt => {
+            let arg = pop1_with_bitcast(state, type_of(op), builder);
+            state.push1(builder.ins().popcnt(arg));
+        }
+        Operator::I16x8Q15MulrSatS => {
+            let (a, b) = pop2_with_bitcast(state, I16X8, builder);
+            state.push1(builder.ins().sqmul_round_sat(a, b))
+        }
         Operator::I16x8ExtMulLowI8x16S => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
             let a_low = builder.ins().swiden_low(a);
@@ -1950,37 +1981,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a_high = builder.ins().uwiden_high(a);
             let b_high = builder.ins().uwiden_high(b);
             state.push1(builder.ins().imul(a_high, b_high));
-        }
-        Operator::F32x4Ceil | Operator::F64x2Ceil => {
-            // This is something of a misuse of `type_of`, because that produces the return type
-            // of `op`.  In this case we want the arg type, but we know it's the same as the
-            // return type.  Same for the 3 cases below.
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().ceil(arg));
-        }
-        Operator::F32x4Floor | Operator::F64x2Floor => {
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().floor(arg));
-        }
-        Operator::F32x4Trunc | Operator::F64x2Trunc => {
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().trunc(arg));
-        }
-        Operator::F32x4Nearest | Operator::F64x2Nearest => {
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().nearest(arg));
-        }
-        Operator::I32x4DotI16x8S => {
-            let (a, b) = pop2_with_bitcast(state, I16X8, builder);
-            state.push1(builder.ins().widening_pairwise_dot_product_s(a, b));
-        }
-        Operator::I8x16Popcnt => {
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().popcnt(arg));
-        }
-        Operator::I16x8Q15MulrSatS => {
-            let (a, b) = pop2_with_bitcast(state, I16X8, builder);
-            state.push1(builder.ins().sqmul_round_sat(a, b))
         }
         Operator::I16x8ExtAddPairwiseI8x16S
         | Operator::I16x8ExtAddPairwiseI8x16U

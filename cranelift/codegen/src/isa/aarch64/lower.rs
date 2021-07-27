@@ -1253,6 +1253,9 @@ pub(crate) fn maybe_input_insn_via_conv<C: LowerCtx<I = Inst>>(
     None
 }
 
+/// Pattern match an extending vector multiplication.
+/// Returns a tuple of the opcode to use, the two input registers and whether
+/// it's the 'high half' version of the instruction.
 pub(crate) fn match_vec_long_mul<C: LowerCtx<I = Inst>>(
     c: &mut C,
     insn: IRInst,
