@@ -9,7 +9,7 @@ use std::mem::MaybeUninit;
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-use wasmtime::{AsContextMut, Caller, Extern, Func, Trap};
+use wasmtime::{AsContextMut, Caller, Extern, Func, Trap, Val};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -187,25 +187,37 @@ pub struct wasmtime_caller_t<'a> {
     caller: Caller<'a, crate::StoreData>,
 }
 
+pub type wasmtime_func_callback_t = extern "C" fn(
+    *mut c_void,
+    *mut wasmtime_caller_t,
+    *const wasmtime_val_t,
+    usize,
+    *mut wasmtime_val_t,
+    usize,
+) -> Option<Box<wasm_trap_t>>;
+
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_new(
     store: CStoreContextMut<'_>,
     ty: &wasm_functype_t,
-    callback: extern "C" fn(
-        *mut c_void,
-        *mut wasmtime_caller_t,
-        *const wasmtime_val_t,
-        usize,
-        *mut wasmtime_val_t,
-        usize,
-    ) -> Option<Box<wasm_trap_t>>,
+    callback: wasmtime_func_callback_t,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
     func: &mut Func,
 ) {
-    let foreign = crate::ForeignData { data, finalizer };
     let ty = ty.ty().ty.clone();
-    let f = Func::new(store, ty, move |caller, params, results| {
+    let cb = c_callback_to_rust_fn(callback, data, finalizer);
+    let f = Func::new(store, ty, cb);
+    *func = f;
+}
+
+pub(crate) unsafe fn c_callback_to_rust_fn(
+    callback: wasmtime_func_callback_t,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
+) -> impl Fn(Caller<'_, crate::StoreData>, &[Val], &mut [Val]) -> Result<(), Trap> {
+    let foreign = crate::ForeignData { data, finalizer };
+    move |caller, params, results| {
         let params = params
             .iter()
             .cloned()
@@ -234,8 +246,7 @@ pub unsafe extern "C" fn wasmtime_func_new(
             results[i] = unsafe { result.to_val() };
         }
         Ok(())
-    });
-    *func = f;
+    }
 }
 
 #[no_mangle]
