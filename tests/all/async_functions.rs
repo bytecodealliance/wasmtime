@@ -639,3 +639,85 @@ fn recursive_async() -> Result<()> {
     run(f2.call_async(&mut store, &[]))?;
     Ok(())
 }
+
+#[test]
+fn linker_module_command() -> Result<()> {
+    run(async {
+        let mut store = async_store();
+        let mut linker = Linker::new(store.engine());
+        let module1 = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (global $g (mut i32) (i32.const 0))
+
+                    (func (export "_start"))
+
+                    (func (export "g") (result i32)
+                        global.get $g
+                        i32.const 1
+                        global.set $g)
+                )
+            "#,
+        )?;
+        let module2 = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (import "" "g" (func (result i32)))
+
+                    (func (export "get") (result i32)
+                        call 0)
+                )
+            "#,
+        )?;
+
+        linker.module_async(&mut store, "", &module1).await?;
+        let instance = linker.instantiate_async(&mut store, &module2).await?;
+        let f = instance.get_typed_func::<(), i32, _>(&mut store, "get")?;
+        assert_eq!(f.call_async(&mut store, ()).await?, 0);
+        assert_eq!(f.call_async(&mut store, ()).await?, 0);
+
+        Ok(())
+    })
+}
+
+#[test]
+fn linker_module_reactor() -> Result<()> {
+    run(async {
+        let mut store = async_store();
+        let mut linker = Linker::new(store.engine());
+        let module1 = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (global $g (mut i32) (i32.const 0))
+
+                    (func (export "g") (result i32)
+                        global.get $g
+                        i32.const 1
+                        global.set $g)
+                )
+            "#,
+        )?;
+        let module2 = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (import "" "g" (func (result i32)))
+
+                    (func (export "get") (result i32)
+                        call 0)
+                )
+            "#,
+        )?;
+
+        linker.module_async(&mut store, "", &module1).await?;
+        let instance = linker.instantiate_async(&mut store, &module2).await?;
+        let f = instance.get_typed_func::<(), i32, _>(&mut store, "get")?;
+        assert_eq!(f.call_async(&mut store, ()).await?, 0);
+        assert_eq!(f.call_async(&mut store, ()).await?, 1);
+
+        Ok(())
+    })
+}
