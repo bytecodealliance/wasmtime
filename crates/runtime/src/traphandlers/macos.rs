@@ -392,20 +392,6 @@ unsafe extern "C" fn unwind(wasm_pc: *const u8) -> ! {
     wasmtime_longjmp(jmp_buf);
 }
 
-thread_local! {
-    static MY_PORT: ClosePort = ClosePort(unsafe { mach_thread_self() });
-}
-
-struct ClosePort(mach_port_name_t);
-
-impl Drop for ClosePort {
-    fn drop(&mut self) {
-        unsafe {
-            mach_port_deallocate(mach_task_self(), self.0);
-        }
-    }
-}
-
 /// Exceptions on macOS can be delivered to either thread-level or task-level
 /// exception ports. In wasmtime we choose to send the exceptions to
 /// thread-level ports. This means that we need to, for each thread that can
@@ -426,13 +412,15 @@ impl Drop for ClosePort {
 pub fn lazy_per_thread_init() -> Result<(), Trap> {
     unsafe {
         assert!(WASMTIME_PORT != MACH_PORT_NULL);
+        let this_thread = mach_thread_self();
         let kret = thread_set_exception_ports(
-            MY_PORT.with(|p| p.0),
+            this_thread,
             EXC_MASK_BAD_ACCESS | EXC_MASK_BAD_INSTRUCTION,
             WASMTIME_PORT,
             EXCEPTION_DEFAULT | MACH_EXCEPTION_CODES,
             mach_addons::THREAD_STATE_NONE,
         );
+        mach_port_deallocate(mach_task_self(), this_thread);
         assert_eq!(kret, KERN_SUCCESS, "failed to set thread exception port");
     }
     Ok(())
