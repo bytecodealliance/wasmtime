@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-bforest"
-version = "0.75.0"
+version = "0.76.0"
 description = "A forest of B+-trees"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-bforest"
@@ -12,7 +12,7 @@ keywords = ["btree", "forest", "set", "map"]
 edition = "2018"
 
 [dependencies]
-cranelift-entity = { path = "../entity", version = "0.75.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.76.0", default-features = false }
 
 [badges]
 maintenance = { status = "experimental" }
