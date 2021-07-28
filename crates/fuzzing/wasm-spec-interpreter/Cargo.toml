@@ -1,0 +1,22 @@
+[package]
+authors = ["The Wasmtime Project Developers"]
+description = "A Rust-to-OCaml wrapper for the WebAssembly specification interpreter"
+name = "wasm-spec-interpreter"
+version = "0.1.0"
+publish = false
+edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+
+# Until https://gitlab.com/ocaml-rust/ocaml-boxroot/-/issues/1 is resolved and
+# this crate can use the `without-ocamlopt` feature to avoid build failures, it
+# is better to only build the OCaml dependencies when fuzzing (see the
+# `build-libinterpret` feature set by this crate's parent).
+[dependencies]
+ocaml-interop = { version = "0.8", optional = true }
+lazy_static = { version = "1.4", optional = true }
+
+[dev-dependencies]
+wat = "1.0"
+
+[features]
+build-libinterpret = ["ocaml-interop", "lazy_static"]

@@ -19,7 +19,13 @@ wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
 wasm-encoder = "0.6.0"
 wasm-smith = "0.6.0"
+wasm-spec-interpreter = { path = "./wasm-spec-interpreter" }
 wasmi = "0.7.0"
 
 [dev-dependencies]
 wat = "1.0.37"
+
+# We only build the library containing the OCaml spec interpreter if the OCaml
+# toolchain is available--which is assumed here to be the case when fuzzing.
+[target.'cfg(fuzzing)'.dependencies]
+wasm-spec-interpreter = { path = "./wasm-spec-interpreter", features = ["build-libinterpret"] }
