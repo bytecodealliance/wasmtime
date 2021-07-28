@@ -435,7 +435,7 @@ impl CompiledExpression {
                             let new_to = landing_positions[&marker];
                             let new_diff = new_to as isize - new_from as isize;
                             // FIXME: use encoding? LittleEndian for now...
-                            &code_buf[new_from - 2..new_from]
+                            code_buf[new_from - 2..new_from]
                                 .copy_from_slice(&(new_diff as i16).to_le_bytes());
                         }
                         Ok(Some((func_index, start, end, code_buf)))
