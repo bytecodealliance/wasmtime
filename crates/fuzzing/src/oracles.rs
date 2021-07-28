@@ -12,8 +12,9 @@
 
 pub mod dummy;
 
+use anyhow::Context;
 use arbitrary::Arbitrary;
-use log::debug;
+use log::{debug, warn};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
@@ -685,12 +686,6 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
         wasmi_val, wasmtime_val
     );
 
-    let show_wat = || {
-        if let Ok(s) = wasmprinter::print_bytes(&wasm[..]) {
-            eprintln!("wat:\n{}\n", s);
-        }
-    };
-
     match (&wasmi_val, &wasmtime_val) {
         (&Ok(Some(wasmi::RuntimeValue::I32(a))), &Ok(Some(Val::I32(b)))) if a == b => {}
         (&Ok(Some(wasmi::RuntimeValue::F32(a))), &Ok(Some(Val::F32(b))))
@@ -701,7 +696,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
         (&Ok(None), &Ok(None)) => {}
         (&Err(_), &Err(_)) => {}
         _ => {
-            show_wat();
+            show_wat(wasm);
             panic!(
                 "Values do not match: wasmi returned {:?}; wasmtime returned {:?}",
                 wasmi_val, wasmtime_val
@@ -710,7 +705,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     }
 
     if wasmi_mem.current_size().0 != wasmtime_mem.size(&wasmtime_store) as usize {
-        show_wat();
+        show_wat(wasm);
         panic!("resulting memories are not the same size");
     }
 
@@ -731,11 +726,148 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     }
 
     if &wasmi_buf[..] != &wasmtime_slice[..] {
-        show_wat();
+        show_wat(wasm);
         panic!("memory contents are not equal");
     }
 
     Some(())
+}
+
+/// Perform differential execution between Wasmtime and the official WebAssembly
+/// specification interpreter.
+///
+/// May return `None` if we early-out due to a rejected fuzz config.
+pub fn differential_spec_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
+    crate::init_fuzzing();
+    debug!("WAT: {}", wasm2wat(wasm));
+    debug!("config: {:#?}", config);
+
+    // Run the spec interpreter first, then Wasmtime. The order is important
+    // because both sides (OCaml runtime and Wasmtime) register signal handlers;
+    // Wasmtime uses these signal handlers for catching various WebAssembly
+    // failures. On certain OSes (e.g. Linux x86_64), the signal handlers
+    // interfere, observable as an uncaught `SIGSEGV`--not even caught by
+    // libFuzzer. By running Wasmtime second, its signal handlers are registered
+    // most recently and they catch failures appropriately.
+    let spec_vals = wasm_spec_interpreter::interpret(wasm, vec![]);
+    debug!("spec interpreter returned: {:?}", &spec_vals);
+    let wasmtime_vals = run_in_wasmtime(wasm, config, &[]);
+    debug!("Wasmtime returned: {:?}", wasmtime_vals);
+
+    // Match a spec interpreter value against a Wasmtime value. Eventually this
+    // should support references and `v128` (TODO).
+    fn matches(spec_val: &wasm_spec_interpreter::Value, wasmtime_val: &wasmtime::Val) -> bool {
+        match (spec_val, wasmtime_val) {
+            (wasm_spec_interpreter::Value::I32(a), wasmtime::Val::I32(b)) => a == b,
+            (wasm_spec_interpreter::Value::I64(a), wasmtime::Val::I64(b)) => a == b,
+            (wasm_spec_interpreter::Value::F32(a), wasmtime::Val::F32(b)) => {
+                f32_equal(*a as u32, *b)
+            }
+            (wasm_spec_interpreter::Value::F64(a), wasmtime::Val::F64(b)) => {
+                f64_equal(*a as u64, *b)
+            }
+            (_, _) => unreachable!("fuzzing non-scalar value types is still TODO"),
+        }
+    }
+
+    match (&spec_vals, &wasmtime_vals) {
+        // Compare the returned values, failing if they do not match.
+        (Ok(spec_vals), Ok(wasmtime_vals)) => {
+            let all_match = spec_vals
+                .iter()
+                .zip(wasmtime_vals)
+                .all(|(s, w)| matches(s, w));
+            if !all_match {
+                show_wat(wasm);
+                panic!(
+                    "Values do not match: spec returned {:?}; wasmtime returned {:?}",
+                    spec_vals, wasmtime_vals
+                );
+            }
+        }
+        // If both sides fail, skip this fuzz execution.
+        (Err(spec_error), Err(wasmtime_error)) => {
+            // The `None` value returned here indicates that both sides
+            // failed--if we see too many of these we might be failing too often
+            // to check instruction semantics. At some point it would be
+            // beneficial to compare the error messages from both sides (TODO).
+            // It would also be good to keep track of statistics about the
+            // ratios of the kinds of errors the fuzzer sees (TODO).
+            warn!(
+                "Both sides failed: spec returned '{}'; wasmtime returned {:?}",
+                spec_error, wasmtime_error
+            );
+            return None;
+        }
+        // If only one side fails, fail the fuzz the test.
+        _ => {
+            show_wat(wasm);
+            panic!(
+                "Only one side failed: spec returned {:?}; wasmtime returned {:?}",
+                &spec_vals, &wasmtime_vals
+            );
+        }
+    }
+
+    // TODO Compare memory contents.
+
+    Some(())
+}
+
+/// Helper for instantiating and running a Wasm module in Wasmtime and returning
+/// its `Val` results.
+fn run_in_wasmtime(
+    wasm: &[u8],
+    config: &crate::generators::Config,
+    params: &[Val],
+) -> anyhow::Result<Vec<Val>> {
+    // Instantiate wasmtime module and instance.
+    let mut wasmtime_config = config.to_wasmtime();
+    wasmtime_config.cranelift_nan_canonicalization(true);
+    let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
+    let mut wasmtime_store = create_store(&wasmtime_engine);
+    if config.consume_fuel {
+        wasmtime_store.add_fuel(u64::max_value()).unwrap();
+    }
+    let wasmtime_module =
+        Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
+    let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
+        .context("Wasmtime cannot instantiate module")?;
+
+    // Find the first exported function.
+    let func_name =
+        first_exported_function(&wasmtime_module).context("Cannot find exported function")?;
+    let wasmtime_main = wasmtime_instance
+        .get_func(&mut wasmtime_store, &func_name[..])
+        .expect("function export is present");
+
+    // Execute the function and return the values.
+    let wasmtime_vals = wasmtime_main.call(&mut wasmtime_store, params);
+    wasmtime_vals.map(|v| v.to_vec())
+}
+
+/// Print the Wasm as WAT on `stderr`.
+fn show_wat(wasm: &[u8]) {
+    eprintln!("wat:\n{}\n", wasm2wat(wasm));
+}
+
+/// Convert the Wasm module to a `String`; an error
+fn wasm2wat(wasm: &[u8]) -> String {
+    match wasmprinter::print_bytes(&wasm[..]) {
+        Ok(s) => s,
+        Err(e) => format!("wasm2wat failed: {}", e),
+    }
+}
+
+// Introspect wasmtime module to find the name of the first exported function.
+fn first_exported_function(module: &wasmtime::Module) -> Option<String> {
+    for e in module.exports() {
+        match e.ty() {
+            wasmtime::ExternType::Func(..) => return Some(e.name().to_string()),
+            _ => {}
+        }
+    }
+    None
 }
 
 #[derive(Default)]
