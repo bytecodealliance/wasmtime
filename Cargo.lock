@@ -951,6 +951,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cty"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7313c0d620d0cb4dbd9d019e461a4beb501071ff46ec0ab933efb4daa76d73e3"
+
+[[package]]
 name = "curve25519-dalek"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1900,6 +1906,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "ocaml-boxroot-sys"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5186393bfbee4ce2bc5bbb82beafb77e85c1d0a557e3cfc8c8a0d63d7845fed5"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "ocaml-interop"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "feed1425b18c848323dceeed5fc35a085b07b58783b040560e3a05dfe2427753"
+dependencies = [
+ "ocaml-boxroot-sys",
+ "ocaml-sys",
+ "static_assertions",
+]
+
+[[package]]
+name = "ocaml-sys"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e7dee4179690e6af128fce2fab845ab45a833d04e117f5fdcafab1ba26ce518"
+dependencies = [
+ "cty",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2833,6 +2868,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3466,6 +3507,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-spec-interpreter"
+version = "0.1.0"
+dependencies = [
+ "lazy_static",
+ "ocaml-interop",
+ "wat",
+]
+
+[[package]]
 name = "wasmi"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3727,6 +3777,7 @@ dependencies = [
  "rayon",
  "wasm-encoder",
  "wasm-smith",
+ "wasm-spec-interpreter",
  "wasmi",
  "wasmparser",
  "wasmprinter",
