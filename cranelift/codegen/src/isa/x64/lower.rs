@@ -5825,7 +5825,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
         }
 
-        Opcode::AtomicLoad => {
+        Opcode::AtomicLoad
+        | Opcode::AtomicUload8
+        | Opcode::AtomicUload16
+        | Opcode::AtomicUload32 => {
             // This is a normal load.  The x86-TSO memory model provides sufficient sequencing
             // to satisfy the CLIF synchronisation requirements for `AtomicLoad` without the
             // need for any fence instructions.
@@ -5847,11 +5850,21 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::AtomicStore => {
+        Opcode::AtomicStore
+        | Opcode::AtomicStore32
+        | Opcode::AtomicStore16
+        | Opcode::AtomicStore8 => {
             // This is a normal store, followed by an `mfence` instruction.
             let data = put_input_in_reg(ctx, inputs[0]);
             let addr = lower_to_amode(ctx, inputs[1], 0);
-            let ty_access = ctx.input_ty(insn, 0);
+            let data_ty = ctx.input_ty(insn, 0);
+            let ty_access = match op {
+                Opcode::AtomicStore => data_ty,
+                Opcode::AtomicStore32 => types::I32,
+                Opcode::AtomicStore16 => types::I16,
+                Opcode::AtomicStore8 => types::I8,
+                _ => unreachable!(),
+            };
             assert!(is_valid_atomic_transaction_ty(ty_access));
 
             ctx.emit(Inst::store(ty_access, data, addr));

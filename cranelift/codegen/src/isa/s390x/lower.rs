@@ -2734,37 +2734,61 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::AtomicCas64 { rd, rn, mem });
             }
         }
-        Opcode::AtomicLoad => {
+        Opcode::AtomicLoad
+        | Opcode::AtomicUload8
+        | Opcode::AtomicUload16
+        | Opcode::AtomicUload32 => {
             let flags = ctx.memflags(insn).unwrap();
             let endianness = flags.endianness(Endianness::Big);
             let ty = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty));
+            let access_ty = match op {
+                Opcode::AtomicLoad => ty,
+                Opcode::AtomicUload8 => types::I8,
+                Opcode::AtomicUload16 => types::I16,
+                Opcode::AtomicUload32 => types::I32,
+                _ => unreachable!(),
+            };
+            assert!(is_valid_atomic_transaction_ty(access_ty));
 
             let mem = lower_address(ctx, &inputs[..], 0, flags);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             if endianness == Endianness::Big {
-                ctx.emit(match ty_bits(ty) {
-                    8 => Inst::Load32ZExt8 { rd, mem },
-                    16 => Inst::Load32ZExt16 { rd, mem },
-                    32 => Inst::Load32 { rd, mem },
-                    64 => Inst::Load64 { rd, mem },
+                ctx.emit(match (ty_bits(access_ty), ty_bits(ty)) {
+                    (8, 32) => Inst::Load32ZExt8 { rd, mem },
+                    (8, 64) => Inst::Load64ZExt8 { rd, mem },
+                    (16, 32) => Inst::Load32ZExt16 { rd, mem },
+                    (16, 64) => Inst::Load64ZExt16 { rd, mem },
+                    (32, 32) => Inst::Load32 { rd, mem },
+                    (32, 64) => Inst::Load64ZExt32 { rd, mem },
+                    (64, 64) => Inst::Load64 { rd, mem },
                     _ => panic!("Unsupported size in load"),
                 });
             } else {
-                ctx.emit(match ty_bits(ty) {
-                    8 => Inst::Load32ZExt8 { rd, mem },
-                    16 => Inst::LoadRev16 { rd, mem },
-                    32 => Inst::LoadRev32 { rd, mem },
-                    64 => Inst::LoadRev64 { rd, mem },
+                ctx.emit(match (ty_bits(access_ty), ty_bits(ty)) {
+                    (8, 32) => Inst::Load32ZExt8 { rd, mem },
+                    (8, 64) => Inst::Load64ZExt8 { rd, mem },
+                    (16, 32) => Inst::LoadRev16 { rd, mem },
+                    (32, 32) => Inst::LoadRev32 { rd, mem },
+                    (64, 64) => Inst::LoadRev64 { rd, mem },
                     _ => panic!("Unsupported size in load"),
                 });
             }
         }
-        Opcode::AtomicStore => {
+        Opcode::AtomicStore
+        | Opcode::AtomicStore32
+        | Opcode::AtomicStore16
+        | Opcode::AtomicStore8 => {
             let flags = ctx.memflags(insn).unwrap();
             let endianness = flags.endianness(Endianness::Big);
-            let ty = ctx.input_ty(insn, 0);
+            let data_ty = ctx.input_ty(insn, 0);
+            let ty = match op {
+                Opcode::AtomicStore => data_ty,
+                Opcode::AtomicStore32 => types::I32,
+                Opcode::AtomicStore16 => types::I16,
+                Opcode::AtomicStore8 => types::I8,
+                _ => unreachable!(),
+            };
             assert!(is_valid_atomic_transaction_ty(ty));
 
             let mem = lower_address(ctx, &inputs[1..], 0, flags);

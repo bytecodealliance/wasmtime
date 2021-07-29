@@ -1,0 +1,72 @@
+test compile
+target aarch64
+
+function %atomic_load_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = atomic_load.i64 v0
+  return v1
+}
+
+; check: ldar x0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_load_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = atomic_load.i32 v0
+  return v1
+}
+
+; check: ldar w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_uload_i32_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = atomic_uload32.i64 v0
+  return v1
+}
+
+; check: ldar w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_uload_i16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = atomic_uload16.i32 v0
+  return v1
+}
+
+; check: ldarh w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_uload_i16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = atomic_uload16.i64 v0
+  return v1
+}
+
+; check: ldarh w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_uload_i8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = atomic_uload8.i32 v0
+  return v1
+}
+
+; check: ldarb w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_uload_i8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = atomic_uload8.i64 v0
+  return v1
+}
+
+; check: ldarb w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret

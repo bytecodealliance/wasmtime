@@ -1,0 +1,72 @@
+test compile
+target aarch64
+
+function %atomic_store_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  atomic_store.i64 v0, v1
+  return
+}
+
+; check: stlr x0, [x1]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_store_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  atomic_store.i32 v0, v1
+  return
+}
+
+; check: stlr w0, [x1]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_ustore_i32_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  atomic_store32.i64 v0, v1
+  return
+}
+
+; check: stlr w0, [x1]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_ustore_i16_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  atomic_store16.i32 v0, v1
+  return
+}
+
+; check: stlrh w0, [x1]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_ustore_i16_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  atomic_store16.i64 v0, v1
+  return
+}
+
+; check: stlrh w0, [x1]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_ustore_i8_i32(i32, i64) {
+block0(v0: i32, v1: i64):
+  atomic_store8.i32 v0, v1
+  return
+}
+
+; check: stlrb w0, [x1]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_ustore_i8_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+  atomic_store8.i64 v0, v1
+  return
+}
+
+; check: stlrb w0, [x1]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
