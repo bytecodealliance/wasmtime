@@ -36,7 +36,7 @@ pub use self::data::*;
 /// [`Store`] it will not be deallocated until the [`Store`] itself is dropped.
 /// This makes [`Store`] unsuitable for creating an unbounded number of
 /// instances in it because [`Store`] will never release this memory. It's
-/// recommended to have a [`Store`] correspond roughly to the liftime of a "main
+/// recommended to have a [`Store`] correspond roughly to the lifetime of a "main
 /// instance" that an embedding is interested in executing.
 ///
 /// ## Type parameter `T`
