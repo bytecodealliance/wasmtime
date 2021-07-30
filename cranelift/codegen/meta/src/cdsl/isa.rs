@@ -10,6 +10,7 @@ use crate::cdsl::xform::{TransformGroupIndex, TransformGroups};
 
 pub(crate) struct TargetIsa {
     pub name: &'static str,
+    #[allow(dead_code)]
     pub instructions: InstructionGroup,
     pub settings: SettingGroup,
     pub regs: IsaRegs,
