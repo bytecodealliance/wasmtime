@@ -78,7 +78,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     TargetIsa::new(
         "x86",
-        inst_group,
         settings,
         regs,
         recipes,

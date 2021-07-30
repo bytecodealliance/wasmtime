@@ -1,5 +1,4 @@
 use crate::cdsl::cpu_modes::CpuMode;
-use crate::cdsl::instructions::InstructionGroupBuilder;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
@@ -95,8 +94,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = define_settings(&shared_defs.settings);
     let regs = define_registers();
 
-    let inst_group = InstructionGroupBuilder::new(&mut shared_defs.all_instructions).build();
-
     // CPU modes for 32-bit and 64-bit operation.
     let mut rv_32 = CpuMode::new("RV32");
     let mut rv_64 = CpuMode::new("RV64");
@@ -130,7 +127,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     TargetIsa::new(
         "riscv",
-        inst_group,
         settings,
         regs,
         recipes,
