@@ -56,7 +56,7 @@ block0(v0: i32, v999: i64):
     ; Boundscheck should be eliminated.
     ; Checks here are assuming that no pipehole opts fold the load offsets.
     ; nextln: $(xoff=$V) = uextend.i64 v0
-    ; nextln: $(hbase=$V) = iadd_imm v999, 64
+    ; check: $(hbase=$V) = iadd_imm v999, 64
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+16
     ; nextln: v2 = load.f32 v1+16
@@ -99,6 +99,7 @@ block0(v0: i32, v999: i64):
     ; check: block0(
     v1 = heap_addr.i64 heap0, v0, 0x8000_0000
     ; Boundscheck code
+    ; check: $(xoff=$V) = uextend.i64 v0
     ; check: $(oob=$V) = icmp
     ; nextln: brz $oob, $(ok=$BB)
     ; nextln: jump $(trap_oob=$BB)
@@ -106,8 +107,7 @@ block0(v0: i32, v999: i64):
     ; nextln: trap heap_oob
     ; check: $ok:
     ; Checks here are assuming that no pipehole opts fold the load offsets.
-    ; nextln: $(xoff=$V) = uextend.i64 v0
-    ; nextln: $(hbase=$V) = iadd_imm.i64 v999, 64
+    ; check: $(hbase=$V) = iadd_imm.i64 v999, 64
     ; nextln: v1 = iadd $hbase, $xoff
     v2 = load.f32 v1+0x7fff_ffff
     ; nextln: v2 = load.f32 v1+0x7fff_ffff

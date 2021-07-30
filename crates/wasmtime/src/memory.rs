@@ -318,7 +318,7 @@ impl Memory {
         unsafe {
             let store = store.into();
             let definition = *store[self.0].definition;
-            slice::from_raw_parts(definition.base, definition.current_length as usize)
+            slice::from_raw_parts(definition.base, definition.current_length)
         }
     }
 
@@ -334,7 +334,7 @@ impl Memory {
         unsafe {
             let store = store.into();
             let definition = *store[self.0].definition;
-            slice::from_raw_parts_mut(definition.base, definition.current_length as usize)
+            slice::from_raw_parts_mut(definition.base, definition.current_length)
         }
     }
 
@@ -395,7 +395,7 @@ impl Memory {
     ///
     /// Panics if this memory doesn't belong to `store`.
     pub fn data_size(&self, store: impl AsContext) -> usize {
-        unsafe { (*store.as_context()[self.0].definition).current_length as usize }
+        unsafe { (*store.as_context()[self.0].definition).current_length }
     }
 
     /// Returns the size, in WebAssembly pages, of this wasm memory.

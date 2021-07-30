@@ -29,7 +29,7 @@ block0(v0: i64):
 function %heap_bound_type(i64 vmctx) {
     gv0 = vmctx
     gv1 = load.i16 notrap aligned gv0
-    heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32 ; error: heap index type i32 differs from the type of its bound, i16
+    heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32 ; error: heap pointer type i64 differs from the type of its bound, i16
 
 block0(v0: i64):
     return

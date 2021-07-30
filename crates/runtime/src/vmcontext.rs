@@ -207,7 +207,7 @@ pub struct VMMemoryDefinition {
     pub base: *mut u8,
 
     /// The current logical size of this linear memory in bytes.
-    pub current_length: u32,
+    pub current_length: usize,
 }
 
 #[cfg(test)]

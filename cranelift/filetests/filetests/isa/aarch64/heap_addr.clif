@@ -5,7 +5,7 @@ target aarch64
 
 function %dynamic_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0
+    gv1 = load.i64 notrap aligned gv0
     heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
 
 block0(v0: i64, v1: i32):
@@ -16,13 +16,14 @@ block0(v0: i64, v1: i32):
 ; check: Block 0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: ldr w2, [x0]
-; nextln: add w2, w2, #0
-; nextln: subs wzr, w1, w2
+; nextln: mov w2, w1
+; nextln: ldr x3, [x0]
+; nextln: mov x3, x3
+; nextln: subs xzr, x2, x3
 ; nextln: b.ls label1 ; b label2
 ; check: Block 1:
 ; check: add x0, x0, x1, UXTW
-; nextln: subs wzr, w1, w2
+; nextln: subs xzr, x2, x3
 ; nextln: movz x1, #0
 ; nextln: csel x0, x1, x0, hi
 ; nextln: ldp fp, lr, [sp], #16
@@ -42,11 +43,12 @@ block0(v0: i64, v1: i32):
 ; check: Block 0:
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
-; nextln: subs wzr, w1, #65536
+; nextln: mov w2, w1
+; nextln: subs xzr, x2, #65536
 ; nextln: b.ls label1 ; b label2
 ; check: Block 1:
 ; check: add x0, x0, x1, UXTW
-; nextln: subs wzr, w1, #65536
+; nextln: subs xzr, x2, #65536
 ; nextln: movz x1, #0
 ; nextln: csel x0, x1, x0, hi
 ; nextln: ldp fp, lr, [sp], #16

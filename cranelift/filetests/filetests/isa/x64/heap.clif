@@ -4,19 +4,20 @@ target x86_64 machinst
 function %f(i32, i64 vmctx) -> i64 {
     gv0 = vmctx
     gv1 = load.i64 notrap aligned gv0+0
-    gv2 = load.i32 notrap aligned gv0+8
+    gv2 = load.i64 notrap aligned gv0+8
     heap0 = dynamic gv1, bound gv2, offset_guard 0x1000, index_type i32
 
 block0(v0: i32, v1: i64):
 
     v2 = heap_addr.i64 heap0, v0, 0x8000
-    ; check:  movl    8(%rsi), %ecx
-    ; nextln: movq    %rdi, %rax
-    ; nextln: addl    $$32768, %eax
+    ; check:  movl    %edi, %ecx
+    ; nextln: movq    8(%rsi), %rdi
+    ; nextln: movq    %rcx, %rax
+    ; nextln: addq    $$32768, %rax
     ; nextln: jnb ; ud2 heap_oob ;
-    ; nextln: cmpl    %ecx, %eax
+    ; nextln: cmpq    %rdi, %rax
     ; nextln: jbe     label1; j label2
     ; check:  Block 1:
- 
+
     return v2
 }

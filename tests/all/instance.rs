@@ -69,6 +69,7 @@ fn linear_memory_limits() -> Result<()> {
         let foo = instance.get_typed_func::<(), i32, _>(&mut store, "foo")?;
 
         assert_eq!(foo.call(&mut store, ())?, 65534);
+        assert_eq!(foo.call(&mut store, ())?, 65535);
         assert_eq!(foo.call(&mut store, ())?, -1);
         Ok(())
     }
