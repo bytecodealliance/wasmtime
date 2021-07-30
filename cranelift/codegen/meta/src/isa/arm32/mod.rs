@@ -1,4 +1,4 @@
-use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
+use crate::cdsl::instructions::InstructionPredicateMap;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::recipes::Recipes;
 use crate::cdsl::regs::{IsaRegs, IsaRegsBuilder, RegBankBuilder, RegClassBuilder};
@@ -52,8 +52,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     let settings = define_settings(&shared_defs.settings);
     let regs = define_regs();
 
-    let inst_group = InstructionGroupBuilder::new(&mut shared_defs.all_instructions).build();
-
     let cpu_modes = vec![];
 
     // TODO implement arm32 recipes.
@@ -64,7 +62,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     TargetIsa::new(
         "arm32",
-        inst_group,
         settings,
         regs,
         recipes,

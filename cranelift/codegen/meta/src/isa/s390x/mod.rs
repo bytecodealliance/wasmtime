@@ -1,4 +1,4 @@
-use crate::cdsl::instructions::{InstructionGroupBuilder, InstructionPredicateMap};
+use crate::cdsl::instructions::InstructionPredicateMap;
 use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::recipes::Recipes;
 use crate::cdsl::regs::IsaRegsBuilder;
@@ -44,7 +44,6 @@ fn define_settings(_shared: &SettingGroup) -> SettingGroup {
 }
 
 pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
-    let inst_group = InstructionGroupBuilder::new(&mut shared_defs.all_instructions).build();
     let settings = define_settings(&shared_defs.settings);
     let regs = IsaRegsBuilder::new().build();
     let recipes = Recipes::new();
@@ -54,7 +53,6 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
 
     TargetIsa::new(
         "s390x",
-        inst_group,
         settings,
         regs,
         recipes,
