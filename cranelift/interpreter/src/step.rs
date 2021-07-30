@@ -630,8 +630,7 @@ where
         Opcode::Fence => unimplemented!("Fence"),
         Opcode::WideningPairwiseDotProductS => unimplemented!("WideningPairwiseDotProductS"),
         Opcode::SqmulRoundSat => unimplemented!("SqmulRoundSat"),
-        Opcode::ExtendedPairwiseAddSigned => unimplemented!("ExtendedPairwiseAddSigned"),
-        Opcode::ExtendedPairwiseAddUnsigned => unimplemented!("ExtendedPairwiseAddUnsigned"),
+        Opcode::IaddPairwise => unimplemented!("IaddPairwise"),
 
         // TODO: these instructions should be removed once the new backend makes these obsolete
         // (see https://github.com/bytecodealliance/wasmtime/issues/1936); additionally, the

@@ -3519,11 +3519,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
 
-        Opcode::ExtendedPairwiseAddSigned
-        | Opcode::ExtendedPairwiseAddUnsigned
-        | Opcode::ConstAddr
-        | Opcode::Vconcat
-        | Opcode::Vsplit => unimplemented!("lowering {}", op),
+        Opcode::IaddPairwise | Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
+            unimplemented!("lowering {}", op)
+        }
     }
 
     Ok(())

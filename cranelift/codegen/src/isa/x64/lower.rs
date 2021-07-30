@@ -4927,18 +4927,33 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 }
             }
         }
-        Opcode::ExtendedPairwiseAddSigned | Opcode::ExtendedPairwiseAddUnsigned => {
-            // Extended pairwise addition instructions computes extended sums within adjacent
-            // pairs of lanes of a SIMD vector, producing a SIMD vector with half as many lanes.
-            // Instruction sequences taken from instruction SPEC PR https://github.com/WebAssembly/simd/pull/380
-            /*
-            let input_ty = ctx.input_ty(insn, 0);
-            let output_ty = ctx.output_ty(insn, 0);
-            let src = put_input_in_reg(ctx, inputs[0]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            unreachable!();
-            match op {
-                Opcode::ExtendedPairwiseAddSigned => match (input_ty, output_ty) {
+        Opcode::IaddPairwise => {
+            if let (Some(swiden_low), Some(swiden_high)) = (
+                matches_input(ctx, inputs[0], Opcode::SwidenLow),
+                matches_input(ctx, inputs[1], Opcode::SwidenHigh),
+            ) {
+                let swiden_input = &[
+                    InsnInput {
+                        insn: swiden_low,
+                        input: 0,
+                    },
+                    InsnInput {
+                        insn: swiden_high,
+                        input: 0,
+                    },
+                ];
+
+                let input_ty = ctx.input_ty(swiden_low, 0);
+                let output_ty = ctx.output_ty(insn, 0);
+                let src0 = put_input_in_reg(ctx, swiden_input[0]);
+                let src1 = put_input_in_reg(ctx, swiden_input[1]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                if src0 != src1 {
+                    unimplemented!(
+                        "iadd_pairwise not implemented for general case with different inputs"
+                    );
+                }
+                match (input_ty, output_ty) {
                     (types::I8X16, types::I16X8) => {
                         static MUL_CONST: [u8; 16] = [0x01; 16];
                         let mul_const = ctx.use_constant(VCodeConstantData::WellKnown(&MUL_CONST));
@@ -4949,7 +4964,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             RegMem::reg(mul_const_reg.to_reg()),
                             dst,
                         ));
-                        ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaddubsw, RegMem::reg(src), dst));
+                        ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmaddubsw, RegMem::reg(src0), dst));
                     }
                     (types::I16X8, types::I32X4) => {
                         static MUL_CONST: [u8; 16] = [
@@ -4959,25 +4974,49 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         let mul_const = ctx.use_constant(VCodeConstantData::WellKnown(&MUL_CONST));
                         let mul_const_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
                         ctx.emit(Inst::xmm_load_const(mul_const, mul_const_reg, types::I16X8));
-                        ctx.emit(Inst::xmm_mov(SseOpcode::Movdqa, RegMem::reg(src), dst));
+                        ctx.emit(Inst::xmm_mov(SseOpcode::Movdqa, RegMem::reg(src0), dst));
                         ctx.emit(Inst::xmm_rm_r(
                             SseOpcode::Pmaddwd,
                             RegMem::reg(mul_const_reg.to_reg()),
                             dst,
                         ));
                     }
-                    _ => unreachable!(
-                        "Type pattern not supported {:?}-{:?} not supported for {:?}.",
-                        input_ty, output_ty, op
-                    ),
-                },
-                Opcode::ExtendedPairwiseAddUnsigned => match (input_ty, output_ty) {
+                    _ => {
+                        unimplemented!("Type not supported for {:?}", op);
+                    }
+                }
+            } else if let (Some(uwiden_low), Some(uwiden_high)) = (
+                matches_input(ctx, inputs[0], Opcode::UwidenLow),
+                matches_input(ctx, inputs[1], Opcode::UwidenHigh),
+            ) {
+                let uwiden_input = &[
+                    InsnInput {
+                        insn: uwiden_low,
+                        input: 0,
+                    },
+                    InsnInput {
+                        insn: uwiden_high,
+                        input: 0,
+                    },
+                ];
+
+                let input_ty = ctx.input_ty(uwiden_low, 0);
+                let output_ty = ctx.output_ty(insn, 0);
+                let src0 = put_input_in_reg(ctx, uwiden_input[0]);
+                let src1 = put_input_in_reg(ctx, uwiden_input[1]);
+                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                if src0 != src1 {
+                    unimplemented!(
+                        "iadd_pairwise not implemented for general case with different inputs"
+                    );
+                }
+                match (input_ty, output_ty) {
                     (types::I8X16, types::I16X8) => {
                         static MUL_CONST: [u8; 16] = [0x01; 16];
                         let mul_const = ctx.use_constant(VCodeConstantData::WellKnown(&MUL_CONST));
                         let mul_const_reg = ctx.alloc_tmp(types::I8X16).only_reg().unwrap();
                         ctx.emit(Inst::xmm_load_const(mul_const, mul_const_reg, types::I8X16));
-                        ctx.emit(Inst::xmm_mov(SseOpcode::Movdqa, RegMem::reg(src), dst));
+                        ctx.emit(Inst::xmm_mov(SseOpcode::Movdqa, RegMem::reg(src0), dst));
                         ctx.emit(Inst::xmm_rm_r(
                             SseOpcode::Pmaddubsw,
                             RegMem::reg(mul_const_reg.to_reg()),
@@ -4997,7 +5036,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             pxor_const_reg,
                             types::I16X8,
                         ));
-                        ctx.emit(Inst::xmm_mov(SseOpcode::Movdqa, RegMem::reg(src), dst));
+                        ctx.emit(Inst::xmm_mov(SseOpcode::Movdqa, RegMem::reg(src0), dst));
                         ctx.emit(Inst::xmm_rm_r(
                             SseOpcode::Pxor,
                             RegMem::reg(pxor_const_reg.to_reg()),
@@ -5021,7 +5060,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             RegMem::reg(madd_const_reg.to_reg()),
                             dst,
                         ));
-
                         static ADDD_CONST2: [u8; 16] = [
                             0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00,
                             0x00, 0x00, 0x01, 0x00,
@@ -5040,14 +5078,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             dst,
                         ));
                     }
-                    _ => unreachable!(
-                        "Type pattern not supported {:?}-{:?} not supported for {:?}.",
-                        input_ty, output_ty, op
-                    ),
-                },
-                _ => unreachable!("{:?} not supported.", op),
+                    _ => {
+                        unimplemented!("Type not supported for {:?}", op);
+                    }
+                }
+            } else {
+                unimplemented!("Operands not supported for {:?}", op);
             }
-            */
         }
         Opcode::UwidenHigh | Opcode::UwidenLow | Opcode::SwidenHigh | Opcode::SwidenLow => {
             let input_ty = ctx.input_ty(insn, 0);

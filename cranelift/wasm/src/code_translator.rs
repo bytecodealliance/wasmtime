@@ -1881,19 +1881,27 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         Operator::I16x8ExtAddPairwiseI8x16S => {
             let a = pop1_with_bitcast(state, I8X16, builder);
-            state.push1(builder.ins().extended_pairwise_add_signed(a))
+            let widen_low = builder.ins().swiden_low(a);
+            let widen_high = builder.ins().swiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
         }
         Operator::I32x4ExtAddPairwiseI16x8S => {
             let a = pop1_with_bitcast(state, I16X8, builder);
-            state.push1(builder.ins().extended_pairwise_add_signed(a))
+            let widen_low = builder.ins().swiden_low(a);
+            let widen_high = builder.ins().swiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
         }
         Operator::I16x8ExtAddPairwiseI8x16U => {
             let a = pop1_with_bitcast(state, I8X16, builder);
-            state.push1(builder.ins().extended_pairwise_add_unsigned(a))
+            let widen_low = builder.ins().uwiden_low(a);
+            let widen_high = builder.ins().uwiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
         }
         Operator::I32x4ExtAddPairwiseI16x8U => {
             let a = pop1_with_bitcast(state, I16X8, builder);
-            state.push1(builder.ins().extended_pairwise_add_unsigned(a))
+            let widen_low = builder.ins().uwiden_low(a);
+            let widen_high = builder.ins().uwiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
         }
         Operator::F32x4Ceil | Operator::F64x2Ceil => {
             // This is something of a misuse of `type_of`, because that produces the return type
