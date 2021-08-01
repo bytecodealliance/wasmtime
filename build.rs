@@ -156,10 +156,8 @@ fn write_testsuite_tests(
     let testname = extract_name(path);
 
     writeln!(out, "#[test]")?;
-    if x64_should_panic(testsuite, &testname, strategy) {
-        writeln!(out, r#"#[should_panic]"#)?;
     // Ignore when using QEMU for running tests (limited memory).
-    } else if ignore(testsuite, &testname, strategy) || (pooling && platform_is_emulated()) {
+    if ignore(testsuite, &testname, strategy) || (pooling && platform_is_emulated()) {
         writeln!(out, "#[ignore]")?;
     }
 
@@ -180,22 +178,6 @@ fn write_testsuite_tests(
     writeln!(out, "}}")?;
     writeln!(out)?;
     Ok(())
-}
-
-/// For x64 backend features that are not supported yet, mark tests as panicking, so
-/// they stop "passing" once the features are properly implemented.
-fn x64_should_panic(testsuite: &str, testname: &str, strategy: &str) -> bool {
-    if !platform_is_x64() || strategy != "Cranelift" {
-        return false;
-    }
-
-    match (testsuite, testname) {
-        ("simd", "simd_i16x8_extadd_pairwise_i8x16") => return true,
-        ("simd", "simd_i32x4_extadd_pairwise_i16x8") => return true,
-        ("simd", _) => return false,
-        _ => {}
-    }
-    false
 }
 
 /// Ignore tests that aren't supported yet.
@@ -220,11 +202,13 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", _) if cfg!(feature = "old-x86-backend") => return true,
             // No simd support yet for s390x.
             ("simd", _) if platform_is_s390x() => return true,
-
-            // These are new instructions that are not really implemented in any backend.
+            // These are new instructions that are only known to be supported for x64.
             ("simd", "simd_i16x8_extadd_pairwise_i8x16")
-            | ("simd", "simd_i32x4_extadd_pairwise_i16x8") => return true,
-
+            | ("simd", "simd_i32x4_extadd_pairwise_i16x8")
+                if !platform_is_x64() =>
+            {
+                return true
+            }
             _ => {}
         },
         _ => panic!("unrecognized strategy"),

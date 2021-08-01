@@ -1879,6 +1879,30 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a = pop1_with_bitcast(state, I32X4, builder);
             state.push1(builder.ins().uwiden_high(a))
         }
+        Operator::I16x8ExtAddPairwiseI8x16S => {
+            let a = pop1_with_bitcast(state, I8X16, builder);
+            let widen_low = builder.ins().swiden_low(a);
+            let widen_high = builder.ins().swiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
+        }
+        Operator::I32x4ExtAddPairwiseI16x8S => {
+            let a = pop1_with_bitcast(state, I16X8, builder);
+            let widen_low = builder.ins().swiden_low(a);
+            let widen_high = builder.ins().swiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
+        }
+        Operator::I16x8ExtAddPairwiseI8x16U => {
+            let a = pop1_with_bitcast(state, I8X16, builder);
+            let widen_low = builder.ins().uwiden_low(a);
+            let widen_high = builder.ins().uwiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
+        }
+        Operator::I32x4ExtAddPairwiseI16x8U => {
+            let a = pop1_with_bitcast(state, I16X8, builder);
+            let widen_low = builder.ins().uwiden_low(a);
+            let widen_high = builder.ins().uwiden_high(a);
+            state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
+        }
         Operator::F32x4Ceil | Operator::F64x2Ceil => {
             // This is something of a misuse of `type_of`, because that produces the return type
             // of `op`.  In this case we want the arg type, but we know it's the same as the
@@ -1981,12 +2005,6 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let a_high = builder.ins().uwiden_high(a);
             let b_high = builder.ins().uwiden_high(b);
             state.push1(builder.ins().imul(a_high, b_high));
-        }
-        Operator::I16x8ExtAddPairwiseI8x16S
-        | Operator::I16x8ExtAddPairwiseI8x16U
-        | Operator::I32x4ExtAddPairwiseI16x8S
-        | Operator::I32x4ExtAddPairwiseI16x8U => {
-            return Err(wasm_unsupported!("proposed simd operator {:?}", op));
         }
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
             return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));

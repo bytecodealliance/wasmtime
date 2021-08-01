@@ -568,6 +568,7 @@ pub enum SseOpcode {
     Pinsrb,
     Pinsrw,
     Pinsrd,
+    Pmaddubsw,
     Pmaddwd,
     Pmaxsb,
     Pmaxsw,
@@ -746,6 +747,7 @@ impl SseOpcode {
             | SseOpcode::Pcmpgtd
             | SseOpcode::Pextrw
             | SseOpcode::Pinsrw
+            | SseOpcode::Pmaddubsw
             | SseOpcode::Pmaddwd
             | SseOpcode::Pmaxsw
             | SseOpcode::Pmaxub
@@ -944,6 +946,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pinsrb => "pinsrb",
             SseOpcode::Pinsrw => "pinsrw",
             SseOpcode::Pinsrd => "pinsrd",
+            SseOpcode::Pmaddubsw => "pmaddubsw",
             SseOpcode::Pmaddwd => "pmaddwd",
             SseOpcode::Pmaxsb => "pmaxsb",
             SseOpcode::Pmaxsw => "pmaxsw",

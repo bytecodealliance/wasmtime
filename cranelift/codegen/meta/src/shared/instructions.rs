@@ -4114,13 +4114,34 @@ pub(crate) fn define(
         Inst::new(
             "uwiden_high",
             r#"
-        Widen the high lanes of `x` using unsigned extension.
+            Widen the high lanes of `x` using unsigned extension.
 
-        This will double the lane width and halve the number of lanes.
+            This will double the lane width and halve the number of lanes.
             "#,
             &formats.unary,
         )
         .operands_in(vec![x])
+        .operands_out(vec![a]),
+    );
+
+    let x = &Operand::new("x", I8or16or32xN);
+    let y = &Operand::new("y", I8or16or32xN);
+    let a = &Operand::new("a", I8or16or32xN);
+
+    ig.push(
+        Inst::new(
+            "iadd_pairwise",
+            r#"
+        Does lane-wise integer pairwise addition on two operands, putting the
+        combined results into a single vector result. Here a pair refers to adjacent
+        lanes in a vector, i.e. i*2 + (i*2+1) for i == num_lanes/2. The first operand
+        pairwise add results will make up the low half of the resulting vector while
+        the second operand pairwise add results will make up the upper half of the
+        resulting vector.
+            "#,
+            &formats.binary,
+        )
+        .operands_in(vec![x, y])
         .operands_out(vec![a]),
     );
 

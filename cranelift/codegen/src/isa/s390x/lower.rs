@@ -2868,7 +2868,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::WideningPairwiseDotProductS
         | Opcode::SqmulRoundSat
         | Opcode::FvpromoteLow
-        | Opcode::Fvdemote => {
+        | Opcode::Fvdemote
+        | Opcode::IaddPairwise => {
             // TODO
             unimplemented!("Vector ops not implemented.");
         }
