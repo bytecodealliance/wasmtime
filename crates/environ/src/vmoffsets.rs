@@ -422,22 +422,10 @@ impl<P: PtrSize> VMOffsets<P> {
         1 * self.pointer_size()
     }
 
-    /// The size of the `current_length` field.
-    #[inline]
-    pub fn size_of_vmmemory_definition_current_length(&self) -> u8 {
-        4
-    }
-
     /// Return the size of `VMMemoryDefinition`.
     #[inline]
     pub fn size_of_vmmemory_definition(&self) -> u8 {
         2 * self.pointer_size()
-    }
-
-    /// The type of the `current_length` field.
-    #[inline]
-    pub fn type_of_vmmemory_definition_current_length(&self) -> ir::Type {
-        ir::Type::int(u16::from(self.size_of_vmmemory_definition_current_length()) * 8).unwrap()
     }
 }
 

@@ -3,7 +3,7 @@ target s390x
 
 function %dynamic_heap_check(i64 vmctx, i32) -> i64 {
     gv0 = vmctx
-    gv1 = load.i32 notrap aligned gv0
+    gv1 = load.i64 notrap aligned gv0
     heap0 = dynamic gv0, bound gv1, offset_guard 0x1000, index_type i32
 
 block0(v0: i64, v1: i32):
@@ -12,15 +12,15 @@ block0(v0: i64, v1: i32):
 }
 
 ; check: Block 0:
-; check:  l %r4, 0(%r2)
-; nextln: ahi %r4, 0
-; nextln: clr %r3, %r4
+; check:  llgfr %r3, %r3
+; nextln: lg %r4, 0(%r2)
+; nextln: aghi %r4, 0
+; nextln: clgr %r3, %r4
 ; nextln: jgnh label1 ; jg label2
 ; check: Block 1:
-; check:  llgfr %r5, %r3
-; nextln: agr %r2, %r5
+; check: agr %r2, %r3
 ; nextln: lghi %r5, 0
-; nextln: clr %r3, %r4
+; nextln: clgr %r3, %r4
 ; nextln: locgrh %r2, %r5
 ; nextln: br %r14
 ; check: Block 2:
@@ -36,13 +36,13 @@ block0(v0: i64, v1: i32):
 }
 
 ; check: Block 0:
-; check:  clfi %r3, 65536
+; check:  llgfr %r3, %r3
+; nextln: clgfi %r3, 65536
 ; nextln: jgnh label1 ; jg label2
 ; check: Block 1:
-; check:  llgfr %r4, %r3
-; nextln: agr %r2, %r4
+; check: agr %r2, %r3
 ; nextln: lghi %r4, 0
-; nextln: clfi %r3, 65536
+; nextln: clgfi %r3, 65536
 ; nextln: locgrh %r2, %r4
 ; nextln: br %r14
 ; check: Block 2:

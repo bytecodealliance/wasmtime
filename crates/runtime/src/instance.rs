@@ -626,13 +626,11 @@ impl Instance {
         let src_mem = self.get_memory(src_index);
         let dst_mem = self.get_memory(dst_index);
 
-        if src
-            .checked_add(len)
-            .map_or(true, |n| n > src_mem.current_length)
-            || dst
-                .checked_add(len)
-                .map_or(true, |m| m > dst_mem.current_length)
-        {
+        if src.checked_add(len).map_or(true, |n| {
+            usize::try_from(n).unwrap() > src_mem.current_length
+        }) || dst.checked_add(len).map_or(true, |m| {
+            usize::try_from(m).unwrap() > dst_mem.current_length
+        }) {
             return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
 
@@ -664,10 +662,9 @@ impl Instance {
     ) -> Result<(), Trap> {
         let memory = self.get_memory(memory_index);
 
-        if dst
-            .checked_add(len)
-            .map_or(true, |m| m > memory.current_length)
-        {
+        if dst.checked_add(len).map_or(true, |m| {
+            usize::try_from(m).unwrap() > memory.current_length
+        }) {
             return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }
 
@@ -726,10 +723,10 @@ impl Instance {
 
         if src
             .checked_add(len)
-            .map_or(true, |n| n as usize > data.len())
-            || dst
-                .checked_add(len)
-                .map_or(true, |m| m > memory.current_length)
+            .map_or(true, |n| usize::try_from(n).unwrap() > data.len())
+            || dst.checked_add(len).map_or(true, |m| {
+                usize::try_from(m).unwrap() > memory.current_length
+            })
         {
             return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
         }

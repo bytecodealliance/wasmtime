@@ -439,14 +439,13 @@ impl<'a> Verifier<'a> {
                             .nonfatal((heap, format!("invalid bound global value {}", bound_gv)));
                     }
 
-                    let index_type = heap_data.index_type;
                     let bound_type = self.func.global_values[bound_gv].global_type(isa);
-                    if index_type != bound_type {
+                    if pointer_type != bound_type {
                         errors.report((
                             heap,
                             format!(
-                                "heap index type {} differs from the type of its bound, {}",
-                                index_type, bound_type
+                                "heap pointer type {} differs from the type of its bound, {}",
+                                pointer_type, bound_type
                             ),
                         ));
                     }

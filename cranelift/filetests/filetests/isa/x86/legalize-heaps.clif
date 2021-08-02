@@ -10,7 +10,7 @@ function %heap_addrs(i32, i64, i64 vmctx) {
     gv0 = iadd_imm.i64 gv4, 64
     gv1 = iadd_imm.i64 gv4, 72
     gv2 = iadd_imm.i64 gv4, 80
-    gv3 = load.i32 notrap aligned gv4+88
+    gv3 = load.i64 notrap aligned gv4+88
 
     heap0 = static gv0, min 0x1_0000, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i32
     heap1 = static gv0, offset_guard 0x1000, bound 0x1_0000, index_type i32
@@ -38,15 +38,15 @@ block0(v0: i32, v1: i64, v3: i64):
     ; check:         v4 = iadd v13, v12
 
     v5 = heap_addr.i64 heap1, v0, 0
-    ; check:         v14 = icmp_imm ugt v0, 0x0001_0000
-    ; check:         brz v14, $(resume_1=$BB)
+    ; check:         v14 = uextend.i64 v0
+    ; check:         v15 = icmp_imm ugt v14, 0x0001_0000
+    ; check:         brz v15, $(resume_1=$BB)
     ; nextln:        jump $(trap_1=$BB)
     ; check:     $trap_1:
     ; nextln:        trap heap_oob
     ; check:     $resume_1:
-    ; check:         v15 = uextend.i64 v0
     ; check:         v16 = iadd_imm.i64 v3, 64
-    ; check:         v5 = iadd v16, v15
+    ; check:         v5 = iadd v16, v14
 
     v6 = heap_addr.i64 heap2, v1, 0
     ; check:         v19 = iconst.i64 0x0001_0000_0000
@@ -70,30 +70,30 @@ block0(v0: i32, v1: i64, v3: i64):
     ; check:         v7 = iadd v21, v1
 
     v8 = heap_addr.i64 heap4, v0, 0
-    ; check:         v22 = load.i32 notrap aligned v3+88
-    ; check:         v23 = iadd_imm v22, 0
-    ; check:         v24 = icmp.i32 ugt v0, v23
-    ; check:         brz v24, $(resume_4=$BB)
+    ; check:         v22 = uextend.i64 v0
+    ; check:         v23 = load.i64 notrap aligned v3+88
+    ; check:         v24 = iadd_imm v23, 0
+    ; check:         v25 = icmp ugt v22, v24
+    ; check:         brz v25, $(resume_4=$BB)
     ; nextln:        jump $(trap_4=$BB)
     ; check:     $trap_4:
     ; nextln:        trap heap_oob
     ; check:     $resume_4:
-    ; check:         v25 = uextend.i64 v0
     ; check:         v26 = iadd_imm.i64 v3, 72
-    ; check:         v8 = iadd v26, v25
+    ; check:         v8 = iadd v26, v22
 
     v9 = heap_addr.i64 heap5, v0, 0
-    ; check:         v27 = load.i32 notrap aligned v3+88
-    ; check:         v28 = iadd_imm v27, 0
-    ; check:         v29 = icmp.i32 ugt v0, v28
-    ; check:         brz v29, $(resume_5=$BB)
+    ; check:         v27 = uextend.i64 v0
+    ; check:         v28 = load.i64 notrap aligned v3+88
+    ; check:         v29 = iadd_imm v28, 0
+    ; check:         v30 = icmp ugt v27, v29
+    ; check:         brz v30, $(resume_5=$BB)
     ; nextln:        jump $(trap_5=$BB)
     ; check:     $trap_5:
     ; nextln:        trap heap_oob
     ; check:     $resume_5:
-    ; check:         v30 = uextend.i64 v0
     ; check:         v31 = iadd_imm.i64 v3, 72
-    ; check:         v9 = iadd v31, v30
+    ; check:         v9 = iadd v31, v27
 
     v10 = heap_addr.i64 heap6, v1, 0
     ; check:         v32 = iadd_imm.i64 v3, 80

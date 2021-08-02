@@ -1154,7 +1154,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
                     base: ptr,
                     offset: Offset32::new(current_length_offset),
-                    global_type: self.offsets.type_of_vmmemory_definition_current_length(),
+                    global_type: pointer_type,
                     readonly: false,
                 });
                 (
@@ -1417,7 +1417,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                         .vmctx_vmmemory_definition_current_length(def_index),
                 )
                 .unwrap();
-                pos.ins().load(I32, ir::MemFlags::trusted(), base, offset)
+                pos.ins()
+                    .load(pointer_type, ir::MemFlags::trusted(), base, offset)
             }
             None => {
                 let offset = i32::try_from(self.offsets.vmctx_vmmemory_import_from(index)).unwrap();
@@ -1425,7 +1426,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
                     pos.ins()
                         .load(pointer_type, ir::MemFlags::trusted(), base, offset);
                 pos.ins().load(
-                    I32,
+                    pointer_type,
                     ir::MemFlags::trusted(),
                     vmmemory_ptr,
                     i32::from(self.offsets.vmmemory_definition_current_length()),
@@ -1435,7 +1436,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let current_length_in_pages = pos
             .ins()
             .udiv_imm(current_length_in_bytes, i64::from(WASM_PAGE_SIZE));
-        Ok(current_length_in_pages)
+        if pointer_type == I32 {
+            Ok(current_length_in_pages)
+        } else {
+            assert_eq!(pointer_type, I64);
+            Ok(pos.ins().ireduce(I32, current_length_in_pages))
+        }
     }
 
     fn translate_memory_copy(

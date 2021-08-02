@@ -2155,6 +2155,9 @@ fn get_heap_addr(
     addr_ty: Type,
     builder: &mut FunctionBuilder,
 ) -> (ir::Value, i32) {
+    // This function will need updates for 64-bit memories
+    debug_assert_eq!(builder.func.dfg.value_type(addr32), I32);
+
     let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
 
     // How exactly the bounds check is performed here and what it's performed

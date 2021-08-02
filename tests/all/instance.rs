@@ -57,19 +57,27 @@ fn linear_memory_limits() -> Result<()> {
         (module
             (memory 65534)
 
-            (func (export "foo")  (result i32)
+            (func (export "grow")  (result i32)
                 i32.const 1
                 memory.grow)
+            (func (export "size")  (result i32)
+                memory.size)
         )
     "#;
         let module = Module::new(engine, wat)?;
 
         let mut store = Store::new(engine, ());
         let instance = Instance::new(&mut store, &module, &[])?;
-        let foo = instance.get_typed_func::<(), i32, _>(&mut store, "foo")?;
+        let size = instance.get_typed_func::<(), i32, _>(&mut store, "size")?;
+        let grow = instance.get_typed_func::<(), i32, _>(&mut store, "grow")?;
 
-        assert_eq!(foo.call(&mut store, ())?, 65534);
-        assert_eq!(foo.call(&mut store, ())?, -1);
+        assert_eq!(size.call(&mut store, ())?, 65534);
+        assert_eq!(grow.call(&mut store, ())?, 65534);
+        assert_eq!(size.call(&mut store, ())?, 65535);
+        assert_eq!(grow.call(&mut store, ())?, 65535);
+        assert_eq!(size.call(&mut store, ())?, 65536);
+        assert_eq!(grow.call(&mut store, ())?, -1);
+        assert_eq!(size.call(&mut store, ())?, 65536);
         Ok(())
     }
 }
