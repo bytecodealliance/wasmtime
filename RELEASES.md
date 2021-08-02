@@ -20,12 +20,12 @@ Released 2021-07-28.
   future bugs in Cranelift, should they arise.
   [#2977](https://github.com/bytecodealliance/wasmtime/pull/2977)
 
-* Linear memories now have a maximum size of 4GB minus one wasm page. A runtime
-  representation limitation means that the full 4GB size is not available to
-  wasm modules. This was incorrectly allowed before and is now fixed to
-  correctly reject a 4GB-sized memory in Wasmtime at runtime. This restriction
-  is expected to be lifted in the future.
+* Linear memories now correctly support a maximum size of 4GB. Previously, the
+  limit field was 32 bits, which did not properly support a full 4GB memory.
+  This update is also a necessary change in preparation for future memory64
+  support.
   [#3013](https://github.com/bytecodealliance/wasmtime/pull/3013)
+  [#3134](https://github.com/bytecodealliance/wasmtime/pull/3134)
 
 * Injection counts of fuel into a `wasmtime::Store` now uses a u64 instead of a
   u32.
@@ -51,7 +51,8 @@ Released 2021-07-28.
 * The `wasmtime::Linker` type now implements `Clone`.
   [#2993](https://github.com/bytecodealliance/wasmtime/pull/2993)
 
-* Support for the SIMD proposal on both x86\_64 and AArch64 has improved.
+* Support for the SIMD proposal on both x86\_64 and AArch64 has improved. On
+  x86\_64, all SIMD opcodes are now supported.
   [#2997](https://github.com/bytecodealliance/wasmtime/pull/2997)
   [#3035](https://github.com/bytecodealliance/wasmtime/pull/3035)
   [#2982](https://github.com/bytecodealliance/wasmtime/pull/2982)
@@ -61,6 +62,7 @@ Released 2021-07-28.
   [#3105](https://github.com/bytecodealliance/wasmtime/pull/3105)
   [#3114](https://github.com/bytecodealliance/wasmtime/pull/3114)
   [#3070](https://github.com/bytecodealliance/wasmtime/pull/3070)
+  [#3126](https://github.com/bytecodealliance/wasmtime/pull/3126)
 
 * A `Trap` can now display its reason without also displaying the backtrace.
   [#3033](https://github.com/bytecodealliance/wasmtime/pull/3033)
