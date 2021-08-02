@@ -4,6 +4,114 @@
 
 ## Unreleased
 
+## 0.29.0
+
+Released 2021-07-28.
+
+### Changed
+
+* Instance exports are now loaded lazily from instances instead of eagerly as
+  they were before. This is an internal-only change and is not a breaking
+  change.
+  [#2984](https://github.com/bytecodealliance/wasmtime/pull/2984)
+
+* All linear memories created by Wasmtime will now, by default, have guard pages
+  in front of them in addition to after them. This is intended to help mitigate
+  future bugs in Cranelift, should they arise.
+  [#2977](https://github.com/bytecodealliance/wasmtime/pull/2977)
+
+* Linear memories now correctly support a maximum size of 4GB. Previously, the
+  limit field was 32 bits, which did not properly support a full 4GB memory.
+  This update is also a necessary change in preparation for future memory64
+  support.
+  [#3013](https://github.com/bytecodealliance/wasmtime/pull/3013)
+  [#3134](https://github.com/bytecodealliance/wasmtime/pull/3134)
+
+* Injection counts of fuel into a `wasmtime::Store` now uses a u64 instead of a
+  u32.
+  [#3048](https://github.com/bytecodealliance/wasmtime/pull/3048)
+
+### Added
+
+* Support for `i128` has improved in the AArch64 backend.
+  [#2959](https://github.com/bytecodealliance/wasmtime/pull/2959)
+  [#2975](https://github.com/bytecodealliance/wasmtime/pull/2975)
+  [#2985](https://github.com/bytecodealliance/wasmtime/pull/2985)
+  [#2990](https://github.com/bytecodealliance/wasmtime/pull/2990)
+  [#3002](https://github.com/bytecodealliance/wasmtime/pull/3002)
+  [#3004](https://github.com/bytecodealliance/wasmtime/pull/3004)
+  [#3005](https://github.com/bytecodealliance/wasmtime/pull/3005)
+  [#3008](https://github.com/bytecodealliance/wasmtime/pull/3008)
+  [#3027](https://github.com/bytecodealliance/wasmtime/pull/3027)
+
+* The s390x backend now supports z14 and atomics.
+  [#2988](https://github.com/bytecodealliance/wasmtime/pull/2988)
+  [#2991](https://github.com/bytecodealliance/wasmtime/pull/2991)
+
+* The `wasmtime::Linker` type now implements `Clone`.
+  [#2993](https://github.com/bytecodealliance/wasmtime/pull/2993)
+
+* Support for the SIMD proposal on both x86\_64 and AArch64 has improved. On
+  x86\_64, all SIMD opcodes are now supported.
+  [#2997](https://github.com/bytecodealliance/wasmtime/pull/2997)
+  [#3035](https://github.com/bytecodealliance/wasmtime/pull/3035)
+  [#2982](https://github.com/bytecodealliance/wasmtime/pull/2982)
+  [#3084](https://github.com/bytecodealliance/wasmtime/pull/3084)
+  [#3082](https://github.com/bytecodealliance/wasmtime/pull/3082)
+  [#3107](https://github.com/bytecodealliance/wasmtime/pull/3107)
+  [#3105](https://github.com/bytecodealliance/wasmtime/pull/3105)
+  [#3114](https://github.com/bytecodealliance/wasmtime/pull/3114)
+  [#3070](https://github.com/bytecodealliance/wasmtime/pull/3070)
+  [#3126](https://github.com/bytecodealliance/wasmtime/pull/3126)
+
+* A `Trap` can now display its reason without also displaying the backtrace.
+  [#3033](https://github.com/bytecodealliance/wasmtime/pull/3033)
+
+* An initiall fuzzer for CLIF has been added.
+  [#3038](https://github.com/bytecodealliance/wasmtime/pull/3038)
+
+* High-level architecture documentation has been added for Wasmtime.
+  [#3019](https://github.com/bytecodealliance/wasmtime/pull/3019)
+
+* Support for multi-memory can now be configured in Wasmtime's C API.
+  [#3071](https://github.com/bytecodealliance/wasmtime/pull/3071)
+
+* The `wasmtime` crate now supports a `posix-signals-on-macos` feature to force
+  the usage of signals instead of mach ports to handle traps on macOS.
+  [#3063](https://github.com/bytecodealliance/wasmtime/pull/3063)
+
+* Wasmtime's C API now has a `wasmtime_trap_code` function to get the raw trap
+  code, if present, for a trap.
+  [#3086](https://github.com/bytecodealliance/wasmtime/pull/3086)
+
+* Wasmtime's C API now has a `wasmtime_linker_define_func` function to define a
+  store-independent function within a linker.
+  [#3122](https://github.com/bytecodealliance/wasmtime/pull/3122)
+
+* A `wasmtime::Linker::module_async` function was added as the asynchronous
+  counterpart to `wasmtime::Linker::module`.
+  [#3121](https://github.com/bytecodealliance/wasmtime/pull/3121)
+
+### Fixed
+
+* Compiling the `wasmtime` crate into a `dylib` crate type has been fixed.
+  [#3010](https://github.com/bytecodealliance/wasmtime/pull/3010)
+
+* The enter/exit hooks for WebAssembly are now executed for an instance's
+  `start` function, if present.
+  [#3001](https://github.com/bytecodealliance/wasmtime/pull/3001)
+
+* Some WASI functions in `wasi-common` have been fixed for big-endian platforms.
+  [#3016](https://github.com/bytecodealliance/wasmtime/pull/3016)
+
+* Wasmtime no longer erroneously assumes that all custom sections may contain
+  DWARF information, reducing instances of `Trap`'s `Display` implementation
+  providing misleading information to set an env var to get more information.
+  [#3083](https://github.com/bytecodealliance/wasmtime/pull/3083)
+
+* Some issues with parsing DWARF debug information have been fixed.
+  [#3116](https://github.com/bytecodealliance/wasmtime/pull/3116)
+
 ## 0.28.0
 
 Released 2021-06-09.
