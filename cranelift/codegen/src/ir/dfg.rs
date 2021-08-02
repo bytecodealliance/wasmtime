@@ -7,8 +7,8 @@ use crate::ir::extfunc::ExtFuncData;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionData};
 use crate::ir::{types, ConstantData, ConstantPool, Immediate};
 use crate::ir::{
-    Block, FuncRef, Inst, SigRef, Signature, Type, Value, ValueLabelAssignments, ValueList,
-    ValueListPool,
+    Block, FuncRef, Inst, SigRef, Signature, SourceLoc, Type, Value, ValueLabelAssignments,
+    ValueList, ValueListPool,
 };
 use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
@@ -151,6 +151,14 @@ impl DataFlowGraph {
     pub fn collect_debug_info(&mut self) {
         if self.values_labels.is_none() {
             self.values_labels = Some(HashMap::new());
+        }
+    }
+
+    /// Inserts a `ValueLabelAssignments::Alias` for `to_alias` if debug info
+    /// collection is enabled.
+    pub fn add_value_label_alias(&mut self, to_alias: Value, from: SourceLoc, value: Value) {
+        if let Some(values_labels) = self.values_labels.as_mut() {
+            values_labels.insert(to_alias, ir::ValueLabelAssignments::Alias { from, value });
         }
     }
 }

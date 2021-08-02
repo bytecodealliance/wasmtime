@@ -204,16 +204,14 @@ fn cast_offset_to_pointer_ty(
 
     // Convert `offset` to `addr_ty`.
     let extended_offset = pos.ins().uextend(addr_ty, offset);
+
+    // Add debug value-label alias so that debuginfo can name the extended
+    // value as the address
     let loc = pos.srcloc();
-    if let Some(values_labels) = pos.func.dfg.values_labels.as_mut() {
-        values_labels.insert(
-            extended_offset,
-            ir::ValueLabelAssignments::Alias {
-                from: loc,
-                value: offset,
-            },
-        );
-    }
+    pos.func
+        .dfg
+        .add_value_label_alias(extended_offset, loc, offset);
+
     extended_offset
 }
 
