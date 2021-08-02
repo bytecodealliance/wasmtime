@@ -6,7 +6,7 @@
 
 ## 0.29.0
 
-Released 2021-07-28.
+Released 2021-08-02.
 
 ### Changed
 
