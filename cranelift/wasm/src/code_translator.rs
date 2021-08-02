@@ -2150,7 +2150,7 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
 fn get_heap_addr(
     heap: ir::Heap,
     addr32: ir::Value,
-    offset: u32,
+    offset: u64,
     width: u32,
     addr_ty: Type,
     builder: &mut FunctionBuilder,
@@ -2159,6 +2159,9 @@ fn get_heap_addr(
     debug_assert_eq!(builder.func.dfg.value_type(addr32), I32);
 
     let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
+
+    // Currently this function only supports 32-bit memories.
+    let offset = u32::try_from(offset).unwrap();
 
     // How exactly the bounds check is performed here and what it's performed
     // on is a bit tricky. Generally we want to rely on access violations (e.g.
@@ -2239,12 +2242,12 @@ fn prepare_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<(MemFlags, Value, Offset32)> {
-    let addr32 = state.pop1();
+    let addr = state.pop1();
 
     let heap = state.get_heap(builder.func, memarg.memory, environ)?;
     let (base, offset) = get_heap_addr(
         heap,
-        addr32,
+        addr,
         memarg.offset,
         loaded_bytes,
         environ.pointer_type(),
@@ -2335,11 +2338,14 @@ fn fold_atomic_mem_addr(
 ) -> Value {
     let access_ty_bytes = access_ty.bytes();
     let final_lma = if memarg.offset > 0 {
+        // Note that 32-bit memories are only supported here at this time, the
+        // logic here (e.g. the `iadd_imm` will need to check for overflow and
+        // other bits and pieces for 64-bit memories.
         assert!(builder.func.dfg.value_type(linear_mem_addr) == I32);
         let linear_mem_addr = builder.ins().uextend(I64, linear_mem_addr);
         let a = builder
             .ins()
-            .iadd_imm(linear_mem_addr, i64::from(memarg.offset));
+            .iadd_imm(linear_mem_addr, i64::try_from(memarg.offset).unwrap());
         let cflags = builder.ins().ifcmp_imm(a, 0x1_0000_0000i64);
         builder.ins().trapif(
             IntCC::UnsignedGreaterThanOrEqual,
@@ -2374,10 +2380,14 @@ fn finalise_atomic_mem_addr<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) -> WasmResult<Value> {
     // Check the alignment of `linear_mem_addr`.
+    //
+    // Note that the `iadd_imm` here and the `try_from` only works for 32-bit
+    // memories.
     let access_ty_bytes = access_ty.bytes();
+    assert!(builder.func.dfg.value_type(linear_mem_addr) == I32);
     let final_lma = builder
         .ins()
-        .iadd_imm(linear_mem_addr, i64::from(memarg.offset));
+        .iadd_imm(linear_mem_addr, i64::try_from(memarg.offset).unwrap());
     if access_ty_bytes != 1 {
         assert!(access_ty_bytes == 2 || access_ty_bytes == 4 || access_ty_bytes == 8);
         let final_lma_misalignment = builder

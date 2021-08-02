@@ -13,6 +13,6 @@ edition = "2018"
 
 [dependencies]
 lightbeam = { path = "..", version = "0.29.0" }
-wasmparser = "0.79"
+wasmparser = "0.80"
 cranelift-codegen = { path = "../../../cranelift/codegen", version = "0.76.0" }
 wasmtime-environ = { path = "../../environ", version = "0.29.0" }

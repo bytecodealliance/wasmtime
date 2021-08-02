@@ -8,9 +8,9 @@
 
 use crate::state::FuncTranslationState;
 use crate::translation_utils::{
-    DataIndex, ElemIndex, EntityIndex, EntityType, Event, EventIndex, FuncIndex, Global,
-    GlobalIndex, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex,
-    ModuleTypeIndex, SignatureIndex, Table, TableIndex, TypeIndex,
+    DataIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex, InstanceIndex,
+    InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex, ModuleTypeIndex, SignatureIndex, Table,
+    TableIndex, Tag, TagIndex, TypeIndex,
 };
 use core::convert::From;
 use core::convert::TryFrom;
@@ -771,15 +771,15 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         field: Option<&'data str>,
     ) -> WasmResult<()>;
 
-    /// Declares an event import to the environment.
-    fn declare_event_import(
+    /// Declares an tag import to the environment.
+    fn declare_tag_import(
         &mut self,
-        event: Event,
+        tag: Tag,
         module: &'data str,
         field: Option<&'data str>,
     ) -> WasmResult<()> {
-        drop((event, module, field));
-        Err(WasmError::Unsupported("wasm events".to_string()))
+        drop((tag, module, field));
+        Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
     /// Declares a global import to the environment.
@@ -844,16 +844,16 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
     /// Declares a memory to the environment
     fn declare_memory(&mut self, memory: Memory) -> WasmResult<()>;
 
-    /// Provides the number of defined events up front. By default this does nothing, but
+    /// Provides the number of defined tags up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
-    fn reserve_events(&mut self, _num: u32) -> WasmResult<()> {
+    fn reserve_tags(&mut self, _num: u32) -> WasmResult<()> {
         Ok(())
     }
 
-    /// Declares an event to the environment
-    fn declare_event(&mut self, event: Event) -> WasmResult<()> {
-        drop(event);
-        Err(WasmError::Unsupported("wasm events".to_string()))
+    /// Declares an tag to the environment
+    fn declare_tag(&mut self, tag: Tag) -> WasmResult<()> {
+        drop(tag);
+        Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
     /// Provides the number of defined globals up front. By default this does nothing, but
@@ -885,14 +885,10 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         name: &'data str,
     ) -> WasmResult<()>;
 
-    /// Declares an event export to the environment.
-    fn declare_event_export(
-        &mut self,
-        event_index: EventIndex,
-        name: &'data str,
-    ) -> WasmResult<()> {
-        drop((event_index, name));
-        Err(WasmError::Unsupported("wasm events".to_string()))
+    /// Declares an tag export to the environment.
+    fn declare_tag_export(&mut self, tag_index: TagIndex, name: &'data str) -> WasmResult<()> {
+        drop((tag_index, name));
+        Err(WasmError::Unsupported("wasm tags".to_string()))
     }
 
     /// Declares a global export to the environment.

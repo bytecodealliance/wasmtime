@@ -221,10 +221,7 @@ fn predict_rss(wasm: &[u8]) -> Result<usize> {
             // the minimum amount of memory to our predicted rss.
             Payload::MemorySection(s) => {
                 for entry in s {
-                    let initial = match entry? {
-                        MemoryType::M32 { limits, .. } => limits.initial as usize,
-                        MemoryType::M64 { limits, .. } => limits.initial as usize,
-                    };
+                    let initial = entry?.initial as usize;
                     prediction += initial * 64 * 1024;
                 }
             }
@@ -233,7 +230,7 @@ fn predict_rss(wasm: &[u8]) -> Result<usize> {
             // currently this is 3 pointers per table entry.
             Payload::TableSection(s) => {
                 for entry in s {
-                    let initial = entry?.limits.initial as usize;
+                    let initial = entry?.initial as usize;
                     prediction += initial * 3 * mem::size_of::<usize>();
                 }
             }

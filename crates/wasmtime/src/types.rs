@@ -217,7 +217,7 @@ impl ExternType {
                 let ty = &types.instance_signatures[*ty];
                 InstanceType::from_wasmtime(types, ty).into()
             }
-            EntityType::Event(_) => unimplemented!("wasm event support"),
+            EntityType::Tag(_) => unimplemented!("wasm tag support"),
         }
     }
 }

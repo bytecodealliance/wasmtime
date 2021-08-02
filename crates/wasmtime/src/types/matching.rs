@@ -236,7 +236,7 @@ impl MatchCx<'_> {
             EntityType::Global(_) => "global",
             EntityType::Module(_) => "module",
             EntityType::Memory(_) => "memory",
-            EntityType::Event(_) => "event",
+            EntityType::Tag(_) => "tag",
             EntityType::Instance(_) => "instance",
             EntityType::Table(_) => "table",
             EntityType::Function(_) => "function",
@@ -301,7 +301,7 @@ impl MatchCx<'_> {
                 }
                 _ => bail!("expected module, but found {}", actual_desc),
             },
-            EntityType::Event(_) => unimplemented!(),
+            EntityType::Tag(_) => unimplemented!(),
         }
     }
 
@@ -332,7 +332,7 @@ impl MatchCx<'_> {
                 Extern::Module(actual) => self.module(*expected, actual),
                 _ => bail!("expected module, but found {}", actual.desc()),
             },
-            EntityType::Event(_) => unimplemented!(),
+            EntityType::Tag(_) => unimplemented!(),
         }
     }
 
@@ -373,6 +373,6 @@ fn entity_desc(ty: &EntityType) -> &'static str {
         EntityType::Function(_) => "func",
         EntityType::Instance(_) => "instance",
         EntityType::Module(_) => "module",
-        EntityType::Event(_) => "event",
+        EntityType::Tag(_) => "tag",
     }
 }
