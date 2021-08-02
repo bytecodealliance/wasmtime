@@ -2644,6 +2644,46 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
+        Inst::VecRRPairLong {
+            op: VecRRPairLongOp::Uaddlp8,
+            rd: writable_vreg(0),
+            rn: vreg(1),
+        },
+        "2028206E",
+        "uaddlp v0.8h, v1.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRPairLong {
+            op: VecRRPairLongOp::Saddlp8,
+            rd: writable_vreg(3),
+            rn: vreg(11),
+        },
+        "6329204E",
+        "saddlp v3.8h, v11.16b",
+    ));
+
+    insns.push((
+        Inst::VecRRPairLong {
+            op: VecRRPairLongOp::Uaddlp16,
+            rd: writable_vreg(14),
+            rn: vreg(23),
+        },
+        "EE2A606E",
+        "uaddlp v14.4s, v23.8h",
+    ));
+
+    insns.push((
+        Inst::VecRRPairLong {
+            op: VecRRPairLongOp::Saddlp16,
+            rd: writable_vreg(29),
+            rn: vreg(0),
+        },
+        "1D28604E",
+        "saddlp v29.4s, v0.8h",
+    ));
+
+    insns.push((
         Inst::VecRRR {
             alu_op: VecALUOp::Sqadd,
             rd: writable_vreg(1),

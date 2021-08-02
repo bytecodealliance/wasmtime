@@ -419,6 +419,18 @@ pub enum VecPairOp {
     Addp,
 }
 
+/// 1-operand vector instruction that extends elements of the input register
+/// and operates on a pair of elements.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum VecRRPairLongOp {
+    /// Sign extend and add pair of elements
+    Saddlp8,
+    Saddlp16,
+    /// Unsigned extend and add pair of elements
+    Uaddlp8,
+    Uaddlp16,
+}
+
 /// An operation across the lanes of vectors.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VecLanesOp {
@@ -1105,6 +1117,15 @@ pub enum Inst {
         rn: Reg,
         rm: Reg,
         high_half: bool,
+    },
+
+    /// 1-operand vector instruction that extends elements of the input
+    /// register and operates on a pair of elements. The output lane width
+    /// is double that of the input.
+    VecRRPairLong {
+        op: VecRRPairLongOp,
+        rd: Writable<Reg>,
+        rn: Reg,
     },
 
     /// A vector ALU op.
@@ -2166,6 +2187,10 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_use(rn);
             collector.add_use(rm);
         }
+        &Inst::VecRRPairLong { rd, rn, .. } => {
+            collector.add_def(rd);
+            collector.add_use(rn);
+        }
         &Inst::VecRRR {
             alu_op, rd, rn, rm, ..
         } => {
@@ -2991,6 +3016,14 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
             };
             map_use(mapper, rn);
             map_use(mapper, rm);
+        }
+        &mut Inst::VecRRPairLong {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            map_def(mapper, rd);
+            map_use(mapper, rn);
         }
         &mut Inst::VecRRR {
             alu_op,
@@ -4149,6 +4182,26 @@ impl Inst {
                 };
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, ScalarSize::Size64);
                 let rn = show_vreg_vector(rn, mb_rru, VectorSize::Size64x2);
+
+                format!("{} {}, {}", op, rd, rn)
+            }
+            &Inst::VecRRPairLong { op, rd, rn } => {
+                let (op, dest, src) = match op {
+                    VecRRPairLongOp::Saddlp8 => {
+                        ("saddlp", VectorSize::Size16x8, VectorSize::Size8x16)
+                    }
+                    VecRRPairLongOp::Saddlp16 => {
+                        ("saddlp", VectorSize::Size32x4, VectorSize::Size16x8)
+                    }
+                    VecRRPairLongOp::Uaddlp8 => {
+                        ("uaddlp", VectorSize::Size16x8, VectorSize::Size8x16)
+                    }
+                    VecRRPairLongOp::Uaddlp16 => {
+                        ("uaddlp", VectorSize::Size32x4, VectorSize::Size16x8)
+                    }
+                };
+                let rd = show_vreg_vector(rd.to_reg(), mb_rru, dest);
+                let rn = show_vreg_vector(rn, mb_rru, src);
 
                 format!("{} {}, {}", op, rd, rn)
             }
