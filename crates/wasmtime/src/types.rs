@@ -18,38 +18,6 @@ pub enum Mutability {
     Var,
 }
 
-/// Limits of tables/memories where the units of the limits are defined by the
-/// table/memory types.
-///
-/// A minimum is always available but the maximum may not be present.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct Limits {
-    min: u32,
-    max: Option<u32>,
-}
-
-impl Limits {
-    /// Creates a new set of limits with the minimum and maximum both specified.
-    pub fn new(min: u32, max: Option<u32>) -> Limits {
-        Limits { min, max }
-    }
-
-    /// Creates a new `Limits` with the `min` specified and no maximum specified.
-    pub fn at_least(min: u32) -> Limits {
-        Limits::new(min, None)
-    }
-
-    /// Returns the minimum amount for these limits.
-    pub fn min(&self) -> u32 {
-        self.min
-    }
-
-    /// Returns the maximum amount for these limits, if specified.
-    pub fn max(&self) -> Option<u32> {
-        self.max
-    }
-}
-
 // Value Types
 
 /// A list of all possible value types in WebAssembly.
@@ -357,38 +325,50 @@ impl GlobalType {
 /// which `call_indirect` can invoke other functions.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TableType {
-    element: ValType,
-    limits: Limits,
+    ty: wasm::Table,
 }
 
 impl TableType {
     /// Creates a new table descriptor which will contain the specified
     /// `element` and have the `limits` applied to its length.
-    pub fn new(element: ValType, limits: Limits) -> TableType {
-        TableType { element, limits }
+    pub fn new(element: ValType, min: u32, max: Option<u32>) -> TableType {
+        TableType {
+            ty: wasm::Table {
+                ty: match element {
+                    ValType::FuncRef => wasm::TableElementType::Func,
+                    _ => wasm::TableElementType::Val(element.get_wasmtime_type()),
+                },
+                wasm_ty: element.to_wasm_type(),
+                minimum: min,
+                maximum: max,
+            },
+        }
     }
 
     /// Returns the element value type of this table.
-    pub fn element(&self) -> &ValType {
-        &self.element
+    pub fn element(&self) -> ValType {
+        ValType::from_wasm_type(&self.ty.wasm_ty)
     }
 
-    /// Returns the limits, in units of elements, of this table.
-    pub fn limits(&self) -> &Limits {
-        &self.limits
+    /// Returns minimum number of elements this table must have
+    pub fn minimum(&self) -> u32 {
+        self.ty.minimum
+    }
+
+    /// Returns the optionally-specified maximum number of elements this table
+    /// can have.
+    ///
+    /// If this returns `None` then the table is not limited in size.
+    pub fn maximum(&self) -> Option<u32> {
+        self.ty.maximum
     }
 
     pub(crate) fn from_wasmtime_table(table: &wasm::Table) -> TableType {
-        let ty = match table.ty {
-            wasm::TableElementType::Func => ValType::FuncRef,
-            #[cfg(target_pointer_width = "64")]
-            wasm::TableElementType::Val(ir::types::R64) => ValType::ExternRef,
-            #[cfg(target_pointer_width = "32")]
-            wasm::TableElementType::Val(ir::types::R32) => ValType::ExternRef,
-            _ => panic!("only `funcref` and `externref` tables supported"),
-        };
-        let limits = Limits::new(table.minimum, table.maximum);
-        TableType::new(ty, limits)
+        TableType { ty: table.clone() }
+    }
+
+    pub(crate) fn wasmtime_table(&self) -> &wasm::Table {
+        &self.ty
     }
 }
 
@@ -400,23 +380,78 @@ impl TableType {
 /// chunks of addressable memory.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct MemoryType {
-    limits: Limits,
+    ty: wasm::Memory,
 }
 
 impl MemoryType {
-    /// Creates a new descriptor for a WebAssembly memory given the specified
-    /// limits of the memory.
-    pub fn new(limits: Limits) -> MemoryType {
-        MemoryType { limits }
+    /// Creates a new descriptor for a 32-bit WebAssembly memory given the
+    /// specified limits of the memory.
+    ///
+    /// The `minimum` and `maximum`  values here are specified in units of
+    /// WebAssembly pages, which are 64k.
+    pub fn new(minimum: u32, maximum: Option<u32>) -> MemoryType {
+        MemoryType {
+            ty: wasm::Memory {
+                memory64: false,
+                shared: false,
+                minimum: minimum.into(),
+                maximum: maximum.map(|i| i.into()),
+            },
+        }
     }
 
-    /// Returns the limits (in pages) that are configured for this memory.
-    pub fn limits(&self) -> &Limits {
-        &self.limits
+    /// Creates a new descriptor for a 64-bit WebAssembly memory given the
+    /// specified limits of the memory.
+    ///
+    /// The `minimum` and `maximum`  values here are specified in units of
+    /// WebAssembly pages, which are 64k.
+    ///
+    /// Note that 64-bit memories are part of the memory64 proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn new64(minimum: u64, maximum: Option<u64>) -> MemoryType {
+        MemoryType {
+            ty: wasm::Memory {
+                memory64: true,
+                shared: false,
+                minimum,
+                maximum,
+            },
+        }
+    }
+
+    /// Returns whether this is a 64-bit memory or not.
+    ///
+    /// Note that 64-bit memories are part of the memory64 proposal for
+    /// WebAssembly which is not standardized yet.
+    pub fn is_64(&self) -> bool {
+        self.ty.memory64
+    }
+
+    /// Returns minimum number of WebAssembly pages this memory must have.
+    ///
+    /// Note that the return value, while a `u64`, will always fit into a `u32`
+    /// for 32-bit memories.
+    pub fn minimum(&self) -> u64 {
+        self.ty.minimum
+    }
+
+    /// Returns the optionally-specified maximum number of pages this memory
+    /// can have.
+    ///
+    /// If this returns `None` then the memory is not limited in size.
+    ///
+    /// Note that the return value, while a `u64`, will always fit into a `u32`
+    /// for 32-bit memories.
+    pub fn maximum(&self) -> Option<u64> {
+        self.ty.maximum
     }
 
     pub(crate) fn from_wasmtime_memory(memory: &wasm::Memory) -> MemoryType {
-        MemoryType::new(Limits::new(memory.minimum, memory.maximum))
+        MemoryType { ty: memory.clone() }
+    }
+
+    pub(crate) fn wasmtime_memory(&self) -> &wasm::Memory {
+        &self.ty
     }
 }
 

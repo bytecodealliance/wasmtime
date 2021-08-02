@@ -14,16 +14,16 @@ include!(concat!(env!("OUT_DIR"), "/wast_testsuite_tests.rs"));
 fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()> {
     let wast = Path::new(wast);
 
-    let simd = wast.iter().any(|s| s == "simd");
-
-    let multi_memory = wast.iter().any(|s| s == "multi-memory");
-    let module_linking = wast.iter().any(|s| s == "module-linking");
-    let threads = wast.iter().any(|s| s == "threads");
-    let bulk_mem = multi_memory || wast.iter().any(|s| s == "bulk-memory-operations");
+    let simd = feature_found(wast, "simd");
+    let memory64 = feature_found(wast, "memory64");
+    let multi_memory = feature_found(wast, "multi-memory");
+    let module_linking = feature_found(wast, "module-linking");
+    let threads = feature_found(wast, "threads");
+    let bulk_mem = memory64 || multi_memory || feature_found(wast, "bulk-memory-operations");
 
     // Some simd tests assume support for multiple tables, which are introduced
     // by reference types.
-    let reftypes = simd || wast.iter().any(|s| s == "reference-types");
+    let reftypes = simd || feature_found(wast, "reference-types");
 
     // Threads aren't implemented in the old backend, so skip those tests.
     if threads && cfg!(feature = "old-x86-backend") {
@@ -37,12 +37,14 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .wasm_multi_memory(multi_memory || module_linking)
         .wasm_module_linking(module_linking)
         .wasm_threads(threads)
+        .wasm_memory64(memory64)
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
-    if wast.ends_with("canonicalize-nan.wast") {
+    if feature_found(wast, "canonicalize-nan") {
         cfg.cranelift_nan_canonicalization(true);
     }
+    let test_allocates_lots_of_memory = wast.ends_with("more-than-4gb.wast");
 
     // By default we'll allocate huge chunks (6gb) of the address space for each
     // linear memory. This is typically fine but when we emulate tests with QEMU
@@ -54,10 +56,30 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     // tests suite from 10GiB to 600MiB. Previously we saw that crossing the
     // 10GiB threshold caused our processes to get OOM killed on CI.
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        // The pooling allocator hogs ~6TB of virtual address space for each
+        // store, so if we don't to hog memory then ignore pooling tests.
+        if pooling {
+            return Ok(());
+        }
+
+        // If the test allocates a lot of memory, that's considered "hogging"
+        // memory, so skip it.
+        if test_allocates_lots_of_memory {
+            return Ok(());
+        }
+
+        // Don't use 4gb address space reservations when not hogging memory.
         cfg.static_memory_maximum_size(0);
     }
 
     let _pooling_lock = if pooling {
+        // Some memory64 tests take more than 4gb of resident memory to test,
+        // but we don't want to configure the pooling allocator to allow that
+        // (that's a ton of memory to reserve), so we skip those tests.
+        if test_allocates_lots_of_memory {
+            return Ok(());
+        }
+
         // The limits here are crafted such that the wast tests should pass.
         // However, these limits may become insufficient in the future as the wast tests change.
         // If a wast test fails because of a limit being "exceeded" or if memory/table
@@ -89,6 +111,13 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     wast_context.register_spectest()?;
     wast_context.run_file(wast)?;
     Ok(())
+}
+
+fn feature_found(path: &Path, name: &str) -> bool {
+    path.iter().any(|part| match part.to_str() {
+        Some(s) => s.contains(name),
+        None => false,
+    })
 }
 
 // The pooling tests make about 6TB of address space reservation which means

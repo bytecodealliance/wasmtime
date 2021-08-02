@@ -792,7 +792,7 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
         &mut self,
         _memory_index: MemoryIndex,
         _base: Option<GlobalIndex>,
-        _offset: u32,
+        _offset: u64,
         _data: &'data [u8],
     ) -> WasmResult<()> {
         // We do nothing

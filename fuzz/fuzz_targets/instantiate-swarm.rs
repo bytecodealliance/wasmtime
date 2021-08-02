@@ -27,6 +27,7 @@ fn run(data: &[u8]) -> Result<()> {
     let mut config: SwarmConfig = u.arbitrary()?;
     config.simd_enabled = u.arbitrary()?;
     config.module_linking_enabled = u.arbitrary()?;
+    config.memory64_enabled = u.arbitrary()?;
     // Don't generate modules that allocate more than 6GB
     config.max_memory_pages = 6 << 30;
     let module = ConfiguredModule::new(config.clone(), &mut u)?;
@@ -35,6 +36,7 @@ fn run(data: &[u8]) -> Result<()> {
     cfg.wasm_multi_memory(config.max_memories > 1);
     cfg.wasm_module_linking(config.module_linking_enabled);
     cfg.wasm_simd(config.simd_enabled);
+    cfg.wasm_memory64(config.memory64_enabled);
 
     oracles::instantiate_with_config(&module.to_bytes(), true, cfg, timeout);
     Ok(())

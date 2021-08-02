@@ -60,6 +60,7 @@ impl MatchCx<'_> {
 
     fn memory_ty(&self, expected: &Memory, actual: &Memory) -> Result<()> {
         if expected.shared == actual.shared
+            && expected.memory64 == actual.memory64
             && expected.minimum <= actual.minimum
             && match expected.maximum {
                 Some(expected) => match actual.maximum {

@@ -9,13 +9,13 @@ impl StoreLimitsBuilder {
         Self(StoreLimits::default())
     }
 
-    /// The maximum number of WebAssembly pages a linear memory can grow to.
+    /// The maximum number of bytes a linear memory can grow to.
     ///
     /// Growing a linear memory beyond this limit will fail.
     ///
-    /// By default, linear memory pages will not be limited.
-    pub fn memory_pages(mut self, limit: u32) -> Self {
-        self.0.memory_pages = Some(limit);
+    /// By default, linear memory will not be limited.
+    pub fn memory_size(mut self, limit: usize) -> Self {
+        self.0.memory_size = Some(limit);
         self
     }
 
@@ -67,7 +67,7 @@ impl StoreLimitsBuilder {
 
 /// Provides limits for a [`Store`](crate::Store).
 pub struct StoreLimits {
-    memory_pages: Option<u32>,
+    memory_size: Option<usize>,
     table_elements: Option<u32>,
     instances: usize,
     tables: usize,
@@ -77,7 +77,7 @@ pub struct StoreLimits {
 impl Default for StoreLimits {
     fn default() -> Self {
         Self {
-            memory_pages: None,
+            memory_size: None,
             table_elements: None,
             instances: wasmtime_runtime::DEFAULT_INSTANCE_LIMIT,
             tables: wasmtime_runtime::DEFAULT_TABLE_LIMIT,
@@ -87,8 +87,8 @@ impl Default for StoreLimits {
 }
 
 impl ResourceLimiter for StoreLimits {
-    fn memory_growing(&mut self, _current: u32, desired: u32, _maximum: Option<u32>) -> bool {
-        match self.memory_pages {
+    fn memory_growing(&mut self, _current: usize, desired: usize, _maximum: Option<usize>) -> bool {
+        match self.memory_size {
             Some(limit) if desired > limit => false,
             _ => true,
         }

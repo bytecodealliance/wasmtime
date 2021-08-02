@@ -190,14 +190,15 @@ pub extern "C" fn wasmtime_f64_nearest(x: f64) -> f64 {
 /// Implementation of memory.grow for locally-defined 32-bit memories.
 pub unsafe extern "C" fn wasmtime_memory32_grow(
     vmctx: *mut VMContext,
-    delta: u32,
+    delta: u64,
     memory_index: u32,
-) -> u32 {
+) -> usize {
     let instance = (*vmctx).instance_mut();
     let memory_index = MemoryIndex::from_u32(memory_index);
-    instance
-        .memory_grow(memory_index, delta)
-        .unwrap_or(u32::max_value())
+    match instance.memory_grow(memory_index, delta) {
+        Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+        None => usize::max_value(),
+    }
 }
 
 /// Implementation of `table.grow`.
@@ -317,10 +318,10 @@ pub unsafe extern "C" fn wasmtime_elem_drop(vmctx: *mut VMContext, elem_index: u
 pub unsafe extern "C" fn wasmtime_memory_copy(
     vmctx: *mut VMContext,
     dst_index: u32,
-    dst: u32,
+    dst: u64,
     src_index: u32,
-    src: u32,
-    len: u32,
+    src: u64,
+    len: u64,
 ) {
     let result = {
         let src_index = MemoryIndex::from_u32(src_index);
@@ -337,14 +338,14 @@ pub unsafe extern "C" fn wasmtime_memory_copy(
 pub unsafe extern "C" fn wasmtime_memory_fill(
     vmctx: *mut VMContext,
     memory_index: u32,
-    dst: u32,
+    dst: u64,
     val: u32,
-    len: u32,
+    len: u64,
 ) {
     let result = {
         let memory_index = MemoryIndex::from_u32(memory_index);
         let instance = (*vmctx).instance_mut();
-        instance.memory_fill(memory_index, dst, val, len)
+        instance.memory_fill(memory_index, dst, val as u8, len)
     };
     if let Err(trap) = result {
         raise_lib_trap(trap);
@@ -356,7 +357,7 @@ pub unsafe extern "C" fn wasmtime_memory_init(
     vmctx: *mut VMContext,
     memory_index: u32,
     data_index: u32,
-    dst: u32,
+    dst: u64,
     src: u32,
     len: u32,
 ) {

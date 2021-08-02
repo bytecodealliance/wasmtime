@@ -302,8 +302,8 @@ impl InstructionData {
             // 32-bit
             &InstructionData::UnaryIeee32 { imm, .. } => Some(DataValue::from(imm)),
             &InstructionData::HeapAddr { imm, .. } => {
-                let imm: u32 = imm.into();
-                Some(DataValue::from(imm as i32)) // Note the switch from unsigned to signed.
+                let imm: u64 = imm.into();
+                Some(DataValue::from(imm as i64)) // Note the switch from unsigned to signed.
             }
             &InstructionData::Load { offset, .. }
             | &InstructionData::LoadComplex { offset, .. }

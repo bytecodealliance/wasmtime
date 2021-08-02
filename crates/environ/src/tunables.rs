@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Hash, Serialize, Deserialize)]
 pub struct Tunables {
     /// For static heaps, the size in wasm pages of the heap protected by bounds checking.
-    pub static_memory_bound: u32,
+    pub static_memory_bound: u64,
 
     /// The size in bytes of the offset guard for static heaps.
     pub static_memory_offset_guard_size: u64,

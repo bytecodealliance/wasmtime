@@ -995,7 +995,7 @@ pub trait ModuleEnvironment<'data>: TargetEnvironment {
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
-        offset: u32,
+        offset: u64,
         data: &'data [u8],
     ) -> WasmResult<()>;
 

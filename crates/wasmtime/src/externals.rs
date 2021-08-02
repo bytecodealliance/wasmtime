@@ -442,7 +442,7 @@ impl Table {
     }
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
-        if init.ty() != *ty.element() {
+        if init.ty() != ty.element() {
             bail!(
                 "table initialization value type {:?} does not have expected type {:?}",
                 init.ty(),
@@ -467,7 +467,7 @@ impl Table {
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             (*table.wasmtime_table(store))
-                .fill(0, init, ty.limits().min())
+                .fill(0, init, ty.minimum())
                 .map_err(Trap::from_runtime)?;
 
             Ok(table)

@@ -154,8 +154,8 @@ impl WatGenerator {
                 write!(
                     self.dst,
                     "(memory {} {})",
-                    mem.limits().min(),
-                    match mem.limits().max() {
+                    mem.minimum(),
+                    match mem.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     }
@@ -166,12 +166,12 @@ impl WatGenerator {
                 write!(
                     self.dst,
                     "(table {} {} {})",
-                    table.limits().min(),
-                    match table.limits().max() {
+                    table.minimum(),
+                    match table.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     },
-                    wat_ty(table.element()),
+                    wat_ty(&table.element()),
                 )
                 .unwrap();
             }
@@ -243,8 +243,8 @@ impl WatGenerator {
                     self.dst,
                     "(memory ${} {} {})\n",
                     name,
-                    mem.limits().min(),
-                    match mem.limits().max() {
+                    mem.minimum(),
+                    match mem.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     }
@@ -256,12 +256,12 @@ impl WatGenerator {
                     self.dst,
                     "(table ${} {} {} {})\n",
                     name,
-                    table.limits().min(),
-                    match table.limits().max() {
+                    table.minimum(),
+                    match table.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     },
-                    wat_ty(table.element()),
+                    wat_ty(&table.element()),
                 )
                 .unwrap();
             }

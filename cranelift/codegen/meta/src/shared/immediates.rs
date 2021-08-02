@@ -14,8 +14,8 @@ pub(crate) struct Immediates {
     /// counts on shift instructions.
     pub uimm8: OperandKind,
 
-    /// An unsigned 32-bit immediate integer operand.
-    pub uimm32: OperandKind,
+    /// An unsigned 64-bit immediate integer operand.
+    pub uimm64: OperandKind,
 
     /// An unsigned 128-bit immediate integer operand.
     ///
@@ -97,8 +97,8 @@ impl Immediates {
             imm64: new_imm("imm", "ir::immediates::Imm64").with_doc("A 64-bit immediate integer."),
             uimm8: new_imm("imm", "ir::immediates::Uimm8")
                 .with_doc("An 8-bit immediate unsigned integer."),
-            uimm32: new_imm("imm", "ir::immediates::Uimm32")
-                .with_doc("A 32-bit immediate unsigned integer."),
+            uimm64: new_imm("imm", "ir::immediates::Uimm64")
+                .with_doc("A 64-bit immediate unsigned integer."),
             uimm128: new_imm("imm", "ir::Immediate")
                 .with_doc("A 128-bit immediate unsigned integer."),
             pool_constant: new_imm("constant_handle", "ir::Constant")

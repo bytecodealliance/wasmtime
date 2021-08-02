@@ -1534,7 +1534,7 @@ pub(crate) fn define(
 
     let H = &Operand::new("H", &entities.heap);
     let p = &Operand::new("p", HeapOffset);
-    let Size = &Operand::new("Size", &imm.uimm32).with_doc("Size in bytes");
+    let Size = &Operand::new("Size", &imm.uimm64).with_doc("Size in bytes");
 
     ig.push(
         Inst::new(

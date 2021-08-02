@@ -2,6 +2,7 @@ use crate::{
     handle_result, wasm_extern_t, wasm_memorytype_t, wasm_store_t, wasmtime_error_t, CStoreContext,
     CStoreContextMut,
 };
+use std::convert::TryFrom;
 use wasmtime::{Extern, Memory};
 
 #[derive(Clone)]
@@ -72,7 +73,7 @@ pub unsafe extern "C" fn wasm_memory_data_size(m: &wasm_memory_t) -> usize {
 
 #[no_mangle]
 pub unsafe extern "C" fn wasm_memory_size(m: &wasm_memory_t) -> wasm_memory_pages_t {
-    m.memory().size(m.ext.store.context())
+    u32::try_from(m.memory().size(m.ext.store.context())).unwrap()
 }
 
 #[no_mangle]
@@ -82,7 +83,7 @@ pub unsafe extern "C" fn wasm_memory_grow(
 ) -> bool {
     let memory = m.memory();
     let mut store = m.ext.store.context_mut();
-    memory.grow(&mut store, delta).is_ok()
+    memory.grow(&mut store, u64::from(delta)).is_ok()
 }
 
 #[no_mangle]
@@ -113,7 +114,7 @@ pub extern "C" fn wasmtime_memory_data_size(store: CStoreContext<'_>, mem: &Memo
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_memory_size(store: CStoreContext<'_>, mem: &Memory) -> u32 {
+pub extern "C" fn wasmtime_memory_size(store: CStoreContext<'_>, mem: &Memory) -> u64 {
     mem.size(store)
 }
 
@@ -121,8 +122,8 @@ pub extern "C" fn wasmtime_memory_size(store: CStoreContext<'_>, mem: &Memory) -
 pub extern "C" fn wasmtime_memory_grow(
     store: CStoreContextMut<'_>,
     mem: &Memory,
-    delta: u32,
-    prev_size: &mut u32,
+    delta: u64,
+    prev_size: &mut u64,
 ) -> Option<Box<wasmtime_error_t>> {
     handle_result(mem.grow(store, delta), |prev| *prev_size = prev)
 }

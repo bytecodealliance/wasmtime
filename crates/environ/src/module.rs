@@ -1,7 +1,6 @@
 //! Data structures for representing decoded wasm modules.
 
 use crate::tunables::Tunables;
-use crate::WASM_MAX_PAGES;
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_wasm::*;
 use indexmap::IndexMap;
@@ -18,7 +17,7 @@ pub enum MemoryStyle {
     /// Addresss space is allocated up front.
     Static {
         /// The number of mapped and unmapped pages.
-        bound: u32,
+        bound: u64,
     },
 }
 
@@ -30,12 +29,17 @@ impl MemoryStyle {
         //
         // If the module doesn't declare an explicit maximum treat it as 4GiB when not
         // requested to use the static memory bound itself as the maximum.
+        let absolute_max_pages = if memory.memory64 {
+            crate::WASM64_MAX_PAGES
+        } else {
+            crate::WASM32_MAX_PAGES
+        };
         let maximum = std::cmp::min(
-            memory.maximum.unwrap_or(WASM_MAX_PAGES),
+            memory.maximum.unwrap_or(absolute_max_pages),
             if tunables.static_memory_bound_is_maximum {
-                std::cmp::min(tunables.static_memory_bound, WASM_MAX_PAGES)
+                std::cmp::min(tunables.static_memory_bound, absolute_max_pages)
             } else {
-                WASM_MAX_PAGES
+                absolute_max_pages
             },
         );
 
@@ -94,7 +98,7 @@ pub struct MemoryInitializer {
     /// Optionally, a global variable giving a base index.
     pub base: Option<GlobalIndex>,
     /// The offset to add to the base.
-    pub offset: u32,
+    pub offset: u64,
     /// The data to write into the linear memory.
     pub data: Box<[u8]>,
 }

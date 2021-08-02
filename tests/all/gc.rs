@@ -303,7 +303,7 @@ fn table_drops_externref() -> anyhow::Result<()> {
         let externref = ExternRef::new(SetFlagOnDrop(flag.clone()));
         Table::new(
             &mut store,
-            TableType::new(ValType::ExternRef, Limits::new(1, None)),
+            TableType::new(ValType::ExternRef, 1, None),
             externref.into(),
         )?;
         drop(store);

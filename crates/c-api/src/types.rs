@@ -1,5 +1,3 @@
-use wasmtime::Limits;
-
 #[repr(C)]
 #[derive(Clone)]
 pub struct wasm_limits_t {
@@ -8,13 +6,12 @@ pub struct wasm_limits_t {
 }
 
 impl wasm_limits_t {
-    pub(crate) fn to_wasmtime(&self) -> Limits {
-        let max = if self.max == u32::max_value() {
+    pub(crate) fn max(&self) -> Option<u32> {
+        if self.max == u32::max_value() {
             None
         } else {
             Some(self.max)
-        };
-        Limits::new(self.min, max)
+        }
     }
 }
 

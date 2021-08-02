@@ -78,16 +78,11 @@ impl StoreLimits {
 }
 
 impl ResourceLimiter for StoreLimits {
-    fn memory_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> bool {
-        // Units provided are in wasm pages, so adjust them to bytes to see if
-        // we are ok to allocate this much.
-        self.alloc((desired - current) as usize * 16 * 1024)
+    fn memory_growing(&mut self, current: usize, desired: usize, _maximum: Option<usize>) -> bool {
+        self.alloc(desired - current)
     }
 
     fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> bool {
-        // Units provided are in table elements, and for now we allocate one
-        // pointer per table element, so use that size for an adjustment into
-        // bytes.
         let delta = (desired - current) as usize * std::mem::size_of::<usize>();
         self.alloc(delta)
     }

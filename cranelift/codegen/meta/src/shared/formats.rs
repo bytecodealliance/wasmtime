@@ -273,7 +273,7 @@ impl Formats {
             heap_addr: Builder::new("HeapAddr")
                 .imm(&entities.heap)
                 .value()
-                .imm(&imm.uimm32)
+                .imm(&imm.uimm64)
                 .build(),
 
             // Accessing a WebAssembly table.

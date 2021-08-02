@@ -73,7 +73,11 @@ impl Mmap {
                 )
             };
             if ptr as isize == -1_isize {
-                bail!("mmap failed: {}", io::Error::last_os_error());
+                bail!(
+                    "mmap failed to allocate {:#x} bytes: {}",
+                    mapping_size,
+                    io::Error::last_os_error()
+                );
             }
 
             Self {
@@ -93,7 +97,11 @@ impl Mmap {
                 )
             };
             if ptr as isize == -1_isize {
-                bail!("mmap failed: {}", io::Error::last_os_error());
+                bail!(
+                    "mmap failed to allocate {:#x} bytes: {}",
+                    mapping_size,
+                    io::Error::last_os_error()
+                );
             }
 
             let mut result = Self {

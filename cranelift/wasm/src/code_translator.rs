@@ -2164,10 +2164,6 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) -> WasmResult<(MemFlags, Value, Offset32)> {
     let addr = state.pop1();
-    // This function will need updates for 64-bit memories
-    debug_assert_eq!(builder.func.dfg.value_type(addr), I32);
-    let offset = u32::try_from(memarg.offset).unwrap();
-
     let heap = state.get_heap(builder.func, memarg.memory, environ)?;
     let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
 
@@ -2222,25 +2218,27 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     // offsets we're checking here are zero. This means that we'll hit the fast
     // path and emit zero conditional traps for bounds checks
     let adjusted_offset = if offset_guard_size == 0 {
-        u64::from(offset) + u64::from(access_size)
+        memarg.offset.saturating_add(u64::from(access_size))
     } else {
         assert!(access_size < 1024);
-        cmp::max(u64::from(offset) / offset_guard_size * offset_guard_size, 1)
+        cmp::max(memarg.offset / offset_guard_size * offset_guard_size, 1)
     };
     debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
-    let check_size = u32::try_from(adjusted_offset).unwrap_or(u32::MAX);
     let base = builder
         .ins()
-        .heap_addr(environ.pointer_type(), heap, addr, check_size);
+        .heap_addr(environ.pointer_type(), heap, addr, adjusted_offset);
 
     // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
     // pointer if necessary.
-    let (addr, offset) = if offset > i32::MAX as u32 {
-        // Offset doesn't fit in the load/store instruction.
-        let adj = builder.ins().iadd_imm(base, i64::from(i32::MAX) + 1);
-        (adj, (offset - (i32::MAX as u32 + 1)) as i32)
-    } else {
-        (base, offset as i32)
+    let (addr, offset) = match i32::try_from(memarg.offset) {
+        Ok(val) => (base, val),
+        Err(_) => {
+            // Note the switch from u64 offset to i64 here, but this should be
+            // ok because we're already guaranteed this won't overflow if we
+            // reach this point after the `heap_addr` instruction above.
+            let adj = builder.ins().iadd_imm(base, memarg.offset as i64);
+            (adj, 0)
+        }
     };
 
     // Note that we don't set `is_aligned` here, even if the load instruction's

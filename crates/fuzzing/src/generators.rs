@@ -149,4 +149,8 @@ impl wasm_smith::Config for WasmtimeDefaultConfig {
     fn bulk_memory_enabled(&self) -> bool {
         true
     }
+
+    fn memory64_enabled(&self) -> bool {
+        true
+    }
 }

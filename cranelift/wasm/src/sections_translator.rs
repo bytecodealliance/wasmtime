@@ -54,11 +54,11 @@ fn entity_type(
 }
 
 fn memory(ty: MemoryType) -> Memory {
-    assert!(!ty.memory64);
     Memory {
-        minimum: ty.initial.try_into().unwrap(),
-        maximum: ty.maximum.map(|i| i.try_into().unwrap()),
+        minimum: ty.initial,
+        maximum: ty.maximum,
         shared: ty.shared,
+        memory64: ty.memory64,
     }
 }
 
@@ -420,7 +420,8 @@ pub fn parse_data_section<'data>(
             } => {
                 let mut init_expr_reader = init_expr.get_binary_reader();
                 let (base, offset) = match init_expr_reader.read_operator()? {
-                    Operator::I32Const { value } => (None, value as u32),
+                    Operator::I32Const { value } => (None, value as u64),
+                    Operator::I64Const { value } => (None, value as u64),
                     Operator::GlobalGet { global_index } => {
                         (Some(GlobalIndex::from_u32(global_index)), 0)
                     }

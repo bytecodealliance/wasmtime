@@ -52,20 +52,20 @@ fn link_twice_bad() -> Result<()> {
     assert!(linker.define("g", "3", global.clone()).is_err());
 
     // memories
-    let ty = MemoryType::new(Limits::new(1, None));
+    let ty = MemoryType::new(1, None);
     let memory = Memory::new(&mut store, ty)?;
     linker.define("m", "", memory.clone())?;
     assert!(linker.define("m", "", memory.clone()).is_err());
-    let ty = MemoryType::new(Limits::new(2, None));
+    let ty = MemoryType::new(2, None);
     let memory = Memory::new(&mut store, ty)?;
     assert!(linker.define("m", "", memory.clone()).is_err());
 
     // tables
-    let ty = TableType::new(ValType::FuncRef, Limits::new(1, None));
+    let ty = TableType::new(ValType::FuncRef, 1, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
     linker.define("t", "", table.clone())?;
     assert!(linker.define("t", "", table.clone()).is_err());
-    let ty = TableType::new(ValType::FuncRef, Limits::new(2, None));
+    let ty = TableType::new(ValType::FuncRef, 2, None);
     let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
     assert!(linker.define("t", "", table.clone()).is_err());
     Ok(())

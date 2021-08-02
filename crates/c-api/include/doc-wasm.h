@@ -594,11 +594,17 @@
  *
  * The caller is responsible for deallocating the returned type.
  *
+ * For compatibility with memory64 it's recommended to use
+ * #wasmtime_memorytype_new instead.
+ *
  * \fn const wasm_limits_t* wasm_memorytype_limits(const wasm_memorytype_t *);
  * \brief Returns the limits of this memory.
  *
  * The returned #wasm_limits_t is owned by the #wasm_memorytype_t parameter, the
  * caller should not deallocate it.
+ *
+ * For compatibility with memory64 it's recommended to use
+ * #wasmtime_memorytype_maximum or #wasmtime_memorytype_minimum instead.
  */
 
 /**

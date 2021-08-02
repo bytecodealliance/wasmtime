@@ -170,8 +170,8 @@ fn imports_exports() -> Result<()> {
     assert_eq!(mem_export.name(), "m");
     match mem_export.ty() {
         ExternType::Memory(m) => {
-            assert_eq!(m.limits().min(), 1);
-            assert_eq!(m.limits().max(), None);
+            assert_eq!(m.minimum(), 1);
+            assert_eq!(m.maximum(), None);
         }
         _ => panic!("unexpected type"),
     }
@@ -179,9 +179,9 @@ fn imports_exports() -> Result<()> {
     assert_eq!(table_export.name(), "t");
     match table_export.ty() {
         ExternType::Table(t) => {
-            assert_eq!(t.limits().min(), 1);
-            assert_eq!(t.limits().max(), None);
-            assert_eq!(*t.element(), ValType::FuncRef);
+            assert_eq!(t.minimum(), 1);
+            assert_eq!(t.maximum(), None);
+            assert_eq!(t.element(), ValType::FuncRef);
         }
         _ => panic!("unexpected type"),
     }
