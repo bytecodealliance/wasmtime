@@ -202,23 +202,12 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
             ("simd", _) if cfg!(feature = "old-x86-backend") => return true,
             // No simd support yet for s390x.
             ("simd", _) if platform_is_s390x() => return true,
-            // These are new instructions that are only known to be supported for x64.
-            ("simd", "simd_i16x8_extadd_pairwise_i8x16")
-            | ("simd", "simd_i32x4_extadd_pairwise_i16x8")
-                if !platform_is_x64() =>
-            {
-                return true
-            }
             _ => {}
         },
         _ => panic!("unrecognized strategy"),
     }
 
     false
-}
-
-fn platform_is_x64() -> bool {
-    env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "x86_64"
 }
 
 fn platform_is_s390x() -> bool {
