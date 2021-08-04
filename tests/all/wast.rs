@@ -25,6 +25,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     // by reference types.
     let reftypes = simd || wast.iter().any(|s| s == "reference-types");
 
+    // Threads aren't implemented in the old backend, so skip those tests.
+    if threads && cfg!(feature = "old-x86-backend") {
+        return Ok(());
+    }
+
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
         .wasm_bulk_memory(bulk_mem)
