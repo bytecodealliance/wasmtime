@@ -38,11 +38,11 @@ macro_rules! foreach_builtin_function {
             /// Returns an index for Wasm's `global.get` instruction for `externref`s.
             externref_global_set(vmctx, i32, reference) -> ();
             /// Returns an index for wasm's `memory.atomic.notify` instruction.
-            memory_atomic_notify(vmctx, i32, i32, i32) -> (i32);
+            memory_atomic_notify(vmctx, i32, pointer, i32) -> (i32);
             /// Returns an index for wasm's `memory.atomic.wait32` instruction.
-            memory_atomic_wait32(vmctx, i32, i32, i32, i64) -> (i32);
+            memory_atomic_wait32(vmctx, i32, pointer, i32, i64) -> (i32);
             /// Returns an index for wasm's `memory.atomic.wait64` instruction.
-            memory_atomic_wait64(vmctx, i32, i32, i64, i64) -> (i32);
+            memory_atomic_wait64(vmctx, i32, pointer, i64, i64) -> (i32);
             /// Invoked when fuel has run out while executing a function.
             out_of_gas(vmctx) -> ();
         }

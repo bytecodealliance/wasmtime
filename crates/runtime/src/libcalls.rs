@@ -57,11 +57,14 @@
 //!   ```
 
 use crate::externref::VMExternRef;
+use crate::instance::Instance;
 use crate::table::Table;
 use crate::traphandlers::{raise_lib_trap, Trap};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
+use backtrace::Backtrace;
 use std::mem;
 use std::ptr::{self, NonNull};
+use wasmtime_environ::ir::TrapCode;
 use wasmtime_environ::wasm::{
     DataIndex, ElemIndex, GlobalIndex, MemoryIndex, TableElementType, TableIndex,
 };
@@ -449,40 +452,103 @@ impl std::fmt::Display for Unimplemented {
 
 /// Implementation of `memory.atomic.notify` for locally defined memories.
 pub unsafe extern "C" fn wasmtime_memory_atomic_notify(
-    _vmctx: *mut VMContext,
-    _memory_index: u32,
-    _addr: u32,
+    vmctx: *mut VMContext,
+    memory_index: u32,
+    addr: usize,
     _count: u32,
 ) -> u32 {
-    raise_lib_trap(Trap::User(Box::new(Unimplemented(
-        "wasm atomics (fn wasmtime_memory_atomic_notify) unsupported",
-    ))));
+    let result = {
+        let memory = MemoryIndex::from_u32(memory_index);
+        let instance = (*vmctx).instance();
+        // this should never overflow since addr + 4 either hits a guard page
+        // or it's been validated to be in-bounds already. Double-check for now
+        // just to be sure.
+        let addr_to_check = addr.checked_add(4).unwrap();
+        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
+            Err(Trap::User(Box::new(Unimplemented(
+                "wasm atomics (fn wasmtime_memory_atomic_notify) unsupported",
+            ))))
+        })
+    };
+    match result {
+        Ok(n) => n,
+        Err(e) => raise_lib_trap(e),
+    }
 }
 
 /// Implementation of `memory.atomic.wait32` for locally defined memories.
 pub unsafe extern "C" fn wasmtime_memory_atomic_wait32(
-    _vmctx: *mut VMContext,
-    _memory_index: u32,
-    _addr: u32,
+    vmctx: *mut VMContext,
+    memory_index: u32,
+    addr: usize,
     _expected: u32,
     _timeout: u64,
 ) -> u32 {
-    raise_lib_trap(Trap::User(Box::new(Unimplemented(
-        "wasm atomics (fn wasmtime_memory_atomic_wait32) unsupported",
-    ))));
+    let result = {
+        let memory = MemoryIndex::from_u32(memory_index);
+        let instance = (*vmctx).instance();
+        // see wasmtime_memory_atomic_notify for why this shouldn't overflow
+        // but we still double-check
+        let addr_to_check = addr.checked_add(4).unwrap();
+        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
+            Err(Trap::User(Box::new(Unimplemented(
+                "wasm atomics (fn wasmtime_memory_atomic_wait32) unsupported",
+            ))))
+        })
+    };
+    match result {
+        Ok(n) => n,
+        Err(e) => raise_lib_trap(e),
+    }
 }
 
 /// Implementation of `memory.atomic.wait64` for locally defined memories.
 pub unsafe extern "C" fn wasmtime_memory_atomic_wait64(
-    _vmctx: *mut VMContext,
-    _memory_index: u32,
-    _addr: u32,
+    vmctx: *mut VMContext,
+    memory_index: u32,
+    addr: usize,
     _expected: u64,
     _timeout: u64,
 ) -> u32 {
-    raise_lib_trap(Trap::User(Box::new(Unimplemented(
-        "wasm atomics (fn wasmtime_memory_atomic_wait32) unsupported",
-    ))));
+    let result = {
+        let memory = MemoryIndex::from_u32(memory_index);
+        let instance = (*vmctx).instance();
+        // see wasmtime_memory_atomic_notify for why this shouldn't overflow
+        // but we still double-check
+        let addr_to_check = addr.checked_add(8).unwrap();
+        validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
+            Err(Trap::User(Box::new(Unimplemented(
+                "wasm atomics (fn wasmtime_memory_atomic_wait64) unsupported",
+            ))))
+        })
+    };
+    match result {
+        Ok(n) => n,
+        Err(e) => raise_lib_trap(e),
+    }
+}
+
+/// For atomic operations we still check the actual address despite this also
+/// being checked via the `heap_addr` instruction in cranelift. The reason for
+/// that is because the `heap_addr` instruction can defer to a later segfault to
+/// actually recognize the out-of-bounds whereas once we're running Rust code
+/// here we don't want to segfault.
+///
+/// In the situations where bounds checks were elided in JIT code (because oob
+/// would then be later guaranteed to segfault) this manual check is here
+/// so we don't segfault from Rust.
+unsafe fn validate_atomic_addr(
+    instance: &Instance,
+    memory: MemoryIndex,
+    addr: usize,
+) -> Result<(), Trap> {
+    if addr > instance.get_memory(memory).current_length {
+        return Err(Trap::Wasm {
+            trap_code: TrapCode::HeapOutOfBounds,
+            backtrace: Backtrace::new_unresolved(),
+        });
+    }
+    Ok(())
 }
 
 /// Hook for when an instance runs out of fuel.
