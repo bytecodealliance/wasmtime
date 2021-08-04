@@ -302,9 +302,15 @@ impl<T> WastContext<T> {
             }
             AssertInvalid {
                 span: _,
-                mut module,
+                module,
                 message,
             } => {
+                let mut module = match module {
+                    wast::QuoteModule::Module(m) => m,
+                    // This is a `*.wat` parser test which we're not
+                    // interested in.
+                    wast::QuoteModule::Quote(_) => return Ok(()),
+                };
                 let bytes = module.encode()?;
                 let err = match self.module(None, &bytes) {
                     Ok(()) => bail!("expected module to fail to build"),
@@ -354,6 +360,7 @@ impl<T> WastContext<T> {
                     )
                 }
             }
+            AssertUncaughtException { .. } => bail!("unimplemented assert_uncaught_exception"),
         }
 
         Ok(())

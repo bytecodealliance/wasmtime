@@ -440,7 +440,7 @@ impl From<WasmMemoryImmediate> for MemoryImmediate {
         assert_eq!(other.memory, 0);
         MemoryImmediate {
             flags: other.align.into(),
-            offset: other.offset,
+            offset: other.offset as u32,
         }
     }
 }

@@ -2,10 +2,10 @@
 //! to deal with each part of it.
 use crate::environ::{ModuleEnvironment, WasmResult};
 use crate::sections_translator::{
-    parse_alias_section, parse_data_section, parse_element_section, parse_event_section,
-    parse_export_section, parse_function_section, parse_global_section, parse_import_section,
-    parse_instance_section, parse_memory_section, parse_name_section, parse_start_section,
-    parse_table_section, parse_type_section,
+    parse_alias_section, parse_data_section, parse_element_section, parse_export_section,
+    parse_function_section, parse_global_section, parse_import_section, parse_instance_section,
+    parse_memory_section, parse_name_section, parse_start_section, parse_table_section,
+    parse_tag_section, parse_type_section,
 };
 use crate::state::ModuleTranslationState;
 use cranelift_codegen::timing;
@@ -59,9 +59,9 @@ pub fn translate_module<'data>(
                 parse_memory_section(memories, environ)?;
             }
 
-            Payload::EventSection(events) => {
-                validator.event_section(&events)?;
-                parse_event_section(events, environ)?;
+            Payload::TagSection(tags) => {
+                validator.tag_section(&tags)?;
+                parse_tag_section(tags, environ)?;
             }
 
             Payload::GlobalSection(globals) => {

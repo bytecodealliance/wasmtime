@@ -16,5 +16,5 @@ cranelift-wasm = { path = "../../cranelift/wasm", version = "0.76.0" }
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.76.0" }
 cranelift-frontend = { path = "../../cranelift/frontend", version = "0.76.0" }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.76.0" }
-wasmparser = "0.79.0"
+wasmparser = "0.80.0"
 target-lexicon = "0.12"

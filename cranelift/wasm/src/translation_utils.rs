@@ -95,8 +95,8 @@ entity_impl!(InstanceIndex);
 /// Index type of an event inside the WebAssembly module.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct EventIndex(u32);
-entity_impl!(EventIndex);
+pub struct TagIndex(u32);
+entity_impl!(TagIndex);
 
 /// Specialized index for just module types.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
@@ -139,7 +139,7 @@ pub enum EntityType {
     /// A linear memory with the specified limits
     Memory(Memory),
     /// An event definition.
-    Event(Event),
+    Tag(Tag),
     /// A table with the specified element type and limits
     Table(Table),
     /// A function type where the index points to the type section and records a
@@ -236,7 +236,7 @@ pub struct Memory {
 /// WebAssembly event.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct Event {
+pub struct Tag {
     /// The event signature type.
     pub ty: TypeIndex,
 }

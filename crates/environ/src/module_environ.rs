@@ -339,7 +339,7 @@ impl<'data> ModuleEnvironment<'data> {
                 EntityIndex::Instance(self.result.module.instances.push(ty))
             }
             EntityType::Module(ty) => EntityIndex::Module(self.result.module.modules.push(ty)),
-            EntityType::Event(_) => unimplemented!(),
+            EntityType::Tag(_) => unimplemented!(),
         }
     }
 
@@ -1088,7 +1088,7 @@ and for re-adding support for interface types you can see this issue:
                     EntityType::Module(sig) => {
                         self.result.module.modules.push(*sig);
                     }
-                    EntityType::Event(_) => unimplemented!(),
+                    EntityType::Tag(_) => unimplemented!(),
                 }
                 self.result
                     .module

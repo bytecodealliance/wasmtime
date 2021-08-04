@@ -10,9 +10,9 @@
 use crate::environ::{Alias, ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
-    tabletype_to_type, type_to_type, DataIndex, ElemIndex, EntityIndex, EntityType, Event,
-    EventIndex, FuncIndex, Global, GlobalIndex, GlobalInit, InstanceIndex, Memory, MemoryIndex,
-    ModuleIndex, Table, TableElementType, TableIndex, TypeIndex,
+    tabletype_to_type, type_to_type, DataIndex, ElemIndex, EntityIndex, EntityType, FuncIndex,
+    Global, GlobalIndex, GlobalInit, InstanceIndex, Memory, MemoryIndex, ModuleIndex, Table,
+    TableElementType, TableIndex, Tag, TagIndex, TypeIndex,
 };
 use crate::wasm_unsupported;
 use core::convert::TryFrom;
@@ -24,10 +24,10 @@ use std::boxed::Box;
 use std::vec::Vec;
 use wasmparser::{
     self, Data, DataKind, DataSectionReader, Element, ElementItem, ElementItems, ElementKind,
-    ElementSectionReader, EventSectionReader, EventType, Export, ExportSectionReader, ExternalKind,
-    FunctionSectionReader, GlobalSectionReader, GlobalType, ImportSectionEntryType,
-    ImportSectionReader, MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator,
-    TableSectionReader, TableType, TypeDef, TypeSectionReader,
+    ElementSectionReader, Export, ExportSectionReader, ExternalKind, FunctionSectionReader,
+    GlobalSectionReader, GlobalType, ImportSectionEntryType, ImportSectionReader,
+    MemorySectionReader, MemoryType, NameSectionReader, Naming, Operator, TableSectionReader,
+    TableType, TagSectionReader, TagType, TypeDef, TypeSectionReader,
 };
 
 fn entity_type(
@@ -45,7 +45,7 @@ fn entity_type(
             EntityType::Instance(environ.type_to_instance_type(TypeIndex::from_u32(sig))?)
         }
         ImportSectionEntryType::Memory(ty) => EntityType::Memory(memory(ty)),
-        ImportSectionEntryType::Event(evt) => EntityType::Event(event(evt)),
+        ImportSectionEntryType::Tag(t) => EntityType::Tag(tag(t)),
         ImportSectionEntryType::Global(ty) => {
             EntityType::Global(global(ty, environ, GlobalInit::Import)?)
         }
@@ -54,19 +54,16 @@ fn entity_type(
 }
 
 fn memory(ty: MemoryType) -> Memory {
-    match ty {
-        MemoryType::M32 { limits, shared } => Memory {
-            minimum: limits.initial,
-            maximum: limits.maximum,
-            shared: shared,
-        },
-        // FIXME(#2361)
-        MemoryType::M64 { .. } => unimplemented!(),
+    assert!(!ty.memory64);
+    Memory {
+        minimum: ty.initial.try_into().unwrap(),
+        maximum: ty.maximum.map(|i| i.try_into().unwrap()),
+        shared: ty.shared,
     }
 }
 
-fn event(e: EventType) -> Event {
-    Event {
+fn tag(e: TagType) -> Tag {
+    Tag {
         ty: TypeIndex::from_u32(e.type_index),
     }
 }
@@ -78,8 +75,8 @@ fn table(ty: TableType, environ: &mut dyn ModuleEnvironment<'_>) -> WasmResult<T
             Some(t) => TableElementType::Val(t),
             None => TableElementType::Func,
         },
-        minimum: ty.limits.initial,
-        maximum: ty.limits.maximum,
+        minimum: ty.initial,
+        maximum: ty.maximum,
     })
 }
 
@@ -174,8 +171,8 @@ pub fn parse_import_section<'data>(
             ImportSectionEntryType::Memory(ty) => {
                 environ.declare_memory_import(memory(ty), import.module, import.field)?;
             }
-            ImportSectionEntryType::Event(e) => {
-                environ.declare_event_import(event(e), import.module, import.field)?;
+            ImportSectionEntryType::Tag(e) => {
+                environ.declare_tag_import(tag(e), import.module, import.field)?;
             }
             ImportSectionEntryType::Global(ty) => {
                 let ty = global(ty, environ, GlobalInit::Import)?;
@@ -243,16 +240,16 @@ pub fn parse_memory_section(
     Ok(())
 }
 
-/// Parses the Event section of the wasm module.
-pub fn parse_event_section(
-    events: EventSectionReader,
+/// Parses the Tag section of the wasm module.
+pub fn parse_tag_section(
+    tags: TagSectionReader,
     environ: &mut dyn ModuleEnvironment,
 ) -> WasmResult<()> {
-    environ.reserve_events(events.get_count())?;
+    environ.reserve_tags(tags.get_count())?;
 
-    for entry in events {
-        let event = event(entry?);
-        environ.declare_event(event)?;
+    for entry in tags {
+        let tag = tag(entry?);
+        environ.declare_tag(tag)?;
     }
 
     Ok(())
@@ -321,7 +318,7 @@ pub fn parse_export_section<'data>(
             ExternalKind::Memory => {
                 environ.declare_memory_export(MemoryIndex::new(index), field)?
             }
-            ExternalKind::Event => environ.declare_event_export(EventIndex::new(index), field)?,
+            ExternalKind::Tag => environ.declare_tag_export(TagIndex::new(index), field)?,
             ExternalKind::Global => {
                 environ.declare_global_export(GlobalIndex::new(index), field)?
             }
@@ -473,20 +470,31 @@ pub fn parse_name_section<'data>(
                 environ.declare_module_name(name);
             }
             wasmparser::Name::Local(l) => {
-                let mut reader = l.get_function_local_reader()?;
-                for _ in 0..reader.get_count() {
+                let mut reader = l.get_indirect_map()?;
+                for _ in 0..reader.get_indirect_count() {
                     let f = reader.read()?;
-                    if f.func_index == u32::max_value() {
+                    if f.indirect_index == u32::max_value() {
                         continue;
                     }
                     let mut map = f.get_map()?;
                     for _ in 0..map.get_count() {
                         let Naming { index, name } = map.read()?;
-                        environ.declare_local_name(FuncIndex::from_u32(f.func_index), index, name)
+                        environ.declare_local_name(
+                            FuncIndex::from_u32(f.indirect_index),
+                            index,
+                            name,
+                        )
                     }
                 }
             }
-            wasmparser::Name::Unknown { .. } => {}
+            wasmparser::Name::Label(_)
+            | wasmparser::Name::Type(_)
+            | wasmparser::Name::Table(_)
+            | wasmparser::Name::Global(_)
+            | wasmparser::Name::Memory(_)
+            | wasmparser::Name::Element(_)
+            | wasmparser::Name::Data(_)
+            | wasmparser::Name::Unknown { .. } => {}
         }
     }
     Ok(())
@@ -516,7 +524,7 @@ pub fn parse_instance_section<'data>(
                     ExternalKind::Instance => {
                         EntityIndex::Instance(InstanceIndex::from_u32(arg.index))
                     }
-                    ExternalKind::Event => unimplemented!(),
+                    ExternalKind::Tag => unimplemented!(),
 
                     // this won't pass validation
                     ExternalKind::Type => unreachable!(),
