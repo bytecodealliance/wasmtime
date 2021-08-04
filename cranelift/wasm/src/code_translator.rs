@@ -2260,6 +2260,36 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<(MemFlags, Value)> {
+    // Atomic addresses must all be aligned correctly, and for now we check
+    // alignment before we check out-of-bounds-ness. The order of this check may
+    // need to be updated depending on the outcome of the official threads
+    // proposal itself.
+    //
+    // Note that with an offset>0 we generate an `iadd_imm` where the result is
+    // thrown away after the offset check. This may truncate the offset and the
+    // result may overflow as well, but those conditions won't affect the
+    // alignment check itself. This can probably be optimized better and we
+    // should do so in the future as well.
+    if loaded_bytes > 1 {
+        let addr = state.pop1(); // "peek" via pop then push
+        state.push1(addr);
+        let effective_addr = if memarg.offset == 0 {
+            addr
+        } else {
+            builder
+                .ins()
+                .iadd_imm(addr, i64::from(memarg.offset as i32))
+        };
+        debug_assert!(loaded_bytes.is_power_of_two());
+        let misalignment = builder
+            .ins()
+            .band_imm(effective_addr, i64::from(loaded_bytes - 1));
+        let f = builder.ins().ifcmp_imm(misalignment, 0);
+        builder
+            .ins()
+            .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
+    }
+
     let (flags, mut addr, offset) = prepare_addr(memarg, loaded_bytes, builder, state, environ)?;
 
     // Currently cranelift IR operations for atomics don't have offsets
@@ -2267,20 +2297,8 @@ fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     // that via the `prepare_addr` helper we know that if execution reaches
     // this point that this addition won't overflow.
     let offset: i64 = offset.into();
-    if offset > 0 {
+    if offset != 0 {
         addr = builder.ins().iadd_imm(addr, offset);
-    }
-
-    // Atomic addresses in wasm currently always verify that their access is
-    // aligned, so we need to emit a check which ensures that alignment is
-    // respected.
-    if loaded_bytes > 1 {
-        debug_assert!(loaded_bytes.is_power_of_two());
-        let misalignment = builder.ins().band_imm(addr, i64::from(loaded_bytes - 1));
-        let f = builder.ins().ifcmp_imm(misalignment, 0);
-        builder
-            .ins()
-            .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
     }
 
     Ok((flags, addr))
