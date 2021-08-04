@@ -21,10 +21,13 @@ fn run_iter(
 
     let run = instance.get_func(&mut store, "run").unwrap();
     let result = run
-        .call(&mut store, &[
-            wasmtime::Val::I32(i32::try_from(ptr).unwrap()),
-            wasmtime::Val::I32(5),
-        ])
+        .call(
+            &mut store,
+            &[
+                wasmtime::Val::I32(i32::try_from(ptr).unwrap()),
+                wasmtime::Val::I32(5),
+            ],
+        )
         .unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].i32(), Some(0));
@@ -32,7 +35,9 @@ fn run_iter(
     let dealloc = instance
         .get_typed_func::<(u32, u32, u32), (), _>(&mut store, "dealloc")
         .unwrap();
-    dealloc.call(&mut store, (ptr as u32, ua.len() as u32, 1)).unwrap();
+    dealloc
+        .call(&mut store, (ptr as u32, ua.len() as u32, 1))
+        .unwrap();
 }
 
 fn bench_uap(c: &mut Criterion) {
@@ -41,7 +46,9 @@ fn bench_uap(c: &mut Criterion) {
         let engine = wasmtime::Engine::default();
         let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
         let mut store = wasmtime::Store::new(&engine, wasi);
-        let module = wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.control.wasm")).unwrap();
+        let module =
+            wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.control.wasm"))
+                .unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
         wasmtime_wasi::sync::add_to_linker(&mut linker, |s| s).unwrap();
 
@@ -51,7 +58,8 @@ fn bench_uap(c: &mut Criterion) {
         let engine = wasmtime::Engine::default();
         let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
         let mut store = wasmtime::Store::new(&engine, wasi);
-        let module =wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.wizer.wasm")).unwrap();
+        let module =
+            wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.wizer.wasm")).unwrap();
         let mut linker = wasmtime::Linker::new(&engine);
         wasmtime_wasi::sync::add_to_linker(&mut linker, |s| s).unwrap();
 
