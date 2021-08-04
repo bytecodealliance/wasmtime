@@ -531,10 +531,8 @@ impl Wizer {
         }
         for dir in &self.dirs {
             log::debug!("Preopening directory: {}", dir.display());
-            let preopened = unsafe {
-                cap_std::fs::Dir::open_ambient_dir(dir)
-                    .with_context(|| format!("failed to open directory: {}", dir.display()))?
-            };
+            let preopened = wasmtime_wasi::sync::Dir::open_ambient_dir(dir, wasmtime_wasi::sync::ambient_authority())
+                .with_context(|| format!("failed to open directory: {}", dir.display()))?;
             ctx = ctx.preopened_dir(preopened, dir)?;
         }
         Ok(Some(ctx.build()))

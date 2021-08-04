@@ -1,25 +1,27 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::convert::TryFrom;
 
-fn run_iter(linker: &wasmtime::Linker, module: &wasmtime::Module) {
-    let instance = linker.instantiate(module).unwrap();
+fn run_iter(
+    linker: &wasmtime::Linker<wasmtime_wasi::WasiCtx>,
+    module: &wasmtime::Module,
+    mut store: &mut wasmtime::Store<wasmtime_wasi::WasiCtx>,
+) {
+    let instance = linker.instantiate(&mut store, module).unwrap();
 
     let ua = "Mozilla/5.0 (X11; Linux x86_64; rv:85.0) Gecko/20100101 Firefox/85.0";
 
     let alloc = instance
-        .get_func("alloc")
-        .unwrap()
-        .get2::<u32, u32, u32>()
+        .get_typed_func::<(u32, u32), u32, _>(&mut store, "alloc")
         .unwrap();
-    let ptr = alloc(ua.len() as u32, 1).unwrap() as usize;
+    let ptr = alloc.call(&mut store, (ua.len() as u32, 1)).unwrap() as usize;
 
-    let memory = instance.get_memory("memory").unwrap();
-    let data = unsafe { memory.data_unchecked_mut() };
+    let memory = instance.get_memory(&mut store, "memory").unwrap();
+    let data = memory.data_mut(&mut store);
     data[ptr..ptr + ua.len()].copy_from_slice(ua.as_bytes());
 
-    let run = instance.get_func("run").unwrap();
+    let run = instance.get_func(&mut store, "run").unwrap();
     let result = run
-        .call(&[
+        .call(&mut store, &[
             wasmtime::Val::I32(i32::try_from(ptr).unwrap()),
             wasmtime::Val::I32(5),
         ])
@@ -28,37 +30,32 @@ fn run_iter(linker: &wasmtime::Linker, module: &wasmtime::Module) {
     assert_eq!(result[0].i32(), Some(0));
 
     let dealloc = instance
-        .get_func("dealloc")
-        .unwrap()
-        .get3::<u32, u32, u32, ()>()
+        .get_typed_func::<(u32, u32, u32), (), _>(&mut store, "dealloc")
         .unwrap();
-    dealloc(ptr as u32, ua.len() as u32, 1).unwrap();
-}
-
-fn linker(store: &wasmtime::Store) -> wasmtime::Linker {
-    let mut linker = wasmtime::Linker::new(&store);
-    let ctx = wasmtime_wasi::WasiCtx::new(None::<String>).unwrap();
-    let wasi = wasmtime_wasi::Wasi::new(&store, ctx);
-    wasi.add_to_linker(&mut linker).unwrap();
-    linker
+    dealloc.call(&mut store, (ptr as u32, ua.len() as u32, 1)).unwrap();
 }
 
 fn bench_uap(c: &mut Criterion) {
     let mut group = c.benchmark_group("uap");
     group.bench_function("control", |b| {
-        let store = wasmtime::Store::default();
-        let module =
-            wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.control.wasm"))
-                .unwrap();
-        let linker = linker(&store);
-        b.iter(|| run_iter(&linker, &module));
+        let engine = wasmtime::Engine::default();
+        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
+        let mut store = wasmtime::Store::new(&engine, wasi);
+        let module = wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.control.wasm")).unwrap();
+        let mut linker = wasmtime::Linker::new(&engine);
+        wasmtime_wasi::sync::add_to_linker(&mut linker, |s| s).unwrap();
+
+        b.iter(|| run_iter(&linker, &module, &mut store));
     });
     group.bench_function("wizer", |b| {
-        let store = wasmtime::Store::default();
-        let module =
-            wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.wizer.wasm")).unwrap();
-        let linker = linker(&store);
-        b.iter(|| run_iter(&linker, &module));
+        let engine = wasmtime::Engine::default();
+        let wasi = wasmtime_wasi::WasiCtxBuilder::new().build();
+        let mut store = wasmtime::Store::new(&engine, wasi);
+        let module =wasmtime::Module::new(store.engine(), &include_bytes!("uap_bench.wizer.wasm")).unwrap();
+        let mut linker = wasmtime::Linker::new(&engine);
+        wasmtime_wasi::sync::add_to_linker(&mut linker, |s| s).unwrap();
+
+        b.iter(|| run_iter(&linker, &module, &mut store));
     });
     group.finish();
 }
