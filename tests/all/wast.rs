@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::{Condvar, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, InstanceLimits, ModuleLimits,
     PoolingAllocationStrategy, Store, Strategy,
@@ -47,7 +48,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         cfg.static_memory_maximum_size(0);
     }
 
-    if pooling {
+    let _pooling_lock = if pooling {
         // The limits here are crafted such that the wast tests should pass.
         // However, these limits may become insufficient in the future as the wast tests change.
         // If a wast test fails because of a limit being "exceeded" or if memory/table
@@ -69,11 +70,60 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
                 ..Default::default()
             },
         });
-    }
+        Some(lock_pooling())
+    } else {
+        None
+    };
 
     let store = Store::new(&Engine::new(&cfg)?, ());
     let mut wast_context = WastContext::new(store);
     wast_context.register_spectest()?;
     wast_context.run_file(wast)?;
     Ok(())
+}
+
+// The pooling tests make about 6TB of address space reservation which means
+// that we shouldn't let too many of them run concurrently at once. On
+// high-cpu-count systems (e.g. 80 threads) this leads to mmap failures because
+// presumably too much of the address space has been reserved with our limits
+// specified above. By keeping the number of active pooling-related tests to a
+// specified maximum we can put a cap on the virtual address space reservations
+// made.
+fn lock_pooling() -> impl Drop {
+    const MAX_CONCURRENT_POOLING: u32 = 8;
+
+    lazy_static::lazy_static! {
+        static ref ACTIVE: MyState = MyState::default();
+    }
+
+    #[derive(Default)]
+    struct MyState {
+        lock: Mutex<u32>,
+        waiters: Condvar,
+    }
+
+    impl MyState {
+        fn lock(&self) -> impl Drop + '_ {
+            let state = self.lock.lock().unwrap();
+            let mut state = self
+                .waiters
+                .wait_while(state, |cnt| *cnt >= MAX_CONCURRENT_POOLING)
+                .unwrap();
+            *state += 1;
+            LockGuard { state: self }
+        }
+    }
+
+    struct LockGuard<'a> {
+        state: &'a MyState,
+    }
+
+    impl Drop for LockGuard<'_> {
+        fn drop(&mut self) {
+            *self.state.lock.lock().unwrap() -= 1;
+            self.state.waiters.notify_one();
+        }
+    }
+
+    ACTIVE.lock()
 }
