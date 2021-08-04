@@ -613,6 +613,10 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// for the same index.  Whether the waited-on value is 32- or 64-bit can be
     /// determined by examining the type of `expected`, which must be only I32 or I64.
     ///
+    /// Note that the `addr` here is the host linear memory address rather
+    /// than a relative wasm linear memory address. The type of this value is
+    /// the same as the host's pointer.
+    ///
     /// Returns an i32, which is negative if the helper call failed.
     fn translate_atomic_wait(
         &mut self,
@@ -628,6 +632,10 @@ pub trait FuncEnvironment: TargetEnvironment {
     /// The `index` provided identifies the linear memory containing the value
     /// to wait on, and `heap` is the heap reference returned by `make_heap`
     /// for the same index.
+    ///
+    /// Note that the `addr` here is the host linear memory address rather
+    /// than a relative wasm linear memory address. The type of this value is
+    /// the same as the host's pointer.
     ///
     /// Returns an i64, which is negative if the helper call failed.
     fn translate_atomic_notify(

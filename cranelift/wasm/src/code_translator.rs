@@ -694,32 +694,32 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             translate_load(memarg, ir::Opcode::Load, I8X16, builder, state, environ)?;
         }
         Operator::V128Load8x8S { memarg } => {
-            let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
+            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().sload8x8(flags, base, offset);
             state.push1(loaded);
         }
         Operator::V128Load8x8U { memarg } => {
-            let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
+            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().uload8x8(flags, base, offset);
             state.push1(loaded);
         }
         Operator::V128Load16x4S { memarg } => {
-            let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
+            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().sload16x4(flags, base, offset);
             state.push1(loaded);
         }
         Operator::V128Load16x4U { memarg } => {
-            let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
+            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().uload16x4(flags, base, offset);
             state.push1(loaded);
         }
         Operator::V128Load32x2S { memarg } => {
-            let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
+            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().sload32x2(flags, base, offset);
             state.push1(loaded);
         }
         Operator::V128Load32x2U { memarg } => {
-            let (flags, base, offset) = prepare_load(memarg, 8, builder, state, environ)?;
+            let (flags, base, offset) = prepare_addr(memarg, 8, builder, state, environ)?;
             let loaded = builder.ins().uload32x2(flags, base, offset);
             state.push1(loaded);
         }
@@ -1064,8 +1064,8 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let timeout = state.pop1(); // 64 (fixed)
             let expected = state.pop1(); // 32 or 64 (per the `Ixx` in `IxxAtomicWait`)
-            let addr = state.pop1(); // 32 (fixed)
-            let addr = fold_atomic_mem_addr(addr, memarg, implied_ty, builder);
+            let (_flags, addr) =
+                prepare_atomic_addr(memarg, implied_ty.bytes(), builder, state, environ)?;
             assert!(builder.func.dfg.value_type(expected) == implied_ty);
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
@@ -1083,8 +1083,10 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let heap_index = MemoryIndex::from_u32(memarg.memory);
             let heap = state.get_heap(builder.func, memarg.memory, environ)?;
             let count = state.pop1(); // 32 (fixed)
-            let addr = state.pop1(); // 32 (fixed)
-            let addr = fold_atomic_mem_addr(addr, memarg, I32, builder);
+
+            // `memory.atomic.notify` is defined to have an access size of 4
+            // bytes in the spec, even though it doesn't necessarily access memory.
+            let (_flags, addr) = prepare_atomic_addr(memarg, 4, builder, state, environ)?;
             let res =
                 environ.translate_atomic_notify(builder.cursor(), heap_index, heap, addr, count)?;
             state.push1(res);
@@ -2146,22 +2148,28 @@ fn translate_unreachable_operator<FE: FuncEnvironment + ?Sized>(
     Ok(())
 }
 
-/// Get the address+offset to use for a heap access.
-fn get_heap_addr(
-    heap: ir::Heap,
-    addr32: ir::Value,
-    offset: u64,
-    width: u32,
-    addr_ty: Type,
+/// This function is a generalized helper for validating that a wasm-supplied
+/// heap address is in-bounds.
+///
+/// This function takes a litany of parameters and requires that the address to
+/// be verified is at the top of the stack in `state`. This will generate
+/// necessary IR to validate that the heap address is correctly in-bounds, and
+/// various parameters are returned describing the valid heap address if
+/// execution reaches that point.
+fn prepare_addr<FE: FuncEnvironment + ?Sized>(
+    memarg: &MemoryImmediate,
+    access_size: u32,
     builder: &mut FunctionBuilder,
-) -> (ir::Value, i32) {
+    state: &mut FuncTranslationState,
+    environ: &mut FE,
+) -> WasmResult<(MemFlags, Value, Offset32)> {
+    let addr = state.pop1();
     // This function will need updates for 64-bit memories
-    debug_assert_eq!(builder.func.dfg.value_type(addr32), I32);
+    debug_assert_eq!(builder.func.dfg.value_type(addr), I32);
+    let offset = u32::try_from(memarg.offset).unwrap();
 
+    let heap = state.get_heap(builder.func, memarg.memory, environ)?;
     let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
-
-    // Currently this function only supports 32-bit memories.
-    let offset = u32::try_from(offset).unwrap();
 
     // How exactly the bounds check is performed here and what it's performed
     // on is a bit tricky. Generally we want to rely on access violations (e.g.
@@ -2214,54 +2222,86 @@ fn get_heap_addr(
     // offsets we're checking here are zero. This means that we'll hit the fast
     // path and emit zero conditional traps for bounds checks
     let adjusted_offset = if offset_guard_size == 0 {
-        u64::from(offset) + u64::from(width)
+        u64::from(offset) + u64::from(access_size)
     } else {
-        assert!(width < 1024);
+        assert!(access_size < 1024);
         cmp::max(u64::from(offset) / offset_guard_size * offset_guard_size, 1)
     };
     debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
     let check_size = u32::try_from(adjusted_offset).unwrap_or(u32::MAX);
-    let base = builder.ins().heap_addr(addr_ty, heap, addr32, check_size);
+    let base = builder
+        .ins()
+        .heap_addr(environ.pointer_type(), heap, addr, check_size);
 
     // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
     // pointer if necessary.
-    if offset > i32::MAX as u32 {
+    let (addr, offset) = if offset > i32::MAX as u32 {
         // Offset doesn't fit in the load/store instruction.
         let adj = builder.ins().iadd_imm(base, i64::from(i32::MAX) + 1);
         (adj, (offset - (i32::MAX as u32 + 1)) as i32)
     } else {
         (base, offset as i32)
-    }
+    };
+
+    // Note that we don't set `is_aligned` here, even if the load instruction's
+    // alignment immediate may says it's aligned, because WebAssembly's
+    // immediate field is just a hint, while Cranelift's aligned flag needs a
+    // guarantee. WebAssembly memory accesses are always little-endian.
+    let mut flags = MemFlags::new();
+    flags.set_endianness(ir::Endianness::Little);
+
+    Ok((flags, addr, offset.into()))
 }
 
-/// Prepare for a load; factors out common functionality between load and load_extend operations.
-fn prepare_load<FE: FuncEnvironment + ?Sized>(
+fn prepare_atomic_addr<FE: FuncEnvironment + ?Sized>(
     memarg: &MemoryImmediate,
     loaded_bytes: u32,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FE,
-) -> WasmResult<(MemFlags, Value, Offset32)> {
-    let addr = state.pop1();
+) -> WasmResult<(MemFlags, Value)> {
+    // Atomic addresses must all be aligned correctly, and for now we check
+    // alignment before we check out-of-bounds-ness. The order of this check may
+    // need to be updated depending on the outcome of the official threads
+    // proposal itself.
+    //
+    // Note that with an offset>0 we generate an `iadd_imm` where the result is
+    // thrown away after the offset check. This may truncate the offset and the
+    // result may overflow as well, but those conditions won't affect the
+    // alignment check itself. This can probably be optimized better and we
+    // should do so in the future as well.
+    if loaded_bytes > 1 {
+        let addr = state.pop1(); // "peek" via pop then push
+        state.push1(addr);
+        let effective_addr = if memarg.offset == 0 {
+            addr
+        } else {
+            builder
+                .ins()
+                .iadd_imm(addr, i64::from(memarg.offset as i32))
+        };
+        debug_assert!(loaded_bytes.is_power_of_two());
+        let misalignment = builder
+            .ins()
+            .band_imm(effective_addr, i64::from(loaded_bytes - 1));
+        let f = builder.ins().ifcmp_imm(misalignment, 0);
+        builder
+            .ins()
+            .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
+    }
 
-    let heap = state.get_heap(builder.func, memarg.memory, environ)?;
-    let (base, offset) = get_heap_addr(
-        heap,
-        addr,
-        memarg.offset,
-        loaded_bytes,
-        environ.pointer_type(),
-        builder,
-    );
+    let (flags, mut addr, offset) = prepare_addr(memarg, loaded_bytes, builder, state, environ)?;
 
-    // Note that we don't set `is_aligned` here, even if the load instruction's
-    // alignment immediate says it's aligned, because WebAssembly's immediate
-    // field is just a hint, while Cranelift's aligned flag needs a guarantee.
-    // WebAssembly memory accesses are always little-endian.
-    let mut flags = MemFlags::new();
-    flags.set_endianness(ir::Endianness::Little);
+    // Currently cranelift IR operations for atomics don't have offsets
+    // associated with them so we fold the offset into the address itself. Note
+    // that via the `prepare_addr` helper we know that if execution reaches
+    // this point that this addition won't overflow.
+    let offset: i64 = offset.into();
+    if offset != 0 {
+        addr = builder.ins().iadd_imm(addr, offset);
+    }
 
-    Ok((flags, base, offset.into()))
+    Ok((flags, addr))
 }
 
 /// Translate a load instruction.
@@ -2273,7 +2313,7 @@ fn translate_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let (flags, base, offset) = prepare_load(
+    let (flags, base, offset) = prepare_addr(
         memarg,
         mem_op_size(opcode, result_ty),
         builder,
@@ -2293,21 +2333,11 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let (addr32, val) = state.pop2();
+    let val = state.pop1();
     let val_ty = builder.func.dfg.value_type(val);
 
-    let heap = state.get_heap(builder.func, memarg.memory, environ)?;
-    let (base, offset) = get_heap_addr(
-        heap,
-        addr32,
-        memarg.offset,
-        mem_op_size(opcode, val_ty),
-        environ.pointer_type(),
-        builder,
-    );
-    // See the comments in `prepare_load` about the flags.
-    let mut flags = MemFlags::new();
-    flags.set_endianness(ir::Endianness::Little);
+    let (flags, base, offset) =
+        prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?;
     builder
         .ins()
         .Store(opcode, val_ty, flags, offset.into(), val, base);
@@ -2330,92 +2360,6 @@ fn translate_icmp(cc: IntCC, builder: &mut FunctionBuilder, state: &mut FuncTran
     state.push1(builder.ins().bint(I32, val));
 }
 
-fn fold_atomic_mem_addr(
-    linear_mem_addr: Value,
-    memarg: &MemoryImmediate,
-    access_ty: Type,
-    builder: &mut FunctionBuilder,
-) -> Value {
-    let access_ty_bytes = access_ty.bytes();
-    let final_lma = if memarg.offset > 0 {
-        // Note that 32-bit memories are only supported here at this time, the
-        // logic here (e.g. the `iadd_imm` will need to check for overflow and
-        // other bits and pieces for 64-bit memories.
-        assert!(builder.func.dfg.value_type(linear_mem_addr) == I32);
-        let linear_mem_addr = builder.ins().uextend(I64, linear_mem_addr);
-        let a = builder
-            .ins()
-            .iadd_imm(linear_mem_addr, i64::try_from(memarg.offset).unwrap());
-        let cflags = builder.ins().ifcmp_imm(a, 0x1_0000_0000i64);
-        builder.ins().trapif(
-            IntCC::UnsignedGreaterThanOrEqual,
-            cflags,
-            ir::TrapCode::HeapOutOfBounds,
-        );
-        builder.ins().ireduce(I32, a)
-    } else {
-        linear_mem_addr
-    };
-    assert!(access_ty_bytes == 4 || access_ty_bytes == 8);
-    let final_lma_misalignment = builder
-        .ins()
-        .band_imm(final_lma, i64::from(access_ty_bytes - 1));
-    let f = builder
-        .ins()
-        .ifcmp_imm(final_lma_misalignment, i64::from(0));
-    builder
-        .ins()
-        .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
-    final_lma
-}
-
-// For an atomic memory operation, emit an alignment check for the linear memory address,
-// and then compute the final effective address.
-fn finalise_atomic_mem_addr<FE: FuncEnvironment + ?Sized>(
-    linear_mem_addr: Value,
-    memarg: &MemoryImmediate,
-    access_ty: Type,
-    builder: &mut FunctionBuilder,
-    state: &mut FuncTranslationState,
-    environ: &mut FE,
-) -> WasmResult<Value> {
-    // Check the alignment of `linear_mem_addr`.
-    //
-    // Note that the `iadd_imm` here and the `try_from` only works for 32-bit
-    // memories.
-    let access_ty_bytes = access_ty.bytes();
-    assert!(builder.func.dfg.value_type(linear_mem_addr) == I32);
-    let final_lma = builder
-        .ins()
-        .iadd_imm(linear_mem_addr, i64::try_from(memarg.offset).unwrap());
-    if access_ty_bytes != 1 {
-        assert!(access_ty_bytes == 2 || access_ty_bytes == 4 || access_ty_bytes == 8);
-        let final_lma_misalignment = builder
-            .ins()
-            .band_imm(final_lma, i64::from(access_ty_bytes - 1));
-        let f = builder
-            .ins()
-            .ifcmp_imm(final_lma_misalignment, i64::from(0));
-        builder
-            .ins()
-            .trapif(IntCC::NotEqual, f, ir::TrapCode::HeapMisaligned);
-    }
-
-    // Compute the final effective address.
-    let heap = state.get_heap(builder.func, memarg.memory, environ)?;
-    let (base, offset) = get_heap_addr(
-        heap,
-        final_lma,
-        /*offset=*/ 0,
-        access_ty.bytes(),
-        environ.pointer_type(),
-        builder,
-    );
-
-    let final_effective_address = builder.ins().iadd_imm(base, i64::from(offset));
-    Ok(final_effective_address)
-}
-
 fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
     widened_ty: Type,
     access_ty: Type,
@@ -2425,7 +2369,7 @@ fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let (linear_mem_addr, mut arg2) = state.pop2();
+    let mut arg2 = state.pop1();
     let arg2_ty = builder.func.dfg.value_type(arg2);
 
     // The operation is performed at type `access_ty`, and the old value is zero-extended
@@ -2450,15 +2394,9 @@ fn translate_atomic_rmw<FE: FuncEnvironment + ?Sized>(
         arg2 = builder.ins().ireduce(access_ty, arg2);
     }
 
-    let final_effective_address =
-        finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
+    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
 
-    // See the comments in `prepare_load` about the flags.
-    let mut flags = MemFlags::new();
-    flags.set_endianness(ir::Endianness::Little);
-    let mut res = builder
-        .ins()
-        .atomic_rmw(access_ty, flags, op, final_effective_address, arg2);
+    let mut res = builder.ins().atomic_rmw(access_ty, flags, op, addr, arg2);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
     }
@@ -2474,7 +2412,7 @@ fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let (linear_mem_addr, mut expected, mut replacement) = state.pop3();
+    let (mut expected, mut replacement) = state.pop2();
     let expected_ty = builder.func.dfg.value_type(expected);
     let replacement_ty = builder.func.dfg.value_type(replacement);
 
@@ -2504,15 +2442,8 @@ fn translate_atomic_cas<FE: FuncEnvironment + ?Sized>(
         replacement = builder.ins().ireduce(access_ty, replacement);
     }
 
-    let final_effective_address =
-        finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
-
-    // See the comments in `prepare_load` about the flags.
-    let mut flags = MemFlags::new();
-    flags.set_endianness(ir::Endianness::Little);
-    let mut res = builder
-        .ins()
-        .atomic_cas(flags, final_effective_address, expected, replacement);
+    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
+    let mut res = builder.ins().atomic_cas(flags, addr, expected, replacement);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
     }
@@ -2528,8 +2459,6 @@ fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let linear_mem_addr = state.pop1();
-
     // The load is performed at type `access_ty`, and the loaded value is zero extended
     // to `widened_ty`.
     match access_ty {
@@ -2547,15 +2476,8 @@ fn translate_atomic_load<FE: FuncEnvironment + ?Sized>(
     };
     assert!(w_ty_ok && widened_ty.bytes() >= access_ty.bytes());
 
-    let final_effective_address =
-        finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
-
-    // See the comments in `prepare_load` about the flags.
-    let mut flags = MemFlags::new();
-    flags.set_endianness(ir::Endianness::Little);
-    let mut res = builder
-        .ins()
-        .atomic_load(access_ty, flags, final_effective_address);
+    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
+    let mut res = builder.ins().atomic_load(access_ty, flags, addr);
     if access_ty != widened_ty {
         res = builder.ins().uextend(widened_ty, res);
     }
@@ -2570,7 +2492,7 @@ fn translate_atomic_store<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let (linear_mem_addr, mut data) = state.pop2();
+    let mut data = state.pop1();
     let data_ty = builder.func.dfg.value_type(data);
 
     // The operation is performed at type `access_ty`, and the data to be stored may first
@@ -2594,15 +2516,8 @@ fn translate_atomic_store<FE: FuncEnvironment + ?Sized>(
         data = builder.ins().ireduce(access_ty, data);
     }
 
-    let final_effective_address =
-        finalise_atomic_mem_addr(linear_mem_addr, memarg, access_ty, builder, state, environ)?;
-
-    // See the comments in `prepare_load` about the flags.
-    let mut flags = MemFlags::new();
-    flags.set_endianness(ir::Endianness::Little);
-    builder
-        .ins()
-        .atomic_store(flags, data, final_effective_address);
+    let (flags, addr) = prepare_atomic_addr(memarg, access_ty.bytes(), builder, state, environ)?;
+    builder.ins().atomic_store(flags, data, addr);
     Ok(())
 }
 
