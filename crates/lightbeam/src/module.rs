@@ -10,7 +10,7 @@ use memoffset::offset_of;
 
 use std::{convert::TryInto, mem};
 use thiserror::Error;
-use wasmparser::{FuncType, MemoryType, Parser, Payload, ResizableLimits, Type};
+use wasmparser::{FuncType, Parser, Payload, Type};
 
 pub trait AsValueType {
     const TYPE: Type;
@@ -104,12 +104,12 @@ pub struct TranslatedModule {
     ctx: SimpleContext,
     // TODO: Should we wrap this in a `Mutex` so that calling functions from multiple
     //       threads doesn't cause data races?
-    memory: Option<ResizableLimits>,
+    memory: Option<(u64, Option<u64>)>,
 }
 
 impl TranslatedModule {
     pub fn instantiate(self) -> ExecutableModule {
-        let mem_size = self.memory.map(|limits| limits.initial).unwrap_or(0) as usize;
+        let mem_size = self.memory.map(|limits| limits.0 as u32).unwrap_or(0) as usize;
         let mem: BoxSlice<_> = vec![0u8; mem_size * WASM_PAGE_SIZE]
             .into_boxed_slice()
             .into();
@@ -535,19 +535,12 @@ pub fn translate_only(data: &[u8]) -> Result<TranslatedModule, Error> {
 
                 if !mem.is_empty() {
                     let mem = mem[0];
-                    let limits = match mem {
-                        MemoryType::M32 {
-                            limits,
-                            shared: false,
-                        } => limits,
-                        _ => return Err(Error::Input("unsupported memory".to_string())),
-                    };
-                    if Some(limits.initial) != limits.maximum {
+                    if Some(mem.initial) != mem.maximum {
                         return Err(Error::Input(
                             "Custom memory limits not supported in lightbeam".to_string(),
                         ));
                     }
-                    output.memory = Some(limits);
+                    output.memory = Some((mem.initial, mem.maximum));
                 }
             }
             Payload::GlobalSection(s) => {
