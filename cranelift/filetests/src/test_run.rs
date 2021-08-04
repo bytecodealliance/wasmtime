@@ -3,6 +3,7 @@
 //! The `run` test command compiles each function on the host machine and executes it
 
 use crate::function_runner::SingleFunctionCompiler;
+use crate::runtest_environment::RuntestEnvironment;
 use crate::subtest::{Context, SubTest};
 use cranelift_codegen::ir;
 use cranelift_reader::parse_run_command;
@@ -48,6 +49,8 @@ impl SubTest for TestRun {
         }
         let variant = context.isa.unwrap().variant();
 
+        let test_env = RuntestEnvironment::parse(&context.details.comments[..])?;
+
         let mut compiler = SingleFunctionCompiler::with_host_isa(context.flags.clone(), variant);
         for comment in context.details.comments.iter() {
             if let Some(command) = parse_run_command(comment.text, &func.signature)? {
@@ -60,7 +63,17 @@ impl SubTest for TestRun {
                 // running x86_64 code on aarch64 platforms.
                 let compiled_fn = compiler.compile(func.clone().into_owned())?;
                 command
-                    .run(|_, args| Ok(compiled_fn.call(args)))
+                    .run(|_, run_args| {
+                        let runtime_struct = test_env.runtime_struct();
+
+                        let mut args = Vec::with_capacity(run_args.len());
+                        if test_env.is_active() {
+                            args.push(runtime_struct.pointer(context.isa.unwrap().pointer_type()));
+                        }
+                        args.extend_from_slice(run_args);
+
+                        Ok(compiled_fn.call(&args))
+                    })
                     .map_err(|s| anyhow::anyhow!("{}", s))?;
             }
         }
