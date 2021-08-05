@@ -89,3 +89,17 @@ fn use_after_drop() -> anyhow::Result<()> {
     assert_eq!(g.get(&mut store).i32(), Some(101));
     Ok(())
 }
+
+#[test]
+fn v128() -> anyhow::Result<()> {
+    let mut store = Store::<()>::default();
+    let g = Global::new(
+        &mut store,
+        GlobalType::new(ValType::V128, Mutability::Var),
+        0u128.into(),
+    )?;
+    assert_eq!(g.get(&mut store).v128(), Some(0));
+    g.set(&mut store, 1u128.into())?;
+    assert_eq!(g.get(&mut store).v128(), Some(1));
+    Ok(())
+}

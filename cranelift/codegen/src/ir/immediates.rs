@@ -360,6 +360,12 @@ impl From<&[u8]> for V128Imm {
     }
 }
 
+impl From<u128> for V128Imm {
+    fn from(val: u128) -> Self {
+        V128Imm(val.to_le_bytes())
+    }
+}
+
 /// 32-bit signed immediate offset.
 ///
 /// This is used to encode an immediate offset for load/store instructions. All supported ISAs have
