@@ -270,6 +270,12 @@ impl From<Func> for Val {
     }
 }
 
+impl From<u128> for Val {
+    fn from(val: u128) -> Val {
+        Val::V128(val)
+    }
+}
+
 pub(crate) fn into_checked_anyfunc(
     val: Val,
     store: &mut StoreOpaque,

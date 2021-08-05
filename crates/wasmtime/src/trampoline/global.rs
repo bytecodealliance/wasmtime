@@ -27,6 +27,7 @@ pub fn create_global(store: &mut StoreOpaque<'_>, gt: &GlobalType, val: Val) -> 
             Val::I64(i) => wasm::GlobalInit::I64Const(i),
             Val::F32(f) => wasm::GlobalInit::F32Const(f),
             Val::F64(f) => wasm::GlobalInit::F64Const(f),
+            Val::V128(i) => wasm::GlobalInit::V128Const(i.into()),
             Val::ExternRef(None) | Val::FuncRef(None) => wasm::GlobalInit::RefNullConst,
             Val::ExternRef(Some(x)) => {
                 // There is no `GlobalInit` variant for using an existing
@@ -61,7 +62,6 @@ pub fn create_global(store: &mut StoreOpaque<'_>, gt: &GlobalType, val: Val) -> 
 
                 wasm::GlobalInit::RefFunc(func_index)
             }
-            _ => unimplemented!("create_global for {:?}", gt),
         },
     };
 

@@ -309,7 +309,7 @@ impl Global {
                 ValType::FuncRef => {
                     from_checked_anyfunc(definition.as_anyfunc() as *mut _, &mut store.opaque())
                 }
-                ty => unimplemented!("Global::get for {:?}", ty),
+                ValType::V128 => Val::V128(*definition.as_u128()),
             }
         }
     }
@@ -355,7 +355,7 @@ impl Global {
                     let old = mem::replace(definition.as_externref_mut(), x.map(|x| x.inner));
                     drop(old);
                 }
-                _ => unimplemented!("Global::set for {:?}", val.ty()),
+                Val::V128(i) => *definition.as_u128_mut() = i,
             }
         }
         Ok(())
