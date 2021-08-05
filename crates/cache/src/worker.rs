@@ -556,7 +556,7 @@ impl WorkerThread {
                     vec.push(CacheEntry::Unrecognized {
                         path: $path.to_path_buf(),
                         is_dir: $is_dir,
-                    });
+                    })
                 };
             }
             macro_rules! add_unrecognized_and {
