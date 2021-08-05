@@ -40,6 +40,10 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
         .strategy(strategy)?
         .cranelift_debug_verifier(true);
 
+    if wast.ends_with("canonicalize-nan.wast") {
+        cfg.cranelift_nan_canonicalization(true);
+    }
+
     // By default we'll allocate huge chunks (6gb) of the address space for each
     // linear memory. This is typically fine but when we emulate tests with QEMU
     // it turns out that it causes memory usage to balloon massively. Leave a
