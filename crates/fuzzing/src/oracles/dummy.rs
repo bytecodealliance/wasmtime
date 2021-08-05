@@ -469,7 +469,7 @@ mod tests {
         instance_ty.add_named_export("instance0", InstanceType::new().into());
         instance_ty.add_named_export("instance1", InstanceType::new().into());
 
-        let instance = dummy_instance(&mut store, instance_ty.clone());
+        let instance = dummy_instance(&mut store, instance_ty.clone()).unwrap();
 
         let mut expected_exports = vec![
             "func0",
