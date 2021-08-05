@@ -116,3 +116,37 @@ impl<'a> Arbitrary<'a> for SpecTest {
         (1, Some(std::mem::size_of::<usize>()))
     }
 }
+
+/// Type alias for wasm-smith generated modules using wasmtime's default
+/// configuration.
+pub type GeneratedModule = wasm_smith::ConfiguredModule<WasmtimeDefaultConfig>;
+
+/// Wasmtime-specific default configuration for wasm-smith-generated modules.
+#[derive(Arbitrary, Clone, Debug)]
+pub struct WasmtimeDefaultConfig;
+
+impl wasm_smith::Config for WasmtimeDefaultConfig {
+    // Allow multi-memory to get exercised
+    fn max_memories(&self) -> usize {
+        2
+    }
+
+    // Allow multi-table (reference types) to get exercised
+    fn max_tables(&self) -> usize {
+        4
+    }
+
+    // Turn some wasm features default-on for those that have a finished
+    // implementation in Wasmtime.
+    fn simd_enabled(&self) -> bool {
+        true
+    }
+
+    fn reference_types_enabled(&self) -> bool {
+        true
+    }
+
+    fn bulk_memory_enabled(&self) -> bool {
+        true
+    }
+}

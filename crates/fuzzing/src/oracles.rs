@@ -243,7 +243,7 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
 /// or aren't enabled for different configs, we should get the same results when
 /// we call the exported functions for all of our different configs.
 pub fn differential_execution(
-    module: &wasm_smith::Module,
+    module: &crate::generators::GeneratedModule,
     configs: &[crate::generators::DifferentialConfig],
 ) {
     use std::collections::{HashMap, HashSet};
@@ -271,7 +271,7 @@ pub fn differential_execution(
 
     for mut config in configs {
         // Disable module linking since it isn't enabled by default for
-        // `wasm_smith::Module` but is enabled by default for our fuzz config.
+        // `GeneratedModule` but is enabled by default for our fuzz config.
         // Since module linking is currently a breaking change this is required
         // to accept modules that would otherwise be broken by module linking.
         config.wasm_module_linking(false);
@@ -631,7 +631,7 @@ impl wasm_smith::Config for DifferentialWasmiModuleConfig {
         2
     }
 
-    fn max_memory_pages(&self) -> u32 {
+    fn max_memory_pages(&self, _is_64: bool) -> u64 {
         1
     }
 

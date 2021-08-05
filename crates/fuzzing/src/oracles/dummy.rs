@@ -39,7 +39,7 @@ pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Result<Extern> {
     Ok(match ty {
         ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
-        ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)),
+        ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)?),
         ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)?),
         ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)?),
         ExternType::Module(module_ty) => Extern::Module(dummy_module(store.engine(), module_ty)),
@@ -81,9 +81,9 @@ pub fn dummy_global<T>(store: &mut Store<T>, ty: GlobalType) -> Global {
 }
 
 /// Construct a dummy table for the given table type.
-pub fn dummy_table<T>(store: &mut Store<T>, ty: TableType) -> Table {
+pub fn dummy_table<T>(store: &mut Store<T>, ty: TableType) -> Result<Table> {
     let init_val = dummy_value(ty.element().clone());
-    Table::new(store, ty, init_val).unwrap()
+    Table::new(store, ty, init_val)
 }
 
 /// Construct a dummy memory for the given memory type.
@@ -393,7 +393,8 @@ mod tests {
         let table = dummy_table(
             &mut store,
             TableType::new(ValType::ExternRef, Limits::at_least(10)),
-        );
+        )
+        .unwrap();
         assert_eq!(table.size(&store), 10);
         for i in 0..10 {
             assert!(table

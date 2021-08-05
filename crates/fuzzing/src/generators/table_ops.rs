@@ -4,7 +4,7 @@ use arbitrary::Arbitrary;
 use std::ops::Range;
 use wasm_encoder::{
     CodeSection, EntityType, Export, ExportSection, Function, FunctionSection, ImportSection,
-    Instruction, Limits, Module, TableSection, TableType, TypeSection, ValType,
+    Instruction, Module, TableSection, TableType, TypeSection, ValType,
 };
 
 /// A description of a Wasm module that makes a series of `externref` table
@@ -57,10 +57,8 @@ impl TableOps {
         let mut tables = TableSection::new();
         tables.table(TableType {
             element_type: ValType::ExternRef,
-            limits: Limits {
-                min: self.table_size(),
-                max: None,
-            },
+            minimum: self.table_size(),
+            maximum: None,
         });
 
         // Encode the types for all functions that we are using.
