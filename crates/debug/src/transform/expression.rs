@@ -386,7 +386,7 @@ impl CompiledExpression {
                                     }
                                 } else {
                                     return Ok(None);
-                                };
+                                }
                             };
                         }
                         for part in &self.parts {

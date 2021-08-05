@@ -19,19 +19,19 @@ static SHIFTWIDTH: usize = 4;
 /// strings.
 macro_rules! fmtln {
     ($fmt:ident, $fmtstring:expr, $($fmtargs:expr),*) => {
-        $fmt.line(format!($fmtstring, $($fmtargs),*));
+        $fmt.line(format!($fmtstring, $($fmtargs),*))
     };
 
     ($fmt:ident, $arg:expr) => {
-        $fmt.line($arg);
+        $fmt.line($arg)
     };
 
     ($_:tt, $($args:expr),+) => {
-        compile_error!("This macro requires at least two arguments: the Formatter instance and a format string.");
+        compile_error!("This macro requires at least two arguments: the Formatter instance and a format string.")
     };
 
     ($_:tt) => {
-        compile_error!("This macro requires at least two arguments: the Formatter instance and a format string.");
+        compile_error!("This macro requires at least two arguments: the Formatter instance and a format string.")
     };
 }
 
