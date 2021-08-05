@@ -1,24 +1,41 @@
 #![no_main]
 
+use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::time::Duration;
-use wasm_smith::{Config, ConfiguredModule, SwarmConfig};
+use wasm_smith::{ConfiguredModule, SwarmConfig};
 use wasmtime::Strategy;
 use wasmtime_fuzzing::oracles::{self, Timeout};
 
-fuzz_target!(|pair: (bool, ConfiguredModule<SwarmConfig>)| {
-    let (timeout_with_time, module) = pair;
-    let mut cfg = wasmtime_fuzzing::fuzz_default_config(Strategy::Auto).unwrap();
-    cfg.wasm_multi_memory(true);
-    cfg.wasm_module_linking(module.config().module_linking_enabled());
-    oracles::instantiate_with_config(
-        &module.to_bytes(),
-        true,
-        cfg,
-        if timeout_with_time {
-            Timeout::Time(Duration::from_secs(20))
-        } else {
-            Timeout::Fuel(100_000)
-        },
-    );
+fuzz_target!(|data: &[u8]| {
+    // errors in `run` have to do with not enough input in `data`, which we
+    // ignore here since it doesn't affect how we'd like to fuzz.
+    drop(run(data));
 });
+
+fn run(data: &[u8]) -> Result<()> {
+    let mut u = Unstructured::new(data);
+    let timeout = if u.arbitrary()? {
+        Timeout::Time(Duration::from_secs(20))
+    } else {
+        Timeout::Fuel(100_000)
+    };
+
+    // Further configure `SwarmConfig` after we generate one to enable features
+    // that aren't otherwise enabled by default. We want to test all of these in
+    // Wasmtime.
+    let mut config: SwarmConfig = u.arbitrary()?;
+    config.simd_enabled = u.arbitrary()?;
+    config.module_linking_enabled = u.arbitrary()?;
+    // Don't generate modules that allocate more than 6GB
+    config.max_memory_pages = 6 << 30;
+    let module = ConfiguredModule::new(config.clone(), &mut u)?;
+
+    let mut cfg = wasmtime_fuzzing::fuzz_default_config(Strategy::Auto).unwrap();
+    cfg.wasm_multi_memory(config.max_memories > 1);
+    cfg.wasm_module_linking(config.module_linking_enabled);
+    cfg.wasm_simd(config.simd_enabled);
+
+    oracles::instantiate_with_config(&module.to_bytes(), true, cfg, timeout);
+    Ok(())
+}

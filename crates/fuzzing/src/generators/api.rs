@@ -17,7 +17,6 @@
 use arbitrary::{Arbitrary, Unstructured};
 use std::collections::BTreeMap;
 use std::mem;
-use wasm_smith::Module;
 use wasmparser::*;
 
 #[derive(Arbitrary, Debug)]
@@ -40,11 +39,24 @@ pub enum ApiCall {
     ConfigInterruptable(bool),
     EngineNew,
     StoreNew,
-    ModuleNew { id: usize, wasm: Module },
-    ModuleDrop { id: usize },
-    InstanceNew { id: usize, module: usize },
-    InstanceDrop { id: usize },
-    CallExportedFunc { instance: usize, nth: usize },
+    ModuleNew {
+        id: usize,
+        wasm: super::GeneratedModule,
+    },
+    ModuleDrop {
+        id: usize,
+    },
+    InstanceNew {
+        id: usize,
+        module: usize,
+    },
+    InstanceDrop {
+        id: usize,
+    },
+    CallExportedFunc {
+        instance: usize,
+        nth: usize,
+    },
 }
 use ApiCall::*;
 
@@ -107,7 +119,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             if swarm.module_new {
                 choices.push(|input, scope| {
                     let id = scope.next_id();
-                    let mut wasm = Module::arbitrary(input)?;
+                    let mut wasm = super::GeneratedModule::arbitrary(input)?;
                     wasm.ensure_termination(1000);
                     let predicted_rss = predict_rss(&wasm.to_bytes()).unwrap_or(0);
                     scope.modules.insert(id, predicted_rss);
@@ -175,7 +187,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                 // We can generate arbitrary `WasmOptTtf` instances, which have
                 // no upper bound on the number of bytes they consume. This sets
                 // the upper bound to `None`.
-                <Module as Arbitrary>::size_hint(depth),
+                <super::GeneratedModule as Arbitrary>::size_hint(depth),
             )
         })
     }

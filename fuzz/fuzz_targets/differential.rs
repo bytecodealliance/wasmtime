@@ -6,7 +6,7 @@ use wasmtime_fuzzing::{generators, oracles};
 fuzz_target!(|data: (
     generators::DifferentialConfig,
     generators::DifferentialConfig,
-    wasm_smith::Module,
+    generators::GeneratedModule,
 )| {
     let (lhs, rhs, mut wasm) = data;
     wasm.ensure_termination(1000);
