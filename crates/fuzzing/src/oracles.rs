@@ -45,18 +45,53 @@ fn log_wasm(wasm: &[u8]) {
 fn create_store(engine: &Engine) -> Store<StoreLimits> {
     let mut store = Store::new(
         &engine,
-        StoreLimitsBuilder::new()
-            // The limits here are chosen based on the default "maximum type size"
-            // configured in wasm-smith, which is 1000. This means that instances
-            // are allowed to, for example, export up to 1000 memories. We bump that
-            // a little bit here to give us some slop.
-            .instances(1100)
-            .tables(1100)
-            .memories(1100)
-            .build(),
+        StoreLimits {
+            // Limits tables/memories within a store to at most 2gb for now to
+            // exercise some larger address but not overflow various limits.
+            remaining_memory: 2 << 30,
+            oom: false,
+        },
     );
     store.limiter(|s| s as &mut dyn ResourceLimiter);
-    store
+    return store;
+}
+
+struct StoreLimits {
+    /// Remaining memory, in bytes, left to allocate
+    remaining_memory: usize,
+    /// Whether or not an allocation request has been denied
+    oom: bool,
+}
+
+impl StoreLimits {
+    fn alloc(&mut self, amt: usize) -> bool {
+        match self.remaining_memory.checked_sub(amt) {
+            Some(mem) => {
+                self.remaining_memory = mem;
+                true
+            }
+            None => {
+                self.oom = true;
+                false
+            }
+        }
+    }
+}
+
+impl ResourceLimiter for StoreLimits {
+    fn memory_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> bool {
+        // Units provided are in wasm pages, so adjust them to bytes to see if
+        // we are ok to allocate this much.
+        self.alloc((desired - current) as usize * 16 * 1024)
+    }
+
+    fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> bool {
+        // Units provided are in table elements, and for now we allocate one
+        // pointer per table element, so use that size for an adjustment into
+        // bytes.
+        let delta = (desired - current) as usize * std::mem::size_of::<usize>();
+        self.alloc(delta)
+    }
 }
 
 /// Methods of timing out execution of a WebAssembly module
@@ -159,22 +194,26 @@ pub fn instantiate_with_config(
     match linker.instantiate(&mut store, &module) {
         Ok(_) => {}
         Err(e) => {
-            let string = e.to_string();
+            // If the instantiation hit OOM for some reason then that's ok, it's
+            // expected that fuzz-generated programs try to allocate lots of
+            // stuff.
+            if store.data().oom {
+                return;
+            }
+
             // Allow traps which can happen normally with `unreachable` or a
-            // timeout
-            if e.downcast_ref::<Trap>().is_some()
-                // Allow resource exhaustion since this is something that
-                // our wasm-smith generator doesn't guarantee is forbidden.
-                || string.contains("resource limit exceeded")
-                // Also allow errors related to fuel consumption
-                || string.contains("all fuel consumed")
+            // timeout or such
+            if e.downcast_ref::<Trap>().is_some() {
+                return;
+            }
+
+            let string = e.to_string();
+            // Also allow errors related to fuel consumption
+            if string.contains("all fuel consumed")
                 // Currently we instantiate with a `Linker` which can't instantiate
                 // every single module under the sun due to using name-based resolution
                 // rather than positional-based resolution
                 || string.contains("incompatible import type")
-                // If we ran out of resources instantiating this wasm module that's
-                // ok, no need to consider that a fatal error.
-                || string.contains("Insufficient resources")
             {
                 return;
             }
