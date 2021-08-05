@@ -41,7 +41,7 @@ pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Result<Extern> {
         ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
         ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)),
         ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)?),
-        ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)),
+        ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)?),
         ExternType::Module(module_ty) => Extern::Module(dummy_module(store.engine(), module_ty)),
     })
 }
@@ -95,13 +95,13 @@ pub fn dummy_memory<T>(store: &mut Store<T>, ty: MemoryType) -> Result<Memory> {
 ///
 /// This is done by using the expected type to generate a module on-the-fly
 /// which we the instantiate.
-pub fn dummy_instance<T>(store: &mut Store<T>, ty: InstanceType) -> Instance {
+pub fn dummy_instance<T>(store: &mut Store<T>, ty: InstanceType) -> Result<Instance> {
     let mut wat = WatGenerator::new();
     for ty in ty.exports() {
         wat.export(&ty);
     }
     let module = Module::new(store.engine(), &wat.finish()).unwrap();
-    Instance::new(store, &module, &[]).unwrap()
+    Instance::new(store, &module, &[])
 }
 
 /// Construct a dummy module for the given module type.
@@ -469,7 +469,7 @@ mod tests {
         instance_ty.add_named_export("instance0", InstanceType::new().into());
         instance_ty.add_named_export("instance1", InstanceType::new().into());
 
-        let instance = dummy_instance(&mut store, instance_ty.clone());
+        let instance = dummy_instance(&mut store, instance_ty.clone()).unwrap();
 
         let mut expected_exports = vec![
             "func0",
