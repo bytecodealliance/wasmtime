@@ -4600,66 +4600,10 @@ pub(crate) fn define(
             r#"
         Atomically load from memory at `p`.
 
-        It should only be used for integer types with 32 or 64 bits.
+        This is a polymorphic instruction that can load any value type which has a memory
+        representation.  It should only be used for integer types with 8, 16, 32 or 64 bits.
         This operation is sequentially consistent and creates happens-before edges that order
         normal (non-atomic) loads and stores.
-        "#,
-            &formats.load_no_offset,
-        )
-        .operands_in(vec![MemFlags, p])
-        .operands_out(vec![a])
-        .can_load(true)
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "atomic_uload8",
-            r#"
-        Atomically load 8 bits from memory at `p` and zero-extend to either 32 or 64 bits.
-
-        This is equivalent to ``load.i8`` followed by ``uextend``.
-
-        This operation is sequentially consistent and creates happens-before edges that order
-        normal (non-atomic) loads and stores.
-        "#,
-            &formats.load_no_offset,
-        )
-        .operands_in(vec![MemFlags, p])
-        .operands_out(vec![a])
-        .can_load(true)
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "atomic_uload16",
-            r#"
-        Atomically load 16 bits from memory at `p` and zero-extend to either 32 or 64 bits.
-
-        This is equivalent to ``load.i16`` followed by ``uextend``.
-
-        This operation is sequentially consistent and creates
-        happens-before edges that order normal (non-atomic) loads and stores.
-        "#,
-            &formats.load_no_offset,
-        )
-        .operands_in(vec![MemFlags, p])
-        .operands_out(vec![a])
-        .can_load(true)
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "atomic_uload32",
-            r#"
-        Atomically load 32 bits from memory at `p` and zero-extend to 64 bits.
-
-        This is equivalent to ``load.i32`` followed by ``uextend``.
-
-        This operation is sequentially consistent and creates
-        happens-before edges that order normal (non-atomic) loads and stores.
         "#,
             &formats.load_no_offset,
         )
@@ -4675,61 +4619,8 @@ pub(crate) fn define(
             r#"
         Atomically store `x` to memory at `p`.
 
-        This is a polymorphic instruction that can store a 32 or 64-bit value.
-        This operation is sequentially consistent and creates happens-before edges that order
-        normal (non-atomic) loads and stores.
-        "#,
-            &formats.store_no_offset,
-        )
-        .operands_in(vec![MemFlags, x, p])
-        .can_store(true)
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "atomic_store8",
-            r#"
-        Atomically store the low 8 bits of `x` to memory at `p`.
-
-        This is equivalent to ``ireduce.i8`` followed by ``store.i8``.
-
-        This operation is sequentially consistent and creates happens-before edges that order
-        normal (non-atomic) loads and stores.
-        "#,
-            &formats.store_no_offset,
-        )
-        .operands_in(vec![MemFlags, x, p])
-        .can_store(true)
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "atomic_store16",
-            r#"
-        Atomically store the low 16 bits of `x` to memory at `p`.
-
-        This is equivalent to ``ireduce.i16`` followed by ``store.i16``.
-
-        This operation is sequentially consistent and creates happens-before edges that order
-        normal (non-atomic) loads and stores.
-        "#,
-            &formats.store_no_offset,
-        )
-        .operands_in(vec![MemFlags, x, p])
-        .can_store(true)
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "atomic_store32",
-            r#"
-        Atomically store the low 32 bits of `x` to memory at `p`.
-
-        This is equivalent to ``ireduce.i32`` followed by ``store.i32``.
-
+        This is a polymorphic instruction that can store any value type with a memory
+        representation.  It should only be used for integer types with 8, 16, 32 or 64 bits.
         This operation is sequentially consistent and creates happens-before edges that order
         normal (non-atomic) loads and stores.
         "#,

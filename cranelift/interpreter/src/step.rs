@@ -625,14 +625,8 @@ where
         Opcode::Iconcat => assign(Value::concat(arg(0)?, arg(1)?)?),
         Opcode::AtomicRmw => unimplemented!("AtomicRmw"),
         Opcode::AtomicCas => unimplemented!("AtomicCas"),
-        Opcode::AtomicLoad
-        | Opcode::AtomicUload8
-        | Opcode::AtomicUload16
-        | Opcode::AtomicUload32 => unimplemented!("AtomicLoad"),
-        Opcode::AtomicStore
-        | Opcode::AtomicStore8
-        | Opcode::AtomicStore16
-        | Opcode::AtomicStore32 => unimplemented!("AtomicStore"),
+        Opcode::AtomicLoad => unimplemented!("AtomicLoad"),
+        Opcode::AtomicStore => unimplemented!("AtomicStore"),
         Opcode::Fence => unimplemented!("Fence"),
         Opcode::WideningPairwiseDotProductS => unimplemented!("WideningPairwiseDotProductS"),
         Opcode::SqmulRoundSat => unimplemented!("SqmulRoundSat"),

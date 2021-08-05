@@ -521,6 +521,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Uextend | Opcode::Sextend => {
+            if op == Opcode::Uextend {
+                let inputs = ctx.get_input_as_source_or_const(inputs[0].insn, inputs[0].input);
+                if let Some((atomic_load, 0)) = inputs.inst {
+                    if ctx.data(atomic_load).opcode() == Opcode::AtomicLoad {
+                        let output_ty = ty.unwrap();
+                        assert!(output_ty == I32 || output_ty == I64);
+                        let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                        emit_atomic_load(ctx, rt, atomic_load);
+                        ctx.sink_inst(atomic_load);
+                        return Ok(());
+                    }
+                }
+            }
             let output_ty = ty.unwrap();
             let input_ty = ctx.input_ty(insn, 0);
             let from_bits = ty_bits(input_ty) as u8;
@@ -1522,38 +1535,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::AtomicLoad
-        | Opcode::AtomicUload8
-        | Opcode::AtomicUload16
-        | Opcode::AtomicUload32 => {
+        Opcode::AtomicLoad => {
             let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let ty = ty.unwrap();
-            let access_ty = match op {
-                Opcode::AtomicLoad => ty,
-                Opcode::AtomicUload8 => I8,
-                Opcode::AtomicUload16 => I16,
-                Opcode::AtomicUload32 => I32,
-                _ => panic!(),
-            };
-            assert!(is_valid_atomic_transaction_ty(access_ty));
-            ctx.emit(Inst::LoadAcquire { access_ty, rt, rn });
+            emit_atomic_load(ctx, rt, insn);
         }
 
-        Opcode::AtomicStore
-        | Opcode::AtomicStore32
-        | Opcode::AtomicStore16
-        | Opcode::AtomicStore8 => {
+        Opcode::AtomicStore => {
             let rt = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ty = ctx.input_ty(insn, 0);
-            let access_ty = match op {
-                Opcode::AtomicStore => ty,
-                Opcode::AtomicStore32 => I32,
-                Opcode::AtomicStore16 => I16,
-                Opcode::AtomicStore8 => I8,
-                _ => unreachable!(),
-            };
+            let access_ty = ctx.input_ty(insn, 0);
             assert!(is_valid_atomic_transaction_ty(access_ty));
             ctx.emit(Inst::StoreRelease { access_ty, rt, rn });
         }

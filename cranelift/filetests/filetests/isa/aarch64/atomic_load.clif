@@ -21,19 +21,9 @@ block0(v0: i64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
-function %atomic_uload_i32_i64(i64) -> i64 {
+function %atomic_load_i16(i64) -> i16 {
 block0(v0: i64):
-  v1 = atomic_uload32.i64 v0
-  return v1
-}
-
-; check: ldar w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
-function %atomic_uload_i16_i32(i64) -> i32 {
-block0(v0: i64):
-  v1 = atomic_uload16.i32 v0
+  v1 = atomic_load.i16 v0
   return v1
 }
 
@@ -41,19 +31,9 @@ block0(v0: i64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
-function %atomic_uload_i16_i64(i64) -> i64 {
+function %atomic_load_i8(i64) -> i8 {
 block0(v0: i64):
-  v1 = atomic_uload16.i64 v0
-  return v1
-}
-
-; check: ldarh w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
-function %atomic_uload_i8_i32(i64) -> i32 {
-block0(v0: i64):
-  v1 = atomic_uload8.i32 v0
+  v1 = atomic_load.i8 v0
   return v1
 }
 
@@ -61,10 +41,55 @@ block0(v0: i64):
 ; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
-function %atomic_uload_i8_i64(i64) -> i64 {
+function %atomic_load_i32_i64(i64) -> i64 {
 block0(v0: i64):
-  v1 = atomic_uload8.i64 v0
-  return v1
+  v1 = atomic_load.i32 v0
+  v2 = uextend.i64 v1
+  return v2
+}
+
+; check: ldar w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_load_i16_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = atomic_load.i16 v0
+  v2 = uextend.i64 v1
+  return v2
+}
+
+; check: ldarh w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_load_i8_i64(i64) -> i64 {
+block0(v0: i64):
+  v1 = atomic_load.i8 v0
+  v2 = uextend.i64 v1
+  return v2
+}
+
+; check: ldarb w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_load_i16_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = atomic_load.i16 v0
+  v2 = uextend.i32 v1
+  return v2
+}
+
+; check: ldarh w0, [x0]
+; nextln: ldp fp, lr, [sp], #16
+; nextln: ret
+
+function %atomic_load_i8_i32(i64) -> i32 {
+block0(v0: i64):
+  v1 = atomic_load.i8 v0
+  v2 = uextend.i32 v1
+  return v2
 }
 
 ; check: ldarb w0, [x0]
