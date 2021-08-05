@@ -6,7 +6,6 @@ use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::condcodes::FloatCC;
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::ir::types;
-use crate::ir::types::Type;
 use crate::ir::{Function, Inst, InstBuilder, InstructionData, Opcode, Value};
 use crate::timing;
 
@@ -64,22 +63,44 @@ fn add_nan_canon_seq(pos: &mut FuncCursor, inst: Inst) {
     // Insert a comparison instruction, to check if `inst_res` is NaN. Select
     // the canonical NaN value if `val` is NaN, assign the result to `inst`.
     let is_nan = pos.ins().fcmp(FloatCC::NotEqual, new_res, new_res);
-    let canon_nan = insert_nan_const(pos, val_type);
-    pos.ins()
-        .with_result(val)
-        .select(is_nan, canon_nan, new_res);
 
-    pos.prev_inst(); // Step backwards so the pass does not skip instructions.
-}
+    let scalar_select = |pos: &mut FuncCursor, canon_nan: Value| {
+        pos.ins()
+            .with_result(val)
+            .select(is_nan, canon_nan, new_res);
+    };
+    let vector_select = |pos: &mut FuncCursor, canon_nan: Value| {
+        let cond = pos.ins().raw_bitcast(types::I8X16, is_nan);
+        let canon_nan = pos.ins().raw_bitcast(types::I8X16, canon_nan);
+        let result = pos.ins().raw_bitcast(types::I8X16, new_res);
+        let bitmask = pos.ins().bitselect(cond, canon_nan, result);
+        pos.ins().with_result(val).raw_bitcast(val_type, bitmask);
+    };
 
-/// Insert a canonical 32-bit or 64-bit NaN constant at the current position.
-fn insert_nan_const(pos: &mut FuncCursor, nan_type: Type) -> Value {
-    match nan_type {
-        types::F32 => pos.ins().f32const(Ieee32::with_bits(CANON_32BIT_NAN)),
-        types::F64 => pos.ins().f64const(Ieee64::with_bits(CANON_64BIT_NAN)),
+    match val_type {
+        types::F32 => {
+            let canon_nan = pos.ins().f32const(Ieee32::with_bits(CANON_32BIT_NAN));
+            scalar_select(pos, canon_nan);
+        }
+        types::F64 => {
+            let canon_nan = pos.ins().f64const(Ieee64::with_bits(CANON_64BIT_NAN));
+            scalar_select(pos, canon_nan);
+        }
+        types::F32X4 => {
+            let canon_nan = pos.ins().iconst(types::I32, i64::from(CANON_32BIT_NAN));
+            let canon_nan = pos.ins().splat(types::I32X4, canon_nan);
+            vector_select(pos, canon_nan);
+        }
+        types::F64X2 => {
+            let canon_nan = pos.ins().iconst(types::I64, CANON_64BIT_NAN as i64);
+            let canon_nan = pos.ins().splat(types::I64X2, canon_nan);
+            vector_select(pos, canon_nan);
+        }
         _ => {
             // Panic if the type given was not an IEEE floating point type.
             panic!("Could not canonicalize NaN: Unexpected result type found.");
         }
     }
+
+    pos.prev_inst(); // Step backwards so the pass does not skip instructions.
 }
