@@ -1,6 +1,6 @@
 # Cranelift project meetings
 
-The Wasmtime project holds bi-weekly meetings, and we welcome all interested parties to join.
+The Cranelift project holds bi-weekly meetings, and we welcome all interested parties to join.
 
 ## Time and location
 
