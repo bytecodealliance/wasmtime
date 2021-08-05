@@ -1,8 +1,8 @@
 use crate::spectest::link_spectest;
 use anyhow::{anyhow, bail, Context as _, Result};
-use core::fmt;
+use std::fmt::{Display, LowerHex};
+use std::path::Path;
 use std::str;
-use std::{mem::size_of_val, path::Path};
 use wasmtime::*;
 use wast::Wat;
 use wast::{
@@ -180,17 +180,8 @@ impl<T> WastContext<T> {
 
     fn assert_return(&self, result: Outcome, results: &[wast::AssertExpression]) -> Result<()> {
         let values = result.into_result()?;
-        for (v, e) in values.iter().zip(results) {
-            if val_matches(v, e)? {
-                continue;
-            }
-            bail!(
-                "expected {:?} ({}), got {:?} ({})",
-                e,
-                e.as_hex_pattern(),
-                v,
-                v.as_hex_pattern()
-            )
+        for (i, (v, e)) in values.iter().zip(results).enumerate() {
+            match_val(v, e).with_context(|| format!("result {} didn't match", i))?;
         }
         Ok(())
     }
@@ -399,292 +390,310 @@ fn extract_lane_as_i64(bytes: u128, lane: usize) -> i64 {
     (bytes >> (lane * 64)) as i64
 }
 
-/// Check if an f32 (as u32 bits to avoid possible quieting when moving values in registers, e.g.
-/// https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
-/// is a canonical NaN:
-///  - the sign bit is unspecified,
-///  - the 8-bit exponent is set to all 1s
-///  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
-/// See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
-fn is_canonical_f32_nan(bits: u32) -> bool {
-    (bits & 0x7fff_ffff) == 0x7fc0_0000
-}
-
-/// Check if an f64 (as u64 bits to avoid possible quieting when moving values in registers, e.g.
-/// https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
-/// is a canonical NaN:
-///  - the sign bit is unspecified,
-///  - the 11-bit exponent is set to all 1s
-///  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
-/// See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
-fn is_canonical_f64_nan(bits: u64) -> bool {
-    (bits & 0x7fff_ffff_ffff_ffff) == 0x7ff8_0000_0000_0000
-}
-
-/// Check if an f32 (as u32, see comments above) is an arithmetic NaN. This is the same as a
-/// canonical NaN including that the payload MSB is set to 1, but one or more of the remaining
-/// payload bits MAY BE set to 1 (a canonical NaN specifies all 0s). See
-/// https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
-fn is_arithmetic_f32_nan(bits: u32) -> bool {
-    const AF32_NAN: u32 = 0x7f80_0000;
-    let is_nan = bits & AF32_NAN == AF32_NAN;
-    const AF32_PAYLOAD_MSB: u32 = 0x0040_0000;
-    let is_msb_set = bits & AF32_PAYLOAD_MSB == AF32_PAYLOAD_MSB;
-    is_nan && is_msb_set
-}
-
-/// Check if an f64 (as u64, see comments above) is an arithmetic NaN. This is the same as a
-/// canonical NaN including that the payload MSB is set to 1, but one or more of the remaining
-/// payload bits MAY BE set to 1 (a canonical NaN specifies all 0s). See
-/// https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
-fn is_arithmetic_f64_nan(bits: u64) -> bool {
-    const AF64_NAN: u64 = 0x7ff0_0000_0000_0000;
-    let is_nan = bits & AF64_NAN == AF64_NAN;
-    const AF64_PAYLOAD_MSB: u64 = 0x0008_0000_0000_0000;
-    let is_msb_set = bits & AF64_PAYLOAD_MSB == AF64_PAYLOAD_MSB;
-    is_nan && is_msb_set
-}
-
-fn val_matches(actual: &Val, expected: &wast::AssertExpression) -> Result<bool> {
-    Ok(match (actual, expected) {
-        (Val::I32(a), wast::AssertExpression::I32(b)) => a == b,
-        (Val::I64(a), wast::AssertExpression::I64(b)) => a == b,
+fn match_val(actual: &Val, expected: &wast::AssertExpression) -> Result<()> {
+    match (actual, expected) {
+        (Val::I32(a), wast::AssertExpression::I32(b)) => match_int(a, b),
+        (Val::I64(a), wast::AssertExpression::I64(b)) => match_int(a, b),
         // Note that these float comparisons are comparing bits, not float
         // values, so we're testing for bit-for-bit equivalence
-        (Val::F32(a), wast::AssertExpression::F32(b)) => f32_matches(*a, b),
-        (Val::F64(a), wast::AssertExpression::F64(b)) => f64_matches(*a, b),
-        (Val::V128(a), wast::AssertExpression::V128(b)) => v128_matches(*a, b),
-        (Val::ExternRef(x), wast::AssertExpression::RefNull(Some(HeapType::Extern))) => x.is_none(),
+        (Val::F32(a), wast::AssertExpression::F32(b)) => match_f32(*a, b),
+        (Val::F64(a), wast::AssertExpression::F64(b)) => match_f64(*a, b),
+        (Val::V128(a), wast::AssertExpression::V128(b)) => match_v128(*a, b),
+        (Val::ExternRef(x), wast::AssertExpression::RefNull(Some(HeapType::Extern))) => {
+            if let Some(x) = x {
+                let x = x
+                    .data()
+                    .downcast_ref::<u32>()
+                    .expect("only u32 externrefs created in wast test suites");
+                bail!("expected null externref, found {}", x);
+            } else {
+                Ok(())
+            }
+        }
         (Val::ExternRef(x), wast::AssertExpression::RefExtern(y)) => {
             if let Some(x) = x {
                 let x = x
                     .data()
                     .downcast_ref::<u32>()
                     .expect("only u32 externrefs created in wast test suites");
-                x == y
+                if x == y {
+                    Ok(())
+                } else {
+                    bail!("expected {} found {}", y, x);
+                }
             } else {
-                false
+                bail!("expected non-null externref, found null")
             }
         }
-        (Val::FuncRef(x), wast::AssertExpression::RefNull(_)) => x.is_none(),
+        (Val::FuncRef(x), wast::AssertExpression::RefNull(_)) => {
+            if x.is_none() {
+                Ok(())
+            } else {
+                bail!("expected null funcref, found non-null")
+            }
+        }
         _ => bail!(
             "don't know how to compare {:?} and {:?} yet",
             actual,
             expected
         ),
-    })
-}
-
-fn f32_matches(actual: u32, expected: &wast::NanPattern<wast::Float32>) -> bool {
-    match expected {
-        wast::NanPattern::CanonicalNan => is_canonical_f32_nan(actual),
-        wast::NanPattern::ArithmeticNan => is_arithmetic_f32_nan(actual),
-        wast::NanPattern::Value(expected_value) => actual == expected_value.bits,
     }
 }
 
-fn f64_matches(actual: u64, expected: &wast::NanPattern<wast::Float64>) -> bool {
-    match expected {
-        wast::NanPattern::CanonicalNan => is_canonical_f64_nan(actual),
-        wast::NanPattern::ArithmeticNan => is_arithmetic_f64_nan(actual),
-        wast::NanPattern::Value(expected_value) => actual == expected_value.bits,
-    }
-}
-
-fn v128_matches(actual: u128, expected: &wast::V128Pattern) -> bool {
-    match expected {
-        wast::V128Pattern::I8x16(b) => b
-            .iter()
-            .enumerate()
-            .all(|(i, b)| *b == extract_lane_as_i8(actual, i)),
-        wast::V128Pattern::I16x8(b) => b
-            .iter()
-            .enumerate()
-            .all(|(i, b)| *b == extract_lane_as_i16(actual, i)),
-        wast::V128Pattern::I32x4(b) => b
-            .iter()
-            .enumerate()
-            .all(|(i, b)| *b == extract_lane_as_i32(actual, i)),
-        wast::V128Pattern::I64x2(b) => b
-            .iter()
-            .enumerate()
-            .all(|(i, b)| *b == extract_lane_as_i64(actual, i)),
-        wast::V128Pattern::F32x4(b) => b.iter().enumerate().all(|(i, b)| {
-            let a = extract_lane_as_i32(actual, i) as u32;
-            f32_matches(a, b)
-        }),
-        wast::V128Pattern::F64x2(b) => b.iter().enumerate().all(|(i, b)| {
-            let a = extract_lane_as_i64(actual, i) as u64;
-            f64_matches(a, b)
-        }),
-    }
-}
-
-/// When troubleshooting a failure in a spec test, it is valuable to understand the bit-by-bit
-/// difference. To do this, we print a hex-encoded version of Wasm values and assertion expressions
-/// using this helper.
-fn as_hex_pattern<T>(bits: T) -> String
+fn match_int<T>(actual: &T, expected: &T) -> Result<()>
 where
-    T: fmt::LowerHex,
+    T: Eq + Display + LowerHex,
 {
-    format!("{1:#00$x}", size_of_val(&bits) * 2 + 2, bits)
+    if actual == expected {
+        Ok(())
+    } else {
+        bail!(
+            "expected {:18} / {0:#018x}\n\
+             actual   {:18} / {1:#018x}",
+            expected,
+            actual
+        )
+    }
 }
 
-/// The [AsHexPattern] allows us to extend `as_hex_pattern` to various structures.
-trait AsHexPattern {
-    fn as_hex_pattern(&self) -> String;
-}
+fn match_f32(actual: u32, expected: &wast::NanPattern<wast::Float32>) -> Result<()> {
+    match expected {
+        // Check if an f32 (as u32 bits to avoid possible quieting when moving values in registers, e.g.
+        // https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
+        // is a canonical NaN:
+        //  - the sign bit is unspecified,
+        //  - the 8-bit exponent is set to all 1s
+        //  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
+        // See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
+        wast::NanPattern::CanonicalNan => {
+            let canon_nan = 0x7fc0_0000;
+            if (actual & 0x7fff_ffff) == canon_nan {
+                Ok(())
+            } else {
+                bail!(
+                    "expected {:10} / {:#010x}\n\
+                     actual   {:10} / {:#010x}",
+                    "canon-nan",
+                    canon_nan,
+                    f32::from_bits(actual),
+                    actual,
+                )
+            }
+        }
 
-impl AsHexPattern for wast::AssertExpression<'_> {
-    fn as_hex_pattern(&self) -> String {
-        match self {
-            wast::AssertExpression::I32(i) => as_hex_pattern(*i),
-            wast::AssertExpression::I64(i) => as_hex_pattern(*i),
-            wast::AssertExpression::F32(f) => f.as_hex_pattern(),
-            wast::AssertExpression::F64(f) => f.as_hex_pattern(),
-            wast::AssertExpression::V128(v) => v.as_hex_pattern(),
-            wast::AssertExpression::RefNull(_)
-            | wast::AssertExpression::RefExtern(_)
-            | wast::AssertExpression::RefFunc(_)
-            | wast::AssertExpression::LegacyArithmeticNaN
-            | wast::AssertExpression::LegacyCanonicalNaN => "no hex representation".to_string(),
+        // Check if an f32 (as u32, see comments above) is an arithmetic NaN.
+        // This is the same as a canonical NaN including that the payload MSB is
+        // set to 1, but one or more of the remaining payload bits MAY BE set to
+        // 1 (a canonical NaN specifies all 0s). See
+        // https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
+        wast::NanPattern::ArithmeticNan => {
+            const AF32_NAN: u32 = 0x7f80_0000;
+            let is_nan = actual & AF32_NAN == AF32_NAN;
+            const AF32_PAYLOAD_MSB: u32 = 0x0040_0000;
+            let is_msb_set = actual & AF32_PAYLOAD_MSB == AF32_PAYLOAD_MSB;
+            if is_nan && is_msb_set {
+                Ok(())
+            } else {
+                bail!(
+                    "expected {:>10} / {:>10}\n\
+                     actual   {:10} / {:#010x}",
+                    "arith-nan",
+                    "0x7fc*****",
+                    f32::from_bits(actual),
+                    actual,
+                )
+            }
+        }
+        wast::NanPattern::Value(expected_value) => {
+            if actual == expected_value.bits {
+                Ok(())
+            } else {
+                bail!(
+                    "expected {:10} / {:#010x}\n\
+                     actual   {:10} / {:#010x}",
+                    f32::from_bits(expected_value.bits),
+                    expected_value.bits,
+                    f32::from_bits(actual),
+                    actual,
+                )
+            }
         }
     }
 }
 
-impl AsHexPattern for wast::NanPattern<wast::Float32> {
-    fn as_hex_pattern(&self) -> String {
-        match self {
-            wast::NanPattern::CanonicalNan => "0x7fc00000".to_string(),
-            // Note that NaN patterns can have varying sign bits and payloads. Technically the first
-            // bit should be a `*` but it is impossible to show that in hex.
-            wast::NanPattern::ArithmeticNan => "0x7fc*****".to_string(),
-            wast::NanPattern::Value(wast::Float32 { bits }) => as_hex_pattern(*bits),
+fn match_f64(actual: u64, expected: &wast::NanPattern<wast::Float64>) -> Result<()> {
+    match expected {
+        // Check if an f64 (as u64 bits to avoid possible quieting when moving values in registers, e.g.
+        // https://developer.arm.com/documentation/ddi0344/i/neon-and-vfp-programmers-model/modes-of-operation/default-nan-mode?lang=en)
+        // is a canonical NaN:
+        //  - the sign bit is unspecified,
+        //  - the 11-bit exponent is set to all 1s
+        //  - the MSB of the payload is set to 1 (a quieted NaN) and all others to 0.
+        // See https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
+        wast::NanPattern::CanonicalNan => {
+            let canon_nan = 0x7ff8_0000_0000_0000;
+            if (actual & 0x7fff_ffff_ffff_ffff) == canon_nan {
+                Ok(())
+            } else {
+                bail!(
+                    "expected {:18} / {:#018x}\n\
+                     actual   {:18} / {:#018x}",
+                    "canon-nan",
+                    canon_nan,
+                    f64::from_bits(actual),
+                    actual,
+                )
+            }
+        }
+
+        // Check if an f64 (as u64, see comments above) is an arithmetic NaN. This is the same as a
+        // canonical NaN including that the payload MSB is set to 1, but one or more of the remaining
+        // payload bits MAY BE set to 1 (a canonical NaN specifies all 0s). See
+        // https://webassembly.github.io/spec/core/syntax/values.html#floating-point.
+        wast::NanPattern::ArithmeticNan => {
+            const AF64_NAN: u64 = 0x7ff0_0000_0000_0000;
+            let is_nan = actual & AF64_NAN == AF64_NAN;
+            const AF64_PAYLOAD_MSB: u64 = 0x0008_0000_0000_0000;
+            let is_msb_set = actual & AF64_PAYLOAD_MSB == AF64_PAYLOAD_MSB;
+            if is_nan && is_msb_set {
+                Ok(())
+            } else {
+                bail!(
+                    "expected {:>18} / {:>18}\n\
+                     actual   {:18} / {:#018x}",
+                    "arith-nan",
+                    "0x7ff8************",
+                    f64::from_bits(actual),
+                    actual,
+                )
+            }
+        }
+        wast::NanPattern::Value(expected_value) => {
+            if actual == expected_value.bits {
+                Ok(())
+            } else {
+                bail!(
+                    "expected {:18} / {:#018x}\n\
+                     actual   {:18} / {:#018x}",
+                    f64::from_bits(expected_value.bits),
+                    expected_value.bits,
+                    f64::from_bits(actual),
+                    actual,
+                )
+            }
         }
     }
 }
 
-impl AsHexPattern for wast::NanPattern<wast::Float64> {
-    fn as_hex_pattern(&self) -> String {
-        match self {
-            wast::NanPattern::CanonicalNan => "0x7ff8000000000000".to_string(),
-            // Note that NaN patterns can have varying sign bits and payloads. Technically the first
-            // bit should be a `*` but it is impossible to show that in hex.
-            wast::NanPattern::ArithmeticNan => "0x7ff8************".to_string(),
-            wast::NanPattern::Value(wast::Float64 { bits }) => as_hex_pattern(*bits),
+fn match_v128(actual: u128, expected: &wast::V128Pattern) -> Result<()> {
+    match expected {
+        wast::V128Pattern::I8x16(expected) => {
+            let actual = [
+                extract_lane_as_i8(actual, 0),
+                extract_lane_as_i8(actual, 1),
+                extract_lane_as_i8(actual, 2),
+                extract_lane_as_i8(actual, 3),
+                extract_lane_as_i8(actual, 4),
+                extract_lane_as_i8(actual, 5),
+                extract_lane_as_i8(actual, 6),
+                extract_lane_as_i8(actual, 7),
+                extract_lane_as_i8(actual, 8),
+                extract_lane_as_i8(actual, 9),
+                extract_lane_as_i8(actual, 10),
+                extract_lane_as_i8(actual, 11),
+                extract_lane_as_i8(actual, 12),
+                extract_lane_as_i8(actual, 13),
+                extract_lane_as_i8(actual, 14),
+                extract_lane_as_i8(actual, 15),
+            ];
+            if actual == *expected {
+                return Ok(());
+            }
+            bail!(
+                "expected {:4?}\n\
+                 actual   {:4?}\n\
+                 \n\
+                 expected (hex) {0:02x?}\n\
+                 actual (hex)   {1:02x?}",
+                expected,
+                actual,
+            )
         }
-    }
-}
-
-// This implementation reverses both the lanes and the lane bytes in order to match the Wasm SIMD
-// little-endian order. This implementation must include special behavior for this reversal; other
-// implementations do not because they deal with raw values (`u128`) or use big-endian order for
-// display (scalars).
-impl AsHexPattern for wast::V128Pattern {
-    fn as_hex_pattern(&self) -> String {
-        fn reverse_pattern(pattern: String) -> String {
-            let chars: Vec<char> = pattern[2..].chars().collect();
-            let reversed: Vec<&[char]> = chars.chunks(2).rev().collect();
-            reversed.concat().iter().collect()
+        wast::V128Pattern::I16x8(expected) => {
+            let actual = [
+                extract_lane_as_i16(actual, 0),
+                extract_lane_as_i16(actual, 1),
+                extract_lane_as_i16(actual, 2),
+                extract_lane_as_i16(actual, 3),
+                extract_lane_as_i16(actual, 4),
+                extract_lane_as_i16(actual, 5),
+                extract_lane_as_i16(actual, 6),
+                extract_lane_as_i16(actual, 7),
+            ];
+            if actual == *expected {
+                return Ok(());
+            }
+            bail!(
+                "expected {:6?}\n\
+                 actual   {:6?}\n\
+                 \n\
+                 expected (hex) {0:04x?}\n\
+                 actual (hex)   {1:04x?}",
+                expected,
+                actual,
+            )
         }
-
-        fn as_hex_pattern(bits: &[u8]) -> String {
-            bits.iter()
-                .map(|b| format!("{:02x}", b))
-                .collect::<Vec<_>>()
-                .concat()
+        wast::V128Pattern::I32x4(expected) => {
+            let actual = [
+                extract_lane_as_i32(actual, 0),
+                extract_lane_as_i32(actual, 1),
+                extract_lane_as_i32(actual, 2),
+                extract_lane_as_i32(actual, 3),
+            ];
+            if actual == *expected {
+                return Ok(());
+            }
+            bail!(
+                "expected {:11?}\n\
+                 actual   {:11?}\n\
+                 \n\
+                 expected (hex) {0:08x?}\n\
+                 actual (hex)   {1:08x?}",
+                expected,
+                actual,
+            )
         }
-
-        fn reverse_lanes<T, F>(
-            lanes: impl DoubleEndedIterator<Item = T>,
-            as_hex_pattern: F,
-        ) -> String
-        where
-            F: Fn(T) -> String,
-        {
-            lanes
-                .rev()
-                .map(|f| as_hex_pattern(f))
-                .collect::<Vec<_>>()
-                .concat()
+        wast::V128Pattern::I64x2(expected) => {
+            let actual = [
+                extract_lane_as_i64(actual, 0),
+                extract_lane_as_i64(actual, 1),
+            ];
+            if actual == *expected {
+                return Ok(());
+            }
+            bail!(
+                "expected {:20?}\n\
+                 actual   {:20?}\n\
+                 \n\
+                 expected (hex) {0:016x?}\n\
+                 actual (hex)   {1:016x?}",
+                expected,
+                actual,
+            )
         }
-
-        let lanes_as_hex = match self {
-            wast::V128Pattern::I8x16(v) => {
-                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
+        wast::V128Pattern::F32x4(expected) => {
+            for (i, expected) in expected.iter().enumerate() {
+                let a = extract_lane_as_i32(actual, i) as u32;
+                match_f32(a, expected).with_context(|| format!("difference in lane {}", i))?;
             }
-            wast::V128Pattern::I16x8(v) => {
-                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
-            }
-            wast::V128Pattern::I32x4(v) => {
-                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
-            }
-            wast::V128Pattern::I64x2(v) => {
-                reverse_lanes(v.iter(), |b| as_hex_pattern(&b.to_le_bytes()))
-            }
-            wast::V128Pattern::F32x4(v) => {
-                reverse_lanes(v.iter(), |b| reverse_pattern(b.as_hex_pattern()))
-            }
-            wast::V128Pattern::F64x2(v) => {
-                reverse_lanes(v.iter(), |b| reverse_pattern(b.as_hex_pattern()))
-            }
-        };
-
-        String::from("0x") + &lanes_as_hex
-    }
-}
-
-impl AsHexPattern for Val {
-    fn as_hex_pattern(&self) -> String {
-        match self {
-            Val::I32(i) => as_hex_pattern(*i),
-            Val::I64(i) => as_hex_pattern(*i),
-            Val::F32(f) => as_hex_pattern(*f),
-            Val::F64(f) => as_hex_pattern(*f),
-            Val::V128(v) => as_hex_pattern(*v),
-            Val::ExternRef(_) | Val::FuncRef(_) => "no hex representation".to_string(),
+            Ok(())
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    #[test]
-    fn val_to_hex() {
-        assert_eq!(Val::I32(0x42).as_hex_pattern(), "0x00000042");
-        assert_eq!(Val::F64(0x0).as_hex_pattern(), "0x0000000000000000");
-        assert_eq!(
-            Val::V128(u128::from_le_bytes([
-                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc, 0xd, 0xe, 0xf
-            ]))
-            .as_hex_pattern(),
-            "0x0f0e0d0c0b0a09080706050403020100"
-        );
-    }
-
-    #[test]
-    fn assert_expression_to_hex() {
-        assert_eq!(
-            wast::AssertExpression::F32(wast::NanPattern::ArithmeticNan).as_hex_pattern(),
-            "0x7fc*****"
-        );
-        assert_eq!(
-            wast::AssertExpression::F64(wast::NanPattern::Value(wast::Float64 { bits: 0x42 }))
-                .as_hex_pattern(),
-            "0x0000000000000042"
-        );
-        assert_eq!(
-            wast::AssertExpression::V128(wast::V128Pattern::I32x4([0, 1, 2, 3])).as_hex_pattern(),
-            "0x03000000020000000100000000000000"
-        );
-        assert_eq!(
-            wast::AssertExpression::V128(wast::V128Pattern::F64x2([
-                wast::NanPattern::CanonicalNan,
-                wast::NanPattern::ArithmeticNan
-            ]))
-            .as_hex_pattern(),
-            "0x************f87f000000000000f87f"
-        );
+        wast::V128Pattern::F64x2(expected) => {
+            for (i, expected) in expected.iter().enumerate() {
+                let a = extract_lane_as_i64(actual, i) as u64;
+                match_f64(a, expected).with_context(|| format!("difference in lane {}", i))?;
+            }
+            Ok(())
+        }
     }
 }
