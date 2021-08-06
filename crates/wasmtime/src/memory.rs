@@ -599,7 +599,7 @@ mod tests {
         cfg.static_memory_maximum_size(0)
             .dynamic_memory_guard_size(0);
         let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
-        let ty = MemoryType::new(Limits::new(1, None));
+        let ty = MemoryType::new(1, None);
         let mem = Memory::new(&mut store, ty).unwrap();
         let store = store.as_context();
         assert_eq!(store[mem.0].memory.offset_guard_size, 0);
