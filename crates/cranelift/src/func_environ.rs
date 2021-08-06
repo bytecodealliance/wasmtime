@@ -1823,4 +1823,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         }
         Ok(())
     }
+
+    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
+        self.isa.unsigned_add_overflow_condition()
+    }
 }

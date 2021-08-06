@@ -2224,20 +2224,58 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
         cmp::max(memarg.offset / offset_guard_size * offset_guard_size, 1)
     };
     debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
-    let base = builder
-        .ins()
-        .heap_addr(environ.pointer_type(), heap, addr, adjusted_offset);
+    let (addr, offset) = match u32::try_from(adjusted_offset) {
+        // If our adjusted offset fits within a u32, then we can place the
+        // entire offset into the offset of the `heap_addr` instruction. After
+        // the `heap_addr` instruction, though, we need to factor the the offset
+        // into the returned address. This is either an immediate if the offset
+        // further fits within `i32`, or a manual add instruction otherwise.
+        //
+        // Note that native instructions take a signed offset hence the switch
+        // to i32. Note also the lack of overflow checking in the offset
+        // addition, which should be ok since if `heap_addr` passed we're
+        // guaranteed that this won't overflow.
+        Ok(offset) => {
+            let base = builder
+                .ins()
+                .heap_addr(environ.pointer_type(), heap, addr, offset);
+            match i32::try_from(memarg.offset) {
+                Ok(val) => (base, val),
+                Err(_) => {
+                    let adj = builder.ins().iadd_imm(base, i64::from(offset));
+                    (adj, 0)
+                }
+            }
+        }
 
-    // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
-    // pointer if necessary.
-    let (addr, offset) = match i32::try_from(memarg.offset) {
-        Ok(val) => (base, val),
+        // If the adjusted offset doesn't fit within a u32, then this gets
+        // pessimized a fair amount. We can't pass the fixed-sized offset to
+        // the `heap_addr` instruction, so we need to fold the offset into the
+        // address itself. In doing so though we need to check for overflow
+        // because that would mean the address is out-of-bounds.
+        //
+        // Once we have the effective address, offset already folded in, then
+        // `heap_addr` is used to verify that the address is indeed in-bounds.
+        // The access size of the `heap_addr` is what we were passed in from
+        // above.
+        //
+        // Note that this is generating what's likely to be at least two
+        // branches, one for the overflow and one for the bounds check itself.
+        // For now though that should hopefully be ok since 4gb+ offsets are
+        // relatively odd/rare.
         Err(_) => {
-            // Note the switch from u64 offset to i64 here, but this should be
-            // ok because we're already guaranteed this won't overflow if we
-            // reach this point after the `heap_addr` instruction above.
-            let adj = builder.ins().iadd_imm(base, memarg.offset as i64);
-            (adj, 0)
+            let index_type = builder.func.heaps[heap].index_type;
+            let offset = builder.ins().iconst(index_type, memarg.offset as i64);
+            let (addr, overflow) = builder.ins().iadd_ifcout(addr, offset);
+            builder.ins().trapif(
+                environ.unsigned_add_overflow_condition(),
+                overflow,
+                ir::TrapCode::HeapOutOfBounds,
+            );
+            let base = builder
+                .ins()
+                .heap_addr(environ.pointer_type(), heap, addr, access_size);
+            (base, 0)
         }
     };
 

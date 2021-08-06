@@ -697,6 +697,10 @@ pub trait FuncEnvironment: TargetEnvironment {
     ) -> WasmResult<()> {
         Ok(())
     }
+
+    /// Returns the target ISA's condition to check for unsigned addition
+    /// overflowing.
+    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
 }
 
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the

@@ -25,7 +25,7 @@ pub fn expand_heap_addr(
             imm,
         } => {
             debug_assert_eq!(opcode, ir::Opcode::HeapAddr);
-            (heap, arg, imm.into())
+            (heap, arg, u64::from(imm))
         }
         _ => panic!("Wanted heap_addr: {}", func.dfg.display_inst(inst, None)),
     };

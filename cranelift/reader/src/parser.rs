@@ -3064,7 +3064,7 @@ impl<'a> Parser<'a> {
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let arg = self.match_value("expected SSA value heap address")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
-                let imm = self.match_uimm64("expected 64-bit integer size")?;
+                let imm = self.match_uimm32("expected 32-bit integer size")?;
                 InstructionData::HeapAddr {
                     opcode,
                     heap,
