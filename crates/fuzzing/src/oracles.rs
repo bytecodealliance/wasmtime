@@ -13,7 +13,6 @@
 pub mod dummy;
 
 use arbitrary::Arbitrary;
-use dummy::dummy_linker;
 use log::debug;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
@@ -172,56 +171,48 @@ pub fn instantiate_with_config(
         Err(_) if !known_valid => return,
         Err(e) => panic!("failed to compile module: {:?}", e),
     };
-    let linker = match dummy_linker(&mut store, &module) {
-        Ok(linker) => linker,
-        Err(e) => {
-            eprintln!("Warning: failed to create host imports: {:?}", e);
 
-            // Currently the only error we want to allow here is ones where we
-            // ran out of resources creating imports. For example memory
-            // creation may not succeed if the host is running low on resources.
-            //
-            // Other errors, however, are bugs in creation of the host resource.
-            let string = e.to_string();
-            assert!(
-                string.contains("Insufficient resources")
-                    && string.contains("exceeds memory limits")
-            );
-            return;
-        }
+    instantiate_with_dummy(&mut store, &module);
+}
+
+fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
+    // Creation of imports can fail due to resource limit constraints, and then
+    // instantiation can naturally fail for a number of reasons as well. Bundle
+    // the two steps together to match on the error below.
+    let instance =
+        dummy::dummy_linker(store, module).and_then(|l| l.instantiate(&mut *store, module));
+
+    let e = match instance {
+        Ok(i) => return Some(i),
+        Err(e) => e,
     };
 
-    match linker.instantiate(&mut store, &module) {
-        Ok(_) => {}
-        Err(e) => {
-            // If the instantiation hit OOM for some reason then that's ok, it's
-            // expected that fuzz-generated programs try to allocate lots of
-            // stuff.
-            if store.data().oom {
-                return;
-            }
-
-            // Allow traps which can happen normally with `unreachable` or a
-            // timeout or such
-            if e.downcast_ref::<Trap>().is_some() {
-                return;
-            }
-
-            let string = e.to_string();
-            // Also allow errors related to fuel consumption
-            if string.contains("all fuel consumed")
-                // Currently we instantiate with a `Linker` which can't instantiate
-                // every single module under the sun due to using name-based resolution
-                // rather than positional-based resolution
-                || string.contains("incompatible import type")
-            {
-                return;
-            }
-
-            // Everything else should be a bug in the fuzzer
-            panic!("failed to instantiate {:?}", e);
-        }
+    // If the instantiation hit OOM for some reason then that's ok, it's
+    // expected that fuzz-generated programs try to allocate lots of
+    // stuff.
+    if store.data().oom {
+        return None;
     }
+
+    // Allow traps which can happen normally with `unreachable` or a
+    // timeout or such
+    if e.downcast_ref::<Trap>().is_some() {
+        return None;
+    }
+
+    let string = e.to_string();
+    // Also allow errors related to fuel consumption
+    if string.contains("all fuel consumed")
+        // Currently we instantiate with a `Linker` which can't instantiate
+        // every single module under the sun due to using name-based resolution
+        // rather than positional-based resolution
+        || string.contains("incompatible import type")
+    {
+        return None;
+    }
+
+    // Everything else should be a bug in the fuzzer or a bug in wasmtime
+    panic!("failed to instantiate {:?}", e);
 }
 
 /// Compile the Wasm buffer, and implicitly fail if we have an unexpected
@@ -286,27 +277,9 @@ pub fn differential_execution(
         // in and with what values. Like the results of exported functions,
         // calls to imports should also yield the same values for each
         // configuration, and we should assert that.
-        let linker = match dummy_linker(&mut store, &module) {
-            Ok(linker) => linker,
-            Err(e) => {
-                eprintln!("Warning: failed to create host imports: {:?}", e);
-                continue;
-            }
-        };
-
-        // Don't unwrap this: there can be instantiation-/link-time errors that
-        // aren't caught during validation or compilation. For example, an imported
-        // table might not have room for an element segment that we want to
-        // initialize into it.
-        let instance = match linker.instantiate(&mut store, &module) {
-            Ok(instance) => instance,
-            Err(e) => {
-                eprintln!(
-                    "Warning: failed to instantiate `wasm-opt -ttf` module: {}",
-                    e
-                );
-                continue;
-            }
+        let instance = match instantiate_with_dummy(&mut store, &module) {
+            Some(instance) => instance,
+            None => continue,
         };
 
         let exports = instance
@@ -462,16 +435,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 };
 
                 let store = store.as_mut().unwrap();
-                let linker = match dummy_linker(store, module) {
-                    Ok(linker) => linker,
-                    Err(_) => continue,
-                };
-
-                // Don't unwrap this: there can be instantiation-/link-time errors that
-                // aren't caught during validation or compilation. For example, an imported
-                // table might not have room for an element segment that we want to
-                // initialize into it.
-                if let Ok(instance) = linker.instantiate(store, &module) {
+                if let Some(instance) = instantiate_with_dummy(store, module) {
                     instances.insert(id, instance);
                 }
             }
