@@ -5891,7 +5891,7 @@ fn test_aarch64_binemit() {
             ty: I16,
             op: inst_common::AtomicRmwOp::Xor,
         },
-        "BF3B03D53B7F5F487C031ACA3C7F1848B8FFFFB5BF3B03D5",
+        "3BFF5F487C031ACA3CFF1848B8FFFFB5",
         "atomically { 16_bits_at_[x25]) Xor= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }",
     ));
 
@@ -5900,7 +5900,7 @@ fn test_aarch64_binemit() {
             ty: I32,
             op: inst_common::AtomicRmwOp::Xchg,
         },
-        "BF3B03D53B7F5F88FC031AAA3C7F1888B8FFFFB5BF3B03D5",
+        "3BFF5F88FC031AAA3CFF1888B8FFFFB5",
         "atomically { 32_bits_at_[x25]) Xchg= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }",
     ));
     insns.push((
@@ -5947,56 +5947,112 @@ fn test_aarch64_binemit() {
         Inst::AtomicCASLoop {
             ty: I8,
         },
-        "BF3B03D53B7F5F08581F40927F0318EB610000543C7F180878FFFFB5BF3B03D5",
+        "3BFF5F087F033AEB610000543CFF180898FFFFB5",
         "atomically { compare-and-swap(8_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }"
+    ));
+
+    insns.push((
+        Inst::AtomicCASLoop {
+            ty: I16,
+        },
+        "3BFF5F487F233AEB610000543CFF184898FFFFB5",
+        "atomically { compare-and-swap(16_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }"
+    ));
+
+    insns.push((
+        Inst::AtomicCASLoop {
+            ty: I32,
+        },
+        "3BFF5F887F031AEB610000543CFF188898FFFFB5",
+        "atomically { compare-and-swap(32_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }"
     ));
 
     insns.push((
         Inst::AtomicCASLoop {
             ty: I64,
         },
-        "BF3B03D53B7F5FC8F8031AAA7F0318EB610000543C7F18C878FFFFB5BF3B03D5",
+        "3BFF5FC87F031AEB610000543CFF18C898FFFFB5",
         "atomically { compare-and-swap(64_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }"
     ));
 
     insns.push((
-        Inst::AtomicLoad {
-            ty: I8,
-            r_data: writable_xreg(7),
-            r_addr: xreg(28),
+        Inst::LoadAcquire {
+            access_ty: I8,
+            rt: writable_xreg(7),
+            rn: xreg(28),
         },
-        "BF3B03D587034039",
-        "atomically { x7 = zero_extend_8_bits_at[x28] }",
+        "87FFDF08",
+        "ldarb w7, [x28]",
     ));
 
     insns.push((
-        Inst::AtomicLoad {
-            ty: I64,
-            r_data: writable_xreg(28),
-            r_addr: xreg(7),
+        Inst::LoadAcquire {
+            access_ty: I16,
+            rt: writable_xreg(2),
+            rn: xreg(3),
         },
-        "BF3B03D5FC0040F9",
-        "atomically { x28 = zero_extend_64_bits_at[x7] }",
+        "62FCDF48",
+        "ldarh w2, [x3]",
     ));
 
     insns.push((
-        Inst::AtomicStore {
-            ty: I16,
-            r_data: xreg(17),
-            r_addr: xreg(8),
+        Inst::LoadAcquire {
+            access_ty: I32,
+            rt: writable_xreg(15),
+            rn: xreg(0),
         },
-        "11010079BF3B03D5",
-        "atomically { 16_bits_at[x8] = x17 }",
+        "0FFCDF88",
+        "ldar w15, [x0]",
     ));
 
     insns.push((
-        Inst::AtomicStore {
-            ty: I32,
-            r_data: xreg(18),
-            r_addr: xreg(7),
+        Inst::LoadAcquire {
+            access_ty: I64,
+            rt: writable_xreg(28),
+            rn: xreg(7),
         },
-        "F20000B9BF3B03D5",
-        "atomically { 32_bits_at[x7] = x18 }",
+        "FCFCDFC8",
+        "ldar x28, [x7]",
+    ));
+
+    insns.push((
+        Inst::StoreRelease {
+            access_ty: I8,
+            rt: xreg(7),
+            rn: xreg(28),
+        },
+        "87FF9F08",
+        "stlrb w7, [x28]",
+    ));
+
+    insns.push((
+        Inst::StoreRelease {
+            access_ty: I16,
+            rt: xreg(2),
+            rn: xreg(3),
+        },
+        "62FC9F48",
+        "stlrh w2, [x3]",
+    ));
+
+    insns.push((
+        Inst::StoreRelease {
+            access_ty: I32,
+            rt: xreg(15),
+            rn: xreg(0),
+        },
+        "0FFC9F88",
+        "stlr w15, [x0]",
+    ));
+
+    insns.push((
+        Inst::StoreRelease {
+            access_ty: I64,
+            rt: xreg(28),
+            rn: xreg(7),
+        },
+        "FCFC9FC8",
+        "stlr x28, [x7]",
     ));
 
     insns.push((Inst::Fence {}, "BF3B03D5", "dmb ish"));

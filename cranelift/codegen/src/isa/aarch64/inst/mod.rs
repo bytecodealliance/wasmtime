@@ -789,10 +789,9 @@ pub enum Inst {
     },
 
     /// Similar to AtomicRMW, a compare-and-swap operation implemented using a load-linked
-    /// store-conditional loop. The sequence is both preceded and followed by a fence which is
-    /// at least as comprehensive as that of the `Fence` instruction below.  This instruction
-    /// is sequentially consistent.  Note that the operand conventions, although very similar
-    /// to AtomicRMW, are different:
+    /// store-conditional loop.
+    /// This instruction is sequentially consistent.
+    /// Note that the operand conventions, although very similar to AtomicRMW, are different:
     ///
     /// x25   (rd) address
     /// x26   (rd) expected value
@@ -803,22 +802,21 @@ pub enum Inst {
         ty: Type, // I8, I16, I32 or I64
     },
 
-    /// Read `ty` bits from address `r_addr`, zero extend the loaded value to 64 bits and put it
-    /// in `r_data`.  The load instruction is preceded by a fence at least as comprehensive as
-    /// that of the `Fence` instruction below.  This instruction is sequentially consistent.
-    AtomicLoad {
-        ty: Type, // I8, I16, I32 or I64
-        r_data: Writable<Reg>,
-        r_addr: Reg,
+    /// Read `access_ty` bits from address `rt`, either 8, 16, 32 or 64-bits, and put
+    /// it in `rn`, optionally zero-extending to fill a word or double word result.
+    /// This instruction is sequentially consistent.
+    LoadAcquire {
+        access_ty: Type, // I8, I16, I32 or I64
+        rt: Writable<Reg>,
+        rn: Reg,
     },
 
-    /// Write the lowest `ty` bits of `r_data` to address `r_addr`, with a memory fence
-    /// instruction following the store.  The fence is at least as comprehensive as that of the
-    /// `Fence` instruction below.  This instruction is sequentially consistent.
-    AtomicStore {
-        ty: Type, // I8, I16, I32 or I64
-        r_data: Reg,
-        r_addr: Reg,
+    /// Write the lowest `ty` bits of `rt` to address `rn`.
+    /// This instruction is sequentially consistent.
+    StoreRelease {
+        access_ty: Type, // I8, I16, I32 or I64
+        rt: Reg,
+        rn: Reg,
     },
 
     /// A memory fence.  This must provide ordering to ensure that, at a minimum, neither loads
@@ -1940,13 +1938,13 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(writable_xreg(24));
             collector.add_def(writable_xreg(27));
         }
-        &Inst::AtomicLoad { r_data, r_addr, .. } => {
-            collector.add_use(r_addr);
-            collector.add_def(r_data);
+        &Inst::LoadAcquire { rt, rn, .. } => {
+            collector.add_use(rn);
+            collector.add_def(rt);
         }
-        &Inst::AtomicStore { r_data, r_addr, .. } => {
-            collector.add_use(r_addr);
-            collector.add_use(r_data);
+        &Inst::StoreRelease { rt, rn, .. } => {
+            collector.add_use(rn);
+            collector.add_use(rt);
         }
         &Inst::Fence {} => {}
         &Inst::FpuMove64 { rd, rn } => {
@@ -2579,21 +2577,21 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         &mut Inst::AtomicCASLoop { .. } => {
             // There are no vregs to map in this insn.
         }
-        &mut Inst::AtomicLoad {
-            ref mut r_data,
-            ref mut r_addr,
+        &mut Inst::LoadAcquire {
+            ref mut rt,
+            ref mut rn,
             ..
         } => {
-            map_def(mapper, r_data);
-            map_use(mapper, r_addr);
+            map_def(mapper, rt);
+            map_use(mapper, rn);
         }
-        &mut Inst::AtomicStore {
-            ref mut r_data,
-            ref mut r_addr,
+        &mut Inst::StoreRelease {
+            ref mut rt,
+            ref mut rn,
             ..
         } => {
-            map_use(mapper, r_data);
-            map_use(mapper, r_addr);
+            map_use(mapper, rt);
+            map_use(mapper, rn);
         }
         &mut Inst::Fence {} => {}
         &mut Inst::FpuMove64 {
@@ -3643,25 +3641,35 @@ impl Inst {
                     "atomically {{ compare-and-swap({}_bits_at_[x25], x26 -> x28), x27 = old_value_at_[x25]; x24 = trash }}",
                     ty.bits())
             }
-            &Inst::AtomicLoad {
-                ty, r_data, r_addr, ..
+            &Inst::LoadAcquire {
+                access_ty, rt, rn, ..
             } => {
-                format!(
-                    "atomically {{ {} = zero_extend_{}_bits_at[{}] }}",
-                    r_data.show_rru(mb_rru),
-                    ty.bits(),
-                    r_addr.show_rru(mb_rru)
-                )
+                let (op, ty) = match access_ty {
+                    I8 => ("ldarb", I32),
+                    I16 => ("ldarh", I32),
+                    I32 => ("ldar", I32),
+                    I64 => ("ldar", I64),
+                    _ => panic!("Unsupported type: {}", access_ty),
+                };
+                let size = OperandSize::from_ty(ty);
+                let rt = show_ireg_sized(rt.to_reg(), mb_rru, size);
+                let rn = rn.show_rru(mb_rru);
+                format!("{} {}, [{}]", op, rt, rn)
             }
-            &Inst::AtomicStore {
-                ty, r_data, r_addr, ..
+            &Inst::StoreRelease {
+                access_ty, rt, rn, ..
             } => {
-                format!(
-                    "atomically {{ {}_bits_at[{}] = {} }}",
-                    ty.bits(),
-                    r_addr.show_rru(mb_rru),
-                    r_data.show_rru(mb_rru)
-                )
+                let (op, ty) = match access_ty {
+                    I8 => ("stlrb", I32),
+                    I16 => ("stlrh", I32),
+                    I32 => ("stlr", I32),
+                    I64 => ("stlr", I64),
+                    _ => panic!("Unsupported type: {}", access_ty),
+                };
+                let size = OperandSize::from_ty(ty);
+                let rt = show_ireg_sized(rt, mb_rru, size);
+                let rn = rn.show_rru(mb_rru);
+                format!("{} {}, [{}]", op, rt, rn)
             }
             &Inst::Fence {} => {
                 format!("dmb ish")

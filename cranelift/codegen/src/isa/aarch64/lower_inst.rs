@@ -521,6 +521,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Uextend | Opcode::Sextend => {
+            if op == Opcode::Uextend {
+                let inputs = ctx.get_input_as_source_or_const(inputs[0].insn, inputs[0].input);
+                if let Some((atomic_load, 0)) = inputs.inst {
+                    if ctx.data(atomic_load).opcode() == Opcode::AtomicLoad {
+                        let output_ty = ty.unwrap();
+                        assert!(output_ty == I32 || output_ty == I64);
+                        let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                        emit_atomic_load(ctx, rt, atomic_load);
+                        ctx.sink_inst(atomic_load);
+                        return Ok(());
+                    }
+                }
+            }
             let output_ty = ty.unwrap();
             let input_ty = ctx.input_ty(insn, 0);
             let from_bits = ty_bits(input_ty) as u8;
@@ -1523,27 +1536,16 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::AtomicLoad => {
-            let r_data = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let r_addr = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let ty_access = ty.unwrap();
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-            ctx.emit(Inst::AtomicLoad {
-                ty: ty_access,
-                r_data,
-                r_addr,
-            });
+            let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            emit_atomic_load(ctx, rt, insn);
         }
 
         Opcode::AtomicStore => {
-            let r_data = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let r_addr = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ty_access = ctx.input_ty(insn, 0);
-            assert!(is_valid_atomic_transaction_ty(ty_access));
-            ctx.emit(Inst::AtomicStore {
-                ty: ty_access,
-                r_data,
-                r_addr,
-            });
+            let rt = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let access_ty = ctx.input_ty(insn, 0);
+            assert!(is_valid_atomic_transaction_ty(access_ty));
+            ctx.emit(Inst::StoreRelease { access_ty, rt, rn });
         }
 
         Opcode::Fence => {

@@ -498,7 +498,7 @@ fn enc_dmb_ish() -> u32 {
     0xD5033BBF
 }
 
-fn enc_ldxr(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
+fn enc_ldar(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
     let sz = match ty {
         I64 => 0b11,
         I32 => 0b10,
@@ -506,13 +506,13 @@ fn enc_ldxr(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
         I8 => 0b00,
         _ => unreachable!(),
     };
-    0b00001000_01011111_01111100_00000000
+    0b00_001000_1_1_0_11111_1_11111_00000_00000
         | (sz << 30)
         | (machreg_to_gpr(rn) << 5)
         | machreg_to_gpr(rt.to_reg())
 }
 
-fn enc_stxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
+fn enc_stlr(ty: Type, rt: Reg, rn: Reg) -> u32 {
     let sz = match ty {
         I64 => 0b11,
         I32 => 0b10,
@@ -520,7 +520,35 @@ fn enc_stxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
         I8 => 0b00,
         _ => unreachable!(),
     };
-    0b00001000_00000000_01111100_00000000
+    0b00_001000_100_11111_1_11111_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt)
+}
+
+fn enc_ldaxr(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b11,
+        I32 => 0b10,
+        I16 => 0b01,
+        I8 => 0b00,
+        _ => unreachable!(),
+    };
+    0b00_001000_0_1_0_11111_1_11111_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt.to_reg())
+}
+
+fn enc_stlxr(ty: Type, rs: Writable<Reg>, rt: Reg, rn: Reg) -> u32 {
+    let sz = match ty {
+        I64 => 0b11,
+        I32 => 0b10,
+        I16 => 0b01,
+        I8 => 0b00,
+        _ => unreachable!(),
+    };
+    0b00_001000_000_00000_1_11111_00000_00000
         | (sz << 30)
         | (machreg_to_gpr(rs.to_reg()) << 16)
         | (machreg_to_gpr(rn) << 5)
@@ -1286,20 +1314,18 @@ impl MachInstEmit for Inst {
             }
             &Inst::AtomicRMW { ty, op } => {
                 /* Emit this:
-                      dmb         ish
                      again:
-                      ldxr{,b,h}  x/w27, [x25]
+                      ldaxr{,b,h}  x/w27, [x25]
                       op          x28, x27, x26 // op is add,sub,and,orr,eor
-                      stxr{,b,h}  w24, x/w28, [x25]
+                      stlxr{,b,h}  w24, x/w28, [x25]
                       cbnz        x24, again
-                      dmb         ish
 
                    Operand conventions:
                       IN:  x25 (addr), x26 (2nd arg for op)
                       OUT: x27 (old value), x24 (trashed), x28 (trashed)
 
                    It is unfortunate that, per the ARM documentation, x28 cannot be used for
-                   both the store-data and success-flag operands of stxr.  This causes the
+                   both the store-data and success-flag operands of stlxr.  This causes the
                    instruction's behaviour to be "CONSTRAINED UNPREDICTABLE", so we use x24
                    instead for the success-flag.
 
@@ -1320,15 +1346,13 @@ impl MachInstEmit for Inst {
                 let x28wr = writable_xreg(28);
                 let again_label = sink.get_label();
 
-                sink.put4(enc_dmb_ish()); // dmb ish
-
                 // again:
                 sink.bind_label(again_label);
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
+                sink.put4(enc_ldaxr(ty, x27wr, x25)); // ldaxr x27, [x25]
 
                 match op {
                     AtomicRmwOp::Xchg => {
@@ -1420,19 +1444,17 @@ impl MachInstEmit for Inst {
                 if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                sink.put4(enc_stxr(ty, x24wr, x28, x25)); // stxr w24, x28, [x25]
+                sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
 
                 // cbnz w24, again
                 // Note, we're actually testing x24, and relying on the default zero-high-half
-                // rule in the assignment that `stxr` does.
+                // rule in the assignment that `stlxr` does.
                 let br_offset = sink.cur_offset();
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
                     CondBrKind::NotZero(x24),
                 ));
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
-
-                sink.put4(enc_dmb_ish()); // dmb ish
             }
             &Inst::AtomicCAS { rs, rt, rn, ty } => {
                 let size = match ty {
@@ -1447,22 +1469,18 @@ impl MachInstEmit for Inst {
             }
             &Inst::AtomicCASLoop { ty } => {
                 /* Emit this:
-                     dmb         ish
                     again:
-                     ldxr{,b,h}  x/w27, [x25]
-                     and         x24, x26, MASK (= 2^size_bits - 1)
-                     cmp         x27, x24
+                     ldaxr{,b,h} x/w27, [x25]
+                     cmp         x27, x/w26 uxt{b,h}
                      b.ne        out
-                     stxr{,b,h}  w24, x/w28, [x25]
+                     stlxr{,b,h} w24, x/w28, [x25]
                      cbnz        x24, again
                     out:
-                     dmb         ish
 
                   Operand conventions:
                      IN:  x25 (addr), x26 (expected value), x28 (replacement value)
                      OUT: x27 (old value), x24 (trashed)
                 */
-                let xzr = zero_reg();
                 let x24 = xreg(24);
                 let x25 = xreg(25);
                 let x26 = xreg(26);
@@ -1474,37 +1492,25 @@ impl MachInstEmit for Inst {
                 let again_label = sink.get_label();
                 let out_label = sink.get_label();
 
-                sink.put4(enc_dmb_ish()); // dmb ish
-
                 // again:
                 sink.bind_label(again_label);
                 let srcloc = state.cur_srcloc();
                 if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                sink.put4(enc_ldxr(ty, x27wr, x25)); // ldxr x27, [x25]
+                // ldaxr x27, [x25]
+                sink.put4(enc_ldaxr(ty, x27wr, x25));
 
-                if ty == I64 {
-                    // mov x24, x26
-                    sink.put4(enc_arith_rrr(0b101_01010_00_0, 0b000000, x24wr, xzr, x26))
-                } else {
-                    // and x24, x26, 0xFF/0xFFFF/0xFFFFFFFF
-                    let (mask, s) = match ty {
-                        I8 => (0xFF, 7),
-                        I16 => (0xFFFF, 15),
-                        I32 => (0xFFFFFFFF, 31),
-                        _ => unreachable!(),
-                    };
-                    sink.put4(enc_arith_rr_imml(
-                        0b100_100100,
-                        ImmLogic::from_n_r_s(mask, true, 0, s, OperandSize::Size64).enc_bits(),
-                        x26,
-                        x24wr,
-                    ))
-                }
-
-                // cmp x27, x24 (== subs xzr, x27, x24)
-                sink.put4(enc_arith_rrr(0b111_01011_00_0, 0b000000, xzrwr, x27, x24));
+                // The top 32-bits are zero-extended by the ldaxr so we don't
+                // have to use UXTW, just the x-form of the register.
+                let (bit21, extend_op) = match ty {
+                    I8 => (0b1, 0b000000),
+                    I16 => (0b1, 0b001000),
+                    _ => (0b0, 0b000000),
+                };
+                let bits_31_21 = 0b111_01011_000 | bit21;
+                // cmp x27, x26 (== subs xzr, x27, x26)
+                sink.put4(enc_arith_rrr(bits_31_21, extend_op, xzrwr, x27, x26));
 
                 // b.ne out
                 let br_out_offset = sink.cur_offset();
@@ -1518,11 +1524,11 @@ impl MachInstEmit for Inst {
                 if srcloc != SourceLoc::default() {
                     sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
                 }
-                sink.put4(enc_stxr(ty, x24wr, x28, x25)); // stxr w24, x28, [x25]
+                sink.put4(enc_stlxr(ty, x24wr, x28, x25)); // stlxr w24, x28, [x25]
 
                 // cbnz w24, again.
                 // Note, we're actually testing x24, and relying on the default zero-high-half
-                // rule in the assignment that `stxr` does.
+                // rule in the assignment that `stlxr` does.
                 let br_again_offset = sink.cur_offset();
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
@@ -1532,46 +1538,12 @@ impl MachInstEmit for Inst {
 
                 // out:
                 sink.bind_label(out_label);
-                sink.put4(enc_dmb_ish()); // dmb ish
             }
-            &Inst::AtomicLoad { ty, r_data, r_addr } => {
-                let op = match ty {
-                    I8 => 0b0011100001,
-                    I16 => 0b0111100001,
-                    I32 => 0b1011100001,
-                    I64 => 0b1111100001,
-                    _ => unreachable!(),
-                };
-                sink.put4(enc_dmb_ish()); // dmb ish
-
-                let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
-                }
-                let uimm12scaled_zero = UImm12Scaled::zero(I8 /*irrelevant*/);
-                sink.put4(enc_ldst_uimm12(
-                    op,
-                    uimm12scaled_zero,
-                    r_addr,
-                    r_data.to_reg(),
-                ));
+            &Inst::LoadAcquire { access_ty, rt, rn } => {
+                sink.put4(enc_ldar(access_ty, rt, rn));
             }
-            &Inst::AtomicStore { ty, r_data, r_addr } => {
-                let op = match ty {
-                    I8 => 0b0011100000,
-                    I16 => 0b0111100000,
-                    I32 => 0b1011100000,
-                    I64 => 0b1111100000,
-                    _ => unreachable!(),
-                };
-
-                let srcloc = state.cur_srcloc();
-                if srcloc != SourceLoc::default() {
-                    sink.add_trap(srcloc, TrapCode::HeapOutOfBounds);
-                }
-                let uimm12scaled_zero = UImm12Scaled::zero(I8 /*irrelevant*/);
-                sink.put4(enc_ldst_uimm12(op, uimm12scaled_zero, r_addr, r_data));
-                sink.put4(enc_dmb_ish()); // dmb ish
+            &Inst::StoreRelease { access_ty, rt, rn } => {
+                sink.put4(enc_stlr(access_ty, rt, rn));
             }
             &Inst::Fence {} => {
                 sink.put4(enc_dmb_ish()); // dmb ish
