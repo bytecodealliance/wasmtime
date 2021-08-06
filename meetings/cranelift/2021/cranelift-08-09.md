@@ -5,6 +5,7 @@
 ## Agenda
 - cfallin: instruction selection pre-RFC
 - cfallin: update on RA2 (review in progress; licensing)
+- jlbirch: Simd fuzzbugs ... following a consistent set of standards when lowering.
 - General status updates
 
 ## Attendees
