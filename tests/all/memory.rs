@@ -75,7 +75,14 @@ fn test_traps(store: &mut Store<()>, funcs: &[TestFunc], addr: u32, mem: &Memory
         let base = u64::from(func.offset) + u64::from(addr);
         let range = base..base + u64::from(func.width);
         if range.start >= mem_size || range.end >= mem_size {
-            assert!(result.is_err());
+            assert!(
+                result.is_err(),
+                "access at {}+{}+{} succeeded but should have failed when memory has {} bytes",
+                addr,
+                func.offset,
+                func.width,
+                mem_size
+            );
         } else {
             assert!(result.is_ok());
         }
@@ -97,6 +104,7 @@ fn offsets_static_dynamic_oh_my() -> Result<()> {
                 config.dynamic_memory_guard_size(guard_size);
                 config.static_memory_guard_size(guard_size);
                 config.guard_before_linear_memory(guard_before_linear_memory);
+                config.cranelift_debug_verifier(true);
                 engines.push(Engine::new(&config)?);
             }
         }

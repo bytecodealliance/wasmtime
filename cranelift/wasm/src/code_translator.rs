@@ -2235,14 +2235,14 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
         // to i32. Note also the lack of overflow checking in the offset
         // addition, which should be ok since if `heap_addr` passed we're
         // guaranteed that this won't overflow.
-        Ok(offset) => {
+        Ok(adjusted_offset) => {
             let base = builder
                 .ins()
-                .heap_addr(environ.pointer_type(), heap, addr, offset);
+                .heap_addr(environ.pointer_type(), heap, addr, adjusted_offset);
             match i32::try_from(memarg.offset) {
                 Ok(val) => (base, val),
                 Err(_) => {
-                    let adj = builder.ins().iadd_imm(base, i64::from(offset));
+                    let adj = builder.ins().iadd_imm(base, memarg.offset as i64);
                     (adj, 0)
                 }
             }
