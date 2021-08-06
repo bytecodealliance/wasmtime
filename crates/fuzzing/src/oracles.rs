@@ -46,9 +46,9 @@ fn create_store(engine: &Engine) -> Store<StoreLimits> {
     let mut store = Store::new(
         &engine,
         StoreLimits {
-            // Limits tables/memories within a store to at most 2gb for now to
+            // Limits tables/memories within a store to at most 1gb for now to
             // exercise some larger address but not overflow various limits.
-            remaining_memory: 2 << 30,
+            remaining_memory: 1 << 30,
             oom: false,
         },
     );
