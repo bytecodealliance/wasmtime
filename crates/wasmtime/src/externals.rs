@@ -419,7 +419,7 @@ impl Table {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let ty = TableType::new(ValType::FuncRef, Limits::new(2, None));
+    /// let ty = TableType::new(ValType::FuncRef, 2, None);
     /// let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
     ///
     /// let module = Module::new(

@@ -210,7 +210,7 @@ impl Memory {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let memory_ty = MemoryType::new(Limits::new(1, None));
+    /// let memory_ty = MemoryType::new(1, None);
     /// let memory = Memory::new(&mut store, memory_ty)?;
     ///
     /// let module = Module::new(&engine, "(module (memory (import \"\" \"\") 1))")?;
@@ -247,7 +247,7 @@ impl Memory {
     /// let instance = Instance::new(&mut store, &module, &[])?;
     /// let memory = instance.get_memory(&mut store, "mem").unwrap();
     /// let ty = memory.ty(&store);
-    /// assert_eq!(ty.limits().min(), 1);
+    /// assert_eq!(ty.minimum(), 1);
     /// # Ok(())
     /// # }
     /// ```
