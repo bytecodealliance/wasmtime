@@ -485,6 +485,7 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     crate::init_fuzzing();
     log::debug!("running {:?} with {:?}", test.file, fuzz_config);
     let mut config = fuzz_config.to_wasmtime();
+    config.wasm_memory64(false);
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
     config.wasm_module_linking(false);
