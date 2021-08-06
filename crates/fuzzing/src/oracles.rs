@@ -493,6 +493,7 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     config.wasm_reference_types(false);
     config.wasm_bulk_memory(false);
     config.wasm_module_linking(false);
+    config.wasm_multi_memory(false);
     let mut store = create_store(&Engine::new(&config).unwrap());
     if fuzz_config.consume_fuel {
         store.add_fuel(u64::max_value()).unwrap();
