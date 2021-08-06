@@ -6,6 +6,7 @@
 
 use alloc::vec::Vec;
 use core::cmp::Ordering;
+use core::convert::TryFrom;
 use core::fmt::{self, Display, Formatter};
 use core::str::FromStr;
 use core::{i32, u32};
@@ -76,16 +77,16 @@ impl Imm64 {
             return;
         }
 
-        let bit_width = bit_width as i64;
+        let bit_width = i64::from(bit_width);
         let delta = 64 - bit_width;
         let sign_extended = (self.0 << delta) >> delta;
         *self = Imm64(sign_extended);
     }
 }
 
-impl Into<i64> for Imm64 {
-    fn into(self) -> i64 {
-        self.0
+impl From<Imm64> for i64 {
+    fn from(val: Imm64) -> i64 {
+        val.0
     }
 }
 
@@ -164,9 +165,9 @@ impl Uimm64 {
     }
 }
 
-impl Into<u64> for Uimm64 {
-    fn into(self) -> u64 {
-        self.0
+impl From<Uimm64> for u64 {
+    fn from(val: Uimm64) -> u64 {
+        val.0
     }
 }
 
@@ -284,15 +285,15 @@ pub type Uimm8 = u8;
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Uimm32(u32);
 
-impl Into<u32> for Uimm32 {
-    fn into(self) -> u32 {
-        self.0
+impl From<Uimm32> for u32 {
+    fn from(val: Uimm32) -> u32 {
+        val.0
     }
 }
 
-impl Into<i64> for Uimm32 {
-    fn into(self) -> i64 {
-        i64::from(self.0)
+impl From<Uimm32> for i64 {
+    fn from(val: Uimm32) -> i64 {
+        i64::from(val.0)
     }
 }
 
@@ -382,34 +383,27 @@ impl Offset32 {
 
     /// Create a new `Offset32` representing the signed number `x` if possible.
     pub fn try_from_i64(x: i64) -> Option<Self> {
-        let casted = x as i32;
-        if casted as i64 == x {
-            Some(Self::new(casted))
-        } else {
-            None
-        }
+        let x = i32::try_from(x).ok()?;
+        Some(Self::new(x))
     }
 
     /// Add in the signed number `x` if possible.
     pub fn try_add_i64(self, x: i64) -> Option<Self> {
-        let casted = x as i32;
-        if casted as i64 == x {
-            self.0.checked_add(casted).map(Self::new)
-        } else {
-            None
-        }
+        let x = i32::try_from(x).ok()?;
+        let ret = self.0.checked_add(x)?;
+        Some(Self::new(ret))
     }
 }
 
-impl Into<i32> for Offset32 {
-    fn into(self) -> i32 {
-        self.0
+impl From<Offset32> for i32 {
+    fn from(val: Offset32) -> i32 {
+        val.0
     }
 }
 
-impl Into<i64> for Offset32 {
-    fn into(self) -> i64 {
-        i64::from(self.0)
+impl From<Offset32> for i64 {
+    fn from(val: Offset32) -> i64 {
+        i64::from(val.0)
     }
 }
 
