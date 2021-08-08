@@ -271,14 +271,14 @@ impl Value for DataValue {
                 (types::I32, types::I64) => unimplemented!(),
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
-            ValueConversionKind::ZeroExtend(ty) => match (self.ty(), ty) {
-                (types::I8, types::I16) => unimplemented!(),
-                (types::I8, types::I32) => unimplemented!(),
-                (types::I8, types::I64) => unimplemented!(),
-                (types::I16, types::I32) => unimplemented!(),
-                (types::I16, types::I64) => unimplemented!(),
-                (types::I32, types::I64) => unimplemented!(),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
+            ValueConversionKind::ZeroExtend(ty) => match (self, ty) {
+                (DataValue::I8(_), types::I16) => unimplemented!(),
+                (DataValue::I8(_), types::I32) => unimplemented!(),
+                (DataValue::I8(_), types::I64) => unimplemented!(),
+                (DataValue::I16(_), types::I32) => unimplemented!(),
+                (DataValue::I16(_), types::I64) => unimplemented!(),
+                (DataValue::I32(n), types::I64) => DataValue::I64(n as u32 as i64),
+                (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::ToUnsigned => match self {
                 DataValue::I8(n) => DataValue::U8(n as u8),
@@ -386,7 +386,7 @@ impl Value for DataValue {
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
-        binary_match!(&(&self, &other); [I8, I16, I32, I64])
+        binary_match!(&(&self, &other); [B, I8, I16, I32, I64])
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {

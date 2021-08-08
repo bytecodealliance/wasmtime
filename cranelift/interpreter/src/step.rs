@@ -1,11 +1,11 @@
 //! The [step] function interprets a single Cranelift instruction given its [State] and
 //! [InstructionContext]; the interpretation is generic over [Value]s.
 use crate::instruction::InstructionContext;
-use crate::state::{MemoryError, State};
+use crate::state::{Address, AddressMut, MemoryError, State};
 use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Value as ValueRef,
+    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -82,6 +82,22 @@ where
             TrapCode::IntegerDivisionByZero,
         ))),
         Err(e) => Err(e),
+    };
+
+    // Performs a load to an address or traps
+    let load_or_trap = |state: &mut dyn State<'a, V>, address: Address, ty: Type| match state
+        .checked_load(address, ty)
+    {
+        Ok(loaded) => assign(loaded),
+        Err(e) => ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsLoad)),
+    };
+
+    // Performs a store to an address or traps
+    let store_or_trap = |state: &mut dyn State<'a, V>, address: AddressMut, value: V| match state
+        .checked_store(address, value)
+    {
+        Ok(()) => ControlFlow::Continue,
+        Err(e) => ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsStore)),
     };
 
     // Interpret a binary instruction with the given `op`, assigning the resulting value to the
@@ -247,7 +263,9 @@ where
         | Opcode::Uload32x2Complex
         | Opcode::Sload32x2
         | Opcode::Sload32x2Complex => {
-            let address = sum(imm(), args()?)? as usize;
+            let imm = imm().convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
+            let address = sum(imm, args()?)? as usize as Address;
+
             let ctrl_ty = inst_context.controlling_type().unwrap();
             let (load_ty, kind) = match inst.opcode() {
                 Opcode::Load | Opcode::LoadComplex => (ctrl_ty, None),
@@ -283,13 +301,15 @@ where
                 | Opcode::Sload32x2Complex => unimplemented!(),
                 _ => unreachable!(),
             };
-            let loaded = state.load_heap(address, load_ty)?;
-            let extended = if let Some(c) = kind {
-                loaded.convert(c)?
-            } else {
-                loaded
-            };
-            ControlFlow::Assign(smallvec!(extended))
+
+            let res = load_or_trap(state, address, load_ty);
+            match (res, kind) {
+                (ControlFlow::Assign(mut loaded), Some(c)) => {
+                    let loaded = loaded.pop().unwrap();
+                    ControlFlow::Assign(smallvec![loaded.convert(c)?])
+                }
+                (res, _) => res,
+            }
         }
         Opcode::Store
         | Opcode::StoreComplex
@@ -299,7 +319,9 @@ where
         | Opcode::Istore16Complex
         | Opcode::Istore32
         | Opcode::Istore32Complex => {
-            let address = sum(imm(), args_range(1..)?)? as usize;
+            let imm = imm().convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
+            let address = sum(imm, args_range(1..)?)? as usize as AddressMut;
+
             let kind = match inst.opcode() {
                 Opcode::Store | Opcode::StoreComplex => None,
                 Opcode::Istore8 | Opcode::Istore8Complex => {
@@ -318,22 +340,44 @@ where
             } else {
                 arg(0)?
             };
-            state.store_heap(address, reduced)?;
-            ControlFlow::Continue
+            store_or_trap(state, address, reduced)
         }
         Opcode::StackLoad => {
-            let address = sum(imm(), args_range(1..)?)? as usize;
+            let slot = inst.stack_slot().unwrap();
+            let offset = sum(imm(), args()?)? as usize;
+            let address = state.stack_address(slot, offset);
             let load_ty = inst_context.controlling_type().unwrap();
-            let loaded = state.load_stack(address, load_ty)?;
-            ControlFlow::Assign(smallvec!(loaded))
+
+            // The caller can add an offset so large that it goes out of stack range
+            // This is tested here instead of `checked_load`, because the offset
+            // can end up in the heap range, and `checked_load` will allow that.
+            if !state.analyze_address(address).is_stack() {
+                ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsLoad))
+            } else {
+                load_or_trap(state, address, ctrl_ty)
+            }
         }
         Opcode::StackStore => {
-            let address = sum(imm(), args_range(1..)?)? as usize;
-            let arg0 = arg(0)?;
-            state.store_stack(address, arg0)?;
-            ControlFlow::Continue
+            let arg = arg(0)?;
+            let slot = inst.stack_slot().unwrap();
+            let offset = sum(imm(), args_range(1..)?)? as usize;
+            let address = state.stack_address(slot, offset);
+
+            // The caller can add an offset so large that it goes out of stack range
+            // This is tested here instead of `checked_store`, because the offset
+            // can end up in the heap range, and `checked_store` will allow that.
+            if !state.analyze_address(address).is_stack() {
+                ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsStore))
+            } else {
+                store_or_trap(state, address, arg)
+            }
         }
-        Opcode::StackAddr => unimplemented!("StackAddr"),
+        Opcode::StackAddr => {
+            let slot = inst.stack_slot().unwrap();
+            let offset = sum(imm(), args()?)? as usize;
+            let address = state.stack_address(slot, offset) as usize as i128;
+            assign(Value::int(address, ctrl_ty)?)
+        }
         Opcode::GlobalValue => unimplemented!("GlobalValue"),
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
@@ -719,6 +763,16 @@ impl<'a, V> ControlFlow<'a, V> {
             values.into_vec()
         } else {
             panic!("expected the control flow to be in the return state")
+        }
+    }
+
+    /// For convenience, we can unwrap the [ControlFlow] state assuming that it is a
+    /// [ControlFlow::Trap], panicking otherwise.
+    pub fn unwrap_trap(self) -> CraneliftTrap {
+        if let ControlFlow::Trap(trap) = self {
+            trap
+        } else {
+            panic!("expected the control flow to be a trap")
         }
     }
 }
