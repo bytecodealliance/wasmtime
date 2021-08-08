@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::Type;
 use cranelift_reader::parse_heap_command;
@@ -16,6 +17,23 @@ impl RuntestEnvironment {
 
         for comment in comments.iter() {
             if let Some(heap_command) = parse_heap_command(comment.text)? {
+                let heap_index = env.heaps.len() as u64;
+                let expected_ptr = heap_index * 16;
+                if Some(expected_ptr) != heap_command.ptr_offset.map(|p| p.into()) {
+                    return Err(anyhow!(
+                        "Invalid ptr offset, expected vmctx+{}",
+                        expected_ptr
+                    ));
+                }
+
+                let expected_bound = (heap_index * 16) + 8;
+                if Some(expected_bound) != heap_command.bound_offset.map(|p| p.into()) {
+                    return Err(anyhow!(
+                        "Invalid bound offset, expected vmctx+{}",
+                        expected_bound
+                    ));
+                }
+
                 env.heaps.push(heap_command);
             };
         }

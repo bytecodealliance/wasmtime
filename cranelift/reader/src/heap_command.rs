@@ -27,11 +27,29 @@ pub struct HeapCommand {
     ///
     /// For dynamic heaps this is the starting size. For static heaps, this is the total size.
     pub size: Uimm64,
+    /// Offset of the heap pointer from the vmctx base
+    ///
+    /// This is done for verification purposes only
+    pub ptr_offset: Option<Uimm64>,
+    /// Offset of the bound pointer from the vmctx base
+    ///
+    /// This is done for verification purposes only
+    pub bound_offset: Option<Uimm64>,
 }
 
 impl Display for HeapCommand {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "heap: {}, size={}", self.heap_type, self.size)
+        write!(f, "heap: {}, size={}", self.heap_type, self.size)?;
+
+        if let Some(offset) = self.ptr_offset {
+            write!(f, ", ptr=vmctx+{}", offset)?
+        }
+
+        if let Some(offset) = self.bound_offset {
+            write!(f, ", bound=vmctx+{}", offset)?
+        }
+
+        Ok(())
     }
 }
 

@@ -15,7 +15,7 @@ block0(v0: i64, v1: i64, v2: i32):
     v4 = load.i32 v3
     return v4
 }
-; heap: static, size=0x1000
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %static_heap_i64_load_store(0, 1) == 1
 ; run: %static_heap_i64_load_store(0, -1) == -1
 ; run: %static_heap_i64_load_store(16, 1) == 1
@@ -33,7 +33,7 @@ block0(v0: i64, v1: i32, v2: i32):
     v4 = load.i32 v3
     return v4
 }
-; heap: static, size=0x1000
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %static_heap_i32_load_store(0, 1) == 1
 ; run: %static_heap_i32_load_store(0, -1) == -1
 ; run: %static_heap_i32_load_store(16, 1) == 1
@@ -51,7 +51,7 @@ block0(v0: i64, v1: i32, v2: i32):
     v4 = load.i32 v3
     return v4
 }
-; heap: static, size=0x1000
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %static_heap_i32_load_store_no_min(0, 1) == 1
 ; run: %static_heap_i32_load_store_no_min(0, -1) == -1
 ; run: %static_heap_i32_load_store_no_min(16, 1) == 1
@@ -70,7 +70,7 @@ block0(v0: i64, v1: i64, v2: i32):
     v4 = load.i32 v3
     return v4
 }
-; heap: dynamic, size=0x1000
+; heap: dynamic, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %dynamic_heap_i64_load_store(0, 1) == 1
 ; run: %dynamic_heap_i64_load_store(0, -1) == -1
 ; run: %dynamic_heap_i64_load_store(16, 1) == 1
@@ -89,7 +89,7 @@ block0(v0: i64, v1: i32, v2: i32):
     v4 = load.i32 v3
     return v4
 }
-; heap: dynamic, size=0x1000
+; heap: dynamic, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %dynamic_heap_i32_load_store(0, 1) == 1
 ; run: %dynamic_heap_i32_load_store(0, -1) == -1
 ; run: %dynamic_heap_i32_load_store(16, 1) == 1
@@ -123,8 +123,8 @@ block0(v0: i64, v1: i32, v2: i32):
     v9 = iadd.i32 v7, v8
     return v9
 }
-; heap: static, size=0x1000
-; heap: dynamic, size=0x1000
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; heap: dynamic, size=0x1000, ptr=vmctx+16, bound=vmctx+24
 ; run: %multi_heap_load_store(1, 2) == 3
 ; run: %multi_heap_load_store(4, 5) == 9
 
@@ -141,7 +141,7 @@ block0(v0: i64, v1: i64, v2: i32):
     v4 = load.i32 v3
     return v4
 }
-; heap: static, size=0x1000
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %static_heap_i64_load_store_unaligned(0, 1) == 1
 ; run: %static_heap_i64_load_store_unaligned(0, -1) == -1
 ; run: %static_heap_i64_load_store_unaligned(1, 1) == 1
@@ -165,6 +165,6 @@ block0(v0: i64, v1: i32):
     v4 = load.i32 v3
     return v4
 }
-; heap: static, size=0x1000
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; run: %static_heap_i64_iadd_imm(1) == 1
 ; run: %static_heap_i64_iadd_imm(-1) == -1
