@@ -92,6 +92,8 @@ impl TrapCode {
     fn from_non_user(code: ir::TrapCode) -> Self {
         match code {
             ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
+            ir::TrapCode::OutOfBoundsLoad => TrapCode::MemoryOutOfBounds,
+            ir::TrapCode::OutOfBoundsStore => TrapCode::MemoryOutOfBounds,
             ir::TrapCode::HeapOutOfBounds => TrapCode::MemoryOutOfBounds,
             ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
             ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,

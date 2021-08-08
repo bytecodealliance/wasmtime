@@ -23,7 +23,7 @@ use crate::ir::{
     self,
     condcodes::{FloatCC, IntCC},
     trapcode::TrapCode,
-    types, Block, FuncRef, JumpTable, MemFlags, SigRef, Type, Value,
+    types, Block, FuncRef, JumpTable, MemFlags, SigRef, StackSlot, Type, Value,
 };
 use crate::isa;
 
@@ -407,6 +407,15 @@ impl InstructionData {
             | &InstructionData::Store { flags, .. }
             | &InstructionData::StoreComplex { flags, .. }
             | &InstructionData::StoreNoOffset { flags, .. } => Some(flags),
+            _ => None,
+        }
+    }
+
+    /// If this instruction references a stack slot, return it
+    pub fn stack_slot(&self) -> Option<StackSlot> {
+        match self {
+            &InstructionData::StackStore { stack_slot, .. }
+            | &InstructionData::StackLoad { stack_slot, .. } => Some(stack_slot),
             _ => None,
         }
     }
