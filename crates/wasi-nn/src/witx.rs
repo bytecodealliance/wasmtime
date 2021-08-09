@@ -14,8 +14,7 @@ impl<'a> types::UserErrorConversion for WasiNnCtx {
     fn nn_errno_from_wasi_nn_error(&mut self, e: WasiNnError) -> Result<NnErrno, wiggle::Trap> {
         eprintln!("Host error: {:?}", e);
         match e {
-            WasiNnError::OpenvinoSetupError(_) => unimplemented!(),
-            WasiNnError::OpenvinoInferenceError(_) => unimplemented!(),
+            WasiNnError::BackendError(_) => unimplemented!(),
             WasiNnError::GuestError(_) => unimplemented!(),
             WasiNnError::UsageError(_) => unimplemented!(),
         }
