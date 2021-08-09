@@ -99,10 +99,15 @@ impl CompilationArtifacts {
     /// The `use_paged_init` argument controls whether or not an attempt is made to
     /// organize linear memory initialization data as entire pages or to leave
     /// the memory initialization data as individual segments.
+    ///
+    /// The `prefer_parallel_compilation` is used to control whether compilation should be performed
+    /// using multiple threads or not. This has only an effect if the feature `parallel-compilation`
+    /// is enabled.
     pub fn build(
         compiler: &Compiler,
         data: &[u8],
         use_paged_mem_init: bool,
+        #[cfg(feature = "parallel-compilation")] parallel_compilation: bool,
     ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables), SetupError> {
         let (main_module, translations, types) = ModuleEnvironment::new(
             compiler.frontend_config(),
@@ -112,13 +117,18 @@ impl CompilationArtifacts {
         .translate(data)
         .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
-        let list = maybe_parallel!(translations.(into_iter | into_par_iter))
-            .map(|mut translation| {
+        let list = maybe_parallel!(parallel_compilation, translations.(into_iter | into_par_iter), iter => {
+            iter.map(|mut translation| {
                 let Compilation {
                     obj,
                     unwind_info,
                     funcs,
-                } = compiler.compile(&mut translation, &types)?;
+                } = compiler.compile(
+                    &mut translation,
+                    &types,
+                    #[cfg(feature = "parallel-compilation")]
+                    parallel_compilation,
+                )?;
 
                 let ModuleTranslation {
                     mut module,
@@ -160,7 +170,8 @@ impl CompilationArtifacts {
                     has_unparsed_debuginfo,
                 })
             })
-            .collect::<Result<Vec<_>, SetupError>>()?;
+            .collect::<Result<Vec<_>, SetupError>>()?
+        });
         Ok((
             main_module,
             list,
@@ -226,10 +237,11 @@ impl CompiledModule {
         artifacts: Vec<CompilationArtifacts>,
         isa: &dyn TargetIsa,
         profiler: &dyn ProfilingAgent,
+        #[cfg(feature = "parallel-compilation")] parallel_compilation: bool,
     ) -> Result<Vec<Arc<Self>>, SetupError> {
-        maybe_parallel!(artifacts.(into_iter | into_par_iter))
-            .map(|a| CompiledModule::from_artifacts(a, isa, profiler))
-            .collect()
+        maybe_parallel!(parallel_compilation, artifacts.(into_iter | into_par_iter), iter => {
+            iter.map(|a| CompiledModule::from_artifacts(a, isa, profiler)).collect()
+        })
     }
 
     /// Creates `CompiledModule` directly from `CompilationArtifacts`.

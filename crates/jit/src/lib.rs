@@ -22,16 +22,23 @@
 
 #[cfg(feature = "parallel-compilation")]
 macro_rules! maybe_parallel {
-    ($e:ident.($serial:ident | $parallel:ident)) => {
-        $e.$parallel()
-    };
+    ($condition:ident, $e:ident.($serial:ident | $parallel:ident), $iter_name:ident => { $body:expr }) => {{
+        if $condition {
+            let $iter_name = $e.$parallel();
+            $body
+        } else {
+            let $iter_name = $e.$serial();
+            $body
+        }
+    }};
 }
 
 #[cfg(not(feature = "parallel-compilation"))]
 macro_rules! maybe_parallel {
-    ($e:ident.($serial:ident | $parallel:ident)) => {
-        $e.$serial()
-    };
+    ($condition:ident, $e:ident.($serial:ident | $parallel:ident), $iter_name:ident => { $body:expr }) => {{
+        let $iter_name = $e.$serial();
+        $body
+    }};
 }
 
 mod code_memory;

@@ -134,11 +134,12 @@ impl Compiler {
         &self,
         translation: &mut ModuleTranslation,
         types: &TypeTables,
+        #[cfg(feature = "parallel-compilation")] parallel_compilation: bool,
     ) -> Result<Compilation, SetupError> {
         let functions = mem::take(&mut translation.function_body_inputs);
         let functions = functions.into_iter().collect::<Vec<_>>();
-        let funcs = maybe_parallel!(functions.(into_iter | into_par_iter))
-            .map(|(index, func)| {
+        let funcs = maybe_parallel!(parallel_compilation, functions.(into_iter | into_par_iter), iter => {
+            iter.map(|(index, func)| {
                 self.compiler.compile_function(
                     translation,
                     index,
@@ -150,7 +151,8 @@ impl Compiler {
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
-            .collect::<CompiledFunctions>();
+            .collect::<CompiledFunctions>()
+        });
 
         let dwarf_sections = if self.tunables.generate_native_debuginfo && !funcs.is_empty() {
             transform_dwarf_data(
