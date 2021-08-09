@@ -33,7 +33,7 @@ pub(crate) trait BackendExecutionContext {
 /// Errors returned by a backend; [BackendError::BackendAccess] is a catch-all
 /// for failures interacting with the ML library.
 #[derive(Debug, Error)]
-pub(crate) enum BackendError {
+pub enum BackendError {
     #[error("Failed while accessing backend")]
     BackendAccess(#[from] anyhow::Error),
     #[error("Failed while accessing guest module")]
