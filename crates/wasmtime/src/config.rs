@@ -356,6 +356,8 @@ pub struct Config {
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
     pub(crate) deserialize_check_wasmtime_version: bool,
+    #[cfg(feature = "parallel-compilation")]
+    pub(crate) parallel_compilation: bool,
 }
 
 impl Config {
@@ -392,6 +394,8 @@ impl Config {
             async_stack_size: 2 << 20,
             async_support: false,
             deserialize_check_wasmtime_version: true,
+            #[cfg(feature = "parallel-compilation")]
+            parallel_compilation: true,
         };
         ret.cranelift_debug_verifier(false);
         ret.cranelift_opt_level(OptLevel::Speed);
@@ -1207,6 +1211,18 @@ impl Config {
     /// This value defaults to true.
     pub fn deserialize_check_wasmtime_version(&mut self, check: bool) -> &mut Self {
         self.deserialize_check_wasmtime_version = check;
+        self
+    }
+
+    /// Configure wether wasmtime should compile a module using multiple threads.
+    ///
+    /// Disabling this will result in a single thread being used to compile the wasm bytecode.
+    ///
+    /// By default parallel compilation is enabled.
+    #[cfg(feature = "parallel-compilation")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "parallel-compilation")))]
+    pub fn parallel_compilation(&mut self, parallel: bool) -> &mut Self {
+        self.parallel_compilation = parallel;
         self
     }
 
