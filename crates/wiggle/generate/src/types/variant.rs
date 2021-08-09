@@ -96,6 +96,25 @@ pub(super) fn define_variant(names: &Names, name: &witx::Id, v: &witx::Variant) 
         quote!()
     };
 
+    let enum_from = if v.cases.iter().all(|c| c.tref.is_none()) {
+        let from_repr_cases = v.cases.iter().enumerate().map(|(i, c)| {
+            let variant_name = names.enum_variant(&c.name);
+            let n = Literal::usize_unsuffixed(i);
+            quote!(#ident::#variant_name => #n)
+        });
+        quote! {
+            impl From<#ident> for #tag_ty {
+                fn from(v: #ident) -> #tag_ty {
+                    match v {
+                        #(#from_repr_cases),*,
+                    }
+                }
+            }
+        }
+    } else {
+        quote!()
+    };
+
     let (enum_lifetime, extra_derive) = if v.needs_lifetime() {
         (quote!(<'a>), quote!())
     } else {
@@ -109,6 +128,7 @@ pub(super) fn define_variant(names: &Names, name: &witx::Id, v: &witx::Variant) 
         }
 
         #enum_try_from
+        #enum_from
 
         impl<'a> #rt::GuestType<'a> for #ident #enum_lifetime {
             fn guest_size() -> u32 {
