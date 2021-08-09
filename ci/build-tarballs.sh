@@ -50,7 +50,7 @@ if [ "$platform" = "x86_64-windows" ]; then
   rm dist/$bin_pkgname.wixpdb
 elif [ "$platform" = "x86_64-mingw" ]; then
   cp target/x86_64-pc-windows-gnu/release/wasmtime.exe tmp/$bin_pkgname
-  cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a} tmp/$api_pkgname/lib
+  cp target/x86_64-pc-windows-gnu/release/{wasmtime.dll,libwasmtime.a,libwasmtime.dll.a} tmp/$api_pkgname/lib
   fmt=zip
 elif [ "$platform" = "x86_64-macos" ]; then
   # Postprocess the macOS dylib a bit to have a more reasonable `LC_ID_DYLIB`
