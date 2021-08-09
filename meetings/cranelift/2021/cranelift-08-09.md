@@ -56,7 +56,7 @@
     * (cf) the existing APIs should be kept, need a gradual transition, see the
       horizontal and vertical integration stuff in the pre-RFC
 * (cf) update on regalloc2
-  * being reviewed by Julian Seward from Mozilla and Amaneiu from the Rust
+  * being reviewed by Julian Seward from Mozilla and Amanieu from the Rust
     Project
   * Looking to relicense from MPL to Apache + LLVM extension
     * Some code derived from SpiderMonkey's regalloc, which is MPL
@@ -68,7 +68,7 @@
   * mostly want consistency across the code base
   * (cf) we should document what invariants we already have, eg:
     * invariants regalloc.rs expects
-    * missed other example
+    * sinking loads/stores into other ops
 * status updates:
   * (bb): none
   * (abrown):
