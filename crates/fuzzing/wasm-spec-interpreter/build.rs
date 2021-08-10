@@ -5,10 +5,12 @@
 /// approach to avoid missing symbols was to imitate `dune`: I observed `rm -rf
 /// _build && dune build ./ocaml/interpret.exe.o --display=verbose` and used
 /// that as a pattern, now encoded in `ocaml/Makefile` for easier debugging.
-use std::{env, process::Command};
+use std::{env, path::PathBuf, process::Command};
 
 const LIB_NAME: &'static str = "interpret";
 const OCAML_DIR: &'static str = "ocaml";
+const SPEC_DIR: &'static str = "ocaml/spec";
+const SPEC_REPOSITORY: &'static str = "https://github.com/bytecodealliance/wasm-spec-mirror";
 
 fn main() {
     if cfg!(feature = "build-libinterpret") {
@@ -28,6 +30,11 @@ fn build() {
         println!("cargo:rustc-link-search={}", other_dir.to_str().unwrap());
         println!("cargo:rustc-link-lib=static={}", LIB_NAME);
     } else {
+        // Ensure the spec repository is present.
+        if is_spec_repository_empty(SPEC_DIR) {
+            retrieve_spec_repository(SPEC_REPOSITORY, SPEC_DIR)
+        }
+
         // Build the library to link to.
         build_lib(out_dir, OCAML_DIR);
         println!("cargo:rustc-link-search={}", out_dir);
@@ -51,4 +58,28 @@ fn build_lib(out_dir: &str, ocaml_dir: &str) {
         status.success(),
         "Failed to build the OCaml library using 'make'."
     )
+}
+
+// Check if the spec repository directory contains any files.
+fn is_spec_repository_empty(destination: &str) -> bool {
+    PathBuf::from(destination)
+        .read_dir()
+        .map(|mut i| i.next().is_none())
+        .unwrap_or(true)
+}
+
+// Clone the spec repository into `destination`. This exists due to the large
+// size of the dependencies (e.g. KaTeX) that are pulled if this were cloned
+// recursively as a submodule.
+fn retrieve_spec_repository(repository: &str, destination: &str) {
+    let status = Command::new("git")
+        .arg("clone")
+        .arg("--depth")
+        .arg("1")
+        .arg(repository)
+        .arg(destination)
+        .status()
+        .expect("Failed to execute 'git' command to clone spec repository.");
+
+    assert!(status.success(), "Failed to retrieve the spec repository.")
 }

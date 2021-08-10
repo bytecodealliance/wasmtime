@@ -13,7 +13,3 @@
 [submodule "crates/wasi-crypto/spec"]
 	path = crates/wasi-crypto/spec
 	url = https://github.com/WebAssembly/wasi-crypto.git
-[submodule "crates/fuzzing/wasm-spec-interpreter/ocaml/spec"]
-	path = crates/fuzzing/wasm-spec-interpreter/ocaml/spec
-	url = https://github.com/WebAssembly/spec
-	shallow = true
