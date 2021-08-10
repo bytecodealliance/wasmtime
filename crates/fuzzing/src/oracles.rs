@@ -621,6 +621,7 @@ impl wasm_smith::Config for SingleFunctionModuleConfig {
 /// should be rare if modules are generated appropriately.
 pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
     crate::init_fuzzing();
+    log_wasm(wasm);
 
     // Instantiate wasmi module and instance.
     let wasmi_module = wasmi::Module::from_buffer(&wasm[..]).ok()?;
@@ -696,7 +697,6 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
         (&Ok(None), &Ok(None)) => {}
         (&Err(_), &Err(_)) => {}
         _ => {
-            show_wat(wasm);
             panic!(
                 "Values do not match: wasmi returned {:?}; wasmtime returned {:?}",
                 wasmi_val, wasmtime_val
@@ -705,7 +705,6 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     }
 
     if wasmi_mem.current_size().0 != wasmtime_mem.size(&wasmtime_store) as usize {
-        show_wat(wasm);
         panic!("resulting memories are not the same size");
     }
 
@@ -726,7 +725,6 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     }
 
     if &wasmi_buf[..] != &wasmtime_slice[..] {
-        show_wat(wasm);
         panic!("memory contents are not equal");
     }
 
@@ -739,8 +737,8 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
 /// May return `None` if we early-out due to a rejected fuzz config.
 pub fn differential_spec_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
     crate::init_fuzzing();
-    debug!("WAT: {}", wasm2wat(wasm));
     debug!("config: {:#?}", config);
+    log_wasm(wasm);
 
     // Run the spec interpreter first, then Wasmtime. The order is important
     // because both sides (OCaml runtime and Wasmtime) register signal handlers;
@@ -778,7 +776,6 @@ pub fn differential_spec_execution(wasm: &[u8], config: &crate::generators::Conf
                 .zip(wasmtime_vals)
                 .all(|(s, w)| matches(s, w));
             if !all_match {
-                show_wat(wasm);
                 panic!(
                     "Values do not match: spec returned {:?}; wasmtime returned {:?}",
                     spec_vals, wasmtime_vals
@@ -801,7 +798,6 @@ pub fn differential_spec_execution(wasm: &[u8], config: &crate::generators::Conf
         }
         // If only one side fails, fail the fuzz the test.
         _ => {
-            show_wat(wasm);
             panic!(
                 "Only one side failed: spec returned {:?}; wasmtime returned {:?}",
                 &spec_vals, &wasmtime_vals
@@ -844,19 +840,6 @@ fn run_in_wasmtime(
     // Execute the function and return the values.
     let wasmtime_vals = wasmtime_main.call(&mut wasmtime_store, params);
     wasmtime_vals.map(|v| v.to_vec())
-}
-
-/// Print the Wasm as WAT on `stderr`.
-fn show_wat(wasm: &[u8]) {
-    eprintln!("wat:\n{}\n", wasm2wat(wasm));
-}
-
-/// Convert the Wasm module to a `String`; an error
-fn wasm2wat(wasm: &[u8]) -> String {
-    match wasmprinter::print_bytes(&wasm[..]) {
-        Ok(s) => s,
-        Err(e) => format!("wasm2wat failed: {}", e),
-    }
 }
 
 // Introspect wasmtime module to find the name of the first exported function.
