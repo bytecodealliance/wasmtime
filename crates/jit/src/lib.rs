@@ -22,6 +22,7 @@
 
 mod code_memory;
 mod compiler;
+mod debug;
 mod instantiate;
 mod link;
 mod object;

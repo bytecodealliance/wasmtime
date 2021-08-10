@@ -3564,7 +3564,6 @@ dependencies = [
  "bincode",
  "cfg-if 1.0.0",
  "cpp_demangle",
- "cranelift-native",
  "indexmap",
  "lazy_static",
  "libc",
@@ -3700,12 +3699,16 @@ dependencies = [
 name = "wasmtime-cranelift"
 version = "0.29.0"
 dependencies = [
+ "anyhow",
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
+ "cranelift-native",
  "cranelift-wasm",
+ "gimli",
  "target-lexicon",
  "wasmparser",
+ "wasmtime-debug",
  "wasmtime-environ",
 ]
 
@@ -3727,6 +3730,7 @@ dependencies = [
 name = "wasmtime-environ"
 version = "0.29.0"
 dependencies = [
+ "anyhow",
  "cfg-if 1.0.0",
  "cranelift-codegen",
  "cranelift-entity",
@@ -3736,6 +3740,7 @@ dependencies = [
  "log",
  "more-asserts",
  "serde",
+ "target-lexicon",
  "thiserror",
  "wasmparser",
 ]
@@ -3806,7 +3811,6 @@ dependencies = [
  "thiserror",
  "wasmparser",
  "wasmtime-cranelift",
- "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-lightbeam",
  "wasmtime-obj",
@@ -3819,8 +3823,11 @@ dependencies = [
 name = "wasmtime-lightbeam"
 version = "0.29.0"
 dependencies = [
+ "anyhow",
  "cranelift-codegen",
+ "gimli",
  "lightbeam",
+ "target-lexicon",
  "wasmparser",
  "wasmtime-environ",
 ]
@@ -3833,7 +3840,6 @@ dependencies = [
  "more-asserts",
  "object",
  "target-lexicon",
- "wasmtime-debug",
  "wasmtime-environ",
 ]
 

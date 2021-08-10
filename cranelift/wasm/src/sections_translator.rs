@@ -10,9 +10,8 @@
 use crate::environ::{Alias, ModuleEnvironment, WasmError, WasmResult};
 use crate::state::ModuleTranslationState;
 use crate::translation_utils::{
-    tabletype_to_type, type_to_type, DataIndex, ElemIndex, EntityIndex, EntityType, FuncIndex,
-    Global, GlobalIndex, GlobalInit, InstanceIndex, Memory, MemoryIndex, ModuleIndex, Table,
-    TableElementType, TableIndex, Tag, TagIndex, TypeIndex,
+    DataIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex, GlobalInit,
+    InstanceIndex, Memory, MemoryIndex, ModuleIndex, Table, TableIndex, Tag, TagIndex, TypeIndex,
 };
 use crate::wasm_unsupported;
 use core::convert::TryFrom;
@@ -46,10 +45,8 @@ fn entity_type(
         }
         ImportSectionEntryType::Memory(ty) => EntityType::Memory(memory(ty)),
         ImportSectionEntryType::Tag(t) => EntityType::Tag(tag(t)),
-        ImportSectionEntryType::Global(ty) => {
-            EntityType::Global(global(ty, environ, GlobalInit::Import)?)
-        }
-        ImportSectionEntryType::Table(ty) => EntityType::Table(table(ty, environ)?),
+        ImportSectionEntryType::Global(ty) => EntityType::Global(global(ty, GlobalInit::Import)?),
+        ImportSectionEntryType::Table(ty) => EntityType::Table(table(ty)?),
     })
 }
 
@@ -68,26 +65,17 @@ fn tag(e: TagType) -> Tag {
     }
 }
 
-fn table(ty: TableType, environ: &mut dyn ModuleEnvironment<'_>) -> WasmResult<Table> {
+fn table(ty: TableType) -> WasmResult<Table> {
     Ok(Table {
         wasm_ty: ty.element_type.try_into()?,
-        ty: match tabletype_to_type(ty.element_type, environ)? {
-            Some(t) => TableElementType::Val(t),
-            None => TableElementType::Func,
-        },
         minimum: ty.initial,
         maximum: ty.maximum,
     })
 }
 
-fn global(
-    ty: GlobalType,
-    environ: &mut dyn ModuleEnvironment<'_>,
-    initializer: GlobalInit,
-) -> WasmResult<Global> {
+fn global(ty: GlobalType, initializer: GlobalInit) -> WasmResult<Global> {
     Ok(Global {
         wasm_ty: ty.content_type.try_into()?,
-        ty: type_to_type(ty.content_type, environ).unwrap(),
         mutability: ty.mutable,
         initializer,
     })
@@ -175,11 +163,11 @@ pub fn parse_import_section<'data>(
                 environ.declare_tag_import(tag(e), import.module, import.field)?;
             }
             ImportSectionEntryType::Global(ty) => {
-                let ty = global(ty, environ, GlobalInit::Import)?;
+                let ty = global(ty, GlobalInit::Import)?;
                 environ.declare_global_import(ty, import.module, import.field)?;
             }
             ImportSectionEntryType::Table(ty) => {
-                let ty = table(ty, environ)?;
+                let ty = table(ty)?;
                 environ.declare_table_import(ty, import.module, import.field)?;
             }
         }
@@ -218,7 +206,7 @@ pub fn parse_table_section(
     environ.reserve_tables(tables.get_count())?;
 
     for entry in tables {
-        let ty = table(entry?, environ)?;
+        let ty = table(entry?)?;
         environ.declare_table(ty)?;
     }
 
@@ -287,7 +275,7 @@ pub fn parse_global_section(
                 ));
             }
         };
-        let ty = global(ty, environ, initializer)?;
+        let ty = global(ty, initializer)?;
         environ.declare_global(ty)?;
     }
 

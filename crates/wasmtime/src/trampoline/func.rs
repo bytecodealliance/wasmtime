@@ -77,19 +77,14 @@ pub fn create_function(
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
     engine: &Engine,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
-    // Note that we specifically enable reference types here in our ISA because
-    // `Func::new` is intended to be infallible, but our signature may use
-    // reference types which requires safepoints.
-    let isa = &*engine.config().target_isa_with_reference_types();
-    let wasm_trampoline = engine.compiler().compiler().wasm_to_host_trampoline(
-        isa,
-        ft.as_wasm_func_type(),
-        stub_fn as usize,
-    )?;
+    let wasm_trampoline = engine
+        .compiler()
+        .compiler()
+        .wasm_to_host_trampoline(ft.as_wasm_func_type(), stub_fn as usize)?;
     let host_trampoline = engine
         .compiler()
         .compiler()
-        .host_to_wasm_trampoline(isa, ft.as_wasm_func_type())?;
+        .host_to_wasm_trampoline(ft.as_wasm_func_type())?;
 
     let mut code_memory = CodeMemory::new();
     let host_trampoline = code_memory
@@ -98,7 +93,7 @@ pub fn create_function(
     let wasm_trampoline =
         code_memory.allocate_for_function(&wasm_trampoline)? as *mut [VMFunctionBody];
 
-    code_memory.publish(isa);
+    code_memory.publish(engine.compiler());
 
     let sig = engine.signatures().register(ft.as_wasm_func_type());
 

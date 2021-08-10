@@ -3,15 +3,13 @@ use crate::module::{
     ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan, TypeTables,
 };
 use crate::tunables::Tunables;
-use cranelift_codegen::ir;
-use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, translate_module, Alias, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType,
     FuncIndex, Global, GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, Memory,
-    MemoryIndex, ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex,
-    TargetEnvironment, TypeIndex, WasmError, WasmFuncType, WasmResult,
+    MemoryIndex, ModuleIndex, ModuleTypeIndex, SignatureIndex, Table, TableIndex, TypeIndex,
+    WasmError, WasmFuncType, WasmResult,
 };
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::TryFrom;
@@ -45,7 +43,6 @@ pub struct ModuleEnvironment<'data> {
 
     // Various bits and pieces of configuration
     features: WasmFeatures,
-    target_config: TargetFrontendConfig,
     tunables: Tunables,
     first_module: bool,
 }
@@ -134,27 +131,18 @@ pub struct FunctionMetadata {
 
 impl<'data> ModuleEnvironment<'data> {
     /// Allocates the environment data structures.
-    pub fn new(
-        target_config: TargetFrontendConfig,
-        tunables: &Tunables,
-        features: &WasmFeatures,
-    ) -> Self {
+    pub fn new(tunables: &Tunables, features: &WasmFeatures) -> Self {
         Self {
             result: ModuleTranslation::default(),
             results: Vec::with_capacity(1),
             in_progress: Vec::new(),
             modules_to_be: 1,
             types: Default::default(),
-            target_config,
             tunables: tunables.clone(),
             features: *features,
             first_module: true,
             interned_func_types: Default::default(),
         }
-    }
-
-    fn pointer_type(&self) -> ir::Type {
-        self.target_config.pointer_type()
     }
 
     /// Translate a wasm module using this environment.
@@ -375,16 +363,6 @@ impl<'data> ModuleEnvironment<'data> {
         if let Some(idx) = self.result.module.defined_func_index(func) {
             self.result.module.possibly_exported_funcs.insert(idx);
         }
-    }
-}
-
-impl<'data> TargetEnvironment for ModuleEnvironment<'data> {
-    fn target_config(&self) -> TargetFrontendConfig {
-        self.target_config
-    }
-
-    fn reference_type(&self, ty: cranelift_wasm::WasmType) -> ir::Type {
-        crate::reference_type(ty, self.pointer_type())
     }
 }
 

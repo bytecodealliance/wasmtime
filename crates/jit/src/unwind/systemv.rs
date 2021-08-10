@@ -1,11 +1,12 @@
 //! Module for System V ABI unwind registry.
 
+use crate::Compiler;
 use anyhow::{bail, Result};
 use gimli::{
     write::{Address, EhFrame, EndianVec, FrameTable, Writer},
     RunTimeEndian,
 };
-use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
+use wasmtime_environ::isa::unwind::UnwindInfo;
 
 /// Represents a registry of function unwind information for System V ABI.
 pub struct UnwindRegistry {
@@ -53,7 +54,7 @@ impl UnwindRegistry {
     }
 
     /// Publishes all registered functions.
-    pub fn publish(&mut self, isa: &dyn TargetIsa) -> Result<()> {
+    pub fn publish(&mut self, compiler: &Compiler) -> Result<()> {
         if self.published {
             bail!("unwind registry has already been published");
         }
@@ -63,7 +64,7 @@ impl UnwindRegistry {
             return Ok(());
         }
 
-        self.set_frame_table(isa)?;
+        self.set_frame_table(compiler)?;
 
         unsafe {
             self.register_frames();
@@ -74,9 +75,9 @@ impl UnwindRegistry {
         Ok(())
     }
 
-    fn set_frame_table(&mut self, isa: &dyn TargetIsa) -> Result<()> {
+    fn set_frame_table(&mut self, compiler: &Compiler) -> Result<()> {
         let mut table = FrameTable::default();
-        let cie_id = table.add_cie(match isa.create_systemv_cie() {
+        let cie_id = table.add_cie(match compiler.compiler().create_systemv_cie() {
             Some(cie) => cie,
             None => bail!("ISA does not support System V unwind information"),
         });

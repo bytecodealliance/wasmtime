@@ -1051,8 +1051,7 @@ mod test {
     use crate::{Imports, VMSharedSignatureIndex};
     use wasmtime_environ::{
         entity::EntityRef,
-        ir::Type,
-        wasm::{Global, GlobalInit, Memory, SignatureIndex, Table, TableElementType, WasmType},
+        wasm::{Global, GlobalInit, Memory, SignatureIndex, Table, WasmType},
         MemoryPlan, ModuleType, TablePlan, TableStyle,
     };
 
@@ -1088,7 +1087,6 @@ mod test {
             style: TableStyle::CallerChecksSignature,
             table: Table {
                 wasm_ty: WasmType::FuncRef,
-                ty: TableElementType::Func,
                 minimum: 0,
                 maximum: None,
             },
@@ -1144,7 +1142,6 @@ mod test {
 
         module.globals.push(Global {
             wasm_ty: WasmType::I32,
-            ty: Type::int(32).unwrap(),
             mutability: false,
             initializer: GlobalInit::I32Const(0),
         });
@@ -1208,7 +1205,6 @@ mod test {
             style: TableStyle::CallerChecksSignature,
             table: Table {
                 wasm_ty: WasmType::FuncRef,
-                ty: TableElementType::Func,
                 minimum: 0,
                 maximum: None,
             },
@@ -1258,7 +1254,6 @@ mod test {
 
         module.globals.push(Global {
             wasm_ty: WasmType::I32,
-            ty: Type::int(32).unwrap(),
             mutability: false,
             initializer: GlobalInit::I32Const(0),
         });
@@ -1281,7 +1276,6 @@ mod test {
             style: TableStyle::CallerChecksSignature,
             table: Table {
                 wasm_ty: WasmType::FuncRef,
-                ty: TableElementType::Func,
                 minimum: 11,
                 maximum: None,
             },

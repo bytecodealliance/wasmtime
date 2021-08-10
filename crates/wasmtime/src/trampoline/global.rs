@@ -17,7 +17,6 @@ pub fn create_global(store: &mut StoreOpaque<'_>, gt: &GlobalType, val: Val) -> 
 
     let global = wasm::Global {
         wasm_ty: gt.content().to_wasm_type(),
-        ty: gt.content().get_wasmtime_type(),
         mutability: match gt.mutability() {
             Mutability::Const => false,
             Mutability::Var => true,

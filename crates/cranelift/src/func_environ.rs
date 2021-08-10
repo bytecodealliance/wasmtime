@@ -1267,7 +1267,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(GlobalVariable::Memory {
             gv,
             offset: offset.into(),
-            ty: self.module.globals[index].ty,
+            ty: super::value_type(self.isa, self.module.globals[index].wasm_ty),
         })
     }
 

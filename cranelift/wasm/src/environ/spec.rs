@@ -706,7 +706,7 @@ pub trait FuncEnvironment: TargetEnvironment {
 /// An object satisfying the `ModuleEnvironment` trait can be passed as argument to the
 /// [`translate_module`](fn.translate_module.html) function. These methods should not be called
 /// by the user, they are only for `cranelift-wasm` internal use.
-pub trait ModuleEnvironment<'data>: TargetEnvironment {
+pub trait ModuleEnvironment<'data> {
     /// Provides the number of types up front. By default this does nothing, but
     /// implementations can use this to preallocate memory if desired.
     fn reserve_types(&mut self, _num: u32) -> WasmResult<()> {

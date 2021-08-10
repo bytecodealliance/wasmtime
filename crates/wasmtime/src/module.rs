@@ -279,7 +279,7 @@ impl Module {
     /// ```
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         // Check to see that the config's target matches the host
-        let target = engine.config().isa_flags.triple();
+        let target = engine.compiler().compiler().triple();
         if *target != target_lexicon::Triple::host() {
             bail!(
                 "target '{}' specified in the configuration does not match the host",
@@ -318,9 +318,8 @@ impl Module {
 
         let modules = CompiledModule::from_artifacts_list(
             artifacts,
-            engine.compiler().isa(),
-            &*engine.config().profiler,
             engine.compiler(),
+            &*engine.config().profiler,
         )?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])

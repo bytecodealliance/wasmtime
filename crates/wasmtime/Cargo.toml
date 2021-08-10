@@ -13,7 +13,6 @@ edition = "2018"
 rustdoc-args = ["--cfg", "nightlydoc"]
 
 [dependencies]
-cranelift-native = { path = '../../cranelift/native', version = '0.76.0' }
 wasmtime-runtime = { path = "../runtime", version = "0.29.0" }
 wasmtime-environ = { path = "../environ", version = "0.29.0" }
 wasmtime-jit = { path = "../jit", version = "0.29.0" }

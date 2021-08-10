@@ -6,15 +6,14 @@ use object::write::Object;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use wasmparser::WasmFeatures;
-use wasmtime_debug::{emit_dwarf, DwarfSection};
 use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::isa::{TargetFrontendConfig, TargetIsa};
 use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    CompiledFunctions, Compiler as EnvCompiler, DebugInfoData, Module, ModuleMemoryOffset,
+    CompiledFunctions, Compiler as EnvCompiler, CompilerBuilder, ModuleMemoryOffset,
     ModuleTranslation, Tunables, TypeTables, VMOffsets,
 };
 
@@ -33,41 +32,35 @@ pub enum CompilationStrategy {
 }
 
 /// A WebAssembly code JIT compiler.
-///
-/// A `Compiler` instance owns the executable memory that it allocates.
-///
-/// TODO: Evolve this to support streaming rather than requiring a `&[u8]`
-/// containing a whole wasm module at once.
-///
-/// TODO: Consider using cranelift-module.
 pub struct Compiler {
-    isa: Box<dyn TargetIsa>,
     compiler: Box<dyn EnvCompiler>,
-    strategy: CompilationStrategy,
     tunables: Tunables,
     features: WasmFeatures,
     parallel_compilation: bool,
 }
 
 impl Compiler {
-    /// Construct a new `Compiler`.
+    /// Creates a new compiler builder for the provided compilation strategy.
+    pub fn builder(strategy: CompilationStrategy) -> Box<dyn CompilerBuilder> {
+        match strategy {
+            CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
+                wasmtime_cranelift::builder()
+            }
+            #[cfg(feature = "lightbeam")]
+            CompilationStrategy::Lightbeam => unimplemented!(),
+        }
+    }
+
+    /// Creates a new instance of a `Compiler` from the provided compiler
+    /// builder.
     pub fn new(
-        isa: Box<dyn TargetIsa>,
-        strategy: CompilationStrategy,
+        builder: &dyn CompilerBuilder,
         tunables: Tunables,
         features: WasmFeatures,
         parallel_compilation: bool,
-    ) -> Self {
-        Self {
-            isa,
-            strategy,
-            compiler: match strategy {
-                CompilationStrategy::Auto | CompilationStrategy::Cranelift => {
-                    Box::new(wasmtime_cranelift::Cranelift::default())
-                }
-                #[cfg(feature = "lightbeam")]
-                CompilationStrategy::Lightbeam => Box::new(wasmtime_lightbeam::Lightbeam),
-            },
+    ) -> Compiler {
+        Compiler {
+            compiler: builder.build(),
             tunables,
             features,
             parallel_compilation,
@@ -80,25 +73,6 @@ fn _assert_compiler_send_sync() {
     _assert::<Compiler>();
 }
 
-fn transform_dwarf_data(
-    isa: &dyn TargetIsa,
-    module: &Module,
-    debug_data: &DebugInfoData,
-    funcs: &CompiledFunctions,
-) -> Result<Vec<DwarfSection>, SetupError> {
-    let target_config = isa.frontend_config();
-    let ofs = VMOffsets::new(target_config.pointer_bytes(), &module);
-
-    let memory_offset = if ofs.num_imported_memories > 0 {
-        ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
-    } else if ofs.num_defined_memories > 0 {
-        ModuleMemoryOffset::Defined(ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)))
-    } else {
-        ModuleMemoryOffset::None
-    };
-    emit_dwarf(isa, debug_data, funcs, &memory_offset).map_err(SetupError::DebugInfo)
-}
-
 #[allow(missing_docs)]
 pub struct Compilation {
     pub obj: Object,
@@ -107,21 +81,6 @@ pub struct Compilation {
 }
 
 impl Compiler {
-    /// Return the isa.
-    pub fn isa(&self) -> &dyn TargetIsa {
-        self.isa.as_ref()
-    }
-
-    /// Return the compiler's strategy.
-    pub fn strategy(&self) -> CompilationStrategy {
-        self.strategy
-    }
-
-    /// Return the target's frontend configuration settings.
-    pub fn frontend_config(&self) -> TargetFrontendConfig {
-        self.isa.frontend_config()
-    }
-
     /// Return the tunables in use by this engine.
     pub fn tunables(&self) -> &Tunables {
         &self.tunables
@@ -137,6 +96,11 @@ impl Compiler {
         &*self.compiler
     }
 
+    /// Returns the target this compiler is compiling for.
+    pub fn triple(&self) -> &target_lexicon::Triple {
+        self.compiler.triple()
+    }
+
     /// Compile the given function bodies.
     pub fn compile<'data>(
         &self,
@@ -148,25 +112,35 @@ impl Compiler {
 
         let funcs = self
             .run_maybe_parallel(functions, |(index, func)| {
-                self.compiler.compile_function(
-                    translation,
-                    index,
-                    func,
-                    &*self.isa,
-                    &self.tunables,
-                    types,
-                )
+                self.compiler
+                    .compile_function(translation, index, func, &self.tunables, types)
             })?
             .into_iter()
             .collect::<CompiledFunctions>();
 
         let dwarf_sections = if self.tunables.generate_native_debuginfo && !funcs.is_empty() {
-            transform_dwarf_data(
-                &*self.isa,
+            let ofs = VMOffsets::new(
+                self.compiler
+                    .triple()
+                    .architecture
+                    .pointer_width()
+                    .unwrap()
+                    .bytes(),
                 &translation.module,
-                &translation.debuginfo,
-                &funcs,
-            )?
+            );
+
+            let memory_offset = if ofs.num_imported_memories > 0 {
+                ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+            } else if ofs.num_defined_memories > 0 {
+                ModuleMemoryOffset::Defined(
+                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
+                )
+            } else {
+                ModuleMemoryOffset::None
+            };
+            self.compiler
+                .emit_dwarf(&translation.debuginfo, &funcs, &memory_offset)
+                .map_err(SetupError::DebugInfo)?
         } else {
             vec![]
         };
@@ -211,29 +185,27 @@ impl Compiler {
 impl Hash for Compiler {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         let Compiler {
-            strategy,
-            compiler: _,
-            isa,
+            compiler,
             tunables,
             features,
             parallel_compilation: _,
         } = self;
 
-        // Hash compiler's flags: compilation strategy, isa, frontend config,
-        // misc tunables.
-        strategy.hash(hasher);
-        isa.triple().hash(hasher);
-        isa.hash_all_flags(hasher);
-        isa.frontend_config().hash(hasher);
+        compiler.triple().hash(hasher);
+        compiler
+            .flags()
+            .into_iter()
+            .collect::<BTreeMap<_, _>>()
+            .hash(hasher);
+        compiler
+            .isa_flags()
+            .into_iter()
+            .collect::<BTreeMap<_, _>>()
+            .hash(hasher);
         tunables.hash(hasher);
         features.hash(hasher);
 
         // Catch accidental bugs of reusing across crate versions.
         env!("CARGO_PKG_VERSION").hash(hasher);
-
-        // TODO: ... and should we hash anything else? There's a lot of stuff in
-        // `TargetIsa`, like registers/encodings/etc. Should we be hashing that
-        // too? It seems like wasmtime doesn't configure it too too much, but
-        // this may become an issue at some point.
     }
 }

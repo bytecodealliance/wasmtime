@@ -1,9 +1,11 @@
 //! The module that implements the `wasmtime settings` command.
 
 use anyhow::{anyhow, Result};
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use structopt::StructOpt;
-use wasmtime_environ::settings::{self, Setting, SettingKind};
+use wasmtime_environ::{FlagValue, Setting, SettingKind};
+use wasmtime_jit::Compiler;
 
 /// Displays available Cranelift settings for a target.
 #[derive(StructOpt)]
@@ -17,19 +19,18 @@ pub struct SettingsCommand {
 impl SettingsCommand {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
-        let settings = match &self.target {
-            Some(target) => wasmtime_environ::isa::lookup(
-                target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?,
-            )?,
-            None => cranelift_native::builder().unwrap(),
-        };
+        let mut builder = Compiler::builder(wasmtime_jit::CompilationStrategy::Auto);
+        if let Some(target) = &self.target {
+            let target = target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?;
+            builder.target(target)?;
+        }
 
         let mut enums = (Vec::new(), 0, "Enum settings:");
         let mut nums = (Vec::new(), 0, "Numerical settings:");
         let mut bools = (Vec::new(), 0, "Boolean settings:");
         let mut presets = (Vec::new(), 0, "Presets:");
 
-        for setting in settings.iter() {
+        for setting in builder.settings() {
             let (collection, max, _) = match setting.kind {
                 SettingKind::Enum => &mut enums,
                 SettingKind::Num => &mut nums,
@@ -45,11 +46,11 @@ impl SettingsCommand {
         }
 
         if enums.0.is_empty() && nums.0.is_empty() && bools.0.is_empty() && presets.0.is_empty() {
-            println!("Target '{}' has no settings.", settings.triple());
+            println!("Target '{}' has no settings.", builder.triple());
             return Ok(());
         }
 
-        println!("Cranelift settings for target '{}':", settings.triple());
+        println!("Cranelift settings for target '{}':", builder.triple());
 
         for (collection, max, header) in &mut [enums, nums, bools, presets] {
             if collection.is_empty() {
@@ -62,16 +63,15 @@ impl SettingsCommand {
         }
 
         if self.target.is_none() {
-            let isa = settings.finish(settings::Flags::new(settings::builder()));
+            let compiler = builder.build();
             println!();
             println!("Settings inferred for the current host:");
 
-            let mut values = isa.isa_flags();
-            values.sort_by_key(|k| k.name);
+            let values = compiler.isa_flags().into_iter().collect::<BTreeMap<_, _>>();
 
-            for value in values {
-                if value.as_bool().unwrap_or(false) {
-                    println!("  {}", value.name);
+            for (name, value) in values {
+                if let FlagValue::Bool(true) = value {
+                    println!("  {}", name);
                 }
             }
         }
