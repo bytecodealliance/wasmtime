@@ -43,6 +43,8 @@ impl<'config> ModuleCacheEntry<'config> {
     }
 
     /// Gets cached data if state matches, otherwise calls the `compute`.
+    // NOTE: This takes a function pointer instead of a closure so that it doesn't accidentally
+    // close over something not accounted in the cache.
     pub fn get_data<T, U, E>(&self, state: T, compute: fn(T) -> Result<U, E>) -> Result<U, E>
     where
         T: Hash,

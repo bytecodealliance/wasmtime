@@ -291,6 +291,7 @@ impl<'a> SerializedModule<'a> {
                 .collect(),
             engine.compiler().isa(),
             &*engine.config().profiler,
+            engine.compiler(),
         )?;
 
         assert!(!modules.is_empty());

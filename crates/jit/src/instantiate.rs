@@ -8,8 +8,6 @@ use crate::compiler::{Compilation, Compiler};
 use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
 use object::File as ObjectFile;
-#[cfg(feature = "parallel-compilation")]
-use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
@@ -112,8 +110,9 @@ impl CompilationArtifacts {
         .translate(data)
         .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
-        let list = maybe_parallel!(translations.(into_iter | into_par_iter))
-            .map(|mut translation| {
+        let list = compiler.run_maybe_parallel::<_, _, SetupError, _>(
+            translations,
+            |mut translation| {
                 let Compilation {
                     obj,
                     unwind_info,
@@ -159,8 +158,9 @@ impl CompilationArtifacts {
                     },
                     has_unparsed_debuginfo,
                 })
-            })
-            .collect::<Result<Vec<_>, SetupError>>()?;
+            },
+        )?;
+
         Ok((
             main_module,
             list,
@@ -226,10 +226,11 @@ impl CompiledModule {
         artifacts: Vec<CompilationArtifacts>,
         isa: &dyn TargetIsa,
         profiler: &dyn ProfilingAgent,
+        compiler: &Compiler,
     ) -> Result<Vec<Arc<Self>>, SetupError> {
-        maybe_parallel!(artifacts.(into_iter | into_par_iter))
-            .map(|a| CompiledModule::from_artifacts(a, isa, profiler))
-            .collect()
+        compiler.run_maybe_parallel(artifacts, |a| {
+            CompiledModule::from_artifacts(a, isa, profiler)
+        })
     }
 
     /// Creates `CompiledModule` directly from `CompilationArtifacts`.

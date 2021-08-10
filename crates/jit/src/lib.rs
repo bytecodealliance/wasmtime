@@ -20,20 +20,6 @@
     )
 )]
 
-#[cfg(feature = "parallel-compilation")]
-macro_rules! maybe_parallel {
-    ($e:ident.($serial:ident | $parallel:ident)) => {
-        $e.$parallel()
-    };
-}
-
-#[cfg(not(feature = "parallel-compilation"))]
-macro_rules! maybe_parallel {
-    ($e:ident.($serial:ident | $parallel:ident)) => {
-        $e.$serial()
-    };
-}
-
 mod code_memory;
 mod compiler;
 mod instantiate;

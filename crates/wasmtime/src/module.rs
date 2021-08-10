@@ -300,11 +300,19 @@ impl Module {
                     engine.cache_config(),
                 )
                 .get_data((engine.compiler(), binary), |(compiler, binary)| {
-                    CompilationArtifacts::build(compiler, binary, USE_PAGED_MEM_INIT)
+                    CompilationArtifacts::build(
+                        compiler,
+                        binary,
+                        USE_PAGED_MEM_INIT,
+                    )
                 })?;
             } else {
                 let (main_module, artifacts, types) =
-                    CompilationArtifacts::build(engine.compiler(), binary, USE_PAGED_MEM_INIT)?;
+                    CompilationArtifacts::build(
+                        engine.compiler(),
+                        binary,
+                        USE_PAGED_MEM_INIT,
+                    )?;
             }
         };
 
@@ -312,6 +320,7 @@ impl Module {
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
+            engine.compiler(),
         )?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])

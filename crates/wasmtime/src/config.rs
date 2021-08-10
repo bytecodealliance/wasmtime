@@ -356,6 +356,7 @@ pub struct Config {
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
     pub(crate) deserialize_check_wasmtime_version: bool,
+    pub(crate) parallel_compilation: bool,
 }
 
 impl Config {
@@ -392,6 +393,7 @@ impl Config {
             async_stack_size: 2 << 20,
             async_support: false,
             deserialize_check_wasmtime_version: true,
+            parallel_compilation: true,
         };
         ret.cranelift_debug_verifier(false);
         ret.cranelift_opt_level(OptLevel::Speed);
@@ -1210,6 +1212,18 @@ impl Config {
         self
     }
 
+    /// Configure wether wasmtime should compile a module using multiple threads.
+    ///
+    /// Disabling this will result in a single thread being used to compile the wasm bytecode.
+    ///
+    /// By default parallel compilation is enabled.
+    #[cfg(feature = "parallel-compilation")]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "parallel-compilation")))]
+    pub fn parallel_compilation(&mut self, parallel: bool) -> &mut Self {
+        self.parallel_compilation = parallel;
+        self
+    }
+
     pub(crate) fn target_isa(&self) -> Box<dyn TargetIsa> {
         self.isa_flags
             .clone()
@@ -1226,7 +1240,13 @@ impl Config {
         let isa = self.target_isa();
         let mut tunables = self.tunables.clone();
         allocator.adjust_tunables(&mut tunables);
-        Compiler::new(isa, self.strategy, tunables, self.features)
+        Compiler::new(
+            isa,
+            self.strategy,
+            tunables,
+            self.features,
+            self.parallel_compilation,
+        )
     }
 
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
