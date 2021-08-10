@@ -82,8 +82,7 @@ members = [
 exclude = ['crates/wasi-common/WASI/tools/witx-cli']
 
 [features]
-default = ["jitdump", "wasmtime/wat", "parallel-compilation", "wasi-nn"]
-parallel-compilation = ["wasmtime/parallel-compilation"]
+default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation", "wasi-nn"]
 lightbeam = ["wasmtime/lightbeam"]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]

@@ -62,6 +62,7 @@ pub fn compile_to_obj(
         },
         tunables.clone(),
         features.clone(),
+        true, // enable parallel compilation
     );
 
     let environ = ModuleEnvironment::new(compiler.isa().frontend_config(), &tunables, &features);
@@ -72,8 +73,6 @@ pub fn compile_to_obj(
     let compilation = compiler.compile(
         &mut translation[0],
         &types,
-        #[cfg(feature = "parallel-compilation")]
-        true,
     )?;
     Ok(compilation.obj)
 }
