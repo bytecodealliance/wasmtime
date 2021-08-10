@@ -23,13 +23,15 @@
 //! is in the `Sched` abstraction. Once we can build an async scheduler based
 //! on Rust `Future`s, async impls will be able to interoperate, but the
 //! synchronous scheduler depends on downcasting the `WasiFile` type down to
-//! concrete types it knows about (which in turn impl `AsRawFd` for passing to
+//! concrete types it knows about (which in turn impl `AsFd` for passing to
 //! unix `poll`, or the analogous traits on windows).
 //!
 //! Why is this impl suffixed with `-sync`? Because `async` is coming soon!
 //! The async impl may end up depending on tokio or other relatively heavy
 //! deps, so we will retain a sync implementation so that wasi-common users
 //! have an option of not pulling in an async runtime.
+
+#![cfg_attr(io_lifetimes_use_std, feature(io_safety))]
 
 pub mod clocks;
 pub mod dir;
