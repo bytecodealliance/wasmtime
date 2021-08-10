@@ -4,7 +4,6 @@ use anyhow::{anyhow, Result};
 use std::str::FromStr;
 use structopt::StructOpt;
 use wasmtime_environ::settings::{self, Setting, SettingKind};
-use wasmtime_jit::native;
 
 /// Displays available Cranelift settings for a target.
 #[derive(StructOpt)]
@@ -19,10 +18,10 @@ impl SettingsCommand {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
         let settings = match &self.target {
-            Some(target) => {
-                native::lookup(target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?)?
-            }
-            None => native::builder(),
+            Some(target) => wasmtime_environ::isa::lookup(
+                target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?,
+            )?,
+            None => cranelift_native::builder().unwrap(),
         };
 
         let mut enums = (Vec::new(), 0, "Enum settings:");

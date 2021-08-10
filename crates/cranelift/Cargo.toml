@@ -18,3 +18,7 @@ cranelift-frontend = { path = "../../cranelift/frontend", version = "0.76.0" }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.76.0" }
 wasmparser = "0.80.0"
 target-lexicon = "0.12"
+
+[features]
+all-arch = ["cranelift-codegen/all-arch"]
+old-x86-backend = ["cranelift-codegen/old-x86-backend"]

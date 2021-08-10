@@ -1,11 +1,11 @@
 //! Module for System V ABI unwind registry.
 
 use anyhow::{bail, Result};
-use cranelift_codegen::isa::{unwind::UnwindInfo, TargetIsa};
 use gimli::{
     write::{Address, EhFrame, EndianVec, FrameTable, Writer},
     RunTimeEndian,
 };
+use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 
 /// Represents a registry of function unwind information for System V ABI.
 pub struct UnwindRegistry {

@@ -3564,6 +3564,7 @@ dependencies = [
  "bincode",
  "cfg-if 1.0.0",
  "cpp_demangle",
+ "cranelift-native",
  "indexmap",
  "lazy_static",
  "libc",
@@ -3657,6 +3658,7 @@ name = "wasmtime-cli"
 version = "0.29.0"
 dependencies = [
  "anyhow",
+ "cranelift-native",
  "criterion",
  "env_logger 0.8.3",
  "file-per-thread-logger",
@@ -3793,11 +3795,6 @@ dependencies = [
  "addr2line",
  "anyhow",
  "cfg-if 1.0.0",
- "cranelift-codegen",
- "cranelift-entity",
- "cranelift-frontend",
- "cranelift-native",
- "cranelift-wasm",
  "gimli",
  "log",
  "more-asserts",
