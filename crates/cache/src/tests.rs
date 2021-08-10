@@ -65,28 +65,28 @@ fn test_write_read_cache() {
     let entry1 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler1, &cache_config));
     let entry2 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler2, &cache_config));
 
-    entry1.get_data::<_, i32, i32, _>(1, |_| Ok(100)).unwrap();
-    entry1.get_data::<_, i32, i32, _>(1, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(1, |_| Ok(100)).unwrap();
+    entry1.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();
 
-    entry1.get_data::<_, i32, i32, _>(2, |_| Ok(100)).unwrap();
-    entry1.get_data::<_, i32, i32, _>(1, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(2, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(2, |_| Ok(100)).unwrap();
+    entry1.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(2, |_| panic!()).unwrap();
 
-    entry1.get_data::<_, i32, i32, _>(3, |_| Ok(100)).unwrap();
-    entry1.get_data::<_, i32, i32, _>(1, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(2, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(3, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(3, |_| Ok(100)).unwrap();
+    entry1.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(2, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(3, |_| panic!()).unwrap();
 
-    entry1.get_data::<_, i32, i32, _>(4, |_| Ok(100)).unwrap();
-    entry1.get_data::<_, i32, i32, _>(1, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(2, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(3, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(4, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(4, |_| Ok(100)).unwrap();
+    entry1.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(2, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(3, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(4, |_| panic!()).unwrap();
 
-    entry2.get_data::<_, i32, i32, _>(1, |_| Ok(100)).unwrap();
-    entry1.get_data::<_, i32, i32, _>(1, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(2, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(3, |_| panic!()).unwrap();
-    entry1.get_data::<_, i32, i32, _>(4, |_| panic!()).unwrap();
-    entry2.get_data::<_, i32, i32, _>(1, |_| panic!()).unwrap();
+    entry2.get_data::<_, i32, i32>(1, |_| Ok(100)).unwrap();
+    entry1.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(2, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(3, |_| panic!()).unwrap();
+    entry1.get_data::<_, i32, i32>(4, |_| panic!()).unwrap();
+    entry2.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();
 }
