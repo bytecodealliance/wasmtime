@@ -1,7 +1,7 @@
 //! Module for Windows x64 ABI unwind registry.
 
 use anyhow::{bail, Result};
-use cranelift_codegen::isa::{unwind::UnwindInfo, TargetIsa};
+use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use winapi::um::winnt;
 
 /// Represents a registry of function unwind information for Windows x64 ABI.
