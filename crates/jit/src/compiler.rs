@@ -46,6 +46,7 @@ pub struct Compiler {
     strategy: CompilationStrategy,
     tunables: Tunables,
     features: WasmFeatures,
+    parallel_compilation: bool,
 }
 
 impl Compiler {
@@ -55,6 +56,7 @@ impl Compiler {
         strategy: CompilationStrategy,
         tunables: Tunables,
         features: WasmFeatures,
+        parallel_compilation: bool,
     ) -> Self {
         Self {
             isa,
@@ -68,6 +70,7 @@ impl Compiler {
             },
             tunables,
             features,
+            parallel_compilation,
         }
     }
 }
@@ -134,12 +137,12 @@ impl Compiler {
         &self,
         translation: &mut ModuleTranslation,
         types: &TypeTables,
-        #[cfg(feature = "parallel-compilation")] parallel_compilation: bool,
     ) -> Result<Compilation, SetupError> {
         let functions = mem::take(&mut translation.function_body_inputs);
         let functions = functions.into_iter().collect::<Vec<_>>();
-        let funcs = maybe_parallel!(parallel_compilation, functions.(into_iter | into_par_iter), iter => {
-            iter.map(|(index, func)| {
+
+        let funcs = self
+            .run_maybe_parallel(functions, |(index, func)| {
                 self.compiler.compile_function(
                     translation,
                     index,
@@ -148,11 +151,9 @@ impl Compiler {
                     &self.tunables,
                     types,
                 )
-            })
-            .collect::<Result<Vec<_>, _>>()?
+            })?
             .into_iter()
-            .collect::<CompiledFunctions>()
-        });
+            .collect::<CompiledFunctions>();
 
         let dwarf_sections = if self.tunables.generate_native_debuginfo && !funcs.is_empty() {
             transform_dwarf_data(
@@ -174,6 +175,33 @@ impl Compiler {
             funcs,
         })
     }
+
+    /// Run the given closure in parallel if the compiler is configured to do so.
+    pub(crate) fn run_maybe_parallel<
+        A: Send,
+        B: Send,
+        E: Send,
+        F: Fn(A) -> Result<B, E> + Send + Sync,
+    >(
+        &self,
+        input: Vec<A>,
+        f: F,
+    ) -> Result<Vec<B>, E> {
+        if self.parallel_compilation {
+            #[cfg(feature = "parallel-compilation")]
+            return input
+                .into_par_iter()
+                .map(|a| f(a))
+                .collect::<Result<Vec<B>, E>>();
+        }
+
+        // In case the parallel-compilation feature is disabled or the parallel_compilation config
+        // was turned off dynamically fallback to the non-parallel version.
+        input
+            .into_iter()
+            .map(|a| f(a))
+            .collect::<Result<Vec<B>, E>>()
+    }
 }
 
 impl Hash for Compiler {
@@ -184,6 +212,7 @@ impl Hash for Compiler {
             isa,
             tunables,
             features,
+            parallel_compilation: _,
         } = self;
 
         // Hash compiler's flags: compilation strategy, isa, frontend config,

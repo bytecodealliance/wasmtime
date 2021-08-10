@@ -144,8 +144,6 @@ impl Engine {
             &self.inner.compiler,
             &bytes,
             USE_PAGED_MEM_INIT,
-            #[cfg(feature = "parallel-compilation")]
-            self.inner.config.parallel_compilation,
         )?;
 
         crate::module::SerializedModule::from_artifacts(&self.inner.compiler, &artifacts, &types)

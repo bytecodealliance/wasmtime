@@ -356,7 +356,6 @@ pub struct Config {
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
     pub(crate) deserialize_check_wasmtime_version: bool,
-    #[cfg(feature = "parallel-compilation")]
     pub(crate) parallel_compilation: bool,
 }
 
@@ -394,7 +393,6 @@ impl Config {
             async_stack_size: 2 << 20,
             async_support: false,
             deserialize_check_wasmtime_version: true,
-            #[cfg(feature = "parallel-compilation")]
             parallel_compilation: true,
         };
         ret.cranelift_debug_verifier(false);
@@ -1242,7 +1240,13 @@ impl Config {
         let isa = self.target_isa();
         let mut tunables = self.tunables.clone();
         allocator.adjust_tunables(&mut tunables);
-        Compiler::new(isa, self.strategy, tunables, self.features)
+        Compiler::new(
+            isa,
+            self.strategy,
+            tunables,
+            self.features,
+            self.parallel_compilation,
+        )
     }
 
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {

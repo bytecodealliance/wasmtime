@@ -291,8 +291,7 @@ impl<'a> SerializedModule<'a> {
                 .collect(),
             engine.compiler().isa(),
             &*engine.config().profiler,
-            #[cfg(feature = "parallel-compilation")]
-            engine.config().parallel_compilation,
+            engine.compiler(),
         )?;
 
         assert!(!modules.is_empty());

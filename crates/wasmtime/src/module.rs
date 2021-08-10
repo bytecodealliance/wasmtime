@@ -304,8 +304,6 @@ impl Module {
                         compiler,
                         binary,
                         USE_PAGED_MEM_INIT,
-                        #[cfg(feature = "parallel-compilation")]
-                        engine.config().parallel_compilation,
                     )
                 })?;
             } else {
@@ -314,8 +312,6 @@ impl Module {
                         engine.compiler(),
                         binary,
                         USE_PAGED_MEM_INIT,
-                        #[cfg(feature = "parallel-compilation")]
-                        engine.config().parallel_compilation,
                     )?;
             }
         };
@@ -324,8 +320,7 @@ impl Module {
             artifacts,
             engine.compiler().isa(),
             &*engine.config().profiler,
-            #[cfg(feature = "parallel-compilation")]
-            engine.config().parallel_compilation,
+            engine.compiler(),
         )?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
