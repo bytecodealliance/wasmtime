@@ -1,5 +1,4 @@
 use anyhow::{bail, Context as _, Result};
-use object::write::Object;
 use target_lexicon::Triple;
 use wasmparser::WasmFeatures;
 use wasmtime::Strategy;
@@ -14,7 +13,7 @@ pub fn compile_to_obj(
     enable_simd: bool,
     opt_level: wasmtime::OptLevel,
     debug_info: bool,
-) -> Result<Object> {
+) -> Result<Vec<u8>> {
     let strategy = match strategy {
         Strategy::Auto => wasmtime_jit::CompilationStrategy::Auto,
         Strategy::Cranelift => wasmtime_jit::CompilationStrategy::Cranelift,

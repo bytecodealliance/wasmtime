@@ -16,7 +16,6 @@ wasmtime-runtime = { path = "../runtime", version = "0.29.0" }
 wasmtime-cranelift = { path = "../cranelift", version = "0.29.0" }
 wasmtime-lightbeam = { path = "../lightbeam/wasmtime", version = "0.29.0", optional = true }
 wasmtime-profiling = { path = "../profiling", version = "0.29.0" }
-wasmtime-obj = { path = "../obj", version = "0.29.0" }
 rayon = { version = "1.0", optional = true }
 region = "2.2.0"
 thiserror = "1.0.4"
@@ -26,8 +25,8 @@ more-asserts = "0.2.1"
 anyhow = "1.0"
 cfg-if = "1.0"
 log = "0.4"
-gimli = { version = "0.25.0", default-features = false, features = ["write"] }
-object = { version = "0.26.0", default-features = false, features = ["write"] }
+gimli = { version = "0.25.0", default-features = false, features = ["std", "read"] }
+object = { version = "0.26.0", default-features = false, features = ["std", "read_core", "elf"] }
 serde = { version = "1.0.94", features = ["derive"] }
 addr2line = { version = "0.16.0", default-features = false }
 

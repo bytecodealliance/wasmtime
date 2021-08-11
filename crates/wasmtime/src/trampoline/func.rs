@@ -77,23 +77,24 @@ pub fn create_function(
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
     engine: &Engine,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
-    let wasm_trampoline = engine
+    let obj = engine
         .compiler()
         .compiler()
-        .wasm_to_host_trampoline(ft.as_wasm_func_type(), stub_fn as usize)?;
-    let host_trampoline = engine
-        .compiler()
-        .compiler()
-        .host_to_wasm_trampoline(ft.as_wasm_func_type())?;
+        .emit_trampoline_obj(ft.as_wasm_func_type(), stub_fn as usize)?;
 
     let mut code_memory = CodeMemory::new();
-    let host_trampoline = code_memory
-        .allocate_for_function(&host_trampoline)?
-        .as_ptr();
-    let wasm_trampoline =
-        code_memory.allocate_for_function(&wasm_trampoline)? as *mut [VMFunctionBody];
+    let alloc = code_memory.allocate_for_object(&obj)?;
+    let mut trampolines = alloc.trampolines();
+    let (host_i, host_trampoline) = trampolines.next().unwrap();
+    assert_eq!(host_i.as_u32(), 0);
+    let (wasm_i, wasm_trampoline) = trampolines.next().unwrap();
+    assert_eq!(wasm_i.as_u32(), 1);
+    assert!(trampolines.next().is_none());
+    let host_trampoline = host_trampoline.as_ptr();
+    let wasm_trampoline = wasm_trampoline as *mut [_];
+    drop(trampolines);
 
-    code_memory.publish(engine.compiler());
+    code_memory.publish();
 
     let sig = engine.signatures().register(ft.as_wasm_func_type());
 

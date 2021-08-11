@@ -21,7 +21,7 @@ pub fn compile_cranelift(
     )?;
 
     let mut file = File::create(output).context("failed to create object file")?;
-    file.write_all(&obj.write()?)
+    file.write_all(&obj)
         .context("failed to write object file")?;
 
     Ok(())

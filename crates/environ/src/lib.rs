@@ -29,6 +29,7 @@ mod compilation;
 mod data_structures;
 mod module;
 mod module_environ;
+pub mod obj;
 mod tunables;
 mod vmoffsets;
 

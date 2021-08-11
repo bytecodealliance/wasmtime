@@ -7,9 +7,7 @@ use crate::code_memory::CodeMemory;
 use crate::compiler::{Compilation, Compiler};
 use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
-use crate::object::ObjectUnwindInfo;
-use anyhow::{Context, Result};
-use object::File as ObjectFile;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
@@ -56,9 +54,6 @@ pub struct CompilationArtifacts {
 
     /// ELF image with functions code.
     obj: Box<[u8]>,
-
-    /// Unwind information for function code.
-    unwind_info: Box<[ObjectUnwindInfo]>,
 
     /// Descriptions of compiled functions
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
@@ -110,11 +105,7 @@ impl CompilationArtifacts {
         let list = compiler.run_maybe_parallel::<_, _, SetupError, _>(
             translations,
             |mut translation| {
-                let Compilation {
-                    obj,
-                    unwind_info,
-                    funcs,
-                } = compiler.compile(&mut translation, &types)?;
+                let Compilation { obj, funcs } = compiler.compile(&mut translation, &types)?;
 
                 let ModuleTranslation {
                     mut module,
@@ -129,16 +120,9 @@ impl CompilationArtifacts {
                     }
                 }
 
-                let obj = obj.write().map_err(|_| {
-                    SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
-                        "failed to create image memory"
-                    )))
-                })?;
-
                 Ok(CompilationArtifacts {
                     module: Arc::new(module),
                     obj: obj.into_boxed_slice(),
-                    unwind_info: unwind_info.into_boxed_slice(),
                     funcs: funcs
                         .into_iter()
                         .map(|(_, func)| FunctionInfo {
@@ -221,34 +205,26 @@ impl CompiledModule {
     /// artifacts.
     pub fn from_artifacts_list(
         artifacts: Vec<CompilationArtifacts>,
-        compiler: &Compiler,
         profiler: &dyn ProfilingAgent,
+        compiler: &Compiler,
     ) -> Result<Vec<Arc<Self>>, SetupError> {
-        compiler.run_maybe_parallel(artifacts, |a| {
-            CompiledModule::from_artifacts(a, compiler, profiler)
-        })
+        compiler.run_maybe_parallel(artifacts, |a| CompiledModule::from_artifacts(a, profiler))
     }
 
     /// Creates `CompiledModule` directly from `CompilationArtifacts`.
     pub fn from_artifacts(
         artifacts: CompilationArtifacts,
-        compiler: &Compiler,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Arc<Self>, SetupError> {
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
-        let (code_memory, code_range, finished_functions, trampolines) = build_code_memory(
-            compiler,
-            &artifacts.obj,
-            &artifacts.module,
-            &artifacts.unwind_info,
-        )
-        .map_err(|message| {
-            SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
-                "failed to build code memory for functions: {}",
-                message
-            )))
-        })?;
+        let (code_memory, code_range, finished_functions, trampolines) =
+            build_code_memory(&artifacts.obj, &artifacts.module).map_err(|message| {
+                SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
+                    "failed to build code memory for functions: {}",
+                    message
+                )))
+            })?;
 
         // Register GDB JIT images; initialize profiler and load the wasm module.
         let dbg_jit_registration = if artifacts.native_debug_info_present {
@@ -475,21 +451,17 @@ fn create_dbg_image(
 }
 
 fn build_code_memory(
-    compiler: &Compiler,
     obj: &[u8],
     module: &Module,
-    unwind_info: &[ObjectUnwindInfo],
 ) -> Result<(
     CodeMemory,
     (*const u8, usize),
     PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     Vec<(SignatureIndex, VMTrampoline)>,
 )> {
-    let obj = ObjectFile::parse(obj).with_context(|| "Unable to read obj")?;
-
     let mut code_memory = CodeMemory::new();
 
-    let allocation = code_memory.allocate_for_object(&obj, unwind_info)?;
+    let allocation = code_memory.allocate_for_object(obj)?;
 
     // Populate the finished functions from the allocation
     let mut finished_functions = PrimaryMap::with_capacity(allocation.funcs_len());
@@ -519,14 +491,17 @@ fn build_code_memory(
         trampolines.push((i, fnptr));
     }
 
-    let code_range = allocation.code_range();
+    link_module(
+        &allocation.obj,
+        &module,
+        allocation.code_range,
+        &finished_functions,
+    );
 
-    link_module(&obj, &module, code_range, &finished_functions);
-
-    let code_range = (code_range.as_ptr(), code_range.len());
+    let code_range = (allocation.code_range.as_ptr(), allocation.code_range.len());
 
     // Make all code compiled thus far executable.
-    code_memory.publish(compiler);
+    code_memory.publish();
 
     Ok((code_memory, code_range, finished_functions, trampolines))
 }

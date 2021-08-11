@@ -6,7 +6,28 @@ use wasmtime_environ::ir::Endianness;
 use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use wasmtime_environ::{CompiledFunctions, DebugInfoData, ModuleMemoryOffset};
 
-pub use wasmtime_environ::{DwarfSection, DwarfSectionReloc, DwarfSectionRelocTarget};
+#[allow(missing_docs)]
+pub struct DwarfSection {
+    pub name: &'static str,
+    pub body: Vec<u8>,
+    pub relocs: Vec<DwarfSectionReloc>,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone)]
+pub struct DwarfSectionReloc {
+    pub target: DwarfSectionRelocTarget,
+    pub offset: u32,
+    pub addend: i32,
+    pub size: u8,
+}
+
+#[allow(missing_docs)]
+#[derive(Clone)]
+pub enum DwarfSectionRelocTarget {
+    Func(usize),
+    Section(&'static str),
+}
 
 fn emit_dwarf_sections(
     isa: &dyn TargetIsa,

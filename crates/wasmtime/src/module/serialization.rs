@@ -233,8 +233,8 @@ impl<'a> SerializedModule<'a> {
                 .into_iter()
                 .map(|i| i.unwrap_owned())
                 .collect(),
-            engine.compiler(),
             &*engine.config().profiler,
+            engine.compiler(),
         )?;
 
         assert!(!modules.is_empty());

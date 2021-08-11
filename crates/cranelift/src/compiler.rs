@@ -1,24 +1,29 @@
 use crate::func_environ::{get_func_name, FuncEnvironment};
+use crate::obj::{ObjectBuilder, ObjectBuilderTarget};
 use crate::{blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv};
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings;
 use cranelift_codegen::MachSrcLoc;
 use cranelift_codegen::{binemit, Context};
+use cranelift_entity::EntityRef;
 use cranelift_frontend::FunctionBuilder;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, WasmFuncType};
+use cranelift_wasm::{
+    DefinedFuncIndex, DefinedMemoryIndex, FuncIndex, FuncTranslator, MemoryIndex, SignatureIndex,
+    WasmFuncType,
+};
 use std::cmp;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    CompileError, CompiledFunction, CompiledFunctions, DebugInfoData, DwarfSection, FlagValue,
-    FunctionAddressMap, FunctionBodyData, InstructionAddressMap, ModuleMemoryOffset,
-    ModuleTranslation, Relocation, RelocationTarget, StackMapInformation, TrapInformation,
-    Tunables, TypeTables,
+    CompileError, CompiledFunction, CompiledFunctions, FlagValue, FunctionAddressMap,
+    FunctionBodyData, InstructionAddressMap, Module, ModuleMemoryOffset, ModuleTranslation,
+    Relocation, RelocationTarget, StackMapInformation, TrapInformation, Tunables, TypeTables,
+    VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
@@ -204,6 +209,117 @@ impl wasmtime_environ::Compiler for Compiler {
         })
     }
 
+    fn emit_obj(
+        &self,
+        translation: &ModuleTranslation,
+        types: &TypeTables,
+        funcs: &CompiledFunctions,
+        emit_dwarf: bool,
+    ) -> Result<Vec<u8>> {
+        const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
+
+        // Build trampolines for every signature that can be used by this module.
+        let signatures = translation
+            .module
+            .functions
+            .iter()
+            .filter_map(|(i, sig)| match translation.module.defined_func_index(i) {
+                Some(i) if !translation.module.possibly_exported_funcs.contains(&i) => None,
+                _ => Some(*sig),
+            })
+            .collect::<BTreeSet<_>>();
+        let mut trampolines = Vec::with_capacity(signatures.len());
+        for i in signatures {
+            let func = self.host_to_wasm_trampoline(&types.wasm_signatures[i])?;
+            trampolines.push((i, func));
+        }
+
+        let target = ObjectBuilderTarget::elf(self.isa.triple().architecture)?;
+        let mut builder = ObjectBuilder::new(target, &translation.module);
+
+        for (i, func) in funcs.iter() {
+            builder.func(i, func);
+        }
+        for (i, func) in trampolines.iter() {
+            builder.trampoline(*i, func);
+        }
+        builder.align_text_to(CODE_SECTION_ALIGNMENT);
+
+        if emit_dwarf && funcs.len() > 0 {
+            let ofs = VMOffsets::new(
+                self.isa
+                    .triple()
+                    .architecture
+                    .pointer_width()
+                    .unwrap()
+                    .bytes(),
+                &translation.module,
+            );
+
+            let memory_offset = if ofs.num_imported_memories > 0 {
+                ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
+            } else if ofs.num_defined_memories > 0 {
+                ModuleMemoryOffset::Defined(
+                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
+                )
+            } else {
+                ModuleMemoryOffset::None
+            };
+            let dwarf_sections = wasmtime_debug::emit_dwarf(
+                &*self.isa,
+                &translation.debuginfo,
+                funcs,
+                &memory_offset,
+            )
+            .with_context(|| "failed to emit DWARF debug information")?;
+            builder.dwarf_sections(&dwarf_sections)?;
+        }
+
+        Ok(builder.finish(&*self.isa)?)
+    }
+
+    fn emit_trampoline_obj(&self, ty: &WasmFuncType, host_fn: usize) -> Result<Vec<u8>> {
+        let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
+        let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
+        let target = ObjectBuilderTarget::elf(self.isa.triple().architecture)?;
+        let module = Module::new();
+        let mut builder = ObjectBuilder::new(target, &module);
+        builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
+        builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
+        Ok(builder.finish(&*self.isa)?)
+    }
+
+    fn triple(&self) -> &target_lexicon::Triple {
+        self.isa.triple()
+    }
+
+    fn flags(&self) -> HashMap<String, FlagValue> {
+        self.isa
+            .flags()
+            .iter()
+            .map(|val| (val.name.to_string(), to_flag_value(&val)))
+            .collect()
+    }
+
+    fn isa_flags(&self) -> HashMap<String, FlagValue> {
+        self.isa
+            .isa_flags()
+            .iter()
+            .map(|val| (val.name.to_string(), to_flag_value(val)))
+            .collect()
+    }
+}
+
+fn to_flag_value(v: &settings::Value) -> FlagValue {
+    match v.kind() {
+        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap().into()),
+        settings::SettingKind::Num => FlagValue::Num(v.as_num().unwrap()),
+        settings::SettingKind::Bool => FlagValue::Bool(v.as_bool().unwrap()),
+        settings::SettingKind::Preset => unreachable!(),
+    }
+}
+
+impl Compiler {
     fn host_to_wasm_trampoline(&self, ty: &WasmFuncType) -> Result<CompiledFunction, CompileError> {
         let isa = &*self.isa;
         let value_size = mem::size_of::<u128>();
@@ -361,50 +477,6 @@ impl wasmtime_environ::Compiler for Compiler {
         Ok(func)
     }
 
-    fn emit_dwarf(
-        &self,
-        debuginfo_data: &DebugInfoData,
-        funcs: &CompiledFunctions,
-        memory_offset: &ModuleMemoryOffset,
-    ) -> Result<Vec<DwarfSection>> {
-        wasmtime_debug::emit_dwarf(&*self.isa, debuginfo_data, funcs, memory_offset)
-    }
-
-    fn triple(&self) -> &target_lexicon::Triple {
-        self.isa.triple()
-    }
-
-    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
-        self.isa.create_systemv_cie()
-    }
-
-    fn flags(&self) -> HashMap<String, FlagValue> {
-        self.isa
-            .flags()
-            .iter()
-            .map(|val| (val.name.to_string(), to_flag_value(&val)))
-            .collect()
-    }
-
-    fn isa_flags(&self) -> HashMap<String, FlagValue> {
-        self.isa
-            .isa_flags()
-            .iter()
-            .map(|val| (val.name.to_string(), to_flag_value(val)))
-            .collect()
-    }
-}
-
-fn to_flag_value(v: &settings::Value) -> FlagValue {
-    match v.kind() {
-        settings::SettingKind::Enum => FlagValue::Enum(v.as_enum().unwrap().into()),
-        settings::SettingKind::Num => FlagValue::Num(v.as_num().unwrap()),
-        settings::SettingKind::Bool => FlagValue::Bool(v.as_bool().unwrap()),
-        settings::SettingKind::Preset => unreachable!(),
-    }
-}
-
-impl Compiler {
     fn finish_trampoline(
         &self,
         mut context: Context,
