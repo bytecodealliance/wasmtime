@@ -193,6 +193,14 @@ WASMTIME_CONFIG_PROP(void, wasm_multi_memory, bool)
 WASMTIME_CONFIG_PROP(void, wasm_module_linking, bool)
 
 /**
+ * \brief Configures whether the WebAssembly memory64 proposal is
+ * enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_memory64, bool)
+
+/**
  * \brief Configures how JIT code will be compiled.
  *
  * This setting is #WASMTIME_STRATEGY_AUTO by default.

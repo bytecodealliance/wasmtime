@@ -41,6 +41,7 @@ const SUPPORTED_WASM_FEATURES: &[(&str, &str)] = &[
     ("reference-types", "enables support for reference types"),
     ("simd", "enables support for proposed SIMD instructions"),
     ("threads", "enables support for WebAssembly threads"),
+    ("memory64", "enables support for 64-bit memories"),
 ];
 
 const SUPPORTED_WASI_MODULES: &[(&str, &str)] = &[
@@ -437,7 +438,7 @@ fn parse_wasm_features(features: &str) -> Result<wasmparser::WasmFeatures> {
         deterministic_only: false,
         multi_memory: all.unwrap_or(values["multi-memory"].unwrap_or(false)),
         exceptions: false,
-        memory64: false,
+        memory64: all.unwrap_or(values["memory64"].unwrap_or(false)),
     })
 }
 
@@ -561,7 +562,7 @@ mod test {
         assert!(!deterministic_only); // Not supported
         assert!(multi_memory);
         assert!(!exceptions); // Not supported
-        assert!(!memory64); // Not supported
+        assert!(memory64);
 
         Ok(())
     }
@@ -603,7 +604,7 @@ mod test {
     fn test_multiple_features() -> Result<()> {
         let options = CommonOptions::from_iter_safe(vec![
             "foo",
-            "--wasm-features=-reference-types,simd,multi-memory",
+            "--wasm-features=-reference-types,simd,multi-memory,memory64",
         ])?;
 
         let wasmparser::WasmFeatures {
@@ -630,7 +631,7 @@ mod test {
         assert!(!deterministic_only); // Not supported
         assert!(multi_memory);
         assert!(!exceptions); // Not supported
-        assert!(!memory64); // Not supported
+        assert!(memory64);
 
         Ok(())
     }
@@ -675,6 +676,7 @@ mod test {
     feature_test!(test_simd_feature, simd, "simd");
     feature_test!(test_threads_feature, threads, "threads");
     feature_test!(test_multi_memory_feature, multi_memory, "multi-memory");
+    feature_test!(test_memory64_feature, memory64, "memory64");
 
     #[test]
     fn test_default_modules() {
