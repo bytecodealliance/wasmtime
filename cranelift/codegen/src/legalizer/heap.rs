@@ -25,7 +25,7 @@ pub fn expand_heap_addr(
             imm,
         } => {
             debug_assert_eq!(opcode, ir::Opcode::HeapAddr);
-            (heap, arg, imm.into())
+            (heap, arg, u64::from(imm))
         }
         _ => panic!("Wanted heap_addr: {}", func.dfg.display_inst(inst, None)),
     };
@@ -53,11 +53,10 @@ fn dynamic_addr(
     inst: ir::Inst,
     heap: ir::Heap,
     offset: ir::Value,
-    access_size: u32,
+    access_size: u64,
     bound_gv: ir::GlobalValue,
     func: &mut ir::Function,
 ) {
-    let access_size = u64::from(access_size);
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let min_size = func.heaps[heap].min_size.into();
@@ -113,12 +112,11 @@ fn static_addr(
     inst: ir::Inst,
     heap: ir::Heap,
     mut offset: ir::Value,
-    access_size: u32,
+    access_size: u64,
     bound: u64,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
 ) {
-    let access_size = u64::from(access_size);
     let offset_ty = func.dfg.value_type(offset);
     let addr_ty = func.dfg.value_type(func.dfg.first_result(inst));
     let mut pos = FuncCursor::new(func).at_inst(inst);

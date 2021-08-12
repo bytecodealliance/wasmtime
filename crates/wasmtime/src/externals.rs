@@ -419,7 +419,7 @@ impl Table {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let ty = TableType::new(ValType::FuncRef, Limits::new(2, None));
+    /// let ty = TableType::new(ValType::FuncRef, 2, None);
     /// let table = Table::new(&mut store, ty, Val::FuncRef(None))?;
     ///
     /// let module = Module::new(
@@ -442,7 +442,7 @@ impl Table {
     }
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
-        if init.ty() != *ty.element() {
+        if init.ty() != ty.element() {
             bail!(
                 "table initialization value type {:?} does not have expected type {:?}",
                 init.ty(),
@@ -467,7 +467,7 @@ impl Table {
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             (*table.wasmtime_table(store))
-                .fill(0, init, ty.limits().min())
+                .fill(0, init, ty.minimum())
                 .map_err(Trap::from_runtime)?;
 
             Ok(table)

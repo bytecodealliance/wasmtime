@@ -89,7 +89,7 @@ pub struct ModuleLimits {
     pub table_elements: u32,
 
     /// The maximum number of pages for any linear memory defined in a module.
-    pub memory_pages: u32,
+    pub memory_pages: u64,
 }
 
 impl ModuleLimits {
@@ -455,7 +455,7 @@ impl InstancePool {
                 .expect("failed to reset guard pages");
             drop(&mut memory); // require mutable on all platforms, not just uffd
 
-            let size = (memory.size() as usize) * (WASM_PAGE_SIZE as usize);
+            let size = memory.byte_size();
             drop(memory);
             decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
         }
@@ -499,7 +499,7 @@ impl InstancePool {
     fn set_instance_memories(
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
-        max_pages: u32,
+        max_pages: u64,
         mut limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
@@ -599,7 +599,7 @@ struct MemoryPool {
     initial_memory_offset: usize,
     max_memories: usize,
     max_instances: usize,
-    max_wasm_pages: u32,
+    max_wasm_pages: u64,
 }
 
 impl MemoryPool {
@@ -1118,6 +1118,7 @@ mod test {
                 minimum: 0,
                 maximum: None,
                 shared: false,
+                memory64: false,
             },
             pre_guard_size: 0,
             offset_guard_size: 0,
@@ -1234,6 +1235,7 @@ mod test {
                 minimum: 0,
                 maximum: None,
                 shared: false,
+                memory64: false,
             },
             pre_guard_size: 0,
             offset_guard_size: 0,
@@ -1308,6 +1310,7 @@ mod test {
                 minimum: 6,
                 maximum: None,
                 shared: false,
+                memory64: false,
             },
             pre_guard_size: 0,
             offset_guard_size: 0,
@@ -1333,6 +1336,7 @@ mod test {
                 minimum: 1,
                 maximum: None,
                 shared: false,
+                memory64: false,
             },
             offset_guard_size: 0,
             pre_guard_size: 0,

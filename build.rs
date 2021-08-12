@@ -34,6 +34,7 @@ fn main() -> anyhow::Result<()> {
             test_directory_module(out, "tests/misc_testsuite/module-linking", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/simd", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/threads", strategy)?;
+            test_directory_module(out, "tests/misc_testsuite/memory64", strategy)?;
             Ok(())
         })?;
 
@@ -53,6 +54,7 @@ fn main() -> anyhow::Result<()> {
                     "tests/spec_testsuite/proposals/bulk-memory-operations",
                     strategy,
                 )?;
+                test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
             } else {
                 println!(
                     "cargo:warning=The spec testsuite is disabled. To enable, run `git submodule \
@@ -157,7 +159,7 @@ fn write_testsuite_tests(
 
     writeln!(out, "#[test]")?;
     // Ignore when using QEMU for running tests (limited memory).
-    if ignore(testsuite, &testname, strategy) || (pooling && platform_is_emulated()) {
+    if ignore(testsuite, &testname, strategy) {
         writeln!(out, "#[ignore]")?;
     }
 
@@ -212,8 +214,4 @@ fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
 
 fn platform_is_s390x() -> bool {
     env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "s390x"
-}
-
-fn platform_is_emulated() -> bool {
-    env::var("WASMTIME_TEST_NO_HOG_MEMORY").unwrap_or_default() == "1"
 }

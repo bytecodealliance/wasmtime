@@ -1,6 +1,8 @@
 use anyhow::Result;
 use wasmtime::*;
 
+const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
+
 #[test]
 fn test_limits() -> Result<()> {
     let engine = Engine::default();
@@ -12,7 +14,7 @@ fn test_limits() -> Result<()> {
     let mut store = Store::new(
         &engine,
         StoreLimitsBuilder::new()
-            .memory_pages(10)
+            .memory_size(10 * WASM_PAGE_SIZE)
             .table_elements(5)
             .build(),
     );
@@ -23,7 +25,7 @@ fn test_limits() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for memory in std::array::IntoIter::new([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(Limits::new(0, None)))?,
+        Memory::new(&mut store, MemoryType::new(0, None))?,
     ]) {
         memory.grow(&mut store, 3)?;
         memory.grow(&mut store, 5)?;
@@ -43,7 +45,7 @@ fn test_limits() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, Limits::new(0, None)),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )?,
     ]) {
@@ -71,7 +73,12 @@ fn test_limits_memory_only() -> Result<()> {
         r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
     )?;
 
-    let mut store = Store::new(&engine, StoreLimitsBuilder::new().memory_pages(10).build());
+    let mut store = Store::new(
+        &engine,
+        StoreLimitsBuilder::new()
+            .memory_size(10 * WASM_PAGE_SIZE)
+            .build(),
+    );
     store.limiter(|s| s as &mut dyn ResourceLimiter);
 
     let instance = Instance::new(&mut store, &module, &[])?;
@@ -79,7 +86,7 @@ fn test_limits_memory_only() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for memory in std::array::IntoIter::new([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(Limits::new(0, None)))?,
+        Memory::new(&mut store, MemoryType::new(0, None))?,
     ]) {
         memory.grow(&mut store, 3)?;
         memory.grow(&mut store, 5)?;
@@ -99,7 +106,7 @@ fn test_limits_memory_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, Limits::new(0, None)),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )?,
     ]) {
@@ -117,7 +124,12 @@ fn test_initial_memory_limits_exceeded() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(&engine, r#"(module (memory (export "m") 11))"#)?;
 
-    let mut store = Store::new(&engine, StoreLimitsBuilder::new().memory_pages(10).build());
+    let mut store = Store::new(
+        &engine,
+        StoreLimitsBuilder::new()
+            .memory_size(10 * WASM_PAGE_SIZE)
+            .build(),
+    );
     store.limiter(|s| s as &mut dyn ResourceLimiter);
 
     match Instance::new(&mut store, &module, &[]) {
@@ -128,7 +140,7 @@ fn test_initial_memory_limits_exceeded() -> Result<()> {
         ),
     }
 
-    match Memory::new(&mut store, MemoryType::new(Limits::new(25, None))) {
+    match Memory::new(&mut store, MemoryType::new(25, None)) {
         Ok(_) => unreachable!(),
         Err(e) => assert_eq!(
             e.to_string(),
@@ -155,7 +167,7 @@ fn test_limits_table_only() -> Result<()> {
     // Test instance exports and host objects *not* hitting the limit
     for memory in std::array::IntoIter::new([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(Limits::new(0, None)))?,
+        Memory::new(&mut store, MemoryType::new(0, None))?,
     ]) {
         memory.grow(&mut store, 3)?;
         memory.grow(&mut store, 5)?;
@@ -168,7 +180,7 @@ fn test_limits_table_only() -> Result<()> {
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
-            TableType::new(ValType::FuncRef, Limits::new(0, None)),
+            TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
         )?,
     ]) {
@@ -206,7 +218,7 @@ fn test_initial_table_limits_exceeded() -> Result<()> {
 
     match Table::new(
         &mut store,
-        TableType::new(ValType::FuncRef, Limits::new(99, None)),
+        TableType::new(ValType::FuncRef, 99, None),
         Val::FuncRef(None),
     ) {
         Ok(_) => unreachable!(),
@@ -241,7 +253,12 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
         r#"(module (memory (export "m1") 2) (memory (export "m2") 5))"#,
     )?;
 
-    let mut store = Store::new(&engine, StoreLimitsBuilder::new().memory_pages(3).build());
+    let mut store = Store::new(
+        &engine,
+        StoreLimitsBuilder::new()
+            .memory_size(3 * WASM_PAGE_SIZE)
+            .build(),
+    );
     store.limiter(|s| s as &mut dyn ResourceLimiter);
 
     match Instance::new(&mut store, &module, &[]) {
@@ -268,15 +285,12 @@ struct MemoryContext {
 }
 
 impl ResourceLimiter for MemoryContext {
-    fn memory_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
+    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool {
         // Check if the desired exceeds a maximum (either from Wasm or from the host)
-        if desired > maximum.unwrap_or(u32::MAX) {
-            self.limit_exceeded = true;
-            return false;
-        }
+        assert!(desired < maximum.unwrap_or(usize::MAX));
 
-        assert_eq!(current as usize * 0x10000, self.wasm_memory_used,);
-        let desired = desired as usize * 0x10000;
+        assert_eq!(current as usize, self.wasm_memory_used);
+        let desired = desired as usize;
 
         if desired + self.host_memory_used > self.memory_limit {
             self.limit_exceeded = true;

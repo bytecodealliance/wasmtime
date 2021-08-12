@@ -770,7 +770,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
     fn define_function_body(
         &mut self,
         validator: FuncValidator<ValidatorResources>,
-        body: FunctionBody<'data>,
+        mut body: FunctionBody<'data>,
     ) -> WasmResult<()> {
         if self.tunables.generate_native_debuginfo {
             let func_index = self.result.code_index + self.result.module.num_imported_funcs as u32;
@@ -790,6 +790,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
                     params: sig.params.iter().cloned().map(|i| i.into()).collect(),
                 });
         }
+        body.allow_memarg64(self.features.memory64);
         self.result
             .function_body_inputs
             .push(FunctionBodyData { validator, body });
@@ -811,7 +812,7 @@ impl<'data> cranelift_wasm::ModuleEnvironment<'data> for ModuleEnvironment<'data
         &mut self,
         memory_index: MemoryIndex,
         base: Option<GlobalIndex>,
-        offset: u32,
+        offset: u64,
         data: &'data [u8],
     ) -> WasmResult<()> {
         match &mut self.result.module.memory_initialization {

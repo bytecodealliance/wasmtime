@@ -64,7 +64,7 @@ fn main() -> Result<()> {
     assert!(memory.grow(&mut store, 0).is_ok());
 
     println!("Creating stand-alone memory...");
-    let memorytype = MemoryType::new(Limits::new(5, Some(5)));
+    let memorytype = MemoryType::new(5, Some(5));
     let memory2 = Memory::new(&mut store, memorytype)?;
     assert_eq!(memory2.size(&store), 5);
     assert!(memory2.grow(&mut store, 1).is_err());

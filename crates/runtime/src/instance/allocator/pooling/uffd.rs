@@ -213,7 +213,7 @@ impl FaultLocator {
             let instance = self.get_instance(index / self.max_memories);
 
             let init_page_index = (*instance).memories.get(memory_index).and_then(|m| {
-                if page_index < m.size() as usize {
+                if (addr - memory_start) < m.byte_size() {
                     Some(page_index)
                 } else {
                     None
@@ -500,6 +500,7 @@ mod test {
                         minimum: 2,
                         maximum: Some(2),
                         shared: false,
+                        memory64: false,
                     },
                     style: MemoryStyle::Static { bound: 1 },
                     offset_guard_size: 0,

@@ -555,6 +555,60 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
         builder.switch_to_block(continuation_block);
     }
+
+    fn memory_index_type(&self, index: MemoryIndex) -> ir::Type {
+        if self.module.memory_plans[index].memory.memory64 {
+            I64
+        } else {
+            I32
+        }
+    }
+
+    fn cast_pointer_to_memory_index(
+        &self,
+        mut pos: FuncCursor<'_>,
+        val: ir::Value,
+        index: MemoryIndex,
+    ) -> ir::Value {
+        let desired_type = self.memory_index_type(index);
+        let pointer_type = self.pointer_type();
+        assert_eq!(pos.func.dfg.value_type(val), pointer_type);
+
+        // The current length is of type `pointer_type` but we need to fit it
+        // into `desired_type`. We are guaranteed that the result will always
+        // fit, so we just need to do the right ireduce/sextend here.
+        if pointer_type == desired_type {
+            val
+        } else if pointer_type.bits() > desired_type.bits() {
+            pos.ins().ireduce(desired_type, val)
+        } else {
+            // Note that we `sextend` instead of the probably expected
+            // `uextend`. This function is only used within the contexts of
+            // `memory.size` and `memory.grow` where we're working with units of
+            // pages instead of actual bytes, so we know that the upper bit is
+            // always cleared for "valid values". The one case we care about
+            // sextend would be when the return value of `memory.grow` is `-1`,
+            // in which case we want to copy the sign bit.
+            //
+            // This should only come up on 32-bit hosts running wasm64 modules,
+            // which at some point also makes you question various assumptions
+            // made along the way...
+            pos.ins().sextend(desired_type, val)
+        }
+    }
+
+    fn cast_memory_index_to_i64(
+        &self,
+        pos: &mut FuncCursor<'_>,
+        val: ir::Value,
+        index: MemoryIndex,
+    ) -> ir::Value {
+        if self.memory_index_type(index) == I64 {
+            val
+        } else {
+            pos.ins().uextend(I64, val)
+        }
+    }
 }
 
 impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environment> {
@@ -1190,7 +1244,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             min_size: 0.into(),
             offset_guard_size,
             style: heap_style,
-            index_type: I32,
+            index_type: self.memory_index_type(index),
         }))
     }
 
@@ -1395,10 +1449,13 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             &mut pos,
             BuiltinFunctionIndex::memory32_grow(),
         );
+
+        let val = self.cast_memory_index_to_i64(&mut pos, val, index);
         let call_inst = pos
             .ins()
             .call_indirect(func_sig, func_addr, &[vmctx, val, memory_index]);
-        Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+        let result = *pos.func.dfg.inst_results(call_inst).first().unwrap();
+        Ok(self.cast_pointer_to_memory_index(pos, result, index))
     }
 
     fn translate_memory_size(
@@ -1436,12 +1493,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let current_length_in_pages = pos
             .ins()
             .udiv_imm(current_length_in_bytes, i64::from(WASM_PAGE_SIZE));
-        if pointer_type == I32 {
-            Ok(current_length_in_pages)
-        } else {
-            assert_eq!(pointer_type, I64);
-            Ok(pos.ins().ireduce(I32, current_length_in_pages))
-        }
+
+        Ok(self.cast_pointer_to_memory_index(pos, current_length_in_pages, index))
     }
 
     fn translate_memory_copy(
@@ -1455,13 +1508,26 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
-        let src_index = pos.ins().iconst(I32, i64::from(src_index.as_u32()));
-        let dst_index = pos.ins().iconst(I32, i64::from(dst_index.as_u32()));
-
         let (vmctx, func_addr) = self
             .translate_load_builtin_function_address(&mut pos, BuiltinFunctionIndex::memory_copy());
 
         let func_sig = self.builtin_function_signatures.memory_copy(&mut pos.func);
+        let dst = self.cast_memory_index_to_i64(&mut pos, dst, dst_index);
+        let src = self.cast_memory_index_to_i64(&mut pos, src, src_index);
+        // The length is 32-bit if either memory is 32-bit, but if they're both
+        // 64-bit then it's 64-bit. Our intrinsic takes a 64-bit length for
+        // compatibility across all memories, so make sure that it's cast
+        // correctly here (this is a bit special so no generic helper unlike for
+        // `dst`/`src` above)
+        let len = if self.memory_index_type(dst_index) == I64
+            && self.memory_index_type(src_index) == I64
+        {
+            len
+        } else {
+            pos.ins().uextend(I64, len)
+        };
+        let src_index = pos.ins().iconst(I32, i64::from(src_index.as_u32()));
+        let dst_index = pos.ins().iconst(I32, i64::from(dst_index.as_u32()));
         pos.ins().call_indirect(
             func_sig,
             func_addr,
@@ -1481,9 +1547,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         len: ir::Value,
     ) -> WasmResult<()> {
         let func_sig = self.builtin_function_signatures.memory_fill(&mut pos.func);
-        let memory_index = memory_index.index();
-
-        let memory_index_arg = pos.ins().iconst(I32, memory_index as i64);
+        let dst = self.cast_memory_index_to_i64(&mut pos, dst, memory_index);
+        let len = self.cast_memory_index_to_i64(&mut pos, len, memory_index);
+        let memory_index_arg = pos.ins().iconst(I32, i64::from(memory_index.as_u32()));
 
         let (vmctx, func_addr) = self
             .translate_load_builtin_function_address(&mut pos, BuiltinFunctionIndex::memory_fill());
@@ -1513,6 +1579,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
 
         let (vmctx, func_addr) = self.translate_load_builtin_function_address(&mut pos, func_idx);
+
+        let dst = self.cast_memory_index_to_i64(&mut pos, dst, memory_index);
 
         pos.ins().call_indirect(
             func_sig,
@@ -1754,5 +1822,9 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.fuel_function_exit(builder);
         }
         Ok(())
+    }
+
+    fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
+        self.isa.unsigned_add_overflow_condition()
     }
 }

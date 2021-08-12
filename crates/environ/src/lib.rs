@@ -44,8 +44,12 @@ pub use crate::vmoffsets::*;
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;
 
-/// The number of pages we can have before we run out of byte index space.
-pub const WASM_MAX_PAGES: u32 = 0x10000;
+/// The number of pages (for 32-bit modules) we can have before we run out of
+/// byte index space.
+pub const WASM32_MAX_PAGES: u64 = 1 << 16;
+/// The number of pages (for 64-bit modules) we can have before we run out of
+/// byte index space.
+pub const WASM64_MAX_PAGES: u64 = 1 << 48;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

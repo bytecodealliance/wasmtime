@@ -45,18 +45,25 @@ pub const DEFAULT_MEMORY_LIMIT: usize = 10000;
 /// An instance can be created with a resource limiter so that hosts can take into account
 /// non-WebAssembly resource usage to determine if a linear memory or table should grow.
 pub trait ResourceLimiter {
-    /// Notifies the resource limiter that an instance's linear memory has been requested to grow.
+    /// Notifies the resource limiter that an instance's linear memory has been
+    /// requested to grow.
     ///
-    /// * `current` is the current size of the linear memory in WebAssembly page units.
-    /// * `desired` is the desired size of the linear memory in WebAssembly page units.
-    /// * `maximum` is either the linear memory's maximum or a maximum from an instance allocator,
-    ///   also in WebAssembly page units. A value of `None` indicates that the linear memory is
-    ///   unbounded.
+    /// * `current` is the current size of the linear memory in bytes.
+    /// * `desired` is the desired size of the linear memory in bytes.
+    /// * `maximum` is either the linear memory's maximum or a maximum from an
+    ///   instance allocator, also in bytes. A value of `None`
+    ///   indicates that the linear memory is unbounded.
     ///
-    /// This function should return `true` to indicate that the growing operation is permitted or
-    /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
-    /// effect as the linear memory will not grow.
-    fn memory_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+    /// This function should return `true` to indicate that the growing
+    /// operation is permitted or `false` if not permitted. Returning `true`
+    /// when a maximum has been exceeded will have no effect as the linear
+    /// memory will not grow.
+    ///
+    /// This function is not guaranteed to be invoked for all requests to
+    /// `memory.grow`. Requests where the allocation requested size doesn't fit
+    /// in `usize` or exceeds the memory's listed maximum size may not invoke
+    /// this method.
+    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool;
 
     /// Notifies the resource limiter that an instance's table has been requested to grow.
     ///
@@ -406,8 +413,9 @@ impl Instance {
     /// Grow memory by the specified amount of pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
-    /// of pages.
-    pub(crate) fn memory_grow(&mut self, index: MemoryIndex, delta: u32) -> Option<u32> {
+    /// of pages. Returns `Some` with the old size in bytes if growth was
+    /// successful.
+    pub(crate) fn memory_grow(&mut self, index: MemoryIndex, delta: u64) -> Option<usize> {
         let (idx, instance) = if let Some(idx) = self.module.defined_memory_index(index) {
             (idx, self)
         } else {
@@ -616,26 +624,18 @@ impl Instance {
     pub(crate) fn memory_copy(
         &mut self,
         dst_index: MemoryIndex,
-        dst: u32,
+        dst: u64,
         src_index: MemoryIndex,
-        src: u32,
-        len: u32,
+        src: u64,
+        len: u64,
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-memory-copy
 
         let src_mem = self.get_memory(src_index);
         let dst_mem = self.get_memory(dst_index);
 
-        if src.checked_add(len).map_or(true, |n| {
-            usize::try_from(n).unwrap() > src_mem.current_length
-        }) || dst.checked_add(len).map_or(true, |m| {
-            usize::try_from(m).unwrap() > dst_mem.current_length
-        }) {
-            return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
-        }
-
-        let dst = usize::try_from(dst).unwrap();
-        let src = usize::try_from(src).unwrap();
+        let src = self.validate_inbounds(src_mem.current_length, src, len)?;
+        let dst = self.validate_inbounds(dst_mem.current_length, dst, len)?;
 
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
@@ -648,6 +648,19 @@ impl Instance {
         Ok(())
     }
 
+    fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, Trap> {
+        let oob = || Trap::wasm(ir::TrapCode::HeapOutOfBounds);
+        let end = ptr
+            .checked_add(len)
+            .and_then(|i| usize::try_from(i).ok())
+            .ok_or_else(oob)?;
+        if end > max {
+            Err(oob())
+        } else {
+            Ok(ptr as usize)
+        }
+    }
+
     /// Perform the `memory.fill` operation on a locally defined memory.
     ///
     /// # Errors
@@ -656,25 +669,17 @@ impl Instance {
     pub(crate) fn memory_fill(
         &mut self,
         memory_index: MemoryIndex,
-        dst: u32,
-        val: u32,
-        len: u32,
+        dst: u64,
+        val: u8,
+        len: u64,
     ) -> Result<(), Trap> {
         let memory = self.get_memory(memory_index);
-
-        if dst.checked_add(len).map_or(true, |m| {
-            usize::try_from(m).unwrap() > memory.current_length
-        }) {
-            return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
-        }
-
-        let dst = isize::try_from(dst).unwrap();
-        let val = val as u8;
+        let dst = self.validate_inbounds(memory.current_length, dst, len)?;
 
         // Bounds and casts are checked above, by this point we know that
         // everything is safe.
         unsafe {
-            let dst = memory.base.offset(dst);
+            let dst = memory.base.add(dst);
             ptr::write_bytes(dst, val, len as usize);
         }
 
@@ -692,7 +697,7 @@ impl Instance {
         &mut self,
         memory_index: MemoryIndex,
         data_index: DataIndex,
-        dst: u32,
+        dst: u64,
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
@@ -713,29 +718,22 @@ impl Instance {
         &mut self,
         memory_index: MemoryIndex,
         data: &[u8],
-        dst: u32,
+        dst: u64,
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
         let memory = self.get_memory(memory_index);
+        let dst = self.validate_inbounds(memory.current_length, dst, len.into())?;
+        let src = self.validate_inbounds(data.len(), src.into(), len.into())?;
+        let len = len as usize;
 
-        if src
-            .checked_add(len)
-            .map_or(true, |n| usize::try_from(n).unwrap() > data.len())
-            || dst.checked_add(len).map_or(true, |m| {
-                usize::try_from(m).unwrap() > memory.current_length
-            })
-        {
-            return Err(Trap::wasm(ir::TrapCode::HeapOutOfBounds));
-        }
-
-        let src_slice = &data[src as usize..(src + len) as usize];
+        let src_slice = &data[src..(src + len)];
 
         unsafe {
-            let dst_start = memory.base.add(dst as usize);
-            let dst_slice = slice::from_raw_parts_mut(dst_start, len as usize);
+            let dst_start = memory.base.add(dst);
+            let dst_slice = slice::from_raw_parts_mut(dst_start, len);
             dst_slice.copy_from_slice(src_slice);
         }
 

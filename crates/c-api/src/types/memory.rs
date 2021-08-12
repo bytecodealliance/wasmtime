@@ -1,5 +1,6 @@
 use crate::{wasm_externtype_t, wasm_limits_t, CExternType};
 use once_cell::unsync::OnceCell;
+use std::convert::TryFrom;
 use wasmtime::MemoryType;
 
 #[repr(transparent)]
@@ -50,20 +51,61 @@ impl CMemoryType {
 #[no_mangle]
 pub extern "C" fn wasm_memorytype_new(limits: &wasm_limits_t) -> Box<wasm_memorytype_t> {
     Box::new(wasm_memorytype_t::new(MemoryType::new(
-        limits.to_wasmtime(),
+        limits.min,
+        limits.max(),
     )))
 }
 
 #[no_mangle]
 pub extern "C" fn wasm_memorytype_limits(mt: &wasm_memorytype_t) -> &wasm_limits_t {
     let mt = mt.ty();
-    mt.limits_cache.get_or_init(|| {
-        let limits = mt.ty.limits();
-        wasm_limits_t {
-            min: limits.min(),
-            max: limits.max().unwrap_or(u32::max_value()),
-        }
+    mt.limits_cache.get_or_init(|| wasm_limits_t {
+        min: u32::try_from(mt.ty.minimum()).unwrap(),
+        max: u32::try_from(mt.ty.maximum().unwrap_or(u64::from(u32::max_value()))).unwrap(),
     })
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_memorytype_new(
+    minimum: u64,
+    maximum_specified: bool,
+    maximum: u64,
+    memory64: bool,
+) -> Box<wasm_memorytype_t> {
+    let maximum = if maximum_specified {
+        Some(maximum)
+    } else {
+        None
+    };
+    Box::new(wasm_memorytype_t::new(if memory64 {
+        MemoryType::new64(minimum, maximum)
+    } else {
+        MemoryType::new(
+            u32::try_from(minimum).unwrap(),
+            maximum.map(|i| u32::try_from(i).unwrap()),
+        )
+    }))
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_memorytype_minimum(mt: &wasm_memorytype_t) -> u64 {
+    mt.ty().ty.minimum()
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_memorytype_maximum(mt: &wasm_memorytype_t, out: &mut u64) -> bool {
+    match mt.ty().ty.maximum() {
+        Some(max) => {
+            *out = max;
+            true
+        }
+        None => false,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_memorytype_is64(mt: &wasm_memorytype_t) -> bool {
+    mt.ty().ty.is_64()
 }
 
 #[no_mangle]

@@ -279,14 +279,22 @@ fn initialize_tables(instance: &mut Instance, module: &Module) -> Result<(), Ins
 fn get_memory_init_start(
     init: &MemoryInitializer,
     instance: &Instance,
-) -> Result<u32, InstantiationError> {
+) -> Result<u64, InstantiationError> {
     match init.base {
         Some(base) => {
+            let mem64 = instance.module.memory_plans[init.memory_index]
+                .memory
+                .memory64;
             let val = unsafe {
-                if let Some(def_index) = instance.module.defined_global_index(base) {
-                    *instance.global(def_index).as_u32()
+                let global = if let Some(def_index) = instance.module.defined_global_index(base) {
+                    instance.global(def_index)
                 } else {
-                    *(*instance.imported_global(base).from).as_u32()
+                    &*instance.imported_global(base).from
+                };
+                if mem64 {
+                    *global.as_u64()
+                } else {
+                    u64::from(*global.as_u32())
                 }
             };
 
@@ -305,8 +313,9 @@ fn check_memory_init_bounds(
     for init in initializers {
         let memory = instance.get_memory(init.memory_index);
         let start = get_memory_init_start(init, instance)?;
-        let start = usize::try_from(start).unwrap();
-        let end = start.checked_add(init.data.len());
+        let end = usize::try_from(start)
+            .ok()
+            .and_then(|start| start.checked_add(init.data.len()));
 
         match end {
             Some(end) if end <= memory.current_length => {
@@ -334,7 +343,7 @@ fn initialize_memories(
                 &init.data,
                 get_memory_init_start(init, instance)?,
                 0,
-                init.data.len() as u32,
+                u32::try_from(init.data.len()).unwrap(),
             )
             .map_err(InstantiationError::Trap)?;
     }

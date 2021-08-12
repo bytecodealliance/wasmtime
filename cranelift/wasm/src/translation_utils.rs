@@ -226,11 +226,13 @@ pub enum TableElementType {
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Memory {
     /// The minimum number of pages in the memory.
-    pub minimum: u32,
+    pub minimum: u64,
     /// The maximum number of pages in the memory.
-    pub maximum: Option<u32>,
+    pub maximum: Option<u64>,
     /// Whether the memory may be shared between multiple threads.
     pub shared: bool,
+    /// Whether or not this is a 64-bit memory
+    pub memory64: bool,
 }
 
 /// WebAssembly event.

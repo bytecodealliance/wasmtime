@@ -2,6 +2,7 @@ use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, MemoryType, StoreContext, StoreContextMut};
 use anyhow::{bail, Result};
+use std::convert::TryFrom;
 use std::slice;
 
 /// Error for out of bounds [`Memory`] access.
@@ -209,7 +210,7 @@ impl Memory {
     /// let engine = Engine::default();
     /// let mut store = Store::new(&engine, ());
     ///
-    /// let memory_ty = MemoryType::new(Limits::new(1, None));
+    /// let memory_ty = MemoryType::new(1, None);
     /// let memory = Memory::new(&mut store, memory_ty)?;
     ///
     /// let module = Module::new(&engine, "(module (memory (import \"\" \"\") 1))")?;
@@ -246,7 +247,7 @@ impl Memory {
     /// let instance = Instance::new(&mut store, &module, &[])?;
     /// let memory = instance.get_memory(&mut store, "mem").unwrap();
     /// let ty = memory.ty(&store);
-    /// assert_eq!(ty.limits().min(), 1);
+    /// assert_eq!(ty.minimum(), 1);
     /// # Ok(())
     /// # }
     /// ```
@@ -403,8 +404,8 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn size(&self, store: impl AsContext) -> u32 {
-        (self.data_size(store) / wasmtime_environ::WASM_PAGE_SIZE as usize) as u32
+    pub fn size(&self, store: impl AsContext) -> u64 {
+        (self.data_size(store) / wasmtime_environ::WASM_PAGE_SIZE as usize) as u64
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
@@ -448,7 +449,7 @@ impl Memory {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn grow(&self, mut store: impl AsContextMut, delta: u32) -> Result<u32> {
+    pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
         let mem = self.wasmtime_memory(&mut store.as_context_mut().opaque());
         let store = store.as_context_mut();
         unsafe {
@@ -456,7 +457,7 @@ impl Memory {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
                     *store[self.0].definition = vm;
-                    Ok(size)
+                    Ok(u64::try_from(size).unwrap() / u64::from(wasmtime_environ::WASM_PAGE_SIZE))
                 }
                 None => bail!("failed to grow memory by `{}`", delta),
             }
@@ -499,10 +500,11 @@ impl Memory {
     }
 }
 
-/// A linear memory. This trait provides an interface for raw memory buffers which are used
-/// by wasmtime, e.g. inside ['Memory']. Such buffers are in principle not thread safe.
-/// By implementing this trait together with MemoryCreator,
-/// one can supply wasmtime with custom allocated host managed memory.
+/// A linear memory. This trait provides an interface for raw memory buffers
+/// which are used by wasmtime, e.g. inside ['Memory']. Such buffers are in
+/// principle not thread safe. By implementing this trait together with
+/// MemoryCreator, one can supply wasmtime with custom allocated host managed
+/// memory.
 ///
 /// # Safety
 ///
@@ -514,18 +516,20 @@ impl Memory {
 /// Note that this is a relatively new and experimental feature and it is
 /// recommended to be familiar with wasmtime runtime code to use it.
 pub unsafe trait LinearMemory: Send + Sync + 'static {
-    /// Returns the number of allocated wasm pages.
-    fn size(&self) -> u32;
+    /// Returns the number of allocated bytes which are accessible at this time.
+    fn byte_size(&self) -> usize;
 
-    /// Returns the maximum number of pages the memory can grow to.
-    /// Returns `None` if the memory is unbounded.
-    fn maximum(&self) -> Option<u32>;
+    /// Returns the maximum number of bytes the memory can grow to.
+    ///
+    /// Returns `None` if the memory is unbounded, or `Some` if memory cannot
+    /// grow beyond a specified limit.
+    fn maximum_byte_size(&self) -> Option<usize>;
 
-    /// Grow memory by the specified amount of wasm pages.
+    /// Grows this memory to have the `new_size`, in bytes, specified.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
-    /// of wasm pages.
-    fn grow(&mut self, delta: u32) -> Option<u32>;
+    /// of bytes. Returns `Some` if memory was grown successfully.
+    fn grow_to(&mut self, new_size: usize) -> Option<()>;
 
     /// Return the allocated memory as a mutable pointer to u8.
     fn as_ptr(&self) -> *mut u8;
@@ -547,7 +551,9 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// Create a new `LinearMemory` object from the specified parameters.
     ///
     /// The type of memory being created is specified by `ty` which indicates
-    /// both the minimum and maximum size, in wasm pages.
+    /// both the minimum and maximum size, in wasm pages. The minimum and
+    /// maximum sizes, in bytes, are also specified as parameters to avoid
+    /// integer conversion if desired.
     ///
     /// The `reserved_size_in_bytes` value indicates the expected size of the
     /// reservation that is to be made for this memory. If this value is `None`
@@ -557,23 +563,27 @@ pub unsafe trait MemoryCreator: Send + Sync {
     /// size at the end. Note that this reservation need only be a virtual
     /// memory reservation, physical memory does not need to be allocated
     /// immediately. In this case `grow` should never move the base pointer and
-    /// the maximum size of `ty` is guaranteed to fit within `reserved_size_in_bytes`.
+    /// the maximum size of `ty` is guaranteed to fit within
+    /// `reserved_size_in_bytes`.
     ///
-    /// The `guard_size_in_bytes` parameter indicates how many bytes of space, after the
-    /// memory allocation, is expected to be unmapped. JIT code will elide
-    /// bounds checks based on the `guard_size_in_bytes` provided, so for JIT code to
-    /// work correctly the memory returned will need to be properly guarded with
-    /// `guard_size_in_bytes` bytes left unmapped after the base allocation.
+    /// The `guard_size_in_bytes` parameter indicates how many bytes of space,
+    /// after the memory allocation, is expected to be unmapped. JIT code will
+    /// elide bounds checks based on the `guard_size_in_bytes` provided, so for
+    /// JIT code to work correctly the memory returned will need to be properly
+    /// guarded with `guard_size_in_bytes` bytes left unmapped after the base
+    /// allocation.
     ///
-    /// Note that the `reserved_size_in_bytes` and `guard_size_in_bytes` options are tuned from
-    /// the various [`Config`](crate::Config) methods about memory
-    /// sizes/guards. Additionally these two values are guaranteed to be
+    /// Note that the `reserved_size_in_bytes` and `guard_size_in_bytes` options
+    /// are tuned from the various [`Config`](crate::Config) methods about
+    /// memory sizes/guards. Additionally these two values are guaranteed to be
     /// multiples of the system page size.
     fn new_memory(
         &self,
         ty: MemoryType,
-        reserved_size_in_bytes: Option<u64>,
-        guard_size_in_bytes: u64,
+        minimum: usize,
+        maximum: Option<usize>,
+        reserved_size_in_bytes: Option<usize>,
+        guard_size_in_bytes: usize,
     ) -> Result<Box<dyn LinearMemory>, String>;
 }
 
@@ -589,7 +599,7 @@ mod tests {
         cfg.static_memory_maximum_size(0)
             .dynamic_memory_guard_size(0);
         let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
-        let ty = MemoryType::new(Limits::new(1, None));
+        let ty = MemoryType::new(1, None);
         let mem = Memory::new(&mut store, ty).unwrap();
         let store = store.as_context();
         assert_eq!(store[mem.0].memory.offset_guard_size, 0);

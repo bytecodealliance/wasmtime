@@ -1,8 +1,9 @@
 use crate::memory::{LinearMemory, MemoryCreator};
 use crate::store::{InstanceId, StoreOpaque};
 use crate::trampoline::create_handle;
-use crate::{Limits, MemoryType};
+use crate::MemoryType;
 use anyhow::{anyhow, Result};
+use std::convert::TryFrom;
 use std::sync::Arc;
 use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::{wasm, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
@@ -11,14 +12,10 @@ use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefini
 pub fn create_memory(store: &mut StoreOpaque<'_>, memory: &MemoryType) -> Result<InstanceId> {
     let mut module = Module::new();
 
-    let memory = wasm::Memory {
-        minimum: memory.limits().min(),
-        maximum: memory.limits().max(),
-        shared: false, // TODO
-    };
-
-    let memory_plan =
-        wasmtime_environ::MemoryPlan::for_memory(memory, &store.engine().config().tunables);
+    let memory_plan = wasmtime_environ::MemoryPlan::for_memory(
+        memory.wasmtime_memory().clone(),
+        &store.engine().config().tunables,
+    );
     let memory_id = module.memory_plans.push(memory_plan);
     module
         .exports
@@ -32,22 +29,22 @@ struct LinearMemoryProxy {
 }
 
 impl RuntimeLinearMemory for LinearMemoryProxy {
-    fn size(&self) -> u32 {
-        self.mem.size()
+    fn byte_size(&self) -> usize {
+        self.mem.byte_size()
     }
 
-    fn maximum(&self) -> Option<u32> {
-        self.mem.maximum()
+    fn maximum_byte_size(&self) -> Option<usize> {
+        self.mem.maximum_byte_size()
     }
 
-    fn grow(&mut self, delta: u32) -> Option<u32> {
-        self.mem.grow(delta)
+    fn grow_to(&mut self, new_size: usize) -> Option<()> {
+        self.mem.grow_to(new_size)
     }
 
     fn vmmemory(&self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.mem.as_ptr(),
-            current_length: self.mem.size() as usize * WASM_PAGE_SIZE as usize,
+            current_length: self.mem.byte_size(),
         }
     }
 }
@@ -56,14 +53,27 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
 pub(crate) struct MemoryCreatorProxy(pub Arc<dyn MemoryCreator>);
 
 impl RuntimeMemoryCreator for MemoryCreatorProxy {
-    fn new_memory(&self, plan: &MemoryPlan) -> Result<Box<dyn RuntimeLinearMemory>> {
-        let ty = MemoryType::new(Limits::new(plan.memory.minimum, plan.memory.maximum));
+    fn new_memory(
+        &self,
+        plan: &MemoryPlan,
+        minimum: usize,
+        maximum: Option<usize>,
+    ) -> Result<Box<dyn RuntimeLinearMemory>> {
+        let ty = MemoryType::from_wasmtime_memory(&plan.memory);
         let reserved_size_in_bytes = match plan.style {
-            MemoryStyle::Static { bound } => Some(bound as u64 * WASM_PAGE_SIZE as u64),
+            MemoryStyle::Static { bound } => {
+                Some(usize::try_from(bound * (WASM_PAGE_SIZE as u64)).unwrap())
+            }
             MemoryStyle::Dynamic => None,
         };
         self.0
-            .new_memory(ty, reserved_size_in_bytes, plan.offset_guard_size)
+            .new_memory(
+                ty,
+                minimum,
+                maximum,
+                reserved_size_in_bytes,
+                usize::try_from(plan.offset_guard_size).unwrap(),
+            )
             .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
             .map_err(|e| anyhow!(e))
     }

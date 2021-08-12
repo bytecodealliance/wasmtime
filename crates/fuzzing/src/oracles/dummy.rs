@@ -154,8 +154,8 @@ impl WatGenerator {
                 write!(
                     self.dst,
                     "(memory {} {})",
-                    mem.limits().min(),
-                    match mem.limits().max() {
+                    mem.minimum(),
+                    match mem.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     }
@@ -166,12 +166,12 @@ impl WatGenerator {
                 write!(
                     self.dst,
                     "(table {} {} {})",
-                    table.limits().min(),
-                    match table.limits().max() {
+                    table.minimum(),
+                    match table.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     },
-                    wat_ty(table.element()),
+                    wat_ty(&table.element()),
                 )
                 .unwrap();
             }
@@ -243,8 +243,8 @@ impl WatGenerator {
                     self.dst,
                     "(memory ${} {} {})\n",
                     name,
-                    mem.limits().min(),
-                    match mem.limits().max() {
+                    mem.minimum(),
+                    match mem.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     }
@@ -256,12 +256,12 @@ impl WatGenerator {
                     self.dst,
                     "(table ${} {} {} {})\n",
                     name,
-                    table.limits().min(),
-                    match table.limits().max() {
+                    table.minimum(),
+                    match table.maximum() {
                         Some(max) => max.to_string(),
                         None => String::new(),
                     },
-                    wat_ty(table.element()),
+                    wat_ty(&table.element()),
                 )
                 .unwrap();
             }
@@ -390,11 +390,7 @@ mod tests {
     #[test]
     fn dummy_table_import() {
         let mut store = store();
-        let table = dummy_table(
-            &mut store,
-            TableType::new(ValType::ExternRef, Limits::at_least(10)),
-        )
-        .unwrap();
+        let table = dummy_table(&mut store, TableType::new(ValType::ExternRef, 10, None)).unwrap();
         assert_eq!(table.size(&store), 10);
         for i in 0..10 {
             assert!(table
@@ -416,7 +412,7 @@ mod tests {
     #[test]
     fn dummy_memory_import() {
         let mut store = store();
-        let memory = dummy_memory(&mut store, MemoryType::new(Limits::at_least(1))).unwrap();
+        let memory = dummy_memory(&mut store, MemoryType::new(1, None)).unwrap();
         assert_eq!(memory.size(&store), 1);
     }
 
@@ -449,18 +445,12 @@ mod tests {
         );
 
         // Tables.
-        instance_ty.add_named_export(
-            "table0",
-            TableType::new(ValType::ExternRef, Limits::at_least(1)).into(),
-        );
-        instance_ty.add_named_export(
-            "table1",
-            TableType::new(ValType::ExternRef, Limits::at_least(1)).into(),
-        );
+        instance_ty.add_named_export("table0", TableType::new(ValType::ExternRef, 1, None).into());
+        instance_ty.add_named_export("table1", TableType::new(ValType::ExternRef, 1, None).into());
 
         // Memories.
-        instance_ty.add_named_export("memory0", MemoryType::new(Limits::at_least(1)).into());
-        instance_ty.add_named_export("memory1", MemoryType::new(Limits::at_least(1)).into());
+        instance_ty.add_named_export("memory0", MemoryType::new(1, None).into());
+        instance_ty.add_named_export("memory1", MemoryType::new(1, None).into());
 
         // Modules.
         instance_ty.add_named_export("module0", ModuleType::new().into());
@@ -536,30 +526,24 @@ mod tests {
         );
 
         // Multiple exported and imported tables.
-        module_ty.add_named_export(
-            "table0",
-            TableType::new(ValType::ExternRef, Limits::at_least(1)).into(),
-        );
-        module_ty.add_named_export(
-            "table1",
-            TableType::new(ValType::ExternRef, Limits::at_least(1)).into(),
-        );
+        module_ty.add_named_export("table0", TableType::new(ValType::ExternRef, 1, None).into());
+        module_ty.add_named_export("table1", TableType::new(ValType::ExternRef, 1, None).into());
         module_ty.add_named_import(
             "table2",
             None,
-            TableType::new(ValType::ExternRef, Limits::at_least(1)).into(),
+            TableType::new(ValType::ExternRef, 1, None).into(),
         );
         module_ty.add_named_import(
             "table3",
             None,
-            TableType::new(ValType::ExternRef, Limits::at_least(1)).into(),
+            TableType::new(ValType::ExternRef, 1, None).into(),
         );
 
         // Multiple exported and imported memories.
-        module_ty.add_named_export("memory0", MemoryType::new(Limits::at_least(1)).into());
-        module_ty.add_named_export("memory1", MemoryType::new(Limits::at_least(1)).into());
-        module_ty.add_named_import("memory2", None, MemoryType::new(Limits::at_least(1)).into());
-        module_ty.add_named_import("memory3", None, MemoryType::new(Limits::at_least(1)).into());
+        module_ty.add_named_export("memory0", MemoryType::new(1, None).into());
+        module_ty.add_named_export("memory1", MemoryType::new(1, None).into());
+        module_ty.add_named_import("memory2", None, MemoryType::new(1, None).into());
+        module_ty.add_named_import("memory3", None, MemoryType::new(1, None).into());
 
         // An exported and an imported module.
         module_ty.add_named_export("module0", ModuleType::new().into());

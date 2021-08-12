@@ -75,7 +75,14 @@ fn test_traps(store: &mut Store<()>, funcs: &[TestFunc], addr: u32, mem: &Memory
         let base = u64::from(func.offset) + u64::from(addr);
         let range = base..base + u64::from(func.width);
         if range.start >= mem_size || range.end >= mem_size {
-            assert!(result.is_err());
+            assert!(
+                result.is_err(),
+                "access at {}+{}+{} succeeded but should have failed when memory has {} bytes",
+                addr,
+                func.offset,
+                func.width,
+                mem_size
+            );
         } else {
             assert!(result.is_ok());
         }
@@ -97,6 +104,7 @@ fn offsets_static_dynamic_oh_my() -> Result<()> {
                 config.dynamic_memory_guard_size(guard_size);
                 config.static_memory_guard_size(guard_size);
                 config.guard_before_linear_memory(guard_before_linear_memory);
+                config.cranelift_debug_verifier(true);
                 engines.push(Engine::new(&config)?);
             }
         }
@@ -105,9 +113,9 @@ fn offsets_static_dynamic_oh_my() -> Result<()> {
     engines.par_iter().for_each(|engine| {
         let module = module(&engine).unwrap();
 
-        for limits in [Limits::new(1, Some(2)), Limits::new(1, None)].iter() {
+        for (min, max) in [(1, Some(2)), (1, None)].iter() {
             let mut store = Store::new(&engine, ());
-            let mem = Memory::new(&mut store, MemoryType::new(limits.clone())).unwrap();
+            let mem = Memory::new(&mut store, MemoryType::new(*min, *max)).unwrap();
             let instance = Instance::new(&mut store, &module, &[mem.into()]).unwrap();
             let funcs = find_funcs(&mut store, &instance);
 
@@ -137,8 +145,8 @@ fn guards_present() -> Result<()> {
     config.guard_before_linear_memory(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
-    let static_mem = Memory::new(&mut store, MemoryType::new(Limits::new(1, Some(2))))?;
-    let dynamic_mem = Memory::new(&mut store, MemoryType::new(Limits::new(1, None)))?;
+    let static_mem = Memory::new(&mut store, MemoryType::new(1, Some(2)))?;
+    let dynamic_mem = Memory::new(&mut store, MemoryType::new(1, None))?;
 
     let assert_guards = |store: &Store<()>| unsafe {
         // guards before

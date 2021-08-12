@@ -291,6 +291,12 @@ impl From<Uimm32> for u32 {
     }
 }
 
+impl From<Uimm32> for u64 {
+    fn from(val: Uimm32) -> u64 {
+        val.0.into()
+    }
+}
+
 impl From<Uimm32> for i64 {
     fn from(val: Uimm32) -> i64 {
         i64::from(val.0)

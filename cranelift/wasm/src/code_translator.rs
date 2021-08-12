@@ -2164,10 +2164,6 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     environ: &mut FE,
 ) -> WasmResult<(MemFlags, Value, Offset32)> {
     let addr = state.pop1();
-    // This function will need updates for 64-bit memories
-    debug_assert_eq!(builder.func.dfg.value_type(addr), I32);
-    let offset = u32::try_from(memarg.offset).unwrap();
-
     let heap = state.get_heap(builder.func, memarg.memory, environ)?;
     let offset_guard_size: u64 = builder.func.heaps[heap].offset_guard_size.into();
 
@@ -2176,13 +2172,19 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     // segfaults) to generate traps since that means we don't have to bounds
     // check anything explicitly.
     //
-    // If we don't have a guard page of unmapped memory, though, then we can't
-    // rely on this trapping behavior through segfaults. Instead we need to
-    // bounds-check the entire memory access here which is everything from
+    // (1) If we don't have a guard page of unmapped memory, though, then we
+    // can't rely on this trapping behavior through segfaults. Instead we need
+    // to bounds-check the entire memory access here which is everything from
     // `addr32 + offset` to `addr32 + offset + width` (not inclusive). In this
-    // scenario our adjusted offset that we're checking is `offset + width`.
+    // scenario our adjusted offset that we're checking is `memarg.offset +
+    // access_size`. Note that we do saturating arithmetic here to avoid
+    // overflow. THe addition here is in the 64-bit space, which means that
+    // we'll never overflow for 32-bit wasm but for 64-bit this is an issue. If
+    // our effective offset is u64::MAX though then it's impossible for for
+    // that to actually be a valid offset because otherwise the wasm linear
+    // memory would take all of the host memory!
     //
-    // If we have a guard page, however, then we can perform a further
+    // (2) If we have a guard page, however, then we can perform a further
     // optimization of the generated code by only checking multiples of the
     // offset-guard size to be more CSE-friendly. Knowing that we have at least
     // 1 page of a guard page we're then able to disregard the `width` since we
@@ -2215,32 +2217,104 @@ fn prepare_addr<FE: FuncEnvironment + ?Sized>(
     // in-bounds or will hit the guard page, meaning we'll get the desired
     // semantics we want.
     //
-    // As one final comment on the bits with the guard size here, another goal
-    // of this is to hit an optimization in `heap_addr` where if the heap size
-    // minus the offset is >= 4GB then bounds checks are 100% eliminated. This
-    // means that with huge guard regions (e.g. our 2GB default) most adjusted
-    // offsets we're checking here are zero. This means that we'll hit the fast
-    // path and emit zero conditional traps for bounds checks
+    // ---
+    //
+    // With all that in mind remember that the goal is to bounds check as few
+    // things as possible. To facilitate this the "fast path" is expected to be
+    // hit like so:
+    //
+    // * For wasm32, wasmtime defaults to 4gb "static" memories with 2gb guard
+    //   regions. This means our `adjusted_offset` is 1 for all offsets <=2gb.
+    //   This hits the optimized case for `heap_addr` on static memories 4gb in
+    //   size in cranelift's legalization of `heap_addr`, eliding the bounds
+    //   check entirely.
+    //
+    // * For wasm64 offsets <=2gb will generate a single `heap_addr`
+    //   instruction, but at this time all heaps are "dyanmic" which means that
+    //   a single bounds check is forced. Ideally we'd do better here, but
+    //   that's the current state of affairs.
+    //
+    // Basically we assume that most configurations have a guard page and most
+    // offsets in `memarg` are <=2gb, which means we get the fast path of one
+    // `heap_addr` instruction plus a hardcoded i32-offset in memory-related
+    // instructions.
     let adjusted_offset = if offset_guard_size == 0 {
-        u64::from(offset) + u64::from(access_size)
+        // Why saturating? see (1) above
+        memarg.offset.saturating_add(u64::from(access_size))
     } else {
+        // Why is there rounding here? see (2) above
         assert!(access_size < 1024);
-        cmp::max(u64::from(offset) / offset_guard_size * offset_guard_size, 1)
+        cmp::max(memarg.offset / offset_guard_size * offset_guard_size, 1)
     };
-    debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
-    let check_size = u32::try_from(adjusted_offset).unwrap_or(u32::MAX);
-    let base = builder
-        .ins()
-        .heap_addr(environ.pointer_type(), heap, addr, check_size);
 
-    // Native load/store instructions take a signed `Offset32` immediate, so adjust the base
-    // pointer if necessary.
-    let (addr, offset) = if offset > i32::MAX as u32 {
-        // Offset doesn't fit in the load/store instruction.
-        let adj = builder.ins().iadd_imm(base, i64::from(i32::MAX) + 1);
-        (adj, (offset - (i32::MAX as u32 + 1)) as i32)
-    } else {
-        (base, offset as i32)
+    debug_assert!(adjusted_offset > 0); // want to bounds check at least 1 byte
+    let (addr, offset) = match u32::try_from(adjusted_offset) {
+        // If our adjusted offset fits within a u32, then we can place the
+        // entire offset into the offset of the `heap_addr` instruction. After
+        // the `heap_addr` instruction, though, we need to factor the the offset
+        // into the returned address. This is either an immediate to later
+        // memory instructions if the offset further fits within `i32`, or a
+        // manual add instruction otherwise.
+        //
+        // Note that native instructions take a signed offset hence the switch
+        // to i32. Note also the lack of overflow checking in the offset
+        // addition, which should be ok since if `heap_addr` passed we're
+        // guaranteed that this won't overflow.
+        Ok(adjusted_offset) => {
+            let base = builder
+                .ins()
+                .heap_addr(environ.pointer_type(), heap, addr, adjusted_offset);
+            match i32::try_from(memarg.offset) {
+                Ok(val) => (base, val),
+                Err(_) => {
+                    let adj = builder.ins().iadd_imm(base, memarg.offset as i64);
+                    (adj, 0)
+                }
+            }
+        }
+
+        // If the adjusted offset doesn't fit within a u32, then we can't pass
+        // the adjust sized to `heap_addr` raw.
+        //
+        // One reasonable question you might ask is "why not?". There's no
+        // fundamental reason why `heap_addr` *must* take a 32-bit offset. The
+        // reason this isn't done, though, is that blindly changing the offset
+        // to a 64-bit offset increases the size of the `InstructionData` enum
+        // in cranelift by 8 bytes (16 to 24). This can have significant
+        // performance implications so the conclusion when this was written was
+        // that we shouldn't do that.
+        //
+        // Without the ability to put the whole offset into the `heap_addr`
+        // instruction we need to fold the offset into the address itself with
+        // an unsigned addition. In doing so though we need to check for
+        // overflow because that would mean the address is out-of-bounds (wasm
+        // bounds checks happen on the effective 33 or 65 bit address once the
+        // offset is factored in).
+        //
+        // Once we have the effective address, offset already folded in, then
+        // `heap_addr` is used to verify that the address is indeed in-bounds.
+        // The access size of the `heap_addr` is what we were passed in from
+        // above.
+        //
+        // Note that this is generating what's likely to be at least two
+        // branches, one for the overflow and one for the bounds check itself.
+        // For now though that should hopefully be ok since 4gb+ offsets are
+        // relatively odd/rare. In the future if needed we can look into
+        // optimizing this more.
+        Err(_) => {
+            let index_type = builder.func.heaps[heap].index_type;
+            let offset = builder.ins().iconst(index_type, memarg.offset as i64);
+            let (addr, overflow) = builder.ins().iadd_ifcout(addr, offset);
+            builder.ins().trapif(
+                environ.unsigned_add_overflow_condition(),
+                overflow,
+                ir::TrapCode::HeapOutOfBounds,
+            );
+            let base = builder
+                .ins()
+                .heap_addr(environ.pointer_type(), heap, addr, access_size);
+            (base, 0)
+        }
     };
 
     // Note that we don't set `is_aligned` here, even if the load instruction's

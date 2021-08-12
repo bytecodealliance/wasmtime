@@ -3,7 +3,6 @@ use crate::trampoline::MemoryCreatorProxy;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::cmp;
-use std::convert::TryFrom;
 use std::fmt;
 #[cfg(feature = "cache")]
 use std::path::Path;
@@ -136,7 +135,7 @@ pub struct ModuleLimits {
     /// The reservation size of each linear memory is controlled by the
     /// [`static_memory_maximum_size`](Config::static_memory_maximum_size) setting and this value cannot
     /// exceed the configured static memory maximum size.
-    pub memory_pages: u32,
+    pub memory_pages: u64,
 }
 
 impl Default for ModuleLimits {
@@ -773,6 +772,21 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly memory64 [proposal] will
+    /// be enabled for compilation.
+    ///
+    /// Note that this the upstream specification is not finalized and Wasmtime
+    /// may also have bugs for this feature since it hasn't been exercised
+    /// much.
+    ///
+    /// This is `false` by default.
+    ///
+    /// [proposal]: https://github.com/webassembly/memory64
+    pub fn wasm_memory64(&mut self, enable: bool) -> &mut Self {
+        self.features.memory64 = enable;
+        self
+    }
+
     /// Configures which compilation strategy will be used for wasm modules.
     ///
     /// This method can be used to configure which compiler is used for wasm
@@ -1081,7 +1095,7 @@ impl Config {
     /// pooling allocator.
     pub fn static_memory_maximum_size(&mut self, max_size: u64) -> &mut Self {
         let max_pages = max_size / u64::from(wasmtime_environ::WASM_PAGE_SIZE);
-        self.tunables.static_memory_bound = u32::try_from(max_pages).unwrap_or(u32::max_value());
+        self.tunables.static_memory_bound = max_pages;
         self
     }
 
