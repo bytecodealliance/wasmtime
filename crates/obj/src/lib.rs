@@ -23,13 +23,8 @@
 )]
 
 mod builder;
-mod context;
-mod data_segment;
-mod module;
-mod table;
 
 pub use crate::builder::{utils, ObjectBuilder, ObjectBuilderTarget};
-pub use crate::module::emit_module;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
