@@ -4,7 +4,7 @@ use target_lexicon::Triple;
 use wasmparser::WasmFeatures;
 use wasmtime::Strategy;
 use wasmtime_environ::{settings, settings::Configurable, ModuleEnvironment, Tunables};
-use wasmtime_jit::{native, Compiler};
+use wasmtime_jit::Compiler;
 
 /// Creates object file from binary wasm data.
 pub fn compile_to_obj(
@@ -16,8 +16,8 @@ pub fn compile_to_obj(
     debug_info: bool,
 ) -> Result<Object> {
     let isa_builder = match target {
-        Some(target) => native::lookup(target.clone())?,
-        None => native::builder(),
+        Some(target) => wasmtime_environ::isa::lookup(target.clone())?,
+        None => cranelift_native::builder().unwrap(),
     };
     let mut flag_builder = settings::builder();
     let mut features = WasmFeatures::default();

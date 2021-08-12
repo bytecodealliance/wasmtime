@@ -35,6 +35,12 @@ impl FuncTranslator {
         }
     }
 
+    /// Returns the underlying `FunctionBuilderContext` that this translator
+    /// uses.
+    pub fn context(&mut self) -> &mut FunctionBuilderContext {
+        &mut self.func_ctx
+    }
+
     /// Translate a binary WebAssembly function.
     ///
     /// The `code` slice contains the binary WebAssembly *function code* as it appears in the code

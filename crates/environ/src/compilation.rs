@@ -4,7 +4,7 @@
 use crate::{FunctionAddressMap, FunctionBodyData, ModuleTranslation, Tunables, TypeTables};
 use cranelift_codegen::{binemit, ir, isa, isa::unwind::UnwindInfo};
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError};
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError, WasmFuncType};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -105,5 +105,25 @@ pub trait Compiler: Send + Sync {
         isa: &dyn isa::TargetIsa,
         tunables: &Tunables,
         types: &TypeTables,
+    ) -> Result<CompiledFunction, CompileError>;
+
+    /// Creates a trampoline which the host can use to enter wasm. The
+    /// trampoline has type `VMTrampoline` and will call a function of type `ty`
+    /// specified.
+    fn host_to_wasm_trampoline(
+        &self,
+        isa: &dyn isa::TargetIsa,
+        ty: &WasmFuncType,
+    ) -> Result<CompiledFunction, CompileError>;
+
+    /// Creates a trampoline suitable for a wasm module to import.
+    ///
+    /// The trampoline has the type specified by `ty` and will call the function
+    /// `host_fn` which has type `VMTrampoline`.
+    fn wasm_to_host_trampoline(
+        &self,
+        isa: &dyn isa::TargetIsa,
+        ty: &WasmFuncType,
+        host_fn: usize,
     ) -> Result<CompiledFunction, CompileError>;
 }

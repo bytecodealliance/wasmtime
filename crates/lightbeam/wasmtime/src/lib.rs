@@ -9,7 +9,7 @@ use cranelift_codegen::isa;
 use lightbeam::{CodeGenSession, NullOffsetSink, Sinks};
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, TableIndex, TypeIndex,
+    GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmFuncType,
 };
 use wasmtime_environ::{
     BuiltinFunctionIndex, CompileError, CompiledFunction, Compiler, FunctionBodyData, Module,
@@ -74,6 +74,23 @@ impl Compiler for Lightbeam {
             address_map: Default::default(),
             jt_offsets: Default::default(),
         })
+    }
+
+    fn host_to_wasm_trampoline(
+        &self,
+        _isa: &dyn isa::TargetIsa,
+        _ty: &WasmFuncType,
+    ) -> Result<CompiledFunction, CompileError> {
+        unimplemented!()
+    }
+
+    fn wasm_to_host_trampoline(
+        &self,
+        _isa: &dyn isa::TargetIsa,
+        _ty: &WasmFuncType,
+        _host_fn: usize,
+    ) -> Result<CompiledFunction, CompileError> {
+        unimplemented!()
     }
 }
 

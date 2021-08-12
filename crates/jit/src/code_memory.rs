@@ -5,6 +5,7 @@ use crate::object::{
     ObjectUnwindInfo,
 };
 use crate::unwind::UnwindRegistry;
+use anyhow::{Context, Result};
 use object::read::{File as ObjectFile, Object, ObjectSection, ObjectSymbol};
 use region;
 use std::collections::BTreeMap;
@@ -24,8 +25,8 @@ struct CodeMemoryEntry {
 }
 
 impl CodeMemoryEntry {
-    fn with_capacity(cap: usize) -> Result<Self, String> {
-        let mmap = ManuallyDrop::new(Mmap::with_at_least(cap).map_err(|e| e.to_string())?);
+    fn with_capacity(cap: usize) -> Result<Self> {
+        let mmap = ManuallyDrop::new(Mmap::with_at_least(cap)?);
         let registry = ManuallyDrop::new(UnwindRegistry::new(mmap.as_ptr() as usize));
         Ok(Self {
             mmap,
@@ -119,7 +120,7 @@ impl CodeMemory {
     pub fn allocate_for_function<'a>(
         &mut self,
         func: &'a CompiledFunction,
-    ) -> Result<&mut [VMFunctionBody], String> {
+    ) -> Result<&mut [VMFunctionBody]> {
         let size = Self::function_allocation_size(func);
 
         let (buf, registry, start) = self.allocate(size)?;
@@ -167,7 +168,7 @@ impl CodeMemory {
     /// * The offset within the current mmap that the slice starts at
     ///
     /// TODO: Add an alignment flag.
-    fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut UnwindRegistry, usize), String> {
+    fn allocate(&mut self, size: usize) -> Result<(&mut [u8], &mut UnwindRegistry, usize)> {
         assert!(size > 0);
 
         if match &self.current {
@@ -249,7 +250,7 @@ impl CodeMemory {
     }
 
     /// Pushes the current entry and allocates a new one with the given size.
-    fn push_current(&mut self, new_size: usize) -> Result<(), String> {
+    fn push_current(&mut self, new_size: usize) -> Result<()> {
         let previous = mem::replace(
             &mut self.current,
             if new_size == 0 {
@@ -279,7 +280,7 @@ impl CodeMemory {
         &'a mut self,
         obj: &ObjectFile,
         unwind_info: &[ObjectUnwindInfo],
-    ) -> Result<CodeMemoryObjectAllocation<'a>, String> {
+    ) -> Result<CodeMemoryObjectAllocation<'a>> {
         let text_section = obj.section_by_name(".text").unwrap();
 
         if text_section.size() == 0 {
@@ -296,7 +297,7 @@ impl CodeMemory {
         buf.copy_from_slice(
             text_section
                 .data()
-                .map_err(|_| "cannot read section data".to_string())?,
+                .with_context(|| "cannot read section data")?,
         );
 
         // Track locations of all defined functions and trampolines.

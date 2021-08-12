@@ -27,16 +27,12 @@ mod link;
 mod object;
 mod unwind;
 
-pub mod native;
-pub mod trampoline;
-
 pub use crate::code_memory::CodeMemory;
 pub use crate::compiler::{Compilation, CompilationStrategy, Compiler};
 pub use crate::instantiate::{
     CompilationArtifacts, CompiledModule, ModuleCode, SetupError, SymbolizeContext, TypeTables,
 };
 pub use crate::link::link_module;
-pub use wasmtime_cranelift::{blank_sig, wasmtime_call_conv};
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

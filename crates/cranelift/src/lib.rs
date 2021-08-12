@@ -89,13 +89,16 @@
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use cranelift_codegen::ir::{self, ExternalName};
+use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::MachSrcLoc;
 use cranelift_codegen::{binemit, isa, Context};
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, SignatureIndex, WasmType};
+use cranelift_frontend::FunctionBuilder;
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, WasmFuncType, WasmType};
+use std::cmp;
 use std::convert::TryFrom;
+use std::mem;
 use std::sync::Mutex;
 use target_lexicon::CallingConvention;
 use wasmtime_environ::{
@@ -397,16 +400,13 @@ impl Compiler for Cranelift {
         });
         context.func.stack_limit = Some(stack_limit);
         let mut func_translator = self.take_translator();
-        let result = func_translator.translate_body(
+        func_translator.translate_body(
             &mut input.validator,
             input.body.clone(),
             &mut context.func,
             &mut func_env,
-        );
-        if result.is_ok() {
-            self.save_translator(func_translator);
-        }
-        result?;
+        )?;
+        self.save_translator(func_translator);
 
         let mut code_buf: Vec<u8> = Vec::new();
         let mut reloc_sink = RelocSink::new(func_index);
@@ -452,6 +452,206 @@ impl Compiler for Cranelift {
             stack_maps: stack_map_sink.finish(),
         })
     }
+
+    fn host_to_wasm_trampoline(
+        &self,
+        isa: &dyn isa::TargetIsa,
+        ty: &WasmFuncType,
+    ) -> Result<CompiledFunction, CompileError> {
+        let value_size = mem::size_of::<u128>();
+        let pointer_type = isa.pointer_type();
+
+        // The wasm signature we're calling in this trampoline has the actual
+        // ABI of the function signature described by `ty`
+        let wasm_signature = indirect_signature(isa, ty);
+
+        // The host signature has the `VMTrampoline` signature where the ABI is
+        // fixed.
+        let mut host_signature = blank_sig(isa, wasmtime_call_conv(isa));
+        host_signature.params.push(ir::AbiParam::new(pointer_type));
+        host_signature.params.push(ir::AbiParam::new(pointer_type));
+
+        let mut func_translator = self.take_translator();
+        let mut context = Context::new();
+        context.func = ir::Function::with_name_signature(ExternalName::user(0, 0), host_signature);
+
+        // This trampoline will load all the parameters from the `values_vec`
+        // that is passed in and then call the real function (also passed
+        // indirectly) with the specified ABI.
+        //
+        // All the results are then stored into the same `values_vec`.
+        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
+        let block0 = builder.create_block();
+
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+        builder.seal_block(block0);
+
+        let (vmctx_ptr_val, caller_vmctx_ptr_val, callee_value, values_vec_ptr_val) = {
+            let params = builder.func.dfg.block_params(block0);
+            (params[0], params[1], params[2], params[3])
+        };
+
+        // Load the argument values out of `values_vec`.
+        let mflags = ir::MemFlags::trusted();
+        let callee_args = wasm_signature
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, r)| {
+                match i {
+                    0 => vmctx_ptr_val,
+                    1 => caller_vmctx_ptr_val,
+                    _ =>
+                    // i - 2 because vmctx and caller vmctx aren't passed through `values_vec`.
+                    {
+                        builder.ins().load(
+                            r.value_type,
+                            mflags,
+                            values_vec_ptr_val,
+                            ((i - 2) * value_size) as i32,
+                        )
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Call the indirect function pointer we were given
+        let new_sig = builder.import_signature(wasm_signature);
+        let call = builder
+            .ins()
+            .call_indirect(new_sig, callee_value, &callee_args);
+        let results = builder.func.dfg.inst_results(call).to_vec();
+
+        // Store the return values into `values_vec`.
+        let mflags = ir::MemFlags::trusted();
+        for (i, r) in results.iter().enumerate() {
+            builder
+                .ins()
+                .store(mflags, *r, values_vec_ptr_val, (i * value_size) as i32);
+        }
+        builder.ins().return_(&[]);
+        builder.finalize();
+
+        let func = self.finish_trampoline(context, isa)?;
+        self.save_translator(func_translator);
+        Ok(func)
+    }
+
+    fn wasm_to_host_trampoline(
+        &self,
+        isa: &dyn isa::TargetIsa,
+        ty: &WasmFuncType,
+        host_fn: usize,
+    ) -> Result<CompiledFunction, CompileError> {
+        let pointer_type = isa.pointer_type();
+        let wasm_signature = indirect_signature(isa, ty);
+        // The host signature has an added parameter for the `values_vec` input
+        // and output.
+        let mut host_signature = blank_sig(isa, wasmtime_call_conv(isa));
+        host_signature.params.push(ir::AbiParam::new(pointer_type));
+
+        // Compute the size of the values vector. The vmctx and caller vmctx are passed separately.
+        let value_size = mem::size_of::<u128>();
+        let values_vec_len = (value_size * cmp::max(ty.params.len(), ty.returns.len())) as u32;
+
+        let mut context = Context::new();
+        context.func =
+            ir::Function::with_name_signature(ir::ExternalName::user(0, 0), wasm_signature);
+
+        let ss = context.func.create_stack_slot(ir::StackSlotData::new(
+            ir::StackSlotKind::ExplicitSlot,
+            values_vec_len,
+        ));
+
+        let mut func_translator = self.take_translator();
+        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
+        let block0 = builder.create_block();
+
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+        builder.seal_block(block0);
+
+        let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
+        let mflags = MemFlags::trusted();
+        for i in 0..ty.params.len() {
+            let val = builder.func.dfg.block_params(block0)[i + 2];
+            builder
+                .ins()
+                .store(mflags, val, values_vec_ptr_val, (i * value_size) as i32);
+        }
+
+        let block_params = builder.func.dfg.block_params(block0);
+        let vmctx_ptr_val = block_params[0];
+        let caller_vmctx_ptr_val = block_params[1];
+
+        let callee_args = vec![vmctx_ptr_val, caller_vmctx_ptr_val, values_vec_ptr_val];
+
+        let new_sig = builder.import_signature(host_signature);
+
+        let callee_value = builder.ins().iconst(pointer_type, host_fn as i64);
+        builder
+            .ins()
+            .call_indirect(new_sig, callee_value, &callee_args);
+
+        let mflags = MemFlags::trusted();
+        let mut results = Vec::new();
+        for (i, r) in ty.returns.iter().enumerate() {
+            let load = builder.ins().load(
+                value_type(isa, *r),
+                mflags,
+                values_vec_ptr_val,
+                (i * value_size) as i32,
+            );
+            results.push(load);
+        }
+        builder.ins().return_(&results);
+        builder.finalize();
+
+        let func = self.finish_trampoline(context, isa)?;
+        self.save_translator(func_translator);
+        Ok(func)
+    }
+}
+
+impl Cranelift {
+    fn finish_trampoline(
+        &self,
+        mut context: Context,
+        isa: &dyn TargetIsa,
+    ) -> Result<CompiledFunction, CompileError> {
+        let mut code_buf = Vec::new();
+        let mut reloc_sink = TrampolineRelocSink::default();
+        let mut trap_sink = binemit::NullTrapSink {};
+        let mut stack_map_sink = binemit::NullStackMapSink {};
+        context
+            .compile_and_emit(
+                isa,
+                &mut code_buf,
+                &mut reloc_sink,
+                &mut trap_sink,
+                &mut stack_map_sink,
+            )
+            .map_err(|error| {
+                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+            })?;
+
+        let unwind_info = context.create_unwind_info(isa).map_err(|error| {
+            CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
+        })?;
+
+        Ok(CompiledFunction {
+            body: code_buf,
+            jt_offsets: context.func.jt_offsets,
+            unwind_info,
+            relocations: reloc_sink.relocs,
+            stack_maps: Default::default(),
+            stack_slots: Default::default(),
+            traps: Default::default(),
+            value_labels_ranges: Default::default(),
+            address_map: Default::default(),
+        })
+    }
 }
 
 pub fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
@@ -475,38 +675,29 @@ pub fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
     }
 }
 
-pub fn push_types(
-    isa: &dyn TargetIsa,
-    sig: &mut ir::Signature,
-    types: &TypeTables,
-    index: SignatureIndex,
-) {
-    let wasm = &types.wasm_signatures[index];
-
-    let cvt = |ty: &WasmType| {
-        ir::AbiParam::new(match ty {
-            WasmType::I32 => ir::types::I32,
-            WasmType::I64 => ir::types::I64,
-            WasmType::F32 => ir::types::F32,
-            WasmType::F64 => ir::types::F64,
-            WasmType::V128 => ir::types::I8X16,
-            WasmType::FuncRef | WasmType::ExternRef => {
-                wasmtime_environ::reference_type(*ty, isa.pointer_type())
-            }
-            WasmType::ExnRef => unimplemented!(),
-        })
-    };
+pub fn push_types(isa: &dyn TargetIsa, sig: &mut ir::Signature, wasm: &WasmFuncType) {
+    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm.params.iter().map(&cvt));
     sig.returns.extend(wasm.returns.iter().map(&cvt));
 }
 
-pub fn indirect_signature(
-    isa: &dyn TargetIsa,
-    types: &TypeTables,
-    index: SignatureIndex,
-) -> ir::Signature {
+fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
+    match ty {
+        WasmType::I32 => ir::types::I32,
+        WasmType::I64 => ir::types::I64,
+        WasmType::F32 => ir::types::F32,
+        WasmType::F64 => ir::types::F64,
+        WasmType::V128 => ir::types::I8X16,
+        WasmType::FuncRef | WasmType::ExternRef => {
+            wasmtime_environ::reference_type(ty, isa.pointer_type())
+        }
+        WasmType::ExnRef => unimplemented!(),
+    }
+}
+
+pub fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
     let mut sig = blank_sig(isa, wasmtime_call_conv(isa));
-    push_types(isa, &mut sig, types, index);
+    push_types(isa, &mut sig, wasm);
     return sig;
 }
 
@@ -529,6 +720,57 @@ pub fn func_signature(
         _ => wasmtime_call_conv(isa),
     };
     let mut sig = blank_sig(isa, call_conv);
-    push_types(isa, &mut sig, types, module.functions[index]);
+    push_types(
+        isa,
+        &mut sig,
+        &types.wasm_signatures[module.functions[index]],
+    );
     return sig;
+}
+
+/// We don't expect trampoline compilation to produce many relocations, so
+/// this `RelocSink` just asserts that it doesn't recieve most of them, but
+/// handles libcall ones.
+#[derive(Default)]
+struct TrampolineRelocSink {
+    relocs: Vec<Relocation>,
+}
+
+impl binemit::RelocSink for TrampolineRelocSink {
+    fn reloc_external(
+        &mut self,
+        offset: binemit::CodeOffset,
+        _srcloc: ir::SourceLoc,
+        reloc: binemit::Reloc,
+        name: &ir::ExternalName,
+        addend: binemit::Addend,
+    ) {
+        let reloc_target = if let ir::ExternalName::LibCall(libcall) = *name {
+            RelocationTarget::LibCall(libcall)
+        } else {
+            panic!("unrecognized external name")
+        };
+        self.relocs.push(Relocation {
+            reloc,
+            reloc_target,
+            offset,
+            addend,
+        });
+    }
+    fn reloc_constant(
+        &mut self,
+        _code_offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _constant_offset: ir::ConstantOffset,
+    ) {
+        panic!("trampoline compilation should not produce constant relocs");
+    }
+    fn reloc_jt(
+        &mut self,
+        _offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _jt: ir::JumpTable,
+    ) {
+        panic!("trampoline compilation should not produce jump table relocs");
+    }
 }

@@ -132,6 +132,11 @@ impl Compiler {
         &self.features
     }
 
+    /// Return the underlying compiler in use
+    pub fn compiler(&self) -> &dyn EnvCompiler {
+        &*self.compiler
+    }
+
     /// Compile the given function bodies.
     pub fn compile<'data>(
         &self,
@@ -166,8 +171,7 @@ impl Compiler {
             vec![]
         };
 
-        let (obj, unwind_info) =
-            build_object(&*self.isa, &translation, types, &funcs, dwarf_sections)?;
+        let (obj, unwind_info) = build_object(self, &translation, types, &funcs, dwarf_sections)?;
 
         Ok(Compilation {
             obj,

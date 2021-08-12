@@ -1,12 +1,11 @@
 //! Object file generation.
 
-use super::trampoline::build_trampoline;
-use cranelift_frontend::FunctionBuilderContext;
+use crate::Compiler;
 use object::write::Object;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use wasmtime_debug::DwarfSection;
-use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
+use wasmtime_environ::isa::unwind::UnwindInfo;
 use wasmtime_environ::wasm::{FuncIndex, SignatureIndex};
 use wasmtime_environ::{CompiledFunctions, ModuleTranslation, TypeTables};
 use wasmtime_obj::{ObjectBuilder, ObjectBuilderTarget};
@@ -22,7 +21,7 @@ pub enum ObjectUnwindInfo {
 
 // Builds ELF image from the module `Compilation`.
 pub(crate) fn build_object(
-    isa: &dyn TargetIsa,
+    compiler: &Compiler,
     translation: &ModuleTranslation,
     types: &TypeTables,
     funcs: &CompiledFunctions,
@@ -50,10 +49,10 @@ pub(crate) fn build_object(
         })
         .collect::<BTreeSet<_>>();
     let mut trampolines = Vec::with_capacity(signatures.len());
-    let mut cx = FunctionBuilderContext::new();
     for i in signatures {
-        let native_sig = wasmtime_cranelift::indirect_signature(isa, &types, i);
-        let func = build_trampoline(isa, &mut cx, &native_sig, std::mem::size_of::<u128>())?;
+        let func = compiler
+            .compiler()
+            .host_to_wasm_trampoline(compiler.isa(), &types.wasm_signatures[i])?;
         // Preserve trampoline function unwind info.
         if let Some(info) = &func.unwind_info {
             unwind_info.push(ObjectUnwindInfo::Trampoline(i, info.clone()))
@@ -61,7 +60,7 @@ pub(crate) fn build_object(
         trampolines.push((i, func));
     }
 
-    let target = ObjectBuilderTarget::new(isa.triple().architecture)?;
+    let target = ObjectBuilderTarget::new(compiler.isa().triple().architecture)?;
     let mut builder = ObjectBuilder::new(target, &translation.module, funcs);
     builder
         .set_code_alignment(CODE_SECTION_ALIGNMENT)

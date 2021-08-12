@@ -7,6 +7,7 @@ use crate::code_memory::CodeMemory;
 use crate::compiler::{Compilation, Compiler};
 use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
+use anyhow::{Context, Result};
 use object::File as ObjectFile;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -483,16 +484,13 @@ fn build_code_memory(
     obj: &[u8],
     module: &Module,
     unwind_info: &[ObjectUnwindInfo],
-) -> Result<
-    (
-        CodeMemory,
-        (*const u8, usize),
-        PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        Vec<(SignatureIndex, VMTrampoline)>,
-    ),
-    String,
-> {
-    let obj = ObjectFile::parse(obj).map_err(|_| "Unable to read obj".to_string())?;
+) -> Result<(
+    CodeMemory,
+    (*const u8, usize),
+    PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    Vec<(SignatureIndex, VMTrampoline)>,
+)> {
+    let obj = ObjectFile::parse(obj).with_context(|| "Unable to read obj")?;
 
     let mut code_memory = CodeMemory::new();
 

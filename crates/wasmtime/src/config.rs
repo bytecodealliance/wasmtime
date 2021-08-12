@@ -12,7 +12,7 @@ use wasmparser::WasmFeatures;
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::settings::{self, Configurable, SetError};
 use wasmtime_environ::{isa, isa::TargetIsa, Tunables};
-use wasmtime_jit::{native, CompilationStrategy, Compiler};
+use wasmtime_jit::{CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
     InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator, RuntimeMemoryCreator,
@@ -378,7 +378,7 @@ impl Config {
         let mut ret = Self {
             tunables: Tunables::default(),
             flags,
-            isa_flags: native::builder(),
+            isa_flags: cranelift_native::builder().expect("host machine is not a supported target"),
             strategy: CompilationStrategy::Auto,
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
@@ -417,7 +417,7 @@ impl Config {
     /// This method will error if the given target triple is not supported.
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         use std::str::FromStr;
-        self.isa_flags = native::lookup(
+        self.isa_flags = wasmtime_environ::isa::lookup(
             target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?,
         )?;
 
