@@ -101,6 +101,11 @@ pub extern "C" fn wasmtime_config_wasm_module_linking_set(c: &mut wasm_config_t,
 }
 
 #[no_mangle]
+pub extern "C" fn wasmtime_config_wasm_memory64_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_memory64(enable);
+}
+
+#[no_mangle]
 pub extern "C" fn wasmtime_config_strategy_set(
     c: &mut wasm_config_t,
     strategy: wasmtime_strategy_t,

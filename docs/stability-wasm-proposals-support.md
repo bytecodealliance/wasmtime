@@ -23,6 +23,7 @@ vetted](./contributing-implementing-wasm-proposals.html).
 | **[Threads and Atomics]**                   | **In progress.**                 | `--enable-threads`     | [`wasm_threads`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_threads) |
 | **[Multi-Memory]**                          | **Yes.**                         | `--enable-multi-memory`| [`wasm_multi_memory`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_multi_memory) |
 | **[Module Linking]**                        | **Yes.**                         | `--enable-module-linking` | [`wasm_module_linking`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_module_linking) |
+| **[Memory64]**                              | **Yes.**                         | `--enable-memory64`    | [`wasm_memory64`](https://docs.rs/wasmtime/*/wasmtime/struct.Config.html#method.wasm_memory64) |
 
 [config]: https://docs.rs/wasmtime/*/wasmtime/struct.Config.html
 [Multi-Value]: https://github.com/WebAssembly/spec/blob/master/proposals/multi-value/Overview.md
@@ -36,3 +37,4 @@ vetted](./contributing-implementing-wasm-proposals.html).
 [Threads and Atomics]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
 [Multi-Memory]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
 [Module Linking]: https://github.com/WebAssembly/module-linking/blob/master/proposals/module-linking/Explainer.md
+[Memory64]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
