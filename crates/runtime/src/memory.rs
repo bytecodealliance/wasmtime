@@ -51,7 +51,7 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// Grow memory to the specified amount of bytes.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
-    /// of wasm pages.
+    /// of bytes.
     fn grow_to(&mut self, size: usize) -> Option<()>;
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm

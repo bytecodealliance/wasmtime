@@ -528,7 +528,7 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
     /// Grows this memory to have the `new_size`, in bytes, specified.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
-    /// of wasm pages. Returns `Some` if memory was grown successfully.
+    /// of bytes. Returns `Some` if memory was grown successfully.
     fn grow_to(&mut self, new_size: usize) -> Option<()>;
 
     /// Return the allocated memory as a mutable pointer to u8.
