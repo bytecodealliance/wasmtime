@@ -66,10 +66,18 @@ impl DataValue {
         }
     }
 
+    /// Return true if the value is a bool (i.e. `DataValue::B`).
+    pub fn is_bool(&self) -> bool {
+        match self {
+            DataValue::B(_) => true,
+            _ => false,
+        }
+    }
+
     /// Write a [DataValue] to a memory location.
     pub unsafe fn write_value_to(&self, p: *mut u128) {
         match self {
-            DataValue::B(b) => ptr::write(p as *mut bool, *b),
+            DataValue::B(b) => ptr::write(p, if *b { -1i128 as u128 } else { 0u128 }),
             DataValue::I8(i) => ptr::write(p as *mut i8, *i),
             DataValue::I16(i) => ptr::write(p as *mut i16, *i),
             DataValue::I32(i) => ptr::write(p as *mut i32, *i),
@@ -90,7 +98,7 @@ impl DataValue {
             types::I64 => DataValue::I64(ptr::read(p as *const i64)),
             types::F32 => DataValue::F32(ptr::read(p as *const Ieee32)),
             types::F64 => DataValue::F64(ptr::read(p as *const Ieee64)),
-            _ if ty.is_bool() => DataValue::B(ptr::read(p as *const bool)),
+            _ if ty.is_bool() => DataValue::B(ptr::read(p) != 0),
             _ if ty.is_vector() && ty.bytes() == 16 => {
                 DataValue::V128(ptr::read(p as *const [u8; 16]))
             }
