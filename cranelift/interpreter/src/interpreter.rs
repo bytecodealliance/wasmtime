@@ -2,10 +2,11 @@
 //!
 //! This module partially contains the logic for interpreting Cranelift IR.
 
+use crate::address::{Address, AddressRegion, AddressSize};
 use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
-use crate::state::{Address, AddressInfo, AddressMut, MemoryError, State};
+use crate::state::{MemoryError, State};
 use crate::step::{step, ControlFlow, StepError};
 use crate::value::ValueError;
 use cranelift_codegen::data_value::DataValue;
@@ -274,11 +275,25 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         self.fflags.clear()
     }
 
-    fn stack_address(&self, slot: StackSlot, offset: usize) -> AddressMut {
-        let stack_base = self.stack.as_ptr() as usize;
+    fn stack_address(
+        &self,
+        size: AddressSize,
+        slot: StackSlot,
+        offset: u64,
+    ) -> Result<Address, MemoryError> {
+        let stack_slots = &self.get_current_function().stack_slots;
+        let stack_slot = &stack_slots[slot];
+
+        // offset must be `0 <= Offset < sizeof(SS)`
+        if offset >= stack_slot.size as u64 {
+            return Err(MemoryError::InvalidOffset {
+                offset,
+                max: stack_slot.size as u64,
+            });
+        }
 
         // Calculate offset from the base of the stack, to the current frame
-        let frame_offset: usize = self
+        let frame_offset: u64 = self
             .frame_stack
             .iter()
             .enumerate()
@@ -286,75 +301,60 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             .filter(|&(i, _)| i != self.frame_stack.len() - 1)
             // Sum all of the stack slots from the previous frames
             .flat_map(|(_, frame)| frame.function.stack_slots.values())
-            .map(|v| v.size as usize)
+            .map(|v| v.size as u64)
             .sum();
 
         // Calculate the offset from the current frame to the requested stack slot
-        let stack_slots = &self.get_current_function().stack_slots;
-        let slot_offset: usize = stack_slots
+        let slot_offset: u64 = stack_slots
             .keys()
             .filter(|k| k < &slot)
-            .map(|k| stack_slots[k].size as usize)
+            .map(|k| stack_slots[k].size as u64)
             .sum();
 
-        (stack_base + frame_offset + slot_offset + offset) as AddressMut
+        let final_offset = frame_offset + slot_offset + offset;
+        Address::from_parts(size, AddressRegion::Stack, 0, final_offset)
     }
 
-    fn heap_address(&self, _offset: usize) -> Result<AddressMut, MemoryError> {
+    fn heap_address(&self, _size: AddressSize, _offset: u64) -> Result<Address, MemoryError> {
         unimplemented!()
-    }
-
-    fn analyze_address(&self, addr: Address) -> AddressInfo {
-        let addr = addr as usize;
-        let stack_start = self.stack.as_ptr() as usize;
-        let stack_end = stack_start.wrapping_add(self.stack.len()) as usize;
-        if (stack_start..stack_end).contains(&addr) {
-            return AddressInfo::Stack {
-                available_size: stack_end - addr,
-            };
-        }
-
-        let heap_start = self.heap.as_ptr() as usize;
-        let heap_end = heap_start.wrapping_add(self.heap.len()) as usize;
-        if (heap_start..heap_end).contains(&addr) {
-            return AddressInfo::Heap {
-                available_size: heap_end - addr,
-            };
-        }
-
-        AddressInfo::Unknown
     }
 
     fn checked_load(&self, addr: Address, ty: Type) -> Result<DataValue, MemoryError> {
         let load_size = ty.bytes() as usize;
-        let info = self.analyze_address(addr);
-        let available = info.available_size();
 
-        if !info.is_readable() || load_size > available {
-            return Err(MemoryError::OutOfBoundsLoad {
-                addr,
-                load_size,
-                available,
-            });
-        }
+        let raw_addr = match addr.region {
+            AddressRegion::Stack => {
+                let addr_start = addr.offset as usize;
+                let addr_end = addr_start + load_size;
+                if addr_end > self.stack.len() {
+                    return Err(MemoryError::OutOfBoundsLoad { addr, load_size });
+                }
 
-        Ok(unsafe { DataValue::read_value_from(addr.cast(), ty) })
+                self.stack[addr_start..addr_end].as_ptr() as *const _ as *const u128
+            }
+            _ => unimplemented!(),
+        };
+
+        Ok(unsafe { DataValue::read_value_from(raw_addr, ty) })
     }
 
-    fn checked_store(&mut self, addr: AddressMut, v: DataValue) -> Result<(), MemoryError> {
+    fn checked_store(&mut self, addr: Address, v: DataValue) -> Result<(), MemoryError> {
         let store_size = v.ty().bytes() as usize;
-        let info = self.analyze_address(addr);
-        let available = info.available_size();
 
-        if !info.is_writable() || store_size > available {
-            return Err(MemoryError::OutOfBoundsStore {
-                addr,
-                store_size,
-                available,
-            });
-        }
+        let raw_addr = match addr.region {
+            AddressRegion::Stack => {
+                let addr_start = addr.offset as usize;
+                let addr_end = addr_start + store_size;
+                if addr_end > self.stack.len() {
+                    return Err(MemoryError::OutOfBoundsStore { addr, store_size });
+                }
 
-        Ok(unsafe { v.write_value_to(addr.cast()) })
+                self.stack[addr_start..addr_end].as_mut_ptr() as *mut _ as *mut u128
+            }
+            _ => unimplemented!(),
+        };
+
+        Ok(unsafe { v.write_value_to(raw_addr) })
     }
 }
 
@@ -580,7 +580,7 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::OutOfBoundsStore));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::InvalidAddress));
     }
 
     #[test]
@@ -627,7 +627,7 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::OutOfBoundsLoad));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::InvalidAddress));
     }
 
     #[test]

@@ -1,11 +1,13 @@
 //! The [step] function interprets a single Cranelift instruction given its [State] and
 //! [InstructionContext]; the interpretation is generic over [Value]s.
+use crate::address::{Address, AddressSize};
 use crate::instruction::InstructionContext;
-use crate::state::{Address, AddressMut, MemoryError, State};
+use crate::state::{MemoryError, State};
 use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
+    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -84,20 +86,35 @@ where
         Err(e) => Err(e),
     };
 
-    // Performs a load to an address or traps
-    let load_or_trap = |state: &mut dyn State<'a, V>, address: Address, ty: Type| match state
-        .checked_load(address, ty)
-    {
-        Ok(loaded) => assign(loaded),
-        Err(e) => ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsLoad)),
+    let memerror_to_trap = |e: MemoryError| match e {
+        MemoryError::InvalidAddress(_) => TrapCode::InvalidAddress,
+        MemoryError::InvalidAddressType(_) => TrapCode::InvalidAddress,
+        MemoryError::InvalidOffset { .. } => TrapCode::InvalidAddress,
+        MemoryError::InvalidEntry { .. } => TrapCode::InvalidAddress,
+        MemoryError::OutOfBoundsStore { .. } => TrapCode::OutOfBoundsStore,
+        MemoryError::OutOfBoundsLoad { .. } => TrapCode::OutOfBoundsLoad,
     };
 
-    // Performs a store to an address or traps
-    let store_or_trap = |state: &mut dyn State<'a, V>, address: AddressMut, value: V| match state
-        .checked_store(address, value)
-    {
-        Ok(()) => ControlFlow::Continue,
-        Err(e) => ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsStore)),
+    // Assigns or traps depending on the value of the result
+    let assign_or_memtrap = |res| match res {
+        Ok(v) => assign(v),
+        Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
+    };
+
+    // Continues or traps depending on the value of the result
+    let continue_or_memtrap = |res| match res {
+        Ok(_) => ControlFlow::Continue,
+        Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
+    };
+
+    let calculate_addr = |imm: V, args: SmallVec<[V; 1]>| -> ValueResult<u64> {
+        let imm = imm.convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
+        let args = args
+            .into_iter()
+            .map(|v| v.convert(ValueConversionKind::ZeroExtend(ctrl_ty)))
+            .collect::<ValueResult<SmallVec<[V; 1]>>>()?;
+
+        Ok(sum(imm, args)? as u64)
     };
 
     // Interpret a binary instruction with the given `op`, assigning the resulting value to the
@@ -263,9 +280,6 @@ where
         | Opcode::Uload32x2Complex
         | Opcode::Sload32x2
         | Opcode::Sload32x2Complex => {
-            let imm = imm().convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
-            let address = sum(imm, args()?)? as usize as Address;
-
             let ctrl_ty = inst_context.controlling_type().unwrap();
             let (load_ty, kind) = match inst.opcode() {
                 Opcode::Load | Opcode::LoadComplex => (ctrl_ty, None),
@@ -302,13 +316,18 @@ where
                 _ => unreachable!(),
             };
 
-            let res = load_or_trap(state, address, load_ty);
-            match (res, kind) {
-                (ControlFlow::Assign(mut loaded), Some(c)) => {
-                    let loaded = loaded.pop().unwrap();
-                    ControlFlow::Assign(smallvec![loaded.convert(c)?])
-                }
-                (res, _) => res,
+            let addr_value = calculate_addr(imm(), args()?)?;
+            let loaded = assign_or_memtrap(
+                Address::try_from(addr_value).and_then(|addr| state.checked_load(addr, load_ty)),
+            );
+
+            match (loaded, kind) {
+                (ControlFlow::Assign(ret), Some(c)) => ControlFlow::Assign(
+                    ret.into_iter()
+                        .map(|loaded| loaded.convert(c.clone()))
+                        .collect::<ValueResult<SmallVec<[V; 1]>>>()?,
+                ),
+                (cf, _) => cf,
             }
         }
         Opcode::Store
@@ -319,9 +338,6 @@ where
         | Opcode::Istore16Complex
         | Opcode::Istore32
         | Opcode::Istore32Complex => {
-            let imm = imm().convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
-            let address = sum(imm, args_range(1..)?)? as usize as AddressMut;
-
             let kind = match inst.opcode() {
                 Opcode::Store | Opcode::StoreComplex => None,
                 Opcode::Istore8 | Opcode::Istore8Complex => {
@@ -335,48 +351,48 @@ where
                 }
                 _ => unreachable!(),
             };
+
+            let addr_value = calculate_addr(imm(), args_range(1..)?)?;
             let reduced = if let Some(c) = kind {
                 arg(0)?.convert(c)?
             } else {
                 arg(0)?
             };
-            store_or_trap(state, address, reduced)
+            continue_or_memtrap(
+                Address::try_from(addr_value).and_then(|addr| state.checked_store(addr, reduced)),
+            )
         }
         Opcode::StackLoad => {
-            let slot = inst.stack_slot().unwrap();
-            let offset = sum(imm(), args()?)? as usize;
-            let address = state.stack_address(slot, offset);
             let load_ty = inst_context.controlling_type().unwrap();
-
-            // The caller can add an offset so large that it goes out of stack range
-            // This is tested here instead of `checked_load`, because the offset
-            // can end up in the heap range, and `checked_load` will allow that.
-            if !state.analyze_address(address).is_stack() {
-                ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsLoad))
-            } else {
-                load_or_trap(state, address, ctrl_ty)
-            }
+            let slot = inst.stack_slot().unwrap();
+            let offset = sum(imm(), args()?)? as u64;
+            assign_or_memtrap({
+                state
+                    .stack_address(AddressSize::_64, slot, offset)
+                    .and_then(|addr| state.checked_load(addr, load_ty))
+            })
         }
         Opcode::StackStore => {
             let arg = arg(0)?;
             let slot = inst.stack_slot().unwrap();
-            let offset = sum(imm(), args_range(1..)?)? as usize;
-            let address = state.stack_address(slot, offset);
-
-            // The caller can add an offset so large that it goes out of stack range
-            // This is tested here instead of `checked_store`, because the offset
-            // can end up in the heap range, and `checked_store` will allow that.
-            if !state.analyze_address(address).is_stack() {
-                ControlFlow::Trap(CraneliftTrap::User(TrapCode::OutOfBoundsStore))
-            } else {
-                store_or_trap(state, address, arg)
-            }
+            let offset = sum(imm(), args_range(1..)?)? as u64;
+            continue_or_memtrap({
+                state
+                    .stack_address(AddressSize::_64, slot, offset)
+                    .and_then(|addr| state.checked_store(addr, arg))
+            })
         }
         Opcode::StackAddr => {
+            let load_ty = inst_context.controlling_type().unwrap();
             let slot = inst.stack_slot().unwrap();
-            let offset = sum(imm(), args()?)? as usize;
-            let address = state.stack_address(slot, offset) as usize as i128;
-            assign(Value::int(address, ctrl_ty)?)
+            let offset = sum(imm(), args()?)? as u64;
+            assign_or_memtrap({
+                AddressSize::try_from(load_ty).and_then(|addr_size| {
+                    let addr = state.stack_address(addr_size, slot, offset)?;
+                    let dv = DataValue::try_from(addr)?;
+                    Ok(dv.into())
+                })
+            })
         }
         Opcode::GlobalValue => unimplemented!("GlobalValue"),
         Opcode::SymbolValue => unimplemented!("SymbolValue"),

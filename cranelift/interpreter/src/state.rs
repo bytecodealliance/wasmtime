@@ -1,5 +1,7 @@
 //! Cranelift instructions modify the state of the machine; the [State] trait describes these
 //! ways this can happen.
+use crate::address::{Address, AddressSize};
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{FuncRef, Function, StackSlot, Type, Value};
 use cranelift_entity::PrimaryMap;
@@ -58,94 +60,36 @@ pub trait State<'a, V> {
     fn clear_flags(&mut self);
 
     /// Computes the stack address for this stack slot, including an offset.
-    fn stack_address(&self, slot: StackSlot, offset: usize) -> AddressMut;
+    fn stack_address(
+        &self,
+        size: AddressSize,
+        slot: StackSlot,
+        offset: u64,
+    ) -> Result<Address, MemoryError>;
     /// Computes a heap address
-    fn heap_address(&self, offset: usize) -> Result<AddressMut, MemoryError>;
-    /// Analyze an address to get info about it
-    fn analyze_address(&self, addr: Address) -> AddressInfo;
+    fn heap_address(&self, size: AddressSize, offset: u64) -> Result<Address, MemoryError>;
     /// Retrieve a value `V` from memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes loaded corresponds to the specified [Type].
-    fn checked_load(&self, addr: Address, ty: Type) -> Result<V, MemoryError>;
+    fn checked_load(&self, address: Address, ty: Type) -> Result<V, MemoryError>;
     /// Store a value `V` into memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes stored corresponds to the specified [Type].
-    fn checked_store(&mut self, addr: AddressMut, v: V) -> Result<(), MemoryError>;
-}
-
-pub type AddressMut = *mut u8;
-pub type Address = *const u8;
-
-#[derive(Debug, Clone)]
-pub enum AddressInfo {
-    /// Unknown address, not part of any heap or stack
-    Unknown,
-    /// Address is part of the stack
-    Stack {
-        /// The number of bytes that are available after this address.
-        available_size: usize,
-    },
-    /// Address is part of a heap
-    Heap {
-        /// The number of bytes that are available after this address.
-        available_size: usize,
-    },
-}
-
-impl AddressInfo {
-    pub fn available_size(&self) -> usize {
-        match self {
-            AddressInfo::Unknown => 0,
-            AddressInfo::Stack { available_size } => *available_size,
-            AddressInfo::Heap { available_size, .. } => *available_size,
-        }
-    }
-
-    pub fn is_readable(&self) -> bool {
-        match self {
-            AddressInfo::Unknown => false,
-            _ => true,
-        }
-    }
-
-    pub fn is_writable(&self) -> bool {
-        match self {
-            AddressInfo::Unknown => false,
-            _ => true,
-        }
-    }
-
-    pub fn is_stack(&self) -> bool {
-        match self {
-            AddressInfo::Stack { .. } => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_heap(&self) -> bool {
-        match self {
-            AddressInfo::Heap { .. } => true,
-            _ => false,
-        }
-    }
+    fn checked_store(&mut self, address: Address, v: V) -> Result<(), MemoryError>;
 }
 
 #[derive(Error, Debug)]
 pub enum MemoryError {
-    #[error(
-        "Load of {load_size} bytes is larger than available size of {available} at address {addr:p}"
-    )]
-    OutOfBoundsLoad {
-        addr: Address,
-        load_size: usize,
-        available: usize,
-    },
-    #[error(
-        "Store of {store_size} bytes is larger than available size of {available} at address {addr:p}"
-    )]
-    OutOfBoundsStore {
-        addr: Address,
-        store_size: usize,
-        available: usize,
-    },
+    #[error("Invalid DataValue passed as an address: {0}")]
+    InvalidAddress(DataValue),
+    #[error("Invalid type for address: {0}")]
+    InvalidAddressType(Type),
+    #[error("Requested an the entry {entry} but only {max} entries are allowed")]
+    InvalidEntry { entry: u64, max: u64 },
+    #[error("Requested an offset of {offset} but max was {max}")]
+    InvalidOffset { offset: u64, max: u64 },
+    #[error("Load of {load_size} bytes is larger than available size at address {addr:?}")]
+    OutOfBoundsLoad { addr: Address, load_size: usize },
+    #[error("Store of {store_size} bytes is larger than available size at address {addr:?}")]
+    OutOfBoundsStore { addr: Address, store_size: usize },
 }
 
 /// This dummy state allows interpretation over an immutable mapping of values in a single frame.
@@ -198,15 +142,16 @@ where
 
     fn clear_flags(&mut self) {}
 
-    fn stack_address(&self, _slot: StackSlot, _offset: usize) -> AddressMut {
+    fn stack_address(
+        &self,
+        _size: AddressSize,
+        _slot: StackSlot,
+        _offset: u64,
+    ) -> Result<Address, MemoryError> {
         unimplemented!()
     }
 
-    fn heap_address(&self, _offset: usize) -> Result<AddressMut, MemoryError> {
-        unimplemented!()
-    }
-
-    fn analyze_address(&self, _addr: Address) -> AddressInfo {
+    fn heap_address(&self, _size: AddressSize, _offset: u64) -> Result<Address, MemoryError> {
         unimplemented!()
     }
 
@@ -214,7 +159,7 @@ where
         unimplemented!()
     }
 
-    fn checked_store(&mut self, _addr: AddressMut, _v: V) -> Result<(), MemoryError> {
+    fn checked_store(&mut self, _addr: Address, _v: V) -> Result<(), MemoryError> {
         unimplemented!()
     }
 }
