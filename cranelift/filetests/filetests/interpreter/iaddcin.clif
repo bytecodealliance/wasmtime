@@ -1,0 +1,48 @@
+test interpret
+
+function %iaddcin_i8(i8, i8, b1) -> i8 {
+block0(v0: i8, v1: i8, v2: b1):
+    v3 = iadd_cin v0, v1, v2
+    return v3
+}
+; run: %iaddcin_i8(0, 1, true) == 2
+; run: %iaddcin_i8(0, 1, false) == 1
+; run: %iaddcin_i8(100, 27, true) == -128
+; run: %iaddcin_i8(100, 27, false) == 127
+
+function %iaddcin_i16(i16, i16, b1) -> i16 {
+block0(v0: i16, v1: i16, v2: b1):
+    v3 = iadd_cin v0, v1, v2
+    return v3
+}
+; run: %iaddcin_i16(0, 1, true) == 2
+; run: %iaddcin_i16(0, 1, false) == 1
+; run: %iaddcin_i16(100, 27, true) == 128
+; run: %iaddcin_i16(100, 27, false) == 127
+; run: %iaddcin_i16(32000, 767, true) == -32768
+; run: %iaddcin_i16(32000, 767, false) == 32767
+
+function %iaddcin_i32(i32, i32, b1) -> i32 {
+block0(v0: i32, v1: i32, v2: b1):
+    v3 = iadd_cin v0, v1, v2
+    return v3
+}
+; run: %iaddcin_i32(0, 1, true) == 2
+; run: %iaddcin_i32(0, 1, false) == 1
+; run: %iaddcin_i32(100, 27, true) == 128
+; run: %iaddcin_i32(100, 27, false) == 127
+; run: %iaddcin_i32(2000000000, 147483647, true) == -2147483648
+; run: %iaddcin_i32(2000000000, 147483647, false) == 2147483647
+
+
+function %iaddcin_i64(i64, i64, b1) -> i64 {
+block0(v0: i64, v1: i64, v2: b1):
+    v3 = iadd_cin v0, v1, v2
+    return v3
+}
+; run: %iaddcin_i64(0, 1, true) == 2
+; run: %iaddcin_i64(0, 1, false) == 1
+; run: %iaddcin_i64(100, 27, true) == 128
+; run: %iaddcin_i64(100, 27, false) == 127
+; run: %iaddcin_i64(2000000000, 147483647, true) == 2147483648
+; run: %iaddcin_i64(2000000000, 147483647, false) == 2147483647
