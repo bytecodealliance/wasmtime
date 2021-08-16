@@ -632,8 +632,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     }
 
     // Instantiate wasmtime module and instance.
-    let mut wasmtime_config = config.to_wasmtime();
-    wasmtime_config.cranelift_nan_canonicalization(true);
+    let wasmtime_config = config.to_wasmtime();
     let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
     let mut wasmtime_store = create_store(&wasmtime_engine);
     if config.consume_fuel {
@@ -813,14 +812,18 @@ fn run_in_wasmtime(
     config: &crate::generators::Config,
     params: &[Val],
 ) -> anyhow::Result<Vec<Val>> {
-    // Instantiate wasmtime module and instance.
+    // Note that nan canonicalization is forcibly disabled here since this
+    // function is used in differential execution where what we're comparing
+    // against isn't doing nan canonicalization.
     let mut wasmtime_config = config.to_wasmtime();
-    wasmtime_config.cranelift_nan_canonicalization(true);
+    wasmtime_config.cranelift_nan_canonicalization(false);
     let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
     let mut wasmtime_store = create_store(&wasmtime_engine);
     if config.consume_fuel {
         wasmtime_store.add_fuel(u64::max_value()).unwrap();
     }
+
+    // Instantiate wasmtime module and instance.
     let wasmtime_module =
         Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
     let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
