@@ -254,30 +254,40 @@ impl Memory {
         assert_le!(plan.memory.minimum, absolute_max);
         assert!(plan.memory.maximum.is_none() || plan.memory.maximum.unwrap() <= absolute_max);
 
+        // This is the absolute possible maximum that the module can try to
+        // allocate, which is our entire address space minus a wasm page. That
+        // shouldn't ever actually work in terms of an allocation because
+        // presumably the kernel wants *something* for itself, but this is used
+        // to pass to the `limiter` specified, if present, for a requested size
+        // to approximate the scale of the request that the wasm module is
+        // making. This is necessary because the limiter works on `usize` bytes
+        // whereas we're working with possibly-overflowing `u64` calculations
+        // here. To actually faithfully represent the byte requests of modules
+        // we'd have to represent things as `u128`, but that's kinda
+        // overkill for this purpose.
+        let absolute_max = 0usize.wrapping_sub(WASM_PAGE_SIZE);
+
         // If the minimum memory size overflows the size of our own address
-        // space, then we can't satisfy this request.
+        // space, then we can't satisfy this request, but defer the error to
+        // later so the `limiter` can be informed that an effective oom is
+        // happening.
         let minimum = plan
             .memory
             .minimum
             .checked_mul(WASM_PAGE_SIZE_U64)
-            .and_then(|m| usize::try_from(m).ok())
-            .ok_or_else(|| {
-                format_err!(
-                    "memory minimum size of {} pages exceeds memory limits",
-                    plan.memory.minimum
-                )
-            })?;
+            .and_then(|m| usize::try_from(m).ok());
 
         // The plan stores the maximum size in units of wasm pages, but we
-        // use units of bytes. Do the mapping here, and if we overflow for some
-        // reason then just assume that the listed maximum was our entire memory
-        // minus one wasm page since we can't grow past that anyway (presumably
-        // the kernel will reserve at least *something* for itself...)
+        // use units of bytes. Unlike for the `minimum` size we silently clamp
+        // the effective maximum size to `absolute_max` above if the maximum is
+        // too large. This should be ok since as a wasm runtime we get to
+        // arbitrarily decide the actual maximum size of memory, regardless of
+        // what's actually listed on the memory itself.
         let mut maximum = plan.memory.maximum.map(|max| {
             usize::try_from(max)
                 .ok()
                 .and_then(|m| m.checked_mul(WASM_PAGE_SIZE))
-                .unwrap_or(usize::MAX - WASM_PAGE_SIZE)
+                .unwrap_or(absolute_max)
         });
 
         // If this is a 32-bit memory and no maximum is otherwise listed then we
@@ -288,14 +298,30 @@ impl Memory {
         if !plan.memory.memory64 && maximum.is_none() {
             maximum = usize::try_from(1u64 << 32).ok();
         }
+
+        // Inform the limiter what's about to happen. This will let the limiter
+        // reject anything if necessary, and this also guarantees that we should
+        // call the limiter for all requested memories, even if our `minimum`
+        // calculation overflowed. This means that the `minimum` we're informing
+        // the limiter is lossy and may not be 100% accurate, but for now the
+        // expected uses of `limiter` means that's ok.
         if let Some(limiter) = limiter {
-            if !limiter.memory_growing(0, minimum, maximum) {
+            if !limiter.memory_growing(0, minimum.unwrap_or(absolute_max), maximum) {
                 bail!(
                     "memory minimum size of {} pages exceeds memory limits",
                     plan.memory.minimum
                 );
             }
         }
+
+        // At this point we need to actually handle overflows, so bail out with
+        // an error if we made it this far.
+        let minimum = minimum.ok_or_else(|| {
+            format_err!(
+                "memory minimum size of {} pages exceeds memory limits",
+                plan.memory.minimum
+            )
+        })?;
         Ok((minimum, maximum))
     }
 
