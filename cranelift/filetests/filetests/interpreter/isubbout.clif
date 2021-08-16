@@ -1,0 +1,87 @@
+test interpret
+
+function %isubbout_i8_v(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2, v3 = isub_bout v0, v1
+    return v2
+}
+; run: %isubbout_i8_v(0, 1) == -1
+; run: %isubbout_i8_v(100, 20) == 80
+; run: %isubbout_i8_v(100, -20) == 120
+; run: %isubbout_i8_v(-128, 1) == 127
+
+function %isubbout_i8_c(i8, i8) -> b1 {
+block0(v0: i8, v1: i8):
+    v2, v3 = isub_bout v0, v1
+    return v3
+}
+; run: %isubbout_i8_c(0, 1) == true
+; run: %isubbout_i8_c(100, 20) == false
+; run: %isubbout_i8_c(100, -20) == false
+; run: %isubbout_i8_c(-128, 1) == true
+
+function %isubbout_i16_v(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2, v3 = isub_bout v0, v1
+    return v2
+}
+; run: %isubbout_i16_v(0, 1) == -1
+; run: %isubbout_i16_v(100, 20) == 80
+; run: %isubbout_i16_v(100, -28) == 128
+; run: %isubbout_i16_v(-32000, 768) == -32768
+; run: %isubbout_i16_v(-32000, 769) == 32767
+
+function %isubbout_i16_c(i16, i16) -> b1 {
+block0(v0: i16, v1: i16):
+    v2, v3 = isub_bout v0, v1
+    return v3
+}
+; run: %isubbout_i16_c(0, 1) == true
+; run: %isubbout_i16_c(100, 20) == false
+; run: %isubbout_i16_c(100, -28) == false
+; run: %isubbout_i16_c(-32000, 768) == true
+; run: %isubbout_i16_c(-32000, 769) == true
+
+function %isubbout_i32_v(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2, v3 = isub_bout v0, v1
+    return v2
+}
+; run: %isubbout_i32_v(0, 1) == -1
+; run: %isubbout_i32_v(100, 20) == 80
+; run: %isubbout_i32_v(100, -28) == 128
+; run: %isubbout_i32_v(-2147483640, 8) == -2147483648
+; run: %isubbout_i32_v(-2147483640, 9) == 2147483647
+
+function %isubbout_i32_c(i32, i32) -> b1 {
+block0(v0: i32, v1: i32):
+    v2, v3 = isub_bout v0, v1
+    return v3
+}
+; run: %isubbout_i32_c(0, 1) == true
+; run: %isubbout_i32_c(100, 20) == false
+; run: %isubbout_i32_c(100, -28) == false
+; run: %isubbout_i32_c(-2147483640, 8) == true
+; run: %isubbout_i32_c(-2147483640, 9) == true
+
+function %isubbout_i64_v(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2, v3 = isub_bout v0, v1
+    return v2
+}
+; run: %isubbout_i64_v(0, 1) == -1
+; run: %isubbout_i64_v(100, 20) == 80
+; run: %isubbout_i64_v(100, -28) == 128
+; run: %isubbout_i64_v(-2147483640, 8) == -2147483648
+; run: %isubbout_i64_v(-2147483640, 9) == -2147483649
+
+function %isubbout_i64_c(i64, i64) -> b1 {
+block0(v0: i64, v1: i64):
+    v2, v3 = isub_bout v0, v1
+    return v3
+}
+; run: %isubbout_i64_c(0, 1) == true
+; run: %isubbout_i64_c(100, 20) == false
+; run: %isubbout_i64_c(100, -28) == false
+; run: %isubbout_i64_c(-2147483640, 8) == true
+; run: %isubbout_i64_c(-2147483640, 9) == true
