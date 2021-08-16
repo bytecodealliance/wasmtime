@@ -1,8 +1,8 @@
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use anyhow::Error;
+use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
-use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{CompiledFunctions, ModuleMemoryOffset};
 

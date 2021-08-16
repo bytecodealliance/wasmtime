@@ -1,9 +1,9 @@
 pub use crate::transform::transform_dwarf;
+use cranelift_codegen::isa::{unwind::UnwindInfo, TargetIsa};
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::Endianness;
-use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
 use wasmtime_environ::{CompiledFunctions, DebugInfoData, ModuleMemoryOffset};
 
 #[allow(missing_docs)]

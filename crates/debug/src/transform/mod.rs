@@ -3,13 +3,13 @@ use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
 use crate::gc::build_dependencies;
 use anyhow::Error;
+use cranelift_codegen::isa::TargetIsa;
 use gimli::{
     write, DebugAddr, DebugLine, DebugLineStr, DebugStr, DebugStrOffsets, LocationLists,
     RangeLists, UnitSectionOffset,
 };
 use std::collections::HashSet;
 use thiserror::Error;
-use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::{CompiledFunctions, DebugInfoData, ModuleMemoryOffset};
 
 pub use address_transform::AddressTransform;

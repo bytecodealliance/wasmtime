@@ -4,11 +4,11 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{bail, Error};
+use cranelift_codegen::isa::TargetIsa;
 use gimli::{
     write, AttributeValue, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
     DebuggingInformationEntry, Unit,
 };
-use wasmtime_environ::isa::TargetIsa;
 
 #[derive(Debug)]
 pub(crate) enum FileAttributeContext<'a> {

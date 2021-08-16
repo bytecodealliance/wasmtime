@@ -1,5 +1,6 @@
 use super::address_transform::AddressTransform;
 use anyhow::{Context, Error, Result};
+use cranelift_codegen::isa::TargetIsa;
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::cmp::PartialEq;
@@ -8,7 +9,6 @@ use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::ir::{LabelValueLoc, StackSlots, ValueLabel, ValueLabelsRanges, ValueLoc};
-use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use wasmtime_environ::ModuleMemoryOffset;
 

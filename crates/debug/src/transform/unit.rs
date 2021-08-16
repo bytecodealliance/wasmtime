@@ -7,11 +7,11 @@ use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::{DebugInputContext, Reader, TransformError};
 use anyhow::{Context, Error};
+use cranelift_codegen::ir::Endianness;
+use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
-use wasmtime_environ::ir::Endianness;
-use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{CompiledFunctions, ModuleMemoryOffset};
 

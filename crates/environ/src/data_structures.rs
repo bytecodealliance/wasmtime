@@ -9,12 +9,6 @@ pub mod ir {
     pub use cranelift_codegen::{ValueLabelsRanges, ValueLocRange};
 }
 
-pub mod isa {
-    pub use cranelift_codegen::isa::{
-        lookup, unwind, Builder, CallConv, RegUnit, TargetFrontendConfig, TargetIsa,
-    };
-}
-
 pub mod entity {
     pub use cranelift_entity::{packed_option, BoxedSlice, EntityRef, EntitySet, PrimaryMap};
 }

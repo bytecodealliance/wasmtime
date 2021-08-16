@@ -16,6 +16,10 @@
 #![allow(missing_docs)]
 
 use anyhow::Result;
+use cranelift_codegen::isa::{
+    unwind::{systemv, UnwindInfo},
+    TargetIsa,
+};
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{
@@ -31,10 +35,6 @@ use std::convert::TryFrom;
 use wasmtime_debug::{DwarfSection, DwarfSectionRelocTarget};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::{JumpTableOffsets, LibCall, Reloc};
-use wasmtime_environ::isa::{
-    unwind::{systemv, UnwindInfo},
-    TargetIsa,
-};
 use wasmtime_environ::obj;
 use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex, SignatureIndex};
 use wasmtime_environ::{CompiledFunction, Module, Relocation, RelocationTarget};
