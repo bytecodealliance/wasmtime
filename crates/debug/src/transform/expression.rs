@@ -1220,9 +1220,10 @@ mod tests {
     }
 
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
+        use cranelift_codegen::ir::{LabelValueLoc, ValueLoc};
+        use cranelift_codegen::ValueLocRange;
         use std::collections::HashMap;
         use wasmtime_environ::entity::EntityRef;
-        use wasmtime_environ::ir::{LabelValueLoc, ValueLoc, ValueLocRange};
         let mut value_ranges = HashMap::new();
         let value_0 = ValueLabel::new(0);
         let value_1 = ValueLabel::new(1);
@@ -1264,8 +1265,8 @@ mod tests {
     #[test]
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
+        use cranelift_codegen::ir::StackSlots;
         use wasmtime_environ::entity::EntityRef;
-        use wasmtime_environ::ir::StackSlots;
         use wasmtime_environ::wasm::DefinedFuncIndex;
         use wasmtime_environ::ModuleMemoryOffset;
 
