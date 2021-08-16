@@ -284,7 +284,14 @@ impl<'dummy_environment> FuncEnvironment for DummyFuncEnvironment<'dummy_environ
         Ok(GlobalVariable::Memory {
             gv: vmctx,
             offset,
-            ty: self.mod_info.globals[index].entity.ty,
+            ty: match self.mod_info.globals[index].entity.wasm_ty {
+                WasmType::I32 => ir::types::I32,
+                WasmType::I64 => ir::types::I64,
+                WasmType::F32 => ir::types::F32,
+                WasmType::F64 => ir::types::F64,
+                WasmType::V128 => ir::types::I8X16,
+                WasmType::ExnRef | WasmType::FuncRef | WasmType::ExternRef => ir::types::R64,
+            },
         })
     }
 

@@ -26,12 +26,14 @@ use object::{
 };
 use std::collections::HashMap;
 use target_lexicon::Triple;
-use wasmtime_debug::{DwarfSection, DwarfSectionRelocTarget};
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::ir::{LibCall, Reloc};
 use wasmtime_environ::isa::unwind::UnwindInfo;
 use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex, SignatureIndex};
-use wasmtime_environ::{CompiledFunction, CompiledFunctions, Module, Relocation, RelocationTarget};
+use wasmtime_environ::{
+    CompiledFunction, CompiledFunctions, DwarfSection, DwarfSectionRelocTarget, Module, Relocation,
+    RelocationTarget,
+};
 
 fn to_object_relocations<'a>(
     it: impl Iterator<Item = &'a Relocation> + 'a,

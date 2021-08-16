@@ -5,6 +5,7 @@
 
 use crate::code_memory::CodeMemory;
 use crate::compiler::{Compilation, Compiler};
+use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
 use crate::object::ObjectUnwindInfo;
 use anyhow::{Context, Result};
@@ -13,9 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_debug::create_gdbjit_image;
 use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::isa::TargetIsa;
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
 };
@@ -103,13 +102,10 @@ impl CompilationArtifacts {
         data: &[u8],
         use_paged_mem_init: bool,
     ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables), SetupError> {
-        let (main_module, translations, types) = ModuleEnvironment::new(
-            compiler.frontend_config(),
-            compiler.tunables(),
-            compiler.features(),
-        )
-        .translate(data)
-        .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
+        let (main_module, translations, types) =
+            ModuleEnvironment::new(compiler.tunables(), compiler.features())
+                .translate(data)
+                .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
 
         let list = compiler.run_maybe_parallel::<_, _, SetupError, _>(
             translations,
@@ -225,25 +221,24 @@ impl CompiledModule {
     /// artifacts.
     pub fn from_artifacts_list(
         artifacts: Vec<CompilationArtifacts>,
-        isa: &dyn TargetIsa,
-        profiler: &dyn ProfilingAgent,
         compiler: &Compiler,
+        profiler: &dyn ProfilingAgent,
     ) -> Result<Vec<Arc<Self>>, SetupError> {
         compiler.run_maybe_parallel(artifacts, |a| {
-            CompiledModule::from_artifacts(a, isa, profiler)
+            CompiledModule::from_artifacts(a, compiler, profiler)
         })
     }
 
     /// Creates `CompiledModule` directly from `CompilationArtifacts`.
     pub fn from_artifacts(
         artifacts: CompilationArtifacts,
-        isa: &dyn TargetIsa,
+        compiler: &Compiler,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Arc<Self>, SetupError> {
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
         let (code_memory, code_range, finished_functions, trampolines) = build_code_memory(
-            isa,
+            compiler,
             &artifacts.obj,
             &artifacts.module,
             &artifacts.unwind_info,
@@ -480,7 +475,7 @@ fn create_dbg_image(
 }
 
 fn build_code_memory(
-    isa: &dyn TargetIsa,
+    compiler: &Compiler,
     obj: &[u8],
     module: &Module,
     unwind_info: &[ObjectUnwindInfo],
@@ -531,7 +526,7 @@ fn build_code_memory(
     let code_range = (code_range.as_ptr(), code_range.len());
 
     // Make all code compiled thus far executable.
-    code_memory.publish(isa);
+    code_memory.publish(compiler);
 
     Ok((code_memory, code_range, finished_functions, trampolines))
 }

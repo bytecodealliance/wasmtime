@@ -22,10 +22,7 @@ impl MatchCx<'_> {
     }
 
     fn global_ty(&self, expected: &Global, actual: &Global) -> Result<()> {
-        if expected.ty == actual.ty
-            && expected.wasm_ty == actual.wasm_ty
-            && expected.mutability == actual.mutability
-        {
+        if expected.wasm_ty == actual.wasm_ty && expected.mutability == actual.mutability {
             Ok(())
         } else {
             bail!("global types incompatible")
@@ -38,7 +35,6 @@ impl MatchCx<'_> {
 
     fn table_ty(&self, expected: &Table, actual: &Table) -> Result<()> {
         if expected.wasm_ty == actual.wasm_ty
-            && expected.ty == actual.ty
             && expected.minimum <= actual.minimum
             && match expected.maximum {
                 Some(expected) => match actual.maximum {

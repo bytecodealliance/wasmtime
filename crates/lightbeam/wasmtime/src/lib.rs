@@ -3,16 +3,19 @@
 //! This crates provides an implementation of [`Compiler`] in the form of
 //! [`Lightbeam`].
 
+#![allow(dead_code)]
+
+use anyhow::Result;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir::{self, ExternalName};
-use cranelift_codegen::isa;
-use lightbeam::{CodeGenSession, NullOffsetSink, Sinks};
+use std::collections::HashMap;
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
     GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmFuncType,
 };
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompileError, CompiledFunction, Compiler, FunctionBodyData, Module,
+    BuiltinFunctionIndex, CompileError, CompiledFunction, CompiledFunctions, Compiler,
+    DebugInfoData, DwarfSection, FlagValue, FunctionBodyData, Module, ModuleMemoryOffset,
     ModuleTranslation, Relocation, RelocationTarget, TrapInformation, Tunables, TypeTables,
     VMOffsets,
 };
@@ -23,62 +26,61 @@ pub struct Lightbeam;
 impl Compiler for Lightbeam {
     fn compile_function(
         &self,
-        translation: &ModuleTranslation,
-        i: DefinedFuncIndex,
-        function_body: FunctionBodyData<'_>,
-        isa: &dyn isa::TargetIsa,
-        tunables: &Tunables,
+        _translation: &ModuleTranslation,
+        _i: DefinedFuncIndex,
+        _function_body: FunctionBodyData<'_>,
+        _tunables: &Tunables,
         _types: &TypeTables,
     ) -> Result<CompiledFunction, CompileError> {
-        if tunables.generate_native_debuginfo {
-            return Err(CompileError::DebugInfoNotSupported);
-        }
-        let func_index = translation.module.func_index(i);
+        unimplemented!()
+        // if tunables.generate_native_debuginfo {
+        //     return Err(CompileError::DebugInfoNotSupported);
+        // }
+        // let func_index = translation.module.func_index(i);
 
-        let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation);
-        let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
-            translation.function_body_inputs.len() as u32,
-            &env,
-            lightbeam::microwasm::I32,
-        );
+        // let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation);
+        // let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
+        //     translation.function_body_inputs.len() as u32,
+        //     &env,
+        //     lightbeam::microwasm::I32,
+        // );
 
-        let mut reloc_sink = RelocSink::new(func_index);
-        let mut trap_sink = TrapSink::new();
-        lightbeam::translate_function(
-            &mut codegen_session,
-            Sinks {
-                relocs: &mut reloc_sink,
-                traps: &mut trap_sink,
-                offsets: &mut NullOffsetSink,
-            },
-            i.as_u32(),
-            function_body.body,
-        )
-        .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
+        // let mut reloc_sink = RelocSink::new(func_index);
+        // let mut trap_sink = TrapSink::new();
+        // lightbeam::translate_function(
+        //     &mut codegen_session,
+        //     Sinks {
+        //         relocs: &mut reloc_sink,
+        //         traps: &mut trap_sink,
+        //         offsets: &mut NullOffsetSink,
+        //     },
+        //     i.as_u32(),
+        //     function_body.body,
+        // )
+        // .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
 
-        let code_section = codegen_session
-            .into_translated_code_section()
-            .map_err(|e| CompileError::Codegen(format!("Failed to generate output code: {}", e)))?;
+        // let code_section = codegen_session
+        //     .into_translated_code_section()
+        //     .map_err(|e| CompileError::Codegen(format!("Failed to generate output code: {}", e)))?;
 
-        Ok(CompiledFunction {
-            // TODO: try to remove copy here (?)
-            body: code_section.buffer().to_vec(),
-            traps: trap_sink.traps,
-            relocations: reloc_sink.func_relocs,
+        // Ok(CompiledFunction {
+        //     // TODO: try to remove copy here (?)
+        //     body: code_section.buffer().to_vec(),
+        //     traps: trap_sink.traps,
+        //     relocations: reloc_sink.func_relocs,
 
-            // not implemented for lightbeam currently
-            unwind_info: None,
-            stack_maps: Default::default(),
-            stack_slots: Default::default(),
-            value_labels_ranges: Default::default(),
-            address_map: Default::default(),
-            jt_offsets: Default::default(),
-        })
+        //     // not implemented for lightbeam currently
+        //     unwind_info: None,
+        //     stack_maps: Default::default(),
+        //     stack_slots: Default::default(),
+        //     value_labels_ranges: Default::default(),
+        //     address_map: Default::default(),
+        //     jt_offsets: Default::default(),
+        // })
     }
 
     fn host_to_wasm_trampoline(
         &self,
-        _isa: &dyn isa::TargetIsa,
         _ty: &WasmFuncType,
     ) -> Result<CompiledFunction, CompileError> {
         unimplemented!()
@@ -86,10 +88,34 @@ impl Compiler for Lightbeam {
 
     fn wasm_to_host_trampoline(
         &self,
-        _isa: &dyn isa::TargetIsa,
         _ty: &WasmFuncType,
         _host_fn: usize,
     ) -> Result<CompiledFunction, CompileError> {
+        unimplemented!()
+    }
+
+    fn emit_dwarf(
+        &self,
+        _debuginfo_data: &DebugInfoData,
+        _funcs: &CompiledFunctions,
+        _memory_offset: &crate::ModuleMemoryOffset,
+    ) -> Result<Vec<DwarfSection>> {
+        unimplemented!()
+    }
+
+    fn triple(&self) -> &target_lexicon::Triple {
+        unimplemented!()
+    }
+
+    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
+        unimplemented!()
+    }
+
+    fn flags(&self) -> HashMap<String, FlagValue> {
+        unimplemented!()
+    }
+
+    fn isa_flags(&self) -> HashMap<String, FlagValue> {
         unimplemented!()
     }
 }
@@ -229,8 +255,9 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
             .map(DefinedGlobalIndex::as_u32)
     }
 
-    fn global_type(&self, global_index: u32) -> &Self::GlobalType {
-        &self.module.globals[GlobalIndex::from_u32(global_index)].ty
+    fn global_type(&self, _global_index: u32) -> &Self::GlobalType {
+        unimplemented!()
+        // &self.module.globals[GlobalIndex::from_u32(global_index)].ty
     }
 
     fn func_type_index(&self, func_idx: u32) -> u32 {

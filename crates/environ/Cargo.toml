@@ -11,6 +11,7 @@ keywords = ["webassembly", "wasm"]
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0"
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.76.0", features = ["enable-serde"] }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.76.0", features = ["enable-serde"] }
 cranelift-wasm = { path = "../../cranelift/wasm", version = "0.76.0", features = ["enable-serde"] }
@@ -22,6 +23,7 @@ log = { version = "0.4.8", default-features = false }
 more-asserts = "0.2.1"
 cfg-if = "1.0"
 gimli = "0.25.0"
+target-lexicon = "0.12"
 
 [badges]
 maintenance = { status = "actively-developed" }

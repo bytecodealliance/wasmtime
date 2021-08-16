@@ -514,6 +514,7 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg_attr(feature = "old-x86-backend", ignore)]
 fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(false);

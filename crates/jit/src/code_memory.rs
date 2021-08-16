@@ -5,6 +5,7 @@ use crate::object::{
     ObjectUnwindInfo,
 };
 use crate::unwind::UnwindRegistry;
+use crate::Compiler;
 use anyhow::{Context, Result};
 use object::read::{File as ObjectFile, Object, ObjectSection, ObjectSymbol};
 use region;
@@ -12,7 +13,7 @@ use std::collections::BTreeMap;
 use std::mem::ManuallyDrop;
 use std::{cmp, mem};
 use wasmtime_environ::{
-    isa::{unwind::UnwindInfo, TargetIsa},
+    isa::unwind::UnwindInfo,
     wasm::{FuncIndex, SignatureIndex},
     CompiledFunction,
 };
@@ -131,7 +132,7 @@ impl CodeMemory {
     }
 
     /// Make all allocated memory executable.
-    pub fn publish(&mut self, isa: &dyn TargetIsa) {
+    pub fn publish(&mut self, compiler: &Compiler) {
         self.push_current(0)
             .expect("failed to push current memory map");
 
@@ -142,7 +143,7 @@ impl CodeMemory {
         } in &mut self.entries[self.published..]
         {
             // Remove write access to the pages due to the relocation fixups.
-            r.publish(isa)
+            r.publish(compiler)
                 .expect("failed to publish function unwind registry");
 
             if !m.is_empty() {

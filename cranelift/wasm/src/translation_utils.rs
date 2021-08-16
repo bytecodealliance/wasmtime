@@ -165,8 +165,6 @@ pub enum EntityType {
 pub struct Global {
     /// The Wasm type of the value stored in the global.
     pub wasm_ty: crate::WasmType,
-    /// The Cranelift IR type of the value stored in the global.
-    pub ty: ir::Type,
     /// A flag indicating whether the value may change at runtime.
     pub mutability: bool,
     /// The source of the initial value.
@@ -203,8 +201,6 @@ pub enum GlobalInit {
 pub struct Table {
     /// The table elements' Wasm type.
     pub wasm_ty: WasmType,
-    /// The table elements' Cranelift type.
-    pub ty: TableElementType,
     /// The minimum number of elements in the table.
     pub minimum: u32,
     /// The maximum number of elements in the table.

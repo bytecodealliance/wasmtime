@@ -1,18 +1,14 @@
 //! Implements module serialization.
 
-use crate::{Engine, Module, OptLevel};
+use crate::{Engine, Module};
 use anyhow::{anyhow, bail, Context, Result};
 use bincode::Options;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-use std::fmt;
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::{collections::HashMap, fmt::Display};
-use wasmtime_environ::{isa::TargetIsa, settings, Tunables};
-use wasmtime_jit::{
-    CompilationArtifacts, CompilationStrategy, CompiledModule, Compiler, TypeTables,
-};
+use wasmtime_environ::{FlagValue, Tunables};
+use wasmtime_jit::{CompilationArtifacts, CompiledModule, Compiler, TypeTables};
 
 const HEADER: &[u8] = b"\0wasmtime-aot";
 
@@ -111,16 +107,6 @@ impl<'a, 'b, T: Deserialize<'a>> Deserialize<'a> for MyCow<'b, T> {
     }
 }
 
-impl From<settings::OptLevel> for OptLevel {
-    fn from(level: settings::OptLevel) -> Self {
-        match level {
-            settings::OptLevel::Speed => OptLevel::Speed,
-            settings::OptLevel::SpeedAndSize => OptLevel::SpeedAndSize,
-            settings::OptLevel::None => OptLevel::None,
-        }
-    }
-}
-
 /// A small helper struct for serialized module upvars.
 #[derive(Serialize, Deserialize)]
 pub struct SerializedModuleUpvar {
@@ -163,40 +149,11 @@ impl SerializedModuleUpvar {
     }
 }
 
-#[derive(Serialize, Deserialize, Eq, PartialEq)]
-enum FlagValue {
-    Enum(Cow<'static, str>),
-    Num(u8),
-    Bool(bool),
-}
-
-impl From<settings::Value> for FlagValue {
-    fn from(v: settings::Value) -> Self {
-        match v.kind() {
-            settings::SettingKind::Enum => Self::Enum(v.as_enum().unwrap().into()),
-            settings::SettingKind::Num => Self::Num(v.as_num().unwrap()),
-            settings::SettingKind::Bool => Self::Bool(v.as_bool().unwrap()),
-            settings::SettingKind::Preset => unreachable!(),
-        }
-    }
-}
-
-impl Display for FlagValue {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::Enum(v) => v.fmt(f),
-            Self::Num(v) => v.fmt(f),
-            Self::Bool(v) => v.fmt(f),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct SerializedModule<'a> {
     target: String,
     shared_flags: HashMap<String, FlagValue>,
     isa_flags: HashMap<String, FlagValue>,
-    strategy: CompilationStrategy,
     tunables: Tunables,
     features: WasmFeatures,
     artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
@@ -250,21 +207,10 @@ impl<'a> SerializedModule<'a> {
         module_upvars: Vec<SerializedModuleUpvar>,
         types: MyCow<'a, TypeTables>,
     ) -> Self {
-        let isa = compiler.isa();
-
         Self {
-            target: isa.triple().to_string(),
-            shared_flags: isa
-                .flags()
-                .iter()
-                .map(|v| (v.name.to_owned(), v.into()))
-                .collect(),
-            isa_flags: isa
-                .isa_flags()
-                .into_iter()
-                .map(|v| (v.name.to_owned(), v.into()))
-                .collect(),
-            strategy: compiler.strategy(),
+            target: compiler.triple().to_string(),
+            shared_flags: compiler.compiler().flags(),
+            isa_flags: compiler.compiler().isa_flags(),
             tunables: compiler.tunables().clone(),
             features: compiler.features().into(),
             artifacts,
@@ -275,12 +221,10 @@ impl<'a> SerializedModule<'a> {
 
     pub fn into_module(mut self, engine: &Engine) -> Result<Module> {
         let compiler = engine.compiler();
-        let isa = compiler.isa();
 
-        self.check_triple(isa)?;
-        self.check_shared_flags(isa)?;
-        self.check_isa_flags(isa)?;
-        self.check_strategy(compiler)?;
+        self.check_triple(compiler)?;
+        self.check_shared_flags(compiler)?;
+        self.check_isa_flags(compiler)?;
         self.check_tunables(compiler)?;
         self.check_features(compiler)?;
 
@@ -289,9 +233,8 @@ impl<'a> SerializedModule<'a> {
                 .into_iter()
                 .map(|i| i.unwrap_owned())
                 .collect(),
-            engine.compiler().isa(),
-            &*engine.config().profiler,
             engine.compiler(),
+            &*engine.config().profiler,
         )?;
 
         assert!(!modules.is_empty());
@@ -361,17 +304,17 @@ impl<'a> SerializedModule<'a> {
             .context("deserialize compilation artifacts")?)
     }
 
-    fn check_triple(&self, isa: &dyn TargetIsa) -> Result<()> {
+    fn check_triple(&self, compiler: &Compiler) -> Result<()> {
         let triple = target_lexicon::Triple::from_str(&self.target).map_err(|e| anyhow!(e))?;
 
-        if triple.architecture != isa.triple().architecture {
+        if triple.architecture != compiler.triple().architecture {
             bail!(
                 "Module was compiled for architecture '{}'",
                 triple.architecture
             );
         }
 
-        if triple.operating_system != isa.triple().operating_system {
+        if triple.operating_system != compiler.triple().operating_system {
             bail!(
                 "Module was compiled for operating system '{}'",
                 triple.operating_system
@@ -381,13 +324,11 @@ impl<'a> SerializedModule<'a> {
         Ok(())
     }
 
-    fn check_shared_flags(&mut self, isa: &dyn TargetIsa) -> Result<()> {
+    fn check_shared_flags(&mut self, compiler: &Compiler) -> Result<()> {
         let mut shared_flags = std::mem::take(&mut self.shared_flags);
-        for value in isa.flags().iter() {
-            let name = value.name;
-            match shared_flags.remove(name) {
+        for (name, host) in compiler.compiler().flags() {
+            match shared_flags.remove(&name) {
                 Some(v) => {
-                    let host: FlagValue = value.into();
                     if v != host {
                         bail!("Module was compiled with a different '{}' setting: expected '{}' but host has '{}'", name, v, host);
                     }
@@ -406,12 +347,10 @@ impl<'a> SerializedModule<'a> {
         Ok(())
     }
 
-    fn check_isa_flags(&mut self, isa: &dyn TargetIsa) -> Result<()> {
+    fn check_isa_flags(&mut self, compiler: &Compiler) -> Result<()> {
         let mut isa_flags = std::mem::take(&mut self.isa_flags);
-        for value in isa.isa_flags().into_iter() {
-            let name = value.name;
-            let host: FlagValue = value.into();
-            match isa_flags.remove(name) {
+        for (name, host) in compiler.compiler().isa_flags() {
+            match isa_flags.remove(&name) {
                 Some(v) => match (&v, &host) {
                     (FlagValue::Bool(v), FlagValue::Bool(host)) => {
                         // ISA flags represent CPU features; for boolean values, only
@@ -436,25 +375,6 @@ impl<'a> SerializedModule<'a> {
                 "Module was compiled with setting '{}' but it is not present for the host",
                 name
             );
-        }
-
-        Ok(())
-    }
-
-    fn check_strategy(&self, compiler: &Compiler) -> Result<()> {
-        #[allow(unreachable_patterns)]
-        let matches = match (self.strategy, compiler.strategy()) {
-            (CompilationStrategy::Auto, CompilationStrategy::Auto)
-            | (CompilationStrategy::Auto, CompilationStrategy::Cranelift)
-            | (CompilationStrategy::Cranelift, CompilationStrategy::Auto)
-            | (CompilationStrategy::Cranelift, CompilationStrategy::Cranelift) => true,
-            #[cfg(feature = "lightbeam")]
-            (CompilationStrategy::Lightbeam, CompilationStrategy::Lightbeam) => true,
-            _ => false,
-        };
-
-        if !matches {
-            bail!("Module was compiled with strategy '{:?}'", self.strategy);
         }
 
         Ok(())
@@ -610,6 +530,7 @@ impl<'a> SerializedModule<'a> {
 mod test {
     use super::*;
     use crate::Config;
+    use std::borrow::Cow;
 
     #[test]
     fn test_architecture_mismatch() -> Result<()> {

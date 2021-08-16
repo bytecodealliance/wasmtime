@@ -1,6 +1,6 @@
 use std::fmt;
+use wasmtime_environ::wasm;
 use wasmtime_environ::wasm::{EntityType, WasmFuncType};
-use wasmtime_environ::{ir, wasm};
 use wasmtime_jit::TypeTables;
 
 pub(crate) mod matching;
@@ -68,18 +68,6 @@ impl ValType {
         match self {
             ValType::ExternRef | ValType::FuncRef => true,
             _ => false,
-        }
-    }
-
-    pub(crate) fn get_wasmtime_type(&self) -> ir::Type {
-        match self {
-            ValType::I32 => ir::types::I32,
-            ValType::I64 => ir::types::I64,
-            ValType::F32 => ir::types::F32,
-            ValType::F64 => ir::types::F64,
-            ValType::V128 => ir::types::I8X16,
-            ValType::ExternRef => wasmtime_runtime::ref_type(),
-            ValType::FuncRef => wasmtime_runtime::pointer_type(),
         }
     }
 
@@ -334,10 +322,6 @@ impl TableType {
     pub fn new(element: ValType, min: u32, max: Option<u32>) -> TableType {
         TableType {
             ty: wasm::Table {
-                ty: match element {
-                    ValType::FuncRef => wasm::TableElementType::Func,
-                    _ => wasm::TableElementType::Val(element.get_wasmtime_type()),
-                },
                 wasm_ty: element.to_wasm_type(),
                 minimum: min,
                 maximum: max,

@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
-use wasmtime_environ::wasm::TableElementType;
+use wasmtime_environ::wasm::WasmType;
 use wasmtime_environ::{ir, TablePlan};
 
 /// An element going into or coming out of a table.
@@ -20,6 +20,12 @@ pub enum TableElement {
     FuncRef(*mut VMCallerCheckedAnyfunc),
     /// An `exrernref`.
     ExternRef(Option<VMExternRef>),
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum TableElementType {
+    Func,
+    Extern,
 }
 
 // The usage of `*mut VMCallerCheckedAnyfunc` is safe w.r.t. thread safety, this
@@ -38,7 +44,7 @@ impl TableElement {
     unsafe fn from_raw(ty: TableElementType, ptr: usize) -> Self {
         match ty {
             TableElementType::Func => Self::FuncRef(ptr as _),
-            TableElementType::Val(_) => Self::ExternRef(if ptr == 0 {
+            TableElementType::Extern => Self::ExternRef(if ptr == 0 {
                 None
             } else {
                 Some(VMExternRef::from_raw(ptr as *mut u8))
@@ -54,7 +60,7 @@ impl TableElement {
     unsafe fn clone_from_raw(ty: TableElementType, ptr: usize) -> Self {
         match ty {
             TableElementType::Func => Self::FuncRef(ptr as _),
-            TableElementType::Val(_) => Self::ExternRef(if ptr == 0 {
+            TableElementType::Extern => Self::ExternRef(if ptr == 0 {
                 None
             } else {
                 Some(VMExternRef::clone_from_raw(ptr as *mut u8))
@@ -122,6 +128,14 @@ pub enum Table {
     },
 }
 
+fn wasm_to_table_type(ty: WasmType) -> Result<TableElementType> {
+    match ty {
+        WasmType::FuncRef => Ok(TableElementType::Func),
+        WasmType::ExternRef => Ok(TableElementType::Extern),
+        ty => bail!("invalid table element type {:?}", ty),
+    }
+}
+
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
     pub fn new_dynamic(
@@ -130,7 +144,7 @@ impl Table {
     ) -> Result<Self> {
         Self::limit_new(plan, limiter)?;
         let elements = vec![0; plan.table.minimum as usize];
-        let ty = plan.table.ty.clone();
+        let ty = wasm_to_table_type(plan.table.wasm_ty)?;
         let maximum = plan.table.maximum;
 
         Ok(Table::Dynamic {
@@ -148,7 +162,7 @@ impl Table {
     ) -> Result<Self> {
         Self::limit_new(plan, limiter)?;
         let size = plan.table.minimum;
-        let ty = plan.table.ty.clone();
+        let ty = wasm_to_table_type(plan.table.wasm_ty)?;
         let data = match plan.table.maximum {
             Some(max) if (max as usize) < data.len() => &mut data[..max as usize],
             _ => data,
@@ -403,7 +417,7 @@ impl Table {
     fn type_matches(&self, val: &TableElement) -> bool {
         match (&val, self.element_type()) {
             (TableElement::FuncRef(_), TableElementType::Func) => true,
-            (TableElement::ExternRef(_), TableElementType::Val(_)) => true,
+            (TableElement::ExternRef(_), TableElementType::Extern) => true,
             _ => false,
         }
     }
@@ -449,7 +463,7 @@ impl Table {
                 dst_table.elements_mut()[dst_range]
                     .copy_from_slice(&src_table.elements()[src_range]);
             }
-            TableElementType::Val(_) => {
+            TableElementType::Extern => {
                 // We need to clone each `externref`
                 let dst = dst_table.elements_mut();
                 let src = src_table.elements();
@@ -469,7 +483,7 @@ impl Table {
                 // `funcref` are `Copy`, so just do a memmove
                 dst.copy_within(src_range, dst_range.start);
             }
-            TableElementType::Val(_) => {
+            TableElementType::Extern => {
                 // We need to clone each `externref` while handling overlapping
                 // ranges
                 if dst_range.start <= src_range.start {

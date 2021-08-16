@@ -10,8 +10,7 @@ use std::sync::Arc;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::settings::{self, Configurable, SetError};
-use wasmtime_environ::{isa, isa::TargetIsa, Tunables};
+use wasmtime_environ::{CompilerBuilder, Tunables};
 use wasmtime_jit::{CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
@@ -337,12 +336,9 @@ impl Default for InstanceAllocationStrategy {
 ///
 /// This structure exposed a builder-like interface and is primarily consumed by
 /// [`Engine::new()`](crate::Engine::new)
-#[derive(Clone)]
 pub struct Config {
-    pub(crate) flags: settings::Builder,
-    pub(crate) isa_flags: isa::Builder,
+    pub(crate) compiler: Box<dyn CompilerBuilder>,
     pub(crate) tunables: Tunables,
-    pub(crate) strategy: CompilationStrategy,
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     pub(crate) profiler: Arc<dyn ProfilingAgent>,
@@ -362,24 +358,9 @@ impl Config {
     /// Creates a new configuration object with the default configuration
     /// specified.
     pub fn new() -> Self {
-        let mut flags = settings::builder();
-
-        // There are two possible traps for division, and this way
-        // we get the proper one if code traps.
-        flags
-            .enable("avoid_div_traps")
-            .expect("should be valid flag");
-
-        // We don't use probestack as a stack limit mechanism
-        flags
-            .set("enable_probestack", "false")
-            .expect("should be valid flag");
-
         let mut ret = Self {
             tunables: Tunables::default(),
-            flags,
-            isa_flags: cranelift_native::builder().expect("host machine is not a supported target"),
-            strategy: CompilationStrategy::Auto,
+            compiler: Compiler::builder(CompilationStrategy::Auto),
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
@@ -417,9 +398,8 @@ impl Config {
     /// This method will error if the given target triple is not supported.
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         use std::str::FromStr;
-        self.isa_flags = wasmtime_environ::isa::lookup(
-            target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?,
-        )?;
+        self.compiler
+            .target(target_lexicon::Triple::from_str(target).map_err(|e| anyhow::anyhow!(e))?)?;
 
         Ok(self)
     }
@@ -675,7 +655,7 @@ impl Config {
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
 
-        self.flags
+        self.compiler
             .set("enable_safepoints", if enable { "true" } else { "false" })
             .unwrap();
 
@@ -710,7 +690,7 @@ impl Config {
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
         self.features.simd = enable;
         let val = if enable { "true" } else { "false" };
-        self.flags
+        self.compiler
             .set("enable_simd", val)
             .expect("should be valid flag");
         self
@@ -801,7 +781,7 @@ impl Config {
     /// itself to be set, but if they're not set and the strategy is specified
     /// here then an error will be returned.
     pub fn strategy(&mut self, strategy: Strategy) -> Result<&mut Self> {
-        self.strategy = match strategy {
+        let strategy = match strategy {
             Strategy::Auto => CompilationStrategy::Auto,
             Strategy::Cranelift => CompilationStrategy::Cranelift,
             #[cfg(feature = "lightbeam")]
@@ -811,6 +791,7 @@ impl Config {
                 anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
             }
         };
+        self.compiler = Compiler::builder(strategy);
         Ok(self)
     }
 
@@ -837,7 +818,7 @@ impl Config {
     /// The default value for this is `false`
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
-        self.flags
+        self.compiler
             .set("enable_verifier", val)
             .expect("should be valid flag");
         self
@@ -856,7 +837,7 @@ impl Config {
             OptLevel::Speed => "speed",
             OptLevel::SpeedAndSize => "speed_and_size",
         };
-        self.flags
+        self.compiler
             .set("opt_level", val)
             .expect("should be valid flag");
         self
@@ -872,7 +853,7 @@ impl Config {
     /// The default value for this is `false`
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
-        self.flags
+        self.compiler
             .set("enable_nan_canonicalization", val)
             .expect("should be valid flag");
         self
@@ -893,15 +874,7 @@ impl Config {
     ///
     /// This method can fail if the flag's name does not exist.
     pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> Result<&mut Self> {
-        if let Err(err) = self.flags.enable(flag) {
-            match err {
-                SetError::BadName(_) => {
-                    // Try the target-specific flags.
-                    self.isa_flags.enable(flag)?;
-                }
-                _ => bail!(err),
-            }
-        }
+        self.compiler.enable(flag)?;
         Ok(self)
     }
 
@@ -919,15 +892,7 @@ impl Config {
     /// This method can fail if the flag's name does not exist, or the value is not appropriate for
     /// the flag type.
     pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> Result<&mut Self> {
-        if let Err(err) = self.flags.set(name, value) {
-            match err {
-                SetError::BadName(_) => {
-                    // Try the target-specific flags.
-                    self.isa_flags.set(name, value)?;
-                }
-                _ => bail!(err),
-            }
-        }
+        self.compiler.set(name, value)?;
         Ok(self)
     }
 
@@ -1238,25 +1203,11 @@ impl Config {
         self
     }
 
-    pub(crate) fn target_isa(&self) -> Box<dyn TargetIsa> {
-        self.isa_flags
-            .clone()
-            .finish(settings::Flags::new(self.flags.clone()))
-    }
-
-    pub(crate) fn target_isa_with_reference_types(&self) -> Box<dyn TargetIsa> {
-        let mut flags = self.flags.clone();
-        flags.set("enable_safepoints", "true").unwrap();
-        self.isa_flags.clone().finish(settings::Flags::new(flags))
-    }
-
     pub(crate) fn build_compiler(&self, allocator: &dyn InstanceAllocator) -> Compiler {
-        let isa = self.target_isa();
         let mut tunables = self.tunables.clone();
         allocator.adjust_tunables(&mut tunables);
         Compiler::new(
-            isa,
-            self.strategy,
+            &*self.compiler,
             tunables,
             self.features,
             self.parallel_compilation,
@@ -1304,12 +1255,33 @@ impl Default for Config {
     }
 }
 
+impl Clone for Config {
+    fn clone(&self) -> Config {
+        Config {
+            compiler: self.compiler.clone(),
+            tunables: self.tunables.clone(),
+            #[cfg(feature = "cache")]
+            cache_config: self.cache_config.clone(),
+            profiler: self.profiler.clone(),
+            features: self.features.clone(),
+            mem_creator: self.mem_creator.clone(),
+            allocation_strategy: self.allocation_strategy.clone(),
+            max_wasm_stack: self.max_wasm_stack,
+            wasm_backtrace_details_env_used: self.wasm_backtrace_details_env_used,
+            async_support: self.async_support,
+            #[cfg(feature = "async")]
+            async_stack_size: self.async_stack_size,
+            deserialize_check_wasmtime_version: self.deserialize_check_wasmtime_version,
+            parallel_compilation: self.parallel_compilation,
+        }
+    }
+}
+
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Config")
             .field("debug_info", &self.tunables.generate_native_debuginfo)
             .field("parse_wasm_debuginfo", &self.tunables.parse_wasm_debuginfo)
-            .field("strategy", &self.strategy)
             .field("wasm_threads", &self.features.threads)
             .field("wasm_reference_types", &self.features.reference_types)
             .field("wasm_bulk_memory", &self.features.bulk_memory)
@@ -1333,10 +1305,8 @@ impl fmt::Debug for Config {
                 "guard_before_linear_memory",
                 &self.tunables.guard_before_linear_memory,
             )
-            .field(
-                "flags",
-                &settings::Flags::new(self.flags.clone()).to_string(),
-            )
+            .field("parallel_compilation", &self.parallel_compilation)
+            .field("compiler", &self.compiler)
             .finish()
     }
 }

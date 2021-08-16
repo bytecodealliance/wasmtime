@@ -25,8 +25,9 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     // by reference types.
     let reftypes = simd || feature_found(wast, "reference-types");
 
-    // Threads aren't implemented in the old backend, so skip those tests.
-    if threads && cfg!(feature = "old-x86-backend") {
+    // Threads & simd aren't implemented in the old backend, so skip those
+    // tests.
+    if (threads || simd) && cfg!(feature = "old-x86-backend") {
         return Ok(());
     }
 

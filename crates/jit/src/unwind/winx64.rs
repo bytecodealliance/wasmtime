@@ -1,7 +1,8 @@
 //! Module for Windows x64 ABI unwind registry.
 
+use crate::Compiler;
 use anyhow::{bail, Result};
-use wasmtime_environ::isa::{unwind::UnwindInfo, TargetIsa};
+use wasmtime_environ::isa::unwind::UnwindInfo;
 use winapi::um::winnt;
 
 /// Represents a registry of function unwind information for Windows x64 ABI.
@@ -49,7 +50,7 @@ impl UnwindRegistry {
     }
 
     /// Publishes all registered functions.
-    pub fn publish(&mut self, _isa: &dyn TargetIsa) -> Result<()> {
+    pub fn publish(&mut self, _compiler: &Compiler) -> Result<()> {
         if self.published {
             bail!("unwind registry has already been published");
         }

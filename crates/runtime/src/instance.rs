@@ -5,7 +5,7 @@
 use crate::export::Export;
 use crate::externref::VMExternRefActivationsTable;
 use crate::memory::{Memory, RuntimeMemoryCreator};
-use crate::table::{Table, TableElement};
+use crate::table::{Table, TableElement, TableElementType};
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
@@ -25,7 +25,7 @@ use std::{mem, ptr, slice};
 use wasmtime_environ::entity::{packed_option::ReservedValue, EntityRef, EntitySet, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, EntityIndex,
-    FuncIndex, GlobalIndex, MemoryIndex, TableElementType, TableIndex, WasmType,
+    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, WasmType,
 };
 use wasmtime_environ::{ir, HostPtr, Module, VMOffsets};
 
@@ -590,7 +590,7 @@ impl Instance {
                 )?;
             },
 
-            TableElementType::Val(_) => {
+            TableElementType::Extern => {
                 debug_assert!(elements.iter().all(|e| *e == FuncIndex::reserved_value()));
                 table.fill(dst, TableElement::ExternRef(None), len)?;
             }

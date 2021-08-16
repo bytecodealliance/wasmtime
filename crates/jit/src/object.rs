@@ -4,10 +4,9 @@ use crate::Compiler;
 use object::write::Object;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use wasmtime_debug::DwarfSection;
 use wasmtime_environ::isa::unwind::UnwindInfo;
 use wasmtime_environ::wasm::{FuncIndex, SignatureIndex};
-use wasmtime_environ::{CompiledFunctions, ModuleTranslation, TypeTables};
+use wasmtime_environ::{CompiledFunctions, DwarfSection, ModuleTranslation, TypeTables};
 use wasmtime_obj::{ObjectBuilder, ObjectBuilderTarget};
 
 pub use wasmtime_obj::utils;
@@ -52,7 +51,7 @@ pub(crate) fn build_object(
     for i in signatures {
         let func = compiler
             .compiler()
-            .host_to_wasm_trampoline(compiler.isa(), &types.wasm_signatures[i])?;
+            .host_to_wasm_trampoline(&types.wasm_signatures[i])?;
         // Preserve trampoline function unwind info.
         if let Some(info) = &func.unwind_info {
             unwind_info.push(ObjectUnwindInfo::Trampoline(i, info.clone()))
@@ -60,7 +59,7 @@ pub(crate) fn build_object(
         trampolines.push((i, func));
     }
 
-    let target = ObjectBuilderTarget::new(compiler.isa().triple().architecture)?;
+    let target = ObjectBuilderTarget::new(compiler.compiler().triple().architecture)?;
     let mut builder = ObjectBuilder::new(target, &translation.module, funcs);
     builder
         .set_code_alignment(CODE_SECTION_ALIGNMENT)

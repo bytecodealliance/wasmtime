@@ -58,16 +58,14 @@
 
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
-use crate::table::Table;
+use crate::table::{Table, TableElementType};
 use crate::traphandlers::{raise_lib_trap, Trap};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use backtrace::Backtrace;
 use std::mem;
 use std::ptr::{self, NonNull};
 use wasmtime_environ::ir::TrapCode;
-use wasmtime_environ::wasm::{
-    DataIndex, ElemIndex, GlobalIndex, MemoryIndex, TableElementType, TableIndex,
-};
+use wasmtime_environ::wasm::{DataIndex, ElemIndex, GlobalIndex, MemoryIndex, TableIndex};
 
 const TOINT_32: f32 = 1.0 / f32::EPSILON;
 const TOINT_64: f64 = 1.0 / f64::EPSILON;
@@ -214,9 +212,7 @@ pub unsafe extern "C" fn wasmtime_table_grow(
     let table_index = TableIndex::from_u32(table_index);
     let element = match instance.table_element_type(table_index) {
         TableElementType::Func => (init_value as *mut VMCallerCheckedAnyfunc).into(),
-        TableElementType::Val(ty) => {
-            debug_assert_eq!(ty, crate::ref_type());
-
+        TableElementType::Extern => {
             let init_value = if init_value.is_null() {
                 None
             } else {
@@ -249,8 +245,7 @@ pub unsafe extern "C" fn wasmtime_table_fill(
                 let val = val as *mut VMCallerCheckedAnyfunc;
                 table.fill(dst, val.into(), len)
             }
-            TableElementType::Val(ty) => {
-                debug_assert_eq!(ty, crate::ref_type());
+            TableElementType::Extern => {
                 let val = if val.is_null() {
                     None
                 } else {

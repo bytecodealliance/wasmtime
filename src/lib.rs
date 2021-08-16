@@ -304,10 +304,10 @@ impl CommonOptions {
         }
 
         config
+            .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
