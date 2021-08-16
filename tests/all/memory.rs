@@ -288,3 +288,36 @@ unsafe fn assert_faults(ptr: *mut u8) {
         assert_eq!(info.AllocationProtect, PAGE_NOACCESS);
     }
 }
+
+#[test]
+fn massive_64_bit_still_limited() -> Result<()> {
+    // Creating a 64-bit memory which exceeds the limits of the address space
+    // should still send a request to the `ResourceLimiter` to ensure that it
+    // gets at least some chance to see that oom was requested.
+    let mut config = Config::new();
+    config.wasm_memory64(true);
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, MyLimiter { hit: false });
+    store.limiter(|x| x);
+    let ty = MemoryType::new64(1 << 48, None);
+    assert!(Memory::new(&mut store, ty).is_err());
+    assert!(store.data().hit);
+
+    return Ok(());
+
+    struct MyLimiter {
+        hit: bool,
+    }
+
+    impl ResourceLimiter for MyLimiter {
+        fn memory_growing(&mut self, _request: usize, _min: usize, _max: Option<usize>) -> bool {
+            self.hit = true;
+            true
+        }
+
+        fn table_growing(&mut self, _request: u32, _min: u32, _max: Option<u32>) -> bool {
+            unreachable!()
+        }
+    }
+}
