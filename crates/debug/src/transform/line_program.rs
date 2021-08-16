@@ -63,17 +63,20 @@ where
     };
     let comp_dir = root.attr_value(gimli::DW_AT_comp_dir)?;
     let comp_name = root.attr_value(gimli::DW_AT_name)?;
-    let out_comp_dir = clone_attr_string(
-        comp_dir.as_ref().context("comp_dir")?,
-        gimli::DW_FORM_strp,
-        unit,
-        debug_str,
-        debug_str_offsets,
-        debug_line_str,
-        out_strings,
-    )?;
+    let out_comp_dir = match &comp_dir {
+        Some(comp_dir) => Some(clone_attr_string(
+            comp_dir,
+            gimli::DW_FORM_strp,
+            unit,
+            debug_str,
+            debug_str_offsets,
+            debug_line_str,
+            out_strings,
+        )?),
+        None => None,
+    };
     let out_comp_name = clone_attr_string(
-        comp_name.as_ref().context("comp_name")?,
+        comp_name.as_ref().context("missing DW_AT_name attribute")?,
         gimli::DW_FORM_strp,
         unit,
         debug_str,
@@ -102,7 +105,7 @@ where
         let mut out_program = write::LineProgram::new(
             out_encoding,
             line_encoding,
-            out_comp_dir,
+            out_comp_dir.unwrap_or_else(|| write::LineString::String(Vec::new())),
             out_comp_name,
             None,
         );
