@@ -3,14 +3,14 @@ use crate::module::{
     ModuleSignature, ModuleType, ModuleUpvar, TableInitializer, TablePlan, TypeTables,
 };
 use crate::tunables::Tunables;
-use cranelift_codegen::ir::immediates::V128Imm;
+use crate::wasm::{
+    Alias, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
+    GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex,
+    ModuleTypeIndex, SignatureIndex, Table, TableIndex, TypeIndex, WasmFuncType,
+};
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{
-    self, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
-    GlobalIndex, GlobalInit, InstanceIndex, InstanceTypeIndex, MemoryIndex, ModuleIndex,
-    ModuleTypeIndex, SignatureIndex, TableIndex, TypeIndex, WasmError, WasmFuncType, WasmResult,
-};
+use cranelift_wasm::{translate_module, WasmError, WasmResult};
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::mem;

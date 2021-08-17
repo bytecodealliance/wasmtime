@@ -2,12 +2,13 @@
 //! module.
 
 use crate::ir::TrapCode;
+use crate::wasm::{DefinedFuncIndex, WasmFuncType};
 use crate::{
     FunctionAddressMap, FunctionBodyData, ModuleTranslation, StackMap, Tunables, TypeTables,
 };
 use anyhow::Result;
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, WasmError, WasmFuncType};
+use cranelift_wasm::WasmError;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;

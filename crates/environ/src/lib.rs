@@ -49,7 +49,12 @@ pub mod ir {
 
 #[allow(missing_docs)]
 pub mod wasm {
-    pub use cranelift_wasm::*;
+    pub use cranelift_wasm::{
+        Alias, DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
+        DefinedTableIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex,
+        GlobalInit, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex,
+        ModuleTypeIndex, SignatureIndex, Table, TableIndex, TypeIndex, WasmFuncType, WasmType,
+    };
 }
 
 /// WebAssembly page sizes are defined to be 64KiB.

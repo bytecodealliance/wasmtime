@@ -1,8 +1,8 @@
 //! Data structures for representing decoded wasm modules.
 
 use crate::tunables::Tunables;
+use crate::wasm::*;
 use cranelift_entity::{EntityRef, PrimaryMap};
-use cranelift_wasm::*;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -267,7 +267,7 @@ impl TableStyle {
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub struct TablePlan {
     /// The WebAssembly table description.
-    pub table: cranelift_wasm::Table,
+    pub table: Table,
     /// Our chosen implementation style.
     pub style: TableStyle,
 }

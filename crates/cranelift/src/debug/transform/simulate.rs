@@ -5,13 +5,14 @@ use crate::CompiledFunctions;
 use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_entity::EntityRef;
+use cranelift_wasm::get_vmctx_value_label;
 use gimli::write;
 use gimli::{self, LineEncoding};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmparser::Type as WasmType;
-use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
+use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{DebugInfoData, FunctionMetadata, ModuleMemoryOffset, WasmFileInfo};
 
 const PRODUCER_NAME: &str = "wasmtime";
