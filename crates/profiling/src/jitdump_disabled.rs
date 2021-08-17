@@ -1,6 +1,6 @@
 use crate::ProfilingAgent;
 use anyhow::{bail, Result};
-use wasmtime_environ::entity::PrimaryMap;
+use cranelift_entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::VMFunctionBody;

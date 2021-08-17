@@ -3,13 +3,13 @@ use anyhow::{Context, Error, Result};
 use cranelift_codegen::ir::{LabelValueLoc, StackSlots, ValueLabel, ValueLoc};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::ValueLabelsRanges;
+use cranelift_entity::EntityRef;
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
 use wasmtime_environ::ModuleMemoryOffset;
 
@@ -907,7 +907,7 @@ mod tests {
 
     #[test]
     fn test_debug_parse_expressions() {
-        use wasmtime_environ::entity::EntityRef;
+        use cranelift_entity::EntityRef;
 
         let (val1, val3, val20) = (ValueLabel::new(1), ValueLabel::new(3), ValueLabel::new(20));
 
@@ -1177,7 +1177,7 @@ mod tests {
     }
 
     fn create_mock_address_transform() -> AddressTransform {
-        use wasmtime_environ::entity::PrimaryMap;
+        use cranelift_entity::PrimaryMap;
         use wasmtime_environ::WasmFileInfo;
         use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap};
         let mut module_map = PrimaryMap::new();
@@ -1225,8 +1225,8 @@ mod tests {
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
         use cranelift_codegen::ir::{LabelValueLoc, ValueLoc};
         use cranelift_codegen::ValueLocRange;
+        use cranelift_entity::EntityRef;
         use std::collections::HashMap;
-        use wasmtime_environ::entity::EntityRef;
         let mut value_ranges = HashMap::new();
         let value_0 = ValueLabel::new(0);
         let value_1 = ValueLabel::new(1);
@@ -1269,7 +1269,7 @@ mod tests {
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
         use cranelift_codegen::ir::StackSlots;
-        use wasmtime_environ::entity::EntityRef;
+        use cranelift_entity::EntityRef;
         use wasmtime_environ::wasm::DefinedFuncIndex;
         use wasmtime_environ::ModuleMemoryOffset;
 

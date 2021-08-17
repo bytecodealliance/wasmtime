@@ -9,6 +9,7 @@ use crate::vmcontext::{
 };
 use crate::Store;
 use anyhow::Result;
+use cranelift_entity::{EntityRef, EntitySet, PrimaryMap};
 use std::alloc;
 use std::any::Any;
 use std::convert::TryFrom;
@@ -17,7 +18,6 @@ use std::ptr::{self, NonNull};
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_environ::entity::{EntityRef, EntitySet, PrimaryMap};
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, GlobalInit, SignatureIndex, WasmType,
 };

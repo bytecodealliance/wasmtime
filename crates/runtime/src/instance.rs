@@ -12,6 +12,7 @@ use crate::vmcontext::{
     VMInterrupts, VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
 };
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
+use cranelift_entity::{packed_option::ReservedValue, EntityRef, EntitySet, PrimaryMap};
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::Layout;
@@ -22,7 +23,6 @@ use std::hash::Hash;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
-use wasmtime_environ::entity::{packed_option::ReservedValue, EntityRef, EntitySet, PrimaryMap};
 use wasmtime_environ::wasm::{
     DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, EntityIndex,
     FuncIndex, GlobalIndex, MemoryIndex, TableIndex, WasmType,

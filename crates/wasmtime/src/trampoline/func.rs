@@ -2,10 +2,10 @@
 
 use crate::{Engine, FuncType, Trap};
 use anyhow::Result;
+use cranelift_entity::PrimaryMap;
 use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::SignatureIndex;
 use wasmtime_environ::{wasm, Module, ModuleType};
 use wasmtime_jit::CodeMemory;

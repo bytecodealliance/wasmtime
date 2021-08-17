@@ -14,9 +14,10 @@ use self::table::create_table;
 use crate::store::{InstanceId, StoreOpaque};
 use crate::{GlobalType, MemoryType, TableType, Val};
 use anyhow::Result;
+use cranelift_entity::PrimaryMap;
 use std::any::Any;
 use std::sync::Arc;
-use wasmtime_environ::{entity::PrimaryMap, wasm, Module};
+use wasmtime_environ::{wasm, Module};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator,
     VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,

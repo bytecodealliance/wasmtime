@@ -2,7 +2,7 @@ use crate::store::{InstanceId, StoreOpaque};
 use crate::trampoline::create_handle;
 use crate::{GlobalType, Mutability, Val};
 use anyhow::Result;
-use wasmtime_environ::entity::PrimaryMap;
+use cranelift_entity::PrimaryMap;
 use wasmtime_environ::{
     wasm::{self, SignatureIndex},
     Module, ModuleType,

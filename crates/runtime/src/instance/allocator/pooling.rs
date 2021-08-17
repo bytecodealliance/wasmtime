@@ -14,13 +14,13 @@ use super::{
 };
 use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
+use cranelift_entity::{EntitySet, PrimaryMap};
 use rand::Rng;
 use std::convert::TryFrom;
 use std::marker;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
-    entity::{EntitySet, PrimaryMap},
     HostPtr, MemoryStyle, Module, Tunables, VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
 };
 
@@ -1049,8 +1049,8 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
 mod test {
     use super::*;
     use crate::{Imports, VMSharedSignatureIndex};
+    use cranelift_entity::EntityRef;
     use wasmtime_environ::{
-        entity::EntityRef,
         wasm::{Global, GlobalInit, Memory, SignatureIndex, Table, WasmType},
         MemoryPlan, ModuleType, TablePlan, TableStyle,
     };

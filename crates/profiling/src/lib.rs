@@ -1,6 +1,6 @@
+use cranelift_entity::{EntityRef, PrimaryMap};
 use std::error::Error;
 use std::fmt;
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::VMFunctionBody;

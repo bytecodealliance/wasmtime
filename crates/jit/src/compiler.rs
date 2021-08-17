@@ -1,6 +1,7 @@
 //! JIT compilation.
 
 use crate::instantiate::SetupError;
+use cranelift_entity::PrimaryMap;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -8,7 +9,6 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use wasmparser::WasmFeatures;
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{
     Compiler as EnvCompiler, CompilerBuilder, FunctionInfo, ModuleTranslation, Tunables, TypeTables,

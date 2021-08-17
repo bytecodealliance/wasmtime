@@ -48,11 +48,6 @@ pub mod ir {
 }
 
 #[allow(missing_docs)]
-pub mod entity {
-    pub use cranelift_entity::{packed_option, BoxedSlice, EntityRef, EntitySet, PrimaryMap};
-}
-
-#[allow(missing_docs)]
 pub mod wasm {
     pub use cranelift_wasm::*;
 }

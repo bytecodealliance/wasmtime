@@ -2,7 +2,7 @@ use crate::store::{InstanceId, StoreOpaque};
 use crate::trampoline::create_handle;
 use crate::TableType;
 use anyhow::Result;
-use wasmtime_environ::entity::PrimaryMap;
+use cranelift_entity::PrimaryMap;
 use wasmtime_environ::{wasm, Module};
 
 pub fn create_table(store: &mut StoreOpaque<'_>, table: &TableType) -> Result<InstanceId> {

@@ -7,9 +7,9 @@ use crate::{
     Memory, Module, StoreContextMut, Table, Trap, TypedFunc,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
+use cranelift_entity::PrimaryMap;
 use std::mem;
 use std::sync::Arc;
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{
     EntityIndex, EntityType, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex,
     TableIndex,

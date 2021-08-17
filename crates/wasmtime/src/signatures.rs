@@ -1,12 +1,12 @@
 //! Implement a registry of function signatures, for fast indirect call
 //! signature checking.
 
+use cranelift_entity::PrimaryMap;
 use std::{
     collections::{hash_map::Entry, HashMap},
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{SignatureIndex, WasmFuncType};
 use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 

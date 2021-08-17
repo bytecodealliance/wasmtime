@@ -1,13 +1,13 @@
 //! Implements a registry of modules for a store.
 
 use crate::{signatures::SignatureCollection, Module};
+use cranelift_entity::EntityRef;
 use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
 use wasmtime_environ::{
-    entity::EntityRef, wasm::DefinedFuncIndex, FilePos, FunctionAddressMap, StackMap,
-    TrapInformation,
+    wasm::DefinedFuncIndex, FilePos, FunctionAddressMap, StackMap, TrapInformation,
 };
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};

@@ -1,9 +1,9 @@
 //! Linking for JIT-compiled code.
 
+use cranelift_entity::PrimaryMap;
 use object::read::{Object, ObjectSection, Relocation, RelocationTarget};
 use object::{elf, File, ObjectSymbol, RelocationEncoding, RelocationKind};
 use std::ptr::{read_unaligned, write_unaligned};
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::obj::try_parse_func_name;
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;

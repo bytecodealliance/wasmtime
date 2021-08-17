@@ -22,6 +22,7 @@ use cranelift_codegen::isa::{
     unwind::{systemv, UnwindInfo},
     TargetIsa,
 };
+use cranelift_entity::{EntityRef, PrimaryMap};
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{
@@ -34,7 +35,6 @@ use object::{
 };
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::obj;
 use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex, SignatureIndex};
 use wasmtime_environ::Module;

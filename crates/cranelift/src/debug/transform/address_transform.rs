@@ -1,9 +1,9 @@
 use crate::CompiledFunctions;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use gimli::write;
 use more_asserts::assert_le;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{FilePos, FunctionAddressMap, WasmFileInfo};
 
@@ -612,10 +612,10 @@ impl AddressTransform {
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
     use crate::{CompiledFunction, CompiledFunctions};
+    use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
     use std::iter::FromIterator;
     use std::mem;
-    use wasmtime_environ::entity::PrimaryMap;
     use wasmtime_environ::{
         FilePos, FunctionAddressMap, FunctionInfo, InstructionAddressMap, WasmFileInfo,
     };

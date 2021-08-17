@@ -4,13 +4,13 @@ use crate::{
 };
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
+use cranelift_entity::PrimaryMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::ModuleIndex;
 use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 

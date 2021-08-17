@@ -8,11 +8,11 @@ use crate::compiler::{Compilation, Compiler};
 use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
 use anyhow::Result;
+use cranelift_entity::PrimaryMap;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_environ::entity::PrimaryMap;
 use wasmtime_environ::wasm::{
     DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
 };
