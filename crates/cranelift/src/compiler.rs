@@ -24,7 +24,7 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    CompileError, FlagValue, FunctionAddressMap, FunctionBodyData, FunctionInfo,
+    CompileError, FilePos, FlagValue, FunctionAddressMap, FunctionBodyData, FunctionInfo,
     InstructionAddressMap, Module, ModuleMemoryOffset, ModuleTranslation, StackMapInformation,
     TrapInformation, Tunables, TypeTables, VMOffsets,
 };
@@ -65,8 +65,8 @@ impl Compiler {
         let offset = data.original_position();
         let len = data.bytes_remaining();
         assert!((offset + len) <= u32::max_value() as usize);
-        let start_srcloc = ir::SourceLoc::new(offset as u32);
-        let end_srcloc = ir::SourceLoc::new((offset + len) as u32);
+        let start_srcloc = FilePos::new(offset as u32);
+        let end_srcloc = FilePos::new((offset + len) as u32);
 
         let instructions = if let Some(ref mcr) = &context.mach_compile_result {
             // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
@@ -550,14 +550,14 @@ fn collect_address_maps(
 
         // Push an entry for the previous source item.
         ret.push(InstructionAddressMap {
-            srcloc: cur_loc,
+            srcloc: cvt(cur_loc),
             code_offset: cur_offset,
         });
         // And push a "dummy" entry if necessary to cover the span of ranges,
         // if any, between the previous source offset and this one.
         if cur_offset + cur_len != offset {
             ret.push(InstructionAddressMap {
-                srcloc: ir::SourceLoc::default(),
+                srcloc: FilePos::default(),
                 code_offset: cur_offset + cur_len,
             });
         }
@@ -568,17 +568,25 @@ fn collect_address_maps(
         cur_len = len;
     }
     ret.push(InstructionAddressMap {
-        srcloc: cur_loc,
+        srcloc: cvt(cur_loc),
         code_offset: cur_offset,
     });
     if cur_offset + cur_len != code_size {
         ret.push(InstructionAddressMap {
-            srcloc: ir::SourceLoc::default(),
+            srcloc: FilePos::default(),
             code_offset: cur_offset + cur_len,
         });
     }
 
     return ret;
+
+    fn cvt(loc: ir::SourceLoc) -> FilePos {
+        if loc.is_default() {
+            FilePos::default()
+        } else {
+            FilePos::new(loc.bits())
+        }
+    }
 }
 
 /// Implementation of a relocation sink that just saves all the information for later

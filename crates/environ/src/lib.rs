@@ -43,7 +43,7 @@ pub use crate::vmoffsets::*;
 #[allow(missing_docs)]
 pub mod ir {
     pub use cranelift_codegen::binemit::StackMap;
-    pub use cranelift_codegen::ir::{SourceLoc, TrapCode};
+    pub use cranelift_codegen::ir::TrapCode;
 }
 
 #[allow(missing_docs)]

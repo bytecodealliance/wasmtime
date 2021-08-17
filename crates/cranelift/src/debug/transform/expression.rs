@@ -849,7 +849,7 @@ mod tests {
     };
     use crate::CompiledFunction;
     use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
-    use wasmtime_environ::FunctionInfo;
+    use wasmtime_environ::{FilePos, FunctionInfo};
 
     macro_rules! dw_op {
         (DW_OP_WASM_location) => {
@@ -1178,7 +1178,6 @@ mod tests {
 
     fn create_mock_address_transform() -> AddressTransform {
         use wasmtime_environ::entity::PrimaryMap;
-        use wasmtime_environ::ir::SourceLoc;
         use wasmtime_environ::WasmFileInfo;
         use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap};
         let mut module_map = PrimaryMap::new();
@@ -1188,25 +1187,25 @@ mod tests {
                 address_map: FunctionAddressMap {
                     instructions: vec![
                         InstructionAddressMap {
-                            srcloc: SourceLoc::new(code_section_offset + 12),
+                            srcloc: FilePos::new(code_section_offset + 12),
                             code_offset: 5,
                         },
                         InstructionAddressMap {
-                            srcloc: SourceLoc::default(),
+                            srcloc: FilePos::default(),
                             code_offset: 8,
                         },
                         InstructionAddressMap {
-                            srcloc: SourceLoc::new(code_section_offset + 17),
+                            srcloc: FilePos::new(code_section_offset + 17),
                             code_offset: 15,
                         },
                         InstructionAddressMap {
-                            srcloc: SourceLoc::default(),
+                            srcloc: FilePos::default(),
                             code_offset: 23,
                         },
                     ]
                     .into(),
-                    start_srcloc: SourceLoc::new(code_section_offset + 10),
-                    end_srcloc: SourceLoc::new(code_section_offset + 20),
+                    start_srcloc: FilePos::new(code_section_offset + 10),
+                    end_srcloc: FilePos::new(code_section_offset + 20),
                     body_offset: 0,
                     body_len: 30,
                 },

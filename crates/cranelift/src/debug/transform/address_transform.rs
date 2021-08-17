@@ -1,12 +1,11 @@
 use crate::CompiledFunctions;
-use cranelift_codegen::ir::SourceLoc;
 use gimli::write;
 use more_asserts::assert_le;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::{FunctionAddressMap, WasmFileInfo};
+use wasmtime_environ::{FilePos, FunctionAddressMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;
@@ -79,16 +78,21 @@ pub struct AddressTransform {
 }
 
 /// Returns a wasm bytecode offset in the code section from SourceLoc.
-pub fn get_wasm_code_offset(loc: SourceLoc, code_section_offset: u64) -> WasmAddress {
+fn get_wasm_code_offset(loc: FilePos, code_section_offset: u64) -> WasmAddress {
     // Code section size <= 4GB, allow wrapped SourceLoc to recover the overflow.
-    loc.bits().wrapping_sub(code_section_offset as u32) as WasmAddress
+    loc.file_offset()
+        .unwrap()
+        .wrapping_sub(code_section_offset as u32) as WasmAddress
 }
 
 fn build_function_lookup(
     ft: &FunctionAddressMap,
     code_section_offset: u64,
 ) -> (WasmAddress, WasmAddress, FuncLookup) {
-    assert_le!(code_section_offset, ft.start_srcloc.bits() as u64);
+    assert_le!(
+        code_section_offset,
+        ft.start_srcloc.file_offset().unwrap().into()
+    );
     let fn_start = get_wasm_code_offset(ft.start_srcloc, code_section_offset);
     let fn_end = get_wasm_code_offset(ft.end_srcloc, code_section_offset);
     assert_le!(fn_start, fn_end);
@@ -104,7 +108,7 @@ fn build_function_lookup(
     let mut current_range = Vec::new();
     let mut last_gen_inst_empty = false;
     for (i, t) in ft.instructions.iter().enumerate() {
-        if t.srcloc.is_default() {
+        if t.srcloc.file_offset().is_none() {
             continue;
         }
 
@@ -198,7 +202,7 @@ fn build_function_addr_map(
         let ft = &f.info.address_map;
         let mut fn_map = Vec::new();
         for t in ft.instructions.iter() {
-            if t.srcloc.is_default() {
+            if t.srcloc.file_offset().is_none() {
                 continue;
             }
             let offset = get_wasm_code_offset(t.srcloc, code_section_offset);
@@ -612,16 +616,17 @@ mod tests {
     use std::iter::FromIterator;
     use std::mem;
     use wasmtime_environ::entity::PrimaryMap;
-    use wasmtime_environ::ir::SourceLoc;
-    use wasmtime_environ::{FunctionAddressMap, FunctionInfo, InstructionAddressMap, WasmFileInfo};
+    use wasmtime_environ::{
+        FilePos, FunctionAddressMap, FunctionInfo, InstructionAddressMap, WasmFileInfo,
+    };
 
     #[test]
     fn test_get_wasm_code_offset() {
-        let offset = get_wasm_code_offset(SourceLoc::new(3), 1);
+        let offset = get_wasm_code_offset(FilePos::new(3), 1);
         assert_eq!(2, offset);
-        let offset = get_wasm_code_offset(SourceLoc::new(16), 0xF000_0000);
+        let offset = get_wasm_code_offset(FilePos::new(16), 0xF000_0000);
         assert_eq!(0x1000_0010, offset);
-        let offset = get_wasm_code_offset(SourceLoc::new(1), 0x20_8000_0000);
+        let offset = get_wasm_code_offset(FilePos::new(1), 0x20_8000_0000);
         assert_eq!(0x8000_0001, offset);
     }
 
@@ -629,25 +634,25 @@ mod tests {
         FunctionAddressMap {
             instructions: vec![
                 InstructionAddressMap {
-                    srcloc: SourceLoc::new(wasm_offset + 2),
+                    srcloc: FilePos::new(wasm_offset + 2),
                     code_offset: 5,
                 },
                 InstructionAddressMap {
-                    srcloc: SourceLoc::default(),
+                    srcloc: FilePos::default(),
                     code_offset: 8,
                 },
                 InstructionAddressMap {
-                    srcloc: SourceLoc::new(wasm_offset + 7),
+                    srcloc: FilePos::new(wasm_offset + 7),
                     code_offset: 15,
                 },
                 InstructionAddressMap {
-                    srcloc: SourceLoc::default(),
+                    srcloc: FilePos::default(),
                     code_offset: 23,
                 },
             ]
             .into(),
-            start_srcloc: SourceLoc::new(wasm_offset),
-            end_srcloc: SourceLoc::new(wasm_offset + 10),
+            start_srcloc: FilePos::new(wasm_offset),
+            end_srcloc: FilePos::new(wasm_offset + 10),
             body_offset: 0,
             body_len: 30,
         }
@@ -695,11 +700,11 @@ mod tests {
         // append instruction with same srcloc as input.instructions[0]
         let mut list = Vec::from(mem::take(&mut input.instructions));
         list.push(InstructionAddressMap {
-            srcloc: SourceLoc::new(11 + 2),
+            srcloc: FilePos::new(11 + 2),
             code_offset: 23,
         });
         list.push(InstructionAddressMap {
-            srcloc: SourceLoc::default(),
+            srcloc: FilePos::default(),
             code_offset: 26,
         });
         input.instructions = list.into();
