@@ -112,7 +112,7 @@ impl TryFrom<std::io::Error> for types::Errno {
     fn try_from(err: std::io::Error) -> Result<types::Errno, Error> {
         #[cfg(unix)]
         fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
-            use posish::io::Error;
+            use rsix::io::Error;
             match Error::from_io_error(err) {
                 Some(Error::PIPE) => Some(types::Errno::Pipe),
                 Some(Error::PERM) => Some(types::Errno::Perm),
