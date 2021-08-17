@@ -872,11 +872,11 @@ where
     let arg0 = extractlanes(&x, vector_type.lane_type())?;
     let arg1 = extractlanes(&y, vector_type.lane_type())?;
     let mut result = Vec::new();
-    for (i, lhs) in arg0.iter().enumerate() {
+    for (lhs, rhs) in arg0.into_iter().zip(arg1) {
         // The initial Value::int needs to be on a separate line so the
         // compiler can determine concrete types.
-        let mut lhs: V = Value::int(*lhs, vector_type.lane_type())?;
-        let mut rhs: V = Value::int(arg1[i], vector_type.lane_type())?;
+        let mut lhs: V = Value::int(lhs, vector_type.lane_type())?;
+        let mut rhs: V = Value::int(rhs, vector_type.lane_type())?;
         if unsigned {
             lhs = lhs.convert(ValueConversionKind::ToUnsigned)?;
             rhs = rhs.convert(ValueConversionKind::ToUnsigned)?;

@@ -1,20 +1,6 @@
 test interpret
-set enable_simd
 
-function %uaddsat_i8x16(i8x16, i8x16) -> i8x16 {
-block0(v0: i8x16, v1: i8x16):
-    v2 = uadd_sat v0, v1
-    return v2
-}
-; run: %uaddsat_i8x16([150 150 150 150 150 150 150 150 150 150 150 150 150 150 150 150], [150 150 150 150 150 150 150 150 150 150 150 150 150 150 150 150]) == [255 255 255 255 255 255 255 255 255 255 255 255 255 255 255 255]
-
-function %uaddsat_i16x8(i16x8, i16x8) -> i16x8 {
-block0(v0: i16x8, v1: i16x8):
-    v2 = uadd_sat v0, v1
-    return v2
-}
-; run: %uaddsat_i16x8([65000 65000 65000 65000 65000 65000 65000 65000], [1000 1000 1000 1000 1000 1000 1000 1000]) == [65535 65535 65535 65535 65535 65535 65535 65535]
-
+; i32x4 vectors aren't supported in `uadd_sat` outside the interpreter at the moment
 function %uaddsat_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = uadd_sat v0, v1

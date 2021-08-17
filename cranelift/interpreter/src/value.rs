@@ -231,7 +231,7 @@ impl Value for DataValue {
     }
 
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self> {
-        assert!(ty.is_vector());
+        assert!(ty.is_vector() && ty.bytes() == 16);
         Ok(DataValue::V128(v))
     }
 
