@@ -363,6 +363,7 @@ impl CommonOptions {
             .wasm_multi_value(features.multi_value || self.enable_multi_value || self.enable_all)
             .wasm_threads(features.threads || self.enable_threads || self.enable_all)
             .wasm_multi_memory(features.multi_memory || self.enable_multi_memory || self.enable_all)
+            .wasm_memory64(features.memory64 || self.enable_all)
             .wasm_module_linking(
                 features.module_linking || self.enable_module_linking || self.enable_all,
             );
