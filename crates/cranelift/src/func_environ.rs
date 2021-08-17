@@ -617,7 +617,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     }
 
     fn reference_type(&self, ty: WasmType) -> ir::Type {
-        wasmtime_environ::reference_type(ty, self.pointer_type())
+        crate::reference_type(ty, self.pointer_type())
     }
 }
 

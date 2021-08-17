@@ -26,7 +26,6 @@
 mod address_map;
 mod builtin;
 mod compilation;
-mod data_structures;
 mod module;
 mod module_environ;
 pub mod obj;
@@ -36,11 +35,26 @@ mod vmoffsets;
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::compilation::*;
-pub use crate::data_structures::*;
 pub use crate::module::*;
 pub use crate::module_environ::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
+
+#[allow(missing_docs)]
+pub mod ir {
+    pub use cranelift_codegen::binemit::StackMap;
+    pub use cranelift_codegen::ir::{types, SourceLoc, TrapCode, Type};
+}
+
+#[allow(missing_docs)]
+pub mod entity {
+    pub use cranelift_entity::{packed_option, BoxedSlice, EntityRef, EntitySet, PrimaryMap};
+}
+
+#[allow(missing_docs)]
+pub mod wasm {
+    pub use cranelift_wasm::*;
+}
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;
@@ -54,19 +68,6 @@ pub const WASM64_MAX_PAGES: u64 = 1 << 48;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Returns the reference type to use for the provided wasm type.
-pub fn reference_type(wasm_ty: cranelift_wasm::WasmType, pointer_type: ir::Type) -> ir::Type {
-    match wasm_ty {
-        cranelift_wasm::WasmType::FuncRef => pointer_type,
-        cranelift_wasm::WasmType::ExternRef => match pointer_type {
-            ir::types::I32 => ir::types::R32,
-            ir::types::I64 => ir::types::R64,
-            _ => panic!("unsupported pointer type"),
-        },
-        _ => panic!("unsupported Wasm reference type"),
-    }
-}
 
 /// Iterates through all `LibCall` members and all runtime exported functions.
 #[macro_export]

@@ -196,9 +196,7 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
         WasmType::F32 => ir::types::F32,
         WasmType::F64 => ir::types::F64,
         WasmType::V128 => ir::types::I8X16,
-        WasmType::FuncRef | WasmType::ExternRef => {
-            wasmtime_environ::reference_type(ty, isa.pointer_type())
-        }
+        WasmType::FuncRef | WasmType::ExternRef => reference_type(ty, isa.pointer_type()),
         WasmType::ExnRef => unimplemented!(),
     }
 }
@@ -246,4 +244,17 @@ fn func_signature(
         &types.wasm_signatures[module.functions[index]],
     );
     return sig;
+}
+
+/// Returns the reference type to use for the provided wasm type.
+fn reference_type(wasm_ty: cranelift_wasm::WasmType, pointer_type: ir::Type) -> ir::Type {
+    match wasm_ty {
+        cranelift_wasm::WasmType::FuncRef => pointer_type,
+        cranelift_wasm::WasmType::ExternRef => match pointer_type {
+            ir::types::I32 => ir::types::R32,
+            ir::types::I64 => ir::types::R64,
+            _ => panic!("unsupported pointer type"),
+        },
+        _ => panic!("unsupported Wasm reference type"),
+    }
 }
