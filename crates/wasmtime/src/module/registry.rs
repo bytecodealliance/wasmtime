@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use wasmtime_environ::{
-    entity::EntityRef, ir::StackMap, wasm::DefinedFuncIndex, FilePos, FunctionAddressMap,
+    entity::EntityRef, wasm::DefinedFuncIndex, FilePos, FunctionAddressMap, StackMap,
     TrapInformation,
 };
 use wasmtime_jit::CompiledModule;

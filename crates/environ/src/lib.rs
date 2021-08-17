@@ -29,6 +29,7 @@ mod compilation;
 mod module;
 mod module_environ;
 pub mod obj;
+mod stack_map;
 mod tunables;
 mod vmoffsets;
 
@@ -37,12 +38,12 @@ pub use crate::builtin::*;
 pub use crate::compilation::*;
 pub use crate::module::*;
 pub use crate::module_environ::*;
+pub use crate::stack_map::StackMap;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
 
 #[allow(missing_docs)]
 pub mod ir {
-    pub use cranelift_codegen::binemit::StackMap;
     pub use cranelift_codegen::ir::TrapCode;
 }
 

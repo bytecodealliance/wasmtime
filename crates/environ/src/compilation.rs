@@ -1,7 +1,9 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::{FunctionAddressMap, FunctionBodyData, ModuleTranslation, Tunables, TypeTables};
+use crate::{
+    FunctionAddressMap, FunctionBodyData, ModuleTranslation, StackMap, Tunables, TypeTables,
+};
 use anyhow::Result;
 use cranelift_codegen::{binemit, ir};
 use cranelift_entity::PrimaryMap;
@@ -41,7 +43,7 @@ pub struct StackMapInformation {
     pub code_offset: binemit::CodeOffset,
 
     /// The stack map for identifying live GC refs at the GC safepoint.
-    pub stack_map: binemit::StackMap,
+    pub stack_map: StackMap,
 }
 
 /// An error while compiling WebAssembly to machine code.

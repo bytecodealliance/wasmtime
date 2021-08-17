@@ -688,6 +688,13 @@ struct StackMapSink {
 
 impl binemit::StackMapSink for StackMapSink {
     fn add_stack_map(&mut self, code_offset: binemit::CodeOffset, stack_map: binemit::StackMap) {
+        // This is converting from Cranelift's representation of a stack map to
+        // Wasmtime's representation. They happen to align today but that may
+        // not always be true in the future.
+        let stack_map = wasmtime_environ::StackMap::new(
+            stack_map.mapped_words(),
+            stack_map.as_slice().iter().map(|a| a.0),
+        );
         self.infos.push(StackMapInformation {
             code_offset,
             stack_map,
