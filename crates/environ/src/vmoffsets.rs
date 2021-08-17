@@ -21,7 +21,6 @@
 
 use crate::module::Module;
 use crate::BuiltinFunctionIndex;
-use cranelift_codegen::ir;
 use cranelift_wasm::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
     TableIndex, TypeIndex,
@@ -374,12 +373,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn size_of_vmtable_definition(&self) -> u8 {
         2 * self.pointer_size()
-    }
-
-    /// The type of the `current_elements` field.
-    #[inline]
-    pub fn type_of_vmtable_definition_current_elements(&self) -> ir::Type {
-        ir::Type::int(u16::from(self.size_of_vmtable_definition_current_elements()) * 8).unwrap()
     }
 }
 

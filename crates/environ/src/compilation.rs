@@ -1,11 +1,11 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
+use crate::ir::TrapCode;
 use crate::{
     FunctionAddressMap, FunctionBodyData, ModuleTranslation, StackMap, Tunables, TypeTables,
 };
 use anyhow::Result;
-use cranelift_codegen::ir;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, WasmError, WasmFuncType};
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ pub struct TrapInformation {
     /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
     pub code_offset: u32,
     /// Code of the trap.
-    pub trap_code: ir::TrapCode,
+    pub trap_code: TrapCode,
 }
 
 /// The offset within a function of a GC safepoint, and its associated stack

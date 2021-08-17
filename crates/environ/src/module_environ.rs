@@ -4,7 +4,7 @@ use crate::module::{
 };
 use crate::tunables::Tunables;
 use cranelift_codegen::ir::immediates::V128Imm;
-use cranelift_codegen::packed_option::ReservedValue;
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{
     self, DataIndex, DefinedFuncIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global,
