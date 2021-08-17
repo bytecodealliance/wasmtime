@@ -5,7 +5,7 @@ use crate::{
     FunctionAddressMap, FunctionBodyData, ModuleTranslation, StackMap, Tunables, TypeTables,
 };
 use anyhow::Result;
-use cranelift_codegen::{binemit, ir};
+use cranelift_codegen::ir;
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, WasmError, WasmFuncType};
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,7 @@ pub struct FunctionInfo {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TrapInformation {
     /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
-    pub code_offset: binemit::CodeOffset,
+    pub code_offset: u32,
     /// Code of the trap.
     pub trap_code: ir::TrapCode,
 }
@@ -40,7 +40,7 @@ pub struct TrapInformation {
 pub struct StackMapInformation {
     /// The offset of the GC safepoint within the function's native code. It is
     /// relative to the beginning of the function.
-    pub code_offset: binemit::CodeOffset,
+    pub code_offset: u32,
 
     /// The stack map for identifying live GC refs at the GC safepoint.
     pub stack_map: StackMap,
