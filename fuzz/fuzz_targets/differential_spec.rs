@@ -14,9 +14,9 @@ fuzz_target!(|data: (
     wasm_smith::ConfiguredModule<oracles::SingleFunctionModuleConfig>
 )| {
     let (config, mut wasm) = data;
-    wasm.ensure_termination(1000);
+    wasm.module.ensure_termination(1000);
     let tried = TRIED.fetch_add(1, SeqCst);
-    let executed = match oracles::differential_spec_execution(&wasm.to_bytes(), &config) {
+    let executed = match oracles::differential_spec_execution(&wasm.module.to_bytes(), &config) {
         Some(_) => EXECUTED.fetch_add(1, SeqCst),
         None => EXECUTED.load(SeqCst),
     };

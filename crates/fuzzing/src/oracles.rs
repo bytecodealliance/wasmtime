@@ -253,7 +253,7 @@ pub fn differential_execution(
     };
 
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
-    let wasm = module.to_bytes();
+    let wasm = module.module.to_bytes();
     log_wasm(&wasm);
 
     for mut config in configs {
@@ -408,7 +408,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
             ApiCall::ModuleNew { id, wasm } => {
                 log::debug!("creating module: {}", id);
-                let wasm = wasm.to_bytes();
+                let wasm = wasm.module.to_bytes();
                 log_wasm(&wasm);
                 let module = match Module::new(engine.as_ref().unwrap(), &wasm) {
                     Ok(m) => m,

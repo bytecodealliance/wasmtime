@@ -8,6 +8,6 @@ fuzz_target!(|data: (
     wasm_smith::ConfiguredModule<oracles::SingleFunctionModuleConfig>
 )| {
     let (config, mut wasm) = data;
-    wasm.ensure_termination(1000);
-    oracles::differential_wasmi_execution(&wasm.to_bytes()[..], &config);
+    wasm.module.ensure_termination(1000);
+    oracles::differential_wasmi_execution(&wasm.module.to_bytes(), &config);
 });
