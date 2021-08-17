@@ -24,3 +24,11 @@ block0(v0: i32x4):
     return v1
 }
 ; run: %extractlane_0([0 1 2 3]) == 0
+
+
+function %extractlane_1(i64x2) -> i64 {
+block0(v0: i64x2):
+    v1 = extractlane v0, 1
+    return v1
+}
+; run: %extractlane_1([0 4294967297]) == 4294967297
