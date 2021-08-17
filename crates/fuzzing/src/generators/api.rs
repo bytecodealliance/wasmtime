@@ -108,7 +108,7 @@ impl<'a> Arbitrary<'a> for ApiCalls {
                 choices.push(|input, scope| {
                     let id = scope.next_id();
                     let mut wasm = super::GeneratedModule::arbitrary(input)?;
-                    wasm.ensure_termination(1000);
+                    wasm.module.ensure_termination(1000);
                     scope.modules.insert(id);
                     Ok(ModuleNew { id, wasm })
                 });

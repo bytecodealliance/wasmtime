@@ -20,7 +20,7 @@ target-lexicon = "0.12"
 peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
-wasm-smith = "0.6.0"
+wasm-smith = "0.7.0"
 
 [features]
 # Leave a stub feature with no side-effects in place for now: the OSS-Fuzz
