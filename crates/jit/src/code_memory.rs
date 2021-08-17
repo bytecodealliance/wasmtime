@@ -162,7 +162,8 @@ impl CodeMemory {
         &'a mut self,
         obj: &'b [u8],
     ) -> Result<CodeMemoryObjectAllocation<'a, 'b>> {
-        let obj = ObjectFile::parse(obj).with_context(|| "Unable to read obj")?;
+        let obj = ObjectFile::parse(obj)
+            .with_context(|| "failed to parse internal ELF compilation artifact")?;
         let text_section = obj.section_by_name(".text").unwrap();
         let text_section_size = text_section.size() as usize;
 

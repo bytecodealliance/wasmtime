@@ -2,11 +2,11 @@
 //!
 //! Creates ELF image based on `Compilation` information. The ELF contains
 //! functions and trampolines in the ".text" section. It also contains all
-//! relocation records for linking stage. If DWARF sections exist, their
+//! relocation records for the linking stage. If DWARF sections exist, their
 //! content will be written as well.
 //!
 //! The object file has symbols for each function and trampoline, as well as
-//! symbols that refer libcalls.
+//! symbols that refer to libcalls.
 //!
 //! The function symbol names have format "_wasm_function_N", where N is
 //! `FuncIndex`. The defined wasm function symbols refer to a JIT compiled
@@ -57,9 +57,6 @@ fn to_object_architecture(
 }
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
-
-/// Builds ELF image from the module `Compilation`.
-// const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
 
 /// Iterates through all `LibCall` members and all runtime exported functions.
 #[macro_export]
@@ -270,10 +267,10 @@ impl<'a> ObjectBuilder<'a> {
 
     pub fn dwarf_sections(&mut self, sections: &[DwarfSection]) -> Result<()> {
         // If we have DWARF data, write it in the object file.
-        let (debug_bodies, debug_relocs) = sections
+        let (debug_bodies, debug_relocs): (Vec<_>, Vec<_>) = sections
             .iter()
             .map(|s| ((s.name, &s.body), (s.name, &s.relocs)))
-            .unzip::<_, _, Vec<_>, Vec<_>>();
+            .unzip();
         let mut dwarf_sections_ids = HashMap::new();
         for (name, body) in debug_bodies {
             let segment = self.obj.segment_name(StandardSegment::Debug).to_vec();
