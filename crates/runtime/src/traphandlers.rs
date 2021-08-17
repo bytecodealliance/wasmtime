@@ -10,7 +10,7 @@ use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::Once;
-use wasmtime_environ::ir;
+use wasmtime_environ::TrapCode;
 
 pub use self::tls::{tls_eager_initialize, TlsRestore};
 
@@ -131,7 +131,7 @@ pub enum Trap {
     /// A trap raised from a wasm libcall
     Wasm {
         /// Code of the trap.
-        trap_code: ir::TrapCode,
+        trap_code: TrapCode,
         /// Native stack backtrace at the time the trap occurred
         backtrace: Backtrace,
     },
@@ -147,7 +147,7 @@ impl Trap {
     /// Construct a new Wasm trap with the given source location and trap code.
     ///
     /// Internally saves a backtrace when constructed.
-    pub fn wasm(trap_code: ir::TrapCode) -> Self {
+    pub fn wasm(trap_code: TrapCode) -> Self {
         let backtrace = Backtrace::new_unresolved();
         Trap::Wasm {
             trap_code,

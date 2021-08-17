@@ -1,8 +1,6 @@
 use crate::ProfilingAgent;
 use anyhow::{bail, Result};
-use cranelift_entity::PrimaryMap;
-use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::Module;
+use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap};
 use wasmtime_runtime::VMFunctionBody;
 
 /// Interface for driving vtune support

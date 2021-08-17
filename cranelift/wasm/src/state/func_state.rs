@@ -6,8 +6,8 @@
 //! The `FuncTranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use crate::environ::{FuncEnvironment, GlobalVariable, WasmResult};
-use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
+use crate::environ::{FuncEnvironment, GlobalVariable};
+use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmResult};
 use crate::{HashMap, Occupied, Vacant};
 use cranelift_codegen::ir::{self, Block, Inst, Value};
 use std::vec::Vec;

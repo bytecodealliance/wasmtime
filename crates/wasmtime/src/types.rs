@@ -1,6 +1,5 @@
 use std::fmt;
-use wasmtime_environ::wasm;
-use wasmtime_environ::wasm::{EntityType, WasmFuncType};
+use wasmtime_environ::{EntityType, Global, Memory, Table, WasmFuncType, WasmType};
 use wasmtime_jit::TypeTables;
 
 pub(crate) mod matching;
@@ -71,28 +70,28 @@ impl ValType {
         }
     }
 
-    pub(crate) fn to_wasm_type(&self) -> wasm::WasmType {
+    pub(crate) fn to_wasm_type(&self) -> WasmType {
         match self {
-            Self::I32 => wasm::WasmType::I32,
-            Self::I64 => wasm::WasmType::I64,
-            Self::F32 => wasm::WasmType::F32,
-            Self::F64 => wasm::WasmType::F64,
-            Self::V128 => wasm::WasmType::V128,
-            Self::FuncRef => wasm::WasmType::FuncRef,
-            Self::ExternRef => wasm::WasmType::ExternRef,
+            Self::I32 => WasmType::I32,
+            Self::I64 => WasmType::I64,
+            Self::F32 => WasmType::F32,
+            Self::F64 => WasmType::F64,
+            Self::V128 => WasmType::V128,
+            Self::FuncRef => WasmType::FuncRef,
+            Self::ExternRef => WasmType::ExternRef,
         }
     }
 
-    pub(crate) fn from_wasm_type(ty: &wasm::WasmType) -> Self {
+    pub(crate) fn from_wasm_type(ty: &WasmType) -> Self {
         match ty {
-            wasm::WasmType::I32 => Self::I32,
-            wasm::WasmType::I64 => Self::I64,
-            wasm::WasmType::F32 => Self::F32,
-            wasm::WasmType::F64 => Self::F64,
-            wasm::WasmType::V128 => Self::V128,
-            wasm::WasmType::FuncRef => Self::FuncRef,
-            wasm::WasmType::ExternRef => Self::ExternRef,
-            wasm::WasmType::ExnRef => unimplemented!(),
+            WasmType::I32 => Self::I32,
+            WasmType::I64 => Self::I64,
+            WasmType::F32 => Self::F32,
+            WasmType::F64 => Self::F64,
+            WasmType::V128 => Self::V128,
+            WasmType::FuncRef => Self::FuncRef,
+            WasmType::ExternRef => Self::ExternRef,
+            WasmType::ExnRef => unimplemented!(),
         }
     }
 }
@@ -154,10 +153,7 @@ impl ExternType {
         (Instance(InstanceType) instance unwrap_instance)
     }
 
-    pub(crate) fn from_wasmtime(
-        types: &TypeTables,
-        ty: &wasmtime_environ::wasm::EntityType,
-    ) -> ExternType {
+    pub(crate) fn from_wasmtime(types: &TypeTables, ty: &EntityType) -> ExternType {
         match ty {
             EntityType::Function(idx) => {
                 FuncType::from_wasm_func_type(types.wasm_signatures[*idx].clone()).into()
@@ -249,11 +245,11 @@ impl FuncType {
         self.sig.returns.iter().map(ValType::from_wasm_type)
     }
 
-    pub(crate) fn as_wasm_func_type(&self) -> &wasm::WasmFuncType {
+    pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
         &self.sig
     }
 
-    pub(crate) fn from_wasm_func_type(sig: wasm::WasmFuncType) -> FuncType {
+    pub(crate) fn from_wasm_func_type(sig: WasmFuncType) -> FuncType {
         Self { sig }
     }
 }
@@ -293,7 +289,7 @@ impl GlobalType {
 
     /// Returns `None` if the wasmtime global has a type that we can't
     /// represent, but that should only very rarely happen and indicate a bug.
-    pub(crate) fn from_wasmtime_global(global: &wasm::Global) -> GlobalType {
+    pub(crate) fn from_wasmtime_global(global: &Global) -> GlobalType {
         let ty = ValType::from_wasm_type(&global.wasm_ty);
         let mutability = if global.mutability {
             Mutability::Var
@@ -313,7 +309,7 @@ impl GlobalType {
 /// which `call_indirect` can invoke other functions.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct TableType {
-    ty: wasm::Table,
+    ty: Table,
 }
 
 impl TableType {
@@ -321,7 +317,7 @@ impl TableType {
     /// `element` and have the `limits` applied to its length.
     pub fn new(element: ValType, min: u32, max: Option<u32>) -> TableType {
         TableType {
-            ty: wasm::Table {
+            ty: Table {
                 wasm_ty: element.to_wasm_type(),
                 minimum: min,
                 maximum: max,
@@ -347,11 +343,11 @@ impl TableType {
         self.ty.maximum
     }
 
-    pub(crate) fn from_wasmtime_table(table: &wasm::Table) -> TableType {
+    pub(crate) fn from_wasmtime_table(table: &Table) -> TableType {
         TableType { ty: table.clone() }
     }
 
-    pub(crate) fn wasmtime_table(&self) -> &wasm::Table {
+    pub(crate) fn wasmtime_table(&self) -> &Table {
         &self.ty
     }
 }
@@ -364,7 +360,7 @@ impl TableType {
 /// chunks of addressable memory.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct MemoryType {
-    ty: wasm::Memory,
+    ty: Memory,
 }
 
 impl MemoryType {
@@ -375,7 +371,7 @@ impl MemoryType {
     /// WebAssembly pages, which are 64k.
     pub fn new(minimum: u32, maximum: Option<u32>) -> MemoryType {
         MemoryType {
-            ty: wasm::Memory {
+            ty: Memory {
                 memory64: false,
                 shared: false,
                 minimum: minimum.into(),
@@ -394,7 +390,7 @@ impl MemoryType {
     /// WebAssembly which is not standardized yet.
     pub fn new64(minimum: u64, maximum: Option<u64>) -> MemoryType {
         MemoryType {
-            ty: wasm::Memory {
+            ty: Memory {
                 memory64: true,
                 shared: false,
                 minimum,
@@ -430,11 +426,11 @@ impl MemoryType {
         self.ty.maximum
     }
 
-    pub(crate) fn from_wasmtime_memory(memory: &wasm::Memory) -> MemoryType {
+    pub(crate) fn from_wasmtime_memory(memory: &Memory) -> MemoryType {
         MemoryType { ty: memory.clone() }
     }
 
-    pub(crate) fn wasmtime_memory(&self) -> &wasm::Memory {
+    pub(crate) fn wasmtime_memory(&self) -> &Memory {
         &self.ty
     }
 }

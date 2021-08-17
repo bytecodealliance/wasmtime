@@ -2,9 +2,9 @@ use super::address_transform::AddressTransform;
 use super::{DebugInputContext, Reader};
 use anyhow::Error;
 use cranelift_entity::EntityRef;
+use cranelift_wasm_types::DefinedFuncIndex;
 use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit};
 use more_asserts::assert_lt;
-use wasmtime_environ::wasm::DefinedFuncIndex;
 
 pub(crate) enum RangeInfoBuilder {
     Undefined,

@@ -6,7 +6,7 @@ use object::read::{File as ObjectFile, Object, ObjectSection, ObjectSymbol};
 use std::collections::BTreeMap;
 use std::mem::ManuallyDrop;
 use wasmtime_environ::obj::{try_parse_func_name, try_parse_trampoline_name};
-use wasmtime_environ::wasm::{FuncIndex, SignatureIndex};
+use wasmtime_environ::{FuncIndex, SignatureIndex};
 use wasmtime_runtime::{Mmap, VMFunctionBody};
 
 struct CodeMemoryEntry {

@@ -7,114 +7,21 @@
 //! [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
 use crate::state::FuncTranslationState;
-use crate::translation_utils::{
+use crate::{
     DataIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex, InstanceIndex,
     InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex, ModuleTypeIndex, SignatureIndex, Table,
-    TableIndex, Tag, TagIndex, TypeIndex,
+    TableIndex, Tag, TagIndex, TypeIndex, WasmError, WasmFuncType, WasmResult, WasmType,
 };
 use core::convert::From;
-use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_frontend::FunctionBuilder;
-#[cfg(feature = "enable-serde")]
-use serde::{Deserialize, Serialize};
 use std::boxed::Box;
 use std::string::ToString;
 use std::vec::Vec;
-use thiserror::Error;
-use wasmparser::ValidatorResources;
-use wasmparser::{BinaryReaderError, FuncValidator, FunctionBody, Operator, WasmFeatures};
-
-/// WebAssembly value type -- equivalent of `wasmparser`'s Type.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub enum WasmType {
-    /// I32 type
-    I32,
-    /// I64 type
-    I64,
-    /// F32 type
-    F32,
-    /// F64 type
-    F64,
-    /// V128 type
-    V128,
-    /// FuncRef type
-    FuncRef,
-    /// ExternRef type
-    ExternRef,
-    /// ExnRef type
-    ExnRef,
-}
-
-impl TryFrom<wasmparser::Type> for WasmType {
-    type Error = WasmError;
-    fn try_from(ty: wasmparser::Type) -> Result<Self, Self::Error> {
-        use wasmparser::Type::*;
-        match ty {
-            I32 => Ok(WasmType::I32),
-            I64 => Ok(WasmType::I64),
-            F32 => Ok(WasmType::F32),
-            F64 => Ok(WasmType::F64),
-            V128 => Ok(WasmType::V128),
-            FuncRef => Ok(WasmType::FuncRef),
-            ExternRef => Ok(WasmType::ExternRef),
-            ExnRef => Ok(WasmType::ExnRef),
-            EmptyBlockType | Func => Err(WasmError::InvalidWebAssembly {
-                message: "unexpected value type".to_string(),
-                offset: 0,
-            }),
-        }
-    }
-}
-
-impl From<WasmType> for wasmparser::Type {
-    fn from(ty: WasmType) -> wasmparser::Type {
-        match ty {
-            WasmType::I32 => wasmparser::Type::I32,
-            WasmType::I64 => wasmparser::Type::I64,
-            WasmType::F32 => wasmparser::Type::F32,
-            WasmType::F64 => wasmparser::Type::F64,
-            WasmType::V128 => wasmparser::Type::V128,
-            WasmType::FuncRef => wasmparser::Type::FuncRef,
-            WasmType::ExternRef => wasmparser::Type::ExternRef,
-            WasmType::ExnRef => wasmparser::Type::ExnRef,
-        }
-    }
-}
-
-/// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct WasmFuncType {
-    /// Function params types.
-    pub params: Box<[WasmType]>,
-    /// Returns params types.
-    pub returns: Box<[WasmType]>,
-}
-
-impl TryFrom<wasmparser::FuncType> for WasmFuncType {
-    type Error = WasmError;
-    fn try_from(ty: wasmparser::FuncType) -> Result<Self, Self::Error> {
-        Ok(Self {
-            params: ty
-                .params
-                .into_vec()
-                .into_iter()
-                .map(WasmType::try_from)
-                .collect::<Result<_, Self::Error>>()?,
-            returns: ty
-                .returns
-                .into_vec()
-                .into_iter()
-                .map(WasmType::try_from)
-                .collect::<Result<_, Self::Error>>()?,
-        })
-    }
-}
+use wasmparser::{FuncValidator, FunctionBody, Operator, ValidatorResources, WasmFeatures};
 
 /// The value of a WebAssembly global variable.
 #[derive(Clone, Copy)]
@@ -135,64 +42,6 @@ pub enum GlobalVariable {
     /// This is a global variable that needs to be handled by the environment.
     Custom,
 }
-
-/// A WebAssembly translation error.
-///
-/// When a WebAssembly function can't be translated, one of these error codes will be returned
-/// to describe the failure.
-#[derive(Error, Debug)]
-pub enum WasmError {
-    /// The input WebAssembly code is invalid.
-    ///
-    /// This error code is used by a WebAssembly translator when it encounters invalid WebAssembly
-    /// code. This should never happen for validated WebAssembly code.
-    #[error("Invalid input WebAssembly code at offset {offset}: {message}")]
-    InvalidWebAssembly {
-        /// A string describing the validation error.
-        message: std::string::String,
-        /// The bytecode offset where the error occurred.
-        offset: usize,
-    },
-
-    /// A feature used by the WebAssembly code is not supported by the embedding environment.
-    ///
-    /// Embedding environments may have their own limitations and feature restrictions.
-    #[error("Unsupported feature: {0}")]
-    Unsupported(std::string::String),
-
-    /// An implementation limit was exceeded.
-    ///
-    /// Cranelift can compile very large and complicated functions, but the [implementation has
-    /// limits][limits] that cause compilation to fail when they are exceeded.
-    ///
-    /// [limits]: https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/docs/ir.md#implementation-limits
-    #[error("Implementation limit exceeded")]
-    ImplLimitExceeded,
-
-    /// Any user-defined error.
-    #[error("User error: {0}")]
-    User(std::string::String),
-}
-
-/// Return an `Err(WasmError::Unsupported(msg))` where `msg` the string built by calling `format!`
-/// on the arguments to this macro.
-#[macro_export]
-macro_rules! wasm_unsupported {
-    ($($arg:tt)*) => { $crate::environ::WasmError::Unsupported(format!($($arg)*)) }
-}
-
-impl From<BinaryReaderError> for WasmError {
-    /// Convert from a `BinaryReaderError` to a `WasmError`.
-    fn from(e: BinaryReaderError) -> Self {
-        Self::InvalidWebAssembly {
-            message: e.message().into(),
-            offset: e.offset(),
-        }
-    }
-}
-
-/// A convenient alias for a `Result` that uses `WasmError` as the error type.
-pub type WasmResult<T> = Result<T, WasmError>;
 
 /// How to return from functions.
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

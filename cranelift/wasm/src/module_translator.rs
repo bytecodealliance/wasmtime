@@ -1,6 +1,6 @@
 //! Translation skeleton that traverses the whole WebAssembly module and call helper functions
 //! to deal with each part of it.
-use crate::environ::{ModuleEnvironment, WasmResult};
+use crate::environ::ModuleEnvironment;
 use crate::sections_translator::{
     parse_alias_section, parse_data_section, parse_element_section, parse_export_section,
     parse_function_section, parse_global_section, parse_import_section, parse_instance_section,
@@ -8,6 +8,7 @@ use crate::sections_translator::{
     parse_tag_section, parse_type_section,
 };
 use crate::state::ModuleTranslationState;
+use crate::WasmResult;
 use cranelift_codegen::timing;
 use std::prelude::v1::*;
 use wasmparser::{NameSectionReader, Parser, Payload, Validator};

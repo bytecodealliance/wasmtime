@@ -1,0 +1,18 @@
+[package]
+name = "cranelift-wasm-types"
+version = "0.76.0"
+authors = ["The Cranelift Project Developers"]
+description = "WebAssembly type definitions for Cranelift"
+documentation = "https://docs.rs/cranelift-wasm-types"
+repository = "https://github.com/bytecodealliance/wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+edition = "2018"
+
+[dependencies]
+cranelift-entity = { path = "../entity", version = "0.76.0" }
+serde = { version = "1.0.94", features = ["derive"], optional = true }
+thiserror = "1.0.4"
+wasmparser = { version = "0.80", default-features = false }
+
+[features]
+enable-serde = ["serde", "cranelift-entity/enable-serde"]

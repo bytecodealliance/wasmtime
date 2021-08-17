@@ -8,8 +8,7 @@ use anyhow::{bail, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
-use wasmtime_environ::wasm::WasmType;
-use wasmtime_environ::{ir, TablePlan};
+use wasmtime_environ::{TablePlan, TrapCode, WasmType};
 
 /// An element going into or coming out of a table.
 ///
@@ -237,7 +236,7 @@ impl Table {
             .and_then(|s| s.get_mut(..items.len()))
         {
             Some(elements) => elements,
-            None => return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds)),
+            None => return Err(Trap::wasm(TrapCode::TableOutOfBounds)),
         };
 
         for (item, slot) in items.zip(elements) {
@@ -253,10 +252,10 @@ impl Table {
         let start = dst as usize;
         let end = start
             .checked_add(len as usize)
-            .ok_or_else(|| Trap::wasm(ir::TrapCode::TableOutOfBounds))?;
+            .ok_or_else(|| Trap::wasm(TrapCode::TableOutOfBounds))?;
 
         if end > self.size() as usize {
-            return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
+            return Err(Trap::wasm(TrapCode::TableOutOfBounds));
         }
 
         debug_assert!(self.type_matches(&val));
@@ -379,7 +378,7 @@ impl Table {
                 .checked_add(len)
                 .map_or(true, |m| m > (*dst_table).size())
         {
-            return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds));
+            return Err(Trap::wasm(TrapCode::TableOutOfBounds));
         }
 
         debug_assert!(

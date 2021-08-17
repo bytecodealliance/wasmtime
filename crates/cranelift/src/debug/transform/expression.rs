@@ -5,13 +5,13 @@ use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::ValueLabelsRanges;
 use cranelift_entity::EntityRef;
 use cranelift_wasm::get_vmctx_value_label;
+use cranelift_wasm_types::DefinedFuncIndex;
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::ModuleMemoryOffset;
 
 #[derive(Debug)]
@@ -1271,7 +1271,7 @@ mod tests {
         use super::ValueLabelRangesBuilder;
         use cranelift_codegen::ir::StackSlots;
         use cranelift_entity::EntityRef;
-        use wasmtime_environ::wasm::DefinedFuncIndex;
+        use cranelift_wasm_types::DefinedFuncIndex;
         use wasmtime_environ::ModuleMemoryOffset;
 
         let addr_tr = create_mock_address_transform();

@@ -3,8 +3,8 @@ use super::expression::{CompiledExpression, FunctionFrameInfo};
 use crate::CompiledFunctions;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
+use cranelift_wasm_types::DefinedFuncIndex;
 use gimli::write;
-use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::ModuleMemoryOffset;
 
 /// Adds internal Wasm utility types DIEs such as WebAssemblyPtr and

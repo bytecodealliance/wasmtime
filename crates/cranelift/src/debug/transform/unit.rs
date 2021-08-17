@@ -10,10 +10,10 @@ use crate::CompiledFunctions;
 use anyhow::{Context, Error};
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::TargetIsa;
+use cranelift_wasm_types::DefinedFuncIndex;
 use gimli::write;
 use gimli::{AttributeValue, DebuggingInformationEntry, Unit};
 use std::collections::HashSet;
-use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::ModuleMemoryOffset;
 
 struct InheritedAttr<T> {

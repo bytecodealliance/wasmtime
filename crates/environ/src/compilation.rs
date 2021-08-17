@@ -1,14 +1,12 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::ir::TrapCode;
-use crate::wasm::{DefinedFuncIndex, WasmFuncType};
 use crate::{
     FunctionAddressMap, FunctionBodyData, ModuleTranslation, StackMap, Tunables, TypeTables,
 };
 use anyhow::Result;
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::WasmError;
+use cranelift_wasm_types::{DefinedFuncIndex, WasmError, WasmFuncType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;
@@ -33,6 +31,50 @@ pub struct TrapInformation {
     pub code_offset: u32,
     /// Code of the trap.
     pub trap_code: TrapCode,
+}
+
+/// A trap code describing the reason for a trap.
+///
+/// All trap instructions have an explicit trap code.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
+pub enum TrapCode {
+    /// The current stack space was exhausted.
+    StackOverflow,
+
+    /// A `heap_addr` instruction detected an out-of-bounds error.
+    ///
+    /// Note that not all out-of-bounds heap accesses are reported this way;
+    /// some are detected by a segmentation fault on the heap unmapped or
+    /// offset-guard pages.
+    HeapOutOfBounds,
+
+    /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
+    HeapMisaligned,
+
+    /// A `table_addr` instruction detected an out-of-bounds error.
+    TableOutOfBounds,
+
+    /// Indirect call to a null table entry.
+    IndirectCallToNull,
+
+    /// Signature mismatch on indirect call.
+    BadSignature,
+
+    /// An integer arithmetic operation caused an overflow.
+    IntegerOverflow,
+
+    /// An integer division by zero.
+    IntegerDivisionByZero,
+
+    /// Failed float-to-int conversion.
+    BadConversionToInteger,
+
+    /// Code that was supposed to have been unreachable was reached.
+    UnreachableCodeReached,
+
+    /// Execution has potentially run too long and may be interrupted.
+    /// This trap is resumable.
+    Interrupt,
 }
 
 /// The offset within a function of a GC safepoint, and its associated stack

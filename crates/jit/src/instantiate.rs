@@ -8,17 +8,14 @@ use crate::compiler::{Compilation, Compiler};
 use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
 use anyhow::Result;
-use cranelift_entity::PrimaryMap;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_environ::wasm::{
-    DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
-};
 use wasmtime_environ::{
-    CompileError, DebugInfoData, FunctionInfo, InstanceSignature, Module, ModuleEnvironment,
-    ModuleSignature, ModuleTranslation, StackMapInformation,
+    CompileError, DebugInfoData, DefinedFuncIndex, FunctionInfo, InstanceSignature,
+    InstanceTypeIndex, Module, ModuleEnvironment, ModuleSignature, ModuleTranslation,
+    ModuleTypeIndex, PrimaryMap, SignatureIndex, StackMapInformation, WasmFuncType,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};

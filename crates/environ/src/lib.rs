@@ -42,20 +42,11 @@ pub use crate::stack_map::StackMap;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
 
-#[allow(missing_docs)]
-pub mod ir {
-    pub use cranelift_codegen::ir::TrapCode;
-}
-
-#[allow(missing_docs)]
-pub mod wasm {
-    pub use cranelift_wasm::{
-        Alias, DataIndex, DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex,
-        DefinedTableIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex,
-        GlobalInit, InstanceIndex, InstanceTypeIndex, Memory, MemoryIndex, ModuleIndex,
-        ModuleTypeIndex, SignatureIndex, Table, TableIndex, TypeIndex, WasmFuncType, WasmType,
-    };
-}
+// Reexport all of these type-level since they're quite commonly used and it's
+// much easier to refer to everything through one crate rather than importing
+// one of three and making sure you're using the right one.
+pub use cranelift_entity::*;
+pub use cranelift_wasm_types::*;
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;

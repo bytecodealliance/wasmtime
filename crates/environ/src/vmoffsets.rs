@@ -20,11 +20,11 @@
 // }
 
 use crate::module::Module;
-use crate::wasm::{
+use crate::BuiltinFunctionIndex;
+use cranelift_wasm_types::{
     DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
     TableIndex, TypeIndex,
 };
-use crate::BuiltinFunctionIndex;
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
 

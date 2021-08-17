@@ -1,5 +1,4 @@
-use crate::environ::{WasmError, WasmResult};
-use crate::translation_utils::SignatureIndex;
+use crate::{SignatureIndex, WasmError, WasmResult};
 use cranelift_codegen::ir::{types, Type};
 use cranelift_entity::PrimaryMap;
 use std::boxed::Box;

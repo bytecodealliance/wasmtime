@@ -16,12 +16,12 @@ wasmparser = { version = "0.80", default-features = false }
 cranelift-codegen = { path = "../codegen", version = "0.76.0", default-features = false }
 cranelift-entity = { path = "../entity", version = "0.76.0" }
 cranelift-frontend = { path = "../frontend", version = "0.76.0", default-features = false }
+cranelift-wasm-types = { path = "../wasm-types", version = "0.76.0", default-features = false }
 hashbrown = { version = "0.9.1", optional = true }
 itertools = "0.10.0"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 smallvec = "1.6.1"
-thiserror = "1.0.4"
 
 [dev-dependencies]
 wat = "1.0.37"
@@ -33,7 +33,7 @@ cranelift-codegen = { path = "../codegen", version = "0.76.0", default-features 
 default = ["std"]
 std = ["cranelift-codegen/std", "cranelift-frontend/std"]
 core = ["hashbrown", "cranelift-codegen/core", "cranelift-frontend/core"]
-enable-serde = ["serde"]
+enable-serde = ["serde", "cranelift-wasm-types/enable-serde"]
 
 [badges]
 maintenance = { status = "experimental" }

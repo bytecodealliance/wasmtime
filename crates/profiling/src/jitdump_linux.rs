@@ -13,7 +13,6 @@
 
 use crate::ProfilingAgent;
 use anyhow::Result;
-use cranelift_entity::PrimaryMap;
 use object::{Object, ObjectSection};
 use scroll::{IOwrite, SizeWith, NATIVE};
 use serde::{Deserialize, Serialize};
@@ -26,8 +25,7 @@ use std::ptr;
 use std::sync::Mutex;
 use std::{borrow, mem, process};
 use target_lexicon::Architecture;
-use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::Module;
+use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap};
 use wasmtime_runtime::VMFunctionBody;
 
 use object::elf;

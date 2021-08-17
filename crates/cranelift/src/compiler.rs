@@ -26,7 +26,7 @@ use std::sync::Mutex;
 use wasmtime_environ::{
     CompileError, FilePos, FlagValue, FunctionAddressMap, FunctionBodyData, FunctionInfo,
     InstructionAddressMap, Module, ModuleMemoryOffset, ModuleTranslation, StackMapInformation,
-    TrapInformation, Tunables, TypeTables, VMOffsets,
+    TrapCode, TrapInformation, Tunables, TypeTables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
@@ -676,7 +676,22 @@ impl binemit::TrapSink for TrapSink {
     ) {
         self.traps.push(TrapInformation {
             code_offset,
-            trap_code,
+            trap_code: match trap_code {
+                ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
+                ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
+                ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
+                ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
+                ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
+                ir::TrapCode::BadSignature => TrapCode::BadSignature,
+                ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
+                ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
+                ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
+                ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
+                ir::TrapCode::Interrupt => TrapCode::Interrupt,
+
+                // these should never be emitted by wasmtime-cranelift
+                ir::TrapCode::User(_) => unreachable!(),
+            },
         });
     }
 }

@@ -1,10 +1,10 @@
 use crate::CompiledFunctions;
 use cranelift_entity::{EntityRef, PrimaryMap};
+use cranelift_wasm_types::DefinedFuncIndex;
 use gimli::write;
 use more_asserts::assert_le;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
-use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{FilePos, FunctionAddressMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;

@@ -15,7 +15,7 @@ use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
-use wasmtime_environ::wasm::{EntityIndex, FuncIndex};
+use wasmtime_environ::{EntityIndex, FuncIndex};
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
@@ -1135,7 +1135,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
             interrupts.stack_limit.store(usize::max_value(), Relaxed);
             return Err(Trap::new_wasm(
                 None,
-                wasmtime_environ::ir::TrapCode::Interrupt,
+                wasmtime_environ::TrapCode::Interrupt,
                 backtrace::Backtrace::new_unresolved(),
             ));
         }

@@ -64,8 +64,7 @@ use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use backtrace::Backtrace;
 use std::mem;
 use std::ptr::{self, NonNull};
-use wasmtime_environ::ir::TrapCode;
-use wasmtime_environ::wasm::{DataIndex, ElemIndex, GlobalIndex, MemoryIndex, TableIndex};
+use wasmtime_environ::{DataIndex, ElemIndex, GlobalIndex, MemoryIndex, TableIndex, TrapCode};
 
 const TOINT_32: f32 = 1.0 / f32::EPSILON;
 const TOINT_64: f64 = 1.0 / f64::EPSILON;
