@@ -17,8 +17,8 @@ use wasmtime_environ::wasm::{
     DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
 };
 use wasmtime_environ::{
-    CompileError, DebugInfoData, FunctionAddressMap, InstanceSignature, Module, ModuleEnvironment,
-    ModuleSignature, ModuleTranslation, StackMapInformation, TrapInformation,
+    CompileError, DebugInfoData, FunctionInfo, InstanceSignature, Module, ModuleEnvironment,
+    ModuleSignature, ModuleTranslation, StackMapInformation,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
@@ -157,15 +157,6 @@ impl CompilationArtifacts {
 struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
-
-/// Information about a function, such as trap information, address map,
-/// and stack maps.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct FunctionInfo {
-    pub traps: Vec<TrapInformation>,
-    pub address_map: FunctionAddressMap,
-    pub stack_maps: Vec<StackMapInformation>,
-}
 
 /// This is intended to mirror the type tables in `wasmtime_environ`, except that
 /// it doesn't store the native signatures which are no longer needed past compilation.

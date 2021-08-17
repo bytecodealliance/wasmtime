@@ -1,4 +1,4 @@
-use crate::transform::AddressTransform;
+use crate::debug::transform::AddressTransform;
 use gimli::constants;
 use gimli::read;
 use gimli::{Reader, UnitSectionOffset};

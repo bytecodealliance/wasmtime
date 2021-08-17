@@ -1,6 +1,7 @@
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::{add_internal_types, append_vmctx_info, get_function_frame_info};
 use super::AddressTransform;
+use crate::CompiledFunctions;
 use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
@@ -11,9 +12,7 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmparser::Type as WasmType;
 use wasmtime_environ::entity::EntityRef;
 use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
-use wasmtime_environ::{
-    CompiledFunctions, DebugInfoData, FunctionMetadata, ModuleMemoryOffset, WasmFileInfo,
-};
+use wasmtime_environ::{DebugInfoData, FunctionMetadata, ModuleMemoryOffset, WasmFileInfo};
 
 const PRODUCER_NAME: &str = "wasmtime";
 

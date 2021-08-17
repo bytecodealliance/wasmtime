@@ -3668,7 +3668,6 @@ dependencies = [
  "wasmparser",
  "wasmtime",
  "wasmtime-cache",
- "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-fuzzing",
  "wasmtime-jit",
@@ -3692,20 +3691,6 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
- "gimli",
- "object",
- "target-lexicon",
- "wasmparser",
- "wasmtime-debug",
- "wasmtime-environ",
-]
-
-[[package]]
-name = "wasmtime-debug"
-version = "0.29.0"
-dependencies = [
- "anyhow",
- "cranelift-codegen",
  "gimli",
  "more-asserts",
  "object",

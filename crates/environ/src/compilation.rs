@@ -3,61 +3,24 @@
 
 use crate::{FunctionAddressMap, FunctionBodyData, ModuleTranslation, Tunables, TypeTables};
 use anyhow::Result;
-use cranelift_codegen::{binemit, ir, isa::unwind::UnwindInfo};
+use cranelift_codegen::{binemit, ir};
 use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError, WasmFuncType};
+use cranelift_wasm::{DefinedFuncIndex, WasmError, WasmFuncType};
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use thiserror::Error;
 
+/// Information about a function, such as trap information, address map,
+/// and stack maps.
+#[derive(Serialize, Deserialize, Clone, Default)]
 #[allow(missing_docs)]
-pub type CompiledFunctions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
-
-/// Compiled function: machine code body, jump table offsets, and unwind information.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
-#[allow(missing_docs)]
-pub struct CompiledFunction {
-    /// The machine code for this function.
-    pub body: Vec<u8>,
-
-    /// The jump tables offsets (in the body).
-    pub jt_offsets: ir::JumpTableOffsets,
-
-    /// The unwind information.
-    pub unwind_info: Option<UnwindInfo>,
-
-    pub relocations: Vec<Relocation>,
-    pub address_map: FunctionAddressMap,
-    pub value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
-    pub stack_slots: ir::StackSlots,
+pub struct FunctionInfo {
     pub traps: Vec<TrapInformation>,
+    pub address_map: FunctionAddressMap,
     pub stack_maps: Vec<StackMapInformation>,
-}
-
-/// A record of a relocation to perform.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct Relocation {
-    /// The relocation code.
-    pub reloc: binemit::Reloc,
-    /// Relocation target.
-    pub reloc_target: RelocationTarget,
-    /// The offset where to apply the relocation.
-    pub offset: binemit::CodeOffset,
-    /// The addend to add to the relocation value.
-    pub addend: binemit::Addend,
-}
-
-/// Destination function. Can be either user function or some special one, like `memory.grow`.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
-pub enum RelocationTarget {
-    /// The user function index.
-    UserFunc(FuncIndex),
-    /// A compiler-generated libcall.
-    LibCall(ir::LibCall),
-    /// Jump table index.
-    JumpTable(FuncIndex, ir::JumpTable),
 }
 
 /// Information about trap.
@@ -175,7 +138,7 @@ pub trait Compiler: Send + Sync {
         data: FunctionBodyData<'_>,
         tunables: &Tunables,
         types: &TypeTables,
-    ) -> Result<CompiledFunction, CompileError>;
+    ) -> Result<Box<dyn Any + Send>, CompileError>;
 
     /// Collects the results of compilation and emits an in-memory ELF object
     /// which is the serialized representation of all compiler artifacts.
@@ -185,9 +148,9 @@ pub trait Compiler: Send + Sync {
         &self,
         module: &ModuleTranslation,
         types: &TypeTables,
-        funcs: &CompiledFunctions,
+        funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
-    ) -> Result<Vec<u8>>;
+    ) -> Result<(Vec<u8>, PrimaryMap<DefinedFuncIndex, FunctionInfo>)>;
 
     /// Emits a small ELF object file in-memory which has two functions for the
     /// host-to-wasm and wasm-to-host trampolines for the wasm type given.

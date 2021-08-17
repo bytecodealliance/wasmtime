@@ -8,9 +8,10 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use wasmparser::WasmFeatures;
+use wasmtime_environ::entity::PrimaryMap;
+use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::{
-    CompiledFunctions, Compiler as EnvCompiler, CompilerBuilder, ModuleTranslation, Tunables,
-    TypeTables,
+    Compiler as EnvCompiler, CompilerBuilder, FunctionInfo, ModuleTranslation, Tunables, TypeTables,
 };
 
 /// Select which kind of compilation to use.
@@ -72,7 +73,7 @@ fn _assert_compiler_send_sync() {
 #[allow(missing_docs)]
 pub struct Compilation {
     pub obj: Vec<u8>,
-    pub funcs: CompiledFunctions,
+    pub funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 }
 
 impl Compiler {
@@ -111,12 +112,12 @@ impl Compiler {
                     .compile_function(translation, index, func, &self.tunables, types)
             })?
             .into_iter()
-            .collect::<CompiledFunctions>();
+            .collect();
 
-        let obj = self.compiler.emit_obj(
+        let (obj, funcs) = self.compiler.emit_obj(
             &translation,
             types,
-            &funcs,
+            funcs,
             self.tunables.generate_native_debuginfo,
         )?;
 

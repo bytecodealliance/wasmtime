@@ -847,8 +847,9 @@ mod tests {
         compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
         FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
     };
+    use crate::CompiledFunction;
     use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
-    use wasmtime_environ::CompiledFunction;
+    use wasmtime_environ::FunctionInfo;
 
     macro_rules! dw_op {
         (DW_OP_WASM_location) => {
@@ -1183,30 +1184,33 @@ mod tests {
         let mut module_map = PrimaryMap::new();
         let code_section_offset: u32 = 100;
         module_map.push(CompiledFunction {
-            address_map: FunctionAddressMap {
-                instructions: vec![
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::new(code_section_offset + 12),
-                        code_offset: 5,
-                    },
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::default(),
-                        code_offset: 8,
-                    },
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::new(code_section_offset + 17),
-                        code_offset: 15,
-                    },
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::default(),
-                        code_offset: 23,
-                    },
-                ]
-                .into(),
-                start_srcloc: SourceLoc::new(code_section_offset + 10),
-                end_srcloc: SourceLoc::new(code_section_offset + 20),
-                body_offset: 0,
-                body_len: 30,
+            info: FunctionInfo {
+                address_map: FunctionAddressMap {
+                    instructions: vec![
+                        InstructionAddressMap {
+                            srcloc: SourceLoc::new(code_section_offset + 12),
+                            code_offset: 5,
+                        },
+                        InstructionAddressMap {
+                            srcloc: SourceLoc::default(),
+                            code_offset: 8,
+                        },
+                        InstructionAddressMap {
+                            srcloc: SourceLoc::new(code_section_offset + 17),
+                            code_offset: 15,
+                        },
+                        InstructionAddressMap {
+                            srcloc: SourceLoc::default(),
+                            code_offset: 23,
+                        },
+                    ]
+                    .into(),
+                    start_srcloc: SourceLoc::new(code_section_offset + 10),
+                    end_srcloc: SourceLoc::new(code_section_offset + 20),
+                    body_offset: 0,
+                    body_len: 30,
+                },
+                ..Default::default()
             },
             ..Default::default()
         });

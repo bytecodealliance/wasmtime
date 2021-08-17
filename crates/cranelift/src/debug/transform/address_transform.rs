@@ -1,3 +1,4 @@
+use crate::CompiledFunctions;
 use cranelift_codegen::ir::SourceLoc;
 use gimli::write;
 use more_asserts::assert_le;
@@ -5,7 +6,7 @@ use std::collections::BTreeMap;
 use std::iter::FromIterator;
 use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::{CompiledFunctions, FunctionAddressMap, WasmFileInfo};
+use wasmtime_environ::{FunctionAddressMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;
@@ -194,7 +195,7 @@ fn build_function_addr_map(
 ) -> PrimaryMap<DefinedFuncIndex, FunctionMap> {
     let mut map = PrimaryMap::new();
     for (_, f) in funcs {
-        let ft = &f.address_map;
+        let ft = &f.info.address_map;
         let mut fn_map = Vec::new();
         for t in ft.instructions.iter() {
             if t.srcloc.is_default() {
@@ -455,7 +456,7 @@ impl AddressTransform {
 
         let mut func = BTreeMap::new();
         for (i, f) in funcs {
-            let ft = &f.address_map;
+            let ft = &f.info.address_map;
             let (fn_start, fn_end, lookup) = build_function_lookup(ft, code_section_offset);
 
             func.insert(
@@ -606,13 +607,13 @@ impl AddressTransform {
 #[cfg(test)]
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
+    use crate::{CompiledFunction, CompiledFunctions};
     use gimli::write::Address;
     use std::iter::FromIterator;
     use std::mem;
     use wasmtime_environ::entity::PrimaryMap;
     use wasmtime_environ::ir::SourceLoc;
-    use wasmtime_environ::{CompiledFunction, WasmFileInfo};
-    use wasmtime_environ::{CompiledFunctions, FunctionAddressMap, InstructionAddressMap};
+    use wasmtime_environ::{FunctionAddressMap, FunctionInfo, InstructionAddressMap, WasmFileInfo};
 
     #[test]
     fn test_get_wasm_code_offset() {
@@ -654,7 +655,10 @@ mod tests {
 
     fn create_simple_module(address_map: FunctionAddressMap) -> CompiledFunctions {
         PrimaryMap::from_iter(vec![CompiledFunction {
-            address_map,
+            info: FunctionInfo {
+                address_map,
+                ..Default::default()
+            },
             ..Default::default()
         }])
     }
