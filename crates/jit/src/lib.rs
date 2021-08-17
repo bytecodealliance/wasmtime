@@ -25,7 +25,6 @@ mod compiler;
 mod debug;
 mod instantiate;
 mod link;
-mod object;
 mod unwind;
 
 pub use crate::code_memory::CodeMemory;

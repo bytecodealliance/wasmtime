@@ -3684,7 +3684,6 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fuzzing",
  "wasmtime-jit",
- "wasmtime-obj",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
@@ -3706,6 +3705,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-wasm",
  "gimli",
+ "object",
  "target-lexicon",
  "wasmparser",
  "wasmtime-debug",
@@ -3717,6 +3717,7 @@ name = "wasmtime-debug"
 version = "0.29.0"
 dependencies = [
  "anyhow",
+ "cranelift-codegen",
  "gimli",
  "more-asserts",
  "object",
@@ -3813,7 +3814,6 @@ dependencies = [
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-lightbeam",
- "wasmtime-obj",
  "wasmtime-profiling",
  "wasmtime-runtime",
  "winapi",
@@ -3829,17 +3829,6 @@ dependencies = [
  "lightbeam",
  "target-lexicon",
  "wasmparser",
- "wasmtime-environ",
-]
-
-[[package]]
-name = "wasmtime-obj"
-version = "0.29.0"
-dependencies = [
- "anyhow",
- "more-asserts",
- "object",
- "target-lexicon",
  "wasmtime-environ",
 ]
 

@@ -19,6 +19,7 @@ target-lexicon = { version = "0.12.0", default-features = false }
 anyhow = "1.0"
 thiserror = "1.0.4"
 more-asserts = "0.2.1"
+cranelift-codegen = { path = "../../cranelift/codegen", version = "0.76.0" }
 
 [badges]
 maintenance = { status = "actively-developed" }

@@ -1,8 +1,6 @@
 //! JIT compilation.
 
 use crate::instantiate::SetupError;
-use crate::object::{build_object, ObjectUnwindInfo};
-use object::write::Object;
 #[cfg(feature = "parallel-compilation")]
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -10,11 +8,9 @@ use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 use std::mem;
 use wasmparser::WasmFeatures;
-use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::wasm::{DefinedMemoryIndex, MemoryIndex};
 use wasmtime_environ::{
-    CompiledFunctions, Compiler as EnvCompiler, CompilerBuilder, ModuleMemoryOffset,
-    ModuleTranslation, Tunables, TypeTables, VMOffsets,
+    CompiledFunctions, Compiler as EnvCompiler, CompilerBuilder, ModuleTranslation, Tunables,
+    TypeTables,
 };
 
 /// Select which kind of compilation to use.
@@ -75,8 +71,7 @@ fn _assert_compiler_send_sync() {
 
 #[allow(missing_docs)]
 pub struct Compilation {
-    pub obj: Object,
-    pub unwind_info: Vec<ObjectUnwindInfo>,
+    pub obj: Vec<u8>,
     pub funcs: CompiledFunctions,
 }
 
@@ -118,40 +113,14 @@ impl Compiler {
             .into_iter()
             .collect::<CompiledFunctions>();
 
-        let dwarf_sections = if self.tunables.generate_native_debuginfo && !funcs.is_empty() {
-            let ofs = VMOffsets::new(
-                self.compiler
-                    .triple()
-                    .architecture
-                    .pointer_width()
-                    .unwrap()
-                    .bytes(),
-                &translation.module,
-            );
+        let obj = self.compiler.emit_obj(
+            &translation,
+            types,
+            &funcs,
+            self.tunables.generate_native_debuginfo,
+        )?;
 
-            let memory_offset = if ofs.num_imported_memories > 0 {
-                ModuleMemoryOffset::Imported(ofs.vmctx_vmmemory_import(MemoryIndex::new(0)))
-            } else if ofs.num_defined_memories > 0 {
-                ModuleMemoryOffset::Defined(
-                    ofs.vmctx_vmmemory_definition_base(DefinedMemoryIndex::new(0)),
-                )
-            } else {
-                ModuleMemoryOffset::None
-            };
-            self.compiler
-                .emit_dwarf(&translation.debuginfo, &funcs, &memory_offset)
-                .map_err(SetupError::DebugInfo)?
-        } else {
-            vec![]
-        };
-
-        let (obj, unwind_info) = build_object(self, &translation, types, &funcs, dwarf_sections)?;
-
-        Ok(Compilation {
-            obj,
-            unwind_info,
-            funcs,
-        })
+        Ok(Compilation { obj, funcs })
     }
 
     /// Run the given closure in parallel if the compiler is configured to do so.

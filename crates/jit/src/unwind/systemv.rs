@@ -1,20 +1,10 @@
 //! Module for System V ABI unwind registry.
 
-use crate::Compiler;
-use anyhow::{bail, Result};
-use gimli::{
-    write::{Address, EhFrame, EndianVec, FrameTable, Writer},
-    RunTimeEndian,
-};
-use wasmtime_environ::isa::unwind::UnwindInfo;
+use anyhow::Result;
 
-/// Represents a registry of function unwind information for System V ABI.
-pub struct UnwindRegistry {
-    base_address: usize,
-    functions: Vec<gimli::write::FrameDescriptionEntry>,
-    frame_table: Vec<u8>,
+/// Represents a registration of function unwind information for System V ABI.
+pub struct UnwindRegistration {
     registrations: Vec<usize>,
-    published: bool,
 }
 
 extern "C" {
@@ -23,100 +13,34 @@ extern "C" {
     fn __deregister_frame(fde: *const u8);
 }
 
-impl UnwindRegistry {
-    /// Creates a new unwind registry with the given base address.
-    pub fn new(base_address: usize) -> Self {
-        Self {
-            base_address,
-            functions: Vec::new(),
-            frame_table: Vec::new(),
-            registrations: Vec::new(),
-            published: false,
-        }
-    }
-
-    /// Registers a function given the start offset, length, and unwind information.
-    pub fn register(&mut self, func_start: u32, _func_len: u32, info: &UnwindInfo) -> Result<()> {
-        if self.published {
-            bail!("unwind registry has already been published");
-        }
-
-        match info {
-            UnwindInfo::SystemV(info) => {
-                self.functions.push(info.to_fde(Address::Constant(
-                    self.base_address as u64 + func_start as u64,
-                )));
-            }
-            _ => bail!("unsupported unwind information"),
-        }
-
-        Ok(())
-    }
-
-    /// Publishes all registered functions.
-    pub fn publish(&mut self, compiler: &Compiler) -> Result<()> {
-        if self.published {
-            bail!("unwind registry has already been published");
-        }
-
-        if self.functions.is_empty() {
-            self.published = true;
-            return Ok(());
-        }
-
-        self.set_frame_table(compiler)?;
-
-        unsafe {
-            self.register_frames();
-        }
-
-        self.published = true;
-
-        Ok(())
-    }
-
-    fn set_frame_table(&mut self, compiler: &Compiler) -> Result<()> {
-        let mut table = FrameTable::default();
-        let cie_id = table.add_cie(match compiler.compiler().create_systemv_cie() {
-            Some(cie) => cie,
-            None => bail!("ISA does not support System V unwind information"),
-        });
-
-        let functions = std::mem::replace(&mut self.functions, Vec::new());
-
-        for func in functions {
-            table.add_fde(cie_id, func);
-        }
-
-        let mut eh_frame = EhFrame(EndianVec::new(RunTimeEndian::default()));
-        table.write_eh_frame(&mut eh_frame).unwrap();
-
+impl UnwindRegistration {
+    /// Registers precompiled unwinding information with the system.
+    ///
+    /// The `_base_address` field is ignored here (only used on other
+    /// platforms), but the `unwind_info` and `unwind_len` parameters should
+    /// describe an in-memory representation of a `.eh_frame` section. This is
+    /// typically arranged for by the `wasmtime-obj` crate.
+    pub unsafe fn new(
+        _base_address: *mut u8,
+        unwind_info: *mut u8,
+        unwind_len: usize,
+    ) -> Result<UnwindRegistration> {
+        let mut registrations = Vec::new();
         if cfg!(any(
             all(target_os = "linux", target_env = "gnu"),
             target_os = "freebsd"
         )) {
-            // libgcc expects a terminating "empty" length, so write a 0 length at the end of the table.
-            eh_frame.0.write_u32(0).unwrap();
-        }
-
-        self.frame_table = eh_frame.0.into_vec();
-
-        Ok(())
-    }
-
-    unsafe fn register_frames(&mut self) {
-        if cfg!(any(
-            all(target_os = "linux", target_env = "gnu"),
-            target_os = "freebsd"
-        )) {
-            // On gnu (libgcc), `__register_frame` will walk the FDEs until an entry of length 0
-            let ptr = self.frame_table.as_ptr();
-            __register_frame(ptr);
-            self.registrations.push(ptr as usize);
+            // On gnu (libgcc), `__register_frame` will walk the FDEs until an
+            // entry of length 0
+            __register_frame(unwind_info);
+            registrations.push(unwind_info as usize);
         } else {
-            // For libunwind, `__register_frame` takes a pointer to a single FDE
-            let start = self.frame_table.as_ptr();
-            let end = start.add(self.frame_table.len());
+            // For libunwind, `__register_frame` takes a pointer to a single
+            // FDE. Note that we subtract 4 from the length of unwind info since
+            // wasmtime-encode .eh_frame sections always have a trailing 32-bit
+            // zero for the platforms above.
+            let start = unwind_info;
+            let end = start.add(unwind_len - 4);
             let mut current = start;
 
             // Walk all of the entries in the frame table and register them
@@ -126,31 +50,36 @@ impl UnwindRegistry {
                 // Skip over the CIE
                 if current != start {
                     __register_frame(current);
-                    self.registrations.push(current as usize);
+                    registrations.push(current as usize);
                 }
 
-                // Move to the next table entry (+4 because the length itself is not inclusive)
+                // Move to the next table entry (+4 because the length itself is
+                // not inclusive)
                 current = current.add(len + 4);
             }
         }
+
+        Ok(UnwindRegistration { registrations })
+    }
+
+    pub fn section_name() -> &'static str {
+        "_wasmtime_eh_frame"
     }
 }
 
-impl Drop for UnwindRegistry {
+impl Drop for UnwindRegistration {
     fn drop(&mut self) {
-        if self.published {
-            unsafe {
-                // libgcc stores the frame entries as a linked list in decreasing sort order
-                // based on the PC value of the registered entry.
-                //
-                // As we store the registrations in increasing order, it would be O(N^2) to
-                // deregister in that order.
-                //
-                // To ensure that we just pop off the first element in the list upon every
-                // deregistration, walk our list of registrations backwards.
-                for fde in self.registrations.iter().rev() {
-                    __deregister_frame(*fde as *const _);
-                }
+        unsafe {
+            // libgcc stores the frame entries as a linked list in decreasing
+            // sort order based on the PC value of the registered entry.
+            //
+            // As we store the registrations in increasing order, it would be
+            // O(N^2) to deregister in that order.
+            //
+            // To ensure that we just pop off the first element in the list upon
+            // every deregistration, walk our list of registrations backwards.
+            for fde in self.registrations.iter().rev() {
+                __deregister_frame(*fde as *const _);
             }
         }
     }

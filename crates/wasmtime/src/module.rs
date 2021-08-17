@@ -318,8 +318,8 @@ impl Module {
 
         let modules = CompiledModule::from_artifacts_list(
             artifacts,
-            engine.compiler(),
             &*engine.config().profiler,
+            engine.compiler(),
         )?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])

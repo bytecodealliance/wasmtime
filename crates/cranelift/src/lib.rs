@@ -99,6 +99,7 @@ pub use builder::builder;
 mod builder;
 mod compiler;
 mod func_environ;
+mod obj;
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
 /// given calling convention.

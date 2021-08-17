@@ -1,18 +1,8 @@
 #![doc(hidden)]
 
 pub mod ir {
-    pub use cranelift_codegen::binemit::{Reloc, StackMap};
-    pub use cranelift_codegen::ir::{
-        types, AbiParam, ArgumentPurpose, Endianness, JumpTableOffsets, LabelValueLoc, LibCall,
-        Signature, SourceLoc, StackSlots, TrapCode, Type, ValueLabel, ValueLoc,
-    };
-    pub use cranelift_codegen::{ValueLabelsRanges, ValueLocRange};
-}
-
-pub mod isa {
-    pub use cranelift_codegen::isa::{
-        lookup, unwind, Builder, CallConv, RegUnit, TargetFrontendConfig, TargetIsa,
-    };
+    pub use cranelift_codegen::binemit::StackMap;
+    pub use cranelift_codegen::ir::{types, SourceLoc, TrapCode, Type};
 }
 
 pub mod entity {

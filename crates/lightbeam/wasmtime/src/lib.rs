@@ -14,10 +14,9 @@ use wasmtime_environ::wasm::{
     GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmFuncType,
 };
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompileError, CompiledFunction, CompiledFunctions, Compiler,
-    DebugInfoData, DwarfSection, FlagValue, FunctionBodyData, Module, ModuleMemoryOffset,
-    ModuleTranslation, Relocation, RelocationTarget, TrapInformation, Tunables, TypeTables,
-    VMOffsets,
+    BuiltinFunctionIndex, CompileError, CompiledFunction, CompiledFunctions, Compiler, FlagValue,
+    FunctionBodyData, Module, ModuleTranslation, Relocation, RelocationTarget, TrapInformation,
+    Tunables, TypeTables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -79,35 +78,21 @@ impl Compiler for Lightbeam {
         // })
     }
 
-    fn host_to_wasm_trampoline(
+    fn emit_obj(
         &self,
-        _ty: &WasmFuncType,
-    ) -> Result<CompiledFunction, CompileError> {
-        unimplemented!()
-    }
-
-    fn wasm_to_host_trampoline(
-        &self,
-        _ty: &WasmFuncType,
-        _host_fn: usize,
-    ) -> Result<CompiledFunction, CompileError> {
-        unimplemented!()
-    }
-
-    fn emit_dwarf(
-        &self,
-        _debuginfo_data: &DebugInfoData,
+        _module: &ModuleTranslation,
+        _types: &TypeTables,
         _funcs: &CompiledFunctions,
-        _memory_offset: &crate::ModuleMemoryOffset,
-    ) -> Result<Vec<DwarfSection>> {
+        _emit_dwarf: bool,
+    ) -> Result<Vec<u8>> {
+        unimplemented!()
+    }
+
+    fn emit_trampoline_obj(&self, _ty: &WasmFuncType, _host_fn: usize) -> Result<Vec<u8>> {
         unimplemented!()
     }
 
     fn triple(&self) -> &target_lexicon::Triple {
-        unimplemented!()
-    }
-
-    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         unimplemented!()
     }
 

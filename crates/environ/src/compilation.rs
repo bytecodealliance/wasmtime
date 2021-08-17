@@ -177,74 +177,30 @@ pub trait Compiler: Send + Sync {
         types: &TypeTables,
     ) -> Result<CompiledFunction, CompileError>;
 
-    /// Creates a trampoline which the host can use to enter wasm.
+    /// Collects the results of compilation and emits an in-memory ELF object
+    /// which is the serialized representation of all compiler artifacts.
     ///
-    /// The generated trampoline will have the type `VMTrampoline` and will
-    /// call a function of type `ty` specified.
-    fn host_to_wasm_trampoline(&self, ty: &WasmFuncType) -> Result<CompiledFunction, CompileError>;
-
-    /// Creates a trampoline suitable for a wasm module to import.
-    ///
-    /// The trampoline has the type specified by `ty` and will call the function
-    /// `host_fn` which has type `VMTrampoline`. Note that `host_fn` is
-    /// directly embedded into the generated code so this is not suitable for a
-    /// cached value or if `host_fn` does not live as long as the compiled
-    /// function.
-    ///
-    /// This is primarily used for `Func::new` in `wasmtime`.
-    fn wasm_to_host_trampoline(
+    /// Note that ELF is used regardless of the target architecture.
+    fn emit_obj(
         &self,
-        ty: &WasmFuncType,
-        host_fn: usize,
-    ) -> Result<CompiledFunction, CompileError>;
-
-    /// Creates DWARF debugging data for a compilation unit.
-    ///
-    /// This function maps DWARF information found in a wasm module to native
-    /// DWARF debugging information. This is currently implemented by the
-    /// `wasmtime-debug` crate.
-    fn emit_dwarf(
-        &self,
-        debuginfo_data: &crate::DebugInfoData,
+        module: &ModuleTranslation,
+        types: &TypeTables,
         funcs: &CompiledFunctions,
-        memory_offset: &crate::ModuleMemoryOffset,
-    ) -> Result<Vec<DwarfSection>>;
+        emit_dwarf: bool,
+    ) -> Result<Vec<u8>>;
+
+    /// Emits a small ELF object file in-memory which has two functions for the
+    /// host-to-wasm and wasm-to-host trampolines for the wasm type given.
+    fn emit_trampoline_obj(&self, ty: &WasmFuncType, host_fn: usize) -> Result<Vec<u8>>;
 
     /// Returns the target triple that this compiler is compiling for.
     fn triple(&self) -> &target_lexicon::Triple;
-
-    /// If supported by the target creates a SystemV CIE used for dwarf
-    /// unwinding information.
-    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry>;
 
     /// Returns a list of configured settings for this compiler.
     fn flags(&self) -> HashMap<String, FlagValue>;
 
     /// Same as [`Compiler::flags`], but ISA-specific (a cranelift-ism)
     fn isa_flags(&self) -> HashMap<String, FlagValue>;
-}
-
-#[allow(missing_docs)]
-pub struct DwarfSection {
-    pub name: &'static str,
-    pub body: Vec<u8>,
-    pub relocs: Vec<DwarfSectionReloc>,
-}
-
-#[allow(missing_docs)]
-#[derive(Clone)]
-pub struct DwarfSectionReloc {
-    pub target: DwarfSectionRelocTarget,
-    pub offset: u32,
-    pub addend: i32,
-    pub size: u8,
-}
-
-#[allow(missing_docs)]
-#[derive(Clone)]
-pub enum DwarfSectionRelocTarget {
-    Func(usize),
-    Section(&'static str),
 }
 
 /// Value of a configured setting for a [`Compiler`]
