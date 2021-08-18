@@ -11,7 +11,6 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::{CompilerBuilder, Tunables};
-use wasmtime_jit::{CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
     InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator, RuntimeMemoryCreator,
@@ -360,7 +359,7 @@ impl Config {
     pub fn new() -> Self {
         let mut ret = Self {
             tunables: Tunables::default(),
-            compiler: Compiler::builder(CompilationStrategy::Auto),
+            compiler: compiler_builder(Strategy::Auto).unwrap(),
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
@@ -781,17 +780,7 @@ impl Config {
     /// itself to be set, but if they're not set and the strategy is specified
     /// here then an error will be returned.
     pub fn strategy(&mut self, strategy: Strategy) -> Result<&mut Self> {
-        let strategy = match strategy {
-            Strategy::Auto => CompilationStrategy::Auto,
-            Strategy::Cranelift => CompilationStrategy::Cranelift,
-            #[cfg(feature = "lightbeam")]
-            Strategy::Lightbeam => CompilationStrategy::Lightbeam,
-            #[cfg(not(feature = "lightbeam"))]
-            Strategy::Lightbeam => {
-                anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
-            }
-        };
-        self.compiler = Compiler::builder(strategy);
+        self.compiler = compiler_builder(strategy)?;
         Ok(self)
     }
 
@@ -1203,17 +1192,6 @@ impl Config {
         self
     }
 
-    pub(crate) fn build_compiler(&self, allocator: &dyn InstanceAllocator) -> Compiler {
-        let mut tunables = self.tunables.clone();
-        allocator.adjust_tunables(&mut tunables);
-        Compiler::new(
-            &*self.compiler,
-            tunables,
-            self.features,
-            self.parallel_compilation,
-        )
-    }
-
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
@@ -1237,6 +1215,18 @@ impl Config {
                 stack_size,
                 &self.tunables,
             )?)),
+        }
+    }
+}
+
+fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
+    match strategy {
+        Strategy::Auto | Strategy::Cranelift => Ok(wasmtime_cranelift::builder()),
+        #[cfg(feature = "lightbeam")]
+        Strategy::Lightbeam => unimplemented!(),
+        #[cfg(not(feature = "lightbeam"))]
+        Strategy::Lightbeam => {
+            anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
         }
     }
 }

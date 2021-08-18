@@ -5,7 +5,6 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use structopt::StructOpt;
 use wasmtime_environ::{FlagValue, Setting, SettingKind};
-use wasmtime_jit::Compiler;
 
 /// Displays available Cranelift settings for a target.
 #[derive(StructOpt)]
@@ -19,7 +18,7 @@ pub struct SettingsCommand {
 impl SettingsCommand {
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
-        let mut builder = Compiler::builder(wasmtime_jit::CompilationStrategy::Auto);
+        let mut builder = wasmtime_cranelift::builder();
         if let Some(target) = &self.target {
             let target = target_lexicon::Triple::from_str(target).map_err(|e| anyhow!(e))?;
             builder.target(target)?;

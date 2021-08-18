@@ -1,9 +1,9 @@
 use anyhow::{bail, Context as _, Result};
+use std::mem;
 use target_lexicon::Triple;
 use wasmparser::WasmFeatures;
 use wasmtime::Strategy;
-use wasmtime_environ::{ModuleEnvironment, Tunables};
-use wasmtime_jit::Compiler;
+use wasmtime_environ::{ModuleEnvironment, PrimaryMap, Tunables};
 
 /// Creates object file from binary wasm data.
 pub fn compile_to_obj(
@@ -14,16 +14,11 @@ pub fn compile_to_obj(
     opt_level: wasmtime::OptLevel,
     debug_info: bool,
 ) -> Result<Vec<u8>> {
-    let strategy = match strategy {
-        Strategy::Auto => wasmtime_jit::CompilationStrategy::Auto,
-        Strategy::Cranelift => wasmtime_jit::CompilationStrategy::Cranelift,
-        #[cfg(feature = "lightbeam")]
-        Strategy::Lightbeam => wasmtime_jit::CompilationStrategy::Lightbeam,
-        #[cfg(not(feature = "lightbeam"))]
-        Strategy::Lightbeam => bail!("lightbeam support not enabled"),
-        s => bail!("unknown compilation strategy {:?}", s),
-    };
-    let mut builder = Compiler::builder(strategy);
+    match strategy {
+        Strategy::Cranelift | Strategy::Auto => {}
+        other => panic!("unsupported strategy {:?}", other),
+    }
+    let mut builder = wasmtime_cranelift::builder();
     if let Some(target) = target {
         builder.target(target.clone())?;
     }
@@ -50,12 +45,21 @@ pub fn compile_to_obj(
     tunables.generate_native_debuginfo = debug_info;
     tunables.parse_wasm_debuginfo = debug_info;
 
-    let compiler = Compiler::new(&*builder, tunables.clone(), features.clone(), true);
+    let compiler = builder.build();
     let environ = ModuleEnvironment::new(&tunables, &features);
     let (_main_module, mut translation, types) = environ
         .translate(wasm)
         .context("failed to translate module")?;
     assert_eq!(translation.len(), 1);
-    let compilation = compiler.compile(&mut translation[0], &types)?;
-    Ok(compilation.obj)
+    let mut funcs = PrimaryMap::default();
+    for (index, func) in mem::take(&mut translation[0].function_body_inputs) {
+        funcs.push(compiler.compile_function(&translation[0], index, func, &tunables, &types)?);
+    }
+    let (obj, _) = compiler.emit_obj(
+        &translation[0],
+        &types,
+        funcs,
+        tunables.generate_native_debuginfo,
+    )?;
+    Ok(obj)
 }

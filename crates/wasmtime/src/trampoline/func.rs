@@ -77,7 +77,6 @@ pub fn create_function(
 ) -> Result<(InstanceHandle, VMTrampoline)> {
     let obj = engine
         .compiler()
-        .compiler()
         .emit_trampoline_obj(ft.as_wasm_func_type(), stub_fn as usize)?;
 
     let mut code_memory = CodeMemory::new();
