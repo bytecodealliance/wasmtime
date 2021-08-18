@@ -9,11 +9,7 @@ use std::mem;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::Validator;
-#[cfg(feature = "cache")]
-use wasmtime_cache::ModuleCacheEntry;
-use wasmtime_environ::{
-    CompileError, ModuleEnvironment, ModuleIndex, ModuleTranslation, PrimaryMap,
-};
+use wasmtime_environ::{ModuleEnvironment, ModuleIndex, PrimaryMap};
 use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 
 mod registry;
@@ -179,6 +175,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -190,6 +188,8 @@ impl Module {
     /// data. The provided `name` will be used in traps/backtrace details.
     ///
     /// See [`Module::new`] for other details.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new_with_name(engine: &Engine, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Self::new(engine, bytes.as_ref())?;
         Arc::get_mut(&mut Arc::get_mut(&mut module.inner).unwrap().module)
@@ -228,6 +228,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         match Self::new(
             engine,
@@ -279,6 +281,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         // Check to see that the config's target matches the host
         let target = engine.compiler().triple();
@@ -295,7 +299,7 @@ impl Module {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
-                let (main_module, artifacts, types) = ModuleCacheEntry::new(
+                let (main_module, artifacts, types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
                 )
@@ -331,6 +335,7 @@ impl Module {
     /// * Type information about all the modules returned. All returned modules
     ///   have local type information with indices that refer to these returned
     ///   tables.
+    #[cfg(compiler)]
     pub(crate) fn build_artifacts(
         engine: &Engine,
         wasm: &[u8],
@@ -572,6 +577,8 @@ impl Module {
     ///
     /// Use `Module::new` or `Module::from_binary` to create the module
     /// from the bytes.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
         SerializedModule::new(self).to_bytes()
     }
@@ -874,10 +881,10 @@ fn _assert_send_sync() {
 /// The hash computed for this structure is used to key the global wasmtime
 /// cache and dictates whether artifacts are reused. Consequently the contents
 /// of this hash dictate when artifacts are or aren't re-used.
-#[cfg(feature = "cache")]
+#[cfg(all(feature = "cache", compiler))]
 struct HashedEngineCompileEnv<'a>(&'a Engine);
 
-#[cfg(feature = "cache")]
+#[cfg(all(feature = "cache", compiler))]
 impl std::hash::Hash for HashedEngineCompileEnv<'_> {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
         use std::collections::BTreeMap;

@@ -300,6 +300,8 @@ impl Func {
     ///
     /// For more information about `Send + Sync + 'static` requirements on the
     /// `func`, see [`Func::wrap`](#why-send--sync--static).
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -1883,6 +1885,7 @@ pub(crate) struct HostFunc {
 
 impl HostFunc {
     /// Analog of [`Func::new`]
+    #[cfg(compiler)]
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,

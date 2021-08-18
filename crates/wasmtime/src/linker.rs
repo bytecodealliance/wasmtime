@@ -289,6 +289,8 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn func_new(
         &mut self,
         module: &str,
@@ -587,6 +589,8 @@ impl<T> Linker<T> {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn module(
         &mut self,
         mut store: impl AsContextMut<Data = T>,

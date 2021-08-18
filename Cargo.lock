@@ -3785,7 +3785,6 @@ dependencies = [
  "thiserror",
  "wasmparser",
  "wasmtime-environ",
- "wasmtime-lightbeam",
  "wasmtime-profiling",
  "wasmtime-runtime",
  "winapi",

@@ -37,6 +37,7 @@ pub struct Engine {
 
 struct EngineInner {
     config: Config,
+    #[cfg(compiler)]
     compiler: Box<dyn wasmtime_environ::Compiler>,
     allocator: Box<dyn InstanceAllocator>,
     signatures: SignatureRegistry,
@@ -59,6 +60,7 @@ impl Engine {
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
+                #[cfg(compiler)]
                 compiler: config.compiler.build(),
                 config,
                 allocator,
@@ -94,6 +96,7 @@ impl Engine {
         &self.inner.config
     }
 
+    #[cfg(compiler)]
     pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
         &*self.inner.compiler
     }
@@ -138,6 +141,8 @@ impl Engine {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;

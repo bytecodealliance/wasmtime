@@ -131,6 +131,7 @@ jobs:
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features cache
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features async
     - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features uffd
+    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features cranelift
 
     # Check some feature combinations of the `wasmtime-c-api` crate
     - run: cargo check --manifest-path crates/c-api/Cargo.toml --no-default-features

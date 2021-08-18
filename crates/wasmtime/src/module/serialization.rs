@@ -162,6 +162,7 @@ pub struct SerializedModule<'a> {
 }
 
 impl<'a> SerializedModule<'a> {
+    #[cfg(compiler)]
     pub fn new(module: &'a Module) -> Self {
         let artifacts = module
             .inner
@@ -187,6 +188,7 @@ impl<'a> SerializedModule<'a> {
         )
     }
 
+    #[cfg(compiler)]
     pub fn from_artifacts(
         engine: &Engine,
         artifacts: &'a Vec<CompilationArtifacts>,
@@ -200,6 +202,7 @@ impl<'a> SerializedModule<'a> {
         )
     }
 
+    #[cfg(compiler)]
     fn with_data(
         engine: &Engine,
         artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
@@ -219,11 +222,26 @@ impl<'a> SerializedModule<'a> {
     }
 
     pub fn into_module(mut self, engine: &Engine) -> Result<Module> {
-        let compiler = engine.compiler();
+        // Verify that the module we're loading matches the triple that `engine`
+        // is configured for. If compilation is disabled within engine then the
+        // assumed triple is the host itself.
+        #[cfg(compiler)]
+        let engine_triple = engine.compiler().triple();
+        #[cfg(not(compiler))]
+        let engine_triple = &target_lexicon::Triple::host();
+        self.check_triple(engine_triple)?;
 
-        self.check_triple(compiler)?;
-        self.check_shared_flags(compiler)?;
-        self.check_isa_flags(compiler)?;
+        // FIXME: Similar to `Module::from_binary` it should likely be validated
+        // here that when `cfg(not(compiler))` is true the isa/shared flags
+        // enabled for this precompiled module are compatible with the host
+        // itself, which `engine` is assumed to be running code for.
+        #[cfg(compiler)]
+        {
+            let compiler = engine.compiler();
+            self.check_shared_flags(compiler)?;
+            self.check_isa_flags(compiler)?;
+        }
+
         self.check_tunables(&engine.config().tunables)?;
         self.check_features(&engine.config().features)?;
 
@@ -298,17 +316,17 @@ impl<'a> SerializedModule<'a> {
             .context("deserialize compilation artifacts")?)
     }
 
-    fn check_triple(&self, compiler: &dyn Compiler) -> Result<()> {
+    fn check_triple(&self, other: &target_lexicon::Triple) -> Result<()> {
         let triple = target_lexicon::Triple::from_str(&self.target).map_err(|e| anyhow!(e))?;
 
-        if triple.architecture != compiler.triple().architecture {
+        if triple.architecture != other.architecture {
             bail!(
                 "Module was compiled for architecture '{}'",
                 triple.architecture
             );
         }
 
-        if triple.operating_system != compiler.triple().operating_system {
+        if triple.operating_system != other.operating_system {
             bail!(
                 "Module was compiled for operating system '{}'",
                 triple.operating_system
@@ -400,7 +418,7 @@ impl<'a> SerializedModule<'a> {
         );
     }
 
-    fn check_tunables(&self, other: &Tunables) -> Result<()> {
+    fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
             static_memory_bound,
             static_memory_offset_guard_size,
@@ -454,7 +472,7 @@ impl<'a> SerializedModule<'a> {
         Ok(())
     }
 
-    fn check_features(&self, other: &wasmparser::WasmFeatures) -> Result<()> {
+    fn check_features(&mut self, other: &wasmparser::WasmFeatures) -> Result<()> {
         let WasmFeatures {
             reference_types,
             multi_value,
