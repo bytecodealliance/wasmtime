@@ -25,7 +25,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "peepmatic-souper",
     // cranelift
     "cranelift-entity",
-    "cranelift-wasm-types",
+    "wasmtime-types",
     "cranelift-bforest",
     "cranelift-codegen-shared",
     "cranelift-codegen-meta",
