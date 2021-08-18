@@ -14,15 +14,6 @@ pub enum TrapCode {
     /// The current stack space was exhausted.
     StackOverflow,
 
-    /// A load was performed to an unmapped address
-    OutOfBoundsLoad,
-
-    /// A store was performed to an unmapped address
-    OutOfBoundsStore,
-
-    /// An operation was performed with an invalid address
-    InvalidAddress,
-
     /// A `heap_addr` instruction detected an out-of-bounds error.
     ///
     /// Note that not all out-of-bounds heap accesses are reported this way;
@@ -67,9 +58,6 @@ impl Display for TrapCode {
         use self::TrapCode::*;
         let identifier = match *self {
             StackOverflow => "stk_ovf",
-            InvalidAddress => "invalid_addr",
-            OutOfBoundsLoad => "oob_load",
-            OutOfBoundsStore => "oob_store",
             HeapOutOfBounds => "heap_oob",
             HeapMisaligned => "heap_misaligned",
             TableOutOfBounds => "table_oob",
@@ -93,9 +81,6 @@ impl FromStr for TrapCode {
         use self::TrapCode::*;
         match s {
             "stk_ovf" => Ok(StackOverflow),
-            "invalid_addr" => Ok(InvalidAddress),
-            "oob_load" => Ok(OutOfBoundsLoad),
-            "oob_store" => Ok(OutOfBoundsStore),
             "heap_oob" => Ok(HeapOutOfBounds),
             "heap_misaligned" => Ok(HeapMisaligned),
             "table_oob" => Ok(TableOutOfBounds),
@@ -118,11 +103,8 @@ mod tests {
     use alloc::string::ToString;
 
     // Everything but user-defined codes.
-    const CODES: [TrapCode; 14] = [
+    const CODES: [TrapCode; 11] = [
         TrapCode::StackOverflow,
-        TrapCode::InvalidAddress,
-        TrapCode::OutOfBoundsLoad,
-        TrapCode::OutOfBoundsStore,
         TrapCode::HeapOutOfBounds,
         TrapCode::HeapMisaligned,
         TrapCode::TableOutOfBounds,

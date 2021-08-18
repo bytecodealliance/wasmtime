@@ -87,12 +87,12 @@ where
     };
 
     let memerror_to_trap = |e: MemoryError| match e {
-        MemoryError::InvalidAddress(_) => TrapCode::InvalidAddress,
-        MemoryError::InvalidAddressType(_) => TrapCode::InvalidAddress,
-        MemoryError::InvalidOffset { .. } => TrapCode::InvalidAddress,
-        MemoryError::InvalidEntry { .. } => TrapCode::InvalidAddress,
-        MemoryError::OutOfBoundsStore { .. } => TrapCode::OutOfBoundsStore,
-        MemoryError::OutOfBoundsLoad { .. } => TrapCode::OutOfBoundsLoad,
+        MemoryError::InvalidAddress(_) => TrapCode::HeapOutOfBounds,
+        MemoryError::InvalidAddressType(_) => TrapCode::HeapOutOfBounds,
+        MemoryError::InvalidOffset { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::OutOfBoundsStore { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::OutOfBoundsLoad { .. } => TrapCode::HeapOutOfBounds,
     };
 
     // Assigns or traps depending on the value of the result

@@ -20,6 +20,17 @@
 //!
 //! The only exception to this is the "stack" region, where, because we only have a single "stack"
 //! we have 0 "entry" bits, and thus is all offset.
+//!
+//! | address size | address kind | region value (2 bits) | entry bits (#) | offset bits (#) |
+//! |--------------|--------------|-----------------------|----------------|-----------------|
+//! | 32           | Stack        | 0b00                  | 0              | 30              |
+//! | 32           | Heap         | 0b01                  | 2              | 28              |
+//! | 32           | Table        | 0b10                  | 5              | 25              |
+//! | 32           | GlobalValue  | 0b11                  | 6              | 24              |
+//! | 64           | Stack        | 0b00                  | 0              | 62              |
+//! | 64           | Heap         | 0b01                  | 6              | 56              |
+//! | 64           | Table        | 0b10                  | 10             | 52              |
+//! | 64           | GlobalValue  | 0b11                  | 12             | 50              |
 
 use crate::state::MemoryError;
 use cranelift_codegen::data_value::DataValue;
