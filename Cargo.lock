@@ -3655,7 +3655,6 @@ name = "wasmtime-cli"
 version = "0.29.0"
 dependencies = [
  "anyhow",
- "cranelift-native",
  "criterion",
  "env_logger 0.8.3",
  "file-per-thread-logger",
