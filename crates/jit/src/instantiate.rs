@@ -120,14 +120,7 @@ impl CompilationArtifacts {
                 Ok(CompilationArtifacts {
                     module: Arc::new(module),
                     obj: obj.into_boxed_slice(),
-                    funcs: funcs
-                        .into_iter()
-                        .map(|(_, func)| FunctionInfo {
-                            stack_maps: func.stack_maps,
-                            traps: func.traps,
-                            address_map: func.address_map,
-                        })
-                        .collect(),
+                    funcs,
                     native_debug_info_present: compiler.tunables().generate_native_debuginfo,
                     debug_info: if compiler.tunables().parse_wasm_debuginfo {
                         Some(debuginfo.into())
