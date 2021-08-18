@@ -8,15 +8,15 @@
 use anyhow::Result;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir::{self, ExternalName};
+use std::any::Any;
 use std::collections::HashMap;
-use wasmtime_environ::wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmFuncType,
+use wasmtime_environ::{
+    BuiltinFunctionIndex, CompileError, Compiler, FlagValue, FunctionBodyData, FunctionInfo,
+    Module, ModuleTranslation, PrimaryMap, TrapInformation, Tunables, TypeTables, VMOffsets,
 };
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompileError, CompiledFunction, CompiledFunctions, Compiler, FlagValue,
-    FunctionBodyData, Module, ModuleTranslation, Relocation, RelocationTarget, TrapInformation,
-    Tunables, TypeTables, VMOffsets,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmFuncType,
 };
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -30,7 +30,7 @@ impl Compiler for Lightbeam {
         _function_body: FunctionBodyData<'_>,
         _tunables: &Tunables,
         _types: &TypeTables,
-    ) -> Result<CompiledFunction, CompileError> {
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
         unimplemented!()
         // if tunables.generate_native_debuginfo {
         //     return Err(CompileError::DebugInfoNotSupported);
@@ -82,9 +82,9 @@ impl Compiler for Lightbeam {
         &self,
         _module: &ModuleTranslation,
         _types: &TypeTables,
-        _funcs: &CompiledFunctions,
+        _funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         _emit_dwarf: bool,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<(Vec<u8>, PrimaryMap<DefinedFuncIndex, FunctionInfo>)> {
         unimplemented!()
     }
 
@@ -109,34 +109,34 @@ impl Compiler for Lightbeam {
 struct RelocSink {
     /// Current function index.
     func_index: FuncIndex,
-
-    /// Relocations recorded for the function.
-    func_relocs: Vec<Relocation>,
+    // /// Relocations recorded for the function.
+    // func_relocs: Vec<Relocation>,
 }
 
 impl binemit::RelocSink for RelocSink {
     fn reloc_external(
         &mut self,
-        offset: binemit::CodeOffset,
+        _offset: binemit::CodeOffset,
         _srcloc: ir::SourceLoc,
-        reloc: binemit::Reloc,
-        name: &ExternalName,
-        addend: binemit::Addend,
+        _reloc: binemit::Reloc,
+        _name: &ExternalName,
+        _addend: binemit::Addend,
     ) {
-        let reloc_target = if let ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 0);
-            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-        } else if let ExternalName::LibCall(libcall) = *name {
-            RelocationTarget::LibCall(libcall)
-        } else {
-            panic!("unrecognized external name")
-        };
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target,
-            offset,
-            addend,
-        });
+        unimplemented!()
+        // let reloc_target = if let ExternalName::User { namespace, index } = *name {
+        //     debug_assert_eq!(namespace, 0);
+        //     RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+        // } else if let ExternalName::LibCall(libcall) = *name {
+        //     RelocationTarget::LibCall(libcall)
+        // } else {
+        //     panic!("unrecognized external name")
+        // };
+        // self.func_relocs.push(Relocation {
+        //     reloc,
+        //     reloc_target,
+        //     offset,
+        //     addend,
+        // });
     }
 
     fn reloc_constant(
@@ -149,13 +149,19 @@ impl binemit::RelocSink for RelocSink {
         // function code with correct relative offsets to the constant data.
     }
 
-    fn reloc_jt(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, jt: ir::JumpTable) {
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target: RelocationTarget::JumpTable(self.func_index, jt),
-            offset,
-            addend: 0,
-        });
+    fn reloc_jt(
+        &mut self,
+        _offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _jt: ir::JumpTable,
+    ) {
+        unimplemented!()
+        // self.func_relocs.push(Relocation {
+        //     reloc,
+        //     reloc_target: RelocationTarget::JumpTable(self.func_index, jt),
+        //     offset,
+        //     addend: 0,
+        // });
     }
 }
 
@@ -164,7 +170,7 @@ impl RelocSink {
     fn new(func_index: FuncIndex) -> Self {
         Self {
             func_index,
-            func_relocs: Vec::new(),
+            // func_relocs: Vec::new(),
         }
     }
 }
@@ -186,14 +192,15 @@ impl TrapSink {
 impl binemit::TrapSink for TrapSink {
     fn trap(
         &mut self,
-        code_offset: binemit::CodeOffset,
+        _code_offset: binemit::CodeOffset,
         _source_loc: ir::SourceLoc,
-        trap_code: ir::TrapCode,
+        _trap_code: ir::TrapCode,
     ) {
-        self.traps.push(TrapInformation {
-            code_offset,
-            trap_code,
-        });
+        unimplemented!()
+        // self.traps.push(TrapInformation {
+        //     code_offset,
+        //     trap_code,
+        // });
     }
 }
 
