@@ -13,8 +13,8 @@
 //! function body, the imported wasm function do not. The trampolines symbol
 //! names have format "_trampoline_N", where N is `SignatureIndex`.
 
-#![allow(missing_docs)]
-
+use crate::debug::{DwarfSection, DwarfSectionRelocTarget};
+use crate::{CompiledFunction, Relocation, RelocationTarget};
 use anyhow::Result;
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::{JumpTableOffsets, LibCall};
@@ -34,11 +34,10 @@ use object::{
 };
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use wasmtime_debug::{DwarfSection, DwarfSectionRelocTarget};
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
 use wasmtime_environ::obj;
-use wasmtime_environ::wasm::{DefinedFuncIndex, FuncIndex, SignatureIndex};
-use wasmtime_environ::{CompiledFunction, Module, Relocation, RelocationTarget};
+use wasmtime_environ::{
+    DefinedFuncIndex, EntityRef, FuncIndex, Module, PrimaryMap, SignatureIndex,
+};
 
 fn to_object_architecture(
     arch: target_lexicon::Architecture,

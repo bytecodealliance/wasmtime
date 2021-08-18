@@ -480,10 +480,7 @@ impl Memory {
         Memory(store.store_data_mut().insert(wasmtime_export))
     }
 
-    pub(crate) fn wasmtime_ty<'a>(
-        &self,
-        store: &'a StoreData,
-    ) -> &'a wasmtime_environ::wasm::Memory {
+    pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreData) -> &'a wasmtime_environ::Memory {
         &store[self.0].memory.memory
     }
 

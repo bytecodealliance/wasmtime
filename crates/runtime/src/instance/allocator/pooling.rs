@@ -20,8 +20,8 @@ use std::marker;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
-    entity::{EntitySet, PrimaryMap},
-    HostPtr, MemoryStyle, Module, Tunables, VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
+    EntitySet, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets, VMOffsetsFields,
+    WASM_PAGE_SIZE,
 };
 
 cfg_if::cfg_if! {
@@ -1000,7 +1000,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                         // If there was an out of bounds access observed in initialization, return a trap
                         if *out_of_bounds {
                             return Err(InstantiationError::Trap(crate::traphandlers::Trap::wasm(
-                                wasmtime_environ::ir::TrapCode::HeapOutOfBounds,
+                                wasmtime_environ::TrapCode::HeapOutOfBounds,
                             )));
                         }
 
@@ -1050,9 +1050,8 @@ mod test {
     use super::*;
     use crate::{Imports, VMSharedSignatureIndex};
     use wasmtime_environ::{
-        entity::EntityRef,
-        wasm::{Global, GlobalInit, Memory, SignatureIndex, Table, WasmType},
-        MemoryPlan, ModuleType, TablePlan, TableStyle,
+        EntityRef, Global, GlobalInit, Memory, MemoryPlan, ModuleType, SignatureIndex, Table,
+        TablePlan, TableStyle, WasmType,
     };
 
     #[test]

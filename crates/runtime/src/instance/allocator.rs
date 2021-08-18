@@ -17,13 +17,10 @@ use std::ptr::{self, NonNull};
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_environ::entity::{EntityRef, EntitySet, PrimaryMap};
-use wasmtime_environ::wasm::{
-    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, GlobalInit, SignatureIndex, WasmType,
-};
 use wasmtime_environ::{
-    ir, HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, TableInitializer,
-    VMOffsets, WASM_PAGE_SIZE,
+    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, EntitySet, GlobalInit,
+    HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
+    SignatureIndex, TableInitializer, TrapCode, VMOffsets, WasmType, WASM_PAGE_SIZE,
 };
 
 mod pooling;
@@ -408,7 +405,7 @@ fn initialize_instance(
             // the expected behavior of the bulk memory spec.
             if *out_of_bounds {
                 return Err(InstantiationError::Trap(Trap::wasm(
-                    ir::TrapCode::HeapOutOfBounds,
+                    TrapCode::HeapOutOfBounds,
                 )));
             }
         }
@@ -533,7 +530,7 @@ unsafe fn initialize_vmcontext_globals(instance: &Instance) {
             GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
             GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
             GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
-            GlobalInit::V128Const(x) => *(*to).as_u128_bits_mut() = x.0,
+            GlobalInit::V128Const(x) => *(*to).as_u128_mut() = x,
             GlobalInit::GetGlobal(x) => {
                 let from = if let Some(def_x) = module.defined_global_index(x) {
                     instance.global(def_x)

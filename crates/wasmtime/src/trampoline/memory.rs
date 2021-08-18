@@ -5,8 +5,7 @@ use crate::MemoryType;
 use anyhow::{anyhow, Result};
 use std::convert::TryFrom;
 use std::sync::Arc;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::{wasm, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
+use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, PrimaryMap, WASM_PAGE_SIZE};
 use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition};
 
 pub fn create_memory(store: &mut StoreOpaque<'_>, memory: &MemoryType) -> Result<InstanceId> {
@@ -19,7 +18,7 @@ pub fn create_memory(store: &mut StoreOpaque<'_>, memory: &MemoryType) -> Result
     let memory_id = module.memory_plans.push(memory_plan);
     module
         .exports
-        .insert(String::new(), wasm::EntityIndex::Memory(memory_id));
+        .insert(String::new(), EntityIndex::Memory(memory_id));
 
     create_handle(module, store, PrimaryMap::new(), Box::new(()), &[], None)
 }

@@ -109,7 +109,7 @@ use std::ops::Deref;
 use std::ptr::{self, NonNull};
 use std::sync::atomic::{self, AtomicUsize, Ordering};
 use std::{alloc::Layout, sync::Arc};
-use wasmtime_environ::ir::StackMap;
+use wasmtime_environ::StackMap;
 
 /// An external reference to some opaque data.
 ///

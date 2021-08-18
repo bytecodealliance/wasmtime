@@ -16,12 +16,12 @@ wasmparser = { version = "0.80", default-features = false }
 cranelift-codegen = { path = "../codegen", version = "0.76.0", default-features = false }
 cranelift-entity = { path = "../entity", version = "0.76.0" }
 cranelift-frontend = { path = "../frontend", version = "0.76.0", default-features = false }
+wasmtime-types = { path = "../../crates/types", version = "0.29.0" }
 hashbrown = { version = "0.9.1", optional = true }
 itertools = "0.10.0"
 log = { version = "0.4.6", default-features = false }
 serde = { version = "1.0.94", features = ["derive"], optional = true }
 smallvec = "1.6.1"
-thiserror = "1.0.4"
 
 [dev-dependencies]
 wat = "1.0.37"

@@ -1,72 +1,79 @@
 //! A `Compilation` contains the compiled function bodies for a WebAssembly
 //! module.
 
-use crate::{FunctionAddressMap, FunctionBodyData, ModuleTranslation, Tunables, TypeTables};
+use crate::{
+    DefinedFuncIndex, FunctionAddressMap, FunctionBodyData, ModuleTranslation, PrimaryMap,
+    StackMap, Tunables, TypeTables, WasmError, WasmFuncType,
+};
 use anyhow::Result;
-use cranelift_codegen::{binemit, ir, isa::unwind::UnwindInfo};
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmError, WasmFuncType};
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use thiserror::Error;
 
+/// Information about a function, such as trap information, address map,
+/// and stack maps.
+#[derive(Serialize, Deserialize, Clone, Default)]
 #[allow(missing_docs)]
-pub type CompiledFunctions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
-
-/// Compiled function: machine code body, jump table offsets, and unwind information.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
-#[allow(missing_docs)]
-pub struct CompiledFunction {
-    /// The machine code for this function.
-    pub body: Vec<u8>,
-
-    /// The jump tables offsets (in the body).
-    pub jt_offsets: ir::JumpTableOffsets,
-
-    /// The unwind information.
-    pub unwind_info: Option<UnwindInfo>,
-
-    pub relocations: Vec<Relocation>,
-    pub address_map: FunctionAddressMap,
-    pub value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
-    pub stack_slots: ir::StackSlots,
+pub struct FunctionInfo {
     pub traps: Vec<TrapInformation>,
+    pub address_map: FunctionAddressMap,
     pub stack_maps: Vec<StackMapInformation>,
-}
-
-/// A record of a relocation to perform.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct Relocation {
-    /// The relocation code.
-    pub reloc: binemit::Reloc,
-    /// Relocation target.
-    pub reloc_target: RelocationTarget,
-    /// The offset where to apply the relocation.
-    pub offset: binemit::CodeOffset,
-    /// The addend to add to the relocation value.
-    pub addend: binemit::Addend,
-}
-
-/// Destination function. Can be either user function or some special one, like `memory.grow`.
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
-pub enum RelocationTarget {
-    /// The user function index.
-    UserFunc(FuncIndex),
-    /// A compiler-generated libcall.
-    LibCall(ir::LibCall),
-    /// Jump table index.
-    JumpTable(FuncIndex, ir::JumpTable),
 }
 
 /// Information about trap.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct TrapInformation {
     /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
-    pub code_offset: binemit::CodeOffset,
+    pub code_offset: u32,
     /// Code of the trap.
-    pub trap_code: ir::TrapCode,
+    pub trap_code: TrapCode,
+}
+
+/// A trap code describing the reason for a trap.
+///
+/// All trap instructions have an explicit trap code.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
+pub enum TrapCode {
+    /// The current stack space was exhausted.
+    StackOverflow,
+
+    /// A `heap_addr` instruction detected an out-of-bounds error.
+    ///
+    /// Note that not all out-of-bounds heap accesses are reported this way;
+    /// some are detected by a segmentation fault on the heap unmapped or
+    /// offset-guard pages.
+    HeapOutOfBounds,
+
+    /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
+    HeapMisaligned,
+
+    /// A `table_addr` instruction detected an out-of-bounds error.
+    TableOutOfBounds,
+
+    /// Indirect call to a null table entry.
+    IndirectCallToNull,
+
+    /// Signature mismatch on indirect call.
+    BadSignature,
+
+    /// An integer arithmetic operation caused an overflow.
+    IntegerOverflow,
+
+    /// An integer division by zero.
+    IntegerDivisionByZero,
+
+    /// Failed float-to-int conversion.
+    BadConversionToInteger,
+
+    /// Code that was supposed to have been unreachable was reached.
+    UnreachableCodeReached,
+
+    /// Execution has potentially run too long and may be interrupted.
+    /// This trap is resumable.
+    Interrupt,
 }
 
 /// The offset within a function of a GC safepoint, and its associated stack
@@ -75,10 +82,10 @@ pub struct TrapInformation {
 pub struct StackMapInformation {
     /// The offset of the GC safepoint within the function's native code. It is
     /// relative to the beginning of the function.
-    pub code_offset: binemit::CodeOffset,
+    pub code_offset: u32,
 
     /// The stack map for identifying live GC refs at the GC safepoint.
-    pub stack_map: binemit::StackMap,
+    pub stack_map: StackMap,
 }
 
 /// An error while compiling WebAssembly to machine code.
@@ -175,7 +182,7 @@ pub trait Compiler: Send + Sync {
         data: FunctionBodyData<'_>,
         tunables: &Tunables,
         types: &TypeTables,
-    ) -> Result<CompiledFunction, CompileError>;
+    ) -> Result<Box<dyn Any + Send>, CompileError>;
 
     /// Collects the results of compilation and emits an in-memory ELF object
     /// which is the serialized representation of all compiler artifacts.
@@ -185,9 +192,9 @@ pub trait Compiler: Send + Sync {
         &self,
         module: &ModuleTranslation,
         types: &TypeTables,
-        funcs: &CompiledFunctions,
+        funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
-    ) -> Result<Vec<u8>>;
+    ) -> Result<(Vec<u8>, PrimaryMap<DefinedFuncIndex, FunctionInfo>)>;
 
     /// Emits a small ELF object file in-memory which has two functions for the
     /// host-to-wasm and wasm-to-host trampolines for the wasm type given.

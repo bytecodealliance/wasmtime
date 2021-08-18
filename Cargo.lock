@@ -805,8 +805,8 @@ dependencies = [
  "serde",
  "smallvec",
  "target-lexicon",
- "thiserror",
  "wasmparser",
+ "wasmtime-types",
  "wat",
 ]
 
@@ -3645,7 +3645,6 @@ name = "wasmtime-cli"
 version = "0.29.0"
 dependencies = [
  "anyhow",
- "cranelift-native",
  "criterion",
  "env_logger 0.8.3",
  "file-per-thread-logger",
@@ -3668,7 +3667,6 @@ dependencies = [
  "wasmparser",
  "wasmtime",
  "wasmtime-cache",
- "wasmtime-debug",
  "wasmtime-environ",
  "wasmtime-fuzzing",
  "wasmtime-jit",
@@ -3693,20 +3691,6 @@ dependencies = [
  "cranelift-native",
  "cranelift-wasm",
  "gimli",
- "object",
- "target-lexicon",
- "wasmparser",
- "wasmtime-debug",
- "wasmtime-environ",
-]
-
-[[package]]
-name = "wasmtime-debug"
-version = "0.29.0"
-dependencies = [
- "anyhow",
- "cranelift-codegen",
- "gimli",
  "more-asserts",
  "object",
  "target-lexicon",
@@ -3721,9 +3705,7 @@ version = "0.29.0"
 dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
- "cranelift-codegen",
  "cranelift-entity",
- "cranelift-wasm",
  "gimli",
  "indexmap",
  "log",
@@ -3732,6 +3714,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasmparser",
+ "wasmtime-types",
 ]
 
 [[package]]
@@ -3860,6 +3843,16 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fiber",
  "winapi",
+]
+
+[[package]]
+name = "wasmtime-types"
+version = "0.29.0"
+dependencies = [
+ "cranelift-entity",
+ "serde",
+ "thiserror",
+ "wasmparser",
 ]
 
 [[package]]

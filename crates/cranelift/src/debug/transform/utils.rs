@@ -1,10 +1,10 @@
 use super::address_transform::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
+use crate::CompiledFunctions;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
 use gimli::write;
-use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::{CompiledFunctions, ModuleMemoryOffset};
+use wasmtime_environ::{DefinedFuncIndex, ModuleMemoryOffset};
 
 /// Adds internal Wasm utility types DIEs such as WebAssemblyPtr and
 /// WasmtimeVMContext.

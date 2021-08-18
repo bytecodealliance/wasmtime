@@ -6,10 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use wasmtime_environ::{
-    entity::EntityRef,
-    ir::{self, StackMap},
-    wasm::DefinedFuncIndex,
-    FunctionAddressMap, TrapInformation,
+    DefinedFuncIndex, EntityRef, FilePos, FunctionAddressMap, StackMap, TrapInformation,
 };
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
@@ -339,10 +336,9 @@ impl GlobalRegisteredModule {
         // though so we can omit this check in release mode.
         debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
 
-        let instr = match pos {
-            Some(pos) => info.address_map.instructions[pos].srcloc,
-            None => info.address_map.start_srcloc,
-        };
+        let instr = pos
+            .map(|i| info.address_map.instructions[i].srcloc)
+            .unwrap_or(info.address_map.start_srcloc);
 
         // Use our wasm-relative pc to symbolize this frame. If there's a
         // symbolication context (dwarf debug info) available then we can try to
@@ -355,23 +351,25 @@ impl GlobalRegisteredModule {
         let mut symbols = Vec::new();
 
         if let Some(s) = &self.module.symbolize_context().ok().and_then(|c| c) {
-            let to_lookup = (instr.bits() as u64) - s.code_section_offset();
-            if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
-                while let Ok(Some(frame)) = frames.next() {
-                    symbols.push(FrameSymbol {
-                        name: frame
-                            .function
-                            .as_ref()
-                            .and_then(|l| l.raw_name().ok())
-                            .map(|s| s.to_string()),
-                        file: frame
-                            .location
-                            .as_ref()
-                            .and_then(|l| l.file)
-                            .map(|s| s.to_string()),
-                        line: frame.location.as_ref().and_then(|l| l.line),
-                        column: frame.location.as_ref().and_then(|l| l.column),
-                    });
+            if let Some(offset) = instr.file_offset() {
+                let to_lookup = u64::from(offset) - s.code_section_offset();
+                if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
+                    while let Ok(Some(frame)) = frames.next() {
+                        symbols.push(FrameSymbol {
+                            name: frame
+                                .function
+                                .as_ref()
+                                .and_then(|l| l.raw_name().ok())
+                                .map(|s| s.to_string()),
+                            file: frame
+                                .location
+                                .as_ref()
+                                .and_then(|l| l.file)
+                                .map(|s| s.to_string()),
+                            line: frame.location.as_ref().and_then(|l| l.line),
+                            column: frame.location.as_ref().and_then(|l| l.column),
+                        });
+                    }
                 }
             }
         }
@@ -413,8 +411,8 @@ pub struct FrameInfo {
     module_name: Option<String>,
     func_index: u32,
     func_name: Option<String>,
-    func_start: ir::SourceLoc,
-    instr: ir::SourceLoc,
+    func_start: FilePos,
+    instr: FilePos,
     symbols: Vec<FrameSymbol>,
 }
 
@@ -464,7 +462,7 @@ impl FrameInfo {
     /// The offset here is the offset from the beginning of the original wasm
     /// module to the instruction that this frame points to.
     pub fn module_offset(&self) -> usize {
-        self.instr.bits() as usize
+        self.instr.file_offset().unwrap_or(u32::MAX) as usize
     }
 
     /// Returns the offset from the original wasm module's function to this
@@ -474,7 +472,10 @@ impl FrameInfo {
     /// function of this frame (within the wasm module) to the instruction this
     /// frame points to.
     pub fn func_offset(&self) -> usize {
-        (self.instr.bits() - self.func_start.bits()) as usize
+        match self.instr.file_offset() {
+            Some(i) => (i - self.func_start.file_offset().unwrap()) as usize,
+            None => u32::MAX as usize,
+        }
     }
 
     /// Returns the debug symbols found, if any, for this function frame.

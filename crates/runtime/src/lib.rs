@@ -62,28 +62,6 @@ pub use crate::vmcontext::{
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// The Cranelift IR type used for reference types for this target architecture.
-pub fn ref_type() -> wasmtime_environ::ir::Type {
-    if cfg!(target_pointer_width = "32") {
-        wasmtime_environ::ir::types::R32
-    } else if cfg!(target_pointer_width = "64") {
-        wasmtime_environ::ir::types::R64
-    } else {
-        unreachable!()
-    }
-}
-
-/// The Cranelift IR type used for pointer types for this target architecture.
-pub fn pointer_type() -> wasmtime_environ::ir::Type {
-    if cfg!(target_pointer_width = "32") {
-        wasmtime_environ::ir::types::I32
-    } else if cfg!(target_pointer_width = "64") {
-        wasmtime_environ::ir::types::I64
-    } else {
-        unreachable!()
-    }
-}
-
 /// Dynamic runtime functionality needed by this crate throughout the execution
 /// of a wasm instance.
 ///

@@ -1,6 +1,9 @@
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::obj::{ObjectBuilder, ObjectBuilderTarget};
-use crate::{blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv};
+use crate::{
+    blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
+    CompiledFunction, Relocation, RelocationTarget,
+};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
 use cranelift_codegen::isa::TargetIsa;
@@ -8,22 +11,22 @@ use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings;
 use cranelift_codegen::MachSrcLoc;
 use cranelift_codegen::{binemit, Context};
-use cranelift_entity::EntityRef;
+use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, FuncIndex, FuncTranslator, MemoryIndex, SignatureIndex,
     WasmFuncType,
 };
+use std::any::Any;
 use std::cmp;
 use std::collections::{BTreeSet, HashMap};
 use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    CompileError, CompiledFunction, CompiledFunctions, FlagValue, FunctionAddressMap,
-    FunctionBodyData, InstructionAddressMap, Module, ModuleMemoryOffset, ModuleTranslation,
-    Relocation, RelocationTarget, StackMapInformation, TrapInformation, Tunables, TypeTables,
-    VMOffsets,
+    CompileError, FilePos, FlagValue, FunctionAddressMap, FunctionBodyData, FunctionInfo,
+    InstructionAddressMap, Module, ModuleMemoryOffset, ModuleTranslation, StackMapInformation,
+    TrapCode, TrapInformation, Tunables, TypeTables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
@@ -62,8 +65,8 @@ impl Compiler {
         let offset = data.original_position();
         let len = data.bytes_remaining();
         assert!((offset + len) <= u32::max_value() as usize);
-        let start_srcloc = ir::SourceLoc::new(offset as u32);
-        let end_srcloc = ir::SourceLoc::new((offset + len) as u32);
+        let start_srcloc = FilePos::new(offset as u32);
+        let end_srcloc = FilePos::new((offset + len) as u32);
 
         let instructions = if let Some(ref mcr) = &context.mach_compile_result {
             // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
@@ -109,7 +112,7 @@ impl wasmtime_environ::Compiler for Compiler {
         mut input: FunctionBodyData<'_>,
         tunables: &Tunables,
         types: &TypeTables,
-    ) -> Result<CompiledFunction, CompileError> {
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
         let func_index = module.func_index(func_index);
@@ -196,27 +199,33 @@ impl wasmtime_environ::Compiler for Compiler {
             None
         };
 
-        Ok(CompiledFunction {
+        Ok(Box::new(CompiledFunction {
             body: code_buf,
             jt_offsets: context.func.jt_offsets,
             relocations: reloc_sink.func_relocs,
-            address_map: address_transform,
             value_labels_ranges: ranges.unwrap_or(Default::default()),
             stack_slots: context.func.stack_slots,
-            traps: trap_sink.traps,
             unwind_info,
-            stack_maps: stack_map_sink.finish(),
-        })
+            info: FunctionInfo {
+                address_map: address_transform,
+                traps: trap_sink.traps,
+                stack_maps: stack_map_sink.finish(),
+            },
+        }))
     }
 
     fn emit_obj(
         &self,
         translation: &ModuleTranslation,
         types: &TypeTables,
-        funcs: &CompiledFunctions,
+        funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<(Vec<u8>, PrimaryMap<DefinedFuncIndex, FunctionInfo>)> {
         const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
+        let funcs: crate::CompiledFunctions = funcs
+            .into_iter()
+            .map(|(_i, f)| *f.downcast().unwrap())
+            .collect();
 
         // Build trampolines for every signature that can be used by this module.
         let signatures = translation
@@ -265,17 +274,20 @@ impl wasmtime_environ::Compiler for Compiler {
             } else {
                 ModuleMemoryOffset::None
             };
-            let dwarf_sections = wasmtime_debug::emit_dwarf(
+            let dwarf_sections = crate::debug::emit_dwarf(
                 &*self.isa,
                 &translation.debuginfo,
-                funcs,
+                &funcs,
                 &memory_offset,
             )
             .with_context(|| "failed to emit DWARF debug information")?;
             builder.dwarf_sections(&dwarf_sections)?;
         }
 
-        Ok(builder.finish(&*self.isa)?)
+        Ok((
+            builder.finish(&*self.isa)?,
+            funcs.into_iter().map(|(_, f)| f.info).collect(),
+        ))
     }
 
     fn emit_trampoline_obj(&self, ty: &WasmFuncType, host_fn: usize) -> Result<Vec<u8>> {
@@ -507,11 +519,9 @@ impl Compiler {
             jt_offsets: context.func.jt_offsets,
             unwind_info,
             relocations: reloc_sink.relocs,
-            stack_maps: Default::default(),
             stack_slots: Default::default(),
-            traps: Default::default(),
             value_labels_ranges: Default::default(),
-            address_map: Default::default(),
+            info: Default::default(),
         })
     }
 }
@@ -540,14 +550,14 @@ fn collect_address_maps(
 
         // Push an entry for the previous source item.
         ret.push(InstructionAddressMap {
-            srcloc: cur_loc,
+            srcloc: cvt(cur_loc),
             code_offset: cur_offset,
         });
         // And push a "dummy" entry if necessary to cover the span of ranges,
         // if any, between the previous source offset and this one.
         if cur_offset + cur_len != offset {
             ret.push(InstructionAddressMap {
-                srcloc: ir::SourceLoc::default(),
+                srcloc: FilePos::default(),
                 code_offset: cur_offset + cur_len,
             });
         }
@@ -558,17 +568,25 @@ fn collect_address_maps(
         cur_len = len;
     }
     ret.push(InstructionAddressMap {
-        srcloc: cur_loc,
+        srcloc: cvt(cur_loc),
         code_offset: cur_offset,
     });
     if cur_offset + cur_len != code_size {
         ret.push(InstructionAddressMap {
-            srcloc: ir::SourceLoc::default(),
+            srcloc: FilePos::default(),
             code_offset: cur_offset + cur_len,
         });
     }
 
     return ret;
+
+    fn cvt(loc: ir::SourceLoc) -> FilePos {
+        if loc.is_default() {
+            FilePos::default()
+        } else {
+            FilePos::new(loc.bits())
+        }
+    }
 }
 
 /// Implementation of a relocation sink that just saves all the information for later
@@ -658,7 +676,22 @@ impl binemit::TrapSink for TrapSink {
     ) {
         self.traps.push(TrapInformation {
             code_offset,
-            trap_code,
+            trap_code: match trap_code {
+                ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
+                ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
+                ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
+                ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
+                ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
+                ir::TrapCode::BadSignature => TrapCode::BadSignature,
+                ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
+                ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
+                ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
+                ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
+                ir::TrapCode::Interrupt => TrapCode::Interrupt,
+
+                // these should never be emitted by wasmtime-cranelift
+                ir::TrapCode::User(_) => unreachable!(),
+            },
         });
     }
 }
@@ -670,6 +703,13 @@ struct StackMapSink {
 
 impl binemit::StackMapSink for StackMapSink {
     fn add_stack_map(&mut self, code_offset: binemit::CodeOffset, stack_map: binemit::StackMap) {
+        // This is converting from Cranelift's representation of a stack map to
+        // Wasmtime's representation. They happen to align today but that may
+        // not always be true in the future.
+        let stack_map = wasmtime_environ::StackMap::new(
+            stack_map.mapped_words(),
+            stack_map.as_slice().iter().map(|a| a.0),
+        );
         self.infos.push(StackMapInformation {
             code_offset,
             stack_map,

@@ -5,10 +5,11 @@
 //! WebAssembly module and the runtime environment.
 
 use crate::code_translator::{bitcast_arguments, translate_operator, wasm_param_types};
-use crate::environ::{FuncEnvironment, ReturnMode, WasmResult};
+use crate::environ::{FuncEnvironment, ReturnMode};
 use crate::state::FuncTranslationState;
 use crate::translation_utils::get_vmctx_value_label;
 use crate::wasm_unsupported;
+use crate::WasmResult;
 use core::convert::TryInto;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};

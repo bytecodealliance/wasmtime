@@ -10,12 +10,12 @@
 use crate::ProfilingAgent;
 use anyhow::Result;
 use core::ptr;
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm_types::DefinedFuncIndex;
 use ittapi_rs::*;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::Mutex;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::DefinedFuncIndex;
 use wasmtime_environ::Module;
 use wasmtime_runtime::VMFunctionBody;
 

@@ -3,15 +3,14 @@ use anyhow::{Context, Error, Result};
 use cranelift_codegen::ir::{LabelValueLoc, StackSlots, ValueLabel, ValueLoc};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::ValueLabelsRanges;
+use cranelift_wasm::get_vmctx_value_label;
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::wasm::{get_vmctx_value_label, DefinedFuncIndex};
-use wasmtime_environ::ModuleMemoryOffset;
+use wasmtime_environ::{DefinedFuncIndex, EntityRef, ModuleMemoryOffset};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
@@ -847,8 +846,9 @@ mod tests {
         compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
         FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
     };
+    use crate::CompiledFunction;
     use gimli::{self, constants, Encoding, EndianSlice, Expression, RunTimeEndian};
-    use wasmtime_environ::CompiledFunction;
+    use wasmtime_environ::{FilePos, FunctionInfo};
 
     macro_rules! dw_op {
         (DW_OP_WASM_location) => {
@@ -906,7 +906,7 @@ mod tests {
 
     #[test]
     fn test_debug_parse_expressions() {
-        use wasmtime_environ::entity::EntityRef;
+        use cranelift_entity::EntityRef;
 
         let (val1, val3, val20) = (ValueLabel::new(1), ValueLabel::new(3), ValueLabel::new(20));
 
@@ -1176,37 +1176,39 @@ mod tests {
     }
 
     fn create_mock_address_transform() -> AddressTransform {
-        use wasmtime_environ::entity::PrimaryMap;
-        use wasmtime_environ::ir::SourceLoc;
+        use cranelift_entity::PrimaryMap;
         use wasmtime_environ::WasmFileInfo;
         use wasmtime_environ::{FunctionAddressMap, InstructionAddressMap};
         let mut module_map = PrimaryMap::new();
         let code_section_offset: u32 = 100;
         module_map.push(CompiledFunction {
-            address_map: FunctionAddressMap {
-                instructions: vec![
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::new(code_section_offset + 12),
-                        code_offset: 5,
-                    },
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::default(),
-                        code_offset: 8,
-                    },
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::new(code_section_offset + 17),
-                        code_offset: 15,
-                    },
-                    InstructionAddressMap {
-                        srcloc: SourceLoc::default(),
-                        code_offset: 23,
-                    },
-                ]
-                .into(),
-                start_srcloc: SourceLoc::new(code_section_offset + 10),
-                end_srcloc: SourceLoc::new(code_section_offset + 20),
-                body_offset: 0,
-                body_len: 30,
+            info: FunctionInfo {
+                address_map: FunctionAddressMap {
+                    instructions: vec![
+                        InstructionAddressMap {
+                            srcloc: FilePos::new(code_section_offset + 12),
+                            code_offset: 5,
+                        },
+                        InstructionAddressMap {
+                            srcloc: FilePos::default(),
+                            code_offset: 8,
+                        },
+                        InstructionAddressMap {
+                            srcloc: FilePos::new(code_section_offset + 17),
+                            code_offset: 15,
+                        },
+                        InstructionAddressMap {
+                            srcloc: FilePos::default(),
+                            code_offset: 23,
+                        },
+                    ]
+                    .into(),
+                    start_srcloc: FilePos::new(code_section_offset + 10),
+                    end_srcloc: FilePos::new(code_section_offset + 20),
+                    body_offset: 0,
+                    body_len: 30,
+                },
+                ..Default::default()
             },
             ..Default::default()
         });
@@ -1222,8 +1224,8 @@ mod tests {
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
         use cranelift_codegen::ir::{LabelValueLoc, ValueLoc};
         use cranelift_codegen::ValueLocRange;
+        use cranelift_entity::EntityRef;
         use std::collections::HashMap;
-        use wasmtime_environ::entity::EntityRef;
         let mut value_ranges = HashMap::new();
         let value_0 = ValueLabel::new(0);
         let value_1 = ValueLabel::new(1);
@@ -1266,9 +1268,7 @@ mod tests {
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
         use cranelift_codegen::ir::StackSlots;
-        use wasmtime_environ::entity::EntityRef;
-        use wasmtime_environ::wasm::DefinedFuncIndex;
-        use wasmtime_environ::ModuleMemoryOffset;
+        use wasmtime_environ::{DefinedFuncIndex, EntityRef, ModuleMemoryOffset};
 
         let addr_tr = create_mock_address_transform();
         let stack_slots = StackSlots::new();

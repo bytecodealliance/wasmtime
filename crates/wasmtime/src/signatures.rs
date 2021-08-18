@@ -6,8 +6,7 @@ use std::{
     sync::RwLock,
 };
 use std::{convert::TryFrom, sync::Arc};
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::{SignatureIndex, WasmFuncType};
+use wasmtime_environ::{PrimaryMap, SignatureIndex, WasmFuncType};
 use wasmtime_runtime::{VMSharedSignatureIndex, VMTrampoline};
 
 /// Represents a collection of shared signatures.

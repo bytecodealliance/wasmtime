@@ -88,18 +88,66 @@
 // also need to actually catch stack overflow, so for now 32k is chosen and it's
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
+use cranelift_codegen::binemit;
 use cranelift_codegen::ir;
-use cranelift_codegen::isa::{CallConv, TargetIsa};
-use cranelift_wasm::{FuncIndex, WasmFuncType, WasmType};
+use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
-use wasmtime_environ::{Module, TypeTables};
+use wasmtime_environ::{FunctionInfo, Module, TypeTables};
 
 pub use builder::builder;
 
 mod builder;
 mod compiler;
+mod debug;
 mod func_environ;
 mod obj;
+
+type CompiledFunctions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
+
+/// Compiled function: machine code body, jump table offsets, and unwind information.
+#[derive(Default)]
+pub struct CompiledFunction {
+    /// The machine code for this function.
+    body: Vec<u8>,
+
+    /// The jump tables offsets (in the body).
+    jt_offsets: ir::JumpTableOffsets,
+
+    /// The unwind information.
+    unwind_info: Option<UnwindInfo>,
+
+    relocations: Vec<Relocation>,
+    value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
+    stack_slots: ir::StackSlots,
+
+    info: FunctionInfo,
+}
+
+/// A record of a relocation to perform.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Relocation {
+    /// The relocation code.
+    reloc: binemit::Reloc,
+    /// Relocation target.
+    reloc_target: RelocationTarget,
+    /// The offset where to apply the relocation.
+    offset: binemit::CodeOffset,
+    /// The addend to add to the relocation value.
+    addend: binemit::Addend,
+}
+
+/// Destination function. Can be either user function or some special one, like `memory.grow`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum RelocationTarget {
+    /// The user function index.
+    UserFunc(FuncIndex),
+    /// A compiler-generated libcall.
+    LibCall(ir::LibCall),
+    /// Jump table index.
+    JumpTable(FuncIndex, ir::JumpTable),
+}
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the
 /// given calling convention.
@@ -148,9 +196,7 @@ fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
         WasmType::F32 => ir::types::F32,
         WasmType::F64 => ir::types::F64,
         WasmType::V128 => ir::types::I8X16,
-        WasmType::FuncRef | WasmType::ExternRef => {
-            wasmtime_environ::reference_type(ty, isa.pointer_type())
-        }
+        WasmType::FuncRef | WasmType::ExternRef => reference_type(ty, isa.pointer_type()),
         WasmType::ExnRef => unimplemented!(),
     }
 }
@@ -198,4 +244,17 @@ fn func_signature(
         &types.wasm_signatures[module.functions[index]],
     );
     return sig;
+}
+
+/// Returns the reference type to use for the provided wasm type.
+fn reference_type(wasm_ty: cranelift_wasm::WasmType, pointer_type: ir::Type) -> ir::Type {
+    match wasm_ty {
+        cranelift_wasm::WasmType::FuncRef => pointer_type,
+        cranelift_wasm::WasmType::ExternRef => match pointer_type {
+            ir::types::I32 => ir::types::R32,
+            ir::types::I64 => ir::types::R64,
+            _ => panic!("unsupported pointer type"),
+        },
+        _ => panic!("unsupported Wasm reference type"),
+    }
 }

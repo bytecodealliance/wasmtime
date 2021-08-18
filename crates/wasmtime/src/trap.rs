@@ -3,7 +3,7 @@ use crate::FrameInfo;
 use backtrace::Backtrace;
 use std::fmt;
 use std::sync::Arc;
-use wasmtime_environ::ir;
+use wasmtime_environ::TrapCode as EnvTrapCode;
 
 /// A struct representing an aborted instruction execution, with a message
 /// indicating the cause.
@@ -88,21 +88,20 @@ pub enum TrapCode {
 }
 
 impl TrapCode {
-    /// Panics if `code` is `ir::TrapCode::User`.
-    fn from_non_user(code: ir::TrapCode) -> Self {
+    /// Panics if `code` is `EnvTrapCode::User`.
+    fn from_non_user(code: EnvTrapCode) -> Self {
         match code {
-            ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
-            ir::TrapCode::HeapOutOfBounds => TrapCode::MemoryOutOfBounds,
-            ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
-            ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
-            ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
-            ir::TrapCode::BadSignature => TrapCode::BadSignature,
-            ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
-            ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
-            ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
-            ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
-            ir::TrapCode::Interrupt => TrapCode::Interrupt,
-            ir::TrapCode::User(_) => panic!("Called `TrapCode::from_non_user` with user code"),
+            EnvTrapCode::StackOverflow => TrapCode::StackOverflow,
+            EnvTrapCode::HeapOutOfBounds => TrapCode::MemoryOutOfBounds,
+            EnvTrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
+            EnvTrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
+            EnvTrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
+            EnvTrapCode::BadSignature => TrapCode::BadSignature,
+            EnvTrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
+            EnvTrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
+            EnvTrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
+            EnvTrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
+            EnvTrapCode::Interrupt => TrapCode::Interrupt,
         }
     }
 }
@@ -175,10 +174,10 @@ impl Trap {
                     modules
                         .lookup_trap_info(pc)
                         .map(|info| info.trap_code)
-                        .unwrap_or(ir::TrapCode::StackOverflow)
+                        .unwrap_or(EnvTrapCode::StackOverflow)
                 });
-                if maybe_interrupted && code == ir::TrapCode::StackOverflow {
-                    code = ir::TrapCode::Interrupt;
+                if maybe_interrupted && code == EnvTrapCode::StackOverflow {
+                    code = EnvTrapCode::Interrupt;
                 }
                 Trap::new_wasm(Some(pc), code, backtrace)
             }
@@ -196,7 +195,7 @@ impl Trap {
     #[cold] // see Trap::new
     pub(crate) fn new_wasm(
         trap_pc: Option<usize>,
-        code: ir::TrapCode,
+        code: EnvTrapCode,
         backtrace: Backtrace,
     ) -> Self {
         let code = TrapCode::from_non_user(code);

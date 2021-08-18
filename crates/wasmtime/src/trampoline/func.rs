@@ -5,9 +5,7 @@ use anyhow::Result;
 use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::SignatureIndex;
-use wasmtime_environ::{wasm, Module, ModuleType};
+use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureIndex};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
@@ -123,7 +121,7 @@ pub unsafe fn create_raw_function(
     let func_id = module.functions.push(sig_id);
     module
         .exports
-        .insert(String::new(), wasm::EntityIndex::Function(func_id));
+        .insert(String::new(), EntityIndex::Function(func_id));
     finished_functions.push(func);
 
     Ok(

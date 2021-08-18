@@ -7,15 +7,14 @@
 
 use crate::environ::{
     FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode, TargetEnvironment,
-    WasmFuncType, WasmResult,
 };
 use crate::func_translator::FuncTranslator;
 use crate::state::FuncTranslationState;
-use crate::translation_utils::{
-    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
-    Table, TableIndex, TypeIndex,
-};
 use crate::WasmType;
+use crate::{
+    DataIndex, DefinedFuncIndex, ElemIndex, FuncIndex, Global, GlobalIndex, Memory, MemoryIndex,
+    Table, TableIndex, TypeIndex, WasmFuncType, WasmResult,
+};
 use core::convert::TryFrom;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::immediates::{Offset32, Uimm64};

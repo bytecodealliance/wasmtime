@@ -12,13 +12,10 @@ use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::{
-    DefinedFuncIndex, InstanceTypeIndex, ModuleTypeIndex, SignatureIndex, WasmFuncType,
-};
 use wasmtime_environ::{
-    CompileError, DebugInfoData, FunctionAddressMap, InstanceSignature, Module, ModuleEnvironment,
-    ModuleSignature, ModuleTranslation, StackMapInformation, TrapInformation,
+    CompileError, DebugInfoData, DefinedFuncIndex, FunctionInfo, InstanceSignature,
+    InstanceTypeIndex, Module, ModuleEnvironment, ModuleSignature, ModuleTranslation,
+    ModuleTypeIndex, PrimaryMap, SignatureIndex, StackMapInformation, WasmFuncType,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
@@ -157,15 +154,6 @@ impl CompilationArtifacts {
 struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
 unsafe impl Send for FinishedFunctions {}
 unsafe impl Sync for FinishedFunctions {}
-
-/// Information about a function, such as trap information, address map,
-/// and stack maps.
-#[derive(Serialize, Deserialize, Clone)]
-pub struct FunctionInfo {
-    pub traps: Vec<TrapInformation>,
-    pub address_map: FunctionAddressMap,
-    pub stack_maps: Vec<StackMapInformation>,
-}
 
 /// This is intended to mirror the type tables in `wasmtime_environ`, except that
 /// it doesn't store the native signatures which are no longer needed past compilation.

@@ -9,12 +9,10 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
 use std::sync::Arc;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex,
-    TableIndex,
+use wasmtime_environ::{
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, Initializer, InstanceIndex, MemoryIndex,
+    ModuleIndex, PrimaryMap, TableIndex,
 };
-use wasmtime_environ::Initializer;
 use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstantiationError, VMContext, VMFunctionBody,

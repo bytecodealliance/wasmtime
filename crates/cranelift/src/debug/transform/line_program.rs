@@ -7,8 +7,7 @@ use gimli::{
     DebuggingInformationEntry, LineEncoding, Unit,
 };
 use more_asserts::assert_le;
-use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::wasm::DefinedFuncIndex;
+use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 #[derive(Debug)]
 enum SavedLineProgramRow {

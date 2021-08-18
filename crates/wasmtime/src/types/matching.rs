@@ -3,7 +3,7 @@ use crate::linker::Definition;
 use crate::store::StoreInnermost;
 use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Context, Result};
-use wasmtime_environ::wasm::{
+use wasmtime_environ::{
     EntityType, Global, InstanceTypeIndex, Memory, ModuleTypeIndex, SignatureIndex, Table,
 };
 use wasmtime_jit::TypeTables;

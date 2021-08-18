@@ -1,8 +1,7 @@
 //! Utilities for working with object files that operate as Wasmtime's
 //! serialization and intermediate format for compiled modules.
 
-use cranelift_entity::EntityRef;
-use cranelift_wasm::{FuncIndex, SignatureIndex};
+use crate::{EntityRef, FuncIndex, SignatureIndex};
 
 const FUNCTION_PREFIX: &str = "_wasm_function_";
 const TRAMPOLINE_PREFIX: &str = "_trampoline_";

@@ -1,8 +1,6 @@
 use std::error::Error;
 use std::fmt;
-use wasmtime_environ::entity::{EntityRef, PrimaryMap};
-use wasmtime_environ::wasm::DefinedFuncIndex;
-use wasmtime_environ::Module;
+use wasmtime_environ::{DefinedFuncIndex, EntityRef, Module, PrimaryMap};
 use wasmtime_runtime::VMFunctionBody;
 
 cfg_if::cfg_if! {

@@ -22,12 +22,11 @@ use std::hash::Hash;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
-use wasmtime_environ::entity::{packed_option::ReservedValue, EntityRef, EntitySet, PrimaryMap};
-use wasmtime_environ::wasm::{
-    DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, EntityIndex,
-    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, WasmType,
+use wasmtime_environ::{
+    packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
+    DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
+    HostPtr, MemoryIndex, Module, PrimaryMap, TableIndex, TrapCode, VMOffsets, WasmType,
 };
-use wasmtime_environ::{ir, HostPtr, Module, VMOffsets};
 
 mod allocator;
 
@@ -571,7 +570,7 @@ impl Instance {
             .and_then(|s| s.get(..usize::try_from(len).unwrap()))
         {
             Some(elements) => elements,
-            None => return Err(Trap::wasm(ir::TrapCode::TableOutOfBounds)),
+            None => return Err(Trap::wasm(TrapCode::TableOutOfBounds)),
         };
 
         match table.element_type() {
@@ -649,7 +648,7 @@ impl Instance {
     }
 
     fn validate_inbounds(&self, max: usize, ptr: u64, len: u64) -> Result<usize, Trap> {
-        let oob = || Trap::wasm(ir::TrapCode::HeapOutOfBounds);
+        let oob = || Trap::wasm(TrapCode::HeapOutOfBounds);
         let end = ptr
             .checked_add(len)
             .and_then(|i| usize::try_from(i).ok())

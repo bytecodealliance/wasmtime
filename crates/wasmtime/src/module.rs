@@ -10,8 +10,7 @@ use std::sync::Arc;
 use wasmparser::Validator;
 #[cfg(feature = "cache")]
 use wasmtime_cache::ModuleCacheEntry;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::ModuleIndex;
+use wasmtime_environ::{ModuleIndex, PrimaryMap};
 use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 
 mod registry;

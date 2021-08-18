@@ -2,8 +2,7 @@ use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
 use std::ptr::NonNull;
-use wasmtime_environ::wasm::Global;
-use wasmtime_environ::{MemoryPlan, TablePlan};
+use wasmtime_environ::{Global, MemoryPlan, TablePlan};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {

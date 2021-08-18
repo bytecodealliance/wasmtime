@@ -7,16 +7,16 @@
 //! The special case of the initialize expressions for table elements offsets or global variables
 //! is handled, according to the semantics of WebAssembly, to only specific expressions that are
 //! interpreted on the fly.
-use crate::environ::{Alias, ModuleEnvironment, WasmError, WasmResult};
+use crate::environ::{Alias, ModuleEnvironment};
 use crate::state::ModuleTranslationState;
-use crate::translation_utils::{
+use crate::wasm_unsupported;
+use crate::{
     DataIndex, ElemIndex, EntityIndex, EntityType, FuncIndex, Global, GlobalIndex, GlobalInit,
     InstanceIndex, Memory, MemoryIndex, ModuleIndex, Table, TableIndex, Tag, TagIndex, TypeIndex,
+    WasmError, WasmResult,
 };
-use crate::wasm_unsupported;
 use core::convert::TryFrom;
 use core::convert::TryInto;
-use cranelift_codegen::ir::immediates::V128Imm;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::EntityRef;
 use std::boxed::Box;
@@ -259,7 +259,7 @@ pub fn parse_global_section(
             Operator::F32Const { value } => GlobalInit::F32Const(value.bits()),
             Operator::F64Const { value } => GlobalInit::F64Const(value.bits()),
             Operator::V128Const { value } => {
-                GlobalInit::V128Const(V128Imm::from(value.bytes().to_vec().as_slice()))
+                GlobalInit::V128Const(u128::from_le_bytes(*value.bytes()))
             }
             Operator::RefNull { ty: _ } => GlobalInit::RefNullConst,
             Operator::RefFunc { function_index } => {

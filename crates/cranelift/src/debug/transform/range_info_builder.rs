@@ -3,8 +3,7 @@ use super::{DebugInputContext, Reader};
 use anyhow::Error;
 use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit};
 use more_asserts::assert_lt;
-use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::wasm::DefinedFuncIndex;
+use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 pub(crate) enum RangeInfoBuilder {
     Undefined,
