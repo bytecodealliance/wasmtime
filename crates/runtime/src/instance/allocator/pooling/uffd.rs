@@ -35,7 +35,7 @@ use crate::instance::Instance;
 use anyhow::{bail, Context, Result};
 use std::thread;
 use userfaultfd::{Event, FeatureFlags, IoctlFlags, Uffd, UffdBuilder};
-use wasmtime_environ::{entity::EntityRef, wasm::DefinedMemoryIndex, MemoryInitialization};
+use wasmtime_environ::{DefinedMemoryIndex, EntityRef, MemoryInitialization};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 

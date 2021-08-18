@@ -1000,7 +1000,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                         // If there was an out of bounds access observed in initialization, return a trap
                         if *out_of_bounds {
                             return Err(InstantiationError::Trap(crate::traphandlers::Trap::wasm(
-                                wasmtime_environ::ir::TrapCode::HeapOutOfBounds,
+                                wasmtime_environ::TrapCode::HeapOutOfBounds,
                             )));
                         }
 
