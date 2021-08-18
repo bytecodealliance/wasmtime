@@ -441,9 +441,7 @@ mod test {
         PoolingAllocationStrategy, VMSharedSignatureIndex,
     };
     use std::sync::Arc;
-    use wasmtime_environ::{
-        entity::PrimaryMap, wasm::Memory, MemoryPlan, MemoryStyle, Module, Tunables,
-    };
+    use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, PrimaryMap, Tunables};
 
     #[cfg(target_pointer_width = "64")]
     #[test]
