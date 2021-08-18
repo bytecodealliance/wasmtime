@@ -2,11 +2,10 @@
 //! module.
 
 use crate::{
-    FunctionAddressMap, FunctionBodyData, ModuleTranslation, StackMap, Tunables, TypeTables,
+    DefinedFuncIndex, FunctionAddressMap, FunctionBodyData, ModuleTranslation, PrimaryMap,
+    StackMap, Tunables, TypeTables, WasmError, WasmFuncType,
 };
 use anyhow::Result;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm_types::{DefinedFuncIndex, WasmError, WasmFuncType};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;

@@ -46,7 +46,7 @@ pub use crate::vmoffsets::*;
 // much easier to refer to everything through one crate rather than importing
 // one of three and making sure you're using the right one.
 pub use cranelift_entity::*;
-pub use cranelift_wasm_types::*;
+pub use wasmtime_types::*;
 
 /// WebAssembly page sizes are defined to be 64KiB.
 pub const WASM_PAGE_SIZE: u32 = 0x10000;

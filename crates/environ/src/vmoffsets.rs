@@ -19,11 +19,9 @@
 //      builtins: VMBuiltinFunctionsArray,
 // }
 
-use crate::module::Module;
-use crate::BuiltinFunctionIndex;
-use cranelift_wasm_types::{
-    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
-    TableIndex, TypeIndex,
+use crate::{
+    BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, MemoryIndex, Module, TableIndex, TypeIndex,
 };
 use more_asserts::assert_lt;
 use std::convert::TryFrom;

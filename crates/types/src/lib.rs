@@ -5,7 +5,6 @@ pub use wasmparser;
 
 use cranelift_entity::entity_impl;
 
-#[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
 
@@ -13,8 +12,7 @@ mod error;
 pub use error::*;
 
 /// WebAssembly value type -- equivalent of `wasmparser`'s Type.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum WasmType {
     /// I32 type
     I32,
@@ -71,8 +69,7 @@ impl From<WasmType> for wasmparser::Type {
 }
 
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
     /// Function params types.
     pub params: Box<[WasmType]>,
@@ -101,107 +98,92 @@ impl TryFrom<wasmparser::FuncType> for WasmFuncType {
 }
 
 /// Index type of a function (imported or defined) inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct FuncIndex(u32);
 entity_impl!(FuncIndex);
 
 /// Index type of a defined function inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedFuncIndex(u32);
 entity_impl!(DefinedFuncIndex);
 
 /// Index type of a defined table inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedTableIndex(u32);
 entity_impl!(DefinedTableIndex);
 
 /// Index type of a defined memory inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedMemoryIndex(u32);
 entity_impl!(DefinedMemoryIndex);
 
 /// Index type of a defined global inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DefinedGlobalIndex(u32);
 entity_impl!(DefinedGlobalIndex);
 
 /// Index type of a table (imported or defined) inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TableIndex(u32);
 entity_impl!(TableIndex);
 
 /// Index type of a global variable (imported or defined) inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct GlobalIndex(u32);
 entity_impl!(GlobalIndex);
 
 /// Index type of a linear memory (imported or defined) inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct MemoryIndex(u32);
 entity_impl!(MemoryIndex);
 
 /// Index type of a signature (imported or defined) inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct SignatureIndex(u32);
 entity_impl!(SignatureIndex);
 
 /// Index type of a passive data segment inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct DataIndex(u32);
 entity_impl!(DataIndex);
 
 /// Index type of a passive element segment inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ElemIndex(u32);
 entity_impl!(ElemIndex);
 
 /// Index type of a type inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TypeIndex(u32);
 entity_impl!(TypeIndex);
 
 /// Index type of a module inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ModuleIndex(u32);
 entity_impl!(ModuleIndex);
 
 /// Index type of an instance inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct InstanceIndex(u32);
 entity_impl!(InstanceIndex);
 
 /// Index type of an event inside the WebAssembly module.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct TagIndex(u32);
 entity_impl!(TagIndex);
 
 /// Specialized index for just module types.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct ModuleTypeIndex(u32);
 entity_impl!(ModuleTypeIndex);
 
 /// Specialized index for just instance types.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub struct InstanceTypeIndex(u32);
 entity_impl!(InstanceTypeIndex);
 
 /// An index of an entity.
-#[derive(Copy, Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 pub enum EntityIndex {
     /// Function index.
     Function(FuncIndex),
@@ -220,8 +202,7 @@ pub enum EntityIndex {
 /// A type of an item in a wasm module where an item is typically something that
 /// can be exported.
 #[allow(missing_docs)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EntityType {
     /// A global variable with the specified content type
     Global(Global),
@@ -249,8 +230,7 @@ pub enum EntityType {
 /// might be represented with the same Cranelift IR type. For example, both a
 /// Wasm `i64` and a `funcref` might be represented with a Cranelift `i64` on
 /// 64-bit architectures, and when GC is not required for func refs.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Global {
     /// The Wasm type of the value stored in the global.
     pub wasm_ty: crate::WasmType,
@@ -261,8 +241,7 @@ pub struct Global {
 }
 
 /// Globals are initialized via the `const` operators or by referring to another import.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum GlobalInit {
     /// An `i32.const`.
     I32Const(i32),
@@ -296,8 +275,7 @@ impl Global {
 }
 
 /// WebAssembly table.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Table {
     /// The table elements' Wasm type.
     pub wasm_ty: WasmType,
@@ -320,8 +298,7 @@ impl TryFrom<wasmparser::TableType> for Table {
 }
 
 /// WebAssembly linear memory.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Memory {
     /// The minimum number of pages in the memory.
     pub minimum: u64,
@@ -345,8 +322,7 @@ impl From<wasmparser::MemoryType> for Memory {
 }
 
 /// WebAssembly event.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Tag {
     /// The event signature type.
     pub ty: TypeIndex,

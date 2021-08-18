@@ -66,7 +66,7 @@ pub use crate::state::func_state::FuncTranslationState;
 pub use crate::state::module_state::ModuleTranslationState;
 pub use crate::translation_utils::*;
 pub use cranelift_frontend::FunctionBuilder;
-pub use cranelift_wasm_types::*;
+pub use wasmtime_types::*;
 
 // Convenience reexport of the wasmparser crate that we're linking against,
 // since a number of types in `wasmparser` show up in the public API of

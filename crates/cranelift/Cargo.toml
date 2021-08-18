@@ -14,7 +14,6 @@ edition = "2018"
 anyhow = "1.0"
 wasmtime-environ = { path = "../environ", version = "0.29.0" }
 cranelift-wasm = { path = "../../cranelift/wasm", version = "0.76.0" }
-cranelift-wasm-types = { path = "../../cranelift/wasm-types", version = "0.76.0" }
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.76.0" }
 cranelift-frontend = { path = "../../cranelift/frontend", version = "0.76.0" }
 cranelift-entity = { path = "../../cranelift/entity", version = "0.76.0" }

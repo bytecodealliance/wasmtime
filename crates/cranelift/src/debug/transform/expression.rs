@@ -3,16 +3,14 @@ use anyhow::{Context, Error, Result};
 use cranelift_codegen::ir::{LabelValueLoc, StackSlots, ValueLabel, ValueLoc};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::ValueLabelsRanges;
-use cranelift_entity::EntityRef;
 use cranelift_wasm::get_vmctx_value_label;
-use cranelift_wasm_types::DefinedFuncIndex;
 use gimli::{self, write, Expression, Operation, Reader, ReaderOffset, X86_64};
 use more_asserts::{assert_le, assert_lt};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_environ::ModuleMemoryOffset;
+use wasmtime_environ::{DefinedFuncIndex, EntityRef, ModuleMemoryOffset};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
@@ -1270,9 +1268,7 @@ mod tests {
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
         use cranelift_codegen::ir::StackSlots;
-        use cranelift_entity::EntityRef;
-        use cranelift_wasm_types::DefinedFuncIndex;
-        use wasmtime_environ::ModuleMemoryOffset;
+        use wasmtime_environ::{DefinedFuncIndex, EntityRef, ModuleMemoryOffset};
 
         let addr_tr = create_mock_address_transform();
         let stack_slots = StackSlots::new();

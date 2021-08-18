@@ -799,7 +799,6 @@ dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
  "cranelift-frontend",
- "cranelift-wasm-types",
  "hashbrown",
  "itertools 0.10.0",
  "log",
@@ -807,17 +806,8 @@ dependencies = [
  "smallvec",
  "target-lexicon",
  "wasmparser",
+ "wasmtime-types",
  "wat",
-]
-
-[[package]]
-name = "cranelift-wasm-types"
-version = "0.76.0"
-dependencies = [
- "cranelift-entity",
- "serde",
- "thiserror",
- "wasmparser",
 ]
 
 [[package]]
@@ -3700,7 +3690,6 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-native",
  "cranelift-wasm",
- "cranelift-wasm-types",
  "gimli",
  "more-asserts",
  "object",
@@ -3717,7 +3706,6 @@ dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
  "cranelift-entity",
- "cranelift-wasm-types",
  "gimli",
  "indexmap",
  "log",
@@ -3726,6 +3714,7 @@ dependencies = [
  "target-lexicon",
  "thiserror",
  "wasmparser",
+ "wasmtime-types",
 ]
 
 [[package]]
@@ -3854,6 +3843,16 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fiber",
  "winapi",
+]
+
+[[package]]
+name = "wasmtime-types"
+version = "0.29.0"
+dependencies = [
+ "cranelift-entity",
+ "serde",
+ "thiserror",
+ "wasmparser",
 ]
 
 [[package]]

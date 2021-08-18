@@ -2,13 +2,12 @@ use super::address_transform::AddressTransform;
 use super::attr::clone_attr_string;
 use super::{Reader, TransformError};
 use anyhow::{Context, Error};
-use cranelift_entity::EntityRef;
-use cranelift_wasm_types::DefinedFuncIndex;
 use gimli::{
     write, DebugLine, DebugLineOffset, DebugLineStr, DebugStr, DebugStrOffsets,
     DebuggingInformationEntry, LineEncoding, Unit,
 };
 use more_asserts::assert_le;
+use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 #[derive(Debug)]
 enum SavedLineProgramRow {
