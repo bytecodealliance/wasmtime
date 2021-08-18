@@ -307,8 +307,8 @@ impl<T> Linker<T> {
     /// Creates a [`Func::new_async`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].
-    #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn func_new_async<F>(
         &mut self,
         module: &str,
@@ -659,8 +659,8 @@ impl<T> Linker<T> {
     /// Define automatic instantiations of a [`Module`] in this linker.
     ///
     /// This is the same as [`Linker::module`], except for async `Store`s.
-    #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub async fn module_async(
         &mut self,
         mut store: impl AsContextMut<Data = T>,
