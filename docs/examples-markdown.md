@@ -28,10 +28,10 @@ Our wasm file should be compiled to `target/wasm32-wasi/debug/rust_wasi_markdown
 
 To do this, we can use the Wasmtime CLI. However, there is one thing to note about Wasmtime, WASI, and the capability based security model. We need to give our program explicit access to read files on our device. Wasm modules that implement WASI will not have this capability unless we give them the capability.
 
-To grant the capability to write in a directory using the Wasmtime CLI, we need to use the --mapdir flag. --mapdir will allow us to map the current directory on the guest's (our program's compiled WASM module) virtual filesystem, to the current directory on the host (the Wasmtime CLI) fileystem. For example:
+To grant the capability to read in a directory using the Wasmtime CLI, we need to use the --dir flag. --dir will instruct wasmtime to allow our wasm module to preopen, and read files in the passed directory. For example:
 
 ```
-$ wasmtime --mapdir GUEST_DIRECTORY::HOST_DIRECTORY my-wasi-program.wasm
+$ wasmtime --dir . my-wasi-program.wasm
 ```
 
 For this example, we will be passing a markdown file to our program called: `example-markdown.md`, that will exist in whatever our current directory (`./`) is. Our markdown file, `example-markdown.md`, will contain:
@@ -45,13 +45,13 @@ I am example markdown for this demo!
 So, **to run our compiled WASI program, we will run**:
 
 ```
-wasmtime --mapdir .::. target/wasm32-wasi/debug/rust_wasi_markdown_parser.wasm ./example-markdown.md
+wasmtime --dir . target/wasm32-wasi/debug/rust_wasi_markdown_parser.wasm -- ./example_markdown.md
 ```
 
 Which should look like the following:
 
 ```
-demouser at demo in ~ $ wasmtime --mapdir .::. target/wasm32-wasi/debug/rust_wasi_markdown_parser.wasm ./example_markdown.md 
+demouser at demo in ~ $ wasmtime --dir . target/wasm32-wasi/debug/rust_wasi_markdown_parser.wasm -- ./example_markdown.md 
 <h1>Hello!</h1>
 <p>I am example markdown for this demo!</p>
 ```

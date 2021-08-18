@@ -1,39 +1,43 @@
+// Import our CLI parsing libraries (And PathBuf for reading paths)
+extern crate structopt;
+
+use structopt::StructOpt;
+use std::path::PathBuf;
+
 // Import our markdown parser library, crate
 extern crate pulldown_cmark;
 
 use pulldown_cmark::{html, Parser};
 
-// Import from the standard library, to allow reading CLI arguments, and from the file system
-use std::env;
+// Import from the standard library, to allow reading from the file system
 use std::fs;
+
+// Define our CLI options using structopt
+#[derive(StructOpt)]
+pub struct Options {
+    /// The markdown file to render
+    #[structopt(parse(from_os_str))]
+    filename: PathBuf,
+}
 
 // Our entrypoint into our WASI module
 fn main() {
 
-    // Get the passed CLI arguments
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() != 2 {
-        eprintln!("error: please pass a markdown file to be parsed");
-        return;
-    }
-
-    // Get the markdown file name argument
-    let filename = &args[1];
+    // Get the passed CLI options
+    let options = Options::from_args();
 
     // Read the markdown file into a string
-    let contents = fs::read_to_string(filename)
+    let contents = fs::read_to_string(options.filename)
         .expect("Something went wrong reading the file");
 
     // Run our parsing function to get back an HTML string
-    let result = format(contents);
+    let result = render_markdown(contents);
 
     // Print out the resulting HTML to standard out
     println!("{}", result);
 }
 
-// Create a function for converting a markdown string, into an HTML string
-pub fn format(markdown: String) -> String {
+pub fn render_markdown(markdown: String) -> String {
     let mut html_buf = String::new();
     let parser = Parser::new(&markdown[..]);
     html::push_html(&mut html_buf, parser);

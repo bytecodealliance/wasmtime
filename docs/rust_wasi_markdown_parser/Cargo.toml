@@ -7,3 +7,4 @@ edition = "2018"
 
 [dependencies]
 pulldown-cmark = "0.1.2"
+structopt = "0.3.22"
