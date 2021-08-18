@@ -70,13 +70,13 @@ unsafe extern "C" fn stub_fn(
     }
 }
 
+#[cfg(compiler)]
 pub fn create_function(
     ft: &FuncType,
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
     engine: &Engine,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
     let obj = engine
-        .compiler()
         .compiler()
         .emit_trampoline_obj(ft.as_wasm_func_type(), stub_fn as usize)?;
 

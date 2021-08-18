@@ -21,14 +21,12 @@
 )]
 
 mod code_memory;
-mod compiler;
 mod debug;
 mod instantiate;
 mod link;
 mod unwind;
 
 pub use crate::code_memory::CodeMemory;
-pub use crate::compiler::{Compilation, CompilationStrategy, Compiler};
 pub use crate::instantiate::{
     CompilationArtifacts, CompiledModule, ModuleCode, SetupError, SymbolizeContext, TypeTables,
 };

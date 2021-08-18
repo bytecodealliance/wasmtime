@@ -11,7 +11,6 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::{CompilerBuilder, Tunables};
-use wasmtime_jit::{CompilationStrategy, Compiler};
 use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
     InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator, RuntimeMemoryCreator,
@@ -337,6 +336,7 @@ impl Default for InstanceAllocationStrategy {
 /// This structure exposed a builder-like interface and is primarily consumed by
 /// [`Engine::new()`](crate::Engine::new)
 pub struct Config {
+    #[cfg(compiler)]
     pub(crate) compiler: Box<dyn CompilerBuilder>,
     pub(crate) tunables: Tunables,
     #[cfg(feature = "cache")]
@@ -360,7 +360,8 @@ impl Config {
     pub fn new() -> Self {
         let mut ret = Self {
             tunables: Tunables::default(),
-            compiler: Compiler::builder(CompilationStrategy::Auto),
+            #[cfg(compiler)]
+            compiler: compiler_builder(Strategy::Auto).unwrap(),
             #[cfg(feature = "cache")]
             cache_config: CacheConfig::new_cache_disabled(),
             profiler: Arc::new(NullProfilerAgent),
@@ -375,8 +376,11 @@ impl Config {
             deserialize_check_wasmtime_version: true,
             parallel_compilation: true,
         };
-        ret.cranelift_debug_verifier(false);
-        ret.cranelift_opt_level(OptLevel::Speed);
+        #[cfg(compiler)]
+        {
+            ret.cranelift_debug_verifier(false);
+            ret.cranelift_opt_level(OptLevel::Speed);
+        }
         ret.wasm_reference_types(true);
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
@@ -396,6 +400,8 @@ impl Config {
     /// # Errors
     ///
     /// This method will error if the given target triple is not supported.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn target(&mut self, target: &str) -> Result<&mut Self> {
         use std::str::FromStr;
         self.compiler
@@ -655,9 +661,12 @@ impl Config {
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.features.reference_types = enable;
 
-        self.compiler
-            .set("enable_safepoints", if enable { "true" } else { "false" })
-            .unwrap();
+        #[cfg(compiler)]
+        {
+            self.compiler
+                .set("enable_safepoints", if enable { "true" } else { "false" })
+                .unwrap();
+        }
 
         // The reference types proposal depends on the bulk memory proposal.
         if enable {
@@ -689,10 +698,13 @@ impl Config {
     /// [proposal]: https://github.com/webassembly/simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
         self.features.simd = enable;
-        let val = if enable { "true" } else { "false" };
-        self.compiler
-            .set("enable_simd", val)
-            .expect("should be valid flag");
+        #[cfg(compiler)]
+        {
+            let val = if enable { "true" } else { "false" };
+            self.compiler
+                .set("enable_simd", val)
+                .expect("should be valid flag");
+        }
         self
     }
 
@@ -780,18 +792,10 @@ impl Config {
     /// Some compilation strategies require compile-time options of `wasmtime`
     /// itself to be set, but if they're not set and the strategy is specified
     /// here then an error will be returned.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn strategy(&mut self, strategy: Strategy) -> Result<&mut Self> {
-        let strategy = match strategy {
-            Strategy::Auto => CompilationStrategy::Auto,
-            Strategy::Cranelift => CompilationStrategy::Cranelift,
-            #[cfg(feature = "lightbeam")]
-            Strategy::Lightbeam => CompilationStrategy::Lightbeam,
-            #[cfg(not(feature = "lightbeam"))]
-            Strategy::Lightbeam => {
-                anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
-            }
-        };
-        self.compiler = Compiler::builder(strategy);
+        self.compiler = compiler_builder(strategy)?;
         Ok(self)
     }
 
@@ -816,6 +820,8 @@ impl Config {
     /// developers of wasmtime itself.
     ///
     /// The default value for this is `false`
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn cranelift_debug_verifier(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler
@@ -831,6 +837,8 @@ impl Config {
     /// more information see the documentation of [`OptLevel`].
     ///
     /// The default value for this is `OptLevel::None`.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
             OptLevel::None => "none",
@@ -851,6 +859,8 @@ impl Config {
     /// This is not required by the WebAssembly spec, so it is not enabled by default.
     ///
     /// The default value for this is `false`
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn cranelift_nan_canonicalization(&mut self, enable: bool) -> &mut Self {
         let val = if enable { "true" } else { "false" };
         self.compiler
@@ -873,6 +883,8 @@ impl Config {
     /// # Errors
     ///
     /// This method can fail if the flag's name does not exist.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub unsafe fn cranelift_flag_enable(&mut self, flag: &str) -> Result<&mut Self> {
         self.compiler.enable(flag)?;
         Ok(self)
@@ -891,6 +903,8 @@ impl Config {
     ///
     /// This method can fail if the flag's name does not exist, or the value is not appropriate for
     /// the flag type.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub unsafe fn cranelift_flag_set(&mut self, name: &str, value: &str) -> Result<&mut Self> {
         self.compiler.set(name, value)?;
         Ok(self)
@@ -1203,17 +1217,6 @@ impl Config {
         self
     }
 
-    pub(crate) fn build_compiler(&self, allocator: &dyn InstanceAllocator) -> Compiler {
-        let mut tunables = self.tunables.clone();
-        allocator.adjust_tunables(&mut tunables);
-        Compiler::new(
-            &*self.compiler,
-            tunables,
-            self.features,
-            self.parallel_compilation,
-        )
-    }
-
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;
@@ -1241,6 +1244,19 @@ impl Config {
     }
 }
 
+#[cfg(compiler)]
+fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
+    match strategy {
+        Strategy::Auto | Strategy::Cranelift => Ok(wasmtime_cranelift::builder()),
+        #[cfg(feature = "lightbeam")]
+        Strategy::Lightbeam => unimplemented!(),
+        #[cfg(not(feature = "lightbeam"))]
+        Strategy::Lightbeam => {
+            anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
+        }
+    }
+}
+
 fn round_up_to_pages(val: u64) -> u64 {
     let page_size = region::page::size() as u64;
     debug_assert!(page_size.is_power_of_two());
@@ -1258,6 +1274,7 @@ impl Default for Config {
 impl Clone for Config {
     fn clone(&self) -> Config {
         Config {
+            #[cfg(compiler)]
             compiler: self.compiler.clone(),
             tunables: self.tunables.clone(),
             #[cfg(feature = "cache")]
@@ -1279,8 +1296,8 @@ impl Clone for Config {
 
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("Config")
-            .field("debug_info", &self.tunables.generate_native_debuginfo)
+        let mut f = f.debug_struct("Config");
+        f.field("debug_info", &self.tunables.generate_native_debuginfo)
             .field("parse_wasm_debuginfo", &self.tunables.parse_wasm_debuginfo)
             .field("wasm_threads", &self.features.threads)
             .field("wasm_reference_types", &self.features.reference_types)
@@ -1305,9 +1322,12 @@ impl fmt::Debug for Config {
                 "guard_before_linear_memory",
                 &self.tunables.guard_before_linear_memory,
             )
-            .field("parallel_compilation", &self.parallel_compilation)
-            .field("compiler", &self.compiler)
-            .finish()
+            .field("parallel_compilation", &self.parallel_compilation);
+        #[cfg(compiler)]
+        {
+            f.field("compiler", &self.compiler);
+        }
+        f.finish()
     }
 }
 

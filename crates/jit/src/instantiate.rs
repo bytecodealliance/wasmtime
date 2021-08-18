@@ -4,7 +4,6 @@
 //! steps.
 
 use crate::code_memory::CodeMemory;
-use crate::compiler::{Compilation, Compiler};
 use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
 use anyhow::Result;
@@ -14,8 +13,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
     CompileError, DebugInfoData, DefinedFuncIndex, FunctionInfo, InstanceSignature,
-    InstanceTypeIndex, Module, ModuleEnvironment, ModuleSignature, ModuleTranslation,
-    ModuleTypeIndex, PrimaryMap, SignatureIndex, StackMapInformation, WasmFuncType,
+    InstanceTypeIndex, Module, ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap,
+    SignatureIndex, StackMapInformation, Tunables, WasmFuncType,
 };
 use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
@@ -84,70 +83,32 @@ struct DebugInfo {
 }
 
 impl CompilationArtifacts {
-    /// Creates a `CompilationArtifacts` for a singular translated wasm module.
-    ///
-    /// The `use_paged_init` argument controls whether or not an attempt is made to
-    /// organize linear memory initialization data as entire pages or to leave
-    /// the memory initialization data as individual segments.
-    pub fn build(
-        compiler: &Compiler,
-        data: &[u8],
-        use_paged_mem_init: bool,
-    ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables), SetupError> {
-        let (main_module, translations, types) =
-            ModuleEnvironment::new(compiler.tunables(), compiler.features())
-                .translate(data)
-                .map_err(|error| SetupError::Compile(CompileError::Wasm(error)))?;
-
-        let list = compiler.run_maybe_parallel::<_, _, SetupError, _>(
-            translations,
-            |mut translation| {
-                let Compilation { obj, funcs } = compiler.compile(&mut translation, &types)?;
-
-                let ModuleTranslation {
-                    mut module,
-                    debuginfo,
-                    has_unparsed_debuginfo,
-                    ..
-                } = translation;
-
-                if use_paged_mem_init {
-                    if let Some(init) = module.memory_initialization.to_paged(&module) {
-                        module.memory_initialization = init;
-                    }
-                }
-
-                Ok(CompilationArtifacts {
-                    module: Arc::new(module),
-                    obj: obj.into_boxed_slice(),
-                    funcs: funcs
-                        .into_iter()
-                        .map(|(_, func)| FunctionInfo {
-                            stack_maps: func.stack_maps,
-                            traps: func.traps,
-                            address_map: func.address_map,
-                        })
-                        .collect(),
-                    native_debug_info_present: compiler.tunables().generate_native_debuginfo,
-                    debug_info: if compiler.tunables().parse_wasm_debuginfo {
-                        Some(debuginfo.into())
-                    } else {
-                        None
-                    },
-                    has_unparsed_debuginfo,
-                })
+    /// Creates a new `CompilationArtifacts` from the final results of
+    /// compilation.
+    pub fn new(
+        translation: ModuleTranslation<'_>,
+        obj: Vec<u8>,
+        funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+        tunables: &Tunables,
+    ) -> CompilationArtifacts {
+        let ModuleTranslation {
+            module,
+            debuginfo,
+            has_unparsed_debuginfo,
+            ..
+        } = translation;
+        CompilationArtifacts {
+            module: Arc::new(module),
+            obj: obj.into_boxed_slice(),
+            funcs,
+            native_debug_info_present: tunables.generate_native_debuginfo,
+            debug_info: if tunables.parse_wasm_debuginfo {
+                Some(debuginfo.into())
+            } else {
+                None
             },
-        )?;
-
-        Ok((
-            main_module,
-            list,
-            TypeTables {
-                wasm_signatures: types.wasm_signatures,
-                module_signatures: types.module_signatures,
-                instance_signatures: types.instance_signatures,
-            },
-        ))
+            has_unparsed_debuginfo,
+        }
     }
 }
 
@@ -189,16 +150,6 @@ pub struct CompiledModule {
 }
 
 impl CompiledModule {
-    /// Creates a list of compiled modules from the given list of compilation
-    /// artifacts.
-    pub fn from_artifacts_list(
-        artifacts: Vec<CompilationArtifacts>,
-        profiler: &dyn ProfilingAgent,
-        compiler: &Compiler,
-    ) -> Result<Vec<Arc<Self>>, SetupError> {
-        compiler.run_maybe_parallel(artifacts, |a| CompiledModule::from_artifacts(a, profiler))
-    }
-
     /// Creates `CompiledModule` directly from `CompilationArtifacts`.
     pub fn from_artifacts(
         artifacts: CompilationArtifacts,

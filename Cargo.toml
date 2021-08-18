@@ -21,8 +21,9 @@ path = "src/bin/wasmtime.rs"
 doc = false
 
 [dependencies]
-wasmtime = { path = "crates/wasmtime", version = "0.29.0", default-features = false, features = ['cache'] }
+wasmtime = { path = "crates/wasmtime", version = "0.29.0", default-features = false, features = ['cache', 'cranelift'] }
 wasmtime-cache = { path = "crates/cache", version = "0.29.0" }
+wasmtime-cranelift = { path = "crates/cranelift", version = "0.29.0" }
 wasmtime-environ = { path = "crates/environ", version = "0.29.0" }
 wasmtime-jit = { path = "crates/jit", version = "0.29.0" }
 wasmtime-wast = { path = "crates/wast", version = "0.29.0" }
@@ -70,6 +71,7 @@ members = [
   "cranelift",
   "crates/bench-api",
   "crates/c-api",
+  "crates/lightbeam/wasmtime",
   "crates/misc/run-examples",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",

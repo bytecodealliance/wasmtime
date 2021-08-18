@@ -1,10 +1,11 @@
 use crate::signatures::SignatureRegistry;
 use crate::{Config, Trap};
 use anyhow::Result;
+#[cfg(feature = "parallel-compilation")]
+use rayon::prelude::*;
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_jit::Compiler;
 use wasmtime_runtime::{debug_builtins, InstanceAllocator};
 
 /// An `Engine` which is a global context for compilation and management of wasm
@@ -36,7 +37,8 @@ pub struct Engine {
 
 struct EngineInner {
     config: Config,
-    compiler: Compiler,
+    #[cfg(compiler)]
+    compiler: Box<dyn wasmtime_environ::Compiler>,
     allocator: Box<dyn InstanceAllocator>,
     signatures: SignatureRegistry,
 }
@@ -50,13 +52,17 @@ impl Engine {
         // as configuring signals, vectored exception handlers, etc.
         wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc);
         debug_builtins::ensure_exported();
-        let allocator = config.build_allocator()?;
+
         let registry = SignatureRegistry::new();
+        let mut config = config.clone();
+        let allocator = config.build_allocator()?;
+        allocator.adjust_tunables(&mut config.tunables);
 
         Ok(Engine {
             inner: Arc::new(EngineInner {
-                config: config.clone(),
-                compiler: config.build_compiler(allocator.as_ref()),
+                #[cfg(compiler)]
+                compiler: config.compiler.build(),
+                config,
                 allocator,
                 signatures: registry,
             }),
@@ -90,8 +96,9 @@ impl Engine {
         &self.inner.config
     }
 
-    pub(crate) fn compiler(&self) -> &Compiler {
-        &self.inner.compiler
+    #[cfg(compiler)]
+    pub(crate) fn compiler(&self) -> &dyn wasmtime_environ::Compiler {
+        &*self.inner.compiler
     }
 
     pub(crate) fn allocator(&self) -> &dyn InstanceAllocator {
@@ -134,20 +141,39 @@ impl Engine {
     ///
     /// [binary]: https://webassembly.github.io/spec/core/binary/index.html
     /// [text]: https://webassembly.github.io/spec/core/text/index.html
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn precompile_module(&self, bytes: &[u8]) -> Result<Vec<u8>> {
-        const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
-
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
+        let (_, artifacts, types) = crate::Module::build_artifacts(self, &bytes)?;
+        crate::module::SerializedModule::from_artifacts(self, &artifacts, &types).to_bytes()
+    }
 
-        let (_, artifacts, types) = wasmtime_jit::CompilationArtifacts::build(
-            &self.inner.compiler,
-            &bytes,
-            USE_PAGED_MEM_INIT,
-        )?;
+    pub(crate) fn run_maybe_parallel<
+        A: Send,
+        B: Send,
+        E: Send,
+        F: Fn(A) -> Result<B, E> + Send + Sync,
+    >(
+        &self,
+        input: Vec<A>,
+        f: F,
+    ) -> Result<Vec<B>, E> {
+        if self.config().parallel_compilation {
+            #[cfg(feature = "parallel-compilation")]
+            return input
+                .into_par_iter()
+                .map(|a| f(a))
+                .collect::<Result<Vec<B>, E>>();
+        }
 
-        crate::module::SerializedModule::from_artifacts(&self.inner.compiler, &artifacts, &types)
-            .to_bytes()
+        // In case the parallel-compilation feature is disabled or the parallel_compilation config
+        // was turned off dynamically fallback to the non-parallel version.
+        input
+            .into_iter()
+            .map(|a| f(a))
+            .collect::<Result<Vec<B>, E>>()
     }
 }
 

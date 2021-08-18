@@ -7,7 +7,7 @@ mod table;
 
 pub(crate) use memory::MemoryCreatorProxy;
 
-pub use self::func::{create_function, create_raw_function};
+pub use self::func::*;
 use self::global::create_global;
 use self::memory::create_memory;
 use self::table::create_table;

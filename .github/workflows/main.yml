@@ -75,7 +75,7 @@ jobs:
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
         cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook
     - run: (cd docs && mdbook build)
-    - run: cargo build -p wasmtime-wasi --features wasmtime/wat
+    - run: cargo build -p wasmtime-wasi --features wasmtime/wat,wasmtime/cranelift
     - run: (cd docs && mdbook test -L ../target/debug/deps)
 
     # Build Rust API documentation
@@ -124,18 +124,20 @@ jobs:
     - uses: ./.github/actions/install-rust
 
     # Check some feature combinations of the `wasmtime` crate
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --no-default-features
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features wat
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features lightbeam
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features jitdump
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features cache
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features async
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features uffd
+    - run: cargo check -p wasmtime --no-default-features
+    - run: cargo check -p wasmtime --no-default-features --features wat
+    - run: cargo check -p wasmtime --no-default-features --features lightbeam
+    - run: cargo check -p wasmtime --no-default-features --features jitdump
+    - run: cargo check -p wasmtime --no-default-features --features cache
+    - run: cargo check -p wasmtime --no-default-features --features async
+    - run: cargo check -p wasmtime --no-default-features --features uffd
+    - run: cargo check -p wasmtime --no-default-features --features cranelift
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
 
     # Check some feature combinations of the `wasmtime-c-api` crate
-    - run: cargo check --manifest-path crates/c-api/Cargo.toml --no-default-features
-    - run: cargo check --manifest-path crates/c-api/Cargo.toml --features wat
-    - run: cargo check --manifest-path crates/c-api/Cargo.toml --features wasi
+    - run: cargo check -p wasmtime-c-api --no-default-features
+    - run: cargo check -p wasmtime-c-api --no-default-features --features wat
+    - run: cargo check -p wasmtime-c-api --no-default-features --features wasi
 
     # Check a few builds of the cranelift backend
     # - only x86 backend support,

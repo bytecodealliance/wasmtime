@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use wasmtime_environ::{FlagValue, Tunables};
-use wasmtime_jit::{CompilationArtifacts, CompiledModule, Compiler, TypeTables};
+use wasmtime_environ::{Compiler, FlagValue, Tunables};
+use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
 
 const HEADER: &[u8] = b"\0wasmtime-aot";
 
@@ -162,8 +162,8 @@ pub struct SerializedModule<'a> {
 }
 
 impl<'a> SerializedModule<'a> {
+    #[cfg(compiler)]
     pub fn new(module: &'a Module) -> Self {
-        let compiler = module.engine().compiler();
         let artifacts = module
             .inner
             .artifact_upvars
@@ -181,38 +181,40 @@ impl<'a> SerializedModule<'a> {
             .collect::<Vec<_>>();
 
         Self::with_data(
-            compiler,
+            module.engine(),
             artifacts,
             module_upvars,
             MyCow::Borrowed(module.types()),
         )
     }
 
+    #[cfg(compiler)]
     pub fn from_artifacts(
-        compiler: &Compiler,
+        engine: &Engine,
         artifacts: &'a Vec<CompilationArtifacts>,
         types: &'a TypeTables,
     ) -> Self {
         Self::with_data(
-            compiler,
+            engine,
             artifacts.iter().map(MyCow::Borrowed).collect(),
             Vec::new(),
             MyCow::Borrowed(types),
         )
     }
 
+    #[cfg(compiler)]
     fn with_data(
-        compiler: &Compiler,
+        engine: &Engine,
         artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
         module_upvars: Vec<SerializedModuleUpvar>,
         types: MyCow<'a, TypeTables>,
     ) -> Self {
         Self {
-            target: compiler.triple().to_string(),
-            shared_flags: compiler.compiler().flags(),
-            isa_flags: compiler.compiler().isa_flags(),
-            tunables: compiler.tunables().clone(),
-            features: compiler.features().into(),
+            target: engine.compiler().triple().to_string(),
+            shared_flags: engine.compiler().flags(),
+            isa_flags: engine.compiler().isa_flags(),
+            tunables: engine.config().tunables.clone(),
+            features: (&engine.config().features).into(),
             artifacts,
             module_upvars,
             types,
@@ -220,22 +222,32 @@ impl<'a> SerializedModule<'a> {
     }
 
     pub fn into_module(mut self, engine: &Engine) -> Result<Module> {
-        let compiler = engine.compiler();
+        // Verify that the module we're loading matches the triple that `engine`
+        // is configured for. If compilation is disabled within engine then the
+        // assumed triple is the host itself.
+        #[cfg(compiler)]
+        let engine_triple = engine.compiler().triple();
+        #[cfg(not(compiler))]
+        let engine_triple = &target_lexicon::Triple::host();
+        self.check_triple(engine_triple)?;
 
-        self.check_triple(compiler)?;
-        self.check_shared_flags(compiler)?;
-        self.check_isa_flags(compiler)?;
-        self.check_tunables(compiler)?;
-        self.check_features(compiler)?;
+        // FIXME: Similar to `Module::from_binary` it should likely be validated
+        // here that when `cfg(not(compiler))` is true the isa/shared flags
+        // enabled for this precompiled module are compatible with the host
+        // itself, which `engine` is assumed to be running code for.
+        #[cfg(compiler)]
+        {
+            let compiler = engine.compiler();
+            self.check_shared_flags(compiler)?;
+            self.check_isa_flags(compiler)?;
+        }
 
-        let modules = CompiledModule::from_artifacts_list(
-            self.artifacts
-                .into_iter()
-                .map(|i| i.unwrap_owned())
-                .collect(),
-            &*engine.config().profiler,
-            engine.compiler(),
-        )?;
+        self.check_tunables(&engine.config().tunables)?;
+        self.check_features(&engine.config().features)?;
+
+        let modules = engine.run_maybe_parallel(self.artifacts, |i| {
+            CompiledModule::from_artifacts(i.unwrap_owned(), &*engine.config().profiler)
+        })?;
 
         assert!(!modules.is_empty());
 
@@ -304,17 +316,17 @@ impl<'a> SerializedModule<'a> {
             .context("deserialize compilation artifacts")?)
     }
 
-    fn check_triple(&self, compiler: &Compiler) -> Result<()> {
+    fn check_triple(&self, other: &target_lexicon::Triple) -> Result<()> {
         let triple = target_lexicon::Triple::from_str(&self.target).map_err(|e| anyhow!(e))?;
 
-        if triple.architecture != compiler.triple().architecture {
+        if triple.architecture != other.architecture {
             bail!(
                 "Module was compiled for architecture '{}'",
                 triple.architecture
             );
         }
 
-        if triple.operating_system != compiler.triple().operating_system {
+        if triple.operating_system != other.operating_system {
             bail!(
                 "Module was compiled for operating system '{}'",
                 triple.operating_system
@@ -324,9 +336,9 @@ impl<'a> SerializedModule<'a> {
         Ok(())
     }
 
-    fn check_shared_flags(&mut self, compiler: &Compiler) -> Result<()> {
+    fn check_shared_flags(&mut self, compiler: &dyn Compiler) -> Result<()> {
         let mut shared_flags = std::mem::take(&mut self.shared_flags);
-        for (name, host) in compiler.compiler().flags() {
+        for (name, host) in compiler.flags() {
             match shared_flags.remove(&name) {
                 Some(v) => {
                     if v != host {
@@ -347,9 +359,9 @@ impl<'a> SerializedModule<'a> {
         Ok(())
     }
 
-    fn check_isa_flags(&mut self, compiler: &Compiler) -> Result<()> {
+    fn check_isa_flags(&mut self, compiler: &dyn Compiler) -> Result<()> {
         let mut isa_flags = std::mem::take(&mut self.isa_flags);
-        for (name, host) in compiler.compiler().isa_flags() {
+        for (name, host) in compiler.isa_flags() {
             match isa_flags.remove(&name) {
                 Some(v) => match (&v, &host) {
                     (FlagValue::Bool(v), FlagValue::Bool(host)) => {
@@ -406,7 +418,7 @@ impl<'a> SerializedModule<'a> {
         );
     }
 
-    fn check_tunables(&self, compiler: &Compiler) -> Result<()> {
+    fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
             static_memory_bound,
             static_memory_offset_guard_size,
@@ -418,8 +430,6 @@ impl<'a> SerializedModule<'a> {
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
         } = self.tunables;
-
-        let other = compiler.tunables();
 
         Self::check_int(
             static_memory_bound,
@@ -462,7 +472,7 @@ impl<'a> SerializedModule<'a> {
         Ok(())
     }
 
-    fn check_features(&self, compiler: &Compiler) -> Result<()> {
+    fn check_features(&mut self, other: &wasmparser::WasmFeatures) -> Result<()> {
         let WasmFeatures {
             reference_types,
             multi_value,
@@ -477,7 +487,6 @@ impl<'a> SerializedModule<'a> {
             memory64,
         } = self.features;
 
-        let other = compiler.features();
         Self::check_bool(
             reference_types,
             other.reference_types,
