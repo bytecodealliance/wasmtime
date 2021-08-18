@@ -1,7 +1,7 @@
 //! Helper functions and structures for the translation.
 use crate::environ::{TargetEnvironment, WasmResult, WasmType};
-use crate::wasm_unsupported;
-use core::convert::TryInto;
+use crate::{wasm_unsupported, WasmError};
+use core::convert::{TryFrom, TryInto};
 use core::u32;
 use cranelift_codegen::entity::entity_impl;
 use cranelift_codegen::ir;
@@ -195,6 +195,17 @@ pub enum GlobalInit {
     Import,
 }
 
+impl Global {
+    /// Creates a new `Global` type from wasmparser's representation.
+    pub fn new(ty: wasmparser::GlobalType, initializer: GlobalInit) -> WasmResult<Global> {
+        Ok(Global {
+            wasm_ty: ty.content_type.try_into()?,
+            mutability: ty.mutable,
+            initializer,
+        })
+    }
+}
+
 /// WebAssembly table.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
@@ -205,6 +216,18 @@ pub struct Table {
     pub minimum: u32,
     /// The maximum number of elements in the table.
     pub maximum: Option<u32>,
+}
+
+impl TryFrom<wasmparser::TableType> for Table {
+    type Error = WasmError;
+
+    fn try_from(ty: wasmparser::TableType) -> WasmResult<Table> {
+        Ok(Table {
+            wasm_ty: ty.element_type.try_into()?,
+            minimum: ty.initial,
+            maximum: ty.maximum,
+        })
+    }
 }
 
 /// WebAssembly table element. Can be a function or a scalar type.
@@ -231,12 +254,31 @@ pub struct Memory {
     pub memory64: bool,
 }
 
+impl From<wasmparser::MemoryType> for Memory {
+    fn from(ty: wasmparser::MemoryType) -> Memory {
+        Memory {
+            minimum: ty.initial,
+            maximum: ty.maximum,
+            shared: ty.shared,
+            memory64: ty.memory64,
+        }
+    }
+}
+
 /// WebAssembly event.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct Tag {
     /// The event signature type.
     pub ty: TypeIndex,
+}
+
+impl From<wasmparser::TagType> for Tag {
+    fn from(ty: wasmparser::TagType) -> Tag {
+        Tag {
+            ty: TypeIndex::from_u32(ty.type_index),
+        }
+    }
 }
 
 /// Helper function translating wasmparser types to Cranelift types when possible.
