@@ -12,6 +12,7 @@
     1. _Sumbit a PR to add your announcement here_
 1. Other agenda items
     1. cfallin: semantics of booleans (#3205)
+    1. cfallin: instruction selection DSL (RFC 15)
 
 ## Notes
 
