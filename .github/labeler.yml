@@ -70,3 +70,7 @@
 "wasmtime:docs":
   - "*.md"
   - "docs/**"
+
+"wasmtime:ref-types":
+  - "crates/wasmtime/src/ref.rs"
+  - "crates/runtime/src/externref.rs"
