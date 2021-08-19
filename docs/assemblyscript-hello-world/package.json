@@ -4,15 +4,15 @@
   "description": "Hello world in Wasi with AS and as-wasi",
   "main": "index.js",
   "scripts": {
-    "build": "asc wasi-hello-world.ts -b wasi-hello-world.wasm -t wasi-hello-world.wat --runtime half",
+    "build": "asc wasi-hello-world.ts -b wasi-hello-world.wasm",
     "wasmtime": "wasmtime wasi-hello-world.wasm"
   },
   "author": "Aaron Turner",
   "license": "MIT",
   "devDependencies": {
-    "assemblyscript": "^0.10.0"
+    "assemblyscript": "^0.19.10"
   },
   "dependencies": {
-    "as-wasi": "^0.1.1"
+    "as-wasi": "^0.4.6"
   }
 }
