@@ -141,7 +141,7 @@ impl RuntimeLinearMemory for MmapMemory {
         if new_size > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
             // If the new size of this heap exceeds the current size of the
             // allocation we have, then this must be a dynamic heap. Use
-            // `new_heap` to calculate a new size of an allocation, allocate it,
+            // `new_size` to calculate a new size of an allocation, allocate it,
             // and then copy over the memory from before.
             let request_bytes = self
                 .pre_guard_size
