@@ -813,8 +813,10 @@ where
     })
 }
 
+type SimdVec = SmallVec<[i128; 4]>;
+
 /// Converts a SIMD vector value into a Rust vector of i128 for processing.
-fn extractlanes<V>(x: &V, lane_type: types::Type) -> ValueResult<Vec<i128>>
+fn extractlanes<V>(x: &V, lane_type: types::Type) -> ValueResult<SimdVec>
 where
     V: Value,
 {
@@ -827,7 +829,7 @@ where
     };
 
     let x = x.into_array()?;
-    let mut lanes = Vec::new();
+    let mut lanes = SimdVec::new();
     for (i, _) in x.iter().enumerate() {
         let mut lane: i128 = 0;
         if i % iterations != 0 {
