@@ -298,13 +298,15 @@ impl CommonOptions {
     fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
 
-        // Set the target before setting any cranelift options
+        // Set the compiler and target before setting any cranelift options,
+        // since the strategy determines which compiler is in use and the target
+        // will reset any target-specific options.
+        config.strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?;
         if let Some(target) = target {
             config.target(target)?;
         }
 
         config
-            .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
