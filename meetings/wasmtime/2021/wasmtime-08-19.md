@@ -11,7 +11,9 @@
 1. Announcements
     1. _Sumbit a PR to add your announcement here_
 1. Other agenda items
-    1. _Sumbit a PR to add your item here_
+    1. Wasmtime's new `cranelift` compile-time feature (Alex, 5 min)
+    2. [Wasmtime 1.0](https://github.com/bytecodealliance/rfcs/pull/14) (Alex, 15-20 min)
+    3. _Sumbit a PR to add your item here_
 
 ## Notes
 
