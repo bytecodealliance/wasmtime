@@ -197,7 +197,7 @@ impl ModuleLimits {
                 );
             }
 
-            if let MemoryStyle::Dynamic = plan.style {
+            if let MemoryStyle::Dynamic { .. } = plan.style {
                 bail!(
                     "memory index {} has an unsupported dynamic memory plan style",
                     i,

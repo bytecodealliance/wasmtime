@@ -12,7 +12,10 @@ use wasmtime_types::*;
 #[derive(Debug, Clone, Hash, Serialize, Deserialize)]
 pub enum MemoryStyle {
     /// The actual memory can be resized and moved.
-    Dynamic,
+    Dynamic {
+        /// Extra space to reserve when a memory must be moved due to growth.
+        reserve: u64,
+    },
     /// Addresss space is allocated up front.
     Static {
         /// The number of mapped and unmapped pages.
@@ -54,7 +57,12 @@ impl MemoryStyle {
         }
 
         // Otherwise, make it dynamic.
-        (Self::Dynamic, tunables.dynamic_memory_offset_guard_size)
+        (
+            Self::Dynamic {
+                reserve: tunables.dynamic_memory_growth_reserve,
+            },
+            tunables.dynamic_memory_offset_guard_size,
+        )
     }
 }
 

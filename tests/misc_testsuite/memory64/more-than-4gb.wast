@@ -14,16 +14,8 @@
 )
 (assert_return (invoke "grow" (i64.const 0)) (i64.const 0x1_0001))
 (assert_return (invoke "size") (i64.const 0x1_0001))
-
-;; TODO: unsure how to test this. Right now growth of any 64-bit memory will
-;; always reallocate and copy all the previous memory to a new location, and
-;; this means that we're doing a 4gb copy here. That's pretty slow and is just
-;; copying a bunch of zeros, so until we optimize that it's not really feasible
-;; to test growth in CI andd such.
-(;
 (assert_return (invoke "grow" (i64.const 1)) (i64.const 0x1_0001))
 (assert_return (invoke "size") (i64.const 0x1_0002))
-;)
 
 ;; Test that initialization with a 64-bit global works
 (module $offset

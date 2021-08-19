@@ -63,7 +63,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
             MemoryStyle::Static { bound } => {
                 Some(usize::try_from(bound * (WASM_PAGE_SIZE as u64)).unwrap())
             }
-            MemoryStyle::Dynamic => None,
+            MemoryStyle::Dynamic { .. } => None,
         };
         self.0
             .new_memory(

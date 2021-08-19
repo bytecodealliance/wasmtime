@@ -1203,7 +1203,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // allocated up front and never moved.
         let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
             MemoryPlan {
-                style: MemoryStyle::Dynamic,
+                style: MemoryStyle::Dynamic { .. },
                 offset_guard_size,
                 pre_guard_size: _,
                 memory: _,
