@@ -336,13 +336,13 @@ impl State {
         let rh = RecordHeader {
             id: RecordId::JitCodeLoad as u32,
             record_size: size_limit as u32 + name_len as u32 + len as u32,
-            timestamp: timestamp,
+            timestamp,
         };
 
         let clr = CodeLoadRecord {
             header: rh,
-            pid: pid,
-            tid: tid,
+            pid,
+            tid,
             virtual_address: addr as u64,
             address: addr as u64,
             size: len as u64,
@@ -435,8 +435,8 @@ impl State {
 
                 let mut clr = CodeLoadRecord {
                     header: record_header,
-                    pid: pid,
-                    tid: tid,
+                    pid,
+                    tid,
                     virtual_address: 0,
                     address: 0,
                     size: 0,
