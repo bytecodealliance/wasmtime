@@ -197,7 +197,7 @@ impl ModuleLimits {
                 );
             }
 
-            if let MemoryStyle::Dynamic = plan.style {
+            if let MemoryStyle::Dynamic { .. } = plan.style {
                 bail!(
                     "memory index {} has an unsupported dynamic memory plan style",
                     i,
@@ -1324,7 +1324,7 @@ mod test {
 
         let mut module = Module::default();
         module.memory_plans.push(MemoryPlan {
-            style: MemoryStyle::Dynamic,
+            style: MemoryStyle::Dynamic { reserve: 0 },
             memory: Memory {
                 minimum: 1,
                 maximum: None,

@@ -429,6 +429,9 @@ impl<'a> SerializedModule<'a> {
             consume_fuel,
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
+
+            // This doesn't affect compilation, it's just a runtime setting.
+            dynamic_memory_growth_reserve: _,
         } = self.tunables;
 
         Self::check_int(

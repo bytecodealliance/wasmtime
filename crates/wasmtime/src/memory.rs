@@ -601,7 +601,7 @@ mod tests {
         let store = store.as_context();
         assert_eq!(store[mem.0].memory.offset_guard_size, 0);
         match &store[mem.0].memory.style {
-            wasmtime_environ::MemoryStyle::Dynamic => {}
+            wasmtime_environ::MemoryStyle::Dynamic { .. } => {}
             other => panic!("unexpected style {:?}", other),
         }
     }

@@ -77,6 +77,10 @@ pub struct MmapMemory {
     // maximum size of the linear address space reservation for this memory.
     maximum: Option<usize>,
 
+    // The amount of extra bytes to reserve whenever memory grows. This is
+    // specified so that the cost of repeated growth is amortized.
+    extra_to_reserve_on_growth: usize,
+
     // Size in bytes of extra guard pages before the start and after the end to
     // optimize loads and stores with constant offsets.
     pre_guard_size: usize,
@@ -92,15 +96,19 @@ impl MmapMemory {
         let offset_guard_bytes = usize::try_from(plan.offset_guard_size).unwrap();
         let pre_guard_bytes = usize::try_from(plan.pre_guard_size).unwrap();
 
-        let alloc_bytes = match plan.style {
-            MemoryStyle::Dynamic => minimum,
+        let (alloc_bytes, extra_to_reserve_on_growth) = match plan.style {
+            MemoryStyle::Dynamic { reserve } => (minimum, usize::try_from(reserve).unwrap()),
             MemoryStyle::Static { bound } => {
                 assert_ge!(bound, plan.memory.minimum);
-                usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap()
+                (
+                    usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap(),
+                    0,
+                )
             }
         };
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
+            .and_then(|i| i.checked_add(extra_to_reserve_on_growth))
             .and_then(|i| i.checked_add(offset_guard_bytes))
             .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
 
@@ -115,6 +123,7 @@ impl MmapMemory {
             maximum,
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
+            extra_to_reserve_on_growth,
         })
     }
 }
@@ -130,11 +139,14 @@ impl RuntimeLinearMemory for MmapMemory {
 
     fn grow_to(&mut self, new_size: usize) -> Option<()> {
         if new_size > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
-            // If the new size is within the declared maximum, but needs more memory than we
-            // have on hand, it's a dynamic heap and it can move.
+            // If the new size of this heap exceeds the current size of the
+            // allocation we have, then this must be a dynamic heap. Use
+            // `new_size` to calculate a new size of an allocation, allocate it,
+            // and then copy over the memory from before.
             let request_bytes = self
                 .pre_guard_size
                 .checked_add(new_size)?
+                .checked_add(self.extra_to_reserve_on_growth)?
                 .checked_add(self.offset_guard_size)?;
 
             let mut new_mmap = Mmap::accessible_reserved(0, request_bytes).ok()?;
@@ -147,8 +159,13 @@ impl RuntimeLinearMemory for MmapMemory {
 
             self.mmap = new_mmap;
         } else {
+            // If the new size of this heap fits within the existing allocation
+            // then all we need to do is to make the new pages accessible. This
+            // can happen either for "static" heaps which always hit this case,
+            // or "dynamic" heaps which have some space reserved after the
+            // initial allocation to grow into before the heap is moved in
+            // memory.
             assert!(new_size > self.accessible);
-            // Make the newly allocated pages accessible.
             self.mmap
                 .make_accessible(
                     self.pre_guard_size + self.accessible,

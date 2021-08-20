@@ -1166,6 +1166,45 @@ impl Config {
         self
     }
 
+    /// Configures the size, in bytes, of the extra virtual memory space
+    /// reserved after a "dynamic" memory for growing into.
+    ///
+    /// For the difference between static and dynamic memories, see the
+    /// [`Config::static_memory_maximum_size`]
+    ///
+    /// Dynamic memories can be relocated in the process's virtual address space
+    /// on growth and do not always reserve their entire space up-front. This
+    /// means that a growth of the memory may require movement in the address
+    /// space, which in the worst case can copy a large number of bytes from one
+    /// region to another.
+    ///
+    /// This setting configures how many bytes are reserved after the initial
+    /// reservation for a dynamic memory for growing into. A value of 0 here
+    /// means that no extra bytes are reserved and all calls to `memory.grow`
+    /// will need to relocate the wasm linear memory (copying all the bytes). A
+    /// value of 1 megabyte, however, means that `memory.grow` can allocate up
+    /// to a megabyte of extra memory before the memory needs to be moved in
+    /// linear memory.
+    ///
+    /// Note that this is a currently simple heuristic for optimizing the growth
+    /// of dynamic memories, primarily implemented for the memory64 propsal
+    /// where all memories are currently "dynamic". This is unlikely to be a
+    /// one-size-fits-all style approach and if you're an embedder running into
+    /// issues with dynamic memories and growth and are interested in having
+    /// other growth strategies available here please feel free to [open an
+    /// issue on the Wasmtime repository][issue]!
+    ///
+    /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/ne
+    ///
+    /// ## Default
+    ///
+    /// For 64-bit platforms this defaults to 2GB, and for 32-bit platforms this
+    /// defaults to 1MB.
+    pub fn dynamic_memory_reserved_for_growth(&mut self, reserved: u64) -> &mut Self {
+        self.tunables.dynamic_memory_growth_reserve = round_up_to_pages(reserved);
+        self
+    }
+
     /// Indicates whether a guard region is present before allocations of
     /// linear memory.
     ///

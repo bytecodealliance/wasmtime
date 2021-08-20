@@ -12,6 +12,12 @@ pub struct Tunables {
     /// The size in bytes of the offset guard for dynamic heaps.
     pub dynamic_memory_offset_guard_size: u64,
 
+    /// The size, in bytes, of reserved memory at the end of a "dynamic" memory,
+    /// before the guard page, that memory can grow into. This is intended to
+    /// amortize the cost of `memory.grow` in the same manner that `Vec<T>` has
+    /// space not in use to grow into.
+    pub dynamic_memory_growth_reserve: u64,
+
     /// Whether or not to generate native DWARF debug information.
     pub generate_native_debuginfo: bool,
 
@@ -65,6 +71,13 @@ impl Default for Tunables {
             // Allocate a small guard to optimize common cases but without
             // wasting too much memory.
             dynamic_memory_offset_guard_size: 0x1_0000,
+
+            // We've got lots of address space on 64-bit so use a larger
+            // grow-into-this area, but on 32-bit we aren't as lucky.
+            #[cfg(target_pointer_width = "64")]
+            dynamic_memory_growth_reserve: 2 << 30, // 2GB
+            #[cfg(target_pointer_width = "32")]
+            dynamic_memory_growth_reserve: 1 << 20, // 1MB
 
             generate_native_debuginfo: false,
             parse_wasm_debuginfo: true,
