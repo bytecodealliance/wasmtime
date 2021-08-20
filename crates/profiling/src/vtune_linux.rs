@@ -10,13 +10,11 @@
 use crate::ProfilingAgent;
 use anyhow::Result;
 use core::ptr;
-use cranelift_entity::PrimaryMap;
-use cranelift_wasm_types::DefinedFuncIndex;
 use ittapi_rs::*;
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::sync::Mutex;
-use wasmtime_environ::Module;
+use std::sync::{atomic, Mutex};
+use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap};
 use wasmtime_runtime::VMFunctionBody;
 
 /// Interface for driving the ittapi for VTune support
@@ -76,7 +74,7 @@ impl State {
         len: usize,
     ) -> () {
         let mut jmethod = _iJIT_Method_Load {
-            method_id: method_id,
+            method_id,
             method_name: CString::new(method_name)
                 .expect("CString::new failed")
                 .into_raw(),
@@ -132,13 +130,17 @@ impl State {
         functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
         _dbg_image: Option<&[u8]>,
     ) -> () {
+        // Global counter for module ids.
+        static MODULE_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
+        let global_module_id = MODULE_ID.fetch_add(1, atomic::Ordering::SeqCst);
+
         for (idx, func) in functions.iter() {
             let (addr, len) = unsafe { ((**func).as_ptr() as *const u8, (**func).len()) };
             let default_filename = "wasm_file";
             let default_module_name = String::from("wasm_module");
             let module_name = module.name.as_ref().unwrap_or(&default_module_name);
             let method_name = super::debug_name(module, idx);
-            let method_id = self.get_method_id(module.id, idx);
+            let method_id = self.get_method_id(global_module_id, idx);
             println!(
                 "Event Load: ({}) {:?}::{:?} Addr:{:?}\n",
                 method_id, module_name, method_name, addr
