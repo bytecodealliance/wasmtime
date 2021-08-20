@@ -115,9 +115,6 @@ block0(v0: i32):
 function %load32_zero_float(f32) -> f32x4 {
 block0(v0: f32):
     v1 = scalar_to_vector.f32x4 v0
-    ; regex: MOV=movap*
-    ; check: pushq
-    ; not: $MOV
     ; check: ret
     return v1
 }

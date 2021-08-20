@@ -830,12 +830,15 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn is_frame_setup_needed(
-        _is_leaf: bool,
-        _stack_args_size: u32,
-        _num_clobbered_callee_saves: usize,
-        _fixed_frame_storage_size: u32,
+        is_leaf: bool,
+        stack_args_size: u32,
+        num_clobbered_callee_saves: usize,
+        fixed_frame_storage_size: u32,
     ) -> bool {
-        true
+        !is_leaf
+            || stack_args_size > 0
+            || num_clobbered_callee_saves > 0
+            || fixed_frame_storage_size > 0
     }
 }
 

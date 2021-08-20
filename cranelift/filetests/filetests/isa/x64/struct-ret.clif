@@ -8,11 +8,7 @@ block0(v0: i64):
     return
 }
 
-; check:  pushq   %rbp
-; nextln: movq    %rsp, %rbp
-; nextln: movq    %rdi, %rax
+; check: movq    %rdi, %rax
 ; nextln: movl    $$42, %esi
 ; nextln: movq    %rsi, 0(%rdi)
-; nextln: movq    %rbp, %rsp
-; nextln: popq    %rbp
 ; nextln: ret
