@@ -158,94 +158,88 @@ impl MemoryInitialization {
     pub fn to_paged(&self, module: &Module) -> Option<Self> {
         const WASM_PAGE_SIZE: usize = crate::WASM_PAGE_SIZE as usize;
 
-        match self {
-            Self::Paged { .. } => None,
-            Self::Segmented(initializers) => {
-                let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
-                let mut out_of_bounds = false;
-                let mut map = PrimaryMap::with_capacity(num_defined_memories);
+        let initializers = match self {
+            Self::Segmented(list) => list,
+            Self::Paged { .. } => return None,
+        };
+        let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
+        let mut out_of_bounds = false;
+        let mut map = PrimaryMap::with_capacity(num_defined_memories);
 
-                for _ in 0..num_defined_memories {
-                    map.push(Vec::new());
+        for _ in 0..num_defined_memories {
+            map.push(Vec::new());
+        }
+
+        for initializer in initializers {
+            let index = match (
+                module.defined_memory_index(initializer.memory_index),
+                initializer.base.is_some(),
+            ) {
+                (None, _) | (_, true) => {
+                    // If the initializer references an imported memory or uses a global base,
+                    // the complete set of segments will need to be processed at module instantiation
+                    return None;
+                }
+                (Some(index), false) => index,
+            };
+            if out_of_bounds {
+                continue;
+            }
+
+            // Perform a bounds check on the segment
+            // As this segment is referencing a defined memory without a global base, the last byte
+            // written to by the segment cannot exceed the memory's initial minimum size
+            let offset = usize::try_from(initializer.offset).unwrap();
+            let end = match offset.checked_add(initializer.data.len()) {
+                Some(end) => end,
+                None => {
+                    out_of_bounds = true;
+                    continue;
+                }
+            };
+            if end
+                > ((module.memory_plans[initializer.memory_index].memory.minimum as usize)
+                    * WASM_PAGE_SIZE)
+            {
+                out_of_bounds = true;
+                continue;
+            }
+
+            let pages = &mut map[index];
+            let mut page_index = offset / WASM_PAGE_SIZE;
+            let mut page_offset = offset % WASM_PAGE_SIZE;
+            let mut data_offset = 0;
+            let mut data_remaining = initializer.data.len();
+
+            if data_remaining == 0 {
+                continue;
+            }
+
+            // Copy the initialization data by each WebAssembly-sized page (64 KiB)
+            loop {
+                if page_index >= pages.len() {
+                    pages.resize(page_index + 1, None);
                 }
 
-                for initializer in initializers {
-                    match (
-                        module.defined_memory_index(initializer.memory_index),
-                        initializer.base.is_some(),
-                    ) {
-                        (None, _) | (_, true) => {
-                            // If the initializer references an imported memory or uses a global base,
-                            // the complete set of segments will need to be processed at module instantiation
-                            return None;
-                        }
-                        (Some(index), false) => {
-                            if out_of_bounds {
-                                continue;
-                            }
+                let page = pages[page_index]
+                    .get_or_insert_with(|| vec![0; WASM_PAGE_SIZE].into_boxed_slice());
+                let len = std::cmp::min(data_remaining, WASM_PAGE_SIZE - page_offset);
 
-                            // Perform a bounds check on the segment
-                            // As this segment is referencing a defined memory without a global base, the last byte
-                            // written to by the segment cannot exceed the memory's initial minimum size
-                            let offset = usize::try_from(initializer.offset).unwrap();
-                            let end = match offset.checked_add(initializer.data.len()) {
-                                Some(end) => end,
-                                None => {
-                                    out_of_bounds = true;
-                                    continue;
-                                }
-                            };
-                            if end
-                                > ((module.memory_plans[initializer.memory_index].memory.minimum
-                                    as usize)
-                                    * WASM_PAGE_SIZE)
-                            {
-                                out_of_bounds = true;
-                                continue;
-                            }
+                page[page_offset..page_offset + len]
+                    .copy_from_slice(&initializer.data[data_offset..(data_offset + len)]);
 
-                            let pages = &mut map[index];
-                            let mut page_index = offset / WASM_PAGE_SIZE;
-                            let mut page_offset = offset % WASM_PAGE_SIZE;
-                            let mut data_offset = 0;
-                            let mut data_remaining = initializer.data.len();
-
-                            if data_remaining == 0 {
-                                continue;
-                            }
-
-                            // Copy the initialization data by each WebAssembly-sized page (64 KiB)
-                            loop {
-                                if page_index >= pages.len() {
-                                    pages.resize(page_index + 1, None);
-                                }
-
-                                let page = pages[page_index].get_or_insert_with(|| {
-                                    vec![0; WASM_PAGE_SIZE].into_boxed_slice()
-                                });
-                                let len =
-                                    std::cmp::min(data_remaining, WASM_PAGE_SIZE - page_offset);
-
-                                page[page_offset..page_offset + len].copy_from_slice(
-                                    &initializer.data[data_offset..(data_offset + len)],
-                                );
-
-                                if len == data_remaining {
-                                    break;
-                                }
-
-                                page_index += 1;
-                                page_offset = 0;
-                                data_offset += len;
-                                data_remaining -= len;
-                            }
-                        }
-                    };
+                if len == data_remaining {
+                    break;
                 }
 
-                Some(Self::Paged { map, out_of_bounds })
+                page_index += 1;
+                page_offset = 0;
+                data_offset += len;
+                data_remaining -= len;
             }
         }
+
+        Some(Self::Paged { map, out_of_bounds })
     }
 }
 
