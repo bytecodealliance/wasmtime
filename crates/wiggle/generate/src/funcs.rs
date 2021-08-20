@@ -75,6 +75,14 @@ fn _define_func(
 
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
+    let mk_span = quote!(
+        let _span = #rt::tracing::span!(
+            #rt::tracing::Level::TRACE,
+            "wiggle abi",
+            module = #mod_name,
+            function = #func_name
+        );
+    );
     if settings.get_async(&module, &func).is_sync() {
         (
             quote!(
@@ -85,12 +93,7 @@ fn _define_func(
                     #(#abi_params),*
                 ) -> Result<#abi_ret, #rt::Trap> {
                     use std::convert::TryFrom as _;
-                    let _span = #rt::tracing::span!(
-                        #rt::tracing::Level::TRACE,
-                        "wiggle abi",
-                        module = #mod_name,
-                        function = #func_name
-                    );
+                    #mk_span
                     _span.in_scope(|| {
                       #body
                     })
@@ -109,15 +112,10 @@ fn _define_func(
             ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::Trap>> + 'a {
                 use std::convert::TryFrom as _;
                 use #rt::tracing::Instrument as _;
-                let _span = #rt::tracing::span!(
-                    #rt::tracing::Level::TRACE,
-                    "wiggle abi",
-                    module = #mod_name,
-                    function = #func_name
-                );
-              async move {
-                #body
-              }.instrument(_span)
+                #mk_span
+                async move {
+                    #body
+                }.instrument(_span)
             }),
             bounds,
         )
