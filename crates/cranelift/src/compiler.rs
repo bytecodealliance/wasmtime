@@ -1,6 +1,6 @@
 use crate::debug::ModuleMemoryOffset;
 use crate::func_environ::{get_func_name, FuncEnvironment};
-use crate::obj::{ObjectBuilder, ObjectBuilderTarget};
+use crate::obj::ObjectBuilder;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
     CompiledFunction, Relocation, RelocationTarget,
@@ -18,6 +18,7 @@ use cranelift_wasm::{
     DefinedFuncIndex, DefinedMemoryIndex, FuncIndex, FuncTranslator, MemoryIndex, SignatureIndex,
     WasmFuncType,
 };
+use object::write::Object;
 use std::any::Any;
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
@@ -221,7 +222,8 @@ impl wasmtime_environ::Compiler for Compiler {
         types: &TypeTables,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
-    ) -> Result<(Vec<u8>, PrimaryMap<DefinedFuncIndex, FunctionInfo>)> {
+        obj: &mut Object,
+    ) -> Result<PrimaryMap<DefinedFuncIndex, FunctionInfo>> {
         const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
         let funcs: crate::CompiledFunctions = funcs
             .into_iter()
@@ -244,8 +246,7 @@ impl wasmtime_environ::Compiler for Compiler {
             trampolines.push((i, func));
         }
 
-        let target = ObjectBuilderTarget::elf(self.isa.triple().architecture)?;
-        let mut builder = ObjectBuilder::new(target, &translation.module);
+        let mut builder = ObjectBuilder::new(obj, &translation.module);
 
         for (i, func) in funcs.iter() {
             builder.func(i, func);
@@ -285,21 +286,24 @@ impl wasmtime_environ::Compiler for Compiler {
             builder.dwarf_sections(&dwarf_sections)?;
         }
 
-        Ok((
-            builder.finish(&*self.isa)?,
-            funcs.into_iter().map(|(_, f)| f.info).collect(),
-        ))
+        builder.finish(&*self.isa)?;
+        Ok(funcs.into_iter().map(|(_, f)| f.info).collect())
     }
 
-    fn emit_trampoline_obj(&self, ty: &WasmFuncType, host_fn: usize) -> Result<Vec<u8>> {
+    fn emit_trampoline_obj(
+        &self,
+        ty: &WasmFuncType,
+        host_fn: usize,
+        obj: &mut Object,
+    ) -> Result<()> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
-        let target = ObjectBuilderTarget::elf(self.isa.triple().architecture)?;
         let module = Module::new();
-        let mut builder = ObjectBuilder::new(target, &module);
+        let mut builder = ObjectBuilder::new(obj, &module);
         builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
         builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
-        Ok(builder.finish(&*self.isa)?)
+        builder.finish(&*self.isa)?;
+        Ok(())
     }
 
     fn triple(&self) -> &target_lexicon::Triple {

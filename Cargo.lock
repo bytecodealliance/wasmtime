@@ -3713,6 +3713,7 @@ dependencies = [
  "indexmap",
  "log",
  "more-asserts",
+ "object",
  "serde",
  "target-lexicon",
  "thiserror",

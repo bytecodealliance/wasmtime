@@ -369,11 +369,13 @@ impl Module {
                 .into_iter()
                 .collect();
 
-            let (obj, funcs) = engine.compiler().emit_obj(
+            let mut obj = engine.compiler().object()?;
+            let funcs = engine.compiler().emit_obj(
                 &translation,
                 &types,
                 funcs,
                 tunables.generate_native_debuginfo,
+                &mut obj,
             )?;
 
             // If configured, attempt to use paged memory initialization
@@ -382,7 +384,12 @@ impl Module {
                 translation.try_paged_init();
             }
 
-            Ok(CompilationArtifacts::new(translation, obj, funcs, tunables))
+            Ok(CompilationArtifacts::new(
+                translation,
+                obj,
+                funcs,
+                tunables,
+            )?)
         })?;
 
         Ok((

@@ -29,8 +29,8 @@ use object::write::{
     SymbolSection,
 };
 use object::{
-    elf, Architecture, BinaryFormat, Endianness, RelocationEncoding, RelocationKind, SectionKind,
-    SymbolFlags, SymbolKind, SymbolScope,
+    elf, Architecture, RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind,
+    SymbolScope,
 };
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -38,22 +38,6 @@ use wasmtime_environ::obj;
 use wasmtime_environ::{
     DefinedFuncIndex, EntityRef, FuncIndex, Module, PrimaryMap, SignatureIndex,
 };
-
-fn to_object_architecture(
-    arch: target_lexicon::Architecture,
-) -> Result<Architecture, anyhow::Error> {
-    use target_lexicon::Architecture::*;
-    Ok(match arch {
-        X86_32(_) => Architecture::I386,
-        X86_64 => Architecture::X86_64,
-        Arm(_) => Architecture::Arm,
-        Aarch64(_) => Architecture::Aarch64,
-        S390x => Architecture::S390x,
-        architecture => {
-            anyhow::bail!("target architecture {:?} is unsupported", architecture,);
-        }
-    })
-}
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
@@ -106,27 +90,8 @@ fn write_libcall_symbols(obj: &mut Object) -> HashMap<LibCall, SymbolId> {
     libcalls
 }
 
-pub struct ObjectBuilderTarget {
-    pub(crate) binary_format: BinaryFormat,
-    pub(crate) architecture: Architecture,
-    pub(crate) endianness: Endianness,
-}
-
-impl ObjectBuilderTarget {
-    pub fn elf(arch: target_lexicon::Architecture) -> Result<Self> {
-        Ok(Self {
-            binary_format: BinaryFormat::Elf,
-            architecture: to_object_architecture(arch)?,
-            endianness: match arch.endianness().unwrap() {
-                target_lexicon::Endianness::Little => object::Endianness::Little,
-                target_lexicon::Endianness::Big => object::Endianness::Big,
-            },
-        })
-    }
-}
-
 pub struct ObjectBuilder<'a> {
-    obj: Object,
+    obj: &'a mut Object,
     module: &'a Module,
     text_section: SectionId,
     func_symbols: PrimaryMap<FuncIndex, SymbolId>,
@@ -150,9 +115,7 @@ struct RUNTIME_FUNCTION {
 }
 
 impl<'a> ObjectBuilder<'a> {
-    pub fn new(target: ObjectBuilderTarget, module: &'a Module) -> Self {
-        let mut obj = Object::new(target.binary_format, target.architecture, target.endianness);
-
+    pub fn new(obj: &'a mut Object, module: &'a Module) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
         let text_section = obj.add_section(
@@ -179,7 +142,7 @@ impl<'a> ObjectBuilder<'a> {
             func_symbols.push(symbol_id);
         }
 
-        let libcalls = write_libcall_symbols(&mut obj);
+        let libcalls = write_libcall_symbols(obj);
 
         Self {
             obj,
@@ -309,7 +272,7 @@ impl<'a> ObjectBuilder<'a> {
         Ok(())
     }
 
-    pub fn finish(&mut self, isa: &dyn TargetIsa) -> Result<Vec<u8>> {
+    pub fn finish(&mut self, isa: &dyn TargetIsa) -> Result<()> {
         self.append_relocations()?;
         if self.windows_unwind_info.len() > 0 {
             self.append_windows_unwind_info();
@@ -317,7 +280,7 @@ impl<'a> ObjectBuilder<'a> {
         if self.systemv_unwind_info.len() > 0 {
             self.append_systemv_unwind_info(isa);
         }
-        Ok(self.obj.write()?)
+        Ok(())
     }
 
     fn append_relocations(&mut self) -> Result<()> {

@@ -22,6 +22,7 @@ log = { version = "0.4.8", default-features = false }
 more-asserts = "0.2.1"
 cfg-if = "1.0"
 gimli = { version = "0.25.0", default-features = false, features = ['read'] }
+object = { version = "0.26.0", default-features = false, features = ['write_core', 'elf'] }
 target-lexicon = "0.12"
 
 [badges]

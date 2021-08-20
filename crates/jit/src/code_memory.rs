@@ -38,14 +38,13 @@ impl Drop for CodeMemoryEntry {
     }
 }
 
-pub struct CodeMemoryObjectAllocation<'a, 'b> {
+pub struct CodeMemoryObjectAllocation<'a> {
     pub code_range: &'a mut [u8],
     funcs: BTreeMap<FuncIndex, (usize, usize)>,
     trampolines: BTreeMap<SignatureIndex, (usize, usize)>,
-    pub obj: ObjectFile<'b>,
 }
 
-impl<'a> CodeMemoryObjectAllocation<'a, '_> {
+impl<'a> CodeMemoryObjectAllocation<'a> {
     pub fn funcs_len(&self) -> usize {
         self.funcs.len()
     }
@@ -140,14 +139,22 @@ impl CodeMemory {
         unsafe { &mut *body_ptr }
     }
 
+    /// Alternative to `allocate_for_object`, but when the object file isn't
+    /// already parsed.
+    pub fn allocate_for_object_unparsed<'a>(
+        &'a mut self,
+        obj: &[u8],
+    ) -> Result<CodeMemoryObjectAllocation<'a>> {
+        let obj = ObjectFile::parse(obj)?;
+        self.allocate_for_object(&obj)
+    }
+
     /// Allocates and copies the ELF image code section into CodeMemory.
     /// Returns references to functions and trampolines defined there.
-    pub fn allocate_for_object<'a, 'b>(
+    pub fn allocate_for_object<'a>(
         &'a mut self,
-        obj: &'b [u8],
-    ) -> Result<CodeMemoryObjectAllocation<'a, 'b>> {
-        let obj = ObjectFile::parse(obj)
-            .with_context(|| "failed to parse internal ELF compilation artifact")?;
+        obj: &ObjectFile,
+    ) -> Result<CodeMemoryObjectAllocation<'a>> {
         let text_section = obj.section_by_name(".text").unwrap();
         let text_section_size = text_section.size() as usize;
 
@@ -157,7 +164,6 @@ impl CodeMemory {
                 code_range: &mut [],
                 funcs: BTreeMap::new(),
                 trampolines: BTreeMap::new(),
-                obj,
             });
         }
 
@@ -212,7 +218,6 @@ impl CodeMemory {
             code_range: &mut entry.mmap.as_mut_slice()[..text_section_size],
             funcs,
             trampolines,
-            obj,
         })
     }
 }
