@@ -97,26 +97,27 @@ fn _define_func(
                     _span.in_scope(|| {
                       #body
                     })
-              }
+                }
             ),
             bounds,
         )
     } else {
         (
             quote!(
-            #[allow(unreachable_code)] // deals with warnings in noreturn functions
-            pub fn #ident<'a>(
-                ctx: &'a mut (impl #(#bounds)+*),
-                memory: &'a dyn #rt::GuestMemory,
-                #(#abi_params),*
-            ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::Trap>> + 'a {
-                use std::convert::TryFrom as _;
-                use #rt::tracing::Instrument as _;
-                #mk_span
-                async move {
-                    #body
-                }.instrument(_span)
-            }),
+                #[allow(unreachable_code)] // deals with warnings in noreturn functions
+                pub fn #ident<'a>(
+                    ctx: &'a mut (impl #(#bounds)+*),
+                    memory: &'a dyn #rt::GuestMemory,
+                    #(#abi_params),*
+                ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::Trap>> + 'a {
+                    use std::convert::TryFrom as _;
+                    use #rt::tracing::Instrument as _;
+                    #mk_span
+                    async move {
+                        #body
+                    }.instrument(_span)
+                }
+            ),
             bounds,
         )
     }
