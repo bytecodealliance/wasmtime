@@ -132,6 +132,7 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features wat
     - run: cargo check -p wasmtime --no-default-features --features lightbeam
     - run: cargo check -p wasmtime --no-default-features --features jitdump
+    - run: cargo check -p wasmtime --no-default-features --features vtune
     - run: cargo check -p wasmtime --no-default-features --features cache
     - run: cargo check -p wasmtime --no-default-features --features async
     - run: cargo check -p wasmtime --no-default-features --features uffd
