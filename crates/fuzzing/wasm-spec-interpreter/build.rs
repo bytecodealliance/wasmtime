@@ -74,6 +74,8 @@ fn is_spec_repository_empty(destination: &str) -> bool {
 fn retrieve_spec_repository(repository: &str, destination: &str) {
     let status = Command::new("git")
         .arg("clone")
+        .arg("--branch")
+        .arg("fuzzing")
         .arg("--depth")
         .arg("1")
         .arg(repository)
