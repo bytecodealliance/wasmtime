@@ -1186,6 +1186,16 @@ impl Config {
     /// to a megabyte of extra memory before the memory needs to be moved in
     /// linear memory.
     ///
+    /// Note that this is a currently simple heuristic for optimizing the growth
+    /// of dynamic memories, primarily implemented for the memory64 propsal
+    /// where all memories are currently "dynamic". This is unlikely to be a
+    /// one-size-fits-all style approach and if you're an embedder running into
+    /// issues with dynamic memories and growth and are interested in having
+    /// other growth strategies available here please feel free to [open an
+    /// issue on the Wasmtime repository][issue]!
+    ///
+    /// [issue]: https://github.com/bytecodealliance/wasmtime/issues/ne
+    ///
     /// ## Default
     ///
     /// For 64-bit platforms this defaults to 2GB, and for 32-bit platforms this
