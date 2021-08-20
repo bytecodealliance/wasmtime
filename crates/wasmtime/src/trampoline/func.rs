@@ -132,6 +132,7 @@ pub unsafe fn create_raw_function(
             shared_signatures: sig.into(),
             host_state,
             store: None,
+            wasm_data: &[],
         })?,
     )
 }

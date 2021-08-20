@@ -269,7 +269,9 @@ unsafe fn initialize_wasm_page(
     if let MemoryInitialization::Paged { map, .. } = &instance.module.memory_initialization {
         let pages = &map[memory_index];
 
-        if let Some(Some(data)) = pages.get(page_index) {
+        let pos = pages.binary_search_by_key(&(page_index as u64), |k| k.0);
+        if let Ok(i) = pos {
+            let data = instance.wasm_data(pages[i].1.clone());
             debug_assert_eq!(data.len(), WASM_PAGE_SIZE);
 
             log::trace!(
@@ -530,6 +532,7 @@ mod test {
                                 shared_signatures: VMSharedSignatureIndex::default().into(),
                                 host_state: Box::new(()),
                                 store: None,
+                                wasm_data: &[],
                             },
                         )
                         .expect("instance should allocate"),

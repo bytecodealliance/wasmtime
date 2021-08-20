@@ -736,6 +736,7 @@ impl<'a> Instantiator<'a> {
                         shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),
                         store: Some(store.traitobj),
+                        wasm_data: compiled_module.wasm_data(),
                     })?;
 
             // The instance still has lots of setup, for example

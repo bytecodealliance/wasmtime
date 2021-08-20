@@ -16,9 +16,9 @@ use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::Layout;
 use std::any::Any;
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::hash::Hash;
+use std::ops::Range;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
@@ -146,6 +146,12 @@ pub(crate) struct Instance {
     /// Stores the dropped passive data segments in this instantiation by index.
     /// If the index is present in the set, the segment has been dropped.
     dropped_data: EntitySet<DataIndex>,
+
+    /// A slice pointing to all data that is referenced by this instance. This
+    /// data is managed externally so this is effectively an unsafe reference,
+    /// and this does not live for the `'static` lifetime so the API boundaries
+    /// here are careful to never hand out static references.
+    wasm_data: &'static [u8],
 
     /// Hosts can store arbitrary per-instance information here.
     ///
@@ -509,22 +515,6 @@ impl Instance {
         self.vmctx_plus_offset(self.offsets.vmctx_anyfuncs_begin())
     }
 
-    fn find_passive_segment<'a, I, D, T>(
-        index: I,
-        index_map: &BTreeMap<I, usize>,
-        data: &'a Vec<D>,
-        dropped: &EntitySet<I>,
-    ) -> &'a [T]
-    where
-        D: AsRef<[T]>,
-        I: EntityRef + Ord,
-    {
-        match index_map.get(&index) {
-            Some(index) if !dropped.contains(I::new(*index)) => data[*index].as_ref(),
-            _ => &[],
-        }
-    }
-
     /// The `table.init` operation: initializes a portion of a table with a
     /// passive element.
     ///
@@ -544,12 +534,13 @@ impl Instance {
         // inform `rustc` that the lifetime of the elements here are
         // disconnected from the lifetime of `self`.
         let module = self.module.clone();
-        let elements = Self::find_passive_segment(
-            elem_index,
-            &module.passive_elements_map,
-            &module.passive_elements,
-            &self.dropped_elements,
-        );
+
+        let elements = match module.passive_elements_map.get(&elem_index) {
+            Some(index) if !self.dropped_elements.contains(elem_index) => {
+                module.passive_elements[*index].as_ref()
+            }
+            _ => &[],
+        };
         self.table_init_segment(table_index, elements, dst, src, len)
     }
 
@@ -601,9 +592,7 @@ impl Instance {
     pub(crate) fn elem_drop(&mut self, elem_index: ElemIndex) {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
 
-        if let Some(index) = self.module.passive_elements_map.get(&elem_index) {
-            self.dropped_elements.insert(ElemIndex::new(*index));
-        }
+        self.dropped_elements.insert(elem_index);
 
         // Note that we don't check that we actually removed a segment because
         // dropping a non-passive segment is a no-op (not a trap).
@@ -700,23 +689,21 @@ impl Instance {
         src: u32,
         len: u32,
     ) -> Result<(), Trap> {
-        // TODO: this `clone()` shouldn't be necessary but is used for now to
-        // inform `rustc` that the lifetime of the elements here are
-        // disconnected from the lifetime of `self`.
-        let module = self.module.clone();
-        let data = Self::find_passive_segment(
-            data_index,
-            &module.passive_data_map,
-            &module.passive_data,
-            &self.dropped_data,
-        );
-        self.memory_init_segment(memory_index, &data, dst, src, len)
+        let range = match self.module.passive_data_map.get(&data_index).cloned() {
+            Some(range) if !self.dropped_data.contains(data_index) => range,
+            _ => 0..0,
+        };
+        self.memory_init_segment(memory_index, range, dst, src, len)
+    }
+
+    pub(crate) fn wasm_data(&self, range: Range<u32>) -> &[u8] {
+        &self.wasm_data[range.start as usize..range.end as usize]
     }
 
     pub(crate) fn memory_init_segment(
         &mut self,
         memory_index: MemoryIndex,
-        data: &[u8],
+        range: Range<u32>,
         dst: u64,
         src: u32,
         len: u32,
@@ -724,6 +711,7 @@ impl Instance {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-memory-init
 
         let memory = self.get_memory(memory_index);
+        let data = self.wasm_data(range);
         let dst = self.validate_inbounds(memory.current_length, dst, len.into())?;
         let src = self.validate_inbounds(data.len(), src.into(), len.into())?;
         let len = len as usize;
@@ -741,9 +729,7 @@ impl Instance {
 
     /// Drop the given data segment, truncating its length to zero.
     pub(crate) fn data_drop(&mut self, data_index: DataIndex) {
-        if let Some(index) = self.module.passive_data_map.get(&data_index) {
-            self.dropped_data.insert(DataIndex::new(*index));
-        }
+        self.dropped_data.insert(data_index);
 
         // Note that we don't check that we actually removed a segment because
         // dropping a non-passive segment is a no-op (not a trap).

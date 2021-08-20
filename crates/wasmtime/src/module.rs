@@ -379,13 +379,7 @@ impl Module {
             // If configured, attempt to use paged memory initialization
             // instead of the default mode of memory initialization
             if cfg!(all(feature = "uffd", target_os = "linux")) {
-                if let Some(init) = translation
-                    .module
-                    .memory_initialization
-                    .to_paged(&translation.module)
-                {
-                    translation.module.memory_initialization = init;
-                }
+                translation.try_paged_init();
             }
 
             Ok(CompilationArtifacts::new(translation, obj, funcs, tunables))
