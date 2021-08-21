@@ -83,20 +83,7 @@ impl<'a> Interpreter<'a> {
             .current_frame_mut()
             .set_all(parameters, arguments.to_vec());
 
-        let frame_stack_space = function.stack_slots.values().map(|s| s.size as usize).sum();
-        // Grow the stack by the space necessary for this frame
-        self.state
-            .stack
-            .extend(iter::repeat(0).take(frame_stack_space));
-
-        let res = self.block(first_block);
-
-        // Shorten the stack after exiting the frame
-        self.state
-            .stack
-            .truncate(self.state.stack.len() - frame_stack_space);
-
-        res
+        self.block(first_block)
     }
 
     /// Interpret a [Block] in a [Function]. This drives the interpretation over sequences of
@@ -189,6 +176,8 @@ pub enum InterpreterError {
 pub struct InterpreterState<'a> {
     pub functions: FunctionStore<'a>,
     pub frame_stack: Vec<Frame<'a>>,
+    /// Number of bytes from the bottom of the stack where the current frame's stack space is
+    pub frame_offset: usize,
     pub stack: Vec<u8>,
     pub heap: Vec<u8>,
     pub iflags: HashSet<IntCC>,
@@ -200,6 +189,7 @@ impl Default for InterpreterState<'_> {
         Self {
             functions: FunctionStore::default(),
             frame_stack: vec![],
+            frame_offset: 0,
             stack: Vec::with_capacity(1024),
             heap: vec![0; 1024],
             iflags: HashSet::new(),
@@ -240,10 +230,27 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
     }
 
     fn push_frame(&mut self, function: &'a Function) {
+        if let Some(frame) = self.frame_stack.iter().last() {
+            self.frame_offset += frame.function.stack_size() as usize;
+        }
+
+        // Grow the stack by the space necessary for this frame
+        self.stack
+            .extend(iter::repeat(0).take(function.stack_size() as usize));
+
         self.frame_stack.push(Frame::new(function));
     }
     fn pop_frame(&mut self) {
-        self.frame_stack.pop();
+        if let Some(frame) = self.frame_stack.pop() {
+            // Shorten the stack after exiting the frame
+            self.stack
+                .truncate(self.stack.len() - frame.function.stack_size() as usize);
+
+            // Reset frame_offset to the start of this function
+            if let Some(frame) = self.frame_stack.iter().last() {
+                self.frame_offset -= frame.function.stack_size() as usize;
+            }
+        }
     }
 
     fn get_value(&self, name: ValueRef) -> Option<DataValue> {
@@ -292,18 +299,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             });
         }
 
-        // Calculate offset from the base of the stack, to the current frame
-        let frame_offset: u64 = self
-            .frame_stack
-            .iter()
-            .enumerate()
-            // Remove the last frame, which is the frame that we are currently executing
-            .filter(|&(i, _)| i != self.frame_stack.len() - 1)
-            // Sum all of the stack slots from the previous frames
-            .flat_map(|(_, frame)| frame.function.stack_slots.values())
-            .map(|v| v.size as u64)
-            .sum();
-
         // Calculate the offset from the current frame to the requested stack slot
         let slot_offset: u64 = stack_slots
             .keys()
@@ -311,7 +306,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
             .map(|k| stack_slots[k].size as u64)
             .sum();
 
-        let final_offset = frame_offset + slot_offset + offset;
+        let final_offset = self.frame_offset as u64 + slot_offset + offset;
         Address::from_parts(size, AddressRegion::Stack, 0, final_offset)
     }
 
@@ -580,7 +575,7 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::InvalidAddress));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
     }
 
     #[test]
@@ -604,7 +599,7 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::OutOfBoundsStore));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
     }
 
     #[test]
@@ -627,7 +622,7 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::InvalidAddress));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
     }
 
     #[test]
@@ -650,7 +645,7 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::OutOfBoundsLoad));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
     }
 
     #[test]
@@ -676,7 +671,7 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::OutOfBoundsLoad));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
     }
 
     #[test]
@@ -702,6 +697,6 @@ mod tests {
             .unwrap()
             .unwrap_trap();
 
-        assert_eq!(trap, CraneliftTrap::User(TrapCode::OutOfBoundsStore));
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
     }
 }
