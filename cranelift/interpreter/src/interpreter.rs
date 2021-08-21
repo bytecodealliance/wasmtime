@@ -317,7 +317,7 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
     fn checked_load(&self, addr: Address, ty: Type) -> Result<DataValue, MemoryError> {
         let load_size = ty.bytes() as usize;
 
-        let raw_addr = match addr.region {
+        let src = match addr.region {
             AddressRegion::Stack => {
                 let addr_start = addr.offset as usize;
                 let addr_end = addr_start + load_size;
@@ -325,18 +325,18 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                     return Err(MemoryError::OutOfBoundsLoad { addr, load_size });
                 }
 
-                self.stack[addr_start..addr_end].as_ptr() as *const _ as *const u128
+                &self.stack[addr_start..addr_end]
             }
             _ => unimplemented!(),
         };
 
-        Ok(unsafe { DataValue::read_value_from(raw_addr, ty) })
+        Ok(DataValue::read_from_slice(src, ty))
     }
 
     fn checked_store(&mut self, addr: Address, v: DataValue) -> Result<(), MemoryError> {
         let store_size = v.ty().bytes() as usize;
 
-        let raw_addr = match addr.region {
+        let dst = match addr.region {
             AddressRegion::Stack => {
                 let addr_start = addr.offset as usize;
                 let addr_end = addr_start + store_size;
@@ -344,12 +344,12 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
                     return Err(MemoryError::OutOfBoundsStore { addr, store_size });
                 }
 
-                self.stack[addr_start..addr_end].as_mut_ptr() as *mut _ as *mut u128
+                &mut self.stack[addr_start..addr_end]
             }
             _ => unimplemented!(),
         };
 
-        Ok(unsafe { v.write_value_to(raw_addr) })
+        Ok(v.write_to_slice(dst))
     }
 }
 
