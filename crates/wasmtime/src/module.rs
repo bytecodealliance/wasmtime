@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 use wasmparser::Validator;
 use wasmtime_environ::{ModuleEnvironment, ModuleIndex, PrimaryMap};
-use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
+use wasmtime_jit::{CompilationArtifacts, CompiledModule, CompiledModuleInfo, TypeTables};
 
 mod registry;
 mod serialization;
@@ -312,8 +312,8 @@ impl Module {
             }
         };
 
-        let modules = engine.run_maybe_parallel(artifacts, |a| {
-            CompiledModule::from_artifacts(a, &*engine.config().profiler)
+        let modules = engine.run_maybe_parallel(artifacts, |(a, i)| {
+            CompiledModule::from_artifacts(a, Some(i), &*engine.config().profiler)
         })?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
@@ -339,7 +339,11 @@ impl Module {
     pub(crate) fn build_artifacts(
         engine: &Engine,
         wasm: &[u8],
-    ) -> Result<(usize, Vec<CompilationArtifacts>, TypeTables)> {
+    ) -> Result<(
+        usize,
+        Vec<(CompilationArtifacts, CompiledModuleInfo)>,
+        TypeTables,
+    )> {
         let tunables = &engine.config().tunables;
 
         // First a `ModuleEnvironment` is created which records type information
