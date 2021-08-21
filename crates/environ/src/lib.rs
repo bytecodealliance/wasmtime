@@ -41,6 +41,7 @@ pub use crate::module_environ::*;
 pub use crate::stack_map::StackMap;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
+pub use object;
 
 // Reexport all of these type-level since they're quite commonly used and it's
 // much easier to refer to everything through one crate rather than importing

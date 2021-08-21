@@ -7,13 +7,13 @@ use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
 use anyhow::{anyhow, Context, Result};
-use object::read::File;
 use object::write::{Object, StandardSegment};
-use object::{Object as _, ObjectSection, SectionKind};
+use object::{File, Object as _, ObjectSection, ObjectSymbol, SectionKind};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
 use thiserror::Error;
+use wasmtime_environ::obj;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex, Module,
     ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
@@ -125,9 +125,12 @@ impl CompilationArtifacts {
             push_debug(&mut obj, &debuginfo.debug_rnglists);
         }
 
+        let obj = obj.write()?;
+        verify_symbols(&module, &obj);
+
         return Ok(CompilationArtifacts {
             module: Arc::new(module),
-            obj: obj.write()?.into(),
+            obj: obj.into(),
             funcs,
             native_debug_info_present: tunables.generate_native_debuginfo,
             has_unparsed_debuginfo,
@@ -435,36 +438,34 @@ fn build_code_memory(
     let allocation = code_memory.allocate_for_object(obj)?;
 
     // Populate the finished functions from the allocation
-    let mut finished_functions = PrimaryMap::with_capacity(allocation.funcs_len());
-    for (i, fat_ptr) in allocation.funcs() {
-        let start = fat_ptr.as_ptr() as usize;
-        let fat_ptr: *mut [VMFunctionBody] = fat_ptr;
+    let mut finished_functions =
+        PrimaryMap::with_capacity(module.functions.len() - module.num_imported_funcs);
+    for (index, sym) in obj::defined_functions(module, obj) {
+        let body = &mut allocation[sym.address() as usize..][..sym.size() as usize];
         // Assert that the function bodies are pushed in sort order
         // This property is relied upon to search for functions by PC values
-        assert!(
-            start
+        assert!(unsafe {
+            (&body[0] as *const u8 as usize)
                 > finished_functions
                     .last()
-                    .map(|f: &*mut [VMFunctionBody]| unsafe { (**f).as_ptr() as usize })
+                    .map(|f: &*mut [VMFunctionBody]| (**f).as_ptr() as usize)
                     .unwrap_or(0)
-        );
-        assert_eq!(
-            Some(finished_functions.push(fat_ptr)),
-            module.defined_func_index(i)
-        );
+        });
+        let body = body as *mut [u8] as *mut [VMFunctionBody];
+        assert_eq!(finished_functions.push(body), index);
     }
 
     // Populate the trampolines from the allocation
-    let mut trampolines = Vec::with_capacity(allocation.trampolines_len());
-    for (i, fat_ptr) in allocation.trampolines() {
-        let fnptr =
-            unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr()) };
-        trampolines.push((i, fnptr));
+    let mut trampolines = Vec::with_capacity(module.exported_signatures.len());
+    for (index, sym) in obj::trampolines(module, obj) {
+        let body = &mut allocation[sym.address() as usize..][..sym.size() as usize];
+        let fnptr = unsafe { std::mem::transmute::<*const u8, VMTrampoline>(&body[0]) };
+        trampolines.push((index, fnptr));
     }
 
-    link_module(obj, allocation.code_range);
+    link_module(obj, allocation);
 
-    let code_range = (allocation.code_range.as_ptr(), allocation.code_range.len());
+    let code_range = (allocation.as_ptr(), allocation.len());
 
     // Make all code compiled thus far executable.
     code_memory.publish();
@@ -539,5 +540,29 @@ fn wasm_section_name(id: gimli::SectionId) -> &'static str {
         DebugStr => ".debug_str.wasm",
         DebugStrOffsets => ".debug_str_offsets.wasm",
         DebugTypes => ".debug_types.wasm",
+    }
+}
+
+/// Performs, in debug assertions mode, a verification that the object file's
+/// symbols do indeed align with the `defined_functions` and `trampolines`
+/// functions defined in the `wasmtime-environ` crate.
+fn verify_symbols(module: &Module, obj: &[u8]) {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    let obj = File::parse(obj).expect("failed to parse object image");
+    for (index, sym) in obj::defined_functions(module, &obj) {
+        assert!(sym.is_local());
+        assert_eq!(
+            sym.name().unwrap(),
+            wasmtime_environ::obj::func_symbol_name(module.func_index(index)),
+        );
+    }
+    for (index, sym) in obj::trampolines(module, &obj) {
+        assert!(sym.is_local());
+        assert_eq!(
+            sym.name().unwrap(),
+            wasmtime_environ::obj::trampoline_symbol_name(index),
+        );
     }
 }

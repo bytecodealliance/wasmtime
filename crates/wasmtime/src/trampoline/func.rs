@@ -5,7 +5,8 @@ use anyhow::Result;
 use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
-use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureIndex};
+use wasmtime_environ::object::{Object, ObjectSymbol};
+use wasmtime_environ::{EntityIndex, EntityRef, Module, ModuleType, PrimaryMap, SignatureIndex};
 use wasmtime_jit::CodeMemory;
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
@@ -82,17 +83,32 @@ pub fn create_function(
         .emit_trampoline_obj(ft.as_wasm_func_type(), stub_fn as usize, &mut obj)?;
     let obj = obj.write()?;
 
+    // Copy the results of JIT compilation into executable memory, and this will
+    // also take care of unwind table registration.
     let mut code_memory = CodeMemory::new();
-    let alloc = code_memory.allocate_for_object_unparsed(&obj)?;
-    let mut trampolines = alloc.trampolines();
-    let (host_i, host_trampoline) = trampolines.next().unwrap();
-    assert_eq!(host_i.as_u32(), 0);
-    let (wasm_i, wasm_trampoline) = trampolines.next().unwrap();
-    assert_eq!(wasm_i.as_u32(), 1);
-    assert!(trampolines.next().is_none());
-    let host_trampoline = host_trampoline.as_ptr();
-    let wasm_trampoline = wasm_trampoline as *mut [_];
-    drop(trampolines);
+    let (alloc, obj) = code_memory.allocate_for_object_unparsed(&obj)?;
+
+    // Extract the addresses of the host/wasm trampolines
+    let mut symbols = obj.symbols();
+    drop(symbols.next().unwrap()); // skip the null symbol
+    let host_trampoline = symbols.next().unwrap();
+    debug_assert!(host_trampoline.is_local());
+    debug_assert_eq!(
+        host_trampoline.name().unwrap(),
+        wasmtime_environ::obj::trampoline_symbol_name(SignatureIndex::new(0))
+    );
+    let wasm_trampoline = symbols.next().unwrap();
+    debug_assert!(wasm_trampoline.is_local());
+    debug_assert_eq!(
+        wasm_trampoline.name().unwrap(),
+        wasmtime_environ::obj::trampoline_symbol_name(SignatureIndex::new(1))
+    );
+
+    let host_trampoline =
+        alloc[host_trampoline.address() as usize..][..host_trampoline.size() as usize].as_ptr();
+    let wasm_trampoline =
+        &mut alloc[wasm_trampoline.address() as usize..][..wasm_trampoline.size() as usize];
+    let wasm_trampoline = wasm_trampoline as *mut [u8] as *mut [VMFunctionBody];
 
     code_memory.publish();
 
@@ -104,8 +120,7 @@ pub fn create_function(
             sig,
             Box::new(TrampolineState { func, code_memory }),
         )?;
-        let host_trampoline =
-            std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(host_trampoline);
+        let host_trampoline = std::mem::transmute::<*const u8, VMTrampoline>(host_trampoline);
         Ok((instance, host_trampoline))
     }
 }

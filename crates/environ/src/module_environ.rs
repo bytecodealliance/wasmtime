@@ -10,7 +10,7 @@ use crate::{
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::mem;
 use std::path::PathBuf;
@@ -60,6 +60,18 @@ pub struct ModuleTranslation<'data> {
 
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+
+    /// The set of defined functions within this module which are "possibly
+    /// exported" which means that the host can possibly call them. This
+    /// includes functions such as:
+    ///
+    /// * Exported functions
+    /// * Functions in element segments
+    /// * Functions via `ref.func` instructions
+    ///
+    /// This set is used to determine the set of type signatures that need
+    /// trampolines for the host to call into.
+    pub possibly_exported_funcs: HashSet<DefinedFuncIndex>,
 
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
@@ -220,6 +232,22 @@ impl<'data> ModuleEnvironment<'data> {
 
             Payload::End => {
                 validator.end()?;
+
+                // With the `possibly_exported_funcs` set of functions finished
+                // we can calculate the set of signatures that are exported as
+                // the set of exported functions' signatures.
+                self.result.module.exported_signatures = self
+                    .result
+                    .module
+                    .functions
+                    .iter()
+                    .filter_map(|(i, sig)| match self.result.module.defined_func_index(i) {
+                        Some(i) if !self.result.possibly_exported_funcs.contains(&i) => None,
+                        _ => Some(*sig),
+                    })
+                    .collect();
+                self.result.module.exported_signatures.sort_unstable();
+                self.result.module.exported_signatures.dedup();
 
                 self.result.creation_artifacts.shrink_to_fit();
                 self.result.creation_modules.shrink_to_fit();
@@ -1115,7 +1143,7 @@ and for re-adding support for interface types you can see this issue:
 
     fn flag_func_possibly_exported(&mut self, func: FuncIndex) {
         if let Some(idx) = self.result.module.defined_func_index(func) {
-            self.result.module.possibly_exported_funcs.insert(idx);
+            self.result.possibly_exported_funcs.insert(idx);
         }
     }
 

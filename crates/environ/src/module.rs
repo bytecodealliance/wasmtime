@@ -3,7 +3,7 @@
 use crate::{EntityRef, ModuleTranslation, PrimaryMap, Tunables, WASM_PAGE_SIZE};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::ops::Range;
 use wasmtime_types::*;
@@ -423,9 +423,10 @@ pub struct Module {
     /// The type of each nested wasm module this module contains.
     pub modules: PrimaryMap<ModuleIndex, ModuleTypeIndex>,
 
-    /// The set of defined functions within this module which are located in
-    /// element segments.
-    pub possibly_exported_funcs: BTreeSet<DefinedFuncIndex>,
+    /// A list of type signatures which are considered exported from this
+    /// module, or those that can possibly be called. This list is sorted, and
+    /// trampolines for each of these signatures is required.
+    pub exported_signatures: Vec<SignatureIndex>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,

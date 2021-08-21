@@ -120,12 +120,12 @@ impl wasmtime_environ::Compiler for Compiler {
         let func_index = module.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
-        context.func.signature = func_signature(isa, module, types, func_index);
+        context.func.signature = func_signature(isa, translation, types, func_index);
         if tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(isa, module, types, tunables);
+        let mut func_env = FuncEnvironment::new(isa, translation, types, tunables);
 
         // We use these as constant offsets below in
         // `stack_limit_from_arguments`, so assert their values here. This
@@ -236,7 +236,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .functions
             .iter()
             .filter_map(|(i, sig)| match translation.module.defined_func_index(i) {
-                Some(i) if !translation.module.possibly_exported_funcs.contains(&i) => None,
+                Some(i) if !translation.possibly_exported_funcs.contains(&i) => None,
                 _ => Some(*sig),
             })
             .collect::<BTreeSet<_>>();
