@@ -5,19 +5,12 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use wasmtime_environ::{
-    DefinedFuncIndex, EntityRef, FilePos, FunctionAddressMap, StackMap, TrapInformation,
-};
+use wasmtime_environ::{EntityRef, FilePos, StackMap, TrapInformation};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
 lazy_static::lazy_static! {
     static ref GLOBAL_MODULES: RwLock<GlobalModuleRegistry> = Default::default();
-}
-
-fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u32)> {
-    let (index, start, _) = module.func_by_pc(pc)?;
-    Some((index, (pc - start) as u32))
 }
 
 /// Used for registering modules with a store.
@@ -121,31 +114,10 @@ struct RegisteredModule {
     signatures: Arc<SignatureCollection>,
 }
 
-impl RegisteredModule {
-    fn instr_pos(offset: u32, addr_map: &FunctionAddressMap) -> Option<usize> {
-        // Use our relative position from the start of the function to find the
-        // machine instruction that corresponds to `pc`, which then allows us to
-        // map that to a wasm original source location.
-        match addr_map
-            .instructions
-            .binary_search_by_key(&offset, |map| map.code_offset)
-        {
-            // Exact hit!
-            Ok(pos) => Some(pos),
-
-            // This *would* be at the first slot in the array, so no
-            // instructions cover `pc`.
-            Err(0) => None,
-
-            // This would be at the `nth` slot, so we're at the `n-1`th slot.
-            Err(n) => Some(n - 1),
-        }
-    }
-}
-
 impl ModuleInfo for RegisteredModule {
     fn lookup_stack_map(&self, pc: usize) -> Option<&StackMap> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
+        let text_offset = pc - self.start;
+        let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
         let info = self.module.func_info(index);
 
         // Do a binary search to find the stack map for the given offset.
@@ -192,7 +164,7 @@ impl ModuleInfo for RegisteredModule {
 
         let index = match info
             .stack_maps
-            .binary_search_by_key(&offset, |i| i.code_offset)
+            .binary_search_by_key(&func_offset, |i| i.code_offset)
         {
             // Exact hit.
             Ok(i) => i,
@@ -246,23 +218,22 @@ impl GlobalModuleRegistry {
         let modules = GLOBAL_MODULES.read().unwrap();
 
         match modules.module(pc) {
-            Some(entry) => match func_by_pc(&entry.module, pc) {
-                Some((index, offset)) => {
-                    let info = entry.module.func_info(index);
-                    RegisteredModule::instr_pos(offset, &info.address_map).is_some()
-                }
-                None => false,
-            },
+            Some((entry, text_offset)) => {
+                wasmtime_environ::lookup_file_pos(entry.module.address_map_data(), text_offset)
+                    .is_some()
+            }
             None => false,
         }
     }
 
-    fn module(&self, pc: usize) -> Option<&GlobalRegisteredModule> {
+    /// Returns, if found, the corresponding module for the `pc` as well as the
+    /// pc transformed to a relative offset within the text section.
+    fn module(&self, pc: usize) -> Option<(&GlobalRegisteredModule, usize)> {
         let (end, info) = self.0.range(pc..).next()?;
         if pc < info.start || *end < pc {
             return None;
         }
-        Some(info)
+        Some((info, pc - info.start))
     }
 
     // Work with the global instance of `GlobalModuleRegistry`. Note that only
@@ -280,8 +251,8 @@ impl GlobalModuleRegistry {
     /// boolean indicates whether the engine used to compile this module is
     /// using environment variables to control debuginfo parsing.
     pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool, bool)> {
-        let module = self.module(pc)?;
-        module.lookup_frame_info(pc).map(|info| {
+        let (module, offset) = self.module(pc)?;
+        module.lookup_frame_info(offset).map(|info| {
             (
                 info,
                 module.has_unparsed_debuginfo(),
@@ -292,7 +263,8 @@ impl GlobalModuleRegistry {
 
     /// Fetches trap information about a program counter in a backtrace.
     pub(crate) fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
-        self.module(pc)?.lookup_trap_info(pc)
+        let (module, offset) = self.module(pc)?;
+        module.lookup_trap_info(offset)
     }
 
     /// Registers a new region of code, described by `(start, end)` and with
@@ -336,20 +308,22 @@ impl GlobalRegisteredModule {
     ///
     /// Returns an object if this `pc` is known to this module, or returns `None`
     /// if no information can be found.
-    pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
+    pub fn lookup_frame_info(&self, text_offset: usize) -> Option<FrameInfo> {
+        let (index, _func_offset) = self.module.func_by_text_offset(text_offset)?;
         let info = self.module.func_info(index);
-        let pos = RegisteredModule::instr_pos(offset, &info.address_map);
+        let instr = wasmtime_environ::lookup_file_pos(self.module.address_map_data(), text_offset);
 
         // In debug mode for now assert that we found a mapping for `pc` within
         // the function, because otherwise something is buggy along the way and
         // not accounting for all the instructions. This isn't super critical
         // though so we can omit this check in release mode.
-        debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
+        debug_assert!(
+            instr.is_some(),
+            "failed to find instruction for {:#x}",
+            text_offset
+        );
 
-        let instr = pos
-            .map(|i| info.address_map.instructions[i].srcloc)
-            .unwrap_or(info.address_map.start_srcloc);
+        let instr = instr.unwrap_or(info.start_srcloc);
 
         // Use our wasm-relative pc to symbolize this frame. If there's a
         // symbolication context (dwarf debug info) available then we can try to
@@ -393,18 +367,18 @@ impl GlobalRegisteredModule {
             func_index: index.index() as u32,
             func_name: module.func_names.get(&index).cloned(),
             instr,
-            func_start: info.address_map.start_srcloc,
+            func_start: info.start_srcloc,
             symbols,
         })
     }
 
     /// Fetches trap information about a program counter in a backtrace.
-    pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
+    pub fn lookup_trap_info(&self, text_offset: usize) -> Option<&TrapInformation> {
+        let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
         let info = self.module.func_info(index);
         let idx = info
             .traps
-            .binary_search_by_key(&offset, |info| info.code_offset)
+            .binary_search_by_key(&func_offset, |info| info.code_offset)
             .ok()?;
         Some(&info.traps[idx])
     }

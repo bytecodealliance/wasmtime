@@ -2,8 +2,8 @@
 //! module.
 
 use crate::{
-    DefinedFuncIndex, FunctionAddressMap, FunctionBodyData, ModuleTranslation, PrimaryMap,
-    StackMap, Tunables, TypeTables, WasmError, WasmFuncType,
+    DefinedFuncIndex, FilePos, FunctionBodyData, ModuleTranslation, PrimaryMap, StackMap, Tunables,
+    TypeTables, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::Object;
@@ -21,7 +21,7 @@ use thiserror::Error;
 #[allow(missing_docs)]
 pub struct FunctionInfo {
     pub traps: Vec<TrapInformation>,
-    pub address_map: FunctionAddressMap,
+    pub start_srcloc: FilePos,
     pub stack_maps: Vec<StackMapInformation>,
 }
 

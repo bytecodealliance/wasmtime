@@ -34,6 +34,7 @@ use object::{
 };
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::ops::Range;
 use wasmtime_environ::obj;
 use wasmtime_environ::{
     DefinedFuncIndex, EntityRef, FuncIndex, Module, PrimaryMap, SignatureIndex,
@@ -157,7 +158,11 @@ impl<'a> ObjectBuilder<'a> {
         }
     }
 
-    fn append_func(&mut self, name: Vec<u8>, func: &'a CompiledFunction) -> SymbolId {
+    /// Appends the `func` specified named `name` to this object.
+    ///
+    /// Returns the symbol associated with the function as well as the range
+    /// that the function resides within the text section.
+    fn append_func(&mut self, name: Vec<u8>, func: &'a CompiledFunction) -> (SymbolId, Range<u64>) {
         let off = self
             .obj
             .append_section_data(self.text_section, &func.body, 1);
@@ -207,15 +212,22 @@ impl<'a> ObjectBuilder<'a> {
         if !func.relocations.is_empty() {
             self.pending_relocations.push((off, &func.relocations));
         }
-        symbol_id
+        (symbol_id, off..off + func.body.len() as u64)
     }
 
-    pub fn func(&mut self, index: DefinedFuncIndex, func: &'a CompiledFunction) {
+    /// Pushes a new defined function from the a wasm module into this object,
+    /// returning the range that the compiled code will live at relative in the
+    /// text section of the final executable.
+    ///
+    /// Note that functions must be pushed in the order of their
+    /// `DefinedFuncIndex`.
+    pub fn func(&mut self, index: DefinedFuncIndex, func: &'a CompiledFunction) -> Range<u64> {
         assert_eq!(self.jump_tables.push(&func.jt_offsets), index);
         let index = self.module.func_index(index);
         let name = obj::func_symbol_name(index);
-        let symbol_id = self.append_func(name.into_bytes(), func);
+        let (symbol_id, range) = self.append_func(name.into_bytes(), func);
         assert_eq!(self.func_symbols.push(symbol_id), index);
+        range
     }
 
     pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) {

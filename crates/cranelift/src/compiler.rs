@@ -3,7 +3,7 @@ use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::obj::ObjectBuilder;
 use crate::{
     blank_sig, func_signature, indirect_signature, value_type, wasmtime_call_conv,
-    CompiledFunction, Relocation, RelocationTarget,
+    CompiledFunction, FunctionAddressMap, Relocation, RelocationTarget,
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
@@ -26,7 +26,7 @@ use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
-    CompileError, FilePos, FlagValue, FunctionAddressMap, FunctionBodyData, FunctionInfo,
+    AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
     InstructionAddressMap, Module, ModuleTranslation, StackMapInformation, TrapCode,
     TrapInformation, Tunables, TypeTables, VMOffsets,
 };
@@ -209,10 +209,11 @@ impl wasmtime_environ::Compiler for Compiler {
             stack_slots: context.func.stack_slots,
             unwind_info,
             info: FunctionInfo {
-                address_map: address_transform,
                 traps: trap_sink.traps,
+                start_srcloc: address_transform.start_srcloc,
                 stack_maps: stack_map_sink.finish(),
             },
+            address_map: address_transform,
         }))
     }
 
@@ -247,9 +248,11 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         let mut builder = ObjectBuilder::new(obj, &translation.module);
+        let mut addrs = AddressMapSection::default();
 
         for (i, func) in funcs.iter() {
-            builder.func(i, func);
+            let range = builder.func(i, func);
+            addrs.push(range, &func.address_map.instructions);
         }
         for (i, func) in trampolines.iter() {
             builder.trampoline(*i, func);
@@ -287,6 +290,8 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         builder.finish(&*self.isa)?;
+        addrs.append_to(obj);
+
         Ok(funcs.into_iter().map(|(_, f)| f.info).collect())
     }
 
@@ -527,6 +532,7 @@ impl Compiler {
             stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
             info: Default::default(),
+            address_map: Default::default(),
         })
     }
 }

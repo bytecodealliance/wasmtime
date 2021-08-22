@@ -94,7 +94,7 @@ use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
-use wasmtime_environ::{FunctionInfo, Module, TypeTables};
+use wasmtime_environ::{FilePos, FunctionInfo, InstructionAddressMap, Module, TypeTables};
 
 pub use builder::builder;
 
@@ -118,11 +118,41 @@ pub struct CompiledFunction {
     /// The unwind information.
     unwind_info: Option<UnwindInfo>,
 
+    /// Information used to translate from binary offsets back to the original
+    /// location found in the wasm input.
+    address_map: FunctionAddressMap,
+
     relocations: Vec<Relocation>,
     value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
     stack_slots: ir::StackSlots,
 
     info: FunctionInfo,
+}
+
+/// Function and its instructions addresses mappings.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct FunctionAddressMap {
+    /// An array of data for the instructions in this function, indicating where
+    /// each instruction maps back to in the original function.
+    ///
+    /// This array is sorted least-to-greatest by the `code_offset` field.
+    /// Additionally the span of each `InstructionAddressMap` is implicitly the
+    /// gap between it and the next item in the array.
+    instructions: Box<[InstructionAddressMap]>,
+
+    /// Function's initial offset in the source file, specified in bytes from
+    /// the front of the file.
+    start_srcloc: FilePos,
+
+    /// Function's end offset in the source file, specified in bytes from
+    /// the front of the file.
+    end_srcloc: FilePos,
+
+    /// Generated function body offset if applicable, otherwise 0.
+    body_offset: usize,
+
+    /// Generated function body length.
+    body_len: u32,
 }
 
 /// A record of a relocation to perform.
