@@ -74,14 +74,3 @@ impl Default for FilePos {
         FilePos(u32::MAX)
     }
 }
-
-/// Memory definition offset in the VMContext structure.
-#[derive(Debug, Clone)]
-pub enum ModuleMemoryOffset {
-    /// Not available.
-    None,
-    /// Offset to the defined memory.
-    Defined(u32),
-    /// Offset to the imported memory.
-    Imported(u32),
-}

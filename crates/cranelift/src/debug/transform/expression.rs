@@ -1,4 +1,5 @@
 use super::address_transform::AddressTransform;
+use crate::debug::ModuleMemoryOffset;
 use anyhow::{Context, Error, Result};
 use cranelift_codegen::ir::{LabelValueLoc, StackSlots, ValueLabel, ValueLoc};
 use cranelift_codegen::isa::TargetIsa;
@@ -10,7 +11,7 @@ use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
-use wasmtime_environ::{DefinedFuncIndex, EntityRef, ModuleMemoryOffset};
+use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
 #[derive(Debug)]
 pub struct FunctionFrameInfo<'a> {
@@ -1267,8 +1268,9 @@ mod tests {
     #[test]
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
+        use crate::debug::ModuleMemoryOffset;
         use cranelift_codegen::ir::StackSlots;
-        use wasmtime_environ::{DefinedFuncIndex, EntityRef, ModuleMemoryOffset};
+        use wasmtime_environ::{DefinedFuncIndex, EntityRef};
 
         let addr_tr = create_mock_address_transform();
         let stack_slots = StackSlots::new();

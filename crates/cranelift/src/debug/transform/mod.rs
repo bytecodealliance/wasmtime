@@ -2,6 +2,7 @@ use self::refs::DebugInfoRefsMap;
 use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
 use crate::debug::gc::build_dependencies;
+use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctions;
 use anyhow::Error;
 use cranelift_codegen::isa::TargetIsa;
@@ -11,7 +12,7 @@ use gimli::{
 };
 use std::collections::HashSet;
 use thiserror::Error;
-use wasmtime_environ::{DebugInfoData, ModuleMemoryOffset};
+use wasmtime_environ::DebugInfoData;
 
 pub use address_transform::AddressTransform;
 
