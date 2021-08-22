@@ -30,6 +30,7 @@ mod module;
 mod module_environ;
 pub mod obj;
 mod stack_map;
+mod trap_encoding;
 mod tunables;
 mod vmoffsets;
 
@@ -39,6 +40,7 @@ pub use crate::compilation::*;
 pub use crate::module::*;
 pub use crate::module_environ::*;
 pub use crate::stack_map::StackMap;
+pub use crate::trap_encoding::*;
 pub use crate::tunables::Tunables;
 pub use crate::vmoffsets::*;
 

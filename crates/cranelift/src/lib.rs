@@ -94,7 +94,9 @@ use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
 use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
-use wasmtime_environ::{FilePos, FunctionInfo, InstructionAddressMap, Module, TypeTables};
+use wasmtime_environ::{
+    FilePos, FunctionInfo, InstructionAddressMap, Module, TrapInformation, TypeTables,
+};
 
 pub use builder::builder;
 
@@ -121,6 +123,10 @@ pub struct CompiledFunction {
     /// Information used to translate from binary offsets back to the original
     /// location found in the wasm input.
     address_map: FunctionAddressMap,
+
+    /// Metadata about traps in this module, mapping code offsets to the trap
+    /// that they may cause.
+    traps: Vec<TrapInformation>,
 
     relocations: Vec<Relocation>,
     value_labels_ranges: cranelift_codegen::ValueLabelsRanges,

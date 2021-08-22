@@ -172,8 +172,7 @@ impl Trap {
             } => {
                 let mut code = GlobalModuleRegistry::with(|modules| {
                     modules
-                        .lookup_trap_info(pc)
-                        .map(|info| info.trap_code)
+                        .lookup_trap_code(pc)
                         .unwrap_or(EnvTrapCode::StackOverflow)
                 });
                 if maybe_interrupted && code == EnvTrapCode::StackOverflow {

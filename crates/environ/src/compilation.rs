@@ -20,62 +20,8 @@ use thiserror::Error;
 #[derive(Serialize, Deserialize, Clone, Default)]
 #[allow(missing_docs)]
 pub struct FunctionInfo {
-    pub traps: Vec<TrapInformation>,
     pub start_srcloc: FilePos,
     pub stack_maps: Vec<StackMapInformation>,
-}
-
-/// Information about trap.
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct TrapInformation {
-    /// The offset of the trapping instruction in native code. It is relative to the beginning of the function.
-    pub code_offset: u32,
-    /// Code of the trap.
-    pub trap_code: TrapCode,
-}
-
-/// A trap code describing the reason for a trap.
-///
-/// All trap instructions have an explicit trap code.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
-pub enum TrapCode {
-    /// The current stack space was exhausted.
-    StackOverflow,
-
-    /// A `heap_addr` instruction detected an out-of-bounds error.
-    ///
-    /// Note that not all out-of-bounds heap accesses are reported this way;
-    /// some are detected by a segmentation fault on the heap unmapped or
-    /// offset-guard pages.
-    HeapOutOfBounds,
-
-    /// A wasm atomic operation was presented with a not-naturally-aligned linear-memory address.
-    HeapMisaligned,
-
-    /// A `table_addr` instruction detected an out-of-bounds error.
-    TableOutOfBounds,
-
-    /// Indirect call to a null table entry.
-    IndirectCallToNull,
-
-    /// Signature mismatch on indirect call.
-    BadSignature,
-
-    /// An integer arithmetic operation caused an overflow.
-    IntegerOverflow,
-
-    /// An integer division by zero.
-    IntegerDivisionByZero,
-
-    /// Failed float-to-int conversion.
-    BadConversionToInteger,
-
-    /// Code that was supposed to have been unreachable was reached.
-    UnreachableCodeReached,
-
-    /// Execution has potentially run too long and may be interrupted.
-    /// This trap is resumable.
-    Interrupt,
 }
 
 /// The offset within a function of a GC safepoint, and its associated stack
