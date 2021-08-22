@@ -9,7 +9,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 use thiserror::Error;
 
@@ -204,10 +204,10 @@ pub trait Compiler: Send + Sync {
     fn triple(&self) -> &target_lexicon::Triple;
 
     /// Returns a list of configured settings for this compiler.
-    fn flags(&self) -> HashMap<String, FlagValue>;
+    fn flags(&self) -> BTreeMap<String, FlagValue>;
 
     /// Same as [`Compiler::flags`], but ISA-specific (a cranelift-ism)
-    fn isa_flags(&self) -> HashMap<String, FlagValue>;
+    fn isa_flags(&self) -> BTreeMap<String, FlagValue>;
 }
 
 /// Value of a configured setting for a [`Compiler`]

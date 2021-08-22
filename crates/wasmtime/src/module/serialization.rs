@@ -4,7 +4,7 @@ use crate::{Engine, Module};
 use anyhow::{anyhow, bail, Context, Result};
 use bincode::Options;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasmtime_environ::{Compiler, FlagValue, Tunables};
@@ -152,8 +152,8 @@ impl SerializedModuleUpvar {
 #[derive(Serialize, Deserialize)]
 pub struct SerializedModule<'a> {
     target: String,
-    shared_flags: HashMap<String, FlagValue>,
-    isa_flags: HashMap<String, FlagValue>,
+    shared_flags: BTreeMap<String, FlagValue>,
+    isa_flags: BTreeMap<String, FlagValue>,
     tunables: Tunables,
     features: WasmFeatures,
     artifacts: Vec<MyCow<'a, CompilationArtifacts>>,

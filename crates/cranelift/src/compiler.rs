@@ -20,7 +20,7 @@ use cranelift_wasm::{
 };
 use std::any::Any;
 use std::cmp;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
@@ -306,7 +306,7 @@ impl wasmtime_environ::Compiler for Compiler {
         self.isa.triple()
     }
 
-    fn flags(&self) -> HashMap<String, FlagValue> {
+    fn flags(&self) -> BTreeMap<String, FlagValue> {
         self.isa
             .flags()
             .iter()
@@ -314,7 +314,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .collect()
     }
 
-    fn isa_flags(&self) -> HashMap<String, FlagValue> {
+    fn isa_flags(&self) -> BTreeMap<String, FlagValue> {
         self.isa
             .isa_flags()
             .iter()
