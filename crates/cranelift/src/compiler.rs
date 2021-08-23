@@ -1,3 +1,4 @@
+use crate::debug::ModuleMemoryOffset;
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::obj::{ObjectBuilder, ObjectBuilderTarget};
 use crate::{
@@ -25,8 +26,8 @@ use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
     CompileError, FilePos, FlagValue, FunctionAddressMap, FunctionBodyData, FunctionInfo,
-    InstructionAddressMap, Module, ModuleMemoryOffset, ModuleTranslation, StackMapInformation,
-    TrapCode, TrapInformation, Tunables, TypeTables, VMOffsets,
+    InstructionAddressMap, Module, ModuleTranslation, StackMapInformation, TrapCode,
+    TrapInformation, Tunables, TypeTables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating

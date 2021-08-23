@@ -1,11 +1,12 @@
 pub use crate::debug::transform::transform_dwarf;
+use crate::debug::ModuleMemoryOffset;
 use crate::CompiledFunctions;
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::{unwind::UnwindInfo, TargetIsa};
 use cranelift_entity::EntityRef;
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
-use wasmtime_environ::{DebugInfoData, ModuleMemoryOffset};
+use wasmtime_environ::DebugInfoData;
 
 #[allow(missing_docs)]
 pub struct DwarfSection {
