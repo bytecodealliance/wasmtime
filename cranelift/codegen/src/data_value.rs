@@ -80,7 +80,8 @@ impl DataValue {
     /// Panics if the slice does not have enough space to accommodate the [DataValue]
     pub fn write_to_slice(&self, dst: &mut [u8]) {
         match self {
-            DataValue::B(b) => dst[0] = if *b { 1 } else { 0 },
+            DataValue::B(true) => dst[..16].copy_from_slice(&[u8::MAX; 16][..]),
+            DataValue::B(false) => dst[..16].copy_from_slice(&[0; 16][..]),
             DataValue::I8(i) => dst[..1].copy_from_slice(&i.to_le_bytes()[..]),
             DataValue::I16(i) => dst[..2].copy_from_slice(&i.to_le_bytes()[..]),
             DataValue::I32(i) => dst[..4].copy_from_slice(&i.to_le_bytes()[..]),
@@ -109,7 +110,7 @@ impl DataValue {
             types::F64 => DataValue::F64(Ieee64::with_bits(u64::from_le_bytes(
                 src[..8].try_into().unwrap(),
             ))),
-            _ if ty.is_bool() => DataValue::B(src[0] != 0),
+            _ if ty.is_bool() => DataValue::B(src[..16] != [0; 16]),
             _ if ty.is_vector() && ty.bytes() == 16 => {
                 DataValue::V128(src[..16].try_into().unwrap())
             }
@@ -119,18 +120,22 @@ impl DataValue {
 
     /// Write a [DataValue] to a memory location.
     pub unsafe fn write_value_to(&self, p: *mut u128) {
-        self.write_to_slice(std::slice::from_raw_parts_mut(
-            p as *mut u8,
-            self.ty().bytes() as usize,
-        ));
+        let size = match self.ty() {
+            ty if ty.is_bool() => 16,
+            ty => ty.bytes() as usize,
+        };
+
+        self.write_to_slice(std::slice::from_raw_parts_mut(p as *mut u8, size));
     }
 
     /// Read a [DataValue] from a memory location using a given [Type].
     pub unsafe fn read_value_from(p: *const u128, ty: Type) -> Self {
-        DataValue::read_from_slice(
-            std::slice::from_raw_parts(p as *const u8, ty.bytes() as usize),
-            ty,
-        )
+        let size = match ty {
+            ty if ty.is_bool() => 16,
+            ty => ty.bytes() as usize,
+        };
+
+        DataValue::read_from_slice(std::slice::from_raw_parts(p as *const u8, size), ty)
     }
 }
 
