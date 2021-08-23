@@ -3,7 +3,7 @@
 use crate::{EntityRef, PrimaryMap, Tunables};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
 use std::sync::Arc;
 use wasmtime_types::*;
@@ -349,17 +349,17 @@ pub struct Module {
     pub passive_elements: Vec<Box<[FuncIndex]>>,
 
     /// The map from passive element index (element segment index space) to index in `passive_elements`.
-    pub passive_elements_map: HashMap<ElemIndex, usize>,
+    pub passive_elements_map: BTreeMap<ElemIndex, usize>,
 
     /// WebAssembly passive data segments.
     #[serde(with = "passive_data_serde")]
     pub passive_data: Vec<Arc<[u8]>>,
 
     /// The map from passive data index (data segment index space) to index in `passive_data`.
-    pub passive_data_map: HashMap<DataIndex, usize>,
+    pub passive_data_map: BTreeMap<DataIndex, usize>,
 
     /// WebAssembly function names.
-    pub func_names: HashMap<FuncIndex, String>,
+    pub func_names: BTreeMap<FuncIndex, String>,
 
     /// Types declared in the wasm module.
     pub types: PrimaryMap<TypeIndex, ModuleType>,
@@ -396,7 +396,7 @@ pub struct Module {
 
     /// The set of defined functions within this module which are located in
     /// element segments.
-    pub possibly_exported_funcs: HashSet<DefinedFuncIndex>,
+    pub possibly_exported_funcs: BTreeSet<DefinedFuncIndex>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,

@@ -16,7 +16,7 @@ use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::Layout;
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::hash::Hash;
 use std::ptr::NonNull;
@@ -511,13 +511,13 @@ impl Instance {
 
     fn find_passive_segment<'a, I, D, T>(
         index: I,
-        index_map: &HashMap<I, usize>,
+        index_map: &BTreeMap<I, usize>,
         data: &'a Vec<D>,
         dropped: &EntitySet<I>,
     ) -> &'a [T]
     where
         D: AsRef<[T]>,
-        I: EntityRef + Hash,
+        I: EntityRef + Ord,
     {
         match index_map.get(&index) {
             Some(index) if !dropped.contains(I::new(*index)) => data[*index].as_ref(),

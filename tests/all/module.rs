@@ -78,3 +78,46 @@ fn aot_compiles() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn serialize_deterministic() {
+    let engine = Engine::default();
+
+    let assert_deterministic = |wasm: &str| {
+        let p1 = engine.precompile_module(wasm.as_bytes()).unwrap();
+        let p2 = engine.precompile_module(wasm.as_bytes()).unwrap();
+        if p1 != p2 {
+            panic!("precompile_module not determinisitc for:\n{}", wasm);
+        }
+
+        let module1 = Module::new(&engine, wasm).unwrap();
+        let a1 = module1.serialize().unwrap();
+        let a2 = module1.serialize().unwrap();
+        if a1 != a2 {
+            panic!("Module::serialize not determinisitc for:\n{}", wasm);
+        }
+
+        let module2 = Module::new(&engine, wasm).unwrap();
+        let b1 = module2.serialize().unwrap();
+        let b2 = module2.serialize().unwrap();
+        if b1 != b2 {
+            panic!("Module::serialize not determinisitc for:\n{}", wasm);
+        }
+
+        if a1 != b2 {
+            panic!("not matching across modules:\n{}", wasm);
+        }
+        if b1 != p2 {
+            panic!("not matching across engine/module:\n{}", wasm);
+        }
+    };
+
+    assert_deterministic("(module)");
+    assert_deterministic("(module (func))");
+    assert_deterministic("(module (func nop))");
+    assert_deterministic("(module (func) (func (param i32)))");
+    assert_deterministic("(module (func (export \"f\")) (func (export \"y\")))");
+    assert_deterministic("(module (func $f) (func $g))");
+    assert_deterministic("(module (data \"\") (data \"\"))");
+    assert_deterministic("(module (elem) (elem))");
+}
