@@ -110,7 +110,13 @@ impl DataValue {
             types::F64 => DataValue::F64(Ieee64::with_bits(u64::from_le_bytes(
                 src[..8].try_into().unwrap(),
             ))),
-            _ if ty.is_bool() => DataValue::B(src[..16] != [0; 16]),
+            _ if ty.is_bool() => {
+                // Only `ty.bytes()` are guaranteed to be written
+                // so we can only test the first n bytes of `src`
+
+                let size = ty.bytes() as usize;
+                DataValue::B(src[..size].iter().any(|&i| i != 0))
+            }
             _ if ty.is_vector() && ty.bytes() == 16 => {
                 DataValue::V128(src[..16].try_into().unwrap())
             }
@@ -120,6 +126,8 @@ impl DataValue {
 
     /// Write a [DataValue] to a memory location.
     pub unsafe fn write_value_to(&self, p: *mut u128) {
+        // Since `DataValue` does not have type info for bools we always
+        // write out a full 16 byte slot.
         let size = match self.ty() {
             ty if ty.is_bool() => 16,
             ty => ty.bytes() as usize,
@@ -130,12 +138,10 @@ impl DataValue {
 
     /// Read a [DataValue] from a memory location using a given [Type].
     pub unsafe fn read_value_from(p: *const u128, ty: Type) -> Self {
-        let size = match ty {
-            ty if ty.is_bool() => 16,
-            ty => ty.bytes() as usize,
-        };
-
-        DataValue::read_from_slice(std::slice::from_raw_parts(p as *const u8, size), ty)
+        DataValue::read_from_slice(
+            std::slice::from_raw_parts(p as *const u8, ty.bytes() as usize),
+            ty,
+        )
     }
 }
 

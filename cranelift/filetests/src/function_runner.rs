@@ -1,8 +1,7 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
-use core::{mem, ptr};
+use core::mem;
 use cranelift_codegen::binemit::{NullRelocSink, NullStackMapSink, NullTrapSink};
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature, Type};
 use cranelift_codegen::isa::{BackendVariant, TargetIsa};
 use cranelift_codegen::{ir, settings, CodegenError, Context};
@@ -204,7 +203,7 @@ impl UnboxedValues {
                 param.value_type
             );
             unsafe {
-                Self::write_value_to(arg, slot);
+                arg.write_value_to(slot);
             }
         }
 
@@ -224,49 +223,11 @@ impl UnboxedValues {
 
         // Extract the returned values from this vector.
         for (slot, param) in self.0.iter().zip(&signature.returns) {
-            let value = unsafe { Self::read_value_from(slot, param.value_type) };
+            let value = unsafe { DataValue::read_value_from(slot, param.value_type) };
             returns.push(value);
         }
 
         returns
-    }
-
-    /// Write a [DataValue] to a memory location.
-    unsafe fn write_value_to(v: &DataValue, p: *mut u128) {
-        match v {
-            DataValue::B(b) => ptr::write(p as *mut bool, *b),
-            DataValue::I8(i) => ptr::write(p as *mut i8, *i),
-            DataValue::I16(i) => ptr::write(p as *mut i16, *i),
-            DataValue::I32(i) => ptr::write(p as *mut i32, *i),
-            DataValue::I64(i) => ptr::write(p as *mut i64, *i),
-            DataValue::F32(f) => ptr::write(p as *mut Ieee32, *f),
-            DataValue::F64(f) => ptr::write(p as *mut Ieee64, *f),
-            DataValue::V128(b) => ptr::write(p as *mut [u8; 16], *b),
-            _ => unimplemented!(),
-        }
-    }
-
-    /// Read a [DataValue] from a memory location using a given [Type].
-    unsafe fn read_value_from(p: *const u128, ty: Type) -> DataValue {
-        match ty {
-            ir::types::I8 => DataValue::I8(ptr::read(p as *const i8)),
-            ir::types::I16 => DataValue::I16(ptr::read(p as *const i16)),
-            ir::types::I32 => DataValue::I32(ptr::read(p as *const i32)),
-            ir::types::I64 => DataValue::I64(ptr::read(p as *const i64)),
-            ir::types::F32 => DataValue::F32(ptr::read(p as *const Ieee32)),
-            ir::types::F64 => DataValue::F64(ptr::read(p as *const Ieee64)),
-            _ if ty.is_bool() => match ty.bytes() {
-                1 => DataValue::B(ptr::read(p as *const i8) != 0),
-                2 => DataValue::B(ptr::read(p as *const i16) != 0),
-                4 => DataValue::B(ptr::read(p as *const i32) != 0),
-                8 => DataValue::B(ptr::read(p as *const i64) != 0),
-                _ => unimplemented!(),
-            },
-            _ if ty.is_vector() && ty.bytes() == 16 => {
-                DataValue::V128(ptr::read(p as *const [u8; 16]))
-            }
-            _ => unimplemented!(),
-        }
     }
 }
 
