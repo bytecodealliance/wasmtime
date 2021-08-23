@@ -9,7 +9,7 @@ use anyhow::Result;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir::{self, ExternalName};
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use wasmtime_environ::{
     BuiltinFunctionIndex, CompileError, Compiler, FlagValue, FunctionBodyData, FunctionInfo,
     Module, ModuleTranslation, PrimaryMap, TrapInformation, Tunables, TypeTables, VMOffsets,
@@ -96,11 +96,11 @@ impl Compiler for Lightbeam {
         unimplemented!()
     }
 
-    fn flags(&self) -> HashMap<String, FlagValue> {
+    fn flags(&self) -> BTreeMap<String, FlagValue> {
         unimplemented!()
     }
 
-    fn isa_flags(&self) -> HashMap<String, FlagValue> {
+    fn isa_flags(&self) -> BTreeMap<String, FlagValue> {
         unimplemented!()
     }
 }
