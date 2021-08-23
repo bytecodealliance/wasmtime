@@ -71,6 +71,8 @@ pub enum ValueError {
     InvalidDataValueCast(#[from] DataValueCastFailure),
     #[error("performed a division by zero")]
     IntegerDivisionByZero,
+    #[error("performed a operation that overflowed this integer type")]
+    IntegerOverflow,
 }
 
 #[derive(Debug, PartialEq)]
@@ -350,7 +352,15 @@ impl Value for DataValue {
     }
 
     fn div(self, other: Self) -> ValueResult<Self> {
-        if other.clone().into_int()? == 0 {
+        let denominator = other.clone().into_int()?;
+
+        // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
+        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        if self == min && denominator == -1 {
+            return Err(ValueError::IntegerOverflow);
+        }
+
+        if denominator == 0 {
             return Err(ValueError::IntegerDivisionByZero);
         }
 

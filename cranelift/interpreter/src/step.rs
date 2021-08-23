@@ -81,6 +81,9 @@ where
         Err(ValueError::IntegerDivisionByZero) => Ok(ControlFlow::Trap(CraneliftTrap::User(
             TrapCode::IntegerDivisionByZero,
         ))),
+        Err(ValueError::IntegerOverflow) => Ok(ControlFlow::Trap(CraneliftTrap::User(
+            TrapCode::IntegerOverflow,
+        ))),
         Err(e) => Err(e),
     };
 
