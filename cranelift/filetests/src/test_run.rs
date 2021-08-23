@@ -6,6 +6,7 @@ use crate::function_runner::SingleFunctionCompiler;
 use crate::runtest_environment::RuntestEnvironment;
 use crate::subtest::{Context, SubTest};
 use cranelift_codegen::ir;
+use cranelift_codegen::ir::ArgumentPurpose;
 use cranelift_reader::parse_run_command;
 use cranelift_reader::TestCommand;
 use log::trace;
@@ -65,6 +66,20 @@ impl SubTest for TestRun {
                 command
                     .run(|_, run_args| {
                         let runtime_struct = test_env.runtime_struct();
+
+                        let first_arg_is_vmctx = func
+                            .signature
+                            .params
+                            .first()
+                            .map(|p| p.purpose == ArgumentPurpose::VMContext)
+                            .unwrap_or(false);
+
+                        if !first_arg_is_vmctx && test_env.is_active() {
+                            return Err(concat!(
+                                "This test requests a heap, but the first argument is not `i64 vmctx`.\n",
+                                "See docs/testing.md for more info on using heap annotations."
+                            ).to_string());
+                        }
 
                         let mut args = Vec::with_capacity(run_args.len());
                         if test_env.is_active() {
