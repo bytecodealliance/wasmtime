@@ -340,6 +340,27 @@ mod tests {
         }
     }
 
+    #[test]
+    fn sdiv_min_by_neg_one_traps_with_overflow() {
+        let code = "function %test() -> i8 {
+        block0:
+            v0 = iconst.i32 -2147483648
+            v1 = sdiv_imm.i32 v0, -1
+            return v1
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+
+        match result {
+            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerOverflow)) => {}
+            _ => panic!("Unexpected ControlFlow: {:?}", result),
+        }
+    }
+
     // This test verifies that functions can refer to each other using the function store. A double indirection is
     // required, which is tricky to get right: a referenced function is a FuncRef when called but a FuncIndex inside the
     // function store. This test would preferably be a CLIF filetest but the filetest infrastructure only looks at a
