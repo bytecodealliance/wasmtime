@@ -426,12 +426,7 @@ fn build_code_memory(
         trampolines.push((i, fnptr));
     }
 
-    link_module(
-        &allocation.obj,
-        &module,
-        allocation.code_range,
-        &finished_functions,
-    );
+    link_module(&allocation.obj, allocation.code_range);
 
     let code_range = (allocation.code_range.as_ptr(), allocation.code_range.len());
 

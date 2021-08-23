@@ -3,8 +3,6 @@
 use object::read::{Object, ObjectSection, Relocation, RelocationTarget};
 use object::{elf, File, ObjectSymbol, RelocationEncoding, RelocationKind};
 use std::ptr::{read_unaligned, write_unaligned};
-use wasmtime_environ::obj::try_parse_func_name;
-use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap};
 use wasmtime_runtime::libcalls;
 use wasmtime_runtime::VMFunctionBody;
 
@@ -16,51 +14,35 @@ use wasmtime_runtime::VMFunctionBody;
 /// Currently, the produced ELF image can be trusted.
 /// TODO refactor logic to remove panics and add defensive code the image data
 /// becomes untrusted.
-pub fn link_module(
-    obj: &File,
-    module: &Module,
-    code_range: &mut [u8],
-    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-) {
+pub fn link_module(obj: &File, code_range: &mut [u8]) {
     // Read the ".text" section and process its relocations.
     let text_section = obj.section_by_name(".text").unwrap();
     let body = code_range.as_ptr() as *const VMFunctionBody;
 
     for (offset, r) in text_section.relocations() {
-        apply_reloc(module, obj, finished_functions, body, offset, r);
+        apply_reloc(obj, body, offset, r);
     }
 }
 
-fn apply_reloc(
-    module: &Module,
-    obj: &File,
-    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    body: *const VMFunctionBody,
-    offset: u64,
-    r: Relocation,
-) {
+fn apply_reloc(obj: &File, body: *const VMFunctionBody, offset: u64, r: Relocation) {
     let target_func_address: usize = match r.target() {
         RelocationTarget::Symbol(i) => {
             // Processing relocation target is a named symbols that is compiled
             // wasm function or runtime libcall.
             let sym = obj.symbol_by_index(i).unwrap();
-            match sym.name() {
-                Ok(name) => {
-                    if let Some(index) = try_parse_func_name(name) {
-                        match module.defined_func_index(index) {
-                            Some(f) => {
-                                let fatptr: *const [VMFunctionBody] = finished_functions[f];
-                                fatptr as *const VMFunctionBody as usize
-                            }
-                            None => panic!("direct call to import"),
+            if sym.is_local() {
+                unsafe { body.add(sym.address() as usize) as usize }
+            } else {
+                match sym.name() {
+                    Ok(name) => {
+                        if let Some(addr) = to_libcall_address(name) {
+                            addr
+                        } else {
+                            panic!("unknown function to link: {}", name);
                         }
-                    } else if let Some(addr) = to_libcall_address(name) {
-                        addr
-                    } else {
-                        panic!("unknown function to link: {}", name);
                     }
+                    Err(_) => panic!("unexpected relocation target: not a symbol"),
                 }
-                Err(_) => panic!("unexpected relocation target: not a symbol"),
             }
         }
         _ => panic!("unexpected relocation target"),
