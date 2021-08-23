@@ -26,15 +26,6 @@ impl CodeMemoryEntry {
             unwind_info_len,
         })
     }
-
-    // Note that this intentionally excludes any unwinding information, if
-    // present, since consumers largely are only interested in code memory
-    // itself.
-    fn range(&self) -> (usize, usize) {
-        let start = self.mmap.as_ptr() as usize;
-        let end = start + self.text_len;
-        (start, end)
-    }
 }
 
 impl Drop for CodeMemoryEntry {
@@ -147,13 +138,6 @@ impl CodeMemory {
         let byte_ptr: *mut [u8] = slice;
         let body_ptr = byte_ptr as *mut [VMFunctionBody];
         unsafe { &mut *body_ptr }
-    }
-
-    /// Returns all published segment ranges.
-    pub fn published_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
-        self.entries[..self.published]
-            .iter()
-            .map(|entry| entry.range())
     }
 
     /// Allocates and copies the ELF image code section into CodeMemory.

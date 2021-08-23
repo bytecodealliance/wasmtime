@@ -129,6 +129,7 @@ pub struct TypeTables {
 /// Container for data needed for an Instance function to exist.
 pub struct ModuleCode {
     range: (usize, usize),
+    #[allow(dead_code)]
     code_memory: CodeMemory,
     #[allow(dead_code)]
     dbg_jit_registration: Option<GdbJitImageRegistration>,
@@ -282,11 +283,6 @@ impl CompiledModule {
             .funcs
             .get(index)
             .expect("defined function should be present")
-    }
-
-    /// Returns all ranges covered by JIT code.
-    pub fn jit_code_ranges<'a>(&'a self) -> impl Iterator<Item = (usize, usize)> + 'a {
-        self.code.code_memory.published_ranges()
     }
 
     /// Returns module's JIT code.
