@@ -375,7 +375,9 @@ Some tests need additional resources to be provided by the filetest infrastructu
 When any of the following directives is present the first argument of the function is *required* to be a `i64 vmctx`.
 The filetest infrastructure will then pass a pointer to the environment struct via this argument.
 
-The environment struct is essentially a list of pointers with info about the resources requested by the directives.
+The environment struct is essentially a list of pointers with info about the resources requested by the directives. These
+pointers are always 8 bytes, and laid out sequentially in memory. Even for 32 bit machines, where we only fill the first
+4 bytes of the pointer slot.
 
 Currently, we only support requesting heaps, however this is a generic mechanism that should
 be able to introduce any sort of environment support that we may need later. (e.g. tables, global values, external functions)
@@ -391,7 +393,7 @@ A sample heap annotation is the following:
 ```
 
 This indicates the following:
-* `static`: We have requested a non resizabe and non-movable static heap.
+* `static`: We have requested a non-resizable and non-movable static heap.
 * `size=0x1000`: It has to have a size of 4096 bytes.
 * `ptr=vmctx+0`: The pointer to the address to the start of this heap is placed at offset 0 in the `vmctx` struct
 * `bound=vmctx+8`: The pointer to the address to the end of this heap is placed at offset 8 in the `vmctx` struct
@@ -401,12 +403,15 @@ the environment struct. `vmctx+0` means that at offset 0 of the environment stru
 similarly, at offset 8 the pointer to the end.
 
 
-You can combine multiple heap annotations, in which case, their pointers are laid out sequentially in memory.
+You can combine multiple heap annotations, in which case, their pointers are laid out sequentially in memory in
+the order that the annotations appear in the source file.
 
 ```
 ; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
 ; heap: dynamic, size=0x1000, ptr=vmctx+16, bound=vmctx+24
 ```
+
+An invalid or unexpected offset will raise an error when the test is run.
 
 See the diagram below, on how the `vmctx` struct ends up if with multiple heaps:
 
