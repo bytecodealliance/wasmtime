@@ -844,7 +844,7 @@ where
 }
 
 /// Convert a Rust array of i128s back into a `Value::vector`.
-fn vectorizelanes<V>(x: Vec<i128>, vector_type: types::Type) -> ValueResult<V>
+fn vectorizelanes<V>(x: &[i128], vector_type: types::Type) -> ValueResult<V>
 where
     V: Value,
 {
@@ -887,5 +887,5 @@ where
         let sum = sum.into_int()?;
         result.push(sum);
     }
-    vectorizelanes(result, vector_type)
+    vectorizelanes(&result, vector_type)
 }
