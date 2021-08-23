@@ -93,7 +93,7 @@ impl RuntestContext {
 
         let context_struct = heaps
             .iter()
-            .flat_map(|heap| [heap.as_ptr(), unsafe { heap.as_ptr().add(heap.len()) }])
+            .flat_map(|heap| [heap.as_ptr(), heap.as_ptr().wrapping_add(heap.len())])
             .map(|p| p as usize as u64)
             .collect();
 
