@@ -1,8 +1,9 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use more_asserts::assert_le;
+use std::fs::File;
 use std::io;
 use std::ptr;
 use std::slice;
@@ -22,6 +23,7 @@ pub struct Mmap {
     // the coordination all happens at the OS layer.
     ptr: usize,
     len: usize,
+    file: Option<File>,
 }
 
 impl Mmap {
@@ -34,6 +36,7 @@ impl Mmap {
         Self {
             ptr: empty.as_ptr() as usize,
             len: 0,
+            file: None,
         }
     }
 
@@ -42,6 +45,74 @@ impl Mmap {
         let page_size = region::page::size();
         let rounded_size = round_up_to_page_size(size, page_size);
         Self::accessible_reserved(rounded_size, rounded_size)
+    }
+
+    /// Creates a new `Mmap` from the specified open `file` with the `len`
+    /// specified.
+    ///
+    /// The memory is mapped in read-only mode for the entire file. If portions
+    /// of the file need to be modified then the `region` crate can be use to
+    /// alter permissions of each page.
+    ///
+    /// Note that `len` doesn't have to be page-aligned, but rather it's
+    /// expected to be the length of the `file` provided.
+    pub fn new_file(file: File, len: usize) -> Result<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::prelude::*;
+            let ptr = unsafe {
+                libc::mmap(
+                    ptr::null_mut(),
+                    len,
+                    libc::PROT_READ,
+                    libc::MAP_PRIVATE,
+                    file.as_raw_fd(),
+                    0,
+                )
+            };
+            if ptr as isize == -1_isize {
+                return Err(io::Error::last_os_error())
+                    .context(format!("mmap failed to allocate {:#x} bytes", len));
+            }
+
+            Ok(Self {
+                ptr: ptr as usize,
+                len,
+                file: Some(file),
+            })
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::prelude::*;
+            use winapi::um::handleapi::*;
+            use winapi::um::memoryapi::*;
+            use winapi::um::winnt::*;
+            unsafe {
+                let mapping = CreateFileMappingW(
+                    file.as_raw_handle().cast(),
+                    ptr::null_mut(),
+                    PAGE_READONLY,
+                    0,
+                    0,
+                    ptr::null(),
+                );
+                if mapping.is_null() {
+                    return Err(io::Error::last_os_error())
+                        .context(format!("failed to create file mapping of {:#x} bytes", len));
+                }
+                let ptr = MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, len);
+                CloseHandle(mapping);
+                if ptr.is_null() {
+                    return Err(io::Error::last_os_error())
+                        .context(format!("failed to create map view of {:#x} bytes", len));
+                }
+                Ok(Self {
+                    ptr: ptr as usize,
+                    len,
+                    file: Some(file),
+                })
+            }
+        }
     }
 
     /// Create a new `Mmap` pointing to `accessible_size` bytes of page-aligned accessible memory,
@@ -83,6 +154,7 @@ impl Mmap {
             Self {
                 ptr: ptr as usize,
                 len: mapping_size,
+                file: None,
             }
         } else {
             // Reserve the mapping size.
@@ -107,6 +179,7 @@ impl Mmap {
             let mut result = Self {
                 ptr: ptr as usize,
                 len: mapping_size,
+                file: None,
             };
 
             if accessible_size != 0 {
@@ -152,6 +225,7 @@ impl Mmap {
             Self {
                 ptr: ptr as usize,
                 len: mapping_size,
+                file: None,
             }
         } else {
             // Reserve the mapping size.
@@ -164,6 +238,7 @@ impl Mmap {
             let mut result = Self {
                 ptr: ptr as usize,
                 len: mapping_size,
+                file: None,
             };
 
             if accessible_size != 0 {
@@ -256,11 +331,6 @@ impl Mmap {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-
-    #[allow(dead_code)]
-    pub(crate) unsafe fn from_raw(ptr: usize, len: usize) -> Self {
-        Self { ptr, len }
-    }
 }
 
 impl Drop for Mmap {
@@ -276,10 +346,15 @@ impl Drop for Mmap {
     fn drop(&mut self) {
         if self.len != 0 {
             use winapi::ctypes::c_void;
-            use winapi::um::memoryapi::VirtualFree;
+            use winapi::um::memoryapi::*;
             use winapi::um::winnt::MEM_RELEASE;
-            let r = unsafe { VirtualFree(self.ptr as *mut c_void, 0, MEM_RELEASE) };
-            assert_ne!(r, 0);
+            if self.file.is_none() {
+                let r = unsafe { VirtualFree(self.ptr as *mut c_void, 0, MEM_RELEASE) };
+                assert_ne!(r, 0);
+            } else {
+                let r = unsafe { UnmapViewOfFile(self.ptr as *mut c_void) };
+                assert_ne!(r, 0);
+            }
         }
     }
 }

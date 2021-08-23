@@ -1,6 +1,9 @@
-use anyhow::{Error, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use object::write::{Object, WritableBuffer};
+use std::convert::TryFrom;
+use std::fs::File;
 use std::ops::{Deref, DerefMut, Range, RangeTo};
+use std::path::Path;
 use std::sync::Arc;
 use wasmtime_runtime::Mmap;
 
@@ -71,6 +74,26 @@ impl MmapVec {
                 None => Err(e.into()),
             },
         }
+    }
+
+    /// Creates a new `MmapVec` which is the `path` specified mmap'd into
+    /// memory.
+    ///
+    /// This function will attempt to open the file located at `path` and will
+    /// then use that file to learn about its size and map the full contents
+    /// into memory. This will return an error if the file doesn't exist or if
+    /// it's too large to be fully mapped into memory.
+    pub fn from_file(path: &Path) -> Result<MmapVec> {
+        let file =
+            File::open(path).with_context(|| format!("failed to open: {}", path.display()))?;
+        let len = file
+            .metadata()
+            .context("failed to get file metadata")?
+            .len();
+        let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
+
+        let mmap = Mmap::new_file(file, len).context("failed to create mmap for file")?;
+        Ok(MmapVec::new(mmap, len))
     }
 
     /// "Drains" leading bytes up to the end specified in `range` from this
