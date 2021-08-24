@@ -3799,6 +3799,7 @@ dependencies = [
  "cranelift-codegen",
  "gimli",
  "lightbeam",
+ "object",
  "target-lexicon",
  "wasmparser",
  "wasmtime-environ",
