@@ -1,10 +1,13 @@
 //! Linking for JIT-compiled code.
 
 use object::read::{Object, ObjectSection, Relocation, RelocationTarget};
-use object::{elf, File, ObjectSymbol, RelocationEncoding, RelocationKind};
-use std::ptr::{read_unaligned, write_unaligned};
+use object::{elf, File, NativeEndian as NE, ObjectSymbol, RelocationEncoding, RelocationKind};
+use std::convert::TryFrom;
 use wasmtime_runtime::libcalls;
-use wasmtime_runtime::VMFunctionBody;
+
+type U32 = object::U32Bytes<NE>;
+type I32 = object::I32Bytes<NE>;
+type U64 = object::U64Bytes<NE>;
 
 /// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
 ///
@@ -17,21 +20,20 @@ use wasmtime_runtime::VMFunctionBody;
 pub fn link_module(obj: &File, code_range: &mut [u8]) {
     // Read the ".text" section and process its relocations.
     let text_section = obj.section_by_name(".text").unwrap();
-    let body = code_range.as_ptr() as *const VMFunctionBody;
 
     for (offset, r) in text_section.relocations() {
-        apply_reloc(obj, body, offset, r);
+        apply_reloc(obj, code_range, offset, r);
     }
 }
 
-fn apply_reloc(obj: &File, body: *const VMFunctionBody, offset: u64, r: Relocation) {
+fn apply_reloc(obj: &File, code: &mut [u8], offset: u64, r: Relocation) {
     let target_func_address: usize = match r.target() {
         RelocationTarget::Symbol(i) => {
             // Processing relocation target is a named symbols that is compiled
             // wasm function or runtime libcall.
             let sym = obj.symbol_by_index(i).unwrap();
             if sym.is_local() {
-                unsafe { body.add(sym.address() as usize) as usize }
+                &code[sym.address() as usize] as *const u8 as usize
             } else {
                 match sym.name() {
                     Ok(name) => {
@@ -50,64 +52,57 @@ fn apply_reloc(obj: &File, body: *const VMFunctionBody, offset: u64, r: Relocati
 
     match (r.kind(), r.encoding(), r.size()) {
         #[cfg(target_pointer_width = "64")]
-        (RelocationKind::Absolute, RelocationEncoding::Generic, 64) => unsafe {
-            let reloc_address = body.add(offset as usize) as usize;
-            let reloc_addend = r.addend() as isize;
+        (RelocationKind::Absolute, RelocationEncoding::Generic, 64) => {
+            let reloc_address = reloc_address::<U64>(code, offset);
             let reloc_abs = (target_func_address as u64)
-                .checked_add(reloc_addend as u64)
+                .checked_add(r.addend() as u64)
                 .unwrap();
-            write_unaligned(reloc_address as *mut u64, reloc_abs);
-        },
+            reloc_address.set(NE, reloc_abs);
+        }
         #[cfg(target_pointer_width = "32")]
-        (RelocationKind::Relative, RelocationEncoding::Generic, 32) => unsafe {
-            let reloc_address = body.add(offset as usize) as usize;
-            let reloc_addend = r.addend() as isize;
+        (RelocationKind::Relative, RelocationEncoding::Generic, 32) => {
+            let reloc_address = reloc_address::<U32>(code, offset);
             let reloc_delta_u32 = (target_func_address as u32)
-                .wrapping_sub(reloc_address as u32)
-                .checked_add(reloc_addend as u32)
+                .wrapping_sub(reloc_address as *const _ as u32)
+                .checked_add(r.addend() as u32)
                 .unwrap();
-            write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
-        },
+            reloc_address.set(NE, reloc_delta_u32);
+        }
         #[cfg(target_pointer_width = "32")]
-        (RelocationKind::Relative, RelocationEncoding::X86Branch, 32) => unsafe {
-            let reloc_address = body.add(offset as usize) as usize;
-            let reloc_addend = r.addend() as isize;
+        (RelocationKind::Relative, RelocationEncoding::X86Branch, 32) => {
+            let reloc_address = reloc_address::<U32>(code, offset);
             let reloc_delta_u32 = (target_func_address as u32)
-                .wrapping_sub(reloc_address as u32)
-                .wrapping_add(reloc_addend as u32);
-            write_unaligned(reloc_address as *mut u32, reloc_delta_u32);
-        },
+                .wrapping_sub(reloc_address as *const _ as u32)
+                .wrapping_add(r.addend() as u32);
+            reloc_address.set(NE, reloc_delta_u32);
+        }
         #[cfg(target_pointer_width = "64")]
-        (RelocationKind::Relative, RelocationEncoding::Generic, 32) => unsafe {
-            let reloc_address = body.add(offset as usize) as usize;
-            let reloc_addend = r.addend() as isize;
-            let reloc_delta_u64 = (target_func_address as u64)
-                .wrapping_sub(reloc_address as u64)
-                .wrapping_add(reloc_addend as u64);
+        (RelocationKind::Relative, RelocationEncoding::Generic, 32) => {
+            let reloc_address = reloc_address::<I32>(code, offset);
+            let reloc_delta_i64 = (target_func_address as i64)
+                .wrapping_sub(reloc_address as *const _ as i64)
+                .wrapping_add(r.addend());
             // TODO implement far calls mode in x64 new backend.
-            assert!(
-                reloc_delta_u64 as isize <= i32::max_value() as isize,
-                "relocation too large to fit in i32"
+            reloc_address.set(
+                NE,
+                i32::try_from(reloc_delta_i64).expect("relocation too large to fit in i32"),
             );
-            write_unaligned(reloc_address as *mut u32, reloc_delta_u64 as u32);
-        },
+        }
         #[cfg(target_pointer_width = "64")]
-        (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32) => unsafe {
-            let reloc_address = body.add(offset as usize) as usize;
-            let reloc_addend = r.addend() as isize;
-            let reloc_delta_u64 = (target_func_address as u64)
-                .wrapping_sub(reloc_address as u64)
-                .wrapping_add(reloc_addend as u64);
-            assert!(
-                (reloc_delta_u64 as isize) >> 1 <= i32::max_value() as isize,
-                "relocation too large to fit in i32"
+        (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32) => {
+            let reloc_address = reloc_address::<I32>(code, offset);
+            let reloc_delta_i64 = (target_func_address as i64)
+                .wrapping_sub(reloc_address as *const _ as i64)
+                .wrapping_add(r.addend())
+                >> 1;
+            reloc_address.set(
+                NE,
+                i32::try_from(reloc_delta_i64).expect("relocation too large to fit in i32"),
             );
-            write_unaligned(reloc_address as *mut u32, (reloc_delta_u64 >> 1) as u32);
-        },
-        (RelocationKind::Elf(elf::R_AARCH64_CALL26), RelocationEncoding::Generic, 32) => unsafe {
-            let reloc_address = body.add(offset as usize) as usize;
-            let reloc_addend = r.addend() as isize;
-            let reloc_delta = (target_func_address as u64).wrapping_sub(reloc_address as u64);
+        }
+        (RelocationKind::Elf(elf::R_AARCH64_CALL26), RelocationEncoding::Generic, 32) => {
+            let reloc_address = reloc_address::<U32>(code, offset);
+            let reloc_delta = (target_func_address as u64).wrapping_sub(r.addend() as u64);
             // TODO: come up with a PLT-like solution for longer calls. We can't extend the
             // code segment at this point, but we could conservatively allocate space at the
             // end of the function during codegen, a fixed amount per call, to allow for
@@ -115,14 +110,23 @@ fn apply_reloc(obj: &File, body: *const VMFunctionBody, offset: u64, r: Relocati
             assert!((reloc_delta as i64) < (1 << 27));
             assert!((reloc_delta as i64) >= -(1 << 27));
             let reloc_delta = reloc_delta as u32;
-            let reloc_delta = reloc_delta.wrapping_add(reloc_addend as u32);
+            let reloc_delta = reloc_delta.wrapping_add(r.addend() as u32);
             let delta_bits = reloc_delta >> 2;
-            let insn = read_unaligned(reloc_address as *const u32);
+            let insn = reloc_address.get(NE);
             let new_insn = (insn & 0xfc00_0000) | (delta_bits & 0x03ff_ffff);
-            write_unaligned(reloc_address as *mut u32, new_insn);
-        },
+            reloc_address.set(NE, new_insn);
+        }
         other => panic!("unsupported reloc kind: {:?}", other),
     }
+}
+
+fn reloc_address<T: object::Pod>(code: &mut [u8], offset: u64) -> &mut T {
+    let (reloc, _rest) = usize::try_from(offset)
+        .ok()
+        .and_then(move |offset| code.get_mut(offset..))
+        .and_then(|range| object::from_bytes_mut(range).ok())
+        .expect("invalid reloc offset");
+    reloc
 }
 
 fn to_libcall_address(name: &str) -> Option<usize> {
