@@ -211,6 +211,7 @@ impl<T> Store<T> {
                     imports: Default::default(),
                     module: Arc::new(wasmtime_environ::Module::default()),
                     store: None,
+                    wasm_data: &[],
                 })
                 .expect("failed to allocate default callee")
         };

@@ -51,6 +51,9 @@ pub struct CompilationArtifacts {
     /// ELF image with functions code.
     obj: Box<[u8]>,
 
+    /// All data segments referenced by this module, both active and passive.
+    wasm_data: Box<[u8]>,
+
     /// Descriptions of compiled functions
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
@@ -92,14 +95,45 @@ impl CompilationArtifacts {
         tunables: &Tunables,
     ) -> CompilationArtifacts {
         let ModuleTranslation {
-            module,
+            mut module,
             debuginfo,
             has_unparsed_debuginfo,
+            data,
+            passive_data,
             ..
         } = translation;
+
+        // Concatenate all the wasm data together, placing both active and
+        // passive data into the same chunk of data. Note that this
+        // implementation doesn't allow for unmapping or somehow releasing
+        // passive data on `data.drop`, and if we want to do that in the future
+        // we'll have to change this to store passive data segments separately
+        // from the main data segments.
+        //
+        // Also note that here we have to update all passive data segments and
+        // their relative indices.
+        let wasm_data_size = data
+            .iter()
+            .map(|s| s.len())
+            .chain(passive_data.iter().map(|s| s.len()))
+            .sum();
+        let mut wasm_data = Vec::with_capacity(wasm_data_size);
+        for data in data.iter() {
+            wasm_data.extend_from_slice(data);
+        }
+        let total_data_len = wasm_data.len();
+        for data in passive_data.iter() {
+            wasm_data.extend_from_slice(data);
+        }
+        for (_, range) in module.passive_data_map.iter_mut() {
+            range.start = range.start.checked_add(total_data_len as u32).unwrap();
+            range.end = range.end.checked_add(total_data_len as u32).unwrap();
+        }
+
         CompilationArtifacts {
             module: Arc::new(module),
             obj: obj.into_boxed_slice(),
+            wasm_data: wasm_data.into(),
             funcs,
             native_debug_info_present: tunables.generate_native_debuginfo,
             debug_info: if tunables.parse_wasm_debuginfo {
@@ -201,6 +235,15 @@ impl CompiledModule {
     /// Extracts `CompilationArtifacts` from the compiled module.
     pub fn compilation_artifacts(&self) -> &CompilationArtifacts {
         &self.artifacts
+    }
+
+    /// Returns the concatenated list of all data associated with this wasm
+    /// module.
+    ///
+    /// This is used for initialization of memories and all data ranges stored
+    /// in a `Module` are relative to the slice returned here.
+    pub fn wasm_data(&self) -> &[u8] {
+        &self.artifacts.wasm_data
     }
 
     /// Return a reference-counting pointer to a module.

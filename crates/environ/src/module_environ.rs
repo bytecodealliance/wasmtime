@@ -9,6 +9,7 @@ use crate::{
     WasmFuncType, WasmResult,
 };
 use cranelift_entity::packed_option::ReservedValue;
+use std::borrow::Cow;
 use std::collections::{hash_map::Entry, HashMap};
 use std::convert::{TryFrom, TryInto};
 use std::mem;
@@ -66,6 +67,23 @@ pub struct ModuleTranslation<'data> {
     /// Set if debuginfo was found but it was not parsed due to `Tunables`
     /// configuration.
     pub has_unparsed_debuginfo: bool,
+
+    /// List of data segments found in this module which should be concatenated
+    /// together for the final compiled artifact.
+    ///
+    /// These data segments, when concatenated, are indexed by the
+    /// `MemoryInitializer` type.
+    pub data: Vec<Cow<'data, [u8]>>,
+
+    /// Total size of all data pushed onto `data` so far.
+    total_data: u32,
+
+    /// List of passive element segments found in this module which will get
+    /// concatenated for the final artifact.
+    pub passive_data: Vec<&'data [u8]>,
+
+    /// Total size of all passive data pushed into `passive_data` so far.
+    total_passive_data: u32,
 
     /// When we're parsing the code section this will be incremented so we know
     /// which function is currently being defined.
@@ -577,14 +595,32 @@ impl<'data> ModuleEnvironment<'data> {
 
                 let cnt = usize::try_from(data.get_count()).unwrap();
                 initializers.reserve_exact(cnt);
+                self.result.data.reserve_exact(cnt);
 
                 for (index, entry) in data.into_iter().enumerate() {
                     let wasmparser::Data { kind, data } = entry?;
+                    let mk_range = |total: &mut u32| -> Result<_, WasmError> {
+                        let range = u32::try_from(data.len())
+                            .ok()
+                            .and_then(|size| {
+                                let start = *total;
+                                let end = start.checked_add(size)?;
+                                Some(start..end)
+                            })
+                            .ok_or_else(|| {
+                                WasmError::Unsupported(format!(
+                                    "more than 4 gigabytes of data in wasm module",
+                                ))
+                            })?;
+                        *total += range.end - range.start;
+                        Ok(range)
+                    };
                     match kind {
                         DataKind::Active {
                             memory_index,
                             init_expr,
                         } => {
+                            let range = mk_range(&mut self.result.total_data)?;
                             let memory_index = MemoryIndex::from_u32(memory_index);
                             let mut init_expr_reader = init_expr.get_binary_reader();
                             let (base, offset) = match init_expr_reader.read_operator()? {
@@ -600,21 +636,23 @@ impl<'data> ModuleEnvironment<'data> {
                                     )));
                                 }
                             };
+
                             initializers.push(MemoryInitializer {
                                 memory_index,
                                 base,
                                 offset,
-                                data: data.into(),
+                                data: range,
                             });
+                            self.result.data.push(data.into());
                         }
                         DataKind::Passive => {
                             let data_index = DataIndex::from_u32(index as u32);
-                            let index = self.result.module.passive_data.len();
-                            self.result.module.passive_data.push(Arc::from(data));
+                            let range = mk_range(&mut self.result.total_passive_data)?;
+                            self.result.passive_data.push(data);
                             self.result
                                 .module
                                 .passive_data_map
-                                .insert(data_index, index);
+                                .insert(data_index, range);
                         }
                     }
                 }

@@ -48,6 +48,7 @@ fn create_handle(
                 shared_signatures: shared_signature_id.into(),
                 host_state,
                 store: Some(store.traitobj),
+                wasm_data: &[],
             },
         )?;
 

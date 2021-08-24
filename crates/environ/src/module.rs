@@ -1,11 +1,11 @@
 //! Data structures for representing decoded wasm modules.
 
-use crate::{EntityRef, PrimaryMap, Tunables};
+use crate::{EntityRef, ModuleTranslation, PrimaryMap, Tunables, WASM_PAGE_SIZE};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::convert::TryFrom;
-use std::sync::Arc;
+use std::ops::Range;
 use wasmtime_types::*;
 
 /// Implemenation styles for WebAssembly linear memory.
@@ -106,8 +106,11 @@ pub struct MemoryInitializer {
     pub base: Option<GlobalIndex>,
     /// The offset to add to the base.
     pub offset: u64,
-    /// The data to write into the linear memory.
-    pub data: Box<[u8]>,
+    /// The range of the data to write within the linear memory.
+    ///
+    /// This range indexes into a separately stored data section which will be
+    /// provided with the compiled module's code as well.
+    pub data: Range<u32>,
 }
 
 /// The type of WebAssembly linear memory initialization to use for a module.
@@ -125,6 +128,7 @@ pub enum MemoryInitialization {
     ///
     /// This is the default memory initialization type.
     Segmented(Vec<MemoryInitializer>),
+
     /// Memory initialization is paged.
     ///
     /// To be paged, the following requirements must be met:
@@ -141,111 +145,140 @@ pub enum MemoryInitialization {
     /// any work to point the kernel at the right linear memory page to use.
     Paged {
         /// The map of defined memory index to a list of initialization pages.
-        /// The list of page data is sparse, with None representing a zero page.
-        /// Each page of initialization data is WebAssembly page-sized (64 KiB).
-        /// The size of the list will be the maximum page written to by a data segment.
-        map: PrimaryMap<DefinedMemoryIndex, Vec<Option<Box<[u8]>>>>,
+        ///
+        /// The list of page data is sparse, with each element starting with
+        /// the offset in memory where it will be placed (specified here, as
+        /// a page index, with a `u64`). Each page of initialization data is
+        /// WebAssembly page-sized (64 KiB). Pages whose offset are not
+        /// specified in this array start with 0s in memory. The `Range`
+        /// indices, like those in `MemoryInitializer`, point within a data
+        /// segment that will come as an auxiliary descriptor with other data
+        /// such as the compiled code for the wasm module.
+        map: PrimaryMap<DefinedMemoryIndex, Vec<(u64, Range<u32>)>>,
         /// Whether or not an out-of-bounds data segment was observed.
         /// This is used to fail module instantiation after the pages are initialized.
         out_of_bounds: bool,
     },
 }
 
-impl MemoryInitialization {
-    /// Attempts to convert segmented memory initialization into paged initialization for the given module.
+impl ModuleTranslation<'_> {
+    /// Attempts to convert segmented memory initialization into paged
+    /// initialization for the module that this translation represents.
     ///
-    /// Returns `None` if the initialization cannot be paged or if it is already paged.
-    pub fn to_paged(&self, module: &Module) -> Option<Self> {
-        const WASM_PAGE_SIZE: usize = crate::WASM_PAGE_SIZE as usize;
+    /// If this module's memory initialization is not compatible with paged
+    /// initialization then this won't change anything. Otherwise if it is
+    /// compatible then the `memory_initialization` field will be updated.
+    pub fn try_paged_init(&mut self) {
+        let initializers = match &self.module.memory_initialization {
+            MemoryInitialization::Segmented(list) => list,
+            MemoryInitialization::Paged { .. } => return,
+        };
+        let page_size = u64::from(WASM_PAGE_SIZE);
+        let num_defined_memories =
+            self.module.memory_plans.len() - self.module.num_imported_memories;
+        let mut out_of_bounds = false;
 
-        match self {
-            Self::Paged { .. } => None,
-            Self::Segmented(initializers) => {
-                let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
-                let mut out_of_bounds = false;
-                let mut map = PrimaryMap::with_capacity(num_defined_memories);
+        // Initially all memories start out as all zeros, represented with a
+        // lack of entries in the `BTreeMap` here. The map indexes byte offset
+        // (which is always wasm-page-aligned) to the contents of the page, with
+        // missing entries implicitly as all zeros.
+        let mut page_contents = PrimaryMap::with_capacity(num_defined_memories);
+        for _ in 0..num_defined_memories {
+            page_contents.push(BTreeMap::new());
+        }
 
-                for _ in 0..num_defined_memories {
-                    map.push(Vec::new());
+        assert_eq!(initializers.len(), self.data.len());
+        for (initializer, data) in initializers.iter().zip(&self.data) {
+            let memory_index = match (
+                self.module.defined_memory_index(initializer.memory_index),
+                initializer.base.is_some(),
+            ) {
+                (None, _) | (_, true) => {
+                    // If the initializer references an imported memory or uses a global base,
+                    // the complete set of segments will need to be processed at module instantiation
+                    return;
                 }
+                (Some(index), false) => index,
+            };
+            if out_of_bounds {
+                continue;
+            }
 
-                for initializer in initializers {
-                    match (
-                        module.defined_memory_index(initializer.memory_index),
-                        initializer.base.is_some(),
-                    ) {
-                        (None, _) | (_, true) => {
-                            // If the initializer references an imported memory or uses a global base,
-                            // the complete set of segments will need to be processed at module instantiation
-                            return None;
-                        }
-                        (Some(index), false) => {
-                            if out_of_bounds {
-                                continue;
-                            }
-
-                            // Perform a bounds check on the segment
-                            // As this segment is referencing a defined memory without a global base, the last byte
-                            // written to by the segment cannot exceed the memory's initial minimum size
-                            let offset = usize::try_from(initializer.offset).unwrap();
-                            let end = match offset.checked_add(initializer.data.len()) {
-                                Some(end) => end,
-                                None => {
-                                    out_of_bounds = true;
-                                    continue;
-                                }
-                            };
-                            if end
-                                > ((module.memory_plans[initializer.memory_index].memory.minimum
-                                    as usize)
-                                    * WASM_PAGE_SIZE)
-                            {
-                                out_of_bounds = true;
-                                continue;
-                            }
-
-                            let pages = &mut map[index];
-                            let mut page_index = offset / WASM_PAGE_SIZE;
-                            let mut page_offset = offset % WASM_PAGE_SIZE;
-                            let mut data_offset = 0;
-                            let mut data_remaining = initializer.data.len();
-
-                            if data_remaining == 0 {
-                                continue;
-                            }
-
-                            // Copy the initialization data by each WebAssembly-sized page (64 KiB)
-                            loop {
-                                if page_index >= pages.len() {
-                                    pages.resize(page_index + 1, None);
-                                }
-
-                                let page = pages[page_index].get_or_insert_with(|| {
-                                    vec![0; WASM_PAGE_SIZE].into_boxed_slice()
-                                });
-                                let len =
-                                    std::cmp::min(data_remaining, WASM_PAGE_SIZE - page_offset);
-
-                                page[page_offset..page_offset + len].copy_from_slice(
-                                    &initializer.data[data_offset..(data_offset + len)],
-                                );
-
-                                if len == data_remaining {
-                                    break;
-                                }
-
-                                page_index += 1;
-                                page_offset = 0;
-                                data_offset += len;
-                                data_remaining -= len;
-                            }
-                        }
-                    };
+            // Perform a bounds check on the segment
+            //
+            // As this segment is referencing a defined memory without a global
+            // base, the last byte written to by the segment cannot exceed the
+            // memory's initial minimum size
+            let len = u64::try_from(initializer.data.len()).unwrap();
+            let end = match initializer.offset.checked_add(len) {
+                Some(end) => end,
+                None => {
+                    out_of_bounds = true;
+                    continue;
                 }
+            };
+            let memory = &self.module.memory_plans[initializer.memory_index].memory;
+            let initial_memory_end = memory.minimum * page_size;
+            if end > initial_memory_end {
+                out_of_bounds = true;
+                continue;
+            }
 
-                Some(Self::Paged { map, out_of_bounds })
+            // Perform the same style of initialization that instantiating the
+            // module performs at this point, except initialize our
+            // `page_contents` map which is indexed by page number and contains
+            // the actual page contents.
+            //
+            // This is done iteratively page-by-page until the entire data
+            // segment has been copied into the page map.
+            let contents = &mut page_contents[memory_index];
+            let mut page_index = initializer.offset / page_size;
+            let mut page_offset = (initializer.offset % page_size) as usize;
+            let mut data = &data[..];
+
+            while !data.is_empty() {
+                // If this page hasn't been seen before, then it starts out as
+                // all zeros.
+                let page = contents
+                    .entry(page_index)
+                    .or_insert_with(|| vec![0; page_size as usize]);
+                let page = &mut page[page_offset..];
+
+                let len = std::cmp::min(data.len(), page.len());
+                page[..len].copy_from_slice(&data[..len]);
+
+                page_index += 1;
+                page_offset = 0;
+                data = &data[len..];
             }
         }
+
+        // If we've gotten this far then we're switching to paged
+        // initialization. The contents of the initial wasm memory are
+        // specified by `page_contents`, so the job now is to transform data
+        // representation of wasm memory back into the representation we use
+        // in a `Module`.
+        //
+        // This is done by clearing `self.data`, the original data segments,
+        // since those are now all represented in `page_contents`. Afterwards
+        // all the pages are subsequently pushed onto `self.data` and the
+        // offsets within `self.data` are recorded in each segment that's part
+        // of `Paged`.
+        self.data.clear();
+        let mut map = PrimaryMap::with_capacity(page_contents.len());
+        let mut offset = 0;
+        for (memory, pages) in page_contents {
+            let mut page_offsets = Vec::with_capacity(pages.len());
+            for (byte_offset, page) in pages {
+                let end = offset + (page.len() as u32);
+                page_offsets.push((byte_offset, offset..end));
+                offset = end;
+                self.data.push(page.into());
+            }
+            let index = map.push(page_offsets);
+            assert_eq!(index, memory);
+        }
+        self.module.memory_initialization = MemoryInitialization::Paged { map, out_of_bounds };
     }
 }
 
@@ -351,12 +384,8 @@ pub struct Module {
     /// The map from passive element index (element segment index space) to index in `passive_elements`.
     pub passive_elements_map: BTreeMap<ElemIndex, usize>,
 
-    /// WebAssembly passive data segments.
-    #[serde(with = "passive_data_serde")]
-    pub passive_data: Vec<Arc<[u8]>>,
-
     /// The map from passive data index (data segment index space) to index in `passive_data`.
-    pub passive_data_map: BTreeMap<DataIndex, usize>,
+    pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
 
     /// WebAssembly function names.
     pub func_names: BTreeMap<FuncIndex, String>,
@@ -626,48 +655,4 @@ pub struct ModuleSignature {
 pub struct InstanceSignature {
     /// The name of what's being exported as well as its type signature.
     pub exports: IndexMap<String, EntityType>,
-}
-
-mod passive_data_serde {
-    use super::Arc;
-    use serde::{de::SeqAccess, de::Visitor, ser::SerializeSeq, Deserializer, Serializer};
-    use std::fmt;
-
-    pub(super) fn serialize<S>(data: &Vec<Arc<[u8]>>, ser: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut seq = ser.serialize_seq(Some(data.len()))?;
-        for v in data {
-            seq.serialize_element(v.as_ref())?;
-        }
-        seq.end()
-    }
-
-    struct PassiveDataVisitor;
-    impl<'de> Visitor<'de> for PassiveDataVisitor {
-        type Value = Vec<Arc<[u8]>>;
-
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a passive data sequence")
-        }
-
-        fn visit_seq<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-        where
-            M: SeqAccess<'de>,
-        {
-            let mut data = Vec::with_capacity(access.size_hint().unwrap_or(0));
-            while let Some(value) = access.next_element::<Vec<u8>>()? {
-                data.push(value.into());
-            }
-            Ok(data)
-        }
-    }
-
-    pub(super) fn deserialize<'de, D>(de: D) -> Result<Vec<Arc<[u8]>>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        de.deserialize_seq(PassiveDataVisitor)
-    }
 }

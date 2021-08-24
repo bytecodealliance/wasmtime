@@ -364,6 +364,7 @@ impl InstancePool {
                     dropped_elements: EntitySet::new(),
                     dropped_data: EntitySet::new(),
                     host_state: Box::new(()),
+                    wasm_data: &[],
                     vmctx: VMContext {
                         _marker: marker::PhantomPinned,
                     },
@@ -382,6 +383,7 @@ impl InstancePool {
         instance.module = req.module.clone();
         instance.offsets = VMOffsets::new(HostPtr, instance.module.as_ref());
         instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+        instance.wasm_data = &*req.wasm_data;
 
         let mut limiter = req.store.and_then(|s| (*s).limiter());
         Self::set_instance_memories(
@@ -492,6 +494,7 @@ impl InstancePool {
         // fresh allocation later on.
         instance.module = self.empty_module.clone();
         instance.offsets = VMOffsets::new(HostPtr, &self.empty_module);
+        instance.wasm_data = &[];
 
         self.free_list.lock().unwrap().push(index);
     }
@@ -527,7 +530,6 @@ impl InstancePool {
         }
 
         debug_assert!(instance.dropped_data.is_empty());
-        instance.dropped_data.resize(module.passive_data.len());
 
         Ok(())
     }
@@ -1410,6 +1412,7 @@ mod test {
                             shared_signatures: VMSharedSignatureIndex::default().into(),
                             host_state: Box::new(()),
                             store: None,
+                            wasm_data: &[],
                         },
                     )
                     .expect("allocation should succeed"),
@@ -1432,6 +1435,7 @@ mod test {
                 shared_signatures: VMSharedSignatureIndex::default().into(),
                 host_state: Box::new(()),
                 store: None,
+                wasm_data: &[],
             },
         ) {
             Err(InstantiationError::Limit(3)) => {}
