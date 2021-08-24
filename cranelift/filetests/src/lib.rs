@@ -34,6 +34,7 @@ pub mod function_runner;
 mod match_directive;
 mod runner;
 mod runone;
+mod runtest_environment;
 mod subtest;
 
 mod test_binemit;

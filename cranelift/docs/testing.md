@@ -367,3 +367,93 @@ Example:
     }
     ; run
 ```
+
+#### Environment directives
+
+Some tests need additional resources to be provided by the filetest infrastructure.
+
+When any of the following directives is present the first argument of the function is *required* to be a `i64 vmctx`.
+The filetest infrastructure will then pass a pointer to the environment struct via this argument.
+
+The environment struct is essentially a list of pointers with info about the resources requested by the directives. These
+pointers are always 8 bytes, and laid out sequentially in memory. Even for 32 bit machines, where we only fill the first
+4 bytes of the pointer slot.
+
+Currently, we only support requesting heaps, however this is a generic mechanism that should
+be able to introduce any sort of environment support that we may need later. (e.g. tables, global values, external functions)
+
+##### `heap` directive
+
+The `heap` directive allows a test to request a heap to be allocated and passed to the test via the environment struct.
+
+
+A sample heap annotation is the following:
+```
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+```
+
+This indicates the following:
+* `static`: We have requested a non-resizable and non-movable static heap.
+* `size=0x1000`: It has to have a size of 4096 bytes.
+* `ptr=vmctx+0`: The pointer to the address to the start of this heap is placed at offset 0 in the `vmctx` struct
+* `bound=vmctx+8`: The pointer to the address to the end of this heap is placed at offset 8 in the `vmctx` struct
+
+The `ptr` and `bound` arguments make explicit the placement of the pointers to the start and end of the heap memory in
+the environment struct. `vmctx+0` means that at offset 0 of the environment struct there will be the pointer to the start
+similarly, at offset 8 the pointer to the end.
+
+
+You can combine multiple heap annotations, in which case, their pointers are laid out sequentially in memory in
+the order that the annotations appear in the source file.
+
+```
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; heap: dynamic, size=0x1000, ptr=vmctx+16, bound=vmctx+24
+```
+
+An invalid or unexpected offset will raise an error when the test is run.
+
+See the diagram below, on how the `vmctx` struct ends up if with multiple heaps:
+
+```
+ ┌─────────────────────┐ vmctx+0
+ │heap0: start address │ 
+ ├─────────────────────┤ vmctx+8
+ │heap0: end address   │
+ ├─────────────────────┤ vmctx+16
+ │heap1: start address │
+ ├─────────────────────┤ vmctx+24
+ │heap1: end address   │ 
+ ├─────────────────────┤ vmctx+32
+ │etc...               │
+ └─────────────────────┘
+```
+
+With this setup, you can now use the global values to load heaps, and load / store to them. 
+
+Example:
+
+```
+function %heap_load_store(i64 vmctx, i64, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    gv2 = load.i64 notrap aligned gv0+8
+    heap0 = dynamic gv1, bound gv2, offset_guard 0, index_type i64
+
+block0(v0: i64, v1: i64, v2: i32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %heap_load_store(0, 1) == 1
+```
+
+
+### `test interpret`
+
+Test the CLIF interpreter
+
+This test supports the same commands as `test run`, but runs the code in the cranelift
+interpreter instead of the host machine.
