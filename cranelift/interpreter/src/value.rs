@@ -62,6 +62,13 @@ pub trait Value: Clone + From<DataValue> {
     fn or(self, other: Self) -> ValueResult<Self>;
     fn xor(self, other: Self) -> ValueResult<Self>;
     fn not(self) -> ValueResult<Self>;
+
+    // Bit counting.
+    fn count_ones(self) -> ValueResult<Self>;
+    fn leading_ones(self) -> ValueResult<Self>;
+    fn leading_zeros(self) -> ValueResult<Self>;
+    fn trailing_zeros(self) -> ValueResult<Self>;
+    fn reverse_bits(self) -> ValueResult<Self>;
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -132,6 +139,20 @@ pub enum ValueConversionKind {
 
 /// Helper for creating match expressions over [DataValue].
 macro_rules! unary_match {
+    ( $op:ident($arg1:expr); [ $( $data_value_ty:ident ),* ]; $return_value_ty:ident ) => {
+        match $arg1 {
+            $( DataValue::$data_value_ty(a) => {
+                Ok(DataValue::$return_value_ty(a.$op()))
+            } )*
+            _ => unimplemented!()
+        }
+    };
+    ( $op:ident($arg1:expr); [ $( $data_value_ty:ident ),* ] ) => {
+        match $arg1 {
+            $( DataValue::$data_value_ty(a) => { Ok(DataValue::$data_value_ty(a.$op())) } )*
+            _ => unimplemented!()
+        }
+    };
     ( $op:tt($arg1:expr); [ $( $data_value_ty:ident ),* ] ) => {
         match $arg1 {
             $( DataValue::$data_value_ty(a) => { Ok(DataValue::$data_value_ty($op a)) } )*
@@ -437,5 +458,25 @@ impl Value for DataValue {
 
     fn not(self) -> ValueResult<Self> {
         unary_match!(!(&self); [I8, I16, I32, I64])
+    }
+
+    fn count_ones(self) -> ValueResult<Self> {
+        unary_match!(count_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+    }
+
+    fn leading_ones(self) -> ValueResult<Self> {
+        unary_match!(leading_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+    }
+
+    fn leading_zeros(self) -> ValueResult<Self> {
+        unary_match!(leading_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+    }
+
+    fn trailing_zeros(self) -> ValueResult<Self> {
+        unary_match!(trailing_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+    }
+
+    fn reverse_bits(self) -> ValueResult<Self> {
+        unary_match!(reverse_bits(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 }

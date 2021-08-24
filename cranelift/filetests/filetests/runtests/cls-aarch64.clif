@@ -1,0 +1,24 @@
+test interpret
+test run
+target aarch64
+; not implemented on `x86_64`
+
+function %cls_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = cls v0
+    return v1
+}
+; run: %cls_i32(1) == 30
+; run: %cls_i32(0x40000000) == 0
+; run: %cls_i32(-1) == 31
+; run: %cls_i32(0) == 31
+
+function %cls_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = cls v0
+    return v1
+}
+; run: %cls_i64(1) == 62
+; run: %cls_i64(0x4000000000000000) == 0
+; run: %cls_i64(-1) == 63
+; run: %cls_i64(0) == 63

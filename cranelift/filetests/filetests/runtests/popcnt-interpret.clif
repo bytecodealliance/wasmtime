@@ -1,0 +1,24 @@
+test interpret
+; i16x8 vectors aren't currently supported by the `AArch64` backend.
+
+function %popcnt_i16x8(i16x8) -> i16x8 {
+block0(v0: i16x8):
+    v1 = popcnt v0
+    return v1
+}
+; run: %popcnt_i16x8([1 1 0x4000 0x4000 0xffff 0xffff 0 0]) == [1 1 1 1 16 16 0 0]
+
+function %popcnt_i32x4(i32x4) -> i32x4 {
+block0(v0: i32x4):
+    v1 = popcnt v0
+    return v1
+}
+; run: %popcnt_i32x4([1 0x40000000 0xFFFFFFFF 0]) == [1 1 32 0]
+
+function %popcnt_i64x2(i64x2) -> i64x2 {
+block0(v0: i64x2):
+    v1 = popcnt v0
+    return v1
+}
+; run: %popcnt_i64x2([1 0x4000000000000000]) == [1 1]
+; run: %popcnt_i64x2([0xffffffffffffffff 0]) == [64 0]
