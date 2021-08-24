@@ -1,0 +1,33 @@
+test interpret
+test run
+target aarch64
+set enable_simd
+target x86_64
+
+function %splat_i8x16(i8) -> i8x16 {
+block0(v0: i8):
+    v1 = splat.i8x16 v0
+    return v1
+}
+; run: %splat_i8x16(1) == [1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1]
+
+function %splat_i16x8(i16) -> i16x8 {
+block0(v0: i16):
+    v1 = splat.i16x8 v0
+    return v1
+}
+; run: %splat_i16x8(512) == [512 512 512 512 512 512 512 512]
+
+function %splat_i32x4(i32) -> i32x4 {
+block0(v0: i32):
+    v1 = splat.i32x4 v0
+    return v1
+}
+; run: %splat_i32x4(2000000) == [2000000 2000000 2000000 2000000]
+
+function %splat_i64x2(i64) -> i64x2 {
+block0(v0: i64):
+    v1 = splat.i64x2 v0
+    return v1
+}
+; run: %splat_i64x2(5000000000) == [5000000000 5000000000]
