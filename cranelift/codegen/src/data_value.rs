@@ -4,7 +4,6 @@ use crate::ir::immediates::{Ieee32, Ieee64, Offset32};
 use crate::ir::{types, ConstantData, Type};
 use core::convert::TryInto;
 use core::fmt::{self, Display, Formatter};
-use core::ptr;
 
 /// Represent a data value. Where [Value] is an SSA reference, [DataValue] is the type + value
 /// that would be referred to by a [Value].
@@ -74,36 +73,75 @@ impl DataValue {
         }
     }
 
-    /// Write a [DataValue] to a memory location.
-    pub unsafe fn write_value_to(&self, p: *mut u128) {
+    /// Write a [DataValue] to a slice.
+    ///
+    /// # Panics:
+    ///
+    /// Panics if the slice does not have enough space to accommodate the [DataValue]
+    pub fn write_to_slice(&self, dst: &mut [u8]) {
         match self {
-            DataValue::B(b) => ptr::write(p, if *b { -1i128 as u128 } else { 0u128 }),
-            DataValue::I8(i) => ptr::write(p as *mut i8, *i),
-            DataValue::I16(i) => ptr::write(p as *mut i16, *i),
-            DataValue::I32(i) => ptr::write(p as *mut i32, *i),
-            DataValue::I64(i) => ptr::write(p as *mut i64, *i),
-            DataValue::F32(f) => ptr::write(p as *mut Ieee32, *f),
-            DataValue::F64(f) => ptr::write(p as *mut Ieee64, *f),
-            DataValue::V128(b) => ptr::write(p as *mut [u8; 16], *b),
+            DataValue::B(true) => dst[..16].copy_from_slice(&[u8::MAX; 16][..]),
+            DataValue::B(false) => dst[..16].copy_from_slice(&[0; 16][..]),
+            DataValue::I8(i) => dst[..1].copy_from_slice(&i.to_le_bytes()[..]),
+            DataValue::I16(i) => dst[..2].copy_from_slice(&i.to_le_bytes()[..]),
+            DataValue::I32(i) => dst[..4].copy_from_slice(&i.to_le_bytes()[..]),
+            DataValue::I64(i) => dst[..8].copy_from_slice(&i.to_le_bytes()[..]),
+            DataValue::F32(f) => dst[..4].copy_from_slice(&f.bits().to_le_bytes()[..]),
+            DataValue::F64(f) => dst[..8].copy_from_slice(&f.bits().to_le_bytes()[..]),
+            DataValue::V128(v) => dst[..16].copy_from_slice(&v[..]),
+            _ => unimplemented!(),
+        };
+    }
+
+    /// Read a [DataValue] from a slice using a given [Type].
+    ///
+    /// # Panics:
+    ///
+    /// Panics if the slice does not have enough space to accommodate the [DataValue]
+    pub fn read_from_slice(src: &[u8], ty: Type) -> Self {
+        match ty {
+            types::I8 => DataValue::I8(i8::from_le_bytes(src[..1].try_into().unwrap())),
+            types::I16 => DataValue::I16(i16::from_le_bytes(src[..2].try_into().unwrap())),
+            types::I32 => DataValue::I32(i32::from_le_bytes(src[..4].try_into().unwrap())),
+            types::I64 => DataValue::I64(i64::from_le_bytes(src[..8].try_into().unwrap())),
+            types::F32 => DataValue::F32(Ieee32::with_bits(u32::from_le_bytes(
+                src[..4].try_into().unwrap(),
+            ))),
+            types::F64 => DataValue::F64(Ieee64::with_bits(u64::from_le_bytes(
+                src[..8].try_into().unwrap(),
+            ))),
+            _ if ty.is_bool() => {
+                // Only `ty.bytes()` are guaranteed to be written
+                // so we can only test the first n bytes of `src`
+
+                let size = ty.bytes() as usize;
+                DataValue::B(src[..size].iter().any(|&i| i != 0))
+            }
+            _ if ty.is_vector() && ty.bytes() == 16 => {
+                DataValue::V128(src[..16].try_into().unwrap())
+            }
             _ => unimplemented!(),
         }
     }
 
+    /// Write a [DataValue] to a memory location.
+    pub unsafe fn write_value_to(&self, p: *mut u128) {
+        // Since `DataValue` does not have type info for bools we always
+        // write out a full 16 byte slot.
+        let size = match self.ty() {
+            ty if ty.is_bool() => 16,
+            ty => ty.bytes() as usize,
+        };
+
+        self.write_to_slice(std::slice::from_raw_parts_mut(p as *mut u8, size));
+    }
+
     /// Read a [DataValue] from a memory location using a given [Type].
     pub unsafe fn read_value_from(p: *const u128, ty: Type) -> Self {
-        match ty {
-            types::I8 => DataValue::I8(ptr::read(p as *const i8)),
-            types::I16 => DataValue::I16(ptr::read(p as *const i16)),
-            types::I32 => DataValue::I32(ptr::read(p as *const i32)),
-            types::I64 => DataValue::I64(ptr::read(p as *const i64)),
-            types::F32 => DataValue::F32(ptr::read(p as *const Ieee32)),
-            types::F64 => DataValue::F64(ptr::read(p as *const Ieee64)),
-            _ if ty.is_bool() => DataValue::B(ptr::read(p) != 0),
-            _ if ty.is_vector() && ty.bytes() == 16 => {
-                DataValue::V128(ptr::read(p as *const [u8; 16]))
-            }
-            _ => unimplemented!(),
-        }
+        DataValue::read_from_slice(
+            std::slice::from_raw_parts(p as *const u8, ty.bytes() as usize),
+            ty,
+        )
     }
 }
 

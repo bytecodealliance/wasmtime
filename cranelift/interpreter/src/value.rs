@@ -92,7 +92,7 @@ impl Display for ValueTypeClass {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ValueConversionKind {
     /// Throw a [ValueError] if an exact conversion to [Type] is not possible; e.g. in `i32` to
     /// `i16`, convert `0x00001234` to `0x1234`.
@@ -234,6 +234,7 @@ impl Value for DataValue {
             ValueConversionKind::Exact(ty) => match (self, ty) {
                 // TODO a lot to do here: from bmask to ireduce to raw_bitcast...
                 (DataValue::I64(n), types::I32) => DataValue::I32(i32::try_from(n)?),
+                (DataValue::I64(n), types::I64) => DataValue::I64(n),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
@@ -273,14 +274,17 @@ impl Value for DataValue {
                 (types::I32, types::I64) => unimplemented!(),
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
-            ValueConversionKind::ZeroExtend(ty) => match (self.ty(), ty) {
-                (types::I8, types::I16) => unimplemented!(),
-                (types::I8, types::I32) => unimplemented!(),
-                (types::I8, types::I64) => unimplemented!(),
-                (types::I16, types::I32) => unimplemented!(),
-                (types::I16, types::I64) => unimplemented!(),
-                (types::I32, types::I64) => unimplemented!(),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
+            ValueConversionKind::ZeroExtend(ty) => match (self, ty) {
+                (DataValue::I8(_), types::I16) => unimplemented!(),
+                (DataValue::I8(_), types::I32) => unimplemented!(),
+                (DataValue::I8(_), types::I64) => unimplemented!(),
+                (DataValue::I16(_), types::I32) => unimplemented!(),
+                (DataValue::I16(_), types::I64) => unimplemented!(),
+                (DataValue::U32(n), types::I64) => DataValue::U64(n as u64),
+                (DataValue::I32(n), types::I64) => DataValue::I64(n as u32 as i64),
+                (DataValue::U64(n), types::I64) => DataValue::U64(n),
+                (DataValue::I64(n), types::I64) => DataValue::I64(n),
+                (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::ToUnsigned => match self {
                 DataValue::I8(n) => DataValue::U8(n as u8),
@@ -340,7 +344,8 @@ impl Value for DataValue {
     }
 
     fn add(self, other: Self) -> ValueResult<Self> {
-        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128]) // TODO: floats must handle NaNs, +/-0
+        // TODO: floats must handle NaNs, +/-0
+        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn sub(self, other: Self) -> ValueResult<Self> {
@@ -396,7 +401,7 @@ impl Value for DataValue {
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
-        binary_match!(&(&self, &other); [I8, I16, I32, I64])
+        binary_match!(&(&self, &other); [B, I8, I16, I32, I64])
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {

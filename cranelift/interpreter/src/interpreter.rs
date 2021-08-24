@@ -2,6 +2,7 @@
 //!
 //! This module partially contains the logic for interpreting Cranelift IR.
 
+use crate::address::{Address, AddressRegion, AddressSize};
 use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
@@ -10,10 +11,11 @@ use crate::step::{step, ControlFlow, StepError};
 use crate::value::ValueError;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::{Block, FuncRef, Function, Type, Value as ValueRef};
+use cranelift_codegen::ir::{Block, FuncRef, Function, StackSlot, Type, Value as ValueRef};
 use log::trace;
 use std::collections::HashSet;
 use std::fmt::Debug;
+use std::iter;
 use thiserror::Error;
 
 /// The Cranelift interpreter; this contains some high-level functions to control the interpreter's
@@ -80,6 +82,7 @@ impl<'a> Interpreter<'a> {
         self.state
             .current_frame_mut()
             .set_all(parameters, arguments.to_vec());
+
         self.block(first_block)
     }
 
@@ -173,6 +176,9 @@ pub enum InterpreterError {
 pub struct InterpreterState<'a> {
     pub functions: FunctionStore<'a>,
     pub frame_stack: Vec<Frame<'a>>,
+    /// Number of bytes from the bottom of the stack where the current frame's stack space is
+    pub frame_offset: usize,
+    pub stack: Vec<u8>,
     pub heap: Vec<u8>,
     pub iflags: HashSet<IntCC>,
     pub fflags: HashSet<FloatCC>,
@@ -183,6 +189,8 @@ impl Default for InterpreterState<'_> {
         Self {
             functions: FunctionStore::default(),
             frame_stack: vec![],
+            frame_offset: 0,
+            stack: Vec::with_capacity(1024),
             heap: vec![0; 1024],
             iflags: HashSet::new(),
             fflags: HashSet::new(),
@@ -222,10 +230,27 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
     }
 
     fn push_frame(&mut self, function: &'a Function) {
+        if let Some(frame) = self.frame_stack.iter().last() {
+            self.frame_offset += frame.function.stack_size() as usize;
+        }
+
+        // Grow the stack by the space necessary for this frame
+        self.stack
+            .extend(iter::repeat(0).take(function.stack_size() as usize));
+
         self.frame_stack.push(Frame::new(function));
     }
     fn pop_frame(&mut self) {
-        self.frame_stack.pop();
+        if let Some(frame) = self.frame_stack.pop() {
+            // Shorten the stack after exiting the frame
+            self.stack
+                .truncate(self.stack.len() - frame.function.stack_size() as usize);
+
+            // Reset frame_offset to the start of this function
+            if let Some(frame) = self.frame_stack.iter().last() {
+                self.frame_offset -= frame.function.stack_size() as usize;
+            }
+        }
     }
 
     fn get_value(&self, name: ValueRef) -> Option<DataValue> {
@@ -257,30 +282,74 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         self.fflags.clear()
     }
 
-    fn load_heap(&self, offset: usize, ty: Type) -> Result<DataValue, MemoryError> {
-        if offset + 16 < self.heap.len() {
-            let pointer = self.heap[offset..offset + 16].as_ptr() as *const _ as *const u128;
-            Ok(unsafe { DataValue::read_value_from(pointer, ty) })
-        } else {
-            Err(MemoryError::InsufficientMemory(offset, self.heap.len()))
+    fn stack_address(
+        &self,
+        size: AddressSize,
+        slot: StackSlot,
+        offset: u64,
+    ) -> Result<Address, MemoryError> {
+        let stack_slots = &self.get_current_function().stack_slots;
+        let stack_slot = &stack_slots[slot];
+
+        // offset must be `0 <= Offset < sizeof(SS)`
+        if offset >= stack_slot.size as u64 {
+            return Err(MemoryError::InvalidOffset {
+                offset,
+                max: stack_slot.size as u64,
+            });
         }
+
+        // Calculate the offset from the current frame to the requested stack slot
+        let slot_offset: u64 = stack_slots
+            .keys()
+            .filter(|k| k < &slot)
+            .map(|k| stack_slots[k].size as u64)
+            .sum();
+
+        let final_offset = self.frame_offset as u64 + slot_offset + offset;
+        Address::from_parts(size, AddressRegion::Stack, 0, final_offset)
     }
 
-    fn store_heap(&mut self, offset: usize, v: DataValue) -> Result<(), MemoryError> {
-        if offset + 16 < self.heap.len() {
-            let pointer = self.heap[offset..offset + 16].as_mut_ptr() as *mut _ as *mut u128;
-            Ok(unsafe { v.write_value_to(pointer) })
-        } else {
-            Err(MemoryError::InsufficientMemory(offset, self.heap.len()))
-        }
-    }
-
-    fn load_stack(&self, _offset: usize, _ty: Type) -> Result<DataValue, MemoryError> {
+    fn heap_address(&self, _size: AddressSize, _offset: u64) -> Result<Address, MemoryError> {
         unimplemented!()
     }
 
-    fn store_stack(&mut self, _offset: usize, _v: DataValue) -> Result<(), MemoryError> {
-        unimplemented!()
+    fn checked_load(&self, addr: Address, ty: Type) -> Result<DataValue, MemoryError> {
+        let load_size = ty.bytes() as usize;
+
+        let src = match addr.region {
+            AddressRegion::Stack => {
+                let addr_start = addr.offset as usize;
+                let addr_end = addr_start + load_size;
+                if addr_end > self.stack.len() {
+                    return Err(MemoryError::OutOfBoundsLoad { addr, load_size });
+                }
+
+                &self.stack[addr_start..addr_end]
+            }
+            _ => unimplemented!(),
+        };
+
+        Ok(DataValue::read_from_slice(src, ty))
+    }
+
+    fn checked_store(&mut self, addr: Address, v: DataValue) -> Result<(), MemoryError> {
+        let store_size = v.ty().bytes() as usize;
+
+        let dst = match addr.region {
+            AddressRegion::Stack => {
+                let addr_start = addr.offset as usize;
+                let addr_end = addr_start + store_size;
+                if addr_end > self.stack.len() {
+                    return Err(MemoryError::OutOfBoundsStore { addr, store_size });
+                }
+
+                &mut self.stack[addr_start..addr_end]
+            }
+            _ => unimplemented!(),
+        };
+
+        Ok(v.write_to_slice(dst))
     }
 }
 
@@ -288,7 +357,6 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
 mod tests {
     use super::*;
     use crate::step::CraneliftTrap;
-    use cranelift_codegen::ir::immediates::Ieee32;
     use cranelift_codegen::ir::TrapCode;
     use cranelift_reader::parse_functions;
 
@@ -332,12 +400,12 @@ mod tests {
         let mut env = FunctionStore::default();
         env.add(func.name.to_string(), &func);
         let state = InterpreterState::default().with_function_store(env);
-        let result = Interpreter::new(state).call_by_name("%test", &[]).unwrap();
+        let trap = Interpreter::new(state)
+            .call_by_name("%test", &[])
+            .unwrap()
+            .unwrap_trap();
 
-        match result {
-            ControlFlow::Trap(CraneliftTrap::User(TrapCode::IntegerDivisionByZero)) => {}
-            _ => panic!("Unexpected ControlFlow: {:?}", result),
-        }
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::IntegerDivisionByZero));
     }
 
     #[test]
@@ -396,20 +464,6 @@ mod tests {
     }
 
     #[test]
-    fn state_heap_roundtrip() -> Result<(), MemoryError> {
-        let mut state = InterpreterState::default();
-        let mut roundtrip = |dv: DataValue| {
-            state.store_heap(0, dv.clone())?;
-            assert_eq!(dv, state.load_heap(0, dv.ty())?);
-            Ok(())
-        };
-
-        roundtrip(DataValue::B(true))?;
-        roundtrip(DataValue::I64(42))?;
-        roundtrip(DataValue::F32(Ieee32::from(0.42)))
-    }
-
-    #[test]
     fn state_flags() {
         let mut state = InterpreterState::default();
         let flag = IntCC::Overflow;
@@ -460,5 +514,210 @@ mod tests {
             .unwrap()
             .unwrap_return();
         assert_eq!(result, vec![DataValue::I32(2)]);
+    }
+
+    // Verifies that writing to the stack on a called function does not overwrite the parents
+    // stack slots.
+    #[test]
+    fn stack_slots_multi_functions() {
+        let code = "
+        function %callee(i64, i64) -> i64 {
+            ss0 = explicit_slot 8
+            ss1 = explicit_slot 8
+
+        block0(v0: i64, v1: i64):
+            stack_store.i64 v0, ss0
+            stack_store.i64 v1, ss1
+            v2 = stack_load.i64 ss0
+            v3 = stack_load.i64 ss1
+            v4 = iadd.i64 v2, v3
+            return v4
+        }
+
+        function %caller(i64, i64, i64, i64) -> i64 {
+            fn0 = %callee(i64, i64) -> i64
+            ss0 = explicit_slot 8
+            ss1 = explicit_slot 8
+
+        block0(v0: i64, v1: i64, v2: i64, v3: i64):
+            stack_store.i64 v0, ss0
+            stack_store.i64 v1, ss1
+
+            v4 = call fn0(v2, v3)
+
+            v5 = stack_load.i64 ss0
+            v6 = stack_load.i64 ss1
+
+            v7 = iadd.i64 v4, v5
+            v8 = iadd.i64 v7, v6
+
+            return v8
+        }";
+
+        let mut env = FunctionStore::default();
+        let funcs = parse_functions(code).unwrap().to_vec();
+        funcs.iter().for_each(|f| env.add(f.name.to_string(), f));
+
+        let state = InterpreterState::default().with_function_store(env);
+        let result = Interpreter::new(state)
+            .call_by_name(
+                "%caller",
+                &[
+                    DataValue::I64(3),
+                    DataValue::I64(5),
+                    DataValue::I64(7),
+                    DataValue::I64(11),
+                ],
+            )
+            .unwrap()
+            .unwrap_return();
+
+        assert_eq!(result, vec![DataValue::I64(26)])
+    }
+
+    #[test]
+    fn out_of_slot_write_traps() {
+        let code = "
+        function %stack_write() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = iconst.i64 10
+            stack_store.i64 v0, ss0+8
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_write", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+    }
+
+    #[test]
+    fn partial_out_of_slot_write_traps() {
+        let code = "
+        function %stack_write() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = iconst.i64 10
+            stack_store.i64 v0, ss0+4
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_write", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+    }
+
+    #[test]
+    fn out_of_slot_read_traps() {
+        let code = "
+        function %stack_load() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = stack_load.i64 ss0+8
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_load", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+    }
+
+    #[test]
+    fn partial_out_of_slot_read_traps() {
+        let code = "
+        function %stack_load() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = stack_load.i64 ss0+4
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_load", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+    }
+
+    #[test]
+    fn partial_out_of_slot_read_by_addr_traps() {
+        let code = "
+        function %stack_load() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = stack_addr.i64 ss0
+            v1 = iconst.i64 4
+            v2 = iadd.i64 v0, v1
+            v3 = load.i64 v2
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_load", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
+    }
+
+    #[test]
+    fn partial_out_of_slot_write_by_addr_traps() {
+        let code = "
+        function %stack_store() {
+            ss0 = explicit_slot 8
+
+        block0:
+            v0 = stack_addr.i64 ss0
+            v1 = iconst.i64 4
+            v2 = iadd.i64 v0, v1
+            store.i64 v1, v2
+            return
+        }";
+
+        let func = parse_functions(code).unwrap().into_iter().next().unwrap();
+        let mut env = FunctionStore::default();
+        env.add(func.name.to_string(), &func);
+        let state = InterpreterState::default().with_function_store(env);
+        let trap = Interpreter::new(state)
+            .call_by_name("%stack_store", &[])
+            .unwrap()
+            .unwrap_trap();
+
+        assert_eq!(trap, CraneliftTrap::User(TrapCode::HeapOutOfBounds));
     }
 }

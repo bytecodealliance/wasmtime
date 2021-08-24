@@ -1,0 +1,130 @@
+test interpret
+test run
+target x86_64 machinst
+target s390x
+target aarch64
+
+function %stack_simple(i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0
+    v1 = stack_load.i64 ss0
+    return v1
+}
+; run: %stack_simple(0) == 0
+; run: %stack_simple(1) == 1
+; run: %stack_simple(-1) == -1
+
+
+function %slot_offset(i64) -> i64 {
+    ss0 = explicit_slot 8, offset 8
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0
+    v1 = stack_load.i64 ss0
+    return v1
+}
+; run: %slot_offset(0) == 0
+; run: %slot_offset(1) == 1
+; run: %slot_offset(-1) == -1
+
+function %stack_offset(i64) -> i64 {
+    ss0 = explicit_slot 16
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0+8
+    v1 = stack_load.i64 ss0+8
+    return v1
+}
+; run: %stack_offset(0) == 0
+; run: %stack_offset(1) == 1
+; run: %stack_offset(-1) == -1
+
+
+function %offset_unaligned(i64) -> i64 {
+    ss0 = explicit_slot 11
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0+3
+    v1 = stack_load.i64 ss0+3
+    return v1
+}
+; run: %offset_unaligned(0) == 0
+; run: %offset_unaligned(1) == 1
+; run: %offset_unaligned(-1) == -1
+
+
+
+function %multi_slot_stack(i64, i64) -> i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+    stack_store.i64 v1, ss1
+    v2 = stack_load.i64 ss0
+    v3 = stack_load.i64 ss1
+    v4 = iadd.i64 v2, v3
+    return v4
+}
+; run: %multi_slot_stack(0, 1) == 1
+; run: %multi_slot_stack(1, 2) == 3
+
+
+
+function %multi_slot_out_of_bounds_writes(i8, i64) -> i8, i64 {
+    ss0 = explicit_slot 1
+    ss1 = explicit_slot 8
+
+block0(v0: i8, v1: i64):
+    stack_store.i8 v0, ss0
+    stack_store.i64 v1, ss1
+    v2 = stack_load.i8 ss0
+    v3 = stack_load.i64 ss1
+    return v2, v3
+}
+; run: %multi_slot_out_o(10, 1) == [10, 1]
+; run: %multi_slot_out_o(0, 2) == [0, 2]
+
+
+function %multi_slot_offset_writes(i8, i64) -> i8, i64 {
+    ss0 = explicit_slot 8, offset 8
+    ss1 = explicit_slot 8
+
+block0(v0: i8, v1: i64):
+    stack_store.i8 v0, ss0
+    stack_store.i64 v1, ss1
+    v2 = stack_load.i8 ss0
+    v3 = stack_load.i64 ss1
+    return v2, v3
+}
+; run: %multi_slot_offse(0, 1) == [0, 1]
+; run: %multi_slot_offse(1, 2) == [1, 2]
+
+function %slot_offset_negative(i64, i64) -> i64, i64 {
+    ss0 = explicit_slot 8
+    ss1 = explicit_slot 8, offset -8
+
+block0(v0: i64, v1: i64):
+    stack_store.i64 v0, ss0
+    stack_store.i64 v1, ss1
+    v2 = stack_load.i64 ss0
+    v3 = stack_load.i64 ss1
+    return v2, v3
+}
+; run: %slot_offset_nega(0, 1) == [0, 1]
+; run: %slot_offset_nega(2, 3) == [2, 3]
+
+
+function %huge_slots(i64) -> i64 {
+    ss0 = explicit_slot 1048576 ; 1MB Slot
+
+block0(v0: i64):
+    stack_store.i64 v0, ss0+1048568 ; Store at 1MB - 8bytes
+    v1 = stack_load.i64 ss0+1048568
+    return v1
+}
+; run: %huge_slots(0) == 0
+; run: %huge_slots(1) == 1
+; run: %huge_slots(-1) == -1
