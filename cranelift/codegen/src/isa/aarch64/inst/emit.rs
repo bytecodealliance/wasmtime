@@ -19,6 +19,34 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
     }
 }
 
+/// Generates the four instructions necessary for a small "jump veneer" which
+/// is used when relative 26-bit call instructions won't cut it and a longer
+/// jump is needed.
+///
+/// This generats:
+///
+///     adr  x16, 16
+///     ldur x16, [x17]
+///     add  x16, x16, x17
+///     br   x16
+///
+/// and the expectation is that the 8-byte immediate address to jump to is
+/// located after these instructions are encoded.
+///
+/// Note that this is part of the `MachBackend::gen_jump_veneer` contract.
+pub fn gen_jump_veneer() -> (u32, u32, u32, u32) {
+    (
+        // adr x17, 16
+        enc_adr(16, writable_xreg(17)),
+        // ldr x16, [x17]
+        enc_ldst_simm9(0b1111100001, SImm9::zero(), 0b00, xreg(17), xreg(16)),
+        // add x16, x16, x17
+        enc_arith_rrr(0b10001011_000, 0, writable_xreg(16), xreg(16), xreg(17)),
+        // br x16
+        enc_br(xreg(16)),
+    )
+}
+
 /// Memory addressing mode finalization: convert "special" modes (e.g.,
 /// generic arbitrary stack offset) into real addressing modes, possibly by
 /// emitting some helper instructions that come immediately before the use

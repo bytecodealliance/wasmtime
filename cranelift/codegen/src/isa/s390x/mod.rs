@@ -165,6 +165,17 @@ impl MachBackend for S390xBackend {
     fn map_reg_to_dwarf(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
+
+    fn max_jump_veneer_size(&self) -> usize {
+        0
+    }
+
+    fn generate_jump_veneer(&self) -> (Vec<u8>, usize) {
+        panic!(
+            "jumps >= 2gb are not implemented yet on s390x, functions are \
+             too far apart to have a relative call between them"
+        );
+    }
 }
 
 /// Create a new `isa::Builder`.

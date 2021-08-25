@@ -111,9 +111,6 @@ type CompiledFunctions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
 /// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Default)]
 pub struct CompiledFunction {
-    /// The machine code for this function.
-    body: Vec<u8>,
-
     /// The jump tables offsets (in the body).
     jt_offsets: ir::JumpTableOffsets,
 
@@ -182,7 +179,7 @@ enum RelocationTarget {
     /// A compiler-generated libcall.
     LibCall(ir::LibCall),
     /// Jump table index.
-    JumpTable(FuncIndex, ir::JumpTable),
+    JumpTable(ir::JumpTable),
 }
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the

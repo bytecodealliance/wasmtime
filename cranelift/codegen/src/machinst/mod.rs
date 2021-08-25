@@ -425,6 +425,34 @@ pub trait MachBackend {
     fn map_reg_to_dwarf(&self, _: Reg) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
+
+    /// Generates as "veneer" which is used when a relative call instruction
+    /// cannot reach to the destination.
+    ///
+    /// Cranelift compiles wasm modules on a per-function basis entirely
+    /// isolated from all other functions. Functions also, ideally, use relative
+    /// calls between them to avoid needing relocation fixups when a module is
+    /// loaded and also having statically more predictable calls. These jumps,
+    /// however, may not always be able to reach the destination depending on
+    /// the final layout of the executable.
+    ///
+    /// This function is used to generate an executable code sequence which can
+    /// be used to jump to an arbitrary pointer-sized immediate. This is
+    /// only used when functions are too far apart to call each other with
+    /// relative call instructions.
+    ///
+    /// The first return of this function is the machine code of the veneer, and
+    /// the second argument is the offset, within the veneer, where an 8-byte
+    /// immediate needs to be written of the target destination. The veneer,
+    /// when jumped to, will add the 8-byte immediate to the address of the
+    /// 8-byte immediate and jump to that location. This means that the veneer
+    /// will do a relative jump to the final location, and the relative jump
+    /// uses a pointer-sized immediate to make the jump.
+    fn generate_jump_veneer(&self) -> (Vec<u8>, usize);
+
+    /// Returns the maximal size of the veneer returned by
+    /// `generate_jump_veneer`.
+    fn max_jump_veneer_size(&self) -> usize;
 }
 
 /// Expected unwind info type.

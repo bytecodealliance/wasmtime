@@ -158,6 +158,14 @@ impl MachBackend for X64Backend {
     fn map_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
+
+    fn max_jump_veneer_size(&self) -> usize {
+        inst::jump_veneer_size()
+    }
+
+    fn generate_jump_veneer(&self) -> (Vec<u8>, usize) {
+        inst::gen_jump_veneer()
+    }
 }
 
 /// Create a new `isa::Builder`.

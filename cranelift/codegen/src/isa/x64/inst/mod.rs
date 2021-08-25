@@ -28,6 +28,8 @@ pub mod unwind;
 use args::*;
 use regs::{create_reg_universe_systemv, show_ireg_sized};
 
+pub use emit::{gen_jump_veneer, jump_veneer_size};
+
 //=============================================================================
 // Instructions (top level): definition
 

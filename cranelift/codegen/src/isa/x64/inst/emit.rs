@@ -4,9 +4,9 @@ use crate::ir::LibCall;
 use crate::ir::TrapCode;
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength};
 use crate::isa::x64::encoding::rex::{
-    emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg, int_reg_enc,
-    low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc, LegacyPrefixes, OpcodeMap,
-    RexFlags,
+    emit_simm, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem, emit_std_reg_reg,
+    encode_modrm, int_reg_enc, low8_will_sign_extend_to_32, low8_will_sign_extend_to_64, reg_enc,
+    LegacyPrefixes, OpcodeMap, RexFlags,
 };
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -54,6 +54,55 @@ fn emit_reloc(
 ) {
     let srcloc = state.cur_srcloc();
     sink.add_reloc(srcloc, kind, name, addend);
+}
+
+/// Generates the instructions necessary for a small "jump veneer" which is
+/// used when relative 32-bit call instructions won't cut it and a longer jump
+/// is needed.
+///
+/// This generats:
+///
+///     movabsq $val, %r10
+///     lea -15(%rip), %r11
+///     add %r10, %r11
+///     jmpq *%r11
+///
+/// Note that this is part of the `MachBackend::gen_jump_veneer` contract.
+pub fn gen_jump_veneer() -> (Vec<u8>, usize) {
+    let mut bytes = Vec::with_capacity(jump_veneer_size());
+
+    let r10 = int_reg_enc(regs::r10());
+    let r11 = int_reg_enc(regs::r11());
+
+    // movabsq $val, %r10
+    bytes.push(0x48 | ((r10 >> 3) & 1));
+    bytes.push(0xB8 | (r10 & 7));
+    let imm_pos = bytes.len();
+    bytes.extend_from_slice(&[0; 8]);
+
+    // lea -15(%rip), %r11
+    bytes.push(0x48 | ((r11 >> 3) & 1) << 2);
+    bytes.push(0x8d);
+    bytes.push(encode_modrm(0b00, r11, 0b101));
+    bytes.extend_from_slice(&i32::to_le_bytes(-15));
+
+    // add %r10, %r11
+    bytes.push(0x48 | (((r11 >> 3) & 1) << 2) | ((r10 >> 3) & 1));
+    bytes.push(0x01);
+    bytes.push(encode_modrm(0b11, r10, r11));
+
+    // jmpq *%r11
+    bytes.push(0x40 | ((r11 >> 3) & 1));
+    bytes.push(0xff);
+    bytes.push(0xe0 | (r11 & 7));
+
+    assert_eq!(bytes.len(), jump_veneer_size());
+    (bytes, imm_pos)
+}
+
+/// See `gen_jump_veneer`.
+pub fn jump_veneer_size() -> usize {
+    23
 }
 
 /// The top-level emit function.

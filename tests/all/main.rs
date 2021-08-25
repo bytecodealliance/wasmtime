@@ -25,6 +25,7 @@ mod module_serialize;
 mod name;
 mod native_hooks;
 mod pooling_allocator;
+mod relocs;
 mod stack_overflow;
 mod store;
 mod table;

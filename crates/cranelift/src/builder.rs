@@ -13,6 +13,11 @@ use wasmtime_environ::{CompilerBuilder, Setting, SettingKind};
 struct Builder {
     flags: settings::Builder,
     isa_flags: isa::Builder,
+
+    // A debug-only setting used to synthetically insert 0-byte padding between
+    // compiled functions to simulate huge compiled artifacts and exercise logic
+    // related to jump veneers.
+    padding_between_functions: usize,
 }
 
 pub fn builder() -> Box<dyn CompilerBuilder> {
@@ -32,6 +37,7 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
     Box::new(Builder {
         flags,
         isa_flags: cranelift_native::builder().expect("host machine is not a supported target"),
+        padding_between_functions: 0,
     })
 }
 
@@ -50,6 +56,12 @@ impl CompilerBuilder for Builder {
     }
 
     fn set(&mut self, name: &str, value: &str) -> Result<()> {
+        // Special wasmtime-cranelift-only setting.
+        if name == "padding_between_functions" {
+            self.padding_between_functions = value.parse()?;
+            return Ok(());
+        }
+
         if let Err(err) = self.flags.set(name, value) {
             match err {
                 SetError::BadName(_) => {
@@ -80,7 +92,10 @@ impl CompilerBuilder for Builder {
             .isa_flags
             .clone()
             .finish(settings::Flags::new(self.flags.clone()));
-        Box::new(crate::compiler::Compiler::new(isa))
+        Box::new(crate::compiler::Compiler::new(
+            isa,
+            self.padding_between_functions,
+        ))
     }
 
     fn settings(&self) -> Vec<Setting> {

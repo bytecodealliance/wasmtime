@@ -161,6 +161,23 @@ impl MachBackend for AArch64Backend {
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         Some(inst::unwind::systemv::create_cie())
     }
+
+    fn max_jump_veneer_size(&self) -> usize {
+        24 // 4 insns + 8-byte immediate
+    }
+
+    fn generate_jump_veneer(&self) -> (Vec<u8>, usize) {
+        let (a, b, c, d) = inst::emit::gen_jump_veneer();
+        let mut bytes = Vec::with_capacity(self.max_jump_veneer_size());
+        bytes.extend_from_slice(&a.to_le_bytes());
+        bytes.extend_from_slice(&b.to_le_bytes());
+        bytes.extend_from_slice(&c.to_le_bytes());
+        bytes.extend_from_slice(&d.to_le_bytes());
+        let imm_start = bytes.len();
+        bytes.extend_from_slice(&[0x00; 8]);
+        assert_eq!(bytes.len(), self.max_jump_veneer_size());
+        (bytes, imm_start)
+    }
 }
 
 /// Create a new `isa::Builder`.
