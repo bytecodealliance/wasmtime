@@ -321,8 +321,10 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Debug-only: check invariants of labels and branch-records described
     /// under "Branch-optimization Correctness" above.
-    #[cfg(debug)]
     fn check_label_branch_invariants(&self) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
         let cur_off = self.cur_offset();
         // Check that every entry in latest_branches has *correct*
         // labels_at_this_branch lists. We do not check completeness because
@@ -361,11 +363,6 @@ impl<I: VCodeInst> MachBuffer<I> {
                 debug_assert_eq!(self.label_aliases[l.0 as usize], UNKNOWN_LABEL);
             }
         }
-    }
-
-    #[cfg(not(debug))]
-    fn check_label_branch_invariants(&self) {
-        // Nothing.
     }
 
     /// Current offset from start of buffer.
