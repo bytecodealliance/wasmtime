@@ -3,7 +3,7 @@
 // Some variants are not constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::binemit::CodeOffset;
+use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{
     B1, B128, B16, B32, B64, B8, F32, F64, FFLAGS, I128, I16, I32, I64, I8, I8X16, IFLAGS, R32, R64,
 };
@@ -4786,13 +4786,18 @@ impl MachInstLabelUse for LabelUse {
     fn supports_veneer(self) -> bool {
         match self {
             LabelUse::Branch19 => true, // veneer is a Branch26
+            LabelUse::Branch26 => true, // veneer is a PCRel32
             _ => false,
         }
     }
 
     /// How large is the veneer, if supported?
     fn veneer_size(self) -> CodeOffset {
-        4
+        match self {
+            LabelUse::Branch19 => 4,
+            LabelUse::Branch26 => 20,
+            _ => unreachable!(),
+        }
     }
 
     /// Generate a veneer into the buffer, given that this veneer is at `veneer_offset`, and return
@@ -4810,7 +4815,47 @@ impl MachInstLabelUse for LabelUse {
                 buffer[0..4].clone_from_slice(&u32::to_le_bytes(insn_word));
                 (veneer_offset, LabelUse::Branch26)
             }
+
+            // This is promoting a 26-bit call/jump to a 32-bit call/jump to
+            // get a further range. This jump translates to a jump to a
+            // relative location based on the address of the constant loaded
+            // from here.
+            //
+            // If this path is taken from a call instruction then caller-saved
+            // registers are available (minus arguments), so x16/x17 are
+            // available. Otherwise for intra-function jumps we also reserve
+            // x16/x17 as spill-style registers. In both cases these are
+            // available for us to use.
+            LabelUse::Branch26 => {
+                let tmp1 = regs::spilltmp_reg();
+                let tmp1_w = regs::writable_spilltmp_reg();
+                let tmp2 = regs::tmp2_reg();
+                let tmp2_w = regs::writable_tmp2_reg();
+                // ldrsw x16, 16
+                let ldr = emit::enc_ldst_imm19(0b1001_1000, 16 / 4, tmp1);
+                // adr x17, 12
+                let adr = emit::enc_adr(12, tmp2_w);
+                // add x16, x16, x17
+                let add = emit::enc_arith_rrr(0b10001011_000, 0, tmp1_w, tmp1, tmp2);
+                // br x16
+                let br = emit::enc_br(tmp1);
+                buffer[0..4].clone_from_slice(&u32::to_le_bytes(ldr));
+                buffer[4..8].clone_from_slice(&u32::to_le_bytes(adr));
+                buffer[8..12].clone_from_slice(&u32::to_le_bytes(add));
+                buffer[12..16].clone_from_slice(&u32::to_le_bytes(br));
+                // the 4-byte signed immediate we'll load is after these
+                // instructions, 16-bytes in.
+                (veneer_offset + 16, LabelUse::PCRel32)
+            }
+
             _ => panic!("Unsupported label-reference type for veneer generation!"),
+        }
+    }
+
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<LabelUse> {
+        match (reloc, addend) {
+            (Reloc::Arm64Call, 0) => Some(LabelUse::Branch26),
+            _ => None,
         }
     }
 }

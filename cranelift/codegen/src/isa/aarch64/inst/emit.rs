@@ -110,7 +110,13 @@ fn machreg_to_gpr_or_vec(m: Reg) -> u32 {
     u32::try_from(m.to_real_reg().get_hw_encoding()).unwrap()
 }
 
-fn enc_arith_rrr(bits_31_21: u32, bits_15_10: u32, rd: Writable<Reg>, rn: Reg, rm: Reg) -> u32 {
+pub(crate) fn enc_arith_rrr(
+    bits_31_21: u32,
+    bits_15_10: u32,
+    rd: Writable<Reg>,
+    rn: Reg,
+    rm: Reg,
+) -> u32 {
     (bits_31_21 << 21)
         | (bits_15_10 << 10)
         | machreg_to_gpr(rd.to_reg())
@@ -243,7 +249,7 @@ fn enc_ldst_reg(
         | machreg_to_gpr_or_vec(rd)
 }
 
-fn enc_ldst_imm19(op_31_24: u32, imm19: u32, rd: Reg) -> u32 {
+pub(crate) fn enc_ldst_imm19(op_31_24: u32, imm19: u32, rd: Reg) -> u32 {
     (op_31_24 << 24) | (imm19 << 5) | machreg_to_gpr_or_vec(rd)
 }
 
@@ -320,11 +326,11 @@ fn enc_bit_rr(size: u32, opcode2: u32, opcode1: u32, rn: Reg, rd: Writable<Reg>)
         | machreg_to_gpr(rd.to_reg())
 }
 
-fn enc_br(rn: Reg) -> u32 {
+pub(crate) fn enc_br(rn: Reg) -> u32 {
     0b1101011_0000_11111_000000_00000_00000 | (machreg_to_gpr(rn) << 5)
 }
 
-fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
+pub(crate) fn enc_adr(off: i32, rd: Writable<Reg>) -> u32 {
     let off = u32::try_from(off).unwrap();
     let immlo = off & 3;
     let immhi = (off >> 2) & ((1 << 19) - 1);
@@ -2694,7 +2700,7 @@ impl MachInstEmit for Inst {
                         dest: BranchTarget::Label(jump_around_label),
                     };
                     jmp.emit(sink, emit_info, state);
-                    sink.emit_island();
+                    sink.emit_island(needed_space + 4);
                     sink.bind_label(jump_around_label);
                 }
             }

@@ -182,7 +182,7 @@ enum RelocationTarget {
     /// A compiler-generated libcall.
     LibCall(ir::LibCall),
     /// Jump table index.
-    JumpTable(FuncIndex, ir::JumpTable),
+    JumpTable(ir::JumpTable),
 }
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the

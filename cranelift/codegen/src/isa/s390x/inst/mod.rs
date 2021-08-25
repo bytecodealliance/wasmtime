@@ -3,7 +3,7 @@
 // Some variants are not constructed, but we still want them as options in the future.
 #![allow(dead_code)]
 
-use crate::binemit::CodeOffset;
+use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::{types, ExternalName, Opcode, TrapCode, Type, ValueLabel};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
@@ -3685,5 +3685,9 @@ impl MachInstLabelUse for LabelUse {
         _veneer_offset: CodeOffset,
     ) -> (CodeOffset, LabelUse) {
         unreachable!();
+    }
+
+    fn from_reloc(_reloc: Reloc, _addend: Addend) -> Option<Self> {
+        None
     }
 }

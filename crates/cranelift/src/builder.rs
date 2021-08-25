@@ -13,6 +13,20 @@ use wasmtime_environ::{CompilerBuilder, Setting, SettingKind};
 struct Builder {
     flags: settings::Builder,
     isa_flags: isa::Builder,
+    linkopts: LinkOptions,
+}
+
+#[derive(Clone, Default)]
+pub struct LinkOptions {
+    /// A debug-only setting used to synthetically insert 0-byte padding between
+    /// compiled functions to simulate huge compiled artifacts and exercise
+    /// logic related to jump veneers.
+    pub padding_between_functions: usize,
+
+    /// A debug-only setting used to force inter-function calls in a wasm module
+    /// to always go through "jump veneers" which are typically only generated
+    /// when functions are very far from each other.
+    pub force_jump_veneers: bool,
 }
 
 pub fn builder() -> Box<dyn CompilerBuilder> {
@@ -32,6 +46,7 @@ pub fn builder() -> Box<dyn CompilerBuilder> {
     Box::new(Builder {
         flags,
         isa_flags: cranelift_native::builder().expect("host machine is not a supported target"),
+        linkopts: LinkOptions::default(),
     })
 }
 
@@ -50,6 +65,17 @@ impl CompilerBuilder for Builder {
     }
 
     fn set(&mut self, name: &str, value: &str) -> Result<()> {
+        // Special wasmtime-cranelift-only settings first
+        if name == "wasmtime_linkopt_padding_between_functions" {
+            self.linkopts.padding_between_functions = value.parse()?;
+            return Ok(());
+        }
+        if name == "wasmtime_linkopt_force_jump_veneer" {
+            self.linkopts.force_jump_veneers = value.parse()?;
+            return Ok(());
+        }
+
+        // ... then forward this to Cranelift
         if let Err(err) = self.flags.set(name, value) {
             match err {
                 SetError::BadName(_) => {
@@ -80,7 +106,7 @@ impl CompilerBuilder for Builder {
             .isa_flags
             .clone()
             .finish(settings::Flags::new(self.flags.clone()));
-        Box::new(crate::compiler::Compiler::new(isa))
+        Box::new(crate::compiler::Compiler::new(isa, self.linkopts.clone()))
     }
 
     fn settings(&self) -> Vec<Setting> {

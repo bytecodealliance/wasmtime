@@ -60,7 +60,7 @@
 //!
 //! ```
 
-use crate::binemit::{CodeInfo, CodeOffset, StackMap};
+use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
 use crate::ir::condcodes::IntCC;
 use crate::ir::{Function, SourceLoc, StackSlot, Type, ValueLabel};
 use crate::result::CodegenResult;
@@ -248,6 +248,12 @@ pub trait MachInstLabelUse: Clone + Copy + Debug + Eq {
     /// "long-range jump" (e.g., on ARM, the 26-bit form), or if already at that
     /// stage, a jump that supports a full 32-bit range, for example.
     fn generate_veneer(self, buffer: &mut [u8], veneer_offset: CodeOffset) -> (CodeOffset, Self);
+
+    /// Returns the corresponding label-use for the relocation specified.
+    ///
+    /// This returns `None` if the relocation doesn't have a corresponding
+    /// representation for the target architecture.
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self>;
 }
 
 /// Describes a block terminator (not call) in the vcode, when its branches
@@ -425,6 +431,57 @@ pub trait MachBackend {
     fn map_reg_to_dwarf(&self, _: Reg) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
+
+    /// Returns an object that can be used to build the text section of an
+    /// executable.
+    ///
+    /// This object will internally attempt to handle as many relocations as
+    /// possible using relative calls/jumps/etc between functions.
+    ///
+    /// The `num_labeled_funcs` argument here is the number of functions which
+    /// will be "labeled" or might have calls between them, typically the number
+    /// of defined functions in the object file.
+    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
+}
+
+/// An object that can be used to create the text section of an executable.
+///
+/// This primarily handles resolving relative relocations at
+/// text-section-assembly time rather than at load/link time. This
+/// architecture-specific logic is sort of like a linker, but only for one
+/// object file at a time.
+pub trait TextSectionBuilder {
+    /// Appends `data` to the text section with the `align` specified.
+    ///
+    /// If `labeled` is `true` then the offset of the final data is used to
+    /// resolve relocations in `resolve_reloc` in the future.
+    ///
+    /// This function returns the offset at which the data was placed in the
+    /// text section.
+    fn append(&mut self, labeled: bool, data: &[u8], align: u32) -> u64;
+
+    /// Attempts to resolve a relocation for this function.
+    ///
+    /// The `offset` is the offset of the relocation, within the text section.
+    /// The `reloc` is the kind of relocation.
+    /// The `addend` is the value to add to the relocation.
+    /// The `target` is the labeled function that is the target of this
+    /// relocation.
+    ///
+    /// Labeled functions are created with the `append` function above by
+    /// setting the `labeled` parameter to `true`.
+    ///
+    /// If this builder does not know how to handle `reloc` then this function
+    /// will return `false`. Otherwise this function will return `true` and this
+    /// relocation will be resolved in the final bytes returned by `finish`.
+    fn resolve_reloc(&mut self, offset: u64, reloc: Reloc, addend: Addend, target: u32) -> bool;
+
+    /// A debug-only option which is used to for
+    fn force_veneers(&mut self);
+
+    /// Completes this text section, filling out any final details, and returns
+    /// the bytes of the text section.
+    fn finish(&mut self) -> Vec<u8>;
 }
 
 /// Expected unwind info type.

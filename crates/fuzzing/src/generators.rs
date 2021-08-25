@@ -20,6 +20,7 @@ use arbitrary::{Arbitrary, Unstructured};
 pub struct DifferentialConfig {
     strategy: DifferentialStrategy,
     opt_level: OptLevel,
+    force_jump_veneers: bool,
 }
 
 impl DifferentialConfig {
@@ -30,6 +31,11 @@ impl DifferentialConfig {
             DifferentialStrategy::Lightbeam => wasmtime::Strategy::Lightbeam,
         })?;
         config.cranelift_opt_level(self.opt_level.to_wasmtime());
+        if self.force_jump_veneers {
+            unsafe {
+                config.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")?;
+            }
+        }
         Ok(config)
     }
 }

@@ -1,3 +1,4 @@
+use crate::builder::LinkOptions;
 use crate::debug::ModuleMemoryOffset;
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::obj::ObjectBuilder;
@@ -36,13 +37,15 @@ use wasmtime_environ::{
 pub(crate) struct Compiler {
     translators: Mutex<Vec<FuncTranslator>>,
     isa: Box<dyn TargetIsa>,
+    linkopts: LinkOptions,
 }
 
 impl Compiler {
-    pub(crate) fn new(isa: Box<dyn TargetIsa>) -> Compiler {
+    pub(crate) fn new(isa: Box<dyn TargetIsa>, linkopts: LinkOptions) -> Compiler {
         Compiler {
             translators: Default::default(),
             isa,
+            linkopts,
         }
     }
 
@@ -170,7 +173,7 @@ impl wasmtime_environ::Compiler for Compiler {
         self.save_translator(func_translator);
 
         let mut code_buf: Vec<u8> = Vec::new();
-        let mut reloc_sink = RelocSink::new(func_index);
+        let mut reloc_sink = RelocSink::new();
         let mut trap_sink = TrapSink::new();
         let mut stack_map_sink = StackMapSink::default();
         context
@@ -228,13 +231,15 @@ impl wasmtime_environ::Compiler for Compiler {
         emit_dwarf: bool,
         obj: &mut Object,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
-        const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
         let funcs: crate::CompiledFunctions = funcs
             .into_iter()
             .map(|(_i, f)| *f.downcast().unwrap())
             .collect();
 
-        let mut builder = ObjectBuilder::new(obj, &translation.module);
+        let mut builder = ObjectBuilder::new(obj, &translation.module, &*self.isa);
+        if self.linkopts.force_jump_veneers {
+            builder.text.force_veneers();
+        }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
         let compiled_trampolines = translation
@@ -249,6 +254,11 @@ impl wasmtime_environ::Compiler for Compiler {
             addrs.push(range.clone(), &func.address_map.instructions);
             traps.push(range.clone(), &func.traps);
             func_starts.push(range.start);
+            if self.linkopts.padding_between_functions > 0 {
+                builder
+                    .text
+                    .append(false, &vec![0; self.linkopts.padding_between_functions], 1);
+            }
         }
 
         // Build trampolines for every signature that can be used by this module.
@@ -260,7 +270,6 @@ impl wasmtime_environ::Compiler for Compiler {
         {
             trampolines.push(builder.trampoline(*i, &func));
         }
-        builder.align_text_to(CODE_SECTION_ALIGNMENT);
 
         if emit_dwarf && funcs.len() > 0 {
             let ofs = VMOffsets::new(
@@ -292,7 +301,7 @@ impl wasmtime_environ::Compiler for Compiler {
             builder.dwarf_sections(&dwarf_sections)?;
         }
 
-        builder.finish(&*self.isa)?;
+        builder.finish()?;
         addrs.append_to(obj);
         traps.append_to(obj);
 
@@ -318,10 +327,10 @@ impl wasmtime_environ::Compiler for Compiler {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
         let module = Module::new();
-        let mut builder = ObjectBuilder::new(obj, &module);
+        let mut builder = ObjectBuilder::new(obj, &module, &*self.isa);
         let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
         let b = builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
-        builder.finish(&*self.isa)?;
+        builder.finish()?;
         Ok((a, b))
     }
 
@@ -617,9 +626,6 @@ fn collect_address_maps(
 
 /// Implementation of a relocation sink that just saves all the information for later
 struct RelocSink {
-    /// Current function index.
-    func_index: FuncIndex,
-
     /// Relocations recorded for the function.
     func_relocs: Vec<Relocation>,
 }
@@ -662,7 +668,7 @@ impl binemit::RelocSink for RelocSink {
     fn reloc_jt(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, jt: ir::JumpTable) {
         self.func_relocs.push(Relocation {
             reloc,
-            reloc_target: RelocationTarget::JumpTable(self.func_index, jt),
+            reloc_target: RelocationTarget::JumpTable(jt),
             offset,
             addend: 0,
         });
@@ -671,9 +677,8 @@ impl binemit::RelocSink for RelocSink {
 
 impl RelocSink {
     /// Return a new `RelocSink` instance.
-    fn new(func_index: FuncIndex) -> Self {
+    fn new() -> Self {
         Self {
-            func_index,
             func_relocs: Vec::new(),
         }
     }

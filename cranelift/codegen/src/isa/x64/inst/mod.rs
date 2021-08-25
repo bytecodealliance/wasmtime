@@ -1,6 +1,6 @@
 //! This module defines x86_64-specific machine instruction types.
 
-use crate::binemit::{CodeOffset, StackMap};
+use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
 use crate::ir::{types, ExternalName, Opcode, SourceLoc, TrapCode, Type, ValueLabel};
 use crate::isa::unwind::UnwindInst;
 use crate::isa::x64::abi::X64ABIMachineSpec;
@@ -3003,6 +3003,13 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::JmpRel32 | LabelUse::PCRel32 => {
                 panic!("Veneer not supported for JumpRel32 label-use.");
             }
+        }
+    }
+
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self> {
+        match (reloc, addend) {
+            (Reloc::X86CallPCRel4, -4) => Some(LabelUse::JmpRel32),
+            _ => None,
         }
     }
 }
