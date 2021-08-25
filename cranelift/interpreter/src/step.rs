@@ -496,10 +496,22 @@ where
             binary(Value::div, inc, two)?
         }
         Opcode::Iadd => binary(Value::add, arg(0)?, arg(1)?)?,
-        Opcode::UaddSat => unimplemented!("UaddSat"),
+        Opcode::UaddSat => assign(binary_arith(
+            arg(0)?,
+            arg(1)?,
+            ctrl_ty,
+            Value::add_sat,
+            true,
+        )?),
         Opcode::SaddSat => unimplemented!("SaddSat"),
         Opcode::Isub => binary(Value::sub, arg(0)?, arg(1)?)?,
-        Opcode::UsubSat => unimplemented!("UsubSat"),
+        Opcode::UsubSat => assign(binary_arith(
+            arg(0)?,
+            arg(1)?,
+            ctrl_ty,
+            Value::sub_sat,
+            true,
+        )?),
         Opcode::SsubSat => unimplemented!("SsubSat"),
         Opcode::Ineg => binary(Value::sub, Value::int(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Iabs => unimplemented!("Iabs"),
@@ -661,7 +673,11 @@ where
         Opcode::Swizzle => unimplemented!("Swizzle"),
         Opcode::Splat => unimplemented!("Splat"),
         Opcode::Insertlane => unimplemented!("Insertlane"),
-        Opcode::Extractlane => unimplemented!("Extractlane"),
+        Opcode::Extractlane => {
+            let value =
+                extractlanes(&arg(0)?, ctrl_ty.lane_type())?[Value::into_int(imm())? as usize];
+            assign(Value::int(value, ctrl_ty.lane_type())?)
+        }
         Opcode::VhighBits => unimplemented!("VhighBits"),
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
@@ -868,4 +884,81 @@ where
             Value::uno(left, right)? || Value::gt(left, right)? || Value::eq(left, right)?
         }
     })
+}
+
+type SimdVec = SmallVec<[i128; 4]>;
+
+/// Converts a SIMD vector value into a Rust vector of i128 for processing.
+fn extractlanes<V>(x: &V, lane_type: types::Type) -> ValueResult<SimdVec>
+where
+    V: Value,
+{
+    let iterations = match lane_type {
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 => 4,
+        types::I64 => 8,
+        _ => unimplemented!("Only 128-bit vectors are currently supported."),
+    };
+
+    let x = x.into_array()?;
+    let mut lanes = SimdVec::new();
+    for (i, _) in x.iter().enumerate() {
+        let mut lane: i128 = 0;
+        if i % iterations != 0 {
+            continue;
+        }
+        for j in 0..iterations {
+            lane += (x[i + j] as i128) << (8 * j);
+        }
+        lanes.push(lane);
+    }
+    return Ok(lanes);
+}
+
+/// Convert a Rust array of i128s back into a `Value::vector`.
+fn vectorizelanes<V>(x: &[i128], vector_type: types::Type) -> ValueResult<V>
+where
+    V: Value,
+{
+    let iterations = match vector_type.lane_type() {
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 => 4,
+        types::I64 => 8,
+        _ => unimplemented!("Only 128-bit vectors are currently supported."),
+    };
+    let mut result: [u8; 16] = [0; 16];
+    for (i, val) in x.iter().enumerate() {
+        let val = *val;
+        for j in 0..iterations {
+            result[(i * iterations) + j] = (val >> (8 * j)) as u8;
+        }
+    }
+    Value::vector(result, vector_type)
+}
+
+/// Performs the supplied binary arithmetic `op` on two SIMD vectors.
+fn binary_arith<V, F>(x: V, y: V, vector_type: types::Type, op: F, unsigned: bool) -> ValueResult<V>
+where
+    V: Value,
+    F: Fn(V, V) -> ValueResult<V>,
+{
+    let arg0 = extractlanes(&x, vector_type.lane_type())?;
+    let arg1 = extractlanes(&y, vector_type.lane_type())?;
+    let mut result = Vec::new();
+    for (lhs, rhs) in arg0.into_iter().zip(arg1) {
+        // The initial Value::int needs to be on a separate line so the
+        // compiler can determine concrete types.
+        let mut lhs: V = Value::int(lhs, vector_type.lane_type())?;
+        let mut rhs: V = Value::int(rhs, vector_type.lane_type())?;
+        if unsigned {
+            lhs = lhs.convert(ValueConversionKind::ToUnsigned)?;
+            rhs = rhs.convert(ValueConversionKind::ToUnsigned)?;
+        }
+        let sum = op(lhs, rhs)?;
+        let sum = sum.into_int()?;
+        result.push(sum);
+    }
+    vectorizelanes(&result, vector_type)
 }

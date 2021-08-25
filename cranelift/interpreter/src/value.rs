@@ -22,6 +22,7 @@ pub trait Value: Clone + From<DataValue> {
     fn bool(b: bool, ty: Type) -> ValueResult<Self>;
     fn into_bool(self) -> ValueResult<bool>;
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self>;
+    fn into_array(&self) -> ValueResult<[u8; 16]>;
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self>;
     fn concat(self, other: Self) -> ValueResult<Self>;
 
@@ -46,6 +47,10 @@ pub trait Value: Clone + From<DataValue> {
     fn mul(self, other: Self) -> ValueResult<Self>;
     fn div(self, other: Self) -> ValueResult<Self>;
     fn rem(self, other: Self) -> ValueResult<Self>;
+
+    // Saturating arithmetic.
+    fn add_sat(self, other: Self) -> ValueResult<Self>;
+    fn sub_sat(self, other: Self) -> ValueResult<Self>;
 
     // Bitwise.
     fn shl(self, other: Self) -> ValueResult<Self>;
@@ -80,6 +85,7 @@ pub enum ValueTypeClass {
     Integer,
     Boolean,
     Float,
+    Vector,
 }
 
 impl Display for ValueTypeClass {
@@ -88,6 +94,7 @@ impl Display for ValueTypeClass {
             ValueTypeClass::Integer => write!(f, "integer"),
             ValueTypeClass::Boolean => write!(f, "boolean"),
             ValueTypeClass::Float => write!(f, "float"),
+            ValueTypeClass::Vector => write!(f, "vector"),
         }
     }
 }
@@ -225,8 +232,16 @@ impl Value for DataValue {
         }
     }
 
-    fn vector(_v: [u8; 16], _ty: Type) -> ValueResult<Self> {
-        unimplemented!()
+    fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self> {
+        assert!(ty.is_vector() && ty.bytes() == 16);
+        Ok(DataValue::V128(v))
+    }
+
+    fn into_array(&self) -> ValueResult<[u8; 16]> {
+        match *self {
+            DataValue::V128(v) => Ok(v),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Vector, self.ty())),
+        }
     }
 
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self> {
@@ -378,6 +393,14 @@ impl Value for DataValue {
         }
 
         binary_match!(%(&self, &other); [I8, I16, I32, I64])
+    }
+
+    fn add_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_add(self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn sub_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_sub(self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn shl(self, other: Self) -> ValueResult<Self> {
