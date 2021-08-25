@@ -459,3 +459,55 @@ fn instantiation_limit() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn preserve_data_segments() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        module_limits: ModuleLimits {
+            memory_pages: 1,
+            table_elements: 10,
+            ..Default::default()
+        },
+        instance_limits: InstanceLimits { count: 2 },
+    });
+    let engine = Engine::new(&config)?;
+    let m = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "mem") 1 1)
+                (data (i32.const 0) "foo"))
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    let i = Instance::new(&mut store, &m, &[])?;
+
+    // Drop the module. This should *not* drop the actual data referenced by the
+    // module, especially when uffd is enabled. If uffd is enabled we'll lazily
+    // fault in the memory of the module, which means it better still be alive
+    // after we drop this.
+    drop(m);
+
+    // Spray some stuff on the heap. If wasm data lived on the heap this should
+    // paper over things and help us catch use-after-free here if it would
+    // otherwise happen.
+    let mut strings = Vec::new();
+    for _ in 0..1000 {
+        let mut string = String::new();
+        for _ in 0..1000 {
+            string.push('g');
+        }
+        strings.push(string);
+    }
+    drop(strings);
+
+    let mem = i.get_memory(&mut store, "mem").unwrap();
+
+    // This will segfault with uffd enabled, and then the uffd will lazily
+    // initialize the memory. Hopefully it's still `foo`!
+    assert!(mem.data(&store).starts_with(b"foo"));
+
+    Ok(())
+}

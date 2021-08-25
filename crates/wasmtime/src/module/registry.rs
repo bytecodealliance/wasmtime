@@ -27,7 +27,10 @@ fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u
 ///
 /// The `BTreeMap` is used to quickly locate a module based on a program counter value.
 #[derive(Default)]
-pub struct ModuleRegistry(BTreeMap<usize, Arc<RegisteredModule>>);
+pub struct ModuleRegistry {
+    modules_with_code: BTreeMap<usize, Arc<RegisteredModule>>,
+    modules_without_code: Vec<Arc<CompiledModule>>,
+}
 
 impl ModuleRegistry {
     /// Fetches information about a registered module given a program counter value.
@@ -37,7 +40,7 @@ impl ModuleRegistry {
     }
 
     fn module(&self, pc: usize) -> Option<&Arc<RegisteredModule>> {
-        let (end, info) = self.0.range(pc..).next()?;
+        let (end, info) = self.modules_with_code.range(pc..).next()?;
         if pc < info.start || *end < pc {
             return None;
         }
@@ -50,32 +53,40 @@ impl ModuleRegistry {
         let compiled_module = module.compiled_module();
         let (start, end) = compiled_module.code().range();
 
-        // Ignore modules with no code or finished functions
-        if start == end || compiled_module.finished_functions().is_empty() {
+        // If there's not actually any functions in this module then we may
+        // still need to preserve it for its data segments. Instances of this
+        // module will hold a pointer to the data stored in the module itself,
+        // and for schemes like uffd this performs lazy initialization which
+        // could use the module in the future. For that reason we continue to
+        // register empty modules and retain them.
+        if compiled_module.finished_functions().is_empty() {
+            self.modules_without_code.push(compiled_module.clone());
             return;
         }
 
         // The module code range is exclusive for end, so make it inclusive as it
         // may be a valid PC value
+        assert!(start < end);
         let end = end - 1;
 
         // Ensure the module isn't already present in the registry
-        // This is expected when a module is instantiated multiple times in the same store
-        if let Some(m) = self.0.get(&end) {
+        // This is expected when a module is instantiated multiple times in the
+        // same store
+        if let Some(m) = self.modules_with_code.get(&end) {
             assert_eq!(m.start, start);
             return;
         }
 
         // Assert that this module's code doesn't collide with any other registered modules
-        if let Some((_, prev)) = self.0.range(end..).next() {
+        if let Some((_, prev)) = self.modules_with_code.range(end..).next() {
             assert!(prev.start > end);
         }
 
-        if let Some((prev_end, _)) = self.0.range(..=start).next_back() {
+        if let Some((prev_end, _)) = self.modules_with_code.range(..=start).next_back() {
             assert!(*prev_end < start);
         }
 
-        let prev = self.0.insert(
+        let prev = self.modules_with_code.insert(
             end,
             Arc::new(RegisteredModule {
                 start,
@@ -98,7 +109,7 @@ impl ModuleRegistry {
 impl Drop for ModuleRegistry {
     fn drop(&mut self) {
         let mut info = GLOBAL_MODULES.write().unwrap();
-        for end in self.0.keys() {
+        for end in self.modules_with_code.keys() {
             info.unregister(*end);
         }
     }
