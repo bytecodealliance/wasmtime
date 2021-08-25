@@ -462,10 +462,7 @@ where
         Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
         Opcode::IaddCout => {
             let sum = Value::add(arg(0)?, arg(1)?)?;
-            let mut carry = false;
-            if Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)? {
-                carry = true;
-            }
+            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
             assign_multiple(&[sum, Value::bool(carry, types::B1)?])
         }
         Opcode::IaddIfcout => unimplemented!("IaddIfcout"),
