@@ -6,6 +6,8 @@ use crate::{
     StackMap, Tunables, TypeTables, WasmError, WasmFuncType,
 };
 use anyhow::Result;
+use object::write::Object;
+use object::{Architecture, BinaryFormat};
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::borrow::Cow;
@@ -184,21 +186,70 @@ pub trait Compiler: Send + Sync {
         types: &TypeTables,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
-    /// Collects the results of compilation and emits an in-memory ELF object
-    /// which is the serialized representation of all compiler artifacts.
+    /// Collects the results of compilation into an in-memory object.
     ///
-    /// Note that ELF is used regardless of the target architecture.
+    /// This function will receive the same `Box<dyn Ayn>` produced as part of
+    /// `compile_function`, as well as the general compilation environment with
+    /// the translation/types. This method is expected to populate information
+    /// in the object file such as:
+    ///
+    /// * Compiled code in a `.text` section
+    /// * Unwind information in Wasmtime-specific sections
+    /// * DWARF debugging information for the host, if `emit_dwarf` is `true`
+    ///   and the compiler supports it.
+    /// * Relocations, if necessary, for the text section
+    ///
+    /// The final result of compilation will contain more sections inserted by
+    /// the compiler-agnostic runtime.
     fn emit_obj(
         &self,
         module: &ModuleTranslation,
         types: &TypeTables,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
-    ) -> Result<(Vec<u8>, PrimaryMap<DefinedFuncIndex, FunctionInfo>)>;
+        obj: &mut Object,
+    ) -> Result<PrimaryMap<DefinedFuncIndex, FunctionInfo>>;
 
-    /// Emits a small ELF object file in-memory which has two functions for the
-    /// host-to-wasm and wasm-to-host trampolines for the wasm type given.
-    fn emit_trampoline_obj(&self, ty: &WasmFuncType, host_fn: usize) -> Result<Vec<u8>>;
+    /// Inserts two functions for host-to-wasm and wasm-to-host trampolines into
+    /// the `obj` provided.
+    ///
+    /// This will configure the same sections as `emit_obj`, but will likely be
+    /// much smaller.
+    fn emit_trampoline_obj(
+        &self,
+        ty: &WasmFuncType,
+        host_fn: usize,
+        obj: &mut Object,
+    ) -> Result<()>;
+
+    /// Creates a new `Object` file which is used to build the results of a
+    /// compilation into.
+    ///
+    /// The returned object file will have an appropriate
+    /// architecture/endianness for `self.triple()`, but at this time it is
+    /// always an ELF file, regardless of target platform.
+    fn object(&self) -> Result<Object> {
+        use target_lexicon::Architecture::*;
+
+        let triple = self.triple();
+        Ok(Object::new(
+            BinaryFormat::Elf,
+            match triple.architecture {
+                X86_32(_) => Architecture::I386,
+                X86_64 => Architecture::X86_64,
+                Arm(_) => Architecture::Arm,
+                Aarch64(_) => Architecture::Aarch64,
+                S390x => Architecture::S390x,
+                architecture => {
+                    anyhow::bail!("target architecture {:?} is unsupported", architecture,);
+                }
+            },
+            match triple.endianness().unwrap() {
+                target_lexicon::Endianness::Little => object::Endianness::Little,
+                target_lexicon::Endianness::Big => object::Endianness::Big,
+            },
+        ))
+    }
 
     /// Returns the target triple that this compiler is compiling for.
     fn triple(&self) -> &target_lexicon::Triple;

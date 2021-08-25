@@ -76,12 +76,14 @@ pub fn create_function(
     func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
     engine: &Engine,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
-    let obj = engine
+    let mut obj = engine.compiler().object()?;
+    engine
         .compiler()
-        .emit_trampoline_obj(ft.as_wasm_func_type(), stub_fn as usize)?;
+        .emit_trampoline_obj(ft.as_wasm_func_type(), stub_fn as usize, &mut obj)?;
+    let obj = obj.write()?;
 
     let mut code_memory = CodeMemory::new();
-    let alloc = code_memory.allocate_for_object(&obj)?;
+    let alloc = code_memory.allocate_for_object_unparsed(&obj)?;
     let mut trampolines = alloc.trampolines();
     let (host_i, host_trampoline) = trampolines.next().unwrap();
     assert_eq!(host_i.as_u32(), 0);

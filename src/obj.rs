@@ -55,11 +55,13 @@ pub fn compile_to_obj(
     for (index, func) in mem::take(&mut translation[0].function_body_inputs) {
         funcs.push(compiler.compile_function(&translation[0], index, func, &tunables, &types)?);
     }
-    let (obj, _) = compiler.emit_obj(
+    let mut obj = compiler.object()?;
+    compiler.emit_obj(
         &translation[0],
         &types,
         funcs,
         tunables.generate_native_debuginfo,
+        &mut obj,
     )?;
-    Ok(obj)
+    Ok(obj.write()?)
 }

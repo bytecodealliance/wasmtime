@@ -8,6 +8,7 @@
 use anyhow::Result;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir::{self, ExternalName};
+use object::write::Object;
 use std::any::Any;
 use std::collections::BTreeMap;
 use wasmtime_environ::{
@@ -84,11 +85,17 @@ impl Compiler for Lightbeam {
         _types: &TypeTables,
         _funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         _emit_dwarf: bool,
-    ) -> Result<(Vec<u8>, PrimaryMap<DefinedFuncIndex, FunctionInfo>)> {
+        _obj: &mut Object,
+    ) -> Result<PrimaryMap<DefinedFuncIndex, FunctionInfo>> {
         unimplemented!()
     }
 
-    fn emit_trampoline_obj(&self, _ty: &WasmFuncType, _host_fn: usize) -> Result<Vec<u8>> {
+    fn emit_trampoline_obj(
+        &self,
+        _ty: &WasmFuncType,
+        _host_fn: usize,
+        _obj: &mut Object,
+    ) -> Result<()> {
         unimplemented!()
     }
 
