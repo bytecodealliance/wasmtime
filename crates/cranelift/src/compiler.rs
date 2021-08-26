@@ -1,3 +1,4 @@
+use crate::builder::LinkOptions;
 use crate::debug::ModuleMemoryOffset;
 use crate::func_environ::{get_func_name, FuncEnvironment};
 use crate::obj::ObjectBuilder;
@@ -36,15 +37,15 @@ use wasmtime_environ::{
 pub(crate) struct Compiler {
     translators: Mutex<Vec<FuncTranslator>>,
     isa: Box<dyn TargetIsa>,
-    padding_between_functions: usize,
+    linkopts: LinkOptions,
 }
 
 impl Compiler {
-    pub(crate) fn new(isa: Box<dyn TargetIsa>, padding_between_functions: usize) -> Compiler {
+    pub(crate) fn new(isa: Box<dyn TargetIsa>, linkopts: LinkOptions) -> Compiler {
         Compiler {
             translators: Default::default(),
             isa,
-            padding_between_functions,
+            linkopts,
         }
     }
 
@@ -256,6 +257,7 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         let mut builder = ObjectBuilder::new(obj, &translation.module);
+        builder.force_jump_veneers = self.linkopts.force_jump_veneers;
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
 
@@ -263,8 +265,8 @@ impl wasmtime_environ::Compiler for Compiler {
             let range = builder.func(i, func);
             addrs.push(range.clone(), &func.address_map.instructions);
             traps.push(range, &func.traps);
-            if self.padding_between_functions > 0 {
-                builder.append_synthetic_padding(self.padding_between_functions);
+            if self.linkopts.padding_between_functions > 0 {
+                builder.append_synthetic_padding(self.linkopts.padding_between_functions);
             }
         }
         for (i, (body, func)) in trampolines.iter_mut() {

@@ -25,10 +25,12 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 ///
 /// This generates:
 ///
-///     ldr  x16, 16
-///     adr  x17, 12
-///     add  x16, x16, x17
-///     br   x16
+/// ```ignore
+/// ldr  x16, 16
+/// adr  x17, 12
+/// add  x16, x16, x17
+/// br   x16
+/// ```
 ///
 /// and the expectation is that the 8-byte immediate address to jump to is
 /// located after these instructions are encoded.

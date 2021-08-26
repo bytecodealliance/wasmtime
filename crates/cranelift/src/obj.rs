@@ -163,6 +163,10 @@ pub struct ObjectBuilder<'a> {
     /// call instruction. These relocations will get filled in at the end
     /// with relative offsets to their target.
     relative_relocs: Vec<RelativeReloc>,
+
+    /// A debug-only option to indicate that all inter-function calls should go
+    /// through veneers, ideally testing the veneer emission code.
+    pub force_jump_veneers: bool,
 }
 
 /// A pending relocation against a wasm-defined function that needs to be
@@ -256,6 +260,7 @@ impl<'a> ObjectBuilder<'a> {
             current_text_off: 0,
             text_locations: HashMap::new(),
             relative_relocs: Vec::new(),
+            force_jump_veneers: false,
         }
     }
 
@@ -480,7 +485,7 @@ impl<'a> ObjectBuilder<'a> {
                     // added for a symbol but the symbol was defined very long
                     // ago. The only way to reach the symbol at this point
                     // is via a veneer.
-                    if distance < min_neg {
+                    if distance < min_neg || self.force_jump_veneers {
                         self.emit_jump_veneer(r);
 
                     // This case, if hit, represents a programming error. If

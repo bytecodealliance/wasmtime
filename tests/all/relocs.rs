@@ -14,7 +14,7 @@ fn store_with_padding(padding: usize) -> Result<Store<()>> {
     // This is an internal debug-only setting specifically recognized for
     // basically just this set of tests.
     unsafe {
-        config.cranelift_flag_set("padding_between_functions", &padding.to_string())?;
+        config.cranelift_flag_set("linkopt_padding_between_functions", &padding.to_string())?;
     }
     let engine = Engine::new(&config)?;
     Ok(Store::new(&engine, ()))
@@ -64,8 +64,20 @@ fn backwards_call_works() -> Result<()> {
 
 #[test]
 fn mixed() -> Result<()> {
-    let mut store = store_with_padding(MB)?;
+    test_many_call_module(store_with_padding(MB)?)
+}
 
+#[test]
+fn mixed_forced() -> Result<()> {
+    let mut config = Config::new();
+    unsafe {
+        config.cranelift_flag_set("linkopt_force_jump_veneer", &padding.to_string())?;
+    }
+    let engine = Engine::new(&config)?;
+    test_many_call_module(Store::new(&engine, ()))
+}
+
+fn test_many_call_module(store: Store<()>) -> Result<()> {
     const N: i32 = 200;
 
     let mut wat = String::new();
@@ -94,26 +106,5 @@ fn mixed() -> Result<()> {
         assert_eq!(a, i + 1);
         assert_eq!(b, i + 2);
     }
-    Ok(())
-}
-
-#[test]
-fn forward_huge() -> Result<()> {
-    let mut store = store_with_padding(2 * GB)?;
-    let module = Module::new(
-        store.engine(),
-        r#"
-            (module
-                (func (export "foo") (result i32)
-                    call 1)
-                (func (result i32)
-                    i32.const 4)
-            )
-        "#,
-    )?;
-
-    let i = Instance::new(&mut store, &module, &[])?;
-    let foo = i.get_typed_func::<(), i32, _>(&mut store, "foo")?;
-    assert_eq!(foo.call(&mut store, ())?, 4);
     Ok(())
 }
