@@ -241,7 +241,10 @@ impl CompiledModule {
         let dbg_jit_registration = if self.artifacts.native_debug_info_present {
             let bytes = create_gdbjit_image(
                 self.artifacts.obj.to_vec(),
-                (self.code.range.0 as *const u8, self.code.range.1),
+                (
+                    self.code.range.0 as *const u8,
+                    self.code.range.1 - self.code.range.0,
+                ),
             )
             .map_err(SetupError::DebugInfo)?;
             profiler.module_load(self, Some(&bytes));
