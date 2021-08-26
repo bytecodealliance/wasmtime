@@ -16,10 +16,14 @@ fn instantiate(linker: &Linker<WasiCtx>, module: &Module) -> Result<()> {
 fn benchmark_name<'a>(strategy: &InstanceAllocationStrategy) -> &'static str {
     match strategy {
         InstanceAllocationStrategy::OnDemand => "default",
-        #[cfg(any(not(feature = "uffd"), not(target_os = "linux")))]
-        InstanceAllocationStrategy::Pooling { .. } => "pooling",
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        InstanceAllocationStrategy::Pooling { .. } => "uffd",
+        InstanceAllocationStrategy::Pooling {
+            page_fault_strategy,
+            ..
+        } => match page_fault_strategy {
+            PoolingPageFaultStrategy::OperatingSystem => "pooling",
+            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            PoolingPageFaultStrategy::Wasmtime => "uffd",
+        },
     }
 }
 

@@ -13,6 +13,7 @@ fn successful_instantiation() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 1 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -39,6 +40,7 @@ fn memory_limit() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 1 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(65536);
@@ -110,6 +112,7 @@ fn memory_init() -> Result<()> {
             count: 1,
             ..Default::default()
         },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
 
     let engine = Engine::new(&config)?;
@@ -146,6 +149,7 @@ fn memory_guard_page_trap() -> Result<()> {
             count: 1,
             ..Default::default()
         },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
 
     let engine = Engine::new(&config)?;
@@ -202,6 +206,7 @@ fn memory_zeroed() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 1 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -245,6 +250,7 @@ fn table_limit() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 1 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -325,6 +331,7 @@ fn table_init() -> Result<()> {
             count: 1,
             ..Default::default()
         },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
 
     let engine = Engine::new(&config)?;
@@ -375,6 +382,7 @@ fn table_zeroed() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 1 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -421,6 +429,7 @@ fn instantiation_limit() -> Result<()> {
         instance_limits: InstanceLimits {
             count: INSTANCE_LIMIT,
         },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -471,6 +480,7 @@ fn preserve_data_segments() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 2 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     let engine = Engine::new(&config)?;
     let m = Module::new(

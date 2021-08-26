@@ -429,6 +429,7 @@ fn async_with_pooling_stacks() {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 1 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);
@@ -458,6 +459,7 @@ fn async_host_func_with_pooling_stacks() -> Result<()> {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: 1 },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     config.dynamic_memory_guard_size(0);
     config.static_memory_guard_size(0);

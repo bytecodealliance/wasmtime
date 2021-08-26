@@ -27,24 +27,17 @@ use wasmtime_environ::{
 cfg_if::cfg_if! {
     if #[cfg(windows)] {
         mod windows;
-        use windows as imp;
-    } else if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-        mod uffd;
-        use uffd as imp;
-        use imp::initialize_memory_pool;
+        use windows as os;
     } else if #[cfg(target_os = "linux")] {
+        #[cfg(feature = "uffd")]
+        mod uffd;
         mod linux;
-        use linux as imp;
+        use linux as os;
     } else {
         mod unix;
-        use unix as imp;
+        use unix as os;
     }
 }
-
-use imp::{commit_memory_pages, commit_table_pages, decommit_memory_pages, decommit_table_pages};
-
-#[cfg(all(feature = "async", unix))]
-use imp::{commit_stack_pages, decommit_stack_pages};
 
 #[cfg(feature = "async")]
 use super::FiberStackError;
@@ -268,6 +261,35 @@ impl Default for PoolingAllocationStrategy {
     }
 }
 
+/// The page fault strategy to use for linear memories.
+#[derive(Debug, Clone, Copy)]
+pub enum PoolingPageFaultStrategy {
+    /// The operating system should handle page faults that occur in linear memories.
+    ///
+    /// This is the default strategy on non-Linux platforms or on Linux without
+    /// the `uffd` feature enabled.
+    OperatingSystem,
+    /// Wasmtime should handle page faults that occur in linear memories.
+    ///
+    /// This strategy requires the `uffd` feature on Linux.
+    ///
+    /// This is the default strategy on Linux with the `uffd` feature enabled.
+    #[cfg(all(feature = "uffd", target_is = "linux"))]
+    Wasmtime,
+}
+
+impl Default for PoolingPageFaultStrategy {
+    fn default() -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(all(feature = "uffd", target_is = "linux"))] {
+                Self::Wasmtime
+            } else {
+                Self::OperatingSystem
+            }
+        }
+    }
+}
+
 /// Represents a pool of maximal `Instance` structures.
 ///
 /// Each index in the pool provides enough space for a maximal `Instance`
@@ -286,6 +308,7 @@ struct InstancePool {
     memories: MemoryPool,
     tables: TablePool,
     empty_module: Arc<Module>,
+    page_fault_strategy: PoolingPageFaultStrategy,
 }
 
 impl InstancePool {
@@ -293,6 +316,7 @@ impl InstancePool {
         module_limits: &ModuleLimits,
         instance_limits: &InstanceLimits,
         tunables: &Tunables,
+        page_fault_strategy: PoolingPageFaultStrategy,
     ) -> Result<Self> {
         let page_size = region::page::size();
 
@@ -334,6 +358,7 @@ impl InstancePool {
             memories: MemoryPool::new(module_limits, instance_limits, tunables)?,
             tables: TablePool::new(module_limits, instance_limits)?,
             empty_module: Arc::new(Module::default()),
+            page_fault_strategy,
         };
 
         // Use a default module to initialize the instances to start
@@ -386,7 +411,7 @@ impl InstancePool {
         instance.wasm_data = &*req.wasm_data;
 
         let mut limiter = req.store.and_then(|s| (*s).limiter());
-        Self::set_instance_memories(
+        self.set_instance_memories(
             instance,
             self.memories.get(index),
             self.memories.max_wasm_pages,
@@ -459,7 +484,13 @@ impl InstancePool {
 
             let size = memory.byte_size();
             drop(memory);
-            decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
+
+            match self.page_fault_strategy {
+                PoolingPageFaultStrategy::OperatingSystem => os::decommit_memory_pages(base, size),
+                #[cfg(all(feature = "uffd", target_is = "linux"))]
+                PoolingPageFaultStrategy::Wasmtime => uffd::decommit_memory_pages(base, size),
+            }
+            .expect("failed to decommit linear memory pages");
         }
 
         instance.memories.clear();
@@ -476,7 +507,7 @@ impl InstancePool {
             );
 
             drop(table);
-            decommit_table_pages(base, size).expect("failed to decommit table pages");
+            os::decommit_table_pages(base, size).expect("failed to decommit table pages");
         }
 
         instance.tables.clear();
@@ -500,6 +531,7 @@ impl InstancePool {
     }
 
     fn set_instance_memories(
+        &self,
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
         max_pages: u64,
@@ -518,6 +550,13 @@ impl InstancePool {
                     (max_pages as usize) * (WASM_PAGE_SIZE as usize),
                 )
             };
+
+            let commit_memory_pages = match self.page_fault_strategy {
+                PoolingPageFaultStrategy::OperatingSystem => os::commit_memory_pages,
+                #[cfg(all(feature = "uffd", target_is = "linux"))]
+                PoolingPageFaultStrategy::Wasmtime => uffd::commit_memory_pages,
+            };
+
             instance.memories.push(
                 Memory::new_static(
                     plan,
@@ -547,7 +586,7 @@ impl InstancePool {
         for plan in (&module.table_plans.values().as_slice()[module.num_imported_tables..]).iter() {
             let base = tables.next().unwrap();
 
-            commit_table_pages(
+            os::commit_table_pages(
                 base as *mut u8,
                 max_elements as usize * mem::size_of::<*mut u8>(),
             )
@@ -687,7 +726,7 @@ impl MemoryPool {
 
         // uffd support requires some special setup for the memory pool
         #[cfg(all(feature = "uffd", target_os = "linux"))]
-        initialize_memory_pool(&pool)?;
+        uffd::initialize_memory_pool(&pool)?;
 
         Ok(pool)
     }
@@ -862,7 +901,7 @@ impl StackPool {
                 .as_mut_ptr()
                 .add((index * self.stack_size) + self.page_size);
 
-            commit_stack_pages(bottom_of_stack, size_without_guard)
+            os::commit_stack_pages(bottom_of_stack, size_without_guard)
                 .map_err(FiberStackError::Resource)?;
 
             wasmtime_fiber::FiberStack::from_top_ptr(bottom_of_stack.add(size_without_guard))
@@ -892,7 +931,7 @@ impl StackPool {
         let index = (start_of_stack - base) / self.stack_size;
         debug_assert!(index < self.max_instances);
 
-        decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
+        os::decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
 
         self.free_list.lock().unwrap().push(index);
     }
@@ -914,7 +953,7 @@ pub struct PoolingInstanceAllocator {
     stacks: StackPool,
     stack_size: usize,
     #[cfg(all(feature = "uffd", target_os = "linux"))]
-    _fault_handler: imp::PageFaultHandler,
+    _fault_handler: uffd::PageFaultHandler,
 }
 
 impl PoolingInstanceAllocator {
@@ -925,15 +964,21 @@ impl PoolingInstanceAllocator {
         instance_limits: InstanceLimits,
         stack_size: usize,
         tunables: &Tunables,
+        page_fault_strategy: PoolingPageFaultStrategy,
     ) -> Result<Self> {
         if instance_limits.count == 0 {
             bail!("the instance count limit cannot be zero");
         }
 
-        let instances = InstancePool::new(&module_limits, &instance_limits, tunables)?;
+        let instances = InstancePool::new(
+            &module_limits,
+            &instance_limits,
+            tunables,
+            page_fault_strategy,
+        )?;
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
-        let _fault_handler = imp::PageFaultHandler::new(&instances)?;
+        let _fault_handler = uffd::PageFaultHandler::new(&instances)?;
 
         Ok(Self {
             strategy,
@@ -1382,6 +1427,7 @@ mod test {
                 static_memory_bound: 1,
                 ..Tunables::default()
             },
+            PoolingPageFaultStrategy::default(),
         )?;
 
         // As of April 2021, the instance struct's size is largely below the size of a single page,
@@ -1608,6 +1654,7 @@ mod test {
                 },
                 4096,
                 &Tunables::default(),
+                PoolingPageFaultStrategy::default(),
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1630,6 +1677,7 @@ mod test {
                     static_memory_bound: 1,
                     ..Tunables::default()
                 },
+                PoolingPageFaultStrategy::default(),
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1653,6 +1701,7 @@ mod test {
                     static_memory_offset_guard_size: 0,
                     ..Tunables::default()
                 },
+                PoolingPageFaultStrategy::default(),
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
@@ -1684,6 +1733,7 @@ mod test {
             InstanceLimits { count: 1 },
             4096,
             &Tunables::default(),
+            PoolingPageFaultStrategy::default(),
         )?;
 
         unsafe {

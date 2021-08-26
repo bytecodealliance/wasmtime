@@ -48,6 +48,7 @@ fn linear_memory_limits() -> Result<()> {
                 ..ModuleLimits::default()
             },
             instance_limits: InstanceLimits::default(),
+            page_fault_strategy: PoolingPageFaultStrategy::default(),
         },
     ))?)?;
     return Ok(());

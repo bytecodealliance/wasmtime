@@ -99,6 +99,7 @@ fn test_setup() -> (Engine, Module) {
             ..Default::default()
         },
         instance_limits: InstanceLimits { count: pool_count },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
     let engine = Engine::new(&config).unwrap();
 

@@ -288,6 +288,48 @@ impl Into<wasmtime_runtime::PoolingAllocationStrategy> for PoolingAllocationStra
     }
 }
 
+/// The page fault strategy to use for linear memories.
+#[derive(Debug, Clone, Copy)]
+pub enum PoolingPageFaultStrategy {
+    /// The operating system should handle page faults that occur in linear memories.
+    ///
+    /// This is the default strategy on non-Linux platforms or on Linux without
+    /// the `uffd` feature enabled.
+    OperatingSystem,
+    /// Wasmtime should handle page faults that occur in linear memories.
+    ///
+    /// This strategy requires the `uffd` feature on Linux.
+    ///
+    /// This is the default strategy on Linux with the `uffd` feature enabled.
+    #[cfg(all(feature = "uffd", target_is = "linux"))]
+    Wasmtime,
+}
+
+impl Default for PoolingPageFaultStrategy {
+    fn default() -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(all(feature = "uffd", target_is = "linux"))] {
+                Self::Wasmtime
+            } else {
+                Self::OperatingSystem
+            }
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::PoolingPageFaultStrategy> for PoolingPageFaultStrategy {
+    fn into(self) -> wasmtime_runtime::PoolingPageFaultStrategy {
+        match self {
+            Self::OperatingSystem => wasmtime_runtime::PoolingPageFaultStrategy::OperatingSystem,
+            #[cfg(all(feature = "uffd", target_is = "linux"))]
+            Self::Wasmtime => wasmtime_runtime::PoolingPageFaultStrategy::Wasmtime,
+        }
+    }
+}
+
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
 pub enum InstanceAllocationStrategy {
@@ -310,6 +352,8 @@ pub enum InstanceAllocationStrategy {
         module_limits: ModuleLimits,
         /// The instance limits to use.
         instance_limits: InstanceLimits,
+        /// The page fault strategy to use.
+        page_fault_strategy: PoolingPageFaultStrategy,
     },
 }
 
@@ -320,6 +364,7 @@ impl InstanceAllocationStrategy {
             strategy: PoolingAllocationStrategy::default(),
             module_limits: ModuleLimits::default(),
             instance_limits: InstanceLimits::default(),
+            page_fault_strategy: PoolingPageFaultStrategy::default(),
         }
     }
 }
@@ -1272,12 +1317,14 @@ impl Config {
                 strategy,
                 module_limits,
                 instance_limits,
+                page_fault_strategy,
             } => Ok(Box::new(PoolingInstanceAllocator::new(
                 strategy.into(),
                 module_limits.into(),
                 instance_limits.into(),
                 stack_size,
                 &self.tunables,
+                page_fault_strategy.into(),
             )?)),
         }
     }

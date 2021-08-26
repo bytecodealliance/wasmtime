@@ -245,6 +245,7 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
             count: 1,
             ..Default::default()
         },
+        page_fault_strategy: PoolingPageFaultStrategy::default(),
     });
 
     let engine = Engine::new(&config)?;

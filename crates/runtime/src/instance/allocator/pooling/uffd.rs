@@ -39,7 +39,12 @@ use wasmtime_environ::{DefinedMemoryIndex, EntityRef, MemoryInitialization};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
-fn decommit(addr: *mut u8, len: usize) -> Result<()> {
+pub fn commit_memory_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+    // A no-op as memory pages remain READ|WRITE with uffd
+    Ok(())
+}
+
+pub fn decommit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
     if len == 0 {
         return Ok(());
     }
@@ -61,35 +66,6 @@ fn decommit(addr: *mut u8, len: usize) -> Result<()> {
     Ok(())
 }
 
-pub fn commit_memory_pages(_addr: *mut u8, _len: usize) -> Result<()> {
-    // A no-op as memory pages remain READ|WRITE with uffd
-    Ok(())
-}
-
-pub fn decommit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
-    decommit(addr, len)
-}
-
-pub fn commit_table_pages(_addr: *mut u8, _len: usize) -> Result<()> {
-    // A no-op as table pages remain READ|WRITE
-    Ok(())
-}
-
-pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
-    decommit(addr, len)
-}
-
-#[cfg(feature = "async")]
-pub fn commit_stack_pages(_addr: *mut u8, _len: usize) -> Result<()> {
-    // A no-op as stack pages remain READ|WRITE
-    Ok(())
-}
-
-#[cfg(feature = "async")]
-pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
-    decommit(addr, len)
-}
-
 /// This is used to initialize the memory pool when uffd is enabled.
 ///
 /// Without uffd, all of the memory pool's pages are initially protected with `NONE` to treat the entire
@@ -99,7 +75,7 @@ pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
 /// With uffd, however, the potentially accessible pages of the each linear memory are made `READ_WRITE` and
 /// the page fault handler will detect an out of bounds access and treat the page, temporarily,
 /// as a guard page.
-pub(super) fn initialize_memory_pool(pool: &MemoryPool) -> Result<()> {
+pub fn initialize_memory_pool(pool: &MemoryPool) -> Result<()> {
     if pool.memory_size == 0 || pool.max_wasm_pages == 0 {
         return Ok(());
     }

@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Condvar, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, InstanceLimits, ModuleLimits,
-    PoolingAllocationStrategy, Store, Strategy,
+    PoolingAllocationStrategy, PoolingPageFaultStrategy, Store, Strategy,
 };
 use wasmtime_wast::WastContext;
 
@@ -104,6 +104,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
                 count: 450,
                 ..Default::default()
             },
+            page_fault_strategy: PoolingPageFaultStrategy::default(),
         });
         Some(lock_pooling())
     } else {

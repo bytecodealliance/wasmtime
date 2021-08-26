@@ -27,6 +27,7 @@ mod pooling;
 
 pub use self::pooling::{
     InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+    PoolingPageFaultStrategy,
 };
 
 /// Represents a request for a new runtime instance.
