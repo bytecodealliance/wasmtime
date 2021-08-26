@@ -12,5 +12,9 @@ block0(v0: i32x4):
     v3 = raw_bitcast.b8x16 v2
     return v3
 }
-; check: ret
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
 

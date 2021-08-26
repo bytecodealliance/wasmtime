@@ -76,6 +76,8 @@ block0(v0: i32):
 ; nextln: imull   $$16843009, %esi
 ; nextln: shrl    $$24, %esi
 ; nextln: movq    %rsi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
 ; nextln: ret
 }
 
@@ -102,5 +104,7 @@ block0(v0: i64):
 ; nextln: imull   $$16843009, %esi
 ; nextln: shrl    $$24, %esi
 ; nextln: movq    %rsi, %rax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
 ; nextln: ret
 }

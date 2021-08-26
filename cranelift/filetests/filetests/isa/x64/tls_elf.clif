@@ -10,5 +10,9 @@ block0(v0: i32):
     return v1
 }
 
-; check: elf_tls_get_addr User { namespace: 1, index: 0 }
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: elf_tls_get_addr User { namespace: 1, index: 0 }
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
 ; nextln: ret

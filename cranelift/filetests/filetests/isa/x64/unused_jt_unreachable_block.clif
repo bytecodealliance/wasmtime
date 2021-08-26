@@ -13,4 +13,8 @@ block1:
     trap unreachable
 }
 
-; check: ret
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret

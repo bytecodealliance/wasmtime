@@ -7,8 +7,12 @@ block0(v0: i64):
     return v1
 }
 
+; check: pushq   %rbp
+; check: movq    %rsp, %rbp
 ; check: popcntq %rdi, %rsi
 ; check: movq    %rsi, %rax
+; check: movq    %rbp, %rsp
+; check: popq    %rbp
 ; check: ret
 
 function %popcnt(i32) -> i32 {
@@ -17,6 +21,10 @@ block0(v0: i32):
     return v1
 }
 
+; check: pushq   %rbp
+; check: movq    %rsp, %rbp
 ; check: popcntl %edi, %esi
 ; check: movq    %rsi, %rax
+; check: movq    %rbp, %rsp
+; check: popq    %rbp
 ; check: ret
