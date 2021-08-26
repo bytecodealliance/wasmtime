@@ -17,7 +17,6 @@ wasmtime-runtime = { path = "../runtime", version = "0.29.0" }
 wasmtime-environ = { path = "../environ", version = "0.29.0" }
 wasmtime-jit = { path = "../jit", version = "0.29.0" }
 wasmtime-cache = { path = "../cache", version = "0.29.0", optional = true }
-wasmtime-profiling = { path = "../profiling", version = "0.29.0" }
 wasmtime-fiber = { path = "../fiber", version = "0.29.0", optional = true }
 wasmtime-cranelift = { path = "../cranelift", version = "0.29.0", optional = true }
 target-lexicon = { version = "0.12.0", default-features = false }

@@ -1,7 +1,5 @@
-use crate::ProfilingAgent;
+use crate::{CompiledModule, ProfilingAgent};
 use anyhow::{bail, Result};
-use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap};
-use wasmtime_runtime::VMFunctionBody;
 
 /// Interface for driving the creation of jitdump files
 #[derive(Debug)]
@@ -21,11 +19,5 @@ impl JitDumpAgent {
 }
 
 impl ProfilingAgent for JitDumpAgent {
-    fn module_load(
-        &self,
-        _module: &Module,
-        _functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        _dbg_image: Option<&[u8]>,
-    ) {
-    }
+    fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) {}
 }

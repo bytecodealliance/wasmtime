@@ -13,7 +13,6 @@ edition = "2018"
 [dependencies]
 wasmtime-environ = { path = "../environ", version = "0.29.0" }
 wasmtime-runtime = { path = "../runtime", version = "0.29.0" }
-wasmtime-profiling = { path = "../profiling", version = "0.29.0" }
 region = "2.2.0"
 thiserror = "1.0.4"
 target-lexicon = { version = "0.12.0", default-features = false }
@@ -26,13 +25,16 @@ gimli = { version = "0.25.0", default-features = false, features = ["std", "read
 object = { version = "0.26.0", default-features = false, features = ["std", "read_core", "elf"] }
 serde = { version = "1.0.94", features = ["derive"] }
 addr2line = { version = "0.16.0", default-features = false }
+libc = { version = "0.2.60", default-features = false, optional = true }
+scroll = { version = "0.10.1", features = ["derive"], optional = true }
+ittapi-rs = { version = "0.1.5", optional = true  }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
 [features]
-jitdump = ["wasmtime-profiling/jitdump"]
-vtune = ["wasmtime-profiling/vtune"]
+jitdump = ['libc', 'scroll']
+vtune = ['ittapi-rs']
 
 [badges]
 maintenance = { status = "actively-developed" }

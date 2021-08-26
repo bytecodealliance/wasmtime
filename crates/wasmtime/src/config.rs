@@ -11,7 +11,7 @@ use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
 use wasmtime_environ::{CompilerBuilder, Tunables};
-use wasmtime_profiling::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
+use wasmtime_jit::{JitDumpAgent, NullProfilerAgent, ProfilingAgent, VTuneAgent};
 use wasmtime_runtime::{
     InstanceAllocator, OnDemandInstanceAllocator, PoolingInstanceAllocator, RuntimeMemoryCreator,
 };

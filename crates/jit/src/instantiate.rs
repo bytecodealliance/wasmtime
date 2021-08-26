@@ -6,6 +6,7 @@
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
+use crate::ProfilingAgent;
 use anyhow::{anyhow, Context, Result};
 use object::read::File;
 use object::write::{Object, StandardSegment};
@@ -19,7 +20,6 @@ use wasmtime_environ::{
     ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
     StackMapInformation, Tunables, WasmFuncType,
 };
-use wasmtime_profiling::ProfilingAgent;
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
 
 /// An error condition while setting up a wasm instance, be it validation,
@@ -211,18 +211,6 @@ impl CompiledModule {
                 )))
             })?;
 
-        // Register GDB JIT images; initialize profiler and load the wasm module.
-        let dbg_jit_registration = if artifacts.native_debug_info_present {
-            let bytes = create_gdbjit_image(artifacts.obj.to_vec(), code_range)
-                .map_err(SetupError::DebugInfo)?;
-            profiler.module_load(&artifacts.module, &finished_functions, Some(&bytes));
-            let reg = GdbJitImageRegistration::register(bytes);
-            Some(reg)
-        } else {
-            profiler.module_load(&artifacts.module, &finished_functions, None);
-            None
-        };
-
         let finished_functions = FinishedFunctions(finished_functions);
         let start = code_range.0 as usize;
         let end = start + code_range.1;
@@ -232,17 +220,43 @@ impl CompiledModule {
             .ok_or_else(|| anyhow!("failed to find internal data section for wasm module"))?;
         let wasm_data = subslice_range(data.data()?, &artifacts.obj);
 
-        Ok(Arc::new(Self {
+        let mut ret = Self {
             artifacts,
             wasm_data,
             code: Arc::new(ModuleCode {
                 range: (start, end),
                 code_memory,
-                dbg_jit_registration,
+                dbg_jit_registration: None,
             }),
             finished_functions,
             trampolines,
-        }))
+        };
+        ret.register_debug_and_profiling(profiler)?;
+
+        Ok(Arc::new(ret))
+    }
+
+    fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
+        // Register GDB JIT images; initialize profiler and load the wasm module.
+        let dbg_jit_registration = if self.artifacts.native_debug_info_present {
+            let bytes = create_gdbjit_image(
+                self.artifacts.obj.to_vec(),
+                (
+                    self.code.range.0 as *const u8,
+                    self.code.range.1 - self.code.range.0,
+                ),
+            )
+            .map_err(SetupError::DebugInfo)?;
+            profiler.module_load(self, Some(&bytes));
+            let reg = GdbJitImageRegistration::register(bytes);
+            Some(reg)
+        } else {
+            profiler.module_load(self, None);
+            None
+        };
+
+        Arc::get_mut(&mut self.code).unwrap().dbg_jit_registration = dbg_jit_registration;
+        Ok(())
     }
 
     /// Extracts `CompilationArtifacts` from the compiled module.
