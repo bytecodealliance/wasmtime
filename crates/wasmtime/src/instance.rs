@@ -732,7 +732,8 @@ impl<'a> Instantiator<'a> {
                     .allocator()
                     .allocate(InstanceAllocationRequest {
                         module: compiled_module.module().clone(),
-                        finished_functions: compiled_module.finished_functions(),
+                        image_base: compiled_module.code().range().0,
+                        functions: compiled_module.functions(),
                         imports: self.cur.build(),
                         shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),

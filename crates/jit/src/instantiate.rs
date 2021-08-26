@@ -8,9 +8,8 @@ use crate::debug::create_gdbjit_image;
 use crate::link::link_module;
 use crate::{MmapVec, ProfilingAgent};
 use anyhow::{anyhow, Context, Result};
-use object::read::File;
 use object::write::{Object, StandardSegment};
-use object::{Object as _, ObjectSection, SectionKind};
+use object::{File, Object as _, ObjectSection, SectionKind};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use std::sync::Arc;
@@ -18,7 +17,8 @@ use thiserror::Error;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex, Module,
     ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
-    StackMapInformation, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP, ELF_WASMTIME_TRAPS,
+    StackMapInformation, Trampoline, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
+    ELF_WASMTIME_TRAPS,
 };
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
 
@@ -80,6 +80,10 @@ pub struct CompiledModuleInfo {
     /// Metadata about each compiled function.
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
+    /// The trampolines compiled into the text section and their start/length
+    /// relative to the start of the text section.
+    trampolines: Vec<Trampoline>,
+
     /// General compilation metadata.
     meta: Metadata,
 }
@@ -124,6 +128,7 @@ pub fn finish_compile(
     translation: ModuleTranslation<'_>,
     mut obj: Object,
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+    trampolines: Vec<Trampoline>,
     tunables: &Tunables,
 ) -> Result<(MmapVec, CompiledModuleInfo)> {
     let ModuleTranslation {
@@ -192,6 +197,7 @@ pub fn finish_compile(
     let info = CompiledModuleInfo {
         module,
         funcs,
+        trampolines,
         meta: Metadata {
             native_debug_info_present: tunables.generate_native_debuginfo,
             has_unparsed_debuginfo,
@@ -220,10 +226,6 @@ pub fn finish_compile(
         obj.append_section_data(section_id, data, 1);
     }
 }
-
-struct FinishedFunctions(PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>);
-unsafe impl Send for FinishedFunctions {}
-unsafe impl Sync for FinishedFunctions {}
 
 /// This is intended to mirror the type tables in `wasmtime_environ`, except that
 /// it doesn't store the native signatures which are no longer needed past compilation.
@@ -259,10 +261,9 @@ pub struct CompiledModule {
     mmap: MmapVec,
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+    trampolines: Vec<Trampoline>,
     meta: Metadata,
     code: Arc<ModuleCode>,
-    finished_functions: FinishedFunctions,
-    trampolines: Vec<(SignatureIndex, VMTrampoline)>,
 }
 
 impl CompiledModule {
@@ -305,27 +306,27 @@ impl CompiledModule {
         };
         let module = Arc::new(info.module);
         let funcs = info.funcs;
+        let trampolines = info.trampolines;
         let wasm_data = subslice_range(section(ELF_WASM_DATA)?, &mmap);
         let address_map_data = subslice_range(section(ELF_WASMTIME_ADDRMAP)?, &mmap);
         let trap_data = subslice_range(section(ELF_WASMTIME_TRAPS)?, &mmap);
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
-        let (code_memory, code_range, finished_functions, trampolines) =
-            build_code_memory(&obj, &module).map_err(|message| {
-                SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
-                    "failed to build code memory for functions: {}",
-                    message
-                )))
-            })?;
+        let (code_memory, code_range) = build_code_memory(&obj).map_err(|message| {
+            SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
+                "failed to build code memory for functions: {}",
+                message
+            )))
+        })?;
 
-        let finished_functions = FinishedFunctions(finished_functions);
         let start = code_range.0 as usize;
         let end = start + code_range.1;
 
         let mut ret = Self {
             meta: info.meta,
             funcs,
+            trampolines,
             module,
             mmap,
             wasm_data,
@@ -336,8 +337,6 @@ impl CompiledModule {
                 code_memory,
                 dbg_jit_registration: None,
             }),
-            finished_functions,
-            trampolines,
         };
         ret.register_debug_and_profiling(profiler)?;
 
@@ -400,6 +399,11 @@ impl CompiledModule {
         &self.module
     }
 
+    /// Returns the `FunctionInfo` map for all defined functions.
+    pub fn functions(&self) -> &PrimaryMap<DefinedFuncIndex, FunctionInfo> {
+        &self.funcs
+    }
+
     /// Return a reference to a mutable module (if possible).
     pub fn module_mut(&mut self) -> Option<&mut Module> {
         Arc::get_mut(&mut self.module)
@@ -407,13 +411,28 @@ impl CompiledModule {
 
     /// Returns the map of all finished JIT functions compiled for this module
     #[inline]
-    pub fn finished_functions(&self) -> &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]> {
-        &self.finished_functions.0
+    pub fn finished_functions(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *mut [VMFunctionBody])> + '_ {
+        self.funcs.iter().map(move |(i, info)| {
+            (
+                i,
+                std::ptr::slice_from_raw_parts_mut(
+                    (self.code.range.0 + info.start as usize) as *mut VMFunctionBody,
+                    info.length as usize,
+                ),
+            )
+        })
     }
 
     /// Returns the per-signature trampolines for this module.
-    pub fn trampolines(&self) -> &[(SignatureIndex, VMTrampoline)] {
-        &self.trampolines
+    pub fn trampolines(&self) -> impl Iterator<Item = (SignatureIndex, VMTrampoline)> + '_ {
+        self.trampolines.iter().map(move |info| {
+            (info.signature, unsafe {
+                let ptr = self.code.range.0 + info.start as usize;
+                std::mem::transmute::<usize, VMTrampoline>(ptr)
+            })
+        })
     }
 
     /// Returns the stack map information for all functions defined in this
@@ -425,25 +444,24 @@ impl CompiledModule {
         &self,
     ) -> impl Iterator<Item = (*mut [VMFunctionBody], &[StackMapInformation])> {
         self.finished_functions()
-            .values()
-            .copied()
+            .map(|(_, f)| f)
             .zip(self.funcs.values().map(|f| f.stack_maps.as_slice()))
     }
 
     /// Lookups a defined function by a program counter value.
     ///
     /// Returns the defined function index and the relative address of
-    /// `text_offfset` within the function itself.
+    /// `text_offset` within the function itself.
     pub fn func_by_text_offset(&self, text_offset: usize) -> Option<(DefinedFuncIndex, u32)> {
-        let functions = self.finished_functions();
+        let text_offset = text_offset as u64;
 
-        let text_section = self.code().range().0;
-        let pc = text_section + text_offset;
-        let index = match functions.binary_search_values_by_key(&pc, |body| unsafe {
-            debug_assert!(!(**body).is_empty());
-            // Return the inclusive "end" of the function
-            (**body).as_ptr() as usize + (**body).len() - 1
-        }) {
+        let index = match self
+            .funcs
+            .binary_search_values_by_key(&text_offset, |info| {
+                debug_assert!(info.length > 0);
+                // Return the inclusive "end" of the function
+                info.start + u64::from(info.length) - 1
+            }) {
             Ok(k) => {
                 // Exact match, pc is at the end of this function
                 k
@@ -456,18 +474,15 @@ impl CompiledModule {
             }
         };
 
-        let body = functions.get(index)?;
-        let (start, end) = unsafe {
-            let ptr = (**body).as_ptr();
-            let len = (**body).len();
-            (ptr as usize, ptr as usize + len)
-        };
+        let body = self.funcs.get(index)?;
+        let start = body.start;
+        let end = body.start + u64::from(body.length);
 
-        if pc < start || end < pc {
+        if text_offset < start || end < text_offset {
             return None;
         }
 
-        Some((index, (text_offset - (start - text_section)) as u32))
+        Some((index, (text_offset - body.start) as u32))
     }
 
     /// Gets the function information for a given function index.
@@ -539,55 +554,19 @@ impl<'a> SymbolizeContext<'a> {
     }
 }
 
-fn build_code_memory(
-    obj: &File,
-    module: &Module,
-) -> Result<(
-    CodeMemory,
-    (*const u8, usize),
-    PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-    Vec<(SignatureIndex, VMTrampoline)>,
-)> {
+fn build_code_memory(obj: &File) -> Result<(CodeMemory, (*const u8, usize))> {
     let mut code_memory = CodeMemory::new();
 
     let allocation = code_memory.allocate_for_object(obj)?;
 
-    // Populate the finished functions from the allocation
-    let mut finished_functions = PrimaryMap::with_capacity(allocation.funcs_len());
-    for (i, fat_ptr) in allocation.funcs() {
-        let start = fat_ptr.as_ptr() as usize;
-        let fat_ptr: *mut [VMFunctionBody] = fat_ptr;
-        // Assert that the function bodies are pushed in sort order
-        // This property is relied upon to search for functions by PC values
-        assert!(
-            start
-                > finished_functions
-                    .last()
-                    .map(|f: &*mut [VMFunctionBody]| unsafe { (**f).as_ptr() as usize })
-                    .unwrap_or(0)
-        );
-        assert_eq!(
-            Some(finished_functions.push(fat_ptr)),
-            module.defined_func_index(i)
-        );
-    }
+    link_module(obj, allocation);
 
-    // Populate the trampolines from the allocation
-    let mut trampolines = Vec::with_capacity(allocation.trampolines_len());
-    for (i, fat_ptr) in allocation.trampolines() {
-        let fnptr =
-            unsafe { std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(fat_ptr.as_ptr()) };
-        trampolines.push((i, fnptr));
-    }
-
-    link_module(obj, allocation.code_range);
-
-    let code_range = (allocation.code_range.as_ptr(), allocation.code_range.len());
+    let code_range = (allocation.as_ptr(), allocation.len());
 
     // Make all code compiled thus far executable.
     code_memory.publish();
 
-    Ok((code_memory, code_range, finished_functions, trampolines))
+    Ok((code_memory, code_range))
 }
 
 /// Returns the range of `inner` within `outer`, such that `outer[range]` is the

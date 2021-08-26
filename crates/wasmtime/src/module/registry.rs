@@ -52,7 +52,7 @@ impl ModuleRegistry {
         // and for schemes like uffd this performs lazy initialization which
         // could use the module in the future. For that reason we continue to
         // register empty modules and retain them.
-        if compiled_module.finished_functions().is_empty() {
+        if compiled_module.finished_functions().len() == 0 {
             self.modules_without_code.push(compiled_module.clone());
             return;
         }
@@ -539,13 +539,19 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
     GlobalModuleRegistry::with(|modules| {
         for (i, alloc) in module.compiled_module().finished_functions() {
             let (start, end) = unsafe {
-                let ptr = (**alloc).as_ptr();
-                let len = (**alloc).len();
+                let ptr = (*alloc).as_ptr();
+                let len = (*alloc).len();
                 (ptr as usize, ptr as usize + len)
             };
             for pc in start..end {
                 let (frame, _, _) = modules.lookup_frame_info(pc).unwrap();
-                assert!(frame.func_index() == i.as_u32());
+                assert!(
+                    frame.func_index() == i.as_u32(),
+                    "lookup of {:#x} returned {}, expected {}",
+                    pc,
+                    frame.func_index(),
+                    i.as_u32()
+                );
             }
         }
     });

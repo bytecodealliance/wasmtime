@@ -17,7 +17,7 @@ use wasmtime_environ::{
 };
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmFuncType,
+    GlobalIndex, MemoryIndex, TableIndex, Trampoline, TypeIndex, WasmFuncType,
 };
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -86,7 +86,7 @@ impl Compiler for Lightbeam {
         _funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         _emit_dwarf: bool,
         _obj: &mut Object,
-    ) -> Result<PrimaryMap<DefinedFuncIndex, FunctionInfo>> {
+    ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
         unimplemented!()
     }
 
@@ -95,7 +95,7 @@ impl Compiler for Lightbeam {
         _ty: &WasmFuncType,
         _host_fn: usize,
         _obj: &mut Object,
-    ) -> Result<()> {
+    ) -> Result<(Trampoline, Trampoline)> {
         unimplemented!()
     }
 

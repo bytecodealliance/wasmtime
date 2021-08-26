@@ -1393,7 +1393,7 @@ mod test {
 
         let mut handles = Vec::new();
         let module = Arc::new(Module::default());
-        let finished_functions = &PrimaryMap::new();
+        let functions = &PrimaryMap::new();
 
         for _ in (0..3).rev() {
             handles.push(
@@ -1402,7 +1402,8 @@ mod test {
                         PoolingAllocationStrategy::NextAvailable,
                         InstanceAllocationRequest {
                             module: module.clone(),
-                            finished_functions,
+                            image_base: 0,
+                            functions,
                             imports: Imports {
                                 functions: &[],
                                 tables: &[],
@@ -1425,7 +1426,8 @@ mod test {
             PoolingAllocationStrategy::NextAvailable,
             InstanceAllocationRequest {
                 module: module.clone(),
-                finished_functions,
+                functions,
+                image_base: 0,
                 imports: Imports {
                     functions: &[],
                     tables: &[],

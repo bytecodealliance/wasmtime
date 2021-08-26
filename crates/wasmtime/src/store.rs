@@ -194,7 +194,7 @@ impl<T> Store<T> {
     /// tables created to 10,000. This can be overridden with the
     /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
-        let finished_functions = &Default::default();
+        let functions = &Default::default();
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to
         // reconstruct a `StoreContextMut<T>`. When we initially call a `Func`,
@@ -206,7 +206,8 @@ impl<T> Store<T> {
             OnDemandInstanceAllocator::default()
                 .allocate(InstanceAllocationRequest {
                     host_state: Box::new(()),
-                    finished_functions,
+                    image_base: 0,
+                    functions,
                     shared_signatures: None.into(),
                     imports: Default::default(),
                     module: Arc::new(wasmtime_environ::Module::default()),

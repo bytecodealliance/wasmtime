@@ -10,7 +10,7 @@ use crate::{
 };
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::mem;
 use std::path::PathBuf;
@@ -60,6 +60,23 @@ pub struct ModuleTranslation<'data> {
 
     /// References to the function bodies.
     pub function_body_inputs: PrimaryMap<DefinedFuncIndex, FunctionBodyData<'data>>,
+
+    /// The set of defined functions within this module which are "possibly
+    /// exported" which means that the host can possibly call them. This
+    /// includes functions such as:
+    ///
+    /// * Exported functions
+    /// * Functions in element segments
+    /// * Functions via `ref.func` instructions
+    ///
+    /// This set is used to determine the set of type signatures that need
+    /// trampolines for the host to call into.
+    pub escaped_funcs: HashSet<DefinedFuncIndex>,
+
+    /// A list of type signatures which are considered exported from this
+    /// module, or those that can possibly be called. This list is sorted, and
+    /// trampolines for each of these signatures are required.
+    pub exported_signatures: Vec<SignatureIndex>,
 
     /// DWARF debug information, if enabled, parsed from the module.
     pub debuginfo: DebugInfoData<'data>,
@@ -220,6 +237,22 @@ impl<'data> ModuleEnvironment<'data> {
 
             Payload::End => {
                 validator.end()?;
+
+                // With the `escaped_funcs` set of functions finished
+                // we can calculate the set of signatures that are exported as
+                // the set of exported functions' signatures.
+                self.result.exported_signatures = self
+                    .result
+                    .module
+                    .functions
+                    .iter()
+                    .filter_map(|(i, sig)| match self.result.module.defined_func_index(i) {
+                        Some(i) if !self.result.escaped_funcs.contains(&i) => None,
+                        _ => Some(*sig),
+                    })
+                    .collect();
+                self.result.exported_signatures.sort_unstable();
+                self.result.exported_signatures.dedup();
 
                 self.result.creation_artifacts.shrink_to_fit();
                 self.result.creation_modules.shrink_to_fit();
@@ -417,7 +450,7 @@ impl<'data> ModuleEnvironment<'data> {
                         Operator::RefNull { ty: _ } => GlobalInit::RefNullConst,
                         Operator::RefFunc { function_index } => {
                             let index = FuncIndex::from_u32(function_index);
-                            self.flag_func_possibly_exported(index);
+                            self.flag_func_escaped(index);
                             GlobalInit::RefFunc(index)
                         }
                         Operator::GlobalGet { global_index } => {
@@ -446,7 +479,7 @@ impl<'data> ModuleEnvironment<'data> {
                     let entity = match kind {
                         ExternalKind::Function => {
                             let index = FuncIndex::from_u32(index);
-                            self.flag_func_possibly_exported(index);
+                            self.flag_func_escaped(index);
                             EntityIndex::Function(index)
                         }
                         ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(index)),
@@ -471,7 +504,7 @@ impl<'data> ModuleEnvironment<'data> {
                 validator.start_section(func, &range)?;
 
                 let func_index = FuncIndex::from_u32(func);
-                self.flag_func_possibly_exported(func_index);
+                self.flag_func_escaped(func_index);
                 debug_assert!(self.result.module.start_func.is_none());
                 self.result.module.start_func = Some(func_index);
             }
@@ -497,7 +530,7 @@ impl<'data> ModuleEnvironment<'data> {
                         elements.push(match item? {
                             ElementItem::Func(f) => {
                                 let f = FuncIndex::from_u32(f);
-                                self.flag_func_possibly_exported(f);
+                                self.flag_func_escaped(f);
                                 f
                             }
                             ElementItem::Null(_ty) => FuncIndex::reserved_value(),
@@ -1113,9 +1146,9 @@ and for re-adding support for interface types you can see this issue:
             .push(ModuleSignature { imports, exports })
     }
 
-    fn flag_func_possibly_exported(&mut self, func: FuncIndex) {
+    fn flag_func_escaped(&mut self, func: FuncIndex) {
         if let Some(idx) = self.result.module.defined_func_index(func) {
-            self.result.module.possibly_exported_funcs.insert(idx);
+            self.result.escaped_funcs.insert(idx);
         }
     }
 

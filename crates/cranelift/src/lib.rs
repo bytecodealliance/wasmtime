@@ -95,7 +95,7 @@ use cranelift_entity::PrimaryMap;
 use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
 use wasmtime_environ::{
-    FilePos, FunctionInfo, InstructionAddressMap, Module, TrapInformation, TypeTables,
+    FilePos, FunctionInfo, InstructionAddressMap, ModuleTranslation, TrapInformation, TypeTables,
 };
 
 pub use builder::builder;
@@ -257,16 +257,16 @@ fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature
 /// use a custom theoretically faster calling convention instead of the default.
 fn func_signature(
     isa: &dyn TargetIsa,
-    module: &Module,
+    translation: &ModuleTranslation,
     types: &TypeTables,
     index: FuncIndex,
 ) -> ir::Signature {
-    let call_conv = match module.defined_func_index(index) {
+    let call_conv = match translation.module.defined_func_index(index) {
         // If this is a defined function in the module and it's never possibly
         // exported, then we can optimize this function to use the fastest
         // calling convention since it's purely an internal implementation
         // detail of the module itself.
-        Some(idx) if !module.possibly_exported_funcs.contains(&idx) => CallConv::Fast,
+        Some(idx) if !translation.escaped_funcs.contains(&idx) => CallConv::Fast,
 
         // ... otherwise if it's an imported function or if it's a possibly
         // exported function then we use the default ABI wasmtime would
@@ -277,7 +277,7 @@ fn func_signature(
     push_types(
         isa,
         &mut sig,
-        &types.wasm_signatures[module.functions[index]],
+        &types.wasm_signatures[translation.module.functions[index]],
     );
     return sig;
 }

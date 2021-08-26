@@ -398,7 +398,7 @@ impl Module {
                 .collect();
 
             let mut obj = engine.compiler().object()?;
-            let funcs = engine.compiler().emit_obj(
+            let (funcs, trampolines) = engine.compiler().emit_obj(
                 &translation,
                 &types,
                 funcs,
@@ -412,7 +412,8 @@ impl Module {
                 translation.try_paged_init();
             }
 
-            let (mmap, info) = wasmtime_jit::finish_compile(translation, obj, funcs, tunables)?;
+            let (mmap, info) =
+                wasmtime_jit::finish_compile(translation, obj, funcs, trampolines, tunables)?;
             Ok((mmap, Some(info)))
         })?;
 
@@ -486,7 +487,7 @@ impl Module {
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
             &types.wasm_signatures,
-            modules.iter().flat_map(|m| m.trampolines().iter().cloned()),
+            modules.iter().flat_map(|m| m.trampolines()),
         ));
 
         let module = modules.remove(main_module);
