@@ -212,7 +212,7 @@ fn build_function_addr_map(
             });
         }
 
-        if cfg!(debug) {
+        if cfg!(debug_assertions) {
             // fn_map is sorted by the generated field -- see FunctionAddressMap::instructions.
             for i in 1..fn_map.len() {
                 assert_le!(fn_map[i - 1].generated, fn_map[i].generated);
