@@ -7,15 +7,14 @@
 //!
 //! Note: amplxe-cl is a command-line tool for Vtune which should be installed.
 
-use crate::ProfilingAgent;
+use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
 use core::ptr;
 use ittapi_rs::*;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::{atomic, Mutex};
-use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap};
-use wasmtime_runtime::VMFunctionBody;
+use wasmtime_environ::DefinedFuncIndex;
 
 /// Interface for driving the ittapi for VTune support
 pub struct VTuneAgent {
@@ -110,36 +109,27 @@ impl State {
 }
 
 impl ProfilingAgent for VTuneAgent {
-    fn module_load(
-        &self,
-        module: &Module,
-        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        dbg_image: Option<&[u8]>,
-    ) {
-        self.state
-            .lock()
-            .unwrap()
-            .module_load(module, functions, dbg_image);
+    fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
+        self.state.lock().unwrap().module_load(module, dbg_image);
     }
 }
 
 impl State {
-    fn module_load(
-        &mut self,
-        module: &Module,
-        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        _dbg_image: Option<&[u8]>,
-    ) -> () {
+    fn module_load(&mut self, module: &CompiledModule, _dbg_image: Option<&[u8]>) -> () {
         // Global counter for module ids.
         static MODULE_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
         let global_module_id = MODULE_ID.fetch_add(1, atomic::Ordering::SeqCst);
 
-        for (idx, func) in functions.iter() {
+        for (idx, func) in module.finished_functions() {
             let (addr, len) = unsafe { ((**func).as_ptr() as *const u8, (**func).len()) };
             let default_filename = "wasm_file";
             let default_module_name = String::from("wasm_module");
-            let module_name = module.name.as_ref().unwrap_or(&default_module_name);
-            let method_name = super::debug_name(module, idx);
+            let module_name = module
+                .module()
+                .name
+                .as_ref()
+                .unwrap_or(&default_module_name);
+            let method_name = super::debug_name(module.module(), idx);
             let method_id = self.get_method_id(global_module_id, idx);
             println!(
                 "Event Load: ({}) {:?}::{:?} Addr:{:?}\n",

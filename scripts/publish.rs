@@ -49,7 +49,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-fiber",
     "wasmtime-environ",
     "wasmtime-runtime",
-    "wasmtime-profiling",
     "wasmtime-cranelift",
     "wasmtime-lightbeam",
     "wasmtime-jit",

@@ -11,7 +11,7 @@
 //!         sudo perf report -i perf.jit.data -F+period,srcline
 //! Note: For descriptive results, the WASM file being executed should contain dwarf debug data
 
-use crate::ProfilingAgent;
+use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
 use object::{Object, ObjectSection};
 use scroll::{IOwrite, SizeWith, NATIVE};
@@ -25,8 +25,6 @@ use std::ptr;
 use std::sync::Mutex;
 use std::{borrow, mem, process};
 use target_lexicon::Architecture;
-use wasmtime_environ::{DefinedFuncIndex, Module, PrimaryMap};
-use wasmtime_runtime::VMFunctionBody;
 
 use object::elf;
 
@@ -200,16 +198,8 @@ impl JitDumpAgent {
 }
 
 impl ProfilingAgent for JitDumpAgent {
-    fn module_load(
-        &self,
-        module: &Module,
-        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        dbg_image: Option<&[u8]>,
-    ) {
-        self.state
-            .lock()
-            .unwrap()
-            .module_load(module, functions, dbg_image);
+    fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
+        self.state.lock().unwrap().module_load(module, dbg_image);
     }
 }
 
@@ -295,16 +285,11 @@ impl State {
     }
 
     /// Sent when a method is compiled and loaded into memory by the VM.
-    pub fn module_load(
-        &mut self,
-        module: &Module,
-        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        dbg_image: Option<&[u8]>,
-    ) -> () {
+    pub fn module_load(&mut self, module: &CompiledModule, dbg_image: Option<&[u8]>) -> () {
         let pid = process::id();
         let tid = pid; // ThreadId does appear to track underlying thread. Using PID.
 
-        for (idx, func) in functions.iter() {
+        for (idx, func) in module.finished_functions() {
             let (addr, len) = unsafe { ((**func).as_ptr() as *const u8, (**func).len()) };
             if let Some(img) = &dbg_image {
                 if let Err(err) = self.dump_from_debug_image(img, "wasm", addr, len, pid, tid) {
@@ -315,7 +300,7 @@ impl State {
                 }
             } else {
                 let timestamp = self.get_time_stamp();
-                let name = super::debug_name(module, idx);
+                let name = super::debug_name(module.module(), idx);
                 self.dump_code_load_record(&name, addr, len, timestamp, pid, tid);
             }
         }

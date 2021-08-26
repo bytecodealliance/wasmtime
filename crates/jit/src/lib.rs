@@ -24,6 +24,7 @@ mod code_memory;
 mod debug;
 mod instantiate;
 mod link;
+mod profiling;
 mod unwind;
 
 pub use crate::code_memory::CodeMemory;
@@ -31,6 +32,7 @@ pub use crate::instantiate::{
     CompilationArtifacts, CompiledModule, ModuleCode, SetupError, SymbolizeContext, TypeTables,
 };
 pub use crate::link::link_module;
+pub use profiling::*;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

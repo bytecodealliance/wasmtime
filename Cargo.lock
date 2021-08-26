@@ -3572,7 +3572,6 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-fiber",
  "wasmtime-jit",
- "wasmtime-profiling",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wat",
@@ -3777,16 +3776,18 @@ dependencies = [
  "anyhow",
  "cfg-if 1.0.0",
  "gimli",
+ "ittapi-rs",
+ "libc",
  "log",
  "more-asserts",
  "object",
  "region",
+ "scroll",
  "serde",
  "target-lexicon",
  "thiserror",
  "wasmparser",
  "wasmtime-environ",
- "wasmtime-profiling",
  "wasmtime-runtime",
  "winapi",
 ]
@@ -3803,24 +3804,6 @@ dependencies = [
  "target-lexicon",
  "wasmparser",
  "wasmtime-environ",
-]
-
-[[package]]
-name = "wasmtime-profiling"
-version = "0.29.0"
-dependencies = [
- "anyhow",
- "cfg-if 1.0.0",
- "gimli",
- "ittapi-rs",
- "lazy_static",
- "libc",
- "object",
- "scroll",
- "serde",
- "target-lexicon",
- "wasmtime-environ",
- "wasmtime-runtime",
 ]
 
 [[package]]

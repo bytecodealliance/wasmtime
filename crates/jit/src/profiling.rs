@@ -1,40 +1,35 @@
+use crate::CompiledModule;
 use std::error::Error;
 use std::fmt;
-use wasmtime_environ::{DefinedFuncIndex, EntityRef, Module, PrimaryMap};
-use wasmtime_runtime::VMFunctionBody;
+use wasmtime_environ::{DefinedFuncIndex, EntityRef, Module};
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "jitdump", target_os = "linux"))] {
-        #[path = "jitdump_linux.rs"]
+        #[path = "profiling/jitdump_linux.rs"]
         mod jitdump;
     } else {
-        #[path = "jitdump_disabled.rs"]
+        #[path = "profiling/jitdump_disabled.rs"]
         mod jitdump;
     }
 }
 
 cfg_if::cfg_if! {
     if #[cfg(all(feature = "vtune", target_os = "linux"))] {
-        #[path = "vtune_linux.rs"]
+        #[path = "profiling/vtune_linux.rs"]
         mod vtune;
     } else {
-        #[path = "vtune_disabled.rs"]
+        #[path = "profiling/vtune_disabled.rs"]
         mod vtune;
     }
 }
 
-pub use crate::jitdump::JitDumpAgent;
-pub use crate::vtune::VTuneAgent;
+pub use jitdump::JitDumpAgent;
+pub use vtune::VTuneAgent;
 
 /// Common interface for profiling tools.
 pub trait ProfilingAgent: Send + Sync + 'static {
     /// Notify the profiler of a new module loaded into memory
-    fn module_load(
-        &self,
-        module: &Module,
-        functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        dbg_image: Option<&[u8]>,
-    ) -> ();
+    fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) -> ();
 }
 
 /// Default agent for unsupported profiling build.
@@ -59,13 +54,7 @@ impl Error for NullProfilerAgentError {
 }
 
 impl ProfilingAgent for NullProfilerAgent {
-    fn module_load(
-        &self,
-        _module: &Module,
-        _functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-        _dbg_image: Option<&[u8]>,
-    ) -> () {
-    }
+    fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) -> () {}
 }
 
 #[allow(dead_code)]
