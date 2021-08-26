@@ -380,7 +380,7 @@ impl Module {
 
             // If configured, attempt to use paged memory initialization
             // instead of the default mode of memory initialization
-            if cfg!(all(feature = "uffd", target_os = "linux")) {
+            if engine.config().paged_memory_initialization {
                 translation.try_paged_init();
             }
 
