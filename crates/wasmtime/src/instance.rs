@@ -372,7 +372,8 @@ impl Instance {
             .get_export(store.as_context_mut(), name)
             .and_then(|f| f.into_func())
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(f.typed::<Params, Results, _>(store)?)
+        Ok(f.typed::<Params, Results, _>(store)
+            .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 
     /// Looks up an exported [`Table`] value by name.
