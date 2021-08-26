@@ -23,10 +23,10 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 /// is used when relative 26-bit call instructions won't cut it and a longer
 /// jump is needed.
 ///
-/// This generats:
+/// This generates:
 ///
-///     adr  x16, 16
-///     ldur x16, [x17]
+///     ldr  x16, 16
+///     adr  x17, 12
 ///     add  x16, x16, x17
 ///     br   x16
 ///
@@ -36,10 +36,10 @@ pub fn memlabel_finalize(_insn_off: CodeOffset, label: &MemLabel) -> i32 {
 /// Note that this is part of the `MachBackend::gen_jump_veneer` contract.
 pub fn gen_jump_veneer() -> (u32, u32, u32, u32) {
     (
+        // ldr x16, 16
+        enc_ldst_imm19(0b01011000, 16 / 4, xreg(16)),
         // adr x17, 16
-        enc_adr(16, writable_xreg(17)),
-        // ldr x16, [x17]
-        enc_ldst_simm9(0b1111100001, SImm9::zero(), 0b00, xreg(17), xreg(16)),
+        enc_adr(12, writable_xreg(17)),
         // add x16, x16, x17
         enc_arith_rrr(0b10001011_000, 0, writable_xreg(16), xreg(16), xreg(17)),
         // br x16
