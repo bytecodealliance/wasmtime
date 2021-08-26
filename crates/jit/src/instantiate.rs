@@ -182,7 +182,6 @@ impl CompilationArtifacts {
             push_debug(&mut obj, &debuginfo.debug_ranges);
             push_debug(&mut obj, &debuginfo.debug_rnglists);
         }
-        std::fs::write("foo.o", &obj.write()?).unwrap();
 
         // Encode a `CompiledModuleInfo` structure into the `ELF_WASMTIME_INFO`
         // section of this image. This is not necessary when the returned module
