@@ -213,12 +213,8 @@ impl CompiledModule {
 
         // Register GDB JIT images; initialize profiler and load the wasm module.
         let dbg_jit_registration = if artifacts.native_debug_info_present {
-            let bytes = create_dbg_image(
-                artifacts.obj.to_vec(),
-                code_range,
-                &artifacts.module,
-                &finished_functions,
-            )?;
+            let bytes = create_gdbjit_image(artifacts.obj.to_vec(), code_range)
+                .map_err(SetupError::DebugInfo)?;
             profiler.module_load(&artifacts.module, &finished_functions, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
             Some(reg)
@@ -405,20 +401,6 @@ impl<'a> SymbolizeContext<'a> {
     pub fn code_section_offset(&self) -> u64 {
         self.code_section_offset
     }
-}
-
-fn create_dbg_image(
-    obj: Vec<u8>,
-    code_range: (*const u8, usize),
-    module: &Module,
-    finished_functions: &PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
-) -> Result<Vec<u8>, SetupError> {
-    let funcs = finished_functions
-        .values()
-        .map(|allocated: &*mut [VMFunctionBody]| (*allocated) as *const u8)
-        .collect::<Vec<_>>();
-    create_gdbjit_image(obj, code_range, module.num_imported_funcs, &funcs)
-        .map_err(SetupError::DebugInfo)
 }
 
 fn build_code_memory(
