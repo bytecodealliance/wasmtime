@@ -30,10 +30,9 @@ mod unwind;
 
 pub use crate::code_memory::CodeMemory;
 pub use crate::instantiate::{
-    finish_compile, subslice_range, CompiledModule, CompiledModuleInfo, ModuleCode, SetupError,
+    finish_compile, subslice_range, CompiledModule, CompiledModuleInfo, SetupError,
     SymbolizeContext, TypeTables,
 };
-pub use crate::link::link_module;
 pub use crate::mmap_vec::MmapVec;
 pub use profiling::*;
 

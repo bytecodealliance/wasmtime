@@ -1,6 +1,6 @@
 //! Linking for JIT-compiled code.
 
-use object::read::{Object, ObjectSection, Relocation, RelocationTarget};
+use object::read::{Object, Relocation, RelocationTarget};
 use object::{elf, File, NativeEndian as NE, ObjectSymbol, RelocationEncoding, RelocationKind};
 use std::convert::TryFrom;
 use wasmtime_runtime::libcalls;
@@ -9,24 +9,13 @@ type U32 = object::U32Bytes<NE>;
 type I32 = object::I32Bytes<NE>;
 type U64 = object::U64Bytes<NE>;
 
-/// Links a module that has been compiled with `compiled_module` in `wasmtime-environ`.
+/// Applies the relocation `r` at `offset` within `code`, according to the
+/// symbols found in `obj`.
 ///
-/// Performs all required relocations inside the function code, provided the necessary metadata.
-/// The relocations data provided in the object file, see object.rs for details.
-///
-/// Currently, the produced ELF image can be trusted.
-/// TODO refactor logic to remove panics and add defensive code the image data
-/// becomes untrusted.
-pub fn link_module(obj: &File, code_range: &mut [u8]) {
-    // Read the ".text" section and process its relocations.
-    let text_section = obj.section_by_name(".text").unwrap();
-
-    for (offset, r) in text_section.relocations() {
-        apply_reloc(obj, code_range, offset, r);
-    }
-}
-
-fn apply_reloc(obj: &File, code: &mut [u8], offset: u64, r: Relocation) {
+/// This method is used at runtime to resolve relocations in ELF images,
+/// typically with respect to where the memory was placed in the final address
+/// in memory.
+pub fn apply_reloc(obj: &File, code: &mut [u8], offset: u64, r: Relocation) {
     let target_func_address: usize = match r.target() {
         RelocationTarget::Symbol(i) => {
             // Processing relocation target is a named symbols that is compiled

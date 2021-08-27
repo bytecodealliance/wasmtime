@@ -732,7 +732,7 @@ impl<'a> Instantiator<'a> {
                     .allocator()
                     .allocate(InstanceAllocationRequest {
                         module: compiled_module.module().clone(),
-                        image_base: compiled_module.code().range().0,
+                        image_base: compiled_module.code().as_ptr() as usize,
                         functions: compiled_module.functions(),
                         imports: self.cur.build(),
                         shared_signatures: self.cur.module.signatures().as_module_map().into(),

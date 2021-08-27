@@ -44,7 +44,6 @@ impl ModuleRegistry {
     /// Registers a new module with the registry.
     pub fn register(&mut self, module: &Module) {
         let compiled_module = module.compiled_module();
-        let (start, end) = compiled_module.code().range();
 
         // If there's not actually any functions in this module then we may
         // still need to preserve it for its data segments. Instances of this
@@ -59,8 +58,10 @@ impl ModuleRegistry {
 
         // The module code range is exclusive for end, so make it inclusive as it
         // may be a valid PC value
-        assert!(start < end);
-        let end = end - 1;
+        let code = compiled_module.code();
+        assert!(!code.is_empty());
+        let start = code.as_ptr() as usize;
+        let end = start + code.len() - 1;
 
         // Ensure the module isn't already present in the registry
         // This is expected when a module is instantiated multiple times in the
