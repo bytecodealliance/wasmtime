@@ -40,7 +40,7 @@ pub fn gen_jump_veneer() -> (u32, u32, u32, u32) {
     (
         // ldr x16, 16
         enc_ldst_imm19(0b01011000, 16 / 4, xreg(16)),
-        // adr x17, 16
+        // adr x17, 12
         enc_adr(12, writable_xreg(17)),
         // add x16, x16, x17
         enc_arith_rrr(0b10001011_000, 0, writable_xreg(16), xreg(16), xreg(17)),

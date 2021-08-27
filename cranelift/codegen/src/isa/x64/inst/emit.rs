@@ -62,10 +62,12 @@ fn emit_reloc(
 ///
 /// This generats:
 ///
-///     movabsq $val, %r10
-///     lea -15(%rip), %r11
-///     add %r10, %r11
-///     jmpq *%r11
+/// ```ignore
+/// movabsq $val, %r10
+/// lea -15(%rip), %r11
+/// add %r10, %r11
+/// jmpq *%r11
+/// ```
 ///
 /// Note that this is part of the `MachBackend::gen_jump_veneer` contract.
 pub fn gen_jump_veneer() -> (Vec<u8>, usize) {
