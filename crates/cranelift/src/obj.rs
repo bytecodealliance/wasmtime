@@ -144,7 +144,10 @@ pub struct ObjectBuilder<'a> {
     /// end when after all relocations have been applied. Note that this is
     /// separate from the section in `obj` because these contents will be edited
     /// for relocations as necessary.
-    text_contents: Vec<Vec<u8>>,
+    ///
+    /// The second element of the pair here is the desired alignment of the
+    /// function body.
+    text_contents: Vec<(Vec<u8>, u64)>,
 
     /// Map from text section offset, `u64`, to the index in `text_contents`
     /// where those contents live.
@@ -275,7 +278,7 @@ impl<'a> ObjectBuilder<'a> {
         body: Vec<u8>,
     ) -> (SymbolId, Range<u64>) {
         let body_len = body.len() as u64;
-        let off = self.push_code(body, true);
+        let off = self.push_code(body, 1, true);
 
         let symbol_id = self.obj.add_symbol(Symbol {
             name,
@@ -301,7 +304,7 @@ impl<'a> ObjectBuilder<'a> {
                 let unwind_size = info.emit_size();
                 let mut unwind_info = vec![0; unwind_size];
                 info.emit(&mut unwind_info);
-                let unwind_off = self.push_code(unwind_info, true);
+                let unwind_off = self.push_code(unwind_info, 4, true);
                 self.windows_unwind_info.push(RUNTIME_FUNCTION {
                     begin: u32::try_from(off).unwrap(),
                     end: u32::try_from(off + body_len).unwrap(),
@@ -396,23 +399,24 @@ impl<'a> ObjectBuilder<'a> {
     /// function's relative call may reach further than the function being
     /// inserted, then a "veneer" is inserted to help it jump further, but the
     /// veneer needs to be inserted before `body` is inserted.
-    fn push_code(&mut self, body: Vec<u8>, allow_veneers: bool) -> u64 {
+    fn push_code(&mut self, body: Vec<u8>, align: u64, allow_veneers: bool) -> u64 {
         let body_len = body.len() as u64;
         assert!(body_len > 0);
 
         // If this function would exceed the `reloc_deadline`, then all
         // relocations are processed to force some veneers to get generated.
-        while self.current_text_off + body_len >= self.reloc_deadline {
+        let mut ret = align_to(self.current_text_off, align);
+        while ret + body_len >= self.reloc_deadline {
             assert!(allow_veneers);
-            self.emit_jump_veneers(self.current_text_off + body_len);
+            self.emit_jump_veneers(ret + body_len);
+            ret = align_to(self.current_text_off, align);
         }
 
         // Once we can safely append the body we do so, updating various state
         // about how to get back to the body.
-        let ret = self.current_text_off;
         self.text_locations.insert(ret, self.text_contents.len());
         self.current_text_off += body_len;
-        self.text_contents.push(body);
+        self.text_contents.push((body, align));
         return ret;
     }
 
@@ -558,7 +562,7 @@ impl<'a> ObjectBuilder<'a> {
 
         let endian = self.endian();
         let code = self.text_locations[&r.offset];
-        let code = &mut self.text_contents[code];
+        let code = &mut self.text_contents[code].0;
 
         match r.reloc.reloc {
             // This corresponds to the `R_AARCH64_CALL26` ELF relocation.
@@ -595,7 +599,7 @@ impl<'a> ObjectBuilder<'a> {
     /// patched to jump to the veneer we're synthesizing.
     fn emit_jump_veneer(&mut self, r: PendingReloc<'a>) {
         let (veneer, reloc_offset) = generate_jump_veneer(self.isa);
-        let veneer_offset = self.push_code(veneer, false);
+        let veneer_offset = self.push_code(veneer, 1, false);
         self.relative_relocs.push(RelativeReloc {
             veneer_offset,
             reloc_offset,
@@ -624,7 +628,7 @@ impl<'a> ObjectBuilder<'a> {
     /// Helper function exclusively for tests to increase padding between
     /// functions to test the veneer insertion logic in this file.
     pub fn append_synthetic_padding(&mut self, amt: usize) {
-        self.push_code(vec![0; amt], true);
+        self.push_code(vec![0; amt], 1, true);
     }
 
     /// Inserts a compiled trampoline into this object.
@@ -716,7 +720,7 @@ impl<'a> ObjectBuilder<'a> {
                 .wrapping_sub(reloc_offset);
 
             // Store the `value` into the location specified in the relocation.
-            let code = &mut self.text_contents[self.text_locations[&reloc.veneer_offset]];
+            let code = &mut self.text_contents[self.text_locations[&reloc.veneer_offset]].0;
             assert_eq!(self.isa.pointer_type().bits(), 64);
             reloc_address::<object::U64Bytes<object::Endianness>>(code, reloc.reloc_offset as u32)
                 .set(endian, value);
@@ -724,8 +728,10 @@ impl<'a> ObjectBuilder<'a> {
 
         // With relocations all handled we can shove everything into the final
         // text section now.
-        for (i, contents) in self.text_contents.iter().enumerate() {
-            let off = self.obj.append_section_data(self.text_section, contents, 1);
+        for (i, (contents, align)) in self.text_contents.iter().enumerate() {
+            let off = self
+                .obj
+                .append_section_data(self.text_section, contents, *align);
             debug_assert_eq!(self.text_locations[&off], i);
         }
 
@@ -897,6 +903,12 @@ impl<'a> ObjectBuilder<'a> {
             }
         }
     }
+}
+
+/// Align a size up to a power-of-two alignment.
+fn align_to(x: u64, alignment: u64) -> u64 {
+    let alignment_mask = alignment - 1;
+    (x + alignment_mask) & !alignment_mask
 }
 
 impl PendingReloc<'_> {
