@@ -147,6 +147,7 @@ impl Engine {
         #[cfg(feature = "wat")]
         let bytes = wat::parse_bytes(&bytes)?;
         let (_, artifacts, types) = crate::Module::build_artifacts(self, &bytes)?;
+        let artifacts = artifacts.into_iter().map(|i| i.0).collect::<Vec<_>>();
         crate::module::SerializedModule::from_artifacts(self, &artifacts, &types).to_bytes()
     }
 

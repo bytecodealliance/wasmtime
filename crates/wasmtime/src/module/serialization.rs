@@ -246,7 +246,7 @@ impl<'a> SerializedModule<'a> {
         self.check_features(&engine.config().features)?;
 
         let modules = engine.run_maybe_parallel(self.artifacts, |i| {
-            CompiledModule::from_artifacts(i.unwrap_owned(), &*engine.config().profiler)
+            CompiledModule::from_artifacts(i.unwrap_owned(), None, &*engine.config().profiler)
         })?;
 
         assert!(!modules.is_empty());

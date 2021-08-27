@@ -22,6 +22,30 @@ use wasmtime_environ::{
 };
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
 
+/// This is the name of the section in the final ELF image which contains
+/// concatenated data segments from the original wasm module.
+///
+/// This section is simply a list of bytes and ranges into this section are
+/// stored within a `Module` for each data segment. Memory initialization and
+/// passive segment management all index data directly located in this section.
+///
+/// Note that this implementation does not afford any method of leveraging the
+/// `data.drop` instruction to actually release the data back to the OS. The
+/// data section is simply always present in the ELF image. If we wanted to
+/// release the data it's probably best to figure out what the best
+/// implementation is for it at the time given a particular set of constraints.
+const ELF_WASM_DATA: &'static str = ".rodata.wasm";
+
+/// This is the name of the section in the final ELF image which contains a
+/// `bincode`-encoded `CompiledModuleInfo`.
+///
+/// This section is optionally decoded in `CompiledModule::from_artifacts`
+/// depending on whether or not a `CompiledModuleInfo` is already available. In
+/// cases like `Module::new` where compilation directly leads into consumption,
+/// it's available. In cases like `Module::deserialize` this section must be
+/// decoded to get all the relevant information.
+const ELF_WASMTIME_INFO: &'static str = ".wasmtime.info";
+
 /// An error condition while setting up a wasm instance, be it validation,
 /// compilation, or instantiation.
 #[derive(Error, Debug)]
@@ -44,19 +68,33 @@ pub enum SetupError {
     DebugInfo(#[from] anyhow::Error),
 }
 
-/// Contains all compilation artifacts.
+/// Final result of compilation which supports serialization to disk.
 #[derive(Serialize, Deserialize)]
 pub struct CompilationArtifacts {
-    /// Module metadata.
-    #[serde(with = "arc_serde")]
-    module: Arc<Module>,
-
-    /// ELF image with functions code.
+    // NB: this structure is in a transitionary phase and will soon go away. At
+    // this time it only contains the ELF image created by compilation, and in
+    // the near future even this will be removed.
     obj: Box<[u8]>,
+}
 
-    /// Descriptions of compiled functions
+/// Secondary in-memory results of compilation.
+///
+/// This opaque structure can be optionally passed back to
+/// `CompiledModule::from_artifacts` to avoid decoding extra information there.
+#[derive(Serialize, Deserialize)]
+pub struct CompiledModuleInfo {
+    /// Type information about the compiled WebAssembly module.
+    module: Module,
+
+    /// Metadata about each compiled function.
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
+    /// General compilation metadata.
+    meta: Metadata,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Metadata {
     /// Whether or not native debug information is available in `obj`
     native_debug_info_present: bool,
 
@@ -67,18 +105,35 @@ pub struct CompilationArtifacts {
     /// Offset in the original wasm file to the code section.
     code_section_offset: u64,
 
+    /// Whether or not custom wasm-specific dwarf sections were inserted into
+    /// the ELF image.
+    ///
+    /// Note that even if this flag is `true` sections may be missing if they
+    /// weren't found in the original wasm module itself.
     has_wasm_debuginfo: bool,
 }
 
 impl CompilationArtifacts {
-    /// Creates a new `CompilationArtifacts` from the final results of
-    /// compilation.
+    /// Finishes compilation of the `translation` specified, producing the final
+    /// compilation artifacts and auxiliary information.
+    ///
+    /// This function will consume the final results of compiling a wasm module
+    /// and finish the ELF image in-progress as part of `obj` by appending any
+    /// compiler-agnostic sections.
+    ///
+    /// The auxiliary `CompiledModuleInfo` structure returned here has also been
+    /// serialized into `CompilationArtifacts`, but if the caller will quickly
+    /// turn-around and invoke `CompiledModule::from_artifacts` after this then
+    /// the information can be passed to that method to avoid extra
+    /// deserialization. This is done to avoid a serialize-then-deserialize for
+    /// API calls like `Module::new` where the compiled module is immediately
+    /// going to be used.
     pub fn new(
         translation: ModuleTranslation<'_>,
         mut obj: Object,
         funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
         tunables: &Tunables,
-    ) -> Result<CompilationArtifacts> {
+    ) -> Result<(CompilationArtifacts, CompiledModuleInfo)> {
         let ModuleTranslation {
             mut module,
             debuginfo,
@@ -90,15 +145,18 @@ impl CompilationArtifacts {
 
         // Place all data from the wasm module into a section which will the
         // source of the data later at runtime.
-        let segment = obj.segment_name(StandardSegment::Data).to_vec();
-        let section_id = obj.add_section(segment, b".wasmdata".to_vec(), SectionKind::ReadOnlyData);
+        let data_id = obj.add_section(
+            obj.segment_name(StandardSegment::Data).to_vec(),
+            ELF_WASM_DATA.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
         let mut total_data_len = 0;
         for data in data.iter() {
-            obj.append_section_data(section_id, data, 1);
+            obj.append_section_data(data_id, data, 1);
             total_data_len += data.len();
         }
         for data in passive_data.iter() {
-            obj.append_section_data(section_id, data, 1);
+            obj.append_section_data(data_id, data, 1);
         }
 
         // Update passive data offsets since they're all located after the other
@@ -125,30 +183,54 @@ impl CompilationArtifacts {
             push_debug(&mut obj, &debuginfo.debug_rnglists);
         }
 
-        return Ok(CompilationArtifacts {
-            module: Arc::new(module),
-            obj: obj.write()?.into(),
+        // Encode a `CompiledModuleInfo` structure into the `ELF_WASMTIME_INFO`
+        // section of this image. This is not necessary when the returned module
+        // is never serialized to disk, which is also why we return a copy of
+        // the `CompiledModuleInfo` structure to the caller in case they don't
+        // want to deserialize this value immediately afterwards from the
+        // section. Otherwise, though, this is necessary to reify a `Module` on
+        // the other side from disk-serialized artifacts in
+        // `Module::deserialize` (a Wasmtime API).
+        let info_id = obj.add_section(
+            obj.segment_name(StandardSegment::Data).to_vec(),
+            ELF_WASMTIME_INFO.as_bytes().to_vec(),
+            SectionKind::ReadOnlyData,
+        );
+        let mut bytes = Vec::new();
+        let info = CompiledModuleInfo {
+            module,
             funcs,
-            native_debug_info_present: tunables.generate_native_debuginfo,
-            has_unparsed_debuginfo,
-            code_section_offset: debuginfo.wasm_file.code_section_offset,
-            has_wasm_debuginfo: tunables.parse_wasm_debuginfo,
-        });
+            meta: Metadata {
+                native_debug_info_present: tunables.generate_native_debuginfo,
+                has_unparsed_debuginfo,
+                code_section_offset: debuginfo.wasm_file.code_section_offset,
+                has_wasm_debuginfo: tunables.parse_wasm_debuginfo,
+            },
+        };
+        bincode::serialize_into(&mut bytes, &info)?;
+        obj.append_section_data(info_id, &bytes, 1);
+
+        return Ok((
+            CompilationArtifacts {
+                obj: obj.write()?.into(),
+            },
+            info,
+        ));
 
         fn push_debug<'a, T>(obj: &mut Object, section: &T)
         where
             T: gimli::Section<gimli::EndianSlice<'a, gimli::LittleEndian>>,
         {
-            if section.reader().slice().is_empty() {
+            let data = section.reader().slice();
+            if data.is_empty() {
                 return;
             }
-            let segment = obj.segment_name(StandardSegment::Debug).to_vec();
             let section_id = obj.add_section(
-                segment,
+                obj.segment_name(StandardSegment::Debug).to_vec(),
                 wasm_section_name(T::id()).as_bytes().to_vec(),
                 SectionKind::Debug,
             );
-            obj.append_section_data(section_id, section.reader().slice(), 1);
+            obj.append_section_data(section_id, data, 1);
         }
     }
 }
@@ -187,6 +269,9 @@ impl ModuleCode {
 pub struct CompiledModule {
     wasm_data: Range<usize>,
     artifacts: CompilationArtifacts,
+    module: Arc<Module>,
+    funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
+    meta: Metadata,
     code: Arc<ModuleCode>,
     finished_functions: FinishedFunctions,
     trampolines: Vec<(SignatureIndex, VMTrampoline)>,
@@ -194,17 +279,45 @@ pub struct CompiledModule {
 
 impl CompiledModule {
     /// Creates `CompiledModule` directly from `CompilationArtifacts`.
+    ///
+    /// This method also takes `info`, an optionally-provided deserialization of
+    /// the artifacts' compilation metadata section. If this information is not
+    /// provided (e.g. it's set to `None`) then the information will be
+    /// deserialized from the image of the compilation artifacts. Otherwise it
+    /// will be assumed to be what would otherwise happen if the section were to
+    /// be deserialized.
+    ///
+    /// The `profiler` argument here is used to inform JIT profiling runtimes
+    /// about new code that is loaded.
     pub fn from_artifacts(
         artifacts: CompilationArtifacts,
+        info: Option<CompiledModuleInfo>,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Arc<Self>> {
         let obj = File::parse(&artifacts.obj[..])
             .with_context(|| "failed to parse internal ELF compilation artifact")?;
 
+        let section = |name: &str| {
+            obj.section_by_name(name)
+                .and_then(|s| s.data().ok())
+                .ok_or_else(|| anyhow!("missing section `{}` in compilation artifacts", name))
+        };
+
+        // Acquire the `CompiledModuleInfo`, either because it was passed in or
+        // by deserializing it from the compiliation image.
+        let info = match info {
+            Some(info) => info,
+            None => bincode::deserialize(section(ELF_WASMTIME_INFO)?)
+                .context("failed to deserialize wasmtime module info")?,
+        };
+        let module = Arc::new(info.module);
+        let funcs = info.funcs;
+        let wasm_data = subslice_range(section(ELF_WASM_DATA)?, &artifacts.obj);
+
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
         let (code_memory, code_range, finished_functions, trampolines) =
-            build_code_memory(&obj, &artifacts.module).map_err(|message| {
+            build_code_memory(&obj, &module).map_err(|message| {
                 SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
                     "failed to build code memory for functions: {}",
                     message
@@ -215,12 +328,10 @@ impl CompiledModule {
         let start = code_range.0 as usize;
         let end = start + code_range.1;
 
-        let data = obj
-            .section_by_name(".wasmdata")
-            .ok_or_else(|| anyhow!("failed to find internal data section for wasm module"))?;
-        let wasm_data = subslice_range(data.data()?, &artifacts.obj);
-
         let mut ret = Self {
+            meta: info.meta,
+            funcs,
+            module,
             artifacts,
             wasm_data,
             code: Arc::new(ModuleCode {
@@ -238,7 +349,7 @@ impl CompiledModule {
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
         // Register GDB JIT images; initialize profiler and load the wasm module.
-        let dbg_jit_registration = if self.artifacts.native_debug_info_present {
+        let dbg_jit_registration = if self.meta.native_debug_info_present {
             let bytes = create_gdbjit_image(
                 self.artifacts.obj.to_vec(),
                 (
@@ -275,12 +386,12 @@ impl CompiledModule {
 
     /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
-        &self.artifacts.module
+        &self.module
     }
 
     /// Return a reference to a mutable module (if possible).
     pub fn module_mut(&mut self) -> Option<&mut Module> {
-        Arc::get_mut(&mut self.artifacts.module)
+        Arc::get_mut(&mut self.module)
     }
 
     /// Returns the map of all finished JIT functions compiled for this module
@@ -302,12 +413,10 @@ impl CompiledModule {
     pub fn stack_maps(
         &self,
     ) -> impl Iterator<Item = (*mut [VMFunctionBody], &[StackMapInformation])> {
-        self.finished_functions().values().copied().zip(
-            self.artifacts
-                .funcs
-                .values()
-                .map(|f| f.stack_maps.as_slice()),
-        )
+        self.finished_functions()
+            .values()
+            .copied()
+            .zip(self.funcs.values().map(|f| f.stack_maps.as_slice()))
     }
 
     /// Lookups a defined function by a program counter value.
@@ -349,8 +458,7 @@ impl CompiledModule {
 
     /// Gets the function information for a given function index.
     pub fn func_info(&self, index: DefinedFuncIndex) -> &FunctionInfo {
-        self.artifacts
-            .funcs
+        self.funcs
             .get(index)
             .expect("defined function should be present")
     }
@@ -367,7 +475,7 @@ impl CompiledModule {
     /// what filename and line number a wasm pc comes from.
     pub fn symbolize_context(&self) -> Result<Option<SymbolizeContext<'_>>> {
         use gimli::EndianSlice;
-        if !self.artifacts.has_wasm_debuginfo {
+        if !self.meta.has_wasm_debuginfo {
             return Ok(None);
         }
         let obj = File::parse(&self.artifacts.obj[..])
@@ -383,14 +491,14 @@ impl CompiledModule {
             .context("failed to create addr2line dwarf mapping context")?;
         Ok(Some(SymbolizeContext {
             inner: cx,
-            code_section_offset: self.artifacts.code_section_offset,
+            code_section_offset: self.meta.code_section_offset,
         }))
     }
 
     /// Returns whether the original wasm module had unparsed debug information
     /// based on the tunables configuration.
     pub fn has_unparsed_debuginfo(&self) -> bool {
-        self.artifacts.has_unparsed_debuginfo
+        self.meta.has_unparsed_debuginfo
     }
 }
 
@@ -466,27 +574,6 @@ fn build_code_memory(
     code_memory.publish();
 
     Ok((code_memory, code_range, finished_functions, trampolines))
-}
-
-mod arc_serde {
-    use super::Arc;
-    use serde::{de::Deserialize, ser::Serialize, Deserializer, Serializer};
-
-    pub(super) fn serialize<S, T>(arc: &Arc<T>, ser: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-        T: Serialize,
-    {
-        (**arc).serialize(ser)
-    }
-
-    pub(super) fn deserialize<'de, D, T>(de: D) -> Result<Arc<T>, D::Error>
-    where
-        D: Deserializer<'de>,
-        T: Deserialize<'de>,
-    {
-        Ok(Arc::new(T::deserialize(de)?))
-    }
 }
 
 /// Returns the range of `inner` within `outer`, such that `outer[range]` is the
