@@ -72,13 +72,13 @@
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
 use super::{hash_map, HashMap};
-use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode, WasmResult};
+use crate::environ::{FuncEnvironment, GlobalVariable, ReturnMode};
 use crate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
 };
-use crate::translation_utils::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex};
 use crate::wasm_unsupported;
+use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmResult};
 use core::convert::TryInto;
 use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
@@ -2407,8 +2407,16 @@ fn translate_store<FE: FuncEnvironment + ?Sized>(
     state: &mut FuncTranslationState,
     environ: &mut FE,
 ) -> WasmResult<()> {
-    let val = state.pop1();
-    let val_ty = builder.func.dfg.value_type(val);
+    let mut val = state.pop1();
+    let mut val_ty = builder.func.dfg.value_type(val);
+
+    // Boolean-vector types don't validate with a `store` instruction, so
+    // bitcast them to a vector type which is compatible with the store
+    // instruction.
+    if val_ty.is_vector() && val_ty.lane_type().is_bool() {
+        val = builder.ins().raw_bitcast(I8X16, val);
+        val_ty = I8X16;
+    }
 
     let (flags, base, offset) =
         prepare_addr(memarg, mem_op_size(opcode, val_ty), builder, state, environ)?;

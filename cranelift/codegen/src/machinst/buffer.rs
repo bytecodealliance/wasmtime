@@ -321,8 +321,15 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Debug-only: check invariants of labels and branch-records described
     /// under "Branch-optimization Correctness" above.
-    #[cfg(debug)]
+    ///
+    /// These invariants are checked at branch-simplification
+    /// time. Note that they may be temporarily violated at other
+    /// times, e.g. after calling `add_{cond,uncond}_branch()` and
+    /// before emitting branch bytes.
     fn check_label_branch_invariants(&self) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
         let cur_off = self.cur_offset();
         // Check that every entry in latest_branches has *correct*
         // labels_at_this_branch lists. We do not check completeness because
@@ -340,10 +347,15 @@ impl<I: VCodeInst> MachBuffer<I> {
             }
         }
 
-        // Check that every label is unresolved, or resolved at or before
-        // cur_offset. If at cur_offset, must be in `labels_at_tail`.
+        // Check that every label is unresolved, or resolved at or
+        // before cur_offset. If at cur_offset, must be in
+        // `labels_at_tail`. We skip labels that are aliased to
+        // others already.
         for (i, &off) in self.label_offsets.iter().enumerate() {
             let label = MachLabel(i as u32);
+            if self.label_aliases[i] != UNKNOWN_LABEL {
+                continue;
+            }
             debug_assert!(off == UNKNOWN_LABEL_OFFSET || off <= cur_off);
             if off == cur_off {
                 debug_assert!(
@@ -361,11 +373,6 @@ impl<I: VCodeInst> MachBuffer<I> {
                 debug_assert_eq!(self.label_aliases[l.0 as usize], UNKNOWN_LABEL);
             }
         }
-    }
-
-    #[cfg(not(debug))]
-    fn check_label_branch_invariants(&self) {
-        // Nothing.
     }
 
     /// Current offset from start of buffer.
@@ -527,7 +534,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.optimize_branches();
 
         // Post-invariant: by `optimize_branches()` (see argument there).
-        self.check_label_branch_invariants();
     }
 
     /// Lazily clear `labels_at_tail` if the tail offset has moved beyond the
@@ -594,7 +600,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         }
 
         // Post-invariant: no mutations to branches/labels data structures.
-        self.check_label_branch_invariants();
     }
 
     /// Inform the buffer of an unconditional branch at the given offset,
@@ -628,7 +633,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         // Post-invariant: we asserted branch start is current tail; the list of
         // labels at branch is cloned from list of labels at current tail.
-        self.check_label_branch_invariants();
     }
 
     /// Inform the buffer of a conditional branch at the given offset,
@@ -662,7 +666,6 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         // Post-invariant: we asserted branch start is current tail; labels at
         // branch list is cloned from list of labels at current tail.
-        self.check_label_branch_invariants();
     }
 
     fn truncate_last_branch(&mut self) {
@@ -757,7 +760,6 @@ impl<I: VCodeInst> MachBuffer<I> {
         //   (see comments to `add_{cond,uncond}_branch()`).
         // - The buffer is truncated to just before the last branch, and the
         //   fixup record referring to that last branch is removed.
-        self.check_label_branch_invariants();
     }
 
     fn optimize_branches(&mut self) {

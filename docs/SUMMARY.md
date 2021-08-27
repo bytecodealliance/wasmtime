@@ -42,7 +42,6 @@
   - [C/C++](./wasm-c.md)
   - [AssemblyScript](./wasm-assemblyscript.md)
   - [WebAssembly Text Format (`*.wat`)](./wasm-wat.md)
-  - [Example: Markdown Parser](./wasm-markdown.md)
 - [Stability](stability.md)
   - [Release Process](./stability-release.md)
   - [Platform Support](./stability-platform-support.md)

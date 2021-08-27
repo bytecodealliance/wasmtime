@@ -5,14 +5,12 @@ use crate::{
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
 use std::fs;
+use std::mem;
 use std::path::Path;
 use std::sync::Arc;
 use wasmparser::Validator;
-#[cfg(feature = "cache")]
-use wasmtime_cache::ModuleCacheEntry;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::ModuleIndex;
-use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
+use wasmtime_environ::{ModuleEnvironment, ModuleIndex, PrimaryMap};
+use wasmtime_jit::{CompilationArtifacts, CompiledModule, CompiledModuleInfo, TypeTables};
 
 mod registry;
 mod serialization;
@@ -177,6 +175,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
         let bytes = bytes.as_ref();
         #[cfg(feature = "wat")]
@@ -188,6 +188,8 @@ impl Module {
     /// data. The provided `name` will be used in traps/backtrace details.
     ///
     /// See [`Module::new`] for other details.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new_with_name(engine: &Engine, bytes: impl AsRef<[u8]>, name: &str) -> Result<Module> {
         let mut module = Self::new(engine, bytes.as_ref())?;
         Arc::get_mut(&mut Arc::get_mut(&mut module.inner).unwrap().module)
@@ -226,6 +228,8 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn from_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         match Self::new(
             engine,
@@ -277,9 +281,11 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn from_binary(engine: &Engine, binary: &[u8]) -> Result<Module> {
         // Check to see that the config's target matches the host
-        let target = engine.config().isa_flags.triple();
+        let target = engine.compiler().triple();
         if *target != target_lexicon::Triple::host() {
             bail!(
                 "target '{}' specified in the configuration does not match the host",
@@ -291,39 +297,114 @@ impl Module {
         // would be inferred for the host, otherwise the JIT might produce unrunnable code
         // for the features the host's CPU actually has.
 
-        const USE_PAGED_MEM_INIT: bool = cfg!(all(feature = "uffd", target_os = "linux"));
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
-                let (main_module, artifacts, types) = ModuleCacheEntry::new(
+                let (main_module, artifacts, types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
                 )
-                .get_data((engine.compiler(), binary), |(compiler, binary)| {
-                    CompilationArtifacts::build(
-                        compiler,
-                        binary,
-                        USE_PAGED_MEM_INIT,
-                    )
+                .get_data((HashedEngineCompileEnv(engine), binary), |(engine, binary)| {
+                    Module::build_artifacts(engine.0, binary)
                 })?;
             } else {
                 let (main_module, artifacts, types) =
-                    CompilationArtifacts::build(
-                        engine.compiler(),
-                        binary,
-                        USE_PAGED_MEM_INIT,
-                    )?;
+                    Module::build_artifacts(engine, binary)?;
             }
         };
 
-        let modules = CompiledModule::from_artifacts_list(
-            artifacts,
-            engine.compiler().isa(),
-            &*engine.config().profiler,
-            engine.compiler(),
-        )?;
+        let modules = engine.run_maybe_parallel(artifacts, |(a, i)| {
+            CompiledModule::from_artifacts(a, Some(i), &*engine.config().profiler)
+        })?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
+    }
+
+    /// Converts an input binary-encoded WebAssembly module to compilation
+    /// artifacts and type information.
+    ///
+    /// This is where compilation actually happens of WebAssembly modules and
+    /// translation/parsing/validation of the binary input occurs. The actual
+    /// result here is a triple of:
+    ///
+    /// * The index into the second field of the "main module". The "main
+    ///   module" in this case is the outermost module described by the `wasm`
+    ///   input, and is here for the module linking proposal.
+    /// * A list of `CompilationArtifacts` for each module found within `wasm`.
+    ///   Note that if module linking is disabled then this list will always
+    ///   have a size of exactly 1.
+    /// * Type information about all the modules returned. All returned modules
+    ///   have local type information with indices that refer to these returned
+    ///   tables.
+    #[cfg(compiler)]
+    pub(crate) fn build_artifacts(
+        engine: &Engine,
+        wasm: &[u8],
+    ) -> Result<(
+        usize,
+        Vec<(CompilationArtifacts, CompiledModuleInfo)>,
+        TypeTables,
+    )> {
+        let tunables = &engine.config().tunables;
+
+        // First a `ModuleEnvironment` is created which records type information
+        // about the wasm module. This is where the WebAssembly is parsed and
+        // validated. Afterwards `types` will have all the type information for
+        // this module.
+        let (main_module, translations, types) =
+            ModuleEnvironment::new(tunables, &engine.config().features)
+                .translate(wasm)
+                .context("failed to parse WebAssembly module")?;
+
+        // Perform a two-level map/reduce here to get the final list of
+        // compilation artifacts. The first level of map/reduce maps over all
+        // modules found and reduces to collection into a vector. The second
+        // level of map/reduce here maps over all functions within each wasm
+        // module found and collects into an ELF image via `emit_obj`.
+        let list = engine.run_maybe_parallel(translations, |mut translation| -> Result<_> {
+            let functions = mem::take(&mut translation.function_body_inputs);
+            let functions = functions.into_iter().collect::<Vec<_>>();
+
+            let funcs = engine
+                .run_maybe_parallel(functions, |(index, func)| {
+                    engine
+                        .compiler()
+                        .compile_function(&translation, index, func, tunables, &types)
+                })?
+                .into_iter()
+                .collect();
+
+            let mut obj = engine.compiler().object()?;
+            let funcs = engine.compiler().emit_obj(
+                &translation,
+                &types,
+                funcs,
+                tunables.generate_native_debuginfo,
+                &mut obj,
+            )?;
+
+            // If configured, attempt to use paged memory initialization
+            // instead of the default mode of memory initialization
+            if engine.config().paged_memory_initialization {
+                translation.try_paged_init();
+            }
+
+            Ok(CompilationArtifacts::new(
+                translation,
+                obj,
+                funcs,
+                tunables,
+            )?)
+        })?;
+
+        Ok((
+            main_module,
+            list,
+            TypeTables {
+                wasm_signatures: types.wasm_signatures,
+                module_signatures: types.module_signatures,
+                instance_signatures: types.instance_signatures,
+            },
+        ))
     }
 
     /// Deserializes an in-memory compiled module previously created with
@@ -501,6 +582,8 @@ impl Module {
     ///
     /// Use `Module::new` or `Module::from_binary` to create the module
     /// from the bytes.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
         SerializedModule::new(self).to_bytes()
     }
@@ -795,4 +878,42 @@ impl Module {
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
     _assert::<Module>();
+}
+
+/// This is a helper struct used when caching to hash the state of an `Engine`
+/// used for module compilation.
+///
+/// The hash computed for this structure is used to key the global wasmtime
+/// cache and dictates whether artifacts are reused. Consequently the contents
+/// of this hash dictate when artifacts are or aren't re-used.
+#[cfg(all(feature = "cache", compiler))]
+struct HashedEngineCompileEnv<'a>(&'a Engine);
+
+#[cfg(all(feature = "cache", compiler))]
+impl std::hash::Hash for HashedEngineCompileEnv<'_> {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        use std::collections::BTreeMap;
+
+        // Hash the compiler's state based on its target and configuration.
+        let compiler = self.0.compiler();
+        compiler.triple().hash(hasher);
+        compiler
+            .flags()
+            .into_iter()
+            .collect::<BTreeMap<_, _>>()
+            .hash(hasher);
+        compiler
+            .isa_flags()
+            .into_iter()
+            .collect::<BTreeMap<_, _>>()
+            .hash(hasher);
+
+        // Hash configuration state read for compilation
+        let config = self.0.config();
+        config.tunables.hash(hasher);
+        config.features.hash(hasher);
+
+        // Catch accidental bugs of reusing across crate versions.
+        env!("CARGO_PKG_VERSION").hash(hasher);
+    }
 }

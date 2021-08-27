@@ -1,7 +1,7 @@
 //! Support for compiling with Cranelift.
 //!
-//! This crate provides an implementation of [`Compiler`] in the form of
-//! [`Cranelift`].
+//! This crate provides an implementation of the `wasmtime_environ::Compiler`
+//! and `wasmtime_environ::CompilerBuilder` traits.
 
 // # How does Wasmtime prevent stack overflow?
 //
@@ -88,373 +88,108 @@
 // also need to actually catch stack overflow, so for now 32k is chosen and it's
 // assume no valid stack pointer will ever be `usize::max_value() - 32k`.
 
-use crate::func_environ::{get_func_name, FuncEnvironment};
-use cranelift_codegen::ir::{self, ExternalName};
-use cranelift_codegen::isa::{CallConv, TargetIsa};
-use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::MachSrcLoc;
-use cranelift_codegen::{binemit, isa, Context};
-use cranelift_wasm::{DefinedFuncIndex, FuncIndex, FuncTranslator, SignatureIndex, WasmType};
-use std::convert::TryFrom;
-use std::sync::Mutex;
+use cranelift_codegen::binemit;
+use cranelift_codegen::ir;
+use cranelift_codegen::isa::{unwind::UnwindInfo, CallConv, TargetIsa};
+use cranelift_entity::PrimaryMap;
+use cranelift_wasm::{DefinedFuncIndex, FuncIndex, WasmFuncType, WasmType};
 use target_lexicon::CallingConvention;
 use wasmtime_environ::{
-    CompileError, CompiledFunction, Compiler, FunctionAddressMap, FunctionBodyData,
-    InstructionAddressMap, Module, ModuleTranslation, Relocation, RelocationTarget,
-    StackMapInformation, TrapInformation, Tunables, TypeTables,
+    FilePos, FunctionInfo, InstructionAddressMap, Module, TrapInformation, TypeTables,
 };
 
+pub use builder::builder;
+
+mod builder;
+mod compiler;
+mod debug;
 mod func_environ;
+mod obj;
 
-/// Implementation of a relocation sink that just saves all the information for later
-struct RelocSink {
-    /// Current function index.
-    func_index: FuncIndex,
+type CompiledFunctions = PrimaryMap<DefinedFuncIndex, CompiledFunction>;
 
-    /// Relocations recorded for the function.
-    func_relocs: Vec<Relocation>,
-}
-
-impl binemit::RelocSink for RelocSink {
-    fn reloc_external(
-        &mut self,
-        offset: binemit::CodeOffset,
-        _srcloc: ir::SourceLoc,
-        reloc: binemit::Reloc,
-        name: &ExternalName,
-        addend: binemit::Addend,
-    ) {
-        let reloc_target = if let ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 0);
-            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-        } else if let ExternalName::LibCall(libcall) = *name {
-            RelocationTarget::LibCall(libcall)
-        } else {
-            panic!("unrecognized external name")
-        };
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target,
-            offset,
-            addend,
-        });
-    }
-
-    fn reloc_constant(
-        &mut self,
-        _code_offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _constant_offset: ir::ConstantOffset,
-    ) {
-        // Do nothing for now: cranelift emits constant data after the function code and also emits
-        // function code with correct relative offsets to the constant data.
-    }
-
-    fn reloc_jt(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, jt: ir::JumpTable) {
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target: RelocationTarget::JumpTable(self.func_index, jt),
-            offset,
-            addend: 0,
-        });
-    }
-}
-
-impl RelocSink {
-    /// Return a new `RelocSink` instance.
-    fn new(func_index: FuncIndex) -> Self {
-        Self {
-            func_index,
-            func_relocs: Vec::new(),
-        }
-    }
-}
-
-/// Implementation of a trap sink that simply stores all trap info in-memory
+/// Compiled function: machine code body, jump table offsets, and unwind information.
 #[derive(Default)]
-struct TrapSink {
-    /// The in-memory vector of trap info
+pub struct CompiledFunction {
+    /// The machine code for this function.
+    body: Vec<u8>,
+
+    /// The jump tables offsets (in the body).
+    jt_offsets: ir::JumpTableOffsets,
+
+    /// The unwind information.
+    unwind_info: Option<UnwindInfo>,
+
+    /// Information used to translate from binary offsets back to the original
+    /// location found in the wasm input.
+    address_map: FunctionAddressMap,
+
+    /// Metadata about traps in this module, mapping code offsets to the trap
+    /// that they may cause.
     traps: Vec<TrapInformation>,
+
+    relocations: Vec<Relocation>,
+    value_labels_ranges: cranelift_codegen::ValueLabelsRanges,
+    stack_slots: ir::StackSlots,
+
+    info: FunctionInfo,
 }
 
-impl TrapSink {
-    /// Create a new `TrapSink`
-    fn new() -> Self {
-        Self::default()
-    }
-}
+/// Function and its instructions addresses mappings.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct FunctionAddressMap {
+    /// An array of data for the instructions in this function, indicating where
+    /// each instruction maps back to in the original function.
+    ///
+    /// This array is sorted least-to-greatest by the `code_offset` field.
+    /// Additionally the span of each `InstructionAddressMap` is implicitly the
+    /// gap between it and the next item in the array.
+    instructions: Box<[InstructionAddressMap]>,
 
-impl binemit::TrapSink for TrapSink {
-    fn trap(
-        &mut self,
-        code_offset: binemit::CodeOffset,
-        _source_loc: ir::SourceLoc,
-        trap_code: ir::TrapCode,
-    ) {
-        self.traps.push(TrapInformation {
-            code_offset,
-            trap_code,
-        });
-    }
-}
+    /// Function's initial offset in the source file, specified in bytes from
+    /// the front of the file.
+    start_srcloc: FilePos,
 
-#[derive(Default)]
-struct StackMapSink {
-    infos: Vec<StackMapInformation>,
-}
+    /// Function's end offset in the source file, specified in bytes from
+    /// the front of the file.
+    end_srcloc: FilePos,
 
-impl binemit::StackMapSink for StackMapSink {
-    fn add_stack_map(&mut self, code_offset: binemit::CodeOffset, stack_map: binemit::StackMap) {
-        self.infos.push(StackMapInformation {
-            code_offset,
-            stack_map,
-        });
-    }
-}
+    /// Generated function body offset if applicable, otherwise 0.
+    body_offset: usize,
 
-impl StackMapSink {
-    fn finish(mut self) -> Vec<StackMapInformation> {
-        self.infos.sort_unstable_by_key(|info| info.code_offset);
-        self.infos
-    }
-}
-
-fn get_function_address_map<'data>(
-    context: &Context,
-    data: &FunctionBodyData<'data>,
+    /// Generated function body length.
     body_len: u32,
-    isa: &dyn isa::TargetIsa,
-) -> FunctionAddressMap {
-    // Generate artificial srcloc for function start/end to identify boundary
-    // within module.
-    let data = data.body.get_binary_reader();
-    let offset = data.original_position();
-    let len = data.bytes_remaining();
-    assert!((offset + len) <= u32::max_value() as usize);
-    let start_srcloc = ir::SourceLoc::new(offset as u32);
-    let end_srcloc = ir::SourceLoc::new((offset + len) as u32);
-
-    let instructions = if let Some(ref mcr) = &context.mach_compile_result {
-        // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
-        // tuples.
-        collect_address_maps(
-            body_len,
-            mcr.buffer
-                .get_srclocs_sorted()
-                .into_iter()
-                .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start))),
-        )
-    } else {
-        // Old-style backend: we need to traverse the instruction/encoding info in the function.
-        let func = &context.func;
-        let mut blocks = func.layout.blocks().collect::<Vec<_>>();
-        blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
-
-        let encinfo = isa.encoding_info();
-        collect_address_maps(
-            body_len,
-            blocks
-                .into_iter()
-                .flat_map(|block| func.inst_offsets(block, &encinfo))
-                .map(|(offset, inst, size)| (func.srclocs[inst], offset, size)),
-        )
-    };
-
-    FunctionAddressMap {
-        instructions: instructions.into(),
-        start_srcloc,
-        end_srcloc,
-        body_offset: 0,
-        body_len,
-    }
 }
 
-// Collects an iterator of `InstructionAddressMap` into a `Vec` for insertion
-// into a `FunctionAddressMap`. This will automatically coalesce adjacent
-// instructions which map to the same original source position.
-fn collect_address_maps(
-    code_size: u32,
-    iter: impl IntoIterator<Item = (ir::SourceLoc, u32, u32)>,
-) -> Vec<InstructionAddressMap> {
-    let mut iter = iter.into_iter();
-    let (mut cur_loc, mut cur_offset, mut cur_len) = match iter.next() {
-        Some(i) => i,
-        None => return Vec::new(),
-    };
-    let mut ret = Vec::new();
-    for (loc, offset, len) in iter {
-        // If this instruction is adjacent to the previous and has the same
-        // source location then we can "coalesce" it with the current
-        // instruction.
-        if cur_offset + cur_len == offset && loc == cur_loc {
-            cur_len += len;
-            continue;
-        }
-
-        // Push an entry for the previous source item.
-        ret.push(InstructionAddressMap {
-            srcloc: cur_loc,
-            code_offset: cur_offset,
-        });
-        // And push a "dummy" entry if necessary to cover the span of ranges,
-        // if any, between the previous source offset and this one.
-        if cur_offset + cur_len != offset {
-            ret.push(InstructionAddressMap {
-                srcloc: ir::SourceLoc::default(),
-                code_offset: cur_offset + cur_len,
-            });
-        }
-        // Update our current location to get extended later or pushed on at
-        // the end.
-        cur_loc = loc;
-        cur_offset = offset;
-        cur_len = len;
-    }
-    ret.push(InstructionAddressMap {
-        srcloc: cur_loc,
-        code_offset: cur_offset,
-    });
-    if cur_offset + cur_len != code_size {
-        ret.push(InstructionAddressMap {
-            srcloc: ir::SourceLoc::default(),
-            code_offset: cur_offset + cur_len,
-        });
-    }
-
-    return ret;
+/// A record of a relocation to perform.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Relocation {
+    /// The relocation code.
+    reloc: binemit::Reloc,
+    /// Relocation target.
+    reloc_target: RelocationTarget,
+    /// The offset where to apply the relocation.
+    offset: binemit::CodeOffset,
+    /// The addend to add to the relocation value.
+    addend: binemit::Addend,
 }
 
-/// A compiler that compiles a WebAssembly module with Cranelift, translating the Wasm to Cranelift IR,
-/// optimizing it and then translating to assembly.
-#[derive(Default)]
-pub struct Cranelift {
-    translators: Mutex<Vec<FuncTranslator>>,
+/// Destination function. Can be either user function or some special one, like `memory.grow`.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum RelocationTarget {
+    /// The user function index.
+    UserFunc(FuncIndex),
+    /// A compiler-generated libcall.
+    LibCall(ir::LibCall),
+    /// Jump table index.
+    JumpTable(FuncIndex, ir::JumpTable),
 }
 
-impl Cranelift {
-    fn take_translator(&self) -> FuncTranslator {
-        let candidate = self.translators.lock().unwrap().pop();
-        candidate.unwrap_or_else(FuncTranslator::new)
-    }
-
-    fn save_translator(&self, translator: FuncTranslator) {
-        self.translators.lock().unwrap().push(translator);
-    }
-}
-
-impl Compiler for Cranelift {
-    fn compile_function(
-        &self,
-        translation: &ModuleTranslation<'_>,
-        func_index: DefinedFuncIndex,
-        mut input: FunctionBodyData<'_>,
-        isa: &dyn isa::TargetIsa,
-        tunables: &Tunables,
-        types: &TypeTables,
-    ) -> Result<CompiledFunction, CompileError> {
-        let module = &translation.module;
-        let func_index = module.func_index(func_index);
-        let mut context = Context::new();
-        context.func.name = get_func_name(func_index);
-        context.func.signature = func_signature(isa, module, types, func_index);
-        if tunables.generate_native_debuginfo {
-            context.func.collect_debug_info();
-        }
-
-        let mut func_env = FuncEnvironment::new(isa, module, types, tunables);
-
-        // We use these as constant offsets below in
-        // `stack_limit_from_arguments`, so assert their values here. This
-        // allows the closure below to get coerced to a function pointer, as
-        // needed by `ir::Function`.
-        //
-        // Otherwise our stack limit is specially calculated from the vmctx
-        // argument, where we need to load the `*const VMInterrupts`
-        // pointer, and then from that pointer we need to load the stack
-        // limit itself. Note that manual register allocation is needed here
-        // too due to how late in the process this codegen happens.
-        //
-        // For more information about interrupts and stack checks, see the
-        // top of this file.
-        let vmctx = context
-            .func
-            .create_global_value(ir::GlobalValueData::VMContext);
-        let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
-            base: vmctx,
-            offset: i32::try_from(func_env.offsets.vmctx_interrupts())
-                .unwrap()
-                .into(),
-            global_type: isa.pointer_type(),
-            readonly: true,
-        });
-        let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
-            base: interrupts_ptr,
-            offset: i32::try_from(func_env.offsets.vminterrupts_stack_limit())
-                .unwrap()
-                .into(),
-            global_type: isa.pointer_type(),
-            readonly: false,
-        });
-        context.func.stack_limit = Some(stack_limit);
-        let mut func_translator = self.take_translator();
-        let result = func_translator.translate_body(
-            &mut input.validator,
-            input.body.clone(),
-            &mut context.func,
-            &mut func_env,
-        );
-        if result.is_ok() {
-            self.save_translator(func_translator);
-        }
-        result?;
-
-        let mut code_buf: Vec<u8> = Vec::new();
-        let mut reloc_sink = RelocSink::new(func_index);
-        let mut trap_sink = TrapSink::new();
-        let mut stack_map_sink = StackMapSink::default();
-        context
-            .compile_and_emit(
-                isa,
-                &mut code_buf,
-                &mut reloc_sink,
-                &mut trap_sink,
-                &mut stack_map_sink,
-            )
-            .map_err(|error| {
-                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-            })?;
-
-        let unwind_info = context.create_unwind_info(isa).map_err(|error| {
-            CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-        })?;
-
-        let address_transform =
-            get_function_address_map(&context, &input, code_buf.len() as u32, isa);
-
-        let ranges = if tunables.generate_native_debuginfo {
-            let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
-                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-            })?;
-            Some(ranges)
-        } else {
-            None
-        };
-
-        Ok(CompiledFunction {
-            body: code_buf,
-            jt_offsets: context.func.jt_offsets,
-            relocations: reloc_sink.func_relocs,
-            address_map: address_transform,
-            value_labels_ranges: ranges.unwrap_or(Default::default()),
-            stack_slots: context.func.stack_slots,
-            traps: trap_sink.traps,
-            unwind_info,
-            stack_maps: stack_map_sink.finish(),
-        })
-    }
-}
-
-pub fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
+/// Creates a new cranelift `Signature` with no wasm params/results for the
+/// given calling convention.
+///
+/// This will add the default vmctx/etc parameters to the signature returned.
+fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
     let pointer_type = isa.pointer_type();
     let mut sig = ir::Signature::new(call_conv);
     // Add the caller/callee `vmctx` parameters.
@@ -466,7 +201,10 @@ pub fn blank_sig(isa: &dyn TargetIsa, call_conv: CallConv) -> ir::Signature {
     return sig;
 }
 
-pub fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
+/// Returns the default calling convention for the `isa` provided.
+///
+/// Note that this calling convention is used for exported functions.
+fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
     match isa.triple().default_calling_convention() {
         Ok(CallingConvention::AppleAarch64) => CallConv::WasmtimeAppleAarch64,
         Ok(CallingConvention::SystemV) | Err(()) => CallConv::WasmtimeSystemV,
@@ -475,42 +213,49 @@ pub fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
     }
 }
 
-pub fn push_types(
-    isa: &dyn TargetIsa,
-    sig: &mut ir::Signature,
-    types: &TypeTables,
-    index: SignatureIndex,
-) {
-    let wasm = &types.wasm_signatures[index];
-
-    let cvt = |ty: &WasmType| {
-        ir::AbiParam::new(match ty {
-            WasmType::I32 => ir::types::I32,
-            WasmType::I64 => ir::types::I64,
-            WasmType::F32 => ir::types::F32,
-            WasmType::F64 => ir::types::F64,
-            WasmType::V128 => ir::types::I8X16,
-            WasmType::FuncRef | WasmType::ExternRef => {
-                wasmtime_environ::reference_type(*ty, isa.pointer_type())
-            }
-            WasmType::ExnRef => unimplemented!(),
-        })
-    };
+/// Appends the types of the `wasm` function signature into the `sig` signature
+/// provided.
+///
+/// Typically the `sig` signature will have been created from [`blank_sig`]
+/// above.
+fn push_types(isa: &dyn TargetIsa, sig: &mut ir::Signature, wasm: &WasmFuncType) {
+    let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm.params.iter().map(&cvt));
     sig.returns.extend(wasm.returns.iter().map(&cvt));
 }
 
-pub fn indirect_signature(
-    isa: &dyn TargetIsa,
-    types: &TypeTables,
-    index: SignatureIndex,
-) -> ir::Signature {
+/// Returns the corresponding cranelift type for the provided wasm type.
+fn value_type(isa: &dyn TargetIsa, ty: WasmType) -> ir::types::Type {
+    match ty {
+        WasmType::I32 => ir::types::I32,
+        WasmType::I64 => ir::types::I64,
+        WasmType::F32 => ir::types::F32,
+        WasmType::F64 => ir::types::F64,
+        WasmType::V128 => ir::types::I8X16,
+        WasmType::FuncRef | WasmType::ExternRef => reference_type(ty, isa.pointer_type()),
+        WasmType::ExnRef => unimplemented!(),
+    }
+}
+
+/// Returns a cranelift signature suitable to indirectly call the wasm signature
+/// specified by `wasm`.
+///
+/// This will implicitly use the default calling convention for `isa` since to
+/// indirectly call a wasm function it must be possibly exported somehow (e.g.
+/// this assumes the function target to call doesn't use the "fast" calling
+/// convention).
+fn indirect_signature(isa: &dyn TargetIsa, wasm: &WasmFuncType) -> ir::Signature {
     let mut sig = blank_sig(isa, wasmtime_call_conv(isa));
-    push_types(isa, &mut sig, types, index);
+    push_types(isa, &mut sig, wasm);
     return sig;
 }
 
-pub fn func_signature(
+/// Returns the cranelift fucntion signature of the function specified.
+///
+/// Note that this will determine the calling convention for the function, and
+/// namely includes an optimization where functions never exported from a module
+/// use a custom theoretically faster calling convention instead of the default.
+fn func_signature(
     isa: &dyn TargetIsa,
     module: &Module,
     types: &TypeTables,
@@ -529,6 +274,23 @@ pub fn func_signature(
         _ => wasmtime_call_conv(isa),
     };
     let mut sig = blank_sig(isa, call_conv);
-    push_types(isa, &mut sig, types, module.functions[index]);
+    push_types(
+        isa,
+        &mut sig,
+        &types.wasm_signatures[module.functions[index]],
+    );
     return sig;
+}
+
+/// Returns the reference type to use for the provided wasm type.
+fn reference_type(wasm_ty: cranelift_wasm::WasmType, pointer_type: ir::Type) -> ir::Type {
+    match wasm_ty {
+        cranelift_wasm::WasmType::FuncRef => pointer_type,
+        cranelift_wasm::WasmType::ExternRef => match pointer_type {
+            ir::types::I32 => ir::types::R32,
+            ir::types::I64 => ir::types::R64,
+            _ => panic!("unsupported pointer type"),
+        },
+        _ => panic!("unsupported Wasm reference type"),
+    }
 }

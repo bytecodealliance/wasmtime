@@ -5,22 +5,12 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use wasmtime_environ::{
-    entity::EntityRef,
-    ir::{self, StackMap},
-    wasm::DefinedFuncIndex,
-    FunctionAddressMap, TrapInformation,
-};
+use wasmtime_environ::{EntityRef, FilePos, StackMap, TrapCode};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
 lazy_static::lazy_static! {
     static ref GLOBAL_MODULES: RwLock<GlobalModuleRegistry> = Default::default();
-}
-
-fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u32)> {
-    let (index, start, _) = module.func_by_pc(pc)?;
-    Some((index, (pc - start) as u32))
 }
 
 /// Used for registering modules with a store.
@@ -30,7 +20,10 @@ fn func_by_pc(module: &CompiledModule, pc: usize) -> Option<(DefinedFuncIndex, u
 ///
 /// The `BTreeMap` is used to quickly locate a module based on a program counter value.
 #[derive(Default)]
-pub struct ModuleRegistry(BTreeMap<usize, Arc<RegisteredModule>>);
+pub struct ModuleRegistry {
+    modules_with_code: BTreeMap<usize, Arc<RegisteredModule>>,
+    modules_without_code: Vec<Arc<CompiledModule>>,
+}
 
 impl ModuleRegistry {
     /// Fetches information about a registered module given a program counter value.
@@ -40,7 +33,7 @@ impl ModuleRegistry {
     }
 
     fn module(&self, pc: usize) -> Option<&Arc<RegisteredModule>> {
-        let (end, info) = self.0.range(pc..).next()?;
+        let (end, info) = self.modules_with_code.range(pc..).next()?;
         if pc < info.start || *end < pc {
             return None;
         }
@@ -53,32 +46,40 @@ impl ModuleRegistry {
         let compiled_module = module.compiled_module();
         let (start, end) = compiled_module.code().range();
 
-        // Ignore modules with no code or finished functions
-        if start == end || compiled_module.finished_functions().is_empty() {
+        // If there's not actually any functions in this module then we may
+        // still need to preserve it for its data segments. Instances of this
+        // module will hold a pointer to the data stored in the module itself,
+        // and for schemes like uffd this performs lazy initialization which
+        // could use the module in the future. For that reason we continue to
+        // register empty modules and retain them.
+        if compiled_module.finished_functions().is_empty() {
+            self.modules_without_code.push(compiled_module.clone());
             return;
         }
 
         // The module code range is exclusive for end, so make it inclusive as it
         // may be a valid PC value
+        assert!(start < end);
         let end = end - 1;
 
         // Ensure the module isn't already present in the registry
-        // This is expected when a module is instantiated multiple times in the same store
-        if let Some(m) = self.0.get(&end) {
+        // This is expected when a module is instantiated multiple times in the
+        // same store
+        if let Some(m) = self.modules_with_code.get(&end) {
             assert_eq!(m.start, start);
             return;
         }
 
         // Assert that this module's code doesn't collide with any other registered modules
-        if let Some((_, prev)) = self.0.range(end..).next() {
+        if let Some((_, prev)) = self.modules_with_code.range(end..).next() {
             assert!(prev.start > end);
         }
 
-        if let Some((prev_end, _)) = self.0.range(..=start).next_back() {
+        if let Some((prev_end, _)) = self.modules_with_code.range(..=start).next_back() {
             assert!(*prev_end < start);
         }
 
-        let prev = self.0.insert(
+        let prev = self.modules_with_code.insert(
             end,
             Arc::new(RegisteredModule {
                 start,
@@ -101,7 +102,7 @@ impl ModuleRegistry {
 impl Drop for ModuleRegistry {
     fn drop(&mut self) {
         let mut info = GLOBAL_MODULES.write().unwrap();
-        for end in self.0.keys() {
+        for end in self.modules_with_code.keys() {
             info.unregister(*end);
         }
     }
@@ -113,31 +114,10 @@ struct RegisteredModule {
     signatures: Arc<SignatureCollection>,
 }
 
-impl RegisteredModule {
-    fn instr_pos(offset: u32, addr_map: &FunctionAddressMap) -> Option<usize> {
-        // Use our relative position from the start of the function to find the
-        // machine instruction that corresponds to `pc`, which then allows us to
-        // map that to a wasm original source location.
-        match addr_map
-            .instructions
-            .binary_search_by_key(&offset, |map| map.code_offset)
-        {
-            // Exact hit!
-            Ok(pos) => Some(pos),
-
-            // This *would* be at the first slot in the array, so no
-            // instructions cover `pc`.
-            Err(0) => None,
-
-            // This would be at the `nth` slot, so we're at the `n-1`th slot.
-            Err(n) => Some(n - 1),
-        }
-    }
-}
-
 impl ModuleInfo for RegisteredModule {
     fn lookup_stack_map(&self, pc: usize) -> Option<&StackMap> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
+        let text_offset = pc - self.start;
+        let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
         let info = self.module.func_info(index);
 
         // Do a binary search to find the stack map for the given offset.
@@ -184,7 +164,7 @@ impl ModuleInfo for RegisteredModule {
 
         let index = match info
             .stack_maps
-            .binary_search_by_key(&offset, |i| i.code_offset)
+            .binary_search_by_key(&func_offset, |i| i.code_offset)
         {
             // Exact hit.
             Ok(i) => i,
@@ -238,23 +218,22 @@ impl GlobalModuleRegistry {
         let modules = GLOBAL_MODULES.read().unwrap();
 
         match modules.module(pc) {
-            Some(entry) => match func_by_pc(&entry.module, pc) {
-                Some((index, offset)) => {
-                    let info = entry.module.func_info(index);
-                    RegisteredModule::instr_pos(offset, &info.address_map).is_some()
-                }
-                None => false,
-            },
+            Some((entry, text_offset)) => {
+                wasmtime_environ::lookup_file_pos(entry.module.address_map_data(), text_offset)
+                    .is_some()
+            }
             None => false,
         }
     }
 
-    fn module(&self, pc: usize) -> Option<&GlobalRegisteredModule> {
+    /// Returns, if found, the corresponding module for the `pc` as well as the
+    /// pc transformed to a relative offset within the text section.
+    fn module(&self, pc: usize) -> Option<(&GlobalRegisteredModule, usize)> {
         let (end, info) = self.0.range(pc..).next()?;
         if pc < info.start || *end < pc {
             return None;
         }
-        Some(info)
+        Some((info, pc - info.start))
     }
 
     // Work with the global instance of `GlobalModuleRegistry`. Note that only
@@ -272,8 +251,8 @@ impl GlobalModuleRegistry {
     /// boolean indicates whether the engine used to compile this module is
     /// using environment variables to control debuginfo parsing.
     pub(crate) fn lookup_frame_info(&self, pc: usize) -> Option<(FrameInfo, bool, bool)> {
-        let module = self.module(pc)?;
-        module.lookup_frame_info(pc).map(|info| {
+        let (module, offset) = self.module(pc)?;
+        module.lookup_frame_info(offset).map(|info| {
             (
                 info,
                 module.has_unparsed_debuginfo(),
@@ -283,8 +262,9 @@ impl GlobalModuleRegistry {
     }
 
     /// Fetches trap information about a program counter in a backtrace.
-    pub(crate) fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
-        self.module(pc)?.lookup_trap_info(pc)
+    pub(crate) fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
+        let (module, offset) = self.module(pc)?;
+        wasmtime_environ::lookup_trap_code(module.module.trap_data(), offset)
     }
 
     /// Registers a new region of code, described by `(start, end)` and with
@@ -328,21 +308,22 @@ impl GlobalRegisteredModule {
     ///
     /// Returns an object if this `pc` is known to this module, or returns `None`
     /// if no information can be found.
-    pub fn lookup_frame_info(&self, pc: usize) -> Option<FrameInfo> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
+    pub fn lookup_frame_info(&self, text_offset: usize) -> Option<FrameInfo> {
+        let (index, _func_offset) = self.module.func_by_text_offset(text_offset)?;
         let info = self.module.func_info(index);
-        let pos = RegisteredModule::instr_pos(offset, &info.address_map);
+        let instr = wasmtime_environ::lookup_file_pos(self.module.address_map_data(), text_offset);
 
         // In debug mode for now assert that we found a mapping for `pc` within
         // the function, because otherwise something is buggy along the way and
         // not accounting for all the instructions. This isn't super critical
         // though so we can omit this check in release mode.
-        debug_assert!(pos.is_some(), "failed to find instruction for {:x}", pc);
+        debug_assert!(
+            instr.is_some(),
+            "failed to find instruction for {:#x}",
+            text_offset
+        );
 
-        let instr = match pos {
-            Some(pos) => info.address_map.instructions[pos].srcloc,
-            None => info.address_map.start_srcloc,
-        };
+        let instr = instr.unwrap_or(info.start_srcloc);
 
         // Use our wasm-relative pc to symbolize this frame. If there's a
         // symbolication context (dwarf debug info) available then we can try to
@@ -355,23 +336,25 @@ impl GlobalRegisteredModule {
         let mut symbols = Vec::new();
 
         if let Some(s) = &self.module.symbolize_context().ok().and_then(|c| c) {
-            let to_lookup = (instr.bits() as u64) - s.code_section_offset();
-            if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
-                while let Ok(Some(frame)) = frames.next() {
-                    symbols.push(FrameSymbol {
-                        name: frame
-                            .function
-                            .as_ref()
-                            .and_then(|l| l.raw_name().ok())
-                            .map(|s| s.to_string()),
-                        file: frame
-                            .location
-                            .as_ref()
-                            .and_then(|l| l.file)
-                            .map(|s| s.to_string()),
-                        line: frame.location.as_ref().and_then(|l| l.line),
-                        column: frame.location.as_ref().and_then(|l| l.column),
-                    });
+            if let Some(offset) = instr.file_offset() {
+                let to_lookup = u64::from(offset) - s.code_section_offset();
+                if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
+                    while let Ok(Some(frame)) = frames.next() {
+                        symbols.push(FrameSymbol {
+                            name: frame
+                                .function
+                                .as_ref()
+                                .and_then(|l| l.raw_name().ok())
+                                .map(|s| s.to_string()),
+                            file: frame
+                                .location
+                                .as_ref()
+                                .and_then(|l| l.file)
+                                .map(|s| s.to_string()),
+                            line: frame.location.as_ref().and_then(|l| l.line),
+                            column: frame.location.as_ref().and_then(|l| l.column),
+                        });
+                    }
                 }
             }
         }
@@ -384,20 +367,9 @@ impl GlobalRegisteredModule {
             func_index: index.index() as u32,
             func_name: module.func_names.get(&index).cloned(),
             instr,
-            func_start: info.address_map.start_srcloc,
+            func_start: info.start_srcloc,
             symbols,
         })
-    }
-
-    /// Fetches trap information about a program counter in a backtrace.
-    pub fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
-        let (index, offset) = func_by_pc(&self.module, pc)?;
-        let info = self.module.func_info(index);
-        let idx = info
-            .traps
-            .binary_search_by_key(&offset, |info| info.code_offset)
-            .ok()?;
-        Some(&info.traps[idx])
     }
 }
 
@@ -413,8 +385,8 @@ pub struct FrameInfo {
     module_name: Option<String>,
     func_index: u32,
     func_name: Option<String>,
-    func_start: ir::SourceLoc,
-    instr: ir::SourceLoc,
+    func_start: FilePos,
+    instr: FilePos,
     symbols: Vec<FrameSymbol>,
 }
 
@@ -464,7 +436,7 @@ impl FrameInfo {
     /// The offset here is the offset from the beginning of the original wasm
     /// module to the instruction that this frame points to.
     pub fn module_offset(&self) -> usize {
-        self.instr.bits() as usize
+        self.instr.file_offset().unwrap_or(u32::MAX) as usize
     }
 
     /// Returns the offset from the original wasm module's function to this
@@ -474,7 +446,10 @@ impl FrameInfo {
     /// function of this frame (within the wasm module) to the instruction this
     /// frame points to.
     pub fn func_offset(&self) -> usize {
-        (self.instr.bits() - self.func_start.bits()) as usize
+        match self.instr.file_offset() {
+            Some(i) => (i - self.func_start.file_offset().unwrap()) as usize,
+            None => u32::MAX as usize,
+        }
     }
 
     /// Returns the debug symbols found, if any, for this function frame.

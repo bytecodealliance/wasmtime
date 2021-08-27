@@ -3,8 +3,12 @@ on:
   push:
     branches: [main]
     tags-ignore: [dev]
+    paths-ignore:
+      - 'meetings/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'meetings/**'
 defaults:
   run:
     shell: bash
@@ -75,7 +79,7 @@ jobs:
         echo "${{ runner.tool_cache }}/mdbook/bin" >> $GITHUB_PATH
         cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook
     - run: (cd docs && mdbook build)
-    - run: cargo build -p wasmtime-wasi --features wasmtime/wat
+    - run: cargo build -p wasmtime-wasi --features wasmtime/wat,wasmtime/cranelift
     - run: (cd docs/rust_wasi_markdown_parser && cargo build)
     - run: (cd docs && mdbook test -L ../target/debug/deps,./rust_wasi_markdown_parser/target/debug/deps)
 
@@ -125,18 +129,21 @@ jobs:
     - uses: ./.github/actions/install-rust
 
     # Check some feature combinations of the `wasmtime` crate
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --no-default-features
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features wat
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features lightbeam
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features jitdump
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features cache
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features async
-    - run: cargo check --manifest-path crates/wasmtime/Cargo.toml --features uffd
+    - run: cargo check -p wasmtime --no-default-features
+    - run: cargo check -p wasmtime --no-default-features --features wat
+    - run: cargo check -p wasmtime --no-default-features --features lightbeam
+    - run: cargo check -p wasmtime --no-default-features --features jitdump
+    - run: cargo check -p wasmtime --no-default-features --features vtune
+    - run: cargo check -p wasmtime --no-default-features --features cache
+    - run: cargo check -p wasmtime --no-default-features --features async
+    - run: cargo check -p wasmtime --no-default-features --features uffd
+    - run: cargo check -p wasmtime --no-default-features --features cranelift
+    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
 
     # Check some feature combinations of the `wasmtime-c-api` crate
-    - run: cargo check --manifest-path crates/c-api/Cargo.toml --no-default-features
-    - run: cargo check --manifest-path crates/c-api/Cargo.toml --features wat
-    - run: cargo check --manifest-path crates/c-api/Cargo.toml --features wasi
+    - run: cargo check -p wasmtime-c-api --no-default-features
+    - run: cargo check -p wasmtime-c-api --no-default-features --features wat
+    - run: cargo check -p wasmtime-c-api --no-default-features --features wasi
 
     # Check a few builds of the cranelift backend
     # - only x86 backend support,
@@ -232,6 +239,8 @@ jobs:
             gcc: aarch64-linux-gnu-gcc
             qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
             qemu_target: aarch64-linux-user
+            # FIXME(#3183) shouldn't be necessary to specify this
+            qemu_flags: -cpu cortex-a72
     steps:
     - uses: actions/checkout@v2
       with:
@@ -264,7 +273,7 @@ jobs:
         # Configure Cargo for cross compilation and tell it how it can run
         # cross executables
         upcase=$(echo ${{ matrix.target }} | awk '{ print toupper($0) }' | sed 's/-/_/g')
-        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} >> $GITHUB_ENV
+        echo CARGO_TARGET_${upcase}_RUNNER=${{ runner.tool_cache }}/qemu/bin/${{ matrix.qemu }} ${{ matrix.qemu_flags }} >> $GITHUB_ENV
         echo CARGO_TARGET_${upcase}_LINKER=${{ matrix.gcc }} >> $GITHUB_ENV
 
         # QEMU emulation is not always the speediest, so total testing time

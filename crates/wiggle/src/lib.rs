@@ -332,11 +332,11 @@ unsafe impl<T: ?Sized + GuestMemory> GuestMemory for Arc<T> {
 /// * `GuestPtr<'_, str>` - a pointer to a guest string. Has the methods
 ///   [`GuestPtr::as_str_mut`], which gives a dynamically borrow-checked
 ///   `GuestStrMut<'_>`, which `DerefMut`s to a `&mut str`, and
-///   [`GuestPtr::as_str`], which is the sharedable version of same.
+///   [`GuestPtr::as_str`], which is the shareable version of same.
 /// * `GuestPtr<'_, [T]>` - a pointer to a guest array. Has methods
 ///   [`GuestPtr::as_slice_mut`], which gives a dynamically borrow-checked
 ///   `GuestSliceMut<'_, T>`, which `DerefMut`s to a `&mut [T]` and
-///   [`GuestPtr::as_slice`], which is the sharedable version of same.
+///   [`GuestPtr::as_slice`], which is the shareable version of same.
 ///
 /// Unsized types such as this may have extra methods and won't have methods
 /// like [`GuestPtr::read`] or [`GuestPtr::write`].
@@ -512,9 +512,9 @@ impl<'a, T> GuestPtr<'a, [T]> {
     /// Attempts to create a [`GuestSlice<'_, T>`] from this pointer, performing
     /// bounds checks and type validation. The `GuestSlice` is a smart pointer
     /// that can be used as a `&[T]` via the `Deref` trait.
-    /// The region of memory backing the slice will be marked as sharedably
+    /// The region of memory backing the slice will be marked as shareably
     /// borrowed by the [`GuestMemory`] until the `GuestSlice` is dropped.
-    /// Multiple sharedable borrows of the same memory are permitted, but only
+    /// Multiple shareable borrows of the same memory are permitted, but only
     /// one mutable borrow.
     ///
     /// This function will return a `GuestSlice` into host memory if all checks
@@ -691,7 +691,7 @@ impl<'a> GuestPtr<'a, str> {
     /// Attempts to create a [`GuestStr<'_>`] from this pointer, performing
     /// bounds checks and utf-8 checks. The resulting `GuestStr` can be used
     /// as a `&str` via the `Deref` trait. The region of memory backing the
-    /// `str` will be marked as sharedably borrowed by the [`GuestMemory`]
+    /// `str` will be marked as shareably borrowed by the [`GuestMemory`]
     /// until the `GuestStr` is dropped.
     ///
     /// This function will return `GuestStr` into host memory if all checks
@@ -777,7 +777,7 @@ impl<T: ?Sized + Pointee> fmt::Debug for GuestPtr<'_, T> {
     }
 }
 
-/// A smart pointer to an sharedable slice in guest memory.
+/// A smart pointer to an shareable slice in guest memory.
 /// Usable as a `&'a [T]` via [`std::ops::Deref`].
 pub struct GuestSlice<'a, T> {
     ptr: &'a [T],
@@ -826,7 +826,7 @@ impl<'a, T> Drop for GuestSliceMut<'a, T> {
     }
 }
 
-/// A smart pointer to an sharedable `str` in guest memory.
+/// A smart pointer to an shareable `str` in guest memory.
 /// Usable as a `&'a str` via [`std::ops::Deref`].
 pub struct GuestStr<'a> {
     ptr: &'a str,

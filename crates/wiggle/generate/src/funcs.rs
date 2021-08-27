@@ -73,36 +73,54 @@ fn _define_func(
         },
     );
 
-    let asyncness = if settings.get_async(&module, &func).is_sync() {
-        quote!()
-    } else {
-        quote!(async)
-    };
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();
-    (
-        quote! {
-            #[allow(unreachable_code)] // deals with warnings in noreturn functions
-            pub #asyncness fn #ident(
-                ctx: &mut (impl #(#bounds)+*),
-                memory: &dyn #rt::GuestMemory,
-                #(#abi_params),*
-            ) -> Result<#abi_ret, #rt::Trap> {
-                use std::convert::TryFrom as _;
-
-                let _span = #rt::tracing::span!(
-                    #rt::tracing::Level::TRACE,
-                    "wiggle abi",
-                    module = #mod_name,
-                    function = #func_name
-                );
-                let _enter = _span.enter();
-
-                #body
-            }
-        },
-        bounds,
-    )
+    let mk_span = quote!(
+        let _span = #rt::tracing::span!(
+            #rt::tracing::Level::TRACE,
+            "wiggle abi",
+            module = #mod_name,
+            function = #func_name
+        );
+    );
+    if settings.get_async(&module, &func).is_sync() {
+        (
+            quote!(
+                #[allow(unreachable_code)] // deals with warnings in noreturn functions
+                pub fn #ident(
+                    ctx: &mut (impl #(#bounds)+*),
+                    memory: &dyn #rt::GuestMemory,
+                    #(#abi_params),*
+                ) -> Result<#abi_ret, #rt::Trap> {
+                    use std::convert::TryFrom as _;
+                    #mk_span
+                    _span.in_scope(|| {
+                      #body
+                    })
+                }
+            ),
+            bounds,
+        )
+    } else {
+        (
+            quote!(
+                #[allow(unreachable_code)] // deals with warnings in noreturn functions
+                pub fn #ident<'a>(
+                    ctx: &'a mut (impl #(#bounds)+*),
+                    memory: &'a dyn #rt::GuestMemory,
+                    #(#abi_params),*
+                ) -> impl std::future::Future<Output = Result<#abi_ret, #rt::Trap>> + 'a {
+                    use std::convert::TryFrom as _;
+                    use #rt::tracing::Instrument as _;
+                    #mk_span
+                    async move {
+                        #body
+                    }.instrument(_span)
+                }
+            ),
+            bounds,
+        )
+    }
 }
 
 struct Rust<'a> {

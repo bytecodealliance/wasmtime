@@ -278,7 +278,12 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
         // enough. If so we don't need to allocate our own.
         let mut old_stack = mem::zeroed();
         let r = libc::sigaltstack(ptr::null(), &mut old_stack);
-        assert_eq!(r, 0, "learning about sigaltstack failed");
+        assert_eq!(
+            r,
+            0,
+            "learning about sigaltstack failed: {}",
+            io::Error::last_os_error()
+        );
         if old_stack.ss_flags & libc::SS_DISABLE == 0 && old_stack.ss_size >= MIN_STACK_SIZE {
             return Ok(None);
         }
@@ -309,14 +314,24 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
             MIN_STACK_SIZE,
             libc::PROT_READ | libc::PROT_WRITE,
         );
-        assert_eq!(r, 0, "mprotect to configure memory for sigaltstack failed");
+        assert_eq!(
+            r,
+            0,
+            "mprotect to configure memory for sigaltstack failed: {}",
+            io::Error::last_os_error()
+        );
         let new_stack = libc::stack_t {
             ss_sp: stack_ptr,
             ss_flags: 0,
             ss_size: MIN_STACK_SIZE,
         };
         let r = libc::sigaltstack(&new_stack, ptr::null_mut());
-        assert_eq!(r, 0, "registering new sigaltstack failed");
+        assert_eq!(
+            r,
+            0,
+            "registering new sigaltstack failed: {}",
+            io::Error::last_os_error()
+        );
 
         Ok(Some(Stack {
             mmap_ptr: ptr,

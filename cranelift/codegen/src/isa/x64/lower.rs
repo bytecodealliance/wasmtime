@@ -4528,8 +4528,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::FcvtFromUint => {
             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let ty = ty.unwrap();
-
             let input_ty = ctx.input_ty(insn, 0);
+            let output_ty = ctx.output_ty(insn, 0);
+
             if !ty.is_vector() {
                 match input_ty {
                     types::I8 | types::I16 | types::I32 => {
@@ -4572,67 +4573,71 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                     _ => panic!("unexpected input type for FcvtFromUint: {:?}", input_ty),
                 };
-            } else if let Some(uwiden) = matches_input(ctx, inputs[0], Opcode::UwidenLow) {
-                let uwiden_input = InsnInput {
-                    insn: uwiden,
-                    input: 0,
-                };
-                let src = put_input_in_reg(ctx, uwiden_input);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let input_ty = ctx.input_ty(uwiden, 0);
-                let output_ty = ctx.output_ty(insn, 0);
+            } else if output_ty == types::F64X2 {
+                if let Some(uwiden) = matches_input(ctx, inputs[0], Opcode::UwidenLow) {
+                    let uwiden_input = InsnInput {
+                        insn: uwiden,
+                        input: 0,
+                    };
+                    let src = put_input_in_reg(ctx, uwiden_input);
+                    let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                    let input_ty = ctx.input_ty(uwiden, 0);
 
-                // Matches_input further obfuscates which Wasm instruction this is ultimately
-                // lowering. Check here that the types are as expected for F64x2ConvertLowI32x4U.
-                debug_assert!(input_ty == types::I32X4 || output_ty == types::F64X2);
+                    // Matches_input further obfuscates which Wasm instruction this is ultimately
+                    // lowering. Check here that the types are as expected for F64x2ConvertLowI32x4U.
+                    debug_assert!(input_ty == types::I32X4);
 
-                // Algorithm uses unpcklps to help create a float that is equivalent
-                // 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent
-                // every value of the mantissa represents a corresponding uint32 number.
-                // When we subtract 0x1.0p52 we are left with double(src).
-                let uint_mask = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, src, types::I32X4));
+                    // Algorithm uses unpcklps to help create a float that is equivalent
+                    // 0x1.0p52 + double(src). 0x1.0p52 is unique because at this exponent
+                    // every value of the mantissa represents a corresponding uint32 number.
+                    // When we subtract 0x1.0p52 we are left with double(src).
+                    let uint_mask = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
+                    ctx.emit(Inst::gen_move(dst, src, types::I32X4));
 
-                static UINT_MASK: [u8; 16] = [
-                    0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00,
-                ];
+                    static UINT_MASK: [u8; 16] = [
+                        0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00,
+                        0x00, 0x00, 0x00, 0x00,
+                    ];
 
-                let uint_mask_const = ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK));
+                    let uint_mask_const =
+                        ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK));
 
-                ctx.emit(Inst::xmm_load_const(
-                    uint_mask_const,
-                    uint_mask,
-                    types::I32X4,
-                ));
+                    ctx.emit(Inst::xmm_load_const(
+                        uint_mask_const,
+                        uint_mask,
+                        types::I32X4,
+                    ));
 
-                // Creates 0x1.0p52 + double(src)
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Unpcklps,
-                    RegMem::from(uint_mask),
-                    dst,
-                ));
+                    // Creates 0x1.0p52 + double(src)
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Unpcklps,
+                        RegMem::from(uint_mask),
+                        dst,
+                    ));
 
-                static UINT_MASK_HIGH: [u8; 16] = [
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x30, 0x43,
-                ];
+                    static UINT_MASK_HIGH: [u8; 16] = [
+                        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00,
+                        0x00, 0x00, 0x30, 0x43,
+                    ];
 
-                let uint_mask_high_const =
-                    ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH));
-                let uint_mask_high = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                ctx.emit(Inst::xmm_load_const(
-                    uint_mask_high_const,
-                    uint_mask_high,
-                    types::I32X4,
-                ));
+                    let uint_mask_high_const =
+                        ctx.use_constant(VCodeConstantData::WellKnown(&UINT_MASK_HIGH));
+                    let uint_mask_high = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
+                    ctx.emit(Inst::xmm_load_const(
+                        uint_mask_high_const,
+                        uint_mask_high,
+                        types::I32X4,
+                    ));
 
-                // 0x1.0p52 + double(src) - 0x1.0p52
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Subpd,
-                    RegMem::from(uint_mask_high),
-                    dst,
-                ));
+                    // 0x1.0p52 + double(src) - 0x1.0p52
+                    ctx.emit(Inst::xmm_rm_r(
+                        SseOpcode::Subpd,
+                        RegMem::from(uint_mask_high),
+                        dst,
+                    ));
+                } else {
+                    panic!("Unsupported FcvtFromUint conversion types: {}", ty);
+                }
             } else {
                 assert_eq!(ctx.input_ty(insn, 0), types::I32X4);
                 let src = put_input_in_reg(ctx, inputs[0]);

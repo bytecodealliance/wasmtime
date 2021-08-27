@@ -35,7 +35,7 @@ use crate::instance::Instance;
 use anyhow::{bail, Context, Result};
 use std::thread;
 use userfaultfd::{Event, FeatureFlags, IoctlFlags, Uffd, UffdBuilder};
-use wasmtime_environ::{entity::EntityRef, wasm::DefinedMemoryIndex, MemoryInitialization};
+use wasmtime_environ::{DefinedMemoryIndex, EntityRef, MemoryInitialization};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
 
@@ -269,7 +269,9 @@ unsafe fn initialize_wasm_page(
     if let MemoryInitialization::Paged { map, .. } = &instance.module.memory_initialization {
         let pages = &map[memory_index];
 
-        if let Some(Some(data)) = pages.get(page_index) {
+        let pos = pages.binary_search_by_key(&(page_index as u64), |k| k.0);
+        if let Ok(i) = pos {
+            let data = instance.wasm_data(pages[i].1.clone());
             debug_assert_eq!(data.len(), WASM_PAGE_SIZE);
 
             log::trace!(
@@ -441,9 +443,7 @@ mod test {
         PoolingAllocationStrategy, VMSharedSignatureIndex,
     };
     use std::sync::Arc;
-    use wasmtime_environ::{
-        entity::PrimaryMap, wasm::Memory, MemoryPlan, MemoryStyle, Module, Tunables,
-    };
+    use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, PrimaryMap, Tunables};
 
     #[cfg(target_pointer_width = "64")]
     #[test]
@@ -532,6 +532,7 @@ mod test {
                                 shared_signatures: VMSharedSignatureIndex::default().into(),
                                 host_state: Box::new(()),
                                 store: None,
+                                wasm_data: &[],
                             },
                         )
                         .expect("instance should allocate"),

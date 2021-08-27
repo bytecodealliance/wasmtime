@@ -15,7 +15,7 @@ use std::pin::Pin;
 use std::ptr::NonNull;
 use std::sync::atomic::Ordering::Relaxed;
 use std::sync::Arc;
-use wasmtime_environ::wasm::{EntityIndex, FuncIndex};
+use wasmtime_environ::{EntityIndex, FuncIndex};
 use wasmtime_runtime::{
     raise_user_trap, ExportFunction, InstanceAllocator, InstanceHandle, OnDemandInstanceAllocator,
     VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
@@ -300,6 +300,8 @@ impl Func {
     ///
     /// For more information about `Send + Sync + 'static` requirements on the
     /// `func`, see [`Func::wrap`](#why-send--sync--static).
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new<T>(
         mut store: impl AsContextMut<Data = T>,
         ty: FuncType,
@@ -378,8 +380,8 @@ impl Func {
     /// # Ok(())
     /// # }
     /// ```
-    #[cfg(feature = "async")]
-    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    #[cfg(all(feature = "async", feature = "cranelift"))]
+    #[cfg_attr(nightlydoc, doc(cfg(all(feature = "async", feature = "cranelift"))))]
     pub fn new_async<T, F>(store: impl AsContextMut<Data = T>, ty: FuncType, func: F) -> Func
     where
         F: for<'a> Fn(
@@ -1135,7 +1137,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Result<Option<usize>, Tr
             interrupts.stack_limit.store(usize::max_value(), Relaxed);
             return Err(Trap::new_wasm(
                 None,
-                wasmtime_environ::ir::TrapCode::Interrupt,
+                wasmtime_environ::TrapCode::Interrupt,
                 backtrace::Backtrace::new_unresolved(),
             ));
         }
@@ -1883,6 +1885,7 @@ pub(crate) struct HostFunc {
 
 impl HostFunc {
     /// Analog of [`Func::new`]
+    #[cfg(compiler)]
     pub fn new<T>(
         engine: &Engine,
         ty: FuncType,

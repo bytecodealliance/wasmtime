@@ -421,6 +421,13 @@ impl Function {
         self.dfg[dst] = self.dfg[src].clone();
         self.layout.remove_inst(src);
     }
+
+    /// Size occupied by all stack slots associated with this function.
+    ///
+    /// Does not include any padding necessary due to offsets
+    pub fn stack_size(&self) -> u32 {
+        self.stack_slots.values().map(|ss| ss.size).sum()
+    }
 }
 
 /// Additional annotations for function display.

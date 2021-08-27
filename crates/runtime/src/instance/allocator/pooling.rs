@@ -20,8 +20,8 @@ use std::marker;
 use std::mem;
 use std::sync::{Arc, Mutex};
 use wasmtime_environ::{
-    entity::{EntitySet, PrimaryMap},
-    HostPtr, MemoryStyle, Module, Tunables, VMOffsets, VMOffsetsFields, WASM_PAGE_SIZE,
+    EntitySet, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets, VMOffsetsFields,
+    WASM_PAGE_SIZE,
 };
 
 cfg_if::cfg_if! {
@@ -197,7 +197,7 @@ impl ModuleLimits {
                 );
             }
 
-            if let MemoryStyle::Dynamic = plan.style {
+            if let MemoryStyle::Dynamic { .. } = plan.style {
                 bail!(
                     "memory index {} has an unsupported dynamic memory plan style",
                     i,
@@ -364,6 +364,7 @@ impl InstancePool {
                     dropped_elements: EntitySet::new(),
                     dropped_data: EntitySet::new(),
                     host_state: Box::new(()),
+                    wasm_data: &[],
                     vmctx: VMContext {
                         _marker: marker::PhantomPinned,
                     },
@@ -382,6 +383,7 @@ impl InstancePool {
         instance.module = req.module.clone();
         instance.offsets = VMOffsets::new(HostPtr, instance.module.as_ref());
         instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+        instance.wasm_data = &*req.wasm_data;
 
         let mut limiter = req.store.and_then(|s| (*s).limiter());
         Self::set_instance_memories(
@@ -492,6 +494,7 @@ impl InstancePool {
         // fresh allocation later on.
         instance.module = self.empty_module.clone();
         instance.offsets = VMOffsets::new(HostPtr, &self.empty_module);
+        instance.wasm_data = &[];
 
         self.free_list.lock().unwrap().push(index);
     }
@@ -527,7 +530,6 @@ impl InstancePool {
         }
 
         debug_assert!(instance.dropped_data.is_empty());
-        instance.dropped_data.resize(module.passive_data.len());
 
         Ok(())
     }
@@ -1000,7 +1002,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                         // If there was an out of bounds access observed in initialization, return a trap
                         if *out_of_bounds {
                             return Err(InstantiationError::Trap(crate::traphandlers::Trap::wasm(
-                                wasmtime_environ::ir::TrapCode::HeapOutOfBounds,
+                                wasmtime_environ::TrapCode::HeapOutOfBounds,
                             )));
                         }
 
@@ -1050,10 +1052,8 @@ mod test {
     use super::*;
     use crate::{Imports, VMSharedSignatureIndex};
     use wasmtime_environ::{
-        entity::EntityRef,
-        ir::Type,
-        wasm::{Global, GlobalInit, Memory, SignatureIndex, Table, TableElementType, WasmType},
-        MemoryPlan, ModuleType, TablePlan, TableStyle,
+        EntityRef, Global, GlobalInit, Memory, MemoryPlan, ModuleType, SignatureIndex, Table,
+        TablePlan, TableStyle, WasmType,
     };
 
     #[test]
@@ -1088,7 +1088,6 @@ mod test {
             style: TableStyle::CallerChecksSignature,
             table: Table {
                 wasm_ty: WasmType::FuncRef,
-                ty: TableElementType::Func,
                 minimum: 0,
                 maximum: None,
             },
@@ -1144,7 +1143,6 @@ mod test {
 
         module.globals.push(Global {
             wasm_ty: WasmType::I32,
-            ty: Type::int(32).unwrap(),
             mutability: false,
             initializer: GlobalInit::I32Const(0),
         });
@@ -1208,7 +1206,6 @@ mod test {
             style: TableStyle::CallerChecksSignature,
             table: Table {
                 wasm_ty: WasmType::FuncRef,
-                ty: TableElementType::Func,
                 minimum: 0,
                 maximum: None,
             },
@@ -1258,7 +1255,6 @@ mod test {
 
         module.globals.push(Global {
             wasm_ty: WasmType::I32,
-            ty: Type::int(32).unwrap(),
             mutability: false,
             initializer: GlobalInit::I32Const(0),
         });
@@ -1281,7 +1277,6 @@ mod test {
             style: TableStyle::CallerChecksSignature,
             table: Table {
                 wasm_ty: WasmType::FuncRef,
-                ty: TableElementType::Func,
                 minimum: 11,
                 maximum: None,
             },
@@ -1331,7 +1326,7 @@ mod test {
 
         let mut module = Module::default();
         module.memory_plans.push(MemoryPlan {
-            style: MemoryStyle::Dynamic,
+            style: MemoryStyle::Dynamic { reserve: 0 },
             memory: Memory {
                 minimum: 1,
                 maximum: None,
@@ -1417,6 +1412,7 @@ mod test {
                             shared_signatures: VMSharedSignatureIndex::default().into(),
                             host_state: Box::new(()),
                             store: None,
+                            wasm_data: &[],
                         },
                     )
                     .expect("allocation should succeed"),
@@ -1439,6 +1435,7 @@ mod test {
                 shared_signatures: VMSharedSignatureIndex::default().into(),
                 host_state: Box::new(()),
                 store: None,
+                wasm_data: &[],
             },
         ) {
             Err(InstantiationError::Limit(3)) => {}

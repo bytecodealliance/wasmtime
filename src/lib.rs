@@ -298,7 +298,10 @@ impl CommonOptions {
     fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
 
-        // Set the target before setting any cranelift options
+        // Set the compiler and target before setting any cranelift options,
+        // since the strategy determines which compiler is in use and the target
+        // will reset any target-specific options.
+        config.strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?;
         if let Some(target) = target {
             config.target(target)?;
         }
@@ -307,7 +310,6 @@ impl CommonOptions {
             .cranelift_debug_verifier(self.enable_cranelift_debug_verifier)
             .debug_info(self.debug_info)
             .cranelift_opt_level(self.opt_level())
-            .strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?
             .profiler(pick_profiling_strategy(self.jitdump, self.vtune)?)?
             .cranelift_nan_canonicalization(self.enable_cranelift_nan_canonicalization);
 
@@ -363,6 +365,7 @@ impl CommonOptions {
             .wasm_multi_value(features.multi_value || self.enable_multi_value || self.enable_all)
             .wasm_threads(features.threads || self.enable_threads || self.enable_all)
             .wasm_multi_memory(features.multi_memory || self.enable_multi_memory || self.enable_all)
+            .wasm_memory64(features.memory64 || self.enable_all)
             .wasm_module_linking(
                 features.module_linking || self.enable_module_linking || self.enable_all,
             );

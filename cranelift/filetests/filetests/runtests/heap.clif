@@ -1,0 +1,170 @@
+test run
+target x86_64 machinst
+target s390x
+target aarch64
+
+
+function %static_heap_i64_load_store(i64 vmctx, i64, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
+
+block0(v0: i64, v1: i64, v2: i32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %static_heap_i64_load_store(0, 1) == 1
+; run: %static_heap_i64_load_store(0, -1) == -1
+; run: %static_heap_i64_load_store(16, 1) == 1
+; run: %static_heap_i64_load_store(16, -1) == -1
+
+
+function %static_heap_i32_load_store(i64 vmctx, i32, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i32
+
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %static_heap_i32_load_store(0, 1) == 1
+; run: %static_heap_i32_load_store(0, -1) == -1
+; run: %static_heap_i32_load_store(16, 1) == 1
+; run: %static_heap_i32_load_store(16, -1) == -1
+
+
+function %static_heap_i32_load_store_no_min(i64 vmctx, i32, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, bound 0x1_0000_0000, offset_guard 0, index_type i32
+
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %static_heap_i32_load_store_no_min(0, 1) == 1
+; run: %static_heap_i32_load_store_no_min(0, -1) == -1
+; run: %static_heap_i32_load_store_no_min(16, 1) == 1
+; run: %static_heap_i32_load_store_no_min(16, -1) == -1
+
+
+function %dynamic_heap_i64_load_store(i64 vmctx, i64, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    gv2 = load.i64 notrap aligned gv0+8
+    heap0 = dynamic gv1, bound gv2, offset_guard 0, index_type i64
+
+block0(v0: i64, v1: i64, v2: i32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: dynamic, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %dynamic_heap_i64_load_store(0, 1) == 1
+; run: %dynamic_heap_i64_load_store(0, -1) == -1
+; run: %dynamic_heap_i64_load_store(16, 1) == 1
+; run: %dynamic_heap_i64_load_store(16, -1) == -1
+
+
+function %dynamic_heap_i32_load_store(i64 vmctx, i32, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    gv2 = load.i64 notrap aligned gv0+8
+    heap0 = dynamic gv1, bound gv2, offset_guard 0, index_type i32
+
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: dynamic, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %dynamic_heap_i32_load_store(0, 1) == 1
+; run: %dynamic_heap_i32_load_store(0, -1) == -1
+; run: %dynamic_heap_i32_load_store(16, 1) == 1
+; run: %dynamic_heap_i32_load_store(16, -1) == -1
+
+
+function %multi_heap_load_store(i64 vmctx, i32, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    gv2 = load.i64 notrap aligned gv0+16
+    gv3 = load.i64 notrap aligned gv0+24
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
+    heap1 = dynamic gv2, bound gv3, offset_guard 0, index_type i32
+
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = iconst.i64 0
+    v4 = iconst.i32 0
+
+    ; Store lhs in heap0
+    v5 = heap_addr.i64 heap0, v3, 4
+    store.i32 v1, v5
+
+    ; Store rhs in heap1
+    v6 = heap_addr.i64 heap1, v4, 4
+    store.i32 v2, v6
+
+
+    v7 = load.i32 v5
+    v8 = load.i32 v6
+
+    v9 = iadd.i32 v7, v8
+    return v9
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; heap: dynamic, size=0x1000, ptr=vmctx+16, bound=vmctx+24
+; run: %multi_heap_load_store(1, 2) == 3
+; run: %multi_heap_load_store(4, 5) == 9
+
+
+
+function %static_heap_i64_load_store_unaligned(i64 vmctx, i64, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
+
+block0(v0: i64, v1: i64, v2: i32):
+    v3 = heap_addr.i64 heap0, v1, 4
+    store.i32 v2, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %static_heap_i64_load_store_unaligned(0, 1) == 1
+; run: %static_heap_i64_load_store_unaligned(0, -1) == -1
+; run: %static_heap_i64_load_store_unaligned(1, 1) == 1
+; run: %static_heap_i64_load_store_unaligned(1, -1) == -1
+; run: %static_heap_i64_load_store_unaligned(2, 1) == 1
+; run: %static_heap_i64_load_store_unaligned(2, -1) == -1
+; run: %static_heap_i64_load_store_unaligned(3, 1) == 1
+; run: %static_heap_i64_load_store_unaligned(3, -1) == -1
+
+
+; This stores data in the place of the pointer in the vmctx struct, not in the heap itself.
+function %static_heap_i64_iadd_imm(i64 vmctx, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = iadd_imm.i64 gv0, 0
+    heap0 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0x8000_0000, index_type i64
+
+block0(v0: i64, v1: i32):
+    v2 = iconst.i64 0
+    v3 = heap_addr.i64 heap0, v2, 4
+    store.i32 v1, v3
+    v4 = load.i32 v3
+    return v4
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; run: %static_heap_i64_iadd_imm(1) == 1
+; run: %static_heap_i64_iadd_imm(-1) == -1

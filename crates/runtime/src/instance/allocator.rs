@@ -17,13 +17,10 @@ use std::ptr::{self, NonNull};
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
-use wasmtime_environ::entity::{EntityRef, EntitySet, PrimaryMap};
-use wasmtime_environ::wasm::{
-    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, GlobalInit, SignatureIndex, WasmType,
-};
 use wasmtime_environ::{
-    ir, HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, TableInitializer,
-    VMOffsets, WASM_PAGE_SIZE,
+    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, EntitySet, GlobalInit,
+    HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
+    SignatureIndex, TableInitializer, TrapCode, VMOffsets, WasmType, WASM_PAGE_SIZE,
 };
 
 mod pooling;
@@ -64,6 +61,16 @@ pub struct InstanceAllocationRequest<'a> {
     /// We use a number of `PhantomPinned` declarations to indicate this to the
     /// compiler. More info on this in `wasmtime/src/store.rs`
     pub store: Option<*mut dyn Store>,
+
+    /// A list of all wasm data that can be referenced by the module that
+    /// will be allocated. The `Module` given here has active/passive data
+    /// segments that are specified as relative indices into this list of bytes.
+    ///
+    /// Note that this is an unsafe pointer. The pointer is expected to live for
+    /// the entire duration of the instance at this time. It's the
+    /// responsibility of the callee when allocating to ensure that this data
+    /// outlives the instance.
+    pub wasm_data: *const [u8],
 }
 
 /// An link error while instantiating a module.
@@ -340,10 +347,10 @@ fn initialize_memories(
         instance
             .memory_init_segment(
                 init.memory_index,
-                &init.data,
+                init.data.clone(),
                 get_memory_init_start(init, instance)?,
                 0,
-                u32::try_from(init.data.len()).unwrap(),
+                init.data.end - init.data.start,
             )
             .map_err(InstantiationError::Trap)?;
     }
@@ -394,13 +401,11 @@ fn initialize_instance(
                 let slice =
                     unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
 
-                for (page_index, page) in pages.iter().enumerate() {
-                    if let Some(data) = page {
-                        debug_assert_eq!(data.len(), WASM_PAGE_SIZE as usize);
-                        let start = page_index * WASM_PAGE_SIZE as usize;
-                        let end = start + WASM_PAGE_SIZE as usize;
-                        slice[start..end].copy_from_slice(data);
-                    }
+                for (page_index, page) in pages {
+                    debug_assert_eq!(page.end - page.start, WASM_PAGE_SIZE);
+                    let start = (*page_index * u64::from(WASM_PAGE_SIZE)) as usize;
+                    let end = start + WASM_PAGE_SIZE as usize;
+                    slice[start..end].copy_from_slice(instance.wasm_data(page.clone()));
                 }
             }
 
@@ -408,7 +413,7 @@ fn initialize_instance(
             // the expected behavior of the bulk memory spec.
             if *out_of_bounds {
                 return Err(InstantiationError::Trap(Trap::wasm(
-                    ir::TrapCode::HeapOutOfBounds,
+                    TrapCode::HeapOutOfBounds,
                 )));
             }
         }
@@ -533,7 +538,7 @@ unsafe fn initialize_vmcontext_globals(instance: &Instance) {
             GlobalInit::I64Const(x) => *(*to).as_i64_mut() = x,
             GlobalInit::F32Const(x) => *(*to).as_f32_bits_mut() = x,
             GlobalInit::F64Const(x) => *(*to).as_f64_bits_mut() = x,
-            GlobalInit::V128Const(x) => *(*to).as_u128_bits_mut() = x.0,
+            GlobalInit::V128Const(x) => *(*to).as_u128_mut() = x,
             GlobalInit::GetGlobal(x) => {
                 let from = if let Some(def_x) = module.defined_global_index(x) {
                     instance.global(def_x)
@@ -655,8 +660,9 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
                 memories,
                 tables,
                 dropped_elements: EntitySet::with_capacity(req.module.passive_elements.len()),
-                dropped_data: EntitySet::with_capacity(req.module.passive_data.len()),
+                dropped_data: EntitySet::with_capacity(req.module.passive_data_map.len()),
                 host_state,
+                wasm_data: &*req.wasm_data,
                 vmctx: VMContext {
                     _marker: marker::PhantomPinned,
                 },

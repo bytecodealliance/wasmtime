@@ -1,0 +1,56 @@
+test interpret
+test run
+target x86_64 machinst
+target s390x
+target aarch64
+
+
+function %stack_addr_iadd(i64) -> b1 {
+    ss0 = explicit_slot 16
+
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    v2 = iadd_imm.i64 v1, 8
+
+    stack_store.i64 v0, ss0+8
+    v3 = load.i64 v2
+
+    v5 = iadd_imm.i64 v0, 20
+    store.i64 v5, v2
+    v6 = stack_load.i64 ss0+8
+
+    v7 = icmp eq v0, v3
+    v8 = icmp eq v5, v6
+    v9 = band v7, v8
+    return v9
+}
+; run: %stack_addr_iadd(0) == true
+; run: %stack_addr_iadd(1) == true
+; run: %stack_addr_iadd(-1) == true
+
+function %stack_addr_64(i64) -> b1 {
+    ss0 = explicit_slot 24
+
+block0(v0: i64):
+    v1 = stack_addr.i64 ss0
+    stack_store.i64 v0, ss0
+    v2 = load.i64 v1
+    v3 = icmp eq v0, v2
+
+    v4 = stack_addr.i64 ss0+8
+    store.i64 v0, v4
+    v5 = stack_load.i64 ss0+8
+    v6 = icmp eq v0, v5
+
+    v7 = stack_addr.i64 ss0+16
+    store.i64 v0, v7
+    v8 = load.i64 v7
+    v9 = icmp eq v0, v8
+
+    v10 = band v3, v6
+    v11 = band v10, v9
+    return v11
+}
+; run: %stack_addr_64(0) == true
+; run: %stack_addr_64(1) == true
+; run: %stack_addr_64(-1) == true

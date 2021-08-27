@@ -11,6 +11,7 @@ const LIB_NAME: &'static str = "interpret";
 const OCAML_DIR: &'static str = "ocaml";
 const SPEC_DIR: &'static str = "ocaml/spec";
 const SPEC_REPOSITORY: &'static str = "https://github.com/bytecodealliance/wasm-spec-mirror";
+const SPEC_REPOSITORY_BRANCH: &'static str = "fuzzing";
 
 fn main() {
     if cfg!(feature = "build-libinterpret") {
@@ -32,7 +33,7 @@ fn build() {
     } else {
         // Ensure the spec repository is present.
         if is_spec_repository_empty(SPEC_DIR) {
-            retrieve_spec_repository(SPEC_REPOSITORY, SPEC_DIR)
+            retrieve_spec_repository(SPEC_REPOSITORY, SPEC_REPOSITORY_BRANCH, SPEC_DIR)
         }
 
         // Build the library to link to.
@@ -71,12 +72,14 @@ fn is_spec_repository_empty(destination: &str) -> bool {
 // Clone the spec repository into `destination`. This exists due to the large
 // size of the dependencies (e.g. KaTeX) that are pulled if this were cloned
 // recursively as a submodule.
-fn retrieve_spec_repository(repository: &str, destination: &str) {
+fn retrieve_spec_repository(repository: &str, branch: &str, destination: &str) {
     let status = Command::new("git")
         .arg("clone")
         .arg("--depth")
         .arg("1")
         .arg(repository)
+        .arg("-b")
+        .arg(branch)
         .arg(destination)
         .status()
         .expect("Failed to execute 'git' command to clone spec repository.");

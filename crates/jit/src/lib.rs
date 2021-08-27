@@ -21,22 +21,19 @@
 )]
 
 mod code_memory;
-mod compiler;
+mod debug;
 mod instantiate;
 mod link;
-mod object;
+mod profiling;
 mod unwind;
 
-pub mod native;
-pub mod trampoline;
-
 pub use crate::code_memory::CodeMemory;
-pub use crate::compiler::{Compilation, CompilationStrategy, Compiler};
 pub use crate::instantiate::{
-    CompilationArtifacts, CompiledModule, ModuleCode, SetupError, SymbolizeContext, TypeTables,
+    CompilationArtifacts, CompiledModule, CompiledModuleInfo, ModuleCode, SetupError,
+    SymbolizeContext, TypeTables,
 };
 pub use crate::link::link_module;
-pub use wasmtime_cranelift::{blank_sig, wasmtime_call_conv};
+pub use profiling::*;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

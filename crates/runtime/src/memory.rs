@@ -77,6 +77,10 @@ pub struct MmapMemory {
     // maximum size of the linear address space reservation for this memory.
     maximum: Option<usize>,
 
+    // The amount of extra bytes to reserve whenever memory grows. This is
+    // specified so that the cost of repeated growth is amortized.
+    extra_to_reserve_on_growth: usize,
+
     // Size in bytes of extra guard pages before the start and after the end to
     // optimize loads and stores with constant offsets.
     pre_guard_size: usize,
@@ -92,15 +96,19 @@ impl MmapMemory {
         let offset_guard_bytes = usize::try_from(plan.offset_guard_size).unwrap();
         let pre_guard_bytes = usize::try_from(plan.pre_guard_size).unwrap();
 
-        let alloc_bytes = match plan.style {
-            MemoryStyle::Dynamic => minimum,
+        let (alloc_bytes, extra_to_reserve_on_growth) = match plan.style {
+            MemoryStyle::Dynamic { reserve } => (minimum, usize::try_from(reserve).unwrap()),
             MemoryStyle::Static { bound } => {
                 assert_ge!(bound, plan.memory.minimum);
-                usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap()
+                (
+                    usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap(),
+                    0,
+                )
             }
         };
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
+            .and_then(|i| i.checked_add(extra_to_reserve_on_growth))
             .and_then(|i| i.checked_add(offset_guard_bytes))
             .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
 
@@ -115,6 +123,7 @@ impl MmapMemory {
             maximum,
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
+            extra_to_reserve_on_growth,
         })
     }
 }
@@ -130,11 +139,14 @@ impl RuntimeLinearMemory for MmapMemory {
 
     fn grow_to(&mut self, new_size: usize) -> Option<()> {
         if new_size > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
-            // If the new size is within the declared maximum, but needs more memory than we
-            // have on hand, it's a dynamic heap and it can move.
+            // If the new size of this heap exceeds the current size of the
+            // allocation we have, then this must be a dynamic heap. Use
+            // `new_size` to calculate a new size of an allocation, allocate it,
+            // and then copy over the memory from before.
             let request_bytes = self
                 .pre_guard_size
                 .checked_add(new_size)?
+                .checked_add(self.extra_to_reserve_on_growth)?
                 .checked_add(self.offset_guard_size)?;
 
             let mut new_mmap = Mmap::accessible_reserved(0, request_bytes).ok()?;
@@ -147,8 +159,13 @@ impl RuntimeLinearMemory for MmapMemory {
 
             self.mmap = new_mmap;
         } else {
+            // If the new size of this heap fits within the existing allocation
+            // then all we need to do is to make the new pages accessible. This
+            // can happen either for "static" heaps which always hit this case,
+            // or "dynamic" heaps which have some space reserved after the
+            // initial allocation to grow into before the heap is moved in
+            // memory.
             assert!(new_size > self.accessible);
-            // Make the newly allocated pages accessible.
             self.mmap
                 .make_accessible(
                     self.pre_guard_size + self.accessible,
@@ -254,30 +271,40 @@ impl Memory {
         assert_le!(plan.memory.minimum, absolute_max);
         assert!(plan.memory.maximum.is_none() || plan.memory.maximum.unwrap() <= absolute_max);
 
+        // This is the absolute possible maximum that the module can try to
+        // allocate, which is our entire address space minus a wasm page. That
+        // shouldn't ever actually work in terms of an allocation because
+        // presumably the kernel wants *something* for itself, but this is used
+        // to pass to the `limiter` specified, if present, for a requested size
+        // to approximate the scale of the request that the wasm module is
+        // making. This is necessary because the limiter works on `usize` bytes
+        // whereas we're working with possibly-overflowing `u64` calculations
+        // here. To actually faithfully represent the byte requests of modules
+        // we'd have to represent things as `u128`, but that's kinda
+        // overkill for this purpose.
+        let absolute_max = 0usize.wrapping_sub(WASM_PAGE_SIZE);
+
         // If the minimum memory size overflows the size of our own address
-        // space, then we can't satisfy this request.
+        // space, then we can't satisfy this request, but defer the error to
+        // later so the `limiter` can be informed that an effective oom is
+        // happening.
         let minimum = plan
             .memory
             .minimum
             .checked_mul(WASM_PAGE_SIZE_U64)
-            .and_then(|m| usize::try_from(m).ok())
-            .ok_or_else(|| {
-                format_err!(
-                    "memory minimum size of {} pages exceeds memory limits",
-                    plan.memory.minimum
-                )
-            })?;
+            .and_then(|m| usize::try_from(m).ok());
 
         // The plan stores the maximum size in units of wasm pages, but we
-        // use units of bytes. Do the mapping here, and if we overflow for some
-        // reason then just assume that the listed maximum was our entire memory
-        // minus one wasm page since we can't grow past that anyway (presumably
-        // the kernel will reserve at least *something* for itself...)
+        // use units of bytes. Unlike for the `minimum` size we silently clamp
+        // the effective maximum size to `absolute_max` above if the maximum is
+        // too large. This should be ok since as a wasm runtime we get to
+        // arbitrarily decide the actual maximum size of memory, regardless of
+        // what's actually listed on the memory itself.
         let mut maximum = plan.memory.maximum.map(|max| {
             usize::try_from(max)
                 .ok()
                 .and_then(|m| m.checked_mul(WASM_PAGE_SIZE))
-                .unwrap_or(usize::MAX - WASM_PAGE_SIZE)
+                .unwrap_or(absolute_max)
         });
 
         // If this is a 32-bit memory and no maximum is otherwise listed then we
@@ -288,14 +315,30 @@ impl Memory {
         if !plan.memory.memory64 && maximum.is_none() {
             maximum = usize::try_from(1u64 << 32).ok();
         }
+
+        // Inform the limiter what's about to happen. This will let the limiter
+        // reject anything if necessary, and this also guarantees that we should
+        // call the limiter for all requested memories, even if our `minimum`
+        // calculation overflowed. This means that the `minimum` we're informing
+        // the limiter is lossy and may not be 100% accurate, but for now the
+        // expected uses of `limiter` means that's ok.
         if let Some(limiter) = limiter {
-            if !limiter.memory_growing(0, minimum, maximum) {
+            if !limiter.memory_growing(0, minimum.unwrap_or(absolute_max), maximum) {
                 bail!(
                     "memory minimum size of {} pages exceeds memory limits",
                     plan.memory.minimum
                 );
             }
         }
+
+        // At this point we need to actually handle overflows, so bail out with
+        // an error if we made it this far.
+        let minimum = minimum.ok_or_else(|| {
+            format_err!(
+                "memory minimum size of {} pages exceeds memory limits",
+                plan.memory.minimum
+            )
+        })?;
         Ok((minimum, maximum))
     }
 

@@ -68,7 +68,7 @@ impl WasmToObjCommand {
 
         let mut file =
             File::create(Path::new(&self.output)).context("failed to create object file")?;
-        file.write_all(&obj.write()?)
+        file.write_all(&obj)
             .context("failed to write object file")?;
 
         Ok(())

@@ -617,7 +617,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     }
 
     fn reference_type(&self, ty: WasmType) -> ir::Type {
-        wasmtime_environ::reference_type(ty, self.pointer_type())
+        crate::reference_type(ty, self.pointer_type())
     }
 }
 
@@ -671,7 +671,10 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         let bound_gv = func.create_global_value(ir::GlobalValueData::Load {
             base: ptr,
             offset: Offset32::new(current_elements_offset),
-            global_type: self.offsets.type_of_vmtable_definition_current_elements(),
+            global_type: ir::Type::int(
+                u16::from(self.offsets.size_of_vmtable_definition_current_elements()) * 8,
+            )
+            .unwrap(),
             readonly: false,
         });
 
@@ -1200,7 +1203,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         // allocated up front and never moved.
         let (offset_guard_size, heap_style, readonly_base) = match self.module.memory_plans[index] {
             MemoryPlan {
-                style: MemoryStyle::Dynamic,
+                style: MemoryStyle::Dynamic { .. },
                 offset_guard_size,
                 pre_guard_size: _,
                 memory: _,
@@ -1267,7 +1270,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(GlobalVariable::Memory {
             gv,
             offset: offset.into(),
-            ty: self.module.globals[index].ty,
+            ty: super::value_type(self.isa, self.module.globals[index].wasm_ty),
         })
     }
 
@@ -1277,7 +1280,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
         let index = self.module.types[index].unwrap_function();
-        let sig = crate::indirect_signature(self.isa, self.types, index);
+        let sig = crate::indirect_signature(self.isa, &self.types.wasm_signatures[index]);
         Ok(func.import_signature(sig))
     }
 

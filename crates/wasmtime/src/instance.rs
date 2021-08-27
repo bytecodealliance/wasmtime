@@ -9,12 +9,10 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Error, Result};
 use std::mem;
 use std::sync::Arc;
-use wasmtime_environ::entity::PrimaryMap;
-use wasmtime_environ::wasm::{
-    EntityIndex, EntityType, FuncIndex, GlobalIndex, InstanceIndex, MemoryIndex, ModuleIndex,
-    TableIndex,
+use wasmtime_environ::{
+    EntityIndex, EntityType, FuncIndex, GlobalIndex, Initializer, InstanceIndex, MemoryIndex,
+    ModuleIndex, PrimaryMap, TableIndex,
 };
-use wasmtime_environ::Initializer;
 use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstantiationError, VMContext, VMFunctionBody,
@@ -374,7 +372,8 @@ impl Instance {
             .get_export(store.as_context_mut(), name)
             .and_then(|f| f.into_func())
             .ok_or_else(|| anyhow!("failed to find function export `{}`", name))?;
-        Ok(f.typed::<Params, Results, _>(store)?)
+        Ok(f.typed::<Params, Results, _>(store)
+            .with_context(|| format!("failed to convert function `{}` to given type", name))?)
     }
 
     /// Looks up an exported [`Table`] value by name.
@@ -738,6 +737,7 @@ impl<'a> Instantiator<'a> {
                         shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),
                         store: Some(store.traitobj),
+                        wasm_data: compiled_module.wasm_data(),
                     })?;
 
             // The instance still has lots of setup, for example

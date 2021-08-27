@@ -25,8 +25,9 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     // by reference types.
     let reftypes = simd || feature_found(wast, "reference-types");
 
-    // Threads aren't implemented in the old backend, so skip those tests.
-    if threads && cfg!(feature = "old-x86-backend") {
+    // Threads & simd aren't implemented in the old backend, so skip those
+    // tests.
+    if (threads || simd) && cfg!(feature = "old-x86-backend") {
         return Ok(());
     }
 
@@ -68,8 +69,11 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
             return Ok(());
         }
 
-        // Don't use 4gb address space reservations when not hogging memory.
+        // Don't use 4gb address space reservations when not hogging memory, and
+        // also don't reserve lots of memory after dynamic memories for growth
+        // (makes growth slower).
         cfg.static_memory_maximum_size(0);
+        cfg.dynamic_memory_reserved_for_growth(0);
     }
 
     let _pooling_lock = if pooling {

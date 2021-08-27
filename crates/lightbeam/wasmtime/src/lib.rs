@@ -3,18 +3,21 @@
 //! This crates provides an implementation of [`Compiler`] in the form of
 //! [`Lightbeam`].
 
+#![allow(dead_code)]
+
+use anyhow::Result;
 use cranelift_codegen::binemit;
 use cranelift_codegen::ir::{self, ExternalName};
-use cranelift_codegen::isa;
-use lightbeam::{CodeGenSession, NullOffsetSink, Sinks};
-use wasmtime_environ::wasm::{
-    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, TableIndex, TypeIndex,
+use object::write::Object;
+use std::any::Any;
+use std::collections::BTreeMap;
+use wasmtime_environ::{
+    BuiltinFunctionIndex, CompileError, Compiler, FlagValue, FunctionBodyData, FunctionInfo,
+    Module, ModuleTranslation, PrimaryMap, TrapInformation, Tunables, TypeTables, VMOffsets,
 };
 use wasmtime_environ::{
-    BuiltinFunctionIndex, CompileError, CompiledFunction, Compiler, FunctionBodyData, Module,
-    ModuleTranslation, Relocation, RelocationTarget, TrapInformation, Tunables, TypeTables,
-    VMOffsets,
+    DefinedFuncIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
+    GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmFuncType,
 };
 
 /// A compiler that compiles a WebAssembly module with Lightbeam, directly translating the Wasm file.
@@ -23,57 +26,89 @@ pub struct Lightbeam;
 impl Compiler for Lightbeam {
     fn compile_function(
         &self,
-        translation: &ModuleTranslation,
-        i: DefinedFuncIndex,
-        function_body: FunctionBodyData<'_>,
-        isa: &dyn isa::TargetIsa,
-        tunables: &Tunables,
+        _translation: &ModuleTranslation,
+        _i: DefinedFuncIndex,
+        _function_body: FunctionBodyData<'_>,
+        _tunables: &Tunables,
         _types: &TypeTables,
-    ) -> Result<CompiledFunction, CompileError> {
-        if tunables.generate_native_debuginfo {
-            return Err(CompileError::DebugInfoNotSupported);
-        }
-        let func_index = translation.module.func_index(i);
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
+        unimplemented!()
+        // if tunables.generate_native_debuginfo {
+        //     return Err(CompileError::DebugInfoNotSupported);
+        // }
+        // let func_index = translation.module.func_index(i);
 
-        let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation);
-        let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
-            translation.function_body_inputs.len() as u32,
-            &env,
-            lightbeam::microwasm::I32,
-        );
+        // let env = FuncEnvironment::new(isa.frontend_config().pointer_bytes(), translation);
+        // let mut codegen_session: CodeGenSession<_> = CodeGenSession::new(
+        //     translation.function_body_inputs.len() as u32,
+        //     &env,
+        //     lightbeam::microwasm::I32,
+        // );
 
-        let mut reloc_sink = RelocSink::new(func_index);
-        let mut trap_sink = TrapSink::new();
-        lightbeam::translate_function(
-            &mut codegen_session,
-            Sinks {
-                relocs: &mut reloc_sink,
-                traps: &mut trap_sink,
-                offsets: &mut NullOffsetSink,
-            },
-            i.as_u32(),
-            function_body.body,
-        )
-        .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
+        // let mut reloc_sink = RelocSink::new(func_index);
+        // let mut trap_sink = TrapSink::new();
+        // lightbeam::translate_function(
+        //     &mut codegen_session,
+        //     Sinks {
+        //         relocs: &mut reloc_sink,
+        //         traps: &mut trap_sink,
+        //         offsets: &mut NullOffsetSink,
+        //     },
+        //     i.as_u32(),
+        //     function_body.body,
+        // )
+        // .map_err(|e| CompileError::Codegen(format!("Failed to translate function: {}", e)))?;
 
-        let code_section = codegen_session
-            .into_translated_code_section()
-            .map_err(|e| CompileError::Codegen(format!("Failed to generate output code: {}", e)))?;
+        // let code_section = codegen_session
+        //     .into_translated_code_section()
+        //     .map_err(|e| CompileError::Codegen(format!("Failed to generate output code: {}", e)))?;
 
-        Ok(CompiledFunction {
-            // TODO: try to remove copy here (?)
-            body: code_section.buffer().to_vec(),
-            traps: trap_sink.traps,
-            relocations: reloc_sink.func_relocs,
+        // Ok(CompiledFunction {
+        //     // TODO: try to remove copy here (?)
+        //     body: code_section.buffer().to_vec(),
+        //     traps: trap_sink.traps,
+        //     relocations: reloc_sink.func_relocs,
 
-            // not implemented for lightbeam currently
-            unwind_info: None,
-            stack_maps: Default::default(),
-            stack_slots: Default::default(),
-            value_labels_ranges: Default::default(),
-            address_map: Default::default(),
-            jt_offsets: Default::default(),
-        })
+        //     // not implemented for lightbeam currently
+        //     unwind_info: None,
+        //     stack_maps: Default::default(),
+        //     stack_slots: Default::default(),
+        //     value_labels_ranges: Default::default(),
+        //     address_map: Default::default(),
+        //     jt_offsets: Default::default(),
+        // })
+    }
+
+    fn emit_obj(
+        &self,
+        _module: &ModuleTranslation,
+        _types: &TypeTables,
+        _funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
+        _emit_dwarf: bool,
+        _obj: &mut Object,
+    ) -> Result<PrimaryMap<DefinedFuncIndex, FunctionInfo>> {
+        unimplemented!()
+    }
+
+    fn emit_trampoline_obj(
+        &self,
+        _ty: &WasmFuncType,
+        _host_fn: usize,
+        _obj: &mut Object,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn triple(&self) -> &target_lexicon::Triple {
+        unimplemented!()
+    }
+
+    fn flags(&self) -> BTreeMap<String, FlagValue> {
+        unimplemented!()
+    }
+
+    fn isa_flags(&self) -> BTreeMap<String, FlagValue> {
+        unimplemented!()
     }
 }
 
@@ -81,34 +116,34 @@ impl Compiler for Lightbeam {
 struct RelocSink {
     /// Current function index.
     func_index: FuncIndex,
-
-    /// Relocations recorded for the function.
-    func_relocs: Vec<Relocation>,
+    // /// Relocations recorded for the function.
+    // func_relocs: Vec<Relocation>,
 }
 
 impl binemit::RelocSink for RelocSink {
     fn reloc_external(
         &mut self,
-        offset: binemit::CodeOffset,
+        _offset: binemit::CodeOffset,
         _srcloc: ir::SourceLoc,
-        reloc: binemit::Reloc,
-        name: &ExternalName,
-        addend: binemit::Addend,
+        _reloc: binemit::Reloc,
+        _name: &ExternalName,
+        _addend: binemit::Addend,
     ) {
-        let reloc_target = if let ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 0);
-            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-        } else if let ExternalName::LibCall(libcall) = *name {
-            RelocationTarget::LibCall(libcall)
-        } else {
-            panic!("unrecognized external name")
-        };
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target,
-            offset,
-            addend,
-        });
+        unimplemented!()
+        // let reloc_target = if let ExternalName::User { namespace, index } = *name {
+        //     debug_assert_eq!(namespace, 0);
+        //     RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+        // } else if let ExternalName::LibCall(libcall) = *name {
+        //     RelocationTarget::LibCall(libcall)
+        // } else {
+        //     panic!("unrecognized external name")
+        // };
+        // self.func_relocs.push(Relocation {
+        //     reloc,
+        //     reloc_target,
+        //     offset,
+        //     addend,
+        // });
     }
 
     fn reloc_constant(
@@ -121,13 +156,19 @@ impl binemit::RelocSink for RelocSink {
         // function code with correct relative offsets to the constant data.
     }
 
-    fn reloc_jt(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, jt: ir::JumpTable) {
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target: RelocationTarget::JumpTable(self.func_index, jt),
-            offset,
-            addend: 0,
-        });
+    fn reloc_jt(
+        &mut self,
+        _offset: binemit::CodeOffset,
+        _reloc: binemit::Reloc,
+        _jt: ir::JumpTable,
+    ) {
+        unimplemented!()
+        // self.func_relocs.push(Relocation {
+        //     reloc,
+        //     reloc_target: RelocationTarget::JumpTable(self.func_index, jt),
+        //     offset,
+        //     addend: 0,
+        // });
     }
 }
 
@@ -136,7 +177,7 @@ impl RelocSink {
     fn new(func_index: FuncIndex) -> Self {
         Self {
             func_index,
-            func_relocs: Vec::new(),
+            // func_relocs: Vec::new(),
         }
     }
 }
@@ -158,14 +199,15 @@ impl TrapSink {
 impl binemit::TrapSink for TrapSink {
     fn trap(
         &mut self,
-        code_offset: binemit::CodeOffset,
+        _code_offset: binemit::CodeOffset,
         _source_loc: ir::SourceLoc,
-        trap_code: ir::TrapCode,
+        _trap_code: ir::TrapCode,
     ) {
-        self.traps.push(TrapInformation {
-            code_offset,
-            trap_code,
-        });
+        unimplemented!()
+        // self.traps.push(TrapInformation {
+        //     code_offset,
+        //     trap_code,
+        // });
     }
 }
 
@@ -212,8 +254,9 @@ impl lightbeam::ModuleContext for FuncEnvironment<'_> {
             .map(DefinedGlobalIndex::as_u32)
     }
 
-    fn global_type(&self, global_index: u32) -> &Self::GlobalType {
-        &self.module.globals[GlobalIndex::from_u32(global_index)].ty
+    fn global_type(&self, _global_index: u32) -> &Self::GlobalType {
+        unimplemented!()
+        // &self.module.globals[GlobalIndex::from_u32(global_index)].ty
     }
 
     fn func_type_index(&self, func_idx: u32) -> u32 {

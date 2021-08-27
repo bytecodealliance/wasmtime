@@ -368,10 +368,7 @@ impl Global {
         Global(store.store_data_mut().insert(wasmtime_export))
     }
 
-    pub(crate) fn wasmtime_ty<'a>(
-        &self,
-        data: &'a StoreData,
-    ) -> &'a wasmtime_environ::wasm::Global {
+    pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::Global {
         &data[self.0].global
     }
 
@@ -651,7 +648,7 @@ impl Table {
         Table(store.store_data_mut().insert(wasmtime_export))
     }
 
-    pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::wasm::Table {
+    pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::Table {
         &data[self.0].table.table
     }
 

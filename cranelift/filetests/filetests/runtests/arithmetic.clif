@@ -196,7 +196,8 @@ block0(v0: i64,v1: i64):
 ; run: %sdiv_i64(3, -2) == -1
 ; run: %sdiv_i64(-19, 7) == -2
 ; run: %sdiv_i64(0xC0FFEEEE_DECAFFFF, 8) == 0xF81FFDDD_DBD96000
-; run: %sdiv_i64(0xC0FFEEEE_DECAFFFF, -8) == 0x7E00222_2426A000
+; run: %sdiv_i64(0xC0FFEEEE_DECAFFFF, -8) == 0x7E002222_426A000
+; run: %sdiv_i64(0x80000000_00000000, -2) == 0x40000000_00000000
 
 function %sdiv_i32(i32, i32) -> i32 {
 block0(v0: i32,v1: i32):
@@ -212,6 +213,7 @@ block0(v0: i32,v1: i32):
 ; run: %sdiv_i32(-19, 7) == -2
 ; run: %sdiv_i32(0xC0FFEEEE, 8) == 0xF81FFDDE
 ; run: %sdiv_i32(0xC0FFEEEE, -8) == 0x7E00222
+; run: %sdiv_i32(0x80000000, -2) == 0x40000000
 
 function %sdiv_i16(i16, i16) -> i16 {
 block0(v0: i16,v1: i16):
@@ -227,6 +229,7 @@ block0(v0: i16,v1: i16):
 ; run: %sdiv_i16(-19, 7) == -2
 ; run: %sdiv_i16(0xC0FF, 8) == 0xF820
 ; run: %sdiv_i16(0xC0FF, -8) == 0x07E0
+; run: %sdiv_i16(0x8000, -2) == 0x4000
 
 function %sdiv_i8(i8, i8) -> i8 {
 block0(v0: i8,v1: i8):
@@ -242,6 +245,7 @@ block0(v0: i8,v1: i8):
 ; run: %sdiv_i8(-19, 7) == -2
 ; run: %sdiv_i8(0xC0, 8) == 0xF8
 ; run: %sdiv_i8(0xC0, -8) == 0x08
+; run: %sdiv_i8(0x80, -2) == 0x40
 
 
 function %udiv_i64(i64, i64) -> i64 {
@@ -258,6 +262,8 @@ block0(v0: i64,v1: i64):
 ; run: %udiv_i64(-19, 7) == 0x24924924_9249248F
 ; run: %udiv_i64(0xC0FFEEEE_DECAFFFF, 8) == 0x181FFDDD_DBD95FFF
 ; run: %udiv_i64(0xC0FFEEEE_DECAFFFF, -8) == 0
+; run: %udiv_i64(0x80000000_00000000, -1) == 0
+; run: %udiv_i64(0x80000000_00000000, -2) == 0
 
 function %udiv_i32(i32, i32) -> i32 {
 block0(v0: i32,v1: i32):
@@ -273,6 +279,8 @@ block0(v0: i32,v1: i32):
 ; run: %udiv_i32(-19, 7) == 0x24924921
 ; run: %udiv_i32(0xC0FFEEEE, 8) == 0x181FFDDD
 ; run: %udiv_i32(0xC0FFEEEE, -8) == 0
+; run: %udiv_i32(0x80000000, -1) == 0
+; run: %udiv_i32(0x80000000, -2) == 0
 
 function %udiv_i16(i16, i16) -> i16 {
 block0(v0: i16,v1: i16):
@@ -288,6 +296,8 @@ block0(v0: i16,v1: i16):
 ; run: %udiv_i16(-19, 7) == 0x248F
 ; run: %udiv_i16(0xC0FF, 8) == 0x181F
 ; run: %udiv_i16(0xC0FF, -8) == 0
+; run: %udiv_i16(0x8000, -1) == 0
+; run: %udiv_i16(0x8000, -2) == 0
 
 function %udiv_i8(i8, i8) -> i8 {
 block0(v0: i8,v1: i8):
@@ -303,3 +313,5 @@ block0(v0: i8,v1: i8):
 ; run: %udiv_i8(-19, 7) == 0x21
 ; run: %udiv_i8(0xC0, 8) == 0x18
 ; run: %udiv_i8(0xC0, -8) == 0
+; run: %udiv_i8(0x80, -1) == 0
+; run: %udiv_i8(0x80, -2) == 0

@@ -1,8 +1,10 @@
 //! The [step] function interprets a single Cranelift instruction given its [State] and
 //! [InstructionContext]; the interpretation is generic over [Value]s.
+use crate::address::{Address, AddressSize};
 use crate::instruction::InstructionContext;
 use crate::state::{MemoryError, State};
 use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
     types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Value as ValueRef,
@@ -81,7 +83,41 @@ where
         Err(ValueError::IntegerDivisionByZero) => Ok(ControlFlow::Trap(CraneliftTrap::User(
             TrapCode::IntegerDivisionByZero,
         ))),
+        Err(ValueError::IntegerOverflow) => Ok(ControlFlow::Trap(CraneliftTrap::User(
+            TrapCode::IntegerOverflow,
+        ))),
         Err(e) => Err(e),
+    };
+
+    let memerror_to_trap = |e: MemoryError| match e {
+        MemoryError::InvalidAddress(_) => TrapCode::HeapOutOfBounds,
+        MemoryError::InvalidAddressType(_) => TrapCode::HeapOutOfBounds,
+        MemoryError::InvalidOffset { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::OutOfBoundsStore { .. } => TrapCode::HeapOutOfBounds,
+        MemoryError::OutOfBoundsLoad { .. } => TrapCode::HeapOutOfBounds,
+    };
+
+    // Assigns or traps depending on the value of the result
+    let assign_or_memtrap = |res| match res {
+        Ok(v) => assign(v),
+        Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
+    };
+
+    // Continues or traps depending on the value of the result
+    let continue_or_memtrap = |res| match res {
+        Ok(_) => ControlFlow::Continue,
+        Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
+    };
+
+    let calculate_addr = |imm: V, args: SmallVec<[V; 1]>| -> ValueResult<u64> {
+        let imm = imm.convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
+        let args = args
+            .into_iter()
+            .map(|v| v.convert(ValueConversionKind::ZeroExtend(ctrl_ty)))
+            .collect::<ValueResult<SmallVec<[V; 1]>>>()?;
+
+        Ok(sum(imm, args)? as u64)
     };
 
     // Interpret a binary instruction with the given `op`, assigning the resulting value to the
@@ -247,7 +283,6 @@ where
         | Opcode::Uload32x2Complex
         | Opcode::Sload32x2
         | Opcode::Sload32x2Complex => {
-            let address = sum(imm(), args()?)? as usize;
             let ctrl_ty = inst_context.controlling_type().unwrap();
             let (load_ty, kind) = match inst.opcode() {
                 Opcode::Load | Opcode::LoadComplex => (ctrl_ty, None),
@@ -283,13 +318,20 @@ where
                 | Opcode::Sload32x2Complex => unimplemented!(),
                 _ => unreachable!(),
             };
-            let loaded = state.load_heap(address, load_ty)?;
-            let extended = if let Some(c) = kind {
-                loaded.convert(c)?
-            } else {
-                loaded
-            };
-            ControlFlow::Assign(smallvec!(extended))
+
+            let addr_value = calculate_addr(imm(), args()?)?;
+            let loaded = assign_or_memtrap(
+                Address::try_from(addr_value).and_then(|addr| state.checked_load(addr, load_ty)),
+            );
+
+            match (loaded, kind) {
+                (ControlFlow::Assign(ret), Some(c)) => ControlFlow::Assign(
+                    ret.into_iter()
+                        .map(|loaded| loaded.convert(c.clone()))
+                        .collect::<ValueResult<SmallVec<[V; 1]>>>()?,
+                ),
+                (cf, _) => cf,
+            }
         }
         Opcode::Store
         | Opcode::StoreComplex
@@ -299,7 +341,6 @@ where
         | Opcode::Istore16Complex
         | Opcode::Istore32
         | Opcode::Istore32Complex => {
-            let address = sum(imm(), args_range(1..)?)? as usize;
             let kind = match inst.opcode() {
                 Opcode::Store | Opcode::StoreComplex => None,
                 Opcode::Istore8 | Opcode::Istore8Complex => {
@@ -313,27 +354,49 @@ where
                 }
                 _ => unreachable!(),
             };
+
+            let addr_value = calculate_addr(imm(), args_range(1..)?)?;
             let reduced = if let Some(c) = kind {
                 arg(0)?.convert(c)?
             } else {
                 arg(0)?
             };
-            state.store_heap(address, reduced)?;
-            ControlFlow::Continue
+            continue_or_memtrap(
+                Address::try_from(addr_value).and_then(|addr| state.checked_store(addr, reduced)),
+            )
         }
         Opcode::StackLoad => {
-            let address = sum(imm(), args_range(1..)?)? as usize;
             let load_ty = inst_context.controlling_type().unwrap();
-            let loaded = state.load_stack(address, load_ty)?;
-            ControlFlow::Assign(smallvec!(loaded))
+            let slot = inst.stack_slot().unwrap();
+            let offset = sum(imm(), args()?)? as u64;
+            assign_or_memtrap({
+                state
+                    .stack_address(AddressSize::_64, slot, offset)
+                    .and_then(|addr| state.checked_load(addr, load_ty))
+            })
         }
         Opcode::StackStore => {
-            let address = sum(imm(), args_range(1..)?)? as usize;
-            let arg0 = arg(0)?;
-            state.store_stack(address, arg0)?;
-            ControlFlow::Continue
+            let arg = arg(0)?;
+            let slot = inst.stack_slot().unwrap();
+            let offset = sum(imm(), args_range(1..)?)? as u64;
+            continue_or_memtrap({
+                state
+                    .stack_address(AddressSize::_64, slot, offset)
+                    .and_then(|addr| state.checked_store(addr, arg))
+            })
         }
-        Opcode::StackAddr => unimplemented!("StackAddr"),
+        Opcode::StackAddr => {
+            let load_ty = inst_context.controlling_type().unwrap();
+            let slot = inst.stack_slot().unwrap();
+            let offset = sum(imm(), args()?)? as u64;
+            assign_or_memtrap({
+                AddressSize::try_from(load_ty).and_then(|addr_size| {
+                    let addr = state.stack_address(addr_size, slot, offset)?;
+                    let dv = DataValue::try_from(addr)?;
+                    Ok(dv.into())
+                })
+            })
+        }
         Opcode::GlobalValue => unimplemented!("GlobalValue"),
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
@@ -433,10 +496,22 @@ where
             binary(Value::div, inc, two)?
         }
         Opcode::Iadd => binary(Value::add, arg(0)?, arg(1)?)?,
-        Opcode::UaddSat => unimplemented!("UaddSat"),
+        Opcode::UaddSat => assign(binary_arith(
+            arg(0)?,
+            arg(1)?,
+            ctrl_ty,
+            Value::add_sat,
+            true,
+        )?),
         Opcode::SaddSat => unimplemented!("SaddSat"),
         Opcode::Isub => binary(Value::sub, arg(0)?, arg(1)?)?,
-        Opcode::UsubSat => unimplemented!("UsubSat"),
+        Opcode::UsubSat => assign(binary_arith(
+            arg(0)?,
+            arg(1)?,
+            ctrl_ty,
+            Value::sub_sat,
+            true,
+        )?),
         Opcode::SsubSat => unimplemented!("SsubSat"),
         Opcode::Ineg => binary(Value::sub, Value::int(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Iabs => unimplemented!("Iabs"),
@@ -598,7 +673,11 @@ where
         Opcode::Swizzle => unimplemented!("Swizzle"),
         Opcode::Splat => unimplemented!("Splat"),
         Opcode::Insertlane => unimplemented!("Insertlane"),
-        Opcode::Extractlane => unimplemented!("Extractlane"),
+        Opcode::Extractlane => {
+            let value =
+                extractlanes(&arg(0)?, ctrl_ty.lane_type())?[Value::into_int(imm())? as usize];
+            assign(Value::int(value, ctrl_ty.lane_type())?)
+        }
         Opcode::VhighBits => unimplemented!("VhighBits"),
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
@@ -721,6 +800,16 @@ impl<'a, V> ControlFlow<'a, V> {
             panic!("expected the control flow to be in the return state")
         }
     }
+
+    /// For convenience, we can unwrap the [ControlFlow] state assuming that it is a
+    /// [ControlFlow::Trap], panicking otherwise.
+    pub fn unwrap_trap(self) -> CraneliftTrap {
+        if let ControlFlow::Trap(trap) = self {
+            trap
+        } else {
+            panic!("expected the control flow to be a trap")
+        }
+    }
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -795,4 +884,81 @@ where
             Value::uno(left, right)? || Value::gt(left, right)? || Value::eq(left, right)?
         }
     })
+}
+
+type SimdVec = SmallVec<[i128; 4]>;
+
+/// Converts a SIMD vector value into a Rust vector of i128 for processing.
+fn extractlanes<V>(x: &V, lane_type: types::Type) -> ValueResult<SimdVec>
+where
+    V: Value,
+{
+    let iterations = match lane_type {
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 => 4,
+        types::I64 => 8,
+        _ => unimplemented!("Only 128-bit vectors are currently supported."),
+    };
+
+    let x = x.into_array()?;
+    let mut lanes = SimdVec::new();
+    for (i, _) in x.iter().enumerate() {
+        let mut lane: i128 = 0;
+        if i % iterations != 0 {
+            continue;
+        }
+        for j in 0..iterations {
+            lane += (x[i + j] as i128) << (8 * j);
+        }
+        lanes.push(lane);
+    }
+    return Ok(lanes);
+}
+
+/// Convert a Rust array of i128s back into a `Value::vector`.
+fn vectorizelanes<V>(x: &[i128], vector_type: types::Type) -> ValueResult<V>
+where
+    V: Value,
+{
+    let iterations = match vector_type.lane_type() {
+        types::I8 => 1,
+        types::I16 => 2,
+        types::I32 => 4,
+        types::I64 => 8,
+        _ => unimplemented!("Only 128-bit vectors are currently supported."),
+    };
+    let mut result: [u8; 16] = [0; 16];
+    for (i, val) in x.iter().enumerate() {
+        let val = *val;
+        for j in 0..iterations {
+            result[(i * iterations) + j] = (val >> (8 * j)) as u8;
+        }
+    }
+    Value::vector(result, vector_type)
+}
+
+/// Performs the supplied binary arithmetic `op` on two SIMD vectors.
+fn binary_arith<V, F>(x: V, y: V, vector_type: types::Type, op: F, unsigned: bool) -> ValueResult<V>
+where
+    V: Value,
+    F: Fn(V, V) -> ValueResult<V>,
+{
+    let arg0 = extractlanes(&x, vector_type.lane_type())?;
+    let arg1 = extractlanes(&y, vector_type.lane_type())?;
+    let mut result = Vec::new();
+    for (lhs, rhs) in arg0.into_iter().zip(arg1) {
+        // The initial Value::int needs to be on a separate line so the
+        // compiler can determine concrete types.
+        let mut lhs: V = Value::int(lhs, vector_type.lane_type())?;
+        let mut rhs: V = Value::int(rhs, vector_type.lane_type())?;
+        if unsigned {
+            lhs = lhs.convert(ValueConversionKind::ToUnsigned)?;
+            rhs = rhs.convert(ValueConversionKind::ToUnsigned)?;
+        }
+        let sum = op(lhs, rhs)?;
+        let sum = sum.into_int()?;
+        result.push(sum);
+    }
+    vectorizelanes(&result, vector_type)
 }

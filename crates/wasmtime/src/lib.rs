@@ -234,6 +234,13 @@
 //! crate. Be sure to check the API you're using to see if any crate features
 //! are enabled.
 //!
+//! * `cranelift` - Enabled by default, this features enables using Cranelift at
+//!   runtime to compile a WebAssembly module to native code. This feature is
+//!   required to process and compile new WebAssembly modules. If this feature
+//!   is disabled then the only way to create a [`Module`] is to use the
+//!   [`Module::deserialize`] function with a precompiled artifact (typically
+//!   compiled with the same version of Wasmtime, just somewhere else).
+//!
 //! * `cache` - Enabled by default, this feature adds support for wasmtime to
 //!   perform internal caching of modules in a global location. This must still
 //!   be enabled explicitly through [`Config::cache_config_load`] or
@@ -358,7 +365,7 @@
 //! ```
 
 #![allow(unknown_lints)]
-#![deny(missing_docs, broken_intra_doc_links)]
+#![deny(missing_docs, rustdoc::broken_intra_doc_links)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(nightlydoc, feature(doc_cfg))]

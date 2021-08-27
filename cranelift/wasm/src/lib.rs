@@ -58,7 +58,7 @@ mod translation_utils;
 
 pub use crate::environ::{
     Alias, DummyEnvironment, FuncEnvironment, GlobalVariable, ModuleEnvironment, ReturnMode,
-    TargetEnvironment, WasmError, WasmFuncType, WasmResult, WasmType,
+    TargetEnvironment,
 };
 pub use crate::func_translator::FuncTranslator;
 pub use crate::module_translator::translate_module;
@@ -66,6 +66,7 @@ pub use crate::state::func_state::FuncTranslationState;
 pub use crate::state::module_state::ModuleTranslationState;
 pub use crate::translation_utils::*;
 pub use cranelift_frontend::FunctionBuilder;
+pub use wasmtime_types::*;
 
 // Convenience reexport of the wasmparser crate that we're linking against,
 // since a number of types in `wasmparser` show up in the public API of

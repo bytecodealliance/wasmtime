@@ -9,6 +9,6 @@ fuzz_target!(|data: (
     generators::GeneratedModule,
 )| {
     let (lhs, rhs, mut wasm) = data;
-    wasm.ensure_termination(1000);
+    wasm.module.ensure_termination(1000);
     oracles::differential_execution(&wasm, &[lhs, rhs]);
 });

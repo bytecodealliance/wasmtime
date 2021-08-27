@@ -2,8 +2,7 @@
 
 use crate::instance::InstanceHandle;
 use crate::vmcontext::VMContext;
-use wasmtime_environ::entity::EntityRef;
-use wasmtime_environ::wasm::MemoryIndex;
+use wasmtime_environ::{EntityRef, MemoryIndex};
 
 static mut VMCTX_AND_MEMORY: (*mut VMContext, usize) = (std::ptr::null_mut(), 0);
 

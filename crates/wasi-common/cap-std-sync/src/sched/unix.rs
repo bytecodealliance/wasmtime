@@ -1,6 +1,6 @@
 use cap_std::time::Duration;
 use io_lifetimes::{AsFd, BorrowedFd};
-use posish::io::{PollFd, PollFdVec, PollFlags};
+use rsix::io::{PollFd, PollFdVec, PollFlags};
 use std::convert::TryInto;
 use wasi_common::{
     file::WasiFile,
@@ -51,7 +51,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
         );
         match pollfds.poll(poll_timeout) {
             Ok(ready) => break ready,
-            Err(posish::io::Error::INTR) => continue,
+            Err(rsix::io::Error::INTR) => continue,
             Err(err) => return Err(err.into()),
         }
     };

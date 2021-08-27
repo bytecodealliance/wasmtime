@@ -3,7 +3,7 @@
 use libfuzzer_sys::arbitrary::{Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::time::Duration;
-use wasm_smith::{ConfiguredModule, SwarmConfig};
+use wasm_smith::{Module, SwarmConfig};
 use wasmtime::Strategy;
 use wasmtime_fuzzing::oracles::{self, Timeout};
 
@@ -30,7 +30,7 @@ fn run(data: &[u8]) -> Result<()> {
     config.memory64_enabled = u.arbitrary()?;
     // Don't generate modules that allocate more than 6GB
     config.max_memory_pages = 6 << 30;
-    let module = ConfiguredModule::new(config.clone(), &mut u)?;
+    let module = Module::new(config.clone(), &mut u)?;
 
     let mut cfg = wasmtime_fuzzing::fuzz_default_config(Strategy::Auto).unwrap();
     cfg.wasm_multi_memory(config.max_memories > 1);

@@ -253,7 +253,7 @@ pub fn differential_execution(
     };
 
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
-    let wasm = module.to_bytes();
+    let wasm = module.module.to_bytes();
     log_wasm(&wasm);
 
     for mut config in configs {
@@ -408,7 +408,7 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 
             ApiCall::ModuleNew { id, wasm } => {
                 log::debug!("creating module: {}", id);
-                let wasm = wasm.to_bytes();
+                let wasm = wasm.module.to_bytes();
                 log_wasm(&wasm);
                 let module = match Module::new(engine.as_ref().unwrap(), &wasm) {
                     Ok(m) => m,
@@ -605,6 +605,12 @@ impl wasm_smith::Config for SingleFunctionModuleConfig {
     fn memory_max_size_required(&self) -> bool {
         true
     }
+
+    // NaN is canonicalized at the wasm level for differential fuzzing so we
+    // can paper over NaN differences between engines.
+    fn canonicalize_nans(&self) -> bool {
+        true
+    }
 }
 
 /// Perform differential execution between Cranelift and wasmi, diffing the
@@ -625,55 +631,27 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
         wasmi::ModuleInstance::new(&wasmi_module, &wasmi::ImportsBuilder::default()).ok()?;
     let wasmi_instance = wasmi_instance.assert_no_start();
 
-    // TODO(paritytech/wasmi#19): wasmi does not currently canonicalize NaNs. To avoid spurious
-    // fuzz failures, for now let's fuzz only integer Wasm programs.
-    if wasmi_module.deny_floating_point().is_err() {
-        return None;
-    }
-
-    // Instantiate wasmtime module and instance.
-    let mut wasmtime_config = config.to_wasmtime();
-    wasmtime_config.cranelift_nan_canonicalization(true);
-    let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
-    let mut wasmtime_store = create_store(&wasmtime_engine);
-    if config.consume_fuel {
-        wasmtime_store.add_fuel(u64::max_value()).unwrap();
-    }
-    let wasmtime_module =
-        Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
+    // If wasmi succeeded then we assert that wasmtime will also succeed.
+    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
     let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
         .expect("Wasmtime can instantiate module");
 
     // Introspect wasmtime module to find name of an exported function and of an
-    // exported memory. Stop when we have one of each. (According to the config
-    // above, there should be at most one of each.)
-    let (func_name, memory_name) = {
-        let mut func_name = None;
-        let mut memory_name = None;
-        for e in wasmtime_module.exports() {
-            match e.ty() {
-                wasmtime::ExternType::Func(..) => func_name = Some(e.name().to_string()),
-                wasmtime::ExternType::Memory(..) => memory_name = Some(e.name().to_string()),
-                _ => {}
-            }
-            if func_name.is_some() && memory_name.is_some() {
-                break;
-            }
-        }
-        (func_name?, memory_name?)
-    };
+    // exported memory.
+    let func_name = first_exported_function(&wasmtime_module)?;
+    let memory_name = first_exported_memory(&wasmtime_module)?;
 
-    let wasmi_mem_export = wasmi_instance.export_by_name(&memory_name[..]).unwrap();
+    let wasmi_mem_export = wasmi_instance.export_by_name(memory_name).unwrap();
     let wasmi_mem = wasmi_mem_export.as_memory().unwrap();
-    let wasmi_main_export = wasmi_instance.export_by_name(&func_name[..]).unwrap();
+    let wasmi_main_export = wasmi_instance.export_by_name(func_name).unwrap();
     let wasmi_main = wasmi_main_export.as_func().unwrap();
     let wasmi_val = wasmi::FuncInstance::invoke(&wasmi_main, &[], &mut wasmi::NopExternals);
 
     let wasmtime_mem = wasmtime_instance
-        .get_memory(&mut wasmtime_store, &memory_name[..])
+        .get_memory(&mut wasmtime_store, memory_name)
         .expect("memory export is present");
     let wasmtime_main = wasmtime_instance
-        .get_func(&mut wasmtime_store, &func_name[..])
+        .get_func(&mut wasmtime_store, func_name)
         .expect("function export is present");
     let wasmtime_vals = wasmtime_main.call(&mut wasmtime_store, &[]);
     let wasmtime_val = wasmtime_vals.map(|v| v.iter().next().cloned());
@@ -806,6 +784,25 @@ pub fn differential_spec_execution(wasm: &[u8], config: &crate::generators::Conf
     Some(())
 }
 
+fn differential_store(
+    wasm: &[u8],
+    fuzz_config: &crate::generators::Config,
+) -> (Module, Store<StoreLimits>) {
+    let mut config = fuzz_config.to_wasmtime();
+    // forcibly disable NaN canonicalization because wasm-smith has already
+    // been configured to canonicalize everything at the wasm level.
+    config.cranelift_nan_canonicalization(false);
+    let engine = Engine::new(&config).unwrap();
+    let mut store = create_store(&engine);
+    if fuzz_config.consume_fuel {
+        store.add_fuel(u64::max_value()).unwrap();
+    }
+
+    let module = Module::new(&engine, &wasm).expect("Wasmtime can compile module");
+
+    (module, store)
+}
+
 /// Helper for instantiating and running a Wasm module in Wasmtime and returning
 /// its `Val` results.
 fn run_in_wasmtime(
@@ -814,15 +811,7 @@ fn run_in_wasmtime(
     params: &[Val],
 ) -> anyhow::Result<Vec<Val>> {
     // Instantiate wasmtime module and instance.
-    let mut wasmtime_config = config.to_wasmtime();
-    wasmtime_config.cranelift_nan_canonicalization(true);
-    let wasmtime_engine = Engine::new(&wasmtime_config).unwrap();
-    let mut wasmtime_store = create_store(&wasmtime_engine);
-    if config.consume_fuel {
-        wasmtime_store.add_fuel(u64::max_value()).unwrap();
-    }
-    let wasmtime_module =
-        Module::new(&wasmtime_engine, &wasm).expect("Wasmtime can compile module");
+    let (wasmtime_module, mut wasmtime_store) = differential_store(wasm, config);
     let wasmtime_instance = Instance::new(&mut wasmtime_store, &wasmtime_module, &[])
         .context("Wasmtime cannot instantiate module")?;
 
@@ -839,10 +828,20 @@ fn run_in_wasmtime(
 }
 
 // Introspect wasmtime module to find the name of the first exported function.
-fn first_exported_function(module: &wasmtime::Module) -> Option<String> {
+fn first_exported_function(module: &wasmtime::Module) -> Option<&str> {
     for e in module.exports() {
         match e.ty() {
-            wasmtime::ExternType::Func(..) => return Some(e.name().to_string()),
+            wasmtime::ExternType::Func(..) => return Some(e.name()),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn first_exported_memory(module: &Module) -> Option<&str> {
+    for e in module.exports() {
+        match e.ty() {
+            wasmtime::ExternType::Memory(..) => return Some(e.name()),
             _ => {}
         }
     }

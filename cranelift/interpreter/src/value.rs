@@ -22,6 +22,7 @@ pub trait Value: Clone + From<DataValue> {
     fn bool(b: bool, ty: Type) -> ValueResult<Self>;
     fn into_bool(self) -> ValueResult<bool>;
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self>;
+    fn into_array(&self) -> ValueResult<[u8; 16]>;
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self>;
     fn concat(self, other: Self) -> ValueResult<Self>;
 
@@ -47,6 +48,10 @@ pub trait Value: Clone + From<DataValue> {
     fn div(self, other: Self) -> ValueResult<Self>;
     fn rem(self, other: Self) -> ValueResult<Self>;
 
+    // Saturating arithmetic.
+    fn add_sat(self, other: Self) -> ValueResult<Self>;
+    fn sub_sat(self, other: Self) -> ValueResult<Self>;
+
     // Bitwise.
     fn shl(self, other: Self) -> ValueResult<Self>;
     fn ushr(self, other: Self) -> ValueResult<Self>;
@@ -71,6 +76,8 @@ pub enum ValueError {
     InvalidDataValueCast(#[from] DataValueCastFailure),
     #[error("performed a division by zero")]
     IntegerDivisionByZero,
+    #[error("performed a operation that overflowed this integer type")]
+    IntegerOverflow,
 }
 
 #[derive(Debug, PartialEq)]
@@ -78,6 +85,7 @@ pub enum ValueTypeClass {
     Integer,
     Boolean,
     Float,
+    Vector,
 }
 
 impl Display for ValueTypeClass {
@@ -86,11 +94,12 @@ impl Display for ValueTypeClass {
             ValueTypeClass::Integer => write!(f, "integer"),
             ValueTypeClass::Boolean => write!(f, "boolean"),
             ValueTypeClass::Float => write!(f, "float"),
+            ValueTypeClass::Vector => write!(f, "vector"),
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ValueConversionKind {
     /// Throw a [ValueError] if an exact conversion to [Type] is not possible; e.g. in `i32` to
     /// `i16`, convert `0x00001234` to `0x1234`.
@@ -223,8 +232,16 @@ impl Value for DataValue {
         }
     }
 
-    fn vector(_v: [u8; 16], _ty: Type) -> ValueResult<Self> {
-        unimplemented!()
+    fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self> {
+        assert!(ty.is_vector() && ty.bytes() == 16);
+        Ok(DataValue::V128(v))
+    }
+
+    fn into_array(&self) -> ValueResult<[u8; 16]> {
+        match *self {
+            DataValue::V128(v) => Ok(v),
+            _ => Err(ValueError::InvalidType(ValueTypeClass::Vector, self.ty())),
+        }
     }
 
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self> {
@@ -232,6 +249,7 @@ impl Value for DataValue {
             ValueConversionKind::Exact(ty) => match (self, ty) {
                 // TODO a lot to do here: from bmask to ireduce to raw_bitcast...
                 (DataValue::I64(n), types::I32) => DataValue::I32(i32::try_from(n)?),
+                (DataValue::I64(n), types::I64) => DataValue::I64(n),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
@@ -271,14 +289,17 @@ impl Value for DataValue {
                 (types::I32, types::I64) => unimplemented!(),
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
-            ValueConversionKind::ZeroExtend(ty) => match (self.ty(), ty) {
-                (types::I8, types::I16) => unimplemented!(),
-                (types::I8, types::I32) => unimplemented!(),
-                (types::I8, types::I64) => unimplemented!(),
-                (types::I16, types::I32) => unimplemented!(),
-                (types::I16, types::I64) => unimplemented!(),
-                (types::I32, types::I64) => unimplemented!(),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
+            ValueConversionKind::ZeroExtend(ty) => match (self, ty) {
+                (DataValue::I8(_), types::I16) => unimplemented!(),
+                (DataValue::I8(_), types::I32) => unimplemented!(),
+                (DataValue::I8(_), types::I64) => unimplemented!(),
+                (DataValue::I16(_), types::I32) => unimplemented!(),
+                (DataValue::I16(_), types::I64) => unimplemented!(),
+                (DataValue::U32(n), types::I64) => DataValue::U64(n as u64),
+                (DataValue::I32(n), types::I64) => DataValue::I64(n as u32 as i64),
+                (DataValue::U64(n), types::I64) => DataValue::U64(n),
+                (DataValue::I64(n), types::I64) => DataValue::I64(n),
+                (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::ToUnsigned => match self {
                 DataValue::I8(n) => DataValue::U8(n as u8),
@@ -338,7 +359,8 @@ impl Value for DataValue {
     }
 
     fn add(self, other: Self) -> ValueResult<Self> {
-        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128]) // TODO: floats must handle NaNs, +/-0
+        // TODO: floats must handle NaNs, +/-0
+        binary_match!(wrapping_add(&self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn sub(self, other: Self) -> ValueResult<Self> {
@@ -350,7 +372,15 @@ impl Value for DataValue {
     }
 
     fn div(self, other: Self) -> ValueResult<Self> {
-        if other.clone().into_int()? == 0 {
+        let denominator = other.clone().into_int()?;
+
+        // Check if we are dividing INT_MIN / -1. This causes an integer overflow trap.
+        let min = Value::int(1i128 << (self.ty().bits() - 1), self.ty())?;
+        if self == min && denominator == -1 {
+            return Err(ValueError::IntegerOverflow);
+        }
+
+        if denominator == 0 {
             return Err(ValueError::IntegerDivisionByZero);
         }
 
@@ -363,6 +393,14 @@ impl Value for DataValue {
         }
 
         binary_match!(%(&self, &other); [I8, I16, I32, I64])
+    }
+
+    fn add_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_add(self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
+    }
+
+    fn sub_sat(self, other: Self) -> ValueResult<Self> {
+        binary_match!(saturating_sub(self, &other); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128])
     }
 
     fn shl(self, other: Self) -> ValueResult<Self> {
@@ -386,7 +424,7 @@ impl Value for DataValue {
     }
 
     fn and(self, other: Self) -> ValueResult<Self> {
-        binary_match!(&(&self, &other); [I8, I16, I32, I64])
+        binary_match!(&(&self, &other); [B, I8, I16, I32, I64])
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {

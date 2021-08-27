@@ -1,7 +1,9 @@
 //! Cranelift instructions modify the state of the machine; the [State] trait describes these
 //! ways this can happen.
+use crate::address::{Address, AddressSize};
+use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::{FuncRef, Function, Type, Value};
+use cranelift_codegen::ir::{FuncRef, Function, StackSlot, Type, Value};
 use cranelift_entity::PrimaryMap;
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -57,25 +59,37 @@ pub trait State<'a, V> {
     /// Clear all [IntCC] and [FloatCC] flags.
     fn clear_flags(&mut self);
 
-    /// Retrieve a value `V` from the heap at the given `offset`; the number of bytes loaded
-    /// corresponds to the specified [Type].
-    fn load_heap(&self, offset: usize, ty: Type) -> Result<V, MemoryError>;
-    /// Store a value `V` into the heap at the given `offset`. The [Type] of `V` will determine
-    /// the number of bytes stored.
-    fn store_heap(&mut self, offset: usize, v: V) -> Result<(), MemoryError>;
-
-    /// Retrieve a value `V` from the stack at the given `offset`; the number of bytes loaded
-    /// corresponds to the specified [Type].
-    fn load_stack(&self, offset: usize, ty: Type) -> Result<V, MemoryError>;
-    /// Store a value `V` on the stack at the given `offset`. The [Type] of `V` will determine
-    /// the number of bytes stored.
-    fn store_stack(&mut self, offset: usize, v: V) -> Result<(), MemoryError>;
+    /// Computes the stack address for this stack slot, including an offset.
+    fn stack_address(
+        &self,
+        size: AddressSize,
+        slot: StackSlot,
+        offset: u64,
+    ) -> Result<Address, MemoryError>;
+    /// Computes a heap address
+    fn heap_address(&self, size: AddressSize, offset: u64) -> Result<Address, MemoryError>;
+    /// Retrieve a value `V` from memory at the given `address`, checking if it belongs either to the
+    /// stack or to one of the heaps; the number of bytes loaded corresponds to the specified [Type].
+    fn checked_load(&self, address: Address, ty: Type) -> Result<V, MemoryError>;
+    /// Store a value `V` into memory at the given `address`, checking if it belongs either to the
+    /// stack or to one of the heaps; the number of bytes stored corresponds to the specified [Type].
+    fn checked_store(&mut self, address: Address, v: V) -> Result<(), MemoryError>;
 }
 
 #[derive(Error, Debug)]
 pub enum MemoryError {
-    #[error("insufficient memory: asked for address {0} in memory of size {1}")]
-    InsufficientMemory(usize, usize),
+    #[error("Invalid DataValue passed as an address: {0}")]
+    InvalidAddress(DataValue),
+    #[error("Invalid type for address: {0}")]
+    InvalidAddressType(Type),
+    #[error("Requested an the entry {entry} but only {max} entries are allowed")]
+    InvalidEntry { entry: u64, max: u64 },
+    #[error("Requested an offset of {offset} but max was {max}")]
+    InvalidOffset { offset: u64, max: u64 },
+    #[error("Load of {load_size} bytes is larger than available size at address {addr:?}")]
+    OutOfBoundsLoad { addr: Address, load_size: usize },
+    #[error("Store of {store_size} bytes is larger than available size at address {addr:?}")]
+    OutOfBoundsStore { addr: Address, store_size: usize },
 }
 
 /// This dummy state allows interpretation over an immutable mapping of values in a single frame.
@@ -128,19 +142,24 @@ where
 
     fn clear_flags(&mut self) {}
 
-    fn load_heap(&self, _offset: usize, _ty: Type) -> Result<V, MemoryError> {
+    fn stack_address(
+        &self,
+        _size: AddressSize,
+        _slot: StackSlot,
+        _offset: u64,
+    ) -> Result<Address, MemoryError> {
         unimplemented!()
     }
 
-    fn store_heap(&mut self, _offset: usize, _v: V) -> Result<(), MemoryError> {
+    fn heap_address(&self, _size: AddressSize, _offset: u64) -> Result<Address, MemoryError> {
         unimplemented!()
     }
 
-    fn load_stack(&self, _offset: usize, _ty: Type) -> Result<V, MemoryError> {
+    fn checked_load(&self, _addr: Address, _ty: Type) -> Result<V, MemoryError> {
         unimplemented!()
     }
 
-    fn store_stack(&mut self, _offset: usize, _v: V) -> Result<(), MemoryError> {
+    fn checked_store(&mut self, _addr: Address, _v: V) -> Result<(), MemoryError> {
         unimplemented!()
     }
 }
