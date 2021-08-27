@@ -362,10 +362,11 @@ impl<'a> ObjectBuilder<'a> {
                 Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
                 Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
 
-                // TODO: why is this skipped? In a previous iteration of this
-                // file this was skipped without comment, and a recent
-                // refactoring led to this comment and confusion as to why this
-                // relocation is ignored...
+                // This is emitted by the old x86 backend and is only present
+                // for when the constant rodata is separated from the code
+                // itself. We don't do that, though, so we ignore these
+                // relocations since the offsets already listed here are already
+                // correct.
                 Reloc::X86PCRelRodata4 => continue,
 
                 other => unimplemented!("Unimplemented relocation {:?}", other),
