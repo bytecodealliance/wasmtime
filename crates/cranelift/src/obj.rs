@@ -363,6 +363,13 @@ impl<'a> ObjectBuilder<'a> {
             let (kind, encoding, size) = match r.reloc {
                 Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
                 Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
+
+                // TODO: why is this skipped? In a previous iteration of this
+                // file this was skipped without comment, and a recent
+                // refactoring led to this comment and confusion as to why this
+                // relocation is ignored...
+                Reloc::X86PCRelRodata4 => continue,
+
                 other => unimplemented!("Unimplemented relocation {:?}", other),
             };
             self.obj
