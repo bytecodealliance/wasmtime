@@ -301,9 +301,7 @@ impl<'a> ObjectBuilder<'a> {
                 let unwind_size = info.emit_size();
                 let mut unwind_info = vec![0; unwind_size];
                 info.emit(&mut unwind_info);
-                let unwind_off = self
-                    .obj
-                    .append_section_data(self.text_section, &unwind_info, 4);
+                let unwind_off = self.push_code(unwind_info, true);
                 self.windows_unwind_info.push(RUNTIME_FUNCTION {
                     begin: u32::try_from(off).unwrap(),
                     end: u32::try_from(off + body_len).unwrap(),
@@ -725,8 +723,9 @@ impl<'a> ObjectBuilder<'a> {
 
         // With relocations all handled we can shove everything into the final
         // text section now.
-        for contents in self.text_contents.iter() {
-            self.obj.append_section_data(self.text_section, contents, 1);
+        for (i, contents) in self.text_contents.iter().enumerate() {
+            let off = self.obj.append_section_data(self.text_section, contents, 1);
+            debug_assert_eq!(self.text_locations[&off], i);
         }
 
         if self.windows_unwind_info.len() > 0 {
