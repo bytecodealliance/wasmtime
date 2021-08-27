@@ -13,7 +13,7 @@ Then, we will open the `src/main.rs` and enter the following contents. Please se
 
 ## `src/main.rs`
 
-```rust
+```rust,should_panic
 {{#include ./rust_wasi_markdown_parser/src/main.rs}}
 ```
 

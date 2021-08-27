@@ -14,6 +14,7 @@ use std::fs;
 
 // Define our CLI options using structopt
 #[derive(StructOpt)]
+#[structopt(name = "rust_wasi_markdown_parser", about = "Markdown to HTML renderer CLI, written with Rust & WASI")]
 pub struct Options {
     /// The markdown file to render
     #[structopt(parse(from_os_str))]
