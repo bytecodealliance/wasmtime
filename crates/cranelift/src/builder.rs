@@ -66,12 +66,12 @@ impl CompilerBuilder for Builder {
 
     fn set(&mut self, name: &str, value: &str) -> Result<()> {
         // Special wasmtime-cranelift-only settings first
-        if name == "linkopt_padding_between_functions" {
+        if name == "wasmtime_linkopt_padding_between_functions" {
             self.linkopts.padding_between_functions = value.parse()?;
             return Ok(());
         }
-        if name == "linkopt_force_jump_veneer" {
-            self.linkopts.force_jump_veneers = value == "true";
+        if name == "wasmtime_linkopt_force_jump_veneer" {
+            self.linkopts.force_jump_veneers = value.parse()?;
             return Ok(());
         }
 

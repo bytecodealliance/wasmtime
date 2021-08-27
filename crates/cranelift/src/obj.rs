@@ -113,7 +113,7 @@ pub struct ObjectBuilder<'a> {
     /// a relocation against a libcall.
     libcalls: HashMap<LibCall, SymbolId>,
 
-    /// Packed form of windows unwind tables which, if present, will get emmited
+    /// Packed form of windows unwind tables which, if present, will get emitted
     /// to a windows-specific unwind info section.
     windows_unwind_info: Vec<RUNTIME_FUNCTION>,
 

@@ -33,7 +33,7 @@ impl DifferentialConfig {
         config.cranelift_opt_level(self.opt_level.to_wasmtime());
         if self.force_jump_veneers {
             unsafe {
-                config.cranelift_flag_set("linkopt_force_jump_veneer", "true")?;
+                config.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")?;
             }
         }
         Ok(config)

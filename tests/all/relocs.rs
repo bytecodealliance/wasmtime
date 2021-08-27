@@ -14,7 +14,10 @@ fn store_with_padding(padding: usize) -> Result<Store<()>> {
     // This is an internal debug-only setting specifically recognized for
     // basically just this set of tests.
     unsafe {
-        config.cranelift_flag_set("linkopt_padding_between_functions", &padding.to_string())?;
+        config.cranelift_flag_set(
+            "wasmtime_linkopt_padding_between_functions",
+            &padding.to_string(),
+        )?;
     }
     let engine = Engine::new(&config)?;
     Ok(Store::new(&engine, ()))
@@ -71,7 +74,7 @@ fn mixed() -> Result<()> {
 fn mixed_forced() -> Result<()> {
     let mut config = Config::new();
     unsafe {
-        config.cranelift_flag_set("linkopt_force_jump_veneer", &padding.to_string())?;
+        config.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", &padding.to_string())?;
     }
     let engine = Engine::new(&config)?;
     test_many_call_module(Store::new(&engine, ()))

@@ -60,7 +60,7 @@ fn emit_reloc(
 /// used when relative 32-bit call instructions won't cut it and a longer jump
 /// is needed.
 ///
-/// This generats:
+/// This generates:
 ///
 /// ```ignore
 /// movabsq $val, %r10

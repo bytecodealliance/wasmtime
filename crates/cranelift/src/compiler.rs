@@ -204,10 +204,9 @@ impl wasmtime_environ::Compiler for Compiler {
             None
         };
 
-        Ok((
+        Ok(Box::new((
             code_buf,
-            Box::new(CompiledFunction {
-                body: code_buf,
+            CompiledFunction {
                 jt_offsets: context.func.jt_offsets,
                 relocations: reloc_sink.func_relocs,
                 value_labels_ranges: ranges.unwrap_or(Default::default()),
@@ -219,8 +218,8 @@ impl wasmtime_environ::Compiler for Compiler {
                     stack_maps: stack_map_sink.finish(),
                 },
                 address_map: address_transform,
-            }),
-        ))
+            },
+        )))
     }
 
     fn emit_obj(
@@ -256,13 +255,13 @@ impl wasmtime_environ::Compiler for Compiler {
             trampolines.push((i, func));
         }
 
-        let mut builder = ObjectBuilder::new(obj, &translation.module);
+        let mut builder = ObjectBuilder::new(obj, &translation.module, &*self.isa);
         builder.force_jump_veneers = self.linkopts.force_jump_veneers;
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
 
-        for (i, func) in funcs.iter() {
-            let range = builder.func(i, func);
+        for ((i, func), (_, body)) in funcs.iter().zip(bodies) {
+            let range = builder.func(i, func, body);
             addrs.push(range.clone(), &func.address_map.instructions);
             traps.push(range, &func.traps);
             if self.linkopts.padding_between_functions > 0 {
@@ -304,9 +303,9 @@ impl wasmtime_environ::Compiler for Compiler {
             builder.dwarf_sections(&dwarf_sections)?;
         }
 
+        builder.finish()?;
         addrs.append_to(obj);
         traps.append_to(obj);
-        builder.finish()?;
 
         Ok(funcs.into_iter().map(|(_, f)| f.info).collect())
     }
