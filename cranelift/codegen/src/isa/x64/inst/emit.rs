@@ -85,13 +85,13 @@ pub fn gen_jump_veneer() -> (Vec<u8>, usize) {
     // lea -15(%rip), %r11
     bytes.push(0x48 | ((r11 >> 3) & 1) << 2);
     bytes.push(0x8d);
-    bytes.push(encode_modrm(0b00, r11, 0b101));
+    bytes.push(encode_modrm(0b00, r11 & 7, 0b101));
     bytes.extend_from_slice(&i32::to_le_bytes(-15));
 
     // add %r10, %r11
     bytes.push(0x48 | (((r11 >> 3) & 1) << 2) | ((r10 >> 3) & 1));
     bytes.push(0x01);
-    bytes.push(encode_modrm(0b11, r10, r11));
+    bytes.push(encode_modrm(0b11, r10 & 7, r11 & 7));
 
     // jmpq *%r11
     bytes.push(0x40 | ((r11 >> 3) & 1));
