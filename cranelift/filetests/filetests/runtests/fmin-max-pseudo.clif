@@ -1,0 +1,81 @@
+test run
+; target s390x TODO: Not yet implemented on s390x
+set enable_simd
+target x86_64 machinst skylake
+
+function %fmin_pseudo_f32(f32, f32) -> f32 {
+block0(v0:f32, v1:f32):
+    v2 = fmin_pseudo v0, v1
+    return v2
+}
+; run: %fmin_pseudo_f32(0x1.0, 0x2.0) == 0x1.0
+; run: %fmin_pseudo_f32(NaN, 0x2.0) == NaN
+; run: %fmin_pseudo_f32(0x0.1, NaN) == 0x0.1
+; run: %fmin_pseudo_f32(0x0.0, -0x0.0) == 0x0.0
+; run: %fmin_pseudo_f32(-0x0.0, 0x0.0) == -0x0.0
+
+function %fmax_pseudo_f32(f32, f32) -> f32 {
+block0(v0:f32, v1:f32):
+    v2 = fmax_pseudo v0, v1
+    return v2
+}
+; run: %fmax_pseudo_f32(0x1.0, 0x2.0) == 0x2.0
+; run: %fmax_pseudo_f32(NaN, 0x2.0) == NaN
+; run: %fmax_pseudo_f32(0x0.1, NaN) == 0x0.1
+; run: %fmax_pseudo_f32(0x0.0, 0x0.0) == 0x0.0
+; run: %fmax_pseudo_f32(-0x0.0, 0x0.0) == -0x0.0
+
+function %fmin_pseudo_f64(f64, f64) -> f64 {
+block0(v0:f64, v1:f64):
+    v2 = fmin_pseudo v0, v1
+    return v2
+}
+; run: %fmin_pseudo_f64(0x1.0, 0x2.0) == 0x1.0
+; run: %fmin_pseudo_f64(NaN, 0x2.0) == NaN
+; run: %fmin_pseudo_f64(0x0.1, NaN) == 0x0.1
+; run: %fmin_pseudo_f64(0x0.0, -0x0.0) == 0x0.0
+; run: %fmin_pseudo_f64(-0x0.0, 0x0.0) == -0x0.0
+
+function %fmax_pseudo_f64(f64, f64) -> f64 {
+block0(v0:f64, v1:f64):
+    v2 = fmax_pseudo v0, v1
+    return v2
+}
+; run: %fmax_pseudo_f64(0x1.0, 0x2.0) == 0x2.0
+; run: %fmax_pseudo_f64(NaN, 0x2.0) == NaN
+; run: %fmax_pseudo_f64(0x0.1, NaN) == 0x0.1
+; run: %fmax_pseudo_f64(0x0.0, 0x0.0) == 0x0.0
+; run: %fmax_pseudo_f64(-0x0.0, 0x0.0) == -0x0.0
+
+target aarch64 ; TODO scalar fmin_pseudo and fmax_pseudo are unimplemented for AArch64
+
+function %fmin_pseudo_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0:f32x4, v1:f32x4):
+    v2 = fmin_pseudo v0, v1
+    return v2
+}
+; run: %fmin_pseudo_f32x4([0x1.0 NaN 0x0.1 -0x0.0], [0x2.0 0x2.0 NaN 0x0.0]) == [0x1.0 NaN 0x0.1 -0x0.0]
+
+function %fmax_pseudo_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0:f32x4, v1:f32x4):
+    v2 = fmax_pseudo v0, v1
+    return v2
+}
+; run: %fmax_pseudo_f32x4([0x1.0 NaN 0x0.1 -0x0.0], [0x2.0 0x2.0 NaN 0x0.0]) == [0x2.0 NaN 0x0.1 -0x0.0]
+
+function %fmin_pseudo_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0:f64x2, v1:f64x2):
+    v2 = fmin_pseudo v0, v1
+    return v2
+}
+; run: %fmin_pseudo_f64x2([0x1.0 NaN], [0x2.0 0x2.0]) == [0x1.0 NaN]
+; run: %fmin_pseudo_f64x2([0x0.1 -0x0.0], [NaN 0x0.0]) == [0x0.1 -0x0.0]
+
+function %fmax_pseudo_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0:f64x2, v1:f64x2):
+    v2 = fmax_pseudo v0, v1
+    return v2
+}
+; run: %fmax_pseudo_f64x2([0x1.0 NaN], [0x2.0 0x2.0]) == [0x2.0 NaN]
+; run: %fmax_pseudo_f64x2([0x0.1 -0x0.0], [NaN 0x0.0]) == [0x0.1 -0x0.0]
+
