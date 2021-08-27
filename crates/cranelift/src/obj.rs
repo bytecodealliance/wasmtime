@@ -415,7 +415,7 @@ impl<'a> ObjectBuilder<'a> {
         // Once we can safely append the body we do so, updating various state
         // about how to get back to the body.
         self.text_locations.insert(ret, self.text_contents.len());
-        self.current_text_off += body_len;
+        self.current_text_off = ret + body_len;
         self.text_contents.push((body, align));
         return ret;
     }
