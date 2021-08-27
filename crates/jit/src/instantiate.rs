@@ -34,7 +34,7 @@ use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBo
 /// data section is simply always present in the ELF image. If we wanted to
 /// release the data it's probably best to figure out what the best
 /// implementation is for it at the time given a particular set of constraints.
-const ELF_WASM_DATA: &'static str = ".data.wasm";
+const ELF_WASM_DATA: &'static str = ".rodata.wasm";
 
 /// This is the name of the section in the final ELF image which contains a
 /// `bincode`-encoded `CompiledModuleInfo`.
