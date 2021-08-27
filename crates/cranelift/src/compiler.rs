@@ -28,7 +28,7 @@ use std::sync::Mutex;
 use wasmtime_environ::{
     AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
     InstructionAddressMap, Module, ModuleTranslation, StackMapInformation, TrapCode,
-    TrapInformation, Tunables, TypeTables, VMOffsets,
+    TrapEncodingBuilder, TrapInformation, Tunables, TypeTables, VMOffsets,
 };
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
@@ -208,8 +208,8 @@ impl wasmtime_environ::Compiler for Compiler {
             value_labels_ranges: ranges.unwrap_or(Default::default()),
             stack_slots: context.func.stack_slots,
             unwind_info,
+            traps: trap_sink.traps,
             info: FunctionInfo {
-                traps: trap_sink.traps,
                 start_srcloc: address_transform.start_srcloc,
                 stack_maps: stack_map_sink.finish(),
             },
@@ -249,10 +249,12 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut builder = ObjectBuilder::new(obj, &translation.module);
         let mut addrs = AddressMapSection::default();
+        let mut traps = TrapEncodingBuilder::default();
 
         for (i, func) in funcs.iter() {
             let range = builder.func(i, func);
-            addrs.push(range, &func.address_map.instructions);
+            addrs.push(range.clone(), &func.address_map.instructions);
+            traps.push(range, &func.traps);
         }
         for (i, func) in trampolines.iter() {
             builder.trampoline(*i, func);
@@ -291,6 +293,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         builder.finish(&*self.isa)?;
         addrs.append_to(obj);
+        traps.append_to(obj);
 
         Ok(funcs.into_iter().map(|(_, f)| f.info).collect())
     }
@@ -533,6 +536,7 @@ impl Compiler {
             value_labels_ranges: Default::default(),
             info: Default::default(),
             address_map: Default::default(),
+            traps: Vec::new(),
         })
     }
 }

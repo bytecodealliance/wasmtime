@@ -18,7 +18,7 @@ use thiserror::Error;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex, Module,
     ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
-    StackMapInformation, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
+    StackMapInformation, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP, ELF_WASMTIME_TRAPS,
 };
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
 
@@ -269,6 +269,7 @@ impl ModuleCode {
 pub struct CompiledModule {
     wasm_data: Range<usize>,
     address_map_data: Range<usize>,
+    trap_data: Range<usize>,
     artifacts: CompilationArtifacts,
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
@@ -315,6 +316,7 @@ impl CompiledModule {
         let funcs = info.funcs;
         let wasm_data = subslice_range(section(ELF_WASM_DATA)?, &artifacts.obj);
         let address_map_data = subslice_range(section(ELF_WASMTIME_ADDRMAP)?, &artifacts.obj);
+        let trap_data = subslice_range(section(ELF_WASMTIME_TRAPS)?, &artifacts.obj);
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
@@ -337,6 +339,7 @@ impl CompiledModule {
             artifacts,
             wasm_data,
             address_map_data,
+            trap_data,
             code: Arc::new(ModuleCode {
                 range: (start, end),
                 code_memory,
@@ -391,6 +394,13 @@ impl CompiledModule {
     /// `wasmtime_environ::lookup_file_pos`.
     pub fn address_map_data(&self) -> &[u8] {
         &self.artifacts.obj[self.address_map_data.clone()]
+    }
+
+    /// Returns the encoded trap information for this compiled image.
+    ///
+    /// For more information see `wasmtime_environ::trap_encoding`.
+    pub fn trap_data(&self) -> &[u8] {
+        &self.artifacts.obj[self.trap_data.clone()]
     }
 
     /// Return a reference-counting pointer to a module.

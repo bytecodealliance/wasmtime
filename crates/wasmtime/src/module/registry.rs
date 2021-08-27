@@ -5,7 +5,7 @@ use std::{
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
-use wasmtime_environ::{EntityRef, FilePos, StackMap, TrapInformation};
+use wasmtime_environ::{EntityRef, FilePos, StackMap, TrapCode};
 use wasmtime_jit::CompiledModule;
 use wasmtime_runtime::{ModuleInfo, VMCallerCheckedAnyfunc, VMTrampoline};
 
@@ -262,9 +262,9 @@ impl GlobalModuleRegistry {
     }
 
     /// Fetches trap information about a program counter in a backtrace.
-    pub(crate) fn lookup_trap_info(&self, pc: usize) -> Option<&TrapInformation> {
+    pub(crate) fn lookup_trap_code(&self, pc: usize) -> Option<TrapCode> {
         let (module, offset) = self.module(pc)?;
-        module.lookup_trap_info(offset)
+        wasmtime_environ::lookup_trap_code(module.module.trap_data(), offset)
     }
 
     /// Registers a new region of code, described by `(start, end)` and with
@@ -370,17 +370,6 @@ impl GlobalRegisteredModule {
             func_start: info.start_srcloc,
             symbols,
         })
-    }
-
-    /// Fetches trap information about a program counter in a backtrace.
-    pub fn lookup_trap_info(&self, text_offset: usize) -> Option<&TrapInformation> {
-        let (index, func_offset) = self.module.func_by_text_offset(text_offset)?;
-        let info = self.module.func_info(index);
-        let idx = info
-            .traps
-            .binary_search_by_key(&func_offset, |info| info.code_offset)
-            .ok()?;
-        Some(&info.traps[idx])
     }
 }
 
