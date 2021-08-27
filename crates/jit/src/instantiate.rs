@@ -18,7 +18,7 @@ use thiserror::Error;
 use wasmtime_environ::{
     CompileError, DefinedFuncIndex, FunctionInfo, InstanceSignature, InstanceTypeIndex, Module,
     ModuleSignature, ModuleTranslation, ModuleTypeIndex, PrimaryMap, SignatureIndex,
-    StackMapInformation, Tunables, WasmFuncType,
+    StackMapInformation, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
 };
 use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
 
@@ -268,6 +268,7 @@ impl ModuleCode {
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     wasm_data: Range<usize>,
+    address_map_data: Range<usize>,
     artifacts: CompilationArtifacts,
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
@@ -313,6 +314,7 @@ impl CompiledModule {
         let module = Arc::new(info.module);
         let funcs = info.funcs;
         let wasm_data = subslice_range(section(ELF_WASM_DATA)?, &artifacts.obj);
+        let address_map_data = subslice_range(section(ELF_WASMTIME_ADDRMAP)?, &artifacts.obj);
 
         // Allocate all of the compiled functions into executable memory,
         // copying over their contents.
@@ -334,6 +336,7 @@ impl CompiledModule {
             module,
             artifacts,
             wasm_data,
+            address_map_data,
             code: Arc::new(ModuleCode {
                 range: (start, end),
                 code_memory,
@@ -384,6 +387,12 @@ impl CompiledModule {
         &self.artifacts.obj[self.wasm_data.clone()]
     }
 
+    /// Returns the encoded address map section used to pass to
+    /// `wasmtime_environ::lookup_file_pos`.
+    pub fn address_map_data(&self) -> &[u8] {
+        &self.artifacts.obj[self.address_map_data.clone()]
+    }
+
     /// Return a reference-counting pointer to a module.
     pub fn module(&self) -> &Arc<Module> {
         &self.module
@@ -421,10 +430,13 @@ impl CompiledModule {
 
     /// Lookups a defined function by a program counter value.
     ///
-    /// Returns the defined function index, the start address, and the end address (exclusive).
-    pub fn func_by_pc(&self, pc: usize) -> Option<(DefinedFuncIndex, usize, usize)> {
+    /// Returns the defined function index and the relative address of
+    /// `text_offfset` within the function itself.
+    pub fn func_by_text_offset(&self, text_offset: usize) -> Option<(DefinedFuncIndex, u32)> {
         let functions = self.finished_functions();
 
+        let text_section = self.code().range().0;
+        let pc = text_section + text_offset;
         let index = match functions.binary_search_values_by_key(&pc, |body| unsafe {
             debug_assert!(!(**body).is_empty());
             // Return the inclusive "end" of the function
@@ -453,7 +465,7 @@ impl CompiledModule {
             return None;
         }
 
-        Some((index, start, end))
+        Some((index, (text_offset - (start - text_section)) as u32))
     }
 
     /// Gets the function information for a given function index.

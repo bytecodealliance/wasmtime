@@ -1,11 +1,9 @@
-use crate::CompiledFunctions;
+use crate::{CompiledFunctions, FunctionAddressMap};
 use gimli::write;
 use more_asserts::assert_le;
 use std::collections::BTreeMap;
 use std::iter::FromIterator;
-use wasmtime_environ::{
-    DefinedFuncIndex, EntityRef, FilePos, FunctionAddressMap, PrimaryMap, WasmFileInfo,
-};
+use wasmtime_environ::{DefinedFuncIndex, EntityRef, FilePos, PrimaryMap, WasmFileInfo};
 
 pub type GeneratedAddress = usize;
 pub type WasmAddress = u64;
@@ -199,7 +197,7 @@ fn build_function_addr_map(
 ) -> PrimaryMap<DefinedFuncIndex, FunctionMap> {
     let mut map = PrimaryMap::new();
     for (_, f) in funcs {
-        let ft = &f.info.address_map;
+        let ft = &f.address_map;
         let mut fn_map = Vec::new();
         for t in ft.instructions.iter() {
             if t.srcloc.file_offset().is_none() {
@@ -460,7 +458,7 @@ impl AddressTransform {
 
         let mut func = BTreeMap::new();
         for (i, f) in funcs {
-            let ft = &f.info.address_map;
+            let ft = &f.address_map;
             let (fn_start, fn_end, lookup) = build_function_lookup(ft, code_section_offset);
 
             func.insert(
@@ -611,14 +609,12 @@ impl AddressTransform {
 #[cfg(test)]
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
-    use crate::{CompiledFunction, CompiledFunctions};
+    use crate::{CompiledFunction, CompiledFunctions, FunctionAddressMap};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
     use std::iter::FromIterator;
     use std::mem;
-    use wasmtime_environ::{
-        FilePos, FunctionAddressMap, FunctionInfo, InstructionAddressMap, WasmFileInfo,
-    };
+    use wasmtime_environ::{FilePos, InstructionAddressMap, WasmFileInfo};
 
     #[test]
     fn test_get_wasm_code_offset() {
@@ -660,10 +656,7 @@ mod tests {
 
     fn create_simple_module(address_map: FunctionAddressMap) -> CompiledFunctions {
         PrimaryMap::from_iter(vec![CompiledFunction {
-            info: FunctionInfo {
-                address_map,
-                ..Default::default()
-            },
+            address_map,
             ..Default::default()
         }])
     }
