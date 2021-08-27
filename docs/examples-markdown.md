@@ -28,7 +28,7 @@ Our wasm file should be compiled to `target/wasm32-wasi/debug/rust_wasi_markdown
 
 To do this, we can use the Wasmtime CLI. However, there is one thing to note about Wasmtime, WASI, and the capability based security model. We need to give our program explicit access to read files on our device. Wasm modules that implement WASI will not have this capability unless we give them the capability.
 
-To grant the capability to read in a directory using the Wasmtime CLI, we need to use the --dir flag. --dir will instruct wasmtime to allow our wasm module to preopen, and read files in the passed directory. For example:
+To grant the capability to read in a directory using the Wasmtime CLI, we need to use the --dir flag. --dir will instruct wasmtime to make the passed directory available to access files from. (You can also `--mapdir GUEST_DIRECTORY::HOST_DIRECTORY` to make it available under a different path inside the content.) For example:
 
 ```bash
 wasmtime --dir . my-wasi-program.wasm
@@ -56,5 +56,4 @@ Which should look like the following:
 ```
 
 Hooray! We were able to write a Wasm Module, that uses WASI to read a markdown file, parse the markdown, and write the output to stdout! Continue reading to see more examples of using Wasmtime to execute Wasm Modules, from the CLI or even embedded in your application!
-
 
