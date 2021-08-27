@@ -3,6 +3,8 @@
 //! for when platform-specific relative call instructios can't always reach
 //! their destination within the platform-specific limits.
 
+#![cfg(not(feature = "old-x86-backend"))] // multi-value not supported here
+
 use anyhow::Result;
 use wasmtime::*;
 
@@ -74,13 +76,13 @@ fn mixed() -> Result<()> {
 fn mixed_forced() -> Result<()> {
     let mut config = Config::new();
     unsafe {
-        config.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", &padding.to_string())?;
+        config.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")?;
     }
     let engine = Engine::new(&config)?;
     test_many_call_module(Store::new(&engine, ()))
 }
 
-fn test_many_call_module(store: Store<()>) -> Result<()> {
+fn test_many_call_module(mut store: Store<()>) -> Result<()> {
     const N: i32 = 200;
 
     let mut wat = String::new();

@@ -115,6 +115,14 @@ impl MachBackend for Arm32Backend {
         // Carry flag clear.
         IntCC::UnsignedLessThan
     }
+
+    fn generate_jump_veneer(&self) -> (Vec<u8>, usize) {
+        panic!("not implemented for arm32 backend")
+    }
+
+    fn max_jump_veneer_size(&self) -> usize {
+        0
+    }
 }
 
 /// Create a new `isa::Builder`.
