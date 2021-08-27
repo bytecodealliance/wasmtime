@@ -352,6 +352,7 @@ pub struct Config {
     pub(crate) async_support: bool,
     pub(crate) deserialize_check_wasmtime_version: bool,
     pub(crate) parallel_compilation: bool,
+    pub(crate) paged_memory_initialization: bool,
 }
 
 impl Config {
@@ -375,6 +376,8 @@ impl Config {
             async_support: false,
             deserialize_check_wasmtime_version: true,
             parallel_compilation: true,
+            // Default to paged memory initialization when using uffd on linux
+            paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
         };
         #[cfg(compiler)]
         {
@@ -984,6 +987,27 @@ impl Config {
         self
     }
 
+    /// Sets whether or not an attempt is made to initialize linear memories by page.
+    ///
+    /// This setting is `false` by default and Wasmtime initializes linear memories
+    /// by copying individual data segments from the compiled module.
+    ///
+    /// Setting this to `true` will cause compilation to attempt to organize the
+    /// data segments into WebAssembly pages and linear memories are initialized by
+    /// copying each page rather than individual data segments.
+    ///
+    /// Modules that import a memory or have data segments that use a global base
+    /// will continue to be initialized by copying each data segment individually.
+    ///
+    /// When combined with the `uffd` feature on Linux, this will allow Wasmtime
+    /// to delay initialization of a linear memory page until it is accessed
+    /// for the first time during WebAssembly execution; this may improve
+    /// instantiation performance as a result.
+    pub fn paged_memory_initialization(&mut self, value: bool) -> &mut Self {
+        self.paged_memory_initialization = value;
+        self
+    }
+
     /// Configures the maximum size, in bytes, where a linear memory is
     /// considered static, above which it'll be considered dynamic.
     ///
@@ -1329,6 +1353,7 @@ impl Clone for Config {
             async_stack_size: self.async_stack_size,
             deserialize_check_wasmtime_version: self.deserialize_check_wasmtime_version,
             parallel_compilation: self.parallel_compilation,
+            paged_memory_initialization: self.paged_memory_initialization,
         }
     }
 }
