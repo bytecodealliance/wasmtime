@@ -26,7 +26,6 @@ object = { version = "0.26.0", default-features = false, features = ["std", "rea
 serde = { version = "1.0.94", features = ["derive"] }
 addr2line = { version = "0.16.0", default-features = false }
 libc = { version = "0.2.60", default-features = false, optional = true }
-scroll = { version = "0.10.1", features = ["derive"], optional = true }
 ittapi-rs = { version = "0.1.5", optional = true  }
 bincode = "1.2.1"
 
@@ -34,7 +33,7 @@ bincode = "1.2.1"
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
 [features]
-jitdump = ['libc', 'scroll']
+jitdump = ['libc']
 vtune = ['ittapi-rs']
 
 [badges]
