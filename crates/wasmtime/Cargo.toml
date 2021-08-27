@@ -38,6 +38,7 @@ paste = "1.0.3"
 psm = "0.1.11"
 lazy_static = "1.4"
 rayon = { version = "1.0", optional = true }
+object = { version = "0.26", default-features = false, features = ['read_core', 'elf'] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"

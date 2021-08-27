@@ -58,6 +58,7 @@ wast = "37.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
 winapi = { version = "0.3.9", features = ['memoryapi'] }
+memchr = "2.4"
 
 [build-dependencies]
 anyhow = "1.0.19"
