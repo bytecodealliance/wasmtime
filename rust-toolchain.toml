@@ -1,0 +1,8 @@
+# If you see this, run `rustup self update` to get rustup 1.24.1 or newer.
+
+# NOTE: above comment is for older `rustup` (before TOML support was added),
+# which will treat the first line as the toolchain name, and therefore show it
+# to the user in the error, instead of "error: invalid channel name '[toolchain]'".
+
+[toolchain]
+channel = "stable"
