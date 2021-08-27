@@ -9,7 +9,6 @@ use anyhow::Result;
 use wasmtime::*;
 
 const MB: usize = 1 << 20;
-const GB: usize = 1 << 30;
 
 fn store_with_padding(padding: usize) -> Result<Store<()>> {
     let mut config = Config::new();
