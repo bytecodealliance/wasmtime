@@ -10,11 +10,8 @@ block0(v0: i8):
   return v3
 }
 
-; check:  stp fp, lr, [sp, #-16]!
-; nextln:  mov fp, sp
-; nextln:  movz x1, #42
+; check:  movz x1, #42
 ; nextln:  add x0, x1, x0, SXTB
-; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
 
@@ -24,10 +21,7 @@ block0(v0: i64):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: movz x1, #0
-; nextln: ldp fp, lr, [sp], #16
+; check: movz x1, #0
 ; nextln: ret
 
 function %i128_sextend_i64(i64) -> i128 {
@@ -36,10 +30,7 @@ block0(v0: i64):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: asr x1, x0, #63
-; nextln: ldp fp, lr, [sp], #16
+; check: asr x1, x0, #63
 ; nextln: ret
 
 
@@ -49,11 +40,8 @@ block0(v0: i32):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: mov w0, w0
+; check: mov w0, w0
 ; nextln: movz x1, #0
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %i128_sextend_i32(i32) -> i128 {
@@ -62,11 +50,8 @@ block0(v0: i32):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sxtw x0, w0
+; check: sxtw x0, w0
 ; nextln: asr x1, x0, #63
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 
@@ -76,11 +61,8 @@ block0(v0: i16):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: uxth w0, w0
+; check: uxth w0, w0
 ; nextln: movz x1, #0
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %i128_sextend_i16(i16) -> i128 {
@@ -89,11 +71,8 @@ block0(v0: i16):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sxth x0, w0
+; check: sxth x0, w0
 ; nextln: asr x1, x0, #63
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 
@@ -103,11 +82,8 @@ block0(v0: i8):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: uxtb w0, w0
+; check: uxtb w0, w0
 ; nextln: movz x1, #0
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %i128_sextend_i8(i8) -> i128 {
@@ -116,9 +92,6 @@ block0(v0: i8):
     return v1
 }
 
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sxtb x0, w0
+; check: sxtb x0, w0
 ; nextln: asr x1, x0, #63
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

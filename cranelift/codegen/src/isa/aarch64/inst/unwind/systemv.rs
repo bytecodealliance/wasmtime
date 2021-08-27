@@ -66,3 +66,107 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
         Some(8)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::{
+        types, AbiParam, ExternalName, Function, InstBuilder, Signature, StackSlotData,
+        StackSlotKind,
+    };
+    use crate::isa::{lookup, CallConv};
+    use crate::settings::{builder, Flags};
+    use crate::Context;
+    use gimli::write::Address;
+    use std::str::FromStr;
+    use target_lexicon::triple;
+
+    #[test]
+    fn test_simple_func() {
+        let isa = lookup(triple!("aarch64"))
+            .expect("expect aarch64 ISA")
+            .finish(Flags::new(builder()));
+
+        let mut context = Context::for_function(create_function(
+            CallConv::SystemV,
+            Some(StackSlotData::new(StackSlotKind::ExplicitSlot, 64)),
+        ));
+
+        context.compile(&*isa).expect("expected compilation");
+
+        let fde = match context
+            .create_unwind_info(isa.as_ref())
+            .expect("can create unwind info")
+        {
+            Some(crate::isa::unwind::UnwindInfo::SystemV(info)) => {
+                info.to_fde(Address::Constant(1234))
+            }
+            _ => panic!("expected unwind information"),
+        };
+
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(1234), length: 24, lsda: None, instructions: [(0, ValExpression(Register(34), Expression { operations: [Simple(DwOp(48))] })), (4, CfaOffset(16)), (4, Offset(Register(29), -16)), (4, Offset(Register(30), -8)), (8, CfaRegister(Register(29)))] }");
+    }
+
+    fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
+        let mut func =
+            Function::with_name_signature(ExternalName::user(0, 0), Signature::new(call_conv));
+
+        let block0 = func.dfg.make_block();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+        pos.ins().return_(&[]);
+
+        if let Some(stack_slot) = stack_slot {
+            func.stack_slots.push(stack_slot);
+        }
+
+        func
+    }
+
+    #[test]
+    fn test_multi_return_func() {
+        let isa = lookup(triple!("aarch64"))
+            .expect("expect aarch64 ISA")
+            .finish(Flags::new(builder()));
+
+        let mut context = Context::for_function(create_multi_return_function(CallConv::SystemV));
+
+        context.compile(&*isa).expect("expected compilation");
+
+        let fde = match context
+            .create_unwind_info(isa.as_ref())
+            .expect("can create unwind info")
+        {
+            Some(crate::isa::unwind::UnwindInfo::SystemV(info)) => {
+                info.to_fde(Address::Constant(4321))
+            }
+            _ => panic!("expected unwind information"),
+        };
+
+        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [] }");
+    }
+
+    fn create_multi_return_function(call_conv: CallConv) -> Function {
+        let mut sig = Signature::new(call_conv);
+        sig.params.push(AbiParam::new(types::I32));
+        let mut func = Function::with_name_signature(ExternalName::user(0, 0), sig);
+
+        let block0 = func.dfg.make_block();
+        let v0 = func.dfg.append_block_param(block0, types::I32);
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
+
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block0);
+        pos.ins().brnz(v0, block2, &[]);
+        pos.ins().jump(block1, &[]);
+
+        pos.insert_block(block1);
+        pos.ins().return_(&[]);
+
+        pos.insert_block(block2);
+        pos.ins().return_(&[]);
+
+        func
+    }
+}

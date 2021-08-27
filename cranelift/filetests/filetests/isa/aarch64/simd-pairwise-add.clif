@@ -11,10 +11,7 @@ block0(v0: i8x16):
   return v3
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: saddlp v0.8h, v0.16b
-; nextln: ldp fp, lr, [sp], #16
+; check: saddlp v0.8h, v0.16b
 ; nextln: ret
 
 function %fn2(i8x16) -> i16x8 {
@@ -25,10 +22,7 @@ block0(v0: i8x16):
   return v3
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: uaddlp v0.8h, v0.16b
-; nextln: ldp fp, lr, [sp], #16
+; check: uaddlp v0.8h, v0.16b
 ; nextln: ret
 
 function %fn3(i16x8) -> i32x4 {
@@ -39,10 +33,7 @@ block0(v0: i16x8):
   return v3
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: saddlp v0.4s, v0.8h
-; nextln: ldp fp, lr, [sp], #16
+; check: saddlp v0.4s, v0.8h
 ; nextln: ret
 
 function %fn4(i16x8) -> i32x4 {
@@ -53,10 +44,7 @@ block0(v0: i16x8):
   return v3
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: uaddlp v0.4s, v0.8h
-; nextln: ldp fp, lr, [sp], #16
+; check: uaddlp v0.4s, v0.8h
 ; nextln: ret
 
 function %fn5(i8x16, i8x16) -> i16x8 {
@@ -67,12 +55,9 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: sxtl v0.8h, v0.8b
+; check: sxtl v0.8h, v0.8b
 ; nextln: sxtl2 v1.8h, v1.16b
 ; nextln: addp v0.8h, v0.8h, v1.8h
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %fn6(i8x16, i8x16) -> i16x8 {
@@ -83,12 +68,9 @@ block0(v0: i8x16, v1: i8x16):
   return v4
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: uxtl v0.8h, v0.8b
+; check: uxtl v0.8h, v0.8b
 ; nextln: uxtl2 v1.8h, v1.16b
 ; nextln: addp v0.8h, v0.8h, v1.8h
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %fn7(i8x16) -> i16x8 {
@@ -99,12 +81,9 @@ block0(v0: i8x16):
   return v3
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: uxtl v1.8h, v0.8b
+; check: uxtl v1.8h, v0.8b
 ; nextln: sxtl2 v0.8h, v0.16b
 ; nextln: addp v0.8h, v1.8h, v0.8h
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %fn8(i8x16) -> i16x8 {
@@ -115,10 +94,7 @@ block0(v0: i8x16):
   return v3
 }
 
-; check: stp fp
-; nextln: mov fp, sp
-; nextln: sxtl v1.8h, v0.8b
+; check: sxtl v1.8h, v0.8b
 ; nextln: uxtl2 v0.8h, v0.16b
 ; nextln: addp v0.8h, v1.8h, v0.8h
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret

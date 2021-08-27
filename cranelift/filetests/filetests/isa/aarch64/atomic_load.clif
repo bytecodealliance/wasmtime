@@ -8,7 +8,6 @@ block0(v0: i64):
 }
 
 ; check: ldar x0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i32(i64) -> i32 {
@@ -18,7 +17,6 @@ block0(v0: i64):
 }
 
 ; check: ldar w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i16(i64) -> i16 {
@@ -28,7 +26,6 @@ block0(v0: i64):
 }
 
 ; check: ldarh w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i8(i64) -> i8 {
@@ -38,7 +35,6 @@ block0(v0: i64):
 }
 
 ; check: ldarb w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i32_i64(i64) -> i64 {
@@ -49,7 +45,6 @@ block0(v0: i64):
 }
 
 ; check: ldar w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i16_i64(i64) -> i64 {
@@ -60,7 +55,6 @@ block0(v0: i64):
 }
 
 ; check: ldarh w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i8_i64(i64) -> i64 {
@@ -71,7 +65,6 @@ block0(v0: i64):
 }
 
 ; check: ldarb w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i16_i32(i64) -> i32 {
@@ -82,7 +75,6 @@ block0(v0: i64):
 }
 
 ; check: ldarh w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
 
 function %atomic_load_i8_i32(i64) -> i32 {
@@ -93,5 +85,4 @@ block0(v0: i64):
 }
 
 ; check: ldarb w0, [x0]
-; nextln: ldp fp, lr, [sp], #16
 ; nextln: ret
