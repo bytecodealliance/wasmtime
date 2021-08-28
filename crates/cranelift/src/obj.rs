@@ -202,8 +202,6 @@ struct RelativeReloc {
     /// from the location of the relocation to this function's definition will
     /// be written.
     target: DefinedFuncIndex,
-    /// An optional addend for the relocation to add.
-    addend: i64,
 }
 
 // This is a mirror of `RUNTIME_FUNCTION` in the Windows API, but defined here
@@ -604,7 +602,6 @@ impl<'a> ObjectBuilder<'a> {
             veneer_offset,
             reloc_offset,
             target: r.target,
-            addend: i64::from(r.reloc.addend),
         });
         self.patch_reloc(&r, r.relative_distance_to(veneer_offset));
     }
@@ -715,9 +712,7 @@ impl<'a> ObjectBuilder<'a> {
             let symbol = self.func_symbols[target];
             let target_offset = self.obj.symbol(symbol).value;
             let reloc_offset = reloc.veneer_offset + (reloc.reloc_offset as u64);
-            let value = target_offset
-                .wrapping_add(reloc.addend as u64)
-                .wrapping_sub(reloc_offset);
+            let value = target_offset.wrapping_sub(reloc_offset);
 
             // Store the `value` into the location specified in the relocation.
             let code = &mut self.text_contents[self.text_locations[&reloc.veneer_offset]].0;
