@@ -65,6 +65,12 @@ test = false
 doc = false
 
 [[bin]]
+name = "differential_v8"
+path = "fuzz_targets/differential_v8.rs"
+test = false
+doc = false
+
+[[bin]]
 name = "spectests"
 path = "fuzz_targets/spectests.rs"
 test = false

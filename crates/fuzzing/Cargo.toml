@@ -21,6 +21,7 @@ wasm-encoder = "0.6.0"
 wasm-smith = "0.7.0"
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter" }
 wasmi = "0.7.0"
+rusty_v8 = "0.27"
 
 [dev-dependencies]
 wat = "1.0.37"
