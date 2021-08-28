@@ -17,7 +17,7 @@ crate-type = ["rlib", "cdylib"]
 [dependencies]
 anyhow = "1.0"
 shuffling-allocator = { version = "1.1.1", optional = true }
-wasmtime = { path = "../wasmtime", default-features = false }
+wasmtime = { path = "../wasmtime", default-features = true }
 wasmtime-wasi = { path = "../wasi" }
 wasmtime-wasi-crypto = { path = "../wasi-crypto", optional = true }
 wasmtime-wasi-nn = { path = "../wasi-nn", optional = true }
