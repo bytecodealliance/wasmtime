@@ -16,8 +16,8 @@ use std::convert::TryFrom;
 use std::mem;
 use wasmparser::Operator;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, TableStyle, Tunables, TypeTables,
-    VMOffsets, INTERRUPTED, WASM_PAGE_SIZE,
+    BuiltinFunctionIndex, MemoryPlan, MemoryStyle, Module, ModuleTranslation, TableStyle, Tunables,
+    TypeTables, VMOffsets, INTERRUPTED, WASM_PAGE_SIZE,
 };
 
 /// Compute an `ir::ExternalName` for a given wasm function index.
@@ -111,6 +111,7 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     module: &'module_environment Module,
+    translation: &'module_environment ModuleTranslation<'module_environment>,
     types: &'module_environment TypeTables,
 
     /// The Cranelift global holding the vmctx address.
@@ -142,7 +143,7 @@ pub struct FuncEnvironment<'module_environment> {
 impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
         isa: &'module_environment (dyn TargetIsa + 'module_environment),
-        module: &'module_environment Module,
+        translation: &'module_environment ModuleTranslation<'module_environment>,
         types: &'module_environment TypeTables,
         tunables: &'module_environment Tunables,
     ) -> Self {
@@ -157,11 +158,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         );
         Self {
             isa,
-            module,
+            module: &translation.module,
+            translation,
             types,
             vmctx: None,
             builtin_function_signatures,
-            offsets: VMOffsets::new(isa.pointer_bytes(), module),
+            offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
             tunables,
             fuel_var: Variable::new(0),
             vminterrupts_ptr: Variable::new(0),
@@ -1289,7 +1291,7 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sig = crate::func_signature(self.isa, self.module, self.types, index);
+        let sig = crate::func_signature(self.isa, self.translation, self.types, index);
         let signature = func.import_signature(sig);
         let name = get_func_name(index);
         Ok(func.import_function(ir::ExtFuncData {

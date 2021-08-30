@@ -2,12 +2,9 @@
 
 use crate::unwind::UnwindRegistration;
 use anyhow::{Context, Result};
-use object::read::{File as ObjectFile, Object, ObjectSection, ObjectSymbol};
-use std::collections::BTreeMap;
+use object::read::{File as ObjectFile, Object, ObjectSection};
 use std::mem::ManuallyDrop;
-use wasmtime_environ::obj::{try_parse_func_name, try_parse_trampoline_name};
-use wasmtime_environ::{FuncIndex, SignatureIndex};
-use wasmtime_runtime::{Mmap, VMFunctionBody};
+use wasmtime_runtime::Mmap;
 
 struct CodeMemoryEntry {
     mmap: ManuallyDrop<Mmap>,
@@ -35,42 +32,6 @@ impl Drop for CodeMemoryEntry {
             ManuallyDrop::drop(&mut self.unwind_registration);
             ManuallyDrop::drop(&mut self.mmap);
         }
-    }
-}
-
-pub struct CodeMemoryObjectAllocation<'a> {
-    pub code_range: &'a mut [u8],
-    funcs: BTreeMap<FuncIndex, (usize, usize)>,
-    trampolines: BTreeMap<SignatureIndex, (usize, usize)>,
-}
-
-impl<'a> CodeMemoryObjectAllocation<'a> {
-    pub fn funcs_len(&self) -> usize {
-        self.funcs.len()
-    }
-
-    pub fn trampolines_len(&self) -> usize {
-        self.trampolines.len()
-    }
-
-    pub fn funcs(&'a self) -> impl Iterator<Item = (FuncIndex, &'a mut [VMFunctionBody])> + 'a {
-        let buf = self.code_range as *const _ as *mut [u8];
-        self.funcs.iter().map(move |(i, (start, len))| {
-            (*i, unsafe {
-                CodeMemory::view_as_mut_vmfunc_slice(&mut (*buf)[*start..*start + *len])
-            })
-        })
-    }
-
-    pub fn trampolines(
-        &'a self,
-    ) -> impl Iterator<Item = (SignatureIndex, &'a mut [VMFunctionBody])> + 'a {
-        let buf = self.code_range as *const _ as *mut [u8];
-        self.trampolines.iter().map(move |(i, (start, len))| {
-            (*i, unsafe {
-                CodeMemory::view_as_mut_vmfunc_slice(&mut (*buf)[*start..*start + *len])
-            })
-        })
     }
 }
 
@@ -132,39 +93,25 @@ impl CodeMemory {
         self.published = self.entries.len();
     }
 
-    /// Convert mut a slice from u8 to VMFunctionBody.
-    fn view_as_mut_vmfunc_slice(slice: &mut [u8]) -> &mut [VMFunctionBody] {
-        let byte_ptr: *mut [u8] = slice;
-        let body_ptr = byte_ptr as *mut [VMFunctionBody];
-        unsafe { &mut *body_ptr }
-    }
-
     /// Alternative to `allocate_for_object`, but when the object file isn't
     /// already parsed.
-    pub fn allocate_for_object_unparsed<'a>(
+    pub fn allocate_for_object_unparsed<'a, 'b>(
         &'a mut self,
-        obj: &[u8],
-    ) -> Result<CodeMemoryObjectAllocation<'a>> {
+        obj: &'b [u8],
+    ) -> Result<(&'a mut [u8], ObjectFile<'b>)> {
         let obj = ObjectFile::parse(obj)?;
-        self.allocate_for_object(&obj)
+        Ok((self.allocate_for_object(&obj)?, obj))
     }
 
     /// Allocates and copies the ELF image code section into CodeMemory.
     /// Returns references to functions and trampolines defined there.
-    pub fn allocate_for_object<'a>(
-        &'a mut self,
-        obj: &ObjectFile,
-    ) -> Result<CodeMemoryObjectAllocation<'a>> {
+    pub fn allocate_for_object(&mut self, obj: &ObjectFile) -> Result<&mut [u8]> {
         let text_section = obj.section_by_name(".text").unwrap();
         let text_section_size = text_section.size() as usize;
 
         if text_section_size == 0 {
             // No code in the image.
-            return Ok(CodeMemoryObjectAllocation {
-                code_range: &mut [],
-                funcs: BTreeMap::new(),
-                trampolines: BTreeMap::new(),
-            });
+            return Ok(&mut []);
         }
 
         // Find the platform-specific unwind section, if present, which contains
@@ -195,29 +142,6 @@ impl CodeMemory {
             );
         }
 
-        // Track locations of all defined functions and trampolines.
-        let mut funcs = BTreeMap::new();
-        let mut trampolines = BTreeMap::new();
-        for sym in obj.symbols() {
-            match sym.name() {
-                Ok(name) => {
-                    if let Some(index) = try_parse_func_name(name) {
-                        let is_import = sym.section_index().is_none();
-                        if !is_import {
-                            funcs.insert(index, (sym.address() as usize, sym.size() as usize));
-                        }
-                    } else if let Some(index) = try_parse_trampoline_name(name) {
-                        trampolines.insert(index, (sym.address() as usize, sym.size() as usize));
-                    }
-                }
-                Err(_) => (),
-            }
-        }
-
-        Ok(CodeMemoryObjectAllocation {
-            code_range: &mut entry.mmap.as_mut_slice()[..text_section_size],
-            funcs,
-            trampolines,
-        })
+        Ok(&mut entry.mmap.as_mut_slice()[..text_section_size])
     }
 }

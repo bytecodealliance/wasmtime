@@ -77,22 +77,23 @@ pub fn create_function(
     engine: &Engine,
 ) -> Result<(InstanceHandle, VMTrampoline)> {
     let mut obj = engine.compiler().object()?;
-    engine
-        .compiler()
-        .emit_trampoline_obj(ft.as_wasm_func_type(), stub_fn as usize, &mut obj)?;
+    let (t1, t2) = engine.compiler().emit_trampoline_obj(
+        ft.as_wasm_func_type(),
+        stub_fn as usize,
+        &mut obj,
+    )?;
     let obj = obj.write()?;
 
+    // Copy the results of JIT compilation into executable memory, and this will
+    // also take care of unwind table registration.
     let mut code_memory = CodeMemory::new();
-    let alloc = code_memory.allocate_for_object_unparsed(&obj)?;
-    let mut trampolines = alloc.trampolines();
-    let (host_i, host_trampoline) = trampolines.next().unwrap();
-    assert_eq!(host_i.as_u32(), 0);
-    let (wasm_i, wasm_trampoline) = trampolines.next().unwrap();
-    assert_eq!(wasm_i.as_u32(), 1);
-    assert!(trampolines.next().is_none());
-    let host_trampoline = host_trampoline.as_ptr();
-    let wasm_trampoline = wasm_trampoline as *mut [_];
-    drop(trampolines);
+    let (alloc, _obj) = code_memory.allocate_for_object_unparsed(&obj)?;
+
+    // Extract the host/wasm trampolines from the results of compilation since
+    // we know their start/length.
+    let host_trampoline = alloc[t1.start as usize..][..t1.length as usize].as_ptr();
+    let wasm_trampoline = &mut alloc[t2.start as usize..][..t2.length as usize];
+    let wasm_trampoline = wasm_trampoline as *mut [u8] as *mut [VMFunctionBody];
 
     code_memory.publish();
 
@@ -104,8 +105,7 @@ pub fn create_function(
             sig,
             Box::new(TrampolineState { func, code_memory }),
         )?;
-        let host_trampoline =
-            std::mem::transmute::<*const VMFunctionBody, VMTrampoline>(host_trampoline);
+        let host_trampoline = std::mem::transmute::<*const u8, VMTrampoline>(host_trampoline);
         Ok((instance, host_trampoline))
     }
 }
@@ -116,7 +116,8 @@ pub unsafe fn create_raw_function(
     host_state: Box<dyn Any + Send + Sync>,
 ) -> Result<InstanceHandle> {
     let mut module = Module::new();
-    let mut finished_functions = PrimaryMap::new();
+    let mut functions = PrimaryMap::new();
+    functions.push(Default::default());
 
     let sig_id = SignatureIndex::from_u32(u32::max_value() - 1);
     module.types.push(ModuleType::Function(sig_id));
@@ -124,12 +125,12 @@ pub unsafe fn create_raw_function(
     module
         .exports
         .insert(String::new(), EntityIndex::Function(func_id));
-    finished_functions.push(func);
 
     Ok(
         OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
             module: Arc::new(module),
-            finished_functions: &finished_functions,
+            functions: &functions,
+            image_base: (*func).as_ptr() as usize,
             imports: Imports::default(),
             shared_signatures: sig.into(),
             host_state,

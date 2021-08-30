@@ -16,24 +16,22 @@ use crate::{GlobalType, MemoryType, TableType, Val};
 use anyhow::Result;
 use std::any::Any;
 use std::sync::Arc;
-use wasmtime_environ::{
-    DefinedFuncIndex, EntityIndex, GlobalIndex, MemoryIndex, Module, PrimaryMap, TableIndex,
-};
+use wasmtime_environ::{EntityIndex, GlobalIndex, MemoryIndex, Module, TableIndex};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator,
-    VMFunctionBody, VMFunctionImport, VMSharedSignatureIndex,
+    VMFunctionImport, VMSharedSignatureIndex,
 };
 
 fn create_handle(
     module: Module,
     store: &mut StoreOpaque<'_>,
-    finished_functions: PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
     host_state: Box<dyn Any + Send + Sync>,
     func_imports: &[VMFunctionImport],
     shared_signature_id: Option<VMSharedSignatureIndex>,
 ) -> Result<InstanceId> {
     let mut imports = Imports::default();
     imports.functions = func_imports;
+    let functions = &Default::default();
 
     unsafe {
         let config = store.engine().config();
@@ -43,7 +41,8 @@ fn create_handle(
         let handle = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0).allocate(
             InstanceAllocationRequest {
                 module: Arc::new(module),
-                finished_functions: &finished_functions,
+                functions,
+                image_base: 0,
                 imports,
                 shared_signatures: shared_signature_id.into(),
                 host_state,

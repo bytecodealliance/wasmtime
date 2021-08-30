@@ -4,7 +4,7 @@ use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMFunctionBody, VMGlobalDefinition,
+    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMGlobalDefinition,
     VMSharedSignatureIndex,
 };
 use crate::Store;
@@ -18,8 +18,8 @@ use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, EntitySet, GlobalInit,
-    HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
+    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, EntitySet, FunctionInfo,
+    GlobalInit, HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
     SignatureIndex, TableInitializer, TrapCode, VMOffsets, WasmType, WASM_PAGE_SIZE,
 };
 
@@ -34,8 +34,12 @@ pub struct InstanceAllocationRequest<'a> {
     /// The module being instantiated.
     pub module: Arc<Module>,
 
-    /// The finished (JIT) functions for the module.
-    pub finished_functions: &'a PrimaryMap<DefinedFuncIndex, *mut [VMFunctionBody]>,
+    /// The base address of where JIT functions are located.
+    pub image_base: usize,
+
+    /// Descriptors about each compiled function, such as the offset from
+    /// `image_base`.
+    pub functions: &'a PrimaryMap<DefinedFuncIndex, FunctionInfo>,
 
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
@@ -483,7 +487,8 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
 
         let (func_ptr, vmctx) = if let Some(def_index) = instance.module.defined_func_index(index) {
             (
-                NonNull::new(req.finished_functions[def_index] as *mut _).unwrap(),
+                NonNull::new((req.image_base + req.functions[def_index].start as usize) as *mut _)
+                    .unwrap(),
                 instance.vmctx_ptr(),
             )
         } else {

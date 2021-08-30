@@ -27,9 +27,6 @@ pub fn create_gdbjit_image(
         }
     }
 
-    // let mut file = ::std::fs::File::create(::std::path::Path::new("test.o")).expect("file");
-    // ::std::io::Write::write_all(&mut file, &bytes).expect("write");
-
     Ok(bytes)
 }
 

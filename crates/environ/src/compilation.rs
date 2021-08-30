@@ -2,8 +2,8 @@
 //! module.
 
 use crate::{
-    DefinedFuncIndex, FilePos, FunctionBodyData, ModuleTranslation, PrimaryMap, StackMap, Tunables,
-    TypeTables, WasmError, WasmFuncType,
+    DefinedFuncIndex, FilePos, FunctionBodyData, ModuleTranslation, PrimaryMap, SignatureIndex,
+    StackMap, Tunables, TypeTables, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::Object;
@@ -22,6 +22,25 @@ use thiserror::Error;
 pub struct FunctionInfo {
     pub start_srcloc: FilePos,
     pub stack_maps: Vec<StackMapInformation>,
+
+    /// Offset in the text section of where this function starts.
+    pub start: u64,
+    /// The size of the compiled function, in bytes.
+    pub length: u32,
+}
+
+/// Information about a compiled trampoline which the host can call to enter
+/// wasm.
+#[derive(Serialize, Deserialize, Clone)]
+#[allow(missing_docs)]
+pub struct Trampoline {
+    /// The signature this trampoline is for
+    pub signature: SignatureIndex,
+
+    /// Offset in the text section of where this function starts.
+    pub start: u64,
+    /// The size of the compiled function, in bytes.
+    pub length: u32,
 }
 
 /// The offset within a function of a GC safepoint, and its associated stack
@@ -154,19 +173,21 @@ pub trait Compiler: Send + Sync {
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
         obj: &mut Object,
-    ) -> Result<PrimaryMap<DefinedFuncIndex, FunctionInfo>>;
+    ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)>;
 
     /// Inserts two functions for host-to-wasm and wasm-to-host trampolines into
     /// the `obj` provided.
     ///
     /// This will configure the same sections as `emit_obj`, but will likely be
-    /// much smaller.
+    /// much smaller. The two returned `Trampoline` structures describe where to
+    /// find the host-to-wasm and wasm-to-host trampolines in the text section,
+    /// respectively.
     fn emit_trampoline_obj(
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
         obj: &mut Object,
-    ) -> Result<()>;
+    ) -> Result<(Trampoline, Trampoline)>;
 
     /// Creates a new `Object` file which is used to build the results of a
     /// compilation into.

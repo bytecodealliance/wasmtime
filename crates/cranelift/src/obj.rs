@@ -37,7 +37,7 @@ use std::convert::TryFrom;
 use std::ops::Range;
 use wasmtime_environ::obj;
 use wasmtime_environ::{
-    DefinedFuncIndex, EntityRef, FuncIndex, Module, PrimaryMap, SignatureIndex,
+    DefinedFuncIndex, EntityRef, FuncIndex, Module, PrimaryMap, SignatureIndex, Trampoline,
 };
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
@@ -230,9 +230,14 @@ impl<'a> ObjectBuilder<'a> {
         range
     }
 
-    pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) {
+    pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) -> Trampoline {
         let name = obj::trampoline_symbol_name(sig);
-        self.append_func(name.into_bytes(), func);
+        let (_, range) = self.append_func(name.into_bytes(), func);
+        Trampoline {
+            signature: sig,
+            start: range.start,
+            length: u32::try_from(range.end - range.start).unwrap(),
+        }
     }
 
     pub fn align_text_to(&mut self, align: u64) {

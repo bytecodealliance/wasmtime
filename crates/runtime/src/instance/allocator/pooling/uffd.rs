@@ -512,7 +512,7 @@ mod test {
 
             let mut handles = Vec::new();
             let module = Arc::new(module);
-            let finished_functions = &PrimaryMap::new();
+            let functions = &PrimaryMap::new();
 
             // Allocate the maximum number of instances with the maximum number of memories
             for _ in 0..instances.max_instances {
@@ -522,7 +522,8 @@ mod test {
                             PoolingAllocationStrategy::Random,
                             InstanceAllocationRequest {
                                 module: module.clone(),
-                                finished_functions,
+                                image_base: 0,
+                                functions,
                                 imports: Imports {
                                     functions: &[],
                                     tables: &[],

@@ -2,9 +2,7 @@ use crate::store::{InstanceId, StoreOpaque};
 use crate::trampoline::create_handle;
 use crate::{GlobalType, Mutability, Val};
 use anyhow::Result;
-use wasmtime_environ::{
-    EntityIndex, Global, GlobalInit, Module, ModuleType, PrimaryMap, SignatureIndex,
-};
+use wasmtime_environ::{EntityIndex, Global, GlobalInit, Module, ModuleType, SignatureIndex};
 use wasmtime_runtime::VMFunctionImport;
 
 pub fn create_global(store: &mut StoreOpaque<'_>, gt: &GlobalType, val: Val) -> Result<InstanceId> {
@@ -69,7 +67,6 @@ pub fn create_global(store: &mut StoreOpaque<'_>, gt: &GlobalType, val: Val) -> 
     let id = create_handle(
         module,
         store,
-        PrimaryMap::new(),
         Box::new(()),
         &func_imports,
         shared_signature_id,

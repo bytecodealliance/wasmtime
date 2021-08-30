@@ -21,13 +21,13 @@ use cranelift_wasm::{
 use object::write::Object;
 use std::any::Any;
 use std::cmp;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::mem;
 use std::sync::Mutex;
 use wasmtime_environ::{
     AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
-    InstructionAddressMap, Module, ModuleTranslation, StackMapInformation, TrapCode,
+    InstructionAddressMap, Module, ModuleTranslation, StackMapInformation, Trampoline, TrapCode,
     TrapEncodingBuilder, TrapInformation, Tunables, TypeTables, VMOffsets,
 };
 
@@ -120,12 +120,12 @@ impl wasmtime_environ::Compiler for Compiler {
         let func_index = module.func_index(func_index);
         let mut context = Context::new();
         context.func.name = get_func_name(func_index);
-        context.func.signature = func_signature(isa, module, types, func_index);
+        context.func.signature = func_signature(isa, translation, types, func_index);
         if tunables.generate_native_debuginfo {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(isa, module, types, tunables);
+        let mut func_env = FuncEnvironment::new(isa, translation, types, tunables);
 
         // We use these as constant offsets below in
         // `stack_limit_from_arguments`, so assert their values here. This
@@ -201,6 +201,7 @@ impl wasmtime_environ::Compiler for Compiler {
             None
         };
 
+        let length = u32::try_from(code_buf.len()).unwrap();
         Ok(Box::new(CompiledFunction {
             body: code_buf,
             jt_offsets: context.func.jt_offsets,
@@ -212,6 +213,8 @@ impl wasmtime_environ::Compiler for Compiler {
             info: FunctionInfo {
                 start_srcloc: address_transform.start_srcloc,
                 stack_maps: stack_map_sink.finish(),
+                start: 0,
+                length,
             },
             address_map: address_transform,
         }))
@@ -224,40 +227,38 @@ impl wasmtime_environ::Compiler for Compiler {
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
         obj: &mut Object,
-    ) -> Result<PrimaryMap<DefinedFuncIndex, FunctionInfo>> {
+    ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
         const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
         let funcs: crate::CompiledFunctions = funcs
             .into_iter()
             .map(|(_i, f)| *f.downcast().unwrap())
             .collect();
 
-        // Build trampolines for every signature that can be used by this module.
-        let signatures = translation
-            .module
-            .functions
-            .iter()
-            .filter_map(|(i, sig)| match translation.module.defined_func_index(i) {
-                Some(i) if !translation.module.possibly_exported_funcs.contains(&i) => None,
-                _ => Some(*sig),
-            })
-            .collect::<BTreeSet<_>>();
-        let mut trampolines = Vec::with_capacity(signatures.len());
-        for i in signatures {
-            let func = self.host_to_wasm_trampoline(&types.wasm_signatures[i])?;
-            trampolines.push((i, func));
-        }
-
         let mut builder = ObjectBuilder::new(obj, &translation.module);
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
+        let compiled_trampolines = translation
+            .exported_signatures
+            .iter()
+            .map(|i| self.host_to_wasm_trampoline(&types.wasm_signatures[*i]))
+            .collect::<Result<Vec<_>, _>>()?;
 
+        let mut func_starts = Vec::with_capacity(funcs.len());
         for (i, func) in funcs.iter() {
             let range = builder.func(i, func);
             addrs.push(range.clone(), &func.address_map.instructions);
-            traps.push(range, &func.traps);
+            traps.push(range.clone(), &func.traps);
+            func_starts.push(range.start);
         }
-        for (i, func) in trampolines.iter() {
-            builder.trampoline(*i, func);
+
+        // Build trampolines for every signature that can be used by this module.
+        let mut trampolines = Vec::with_capacity(translation.exported_signatures.len());
+        for (i, func) in translation
+            .exported_signatures
+            .iter()
+            .zip(&compiled_trampolines)
+        {
+            trampolines.push(builder.trampoline(*i, &func));
         }
         builder.align_text_to(CODE_SECTION_ALIGNMENT);
 
@@ -295,7 +296,17 @@ impl wasmtime_environ::Compiler for Compiler {
         addrs.append_to(obj);
         traps.append_to(obj);
 
-        Ok(funcs.into_iter().map(|(_, f)| f.info).collect())
+        Ok((
+            funcs
+                .into_iter()
+                .zip(func_starts)
+                .map(|((_, mut f), start)| {
+                    f.info.start = start;
+                    f.info
+                })
+                .collect(),
+            trampolines,
+        ))
     }
 
     fn emit_trampoline_obj(
@@ -303,15 +314,15 @@ impl wasmtime_environ::Compiler for Compiler {
         ty: &WasmFuncType,
         host_fn: usize,
         obj: &mut Object,
-    ) -> Result<()> {
+    ) -> Result<(Trampoline, Trampoline)> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
         let module = Module::new();
         let mut builder = ObjectBuilder::new(obj, &module);
-        builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
-        builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
+        let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
+        let b = builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
         builder.finish(&*self.isa)?;
-        Ok(())
+        Ok((a, b))
     }
 
     fn triple(&self) -> &target_lexicon::Triple {

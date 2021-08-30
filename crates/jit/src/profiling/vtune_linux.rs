@@ -121,7 +121,7 @@ impl State {
         let global_module_id = MODULE_ID.fetch_add(1, atomic::Ordering::SeqCst);
 
         for (idx, func) in module.finished_functions() {
-            let (addr, len) = unsafe { ((**func).as_ptr() as *const u8, (**func).len()) };
+            let (addr, len) = unsafe { ((*func).as_ptr() as *const u8, (*func).len()) };
             let default_filename = "wasm_file";
             let default_module_name = String::from("wasm_module");
             let module_name = module

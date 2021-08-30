@@ -2,7 +2,7 @@ use crate::store::{InstanceId, StoreOpaque};
 use crate::trampoline::create_handle;
 use crate::TableType;
 use anyhow::Result;
-use wasmtime_environ::{EntityIndex, Module, PrimaryMap};
+use wasmtime_environ::{EntityIndex, Module};
 
 pub fn create_table(store: &mut StoreOpaque<'_>, table: &TableType) -> Result<InstanceId> {
     let mut module = Module::new();
@@ -16,5 +16,5 @@ pub fn create_table(store: &mut StoreOpaque<'_>, table: &TableType) -> Result<In
         .exports
         .insert(String::new(), EntityIndex::Table(table_id));
 
-    create_handle(module, store, PrimaryMap::new(), Box::new(()), &[], None)
+    create_handle(module, store, Box::new(()), &[], None)
 }
