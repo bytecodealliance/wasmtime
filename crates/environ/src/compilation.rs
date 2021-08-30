@@ -179,7 +179,9 @@ pub trait Compiler: Send + Sync {
     /// the `obj` provided.
     ///
     /// This will configure the same sections as `emit_obj`, but will likely be
-    /// much smaller.
+    /// much smaller. The two returned `Trampoline` structures describe where to
+    /// find the host-to-wasm and wasm-to-host trampolines in the text section,
+    /// respectively.
     fn emit_trampoline_obj(
         &self,
         ty: &WasmFuncType,
