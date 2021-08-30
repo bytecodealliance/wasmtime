@@ -11,7 +11,6 @@
 //! panicking.
 
 pub mod dummy;
-mod v8;
 
 use anyhow::Context;
 use arbitrary::Arbitrary;
@@ -22,7 +21,10 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
+#[cfg(not(windows))]
 pub use v8::*;
+#[cfg(not(windows))]
+mod v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
 
