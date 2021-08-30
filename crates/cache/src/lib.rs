@@ -42,13 +42,40 @@ impl<'config> ModuleCacheEntry<'config> {
         Self(Some(inner))
     }
 
-    /// Gets cached data if state matches, otherwise calls the `compute`.
-    // NOTE: This takes a function pointer instead of a closure so that it doesn't accidentally
-    // close over something not accounted in the cache.
-    pub fn get_data<T, U, E>(&self, state: T, compute: fn(T) -> Result<U, E>) -> Result<U, E>
+    /// Gets cached data if state matches, otherwise calls `compute`.
+    ///
+    /// Data is automatically serialized/deserialized with `bincode`.
+    pub fn get_data<T, U, E>(&self, state: T, compute: fn(&T) -> Result<U, E>) -> Result<U, E>
     where
         T: Hash,
         U: Serialize + for<'a> Deserialize<'a>,
+    {
+        self.get_data_raw(
+            &state,
+            compute,
+            |_state, data| bincode::serialize(data).ok(),
+            |_state, data| bincode::deserialize(&data).ok(),
+        )
+    }
+
+    /// Gets cached data if state matches, otherwise calls `compute`.
+    ///
+    /// If the cache is disabled or no cached data is found then `compute` is
+    /// called to calculate the data. If the data was found in cache it is
+    /// passed to `deserialize`, which if successful will be the returned value.
+    /// When computed the `serialize` function is used to generate the bytes
+    /// from the returned value.
+    pub fn get_data_raw<T, U, E>(
+        &self,
+        state: &T,
+        // NOTE: These are function pointers instead of closures so that they
+        // don't accidentally close over something not accounted in the cache.
+        compute: fn(&T) -> Result<U, E>,
+        serialize: fn(&T, &U) -> Option<Vec<u8>>,
+        deserialize: fn(&T, Vec<u8>) -> Option<U>,
+    ) -> Result<U, E>
+    where
+        T: Hash,
     {
         let inner = match &self.0 {
             Some(inner) => inner,
@@ -62,14 +89,18 @@ impl<'config> ModuleCacheEntry<'config> {
         let hash = base64::encode_config(&hash, base64::URL_SAFE_NO_PAD);
 
         if let Some(cached_val) = inner.get_data(&hash) {
-            let mod_cache_path = inner.root_path.join(&hash);
-            inner.cache_config.on_cache_get_async(&mod_cache_path); // call on success
-            return Ok(cached_val);
+            if let Some(val) = deserialize(state, cached_val) {
+                let mod_cache_path = inner.root_path.join(&hash);
+                inner.cache_config.on_cache_get_async(&mod_cache_path); // call on success
+                return Ok(val);
+            }
         }
         let val_to_cache = compute(state)?;
-        if inner.update_data(&hash, &val_to_cache).is_some() {
-            let mod_cache_path = inner.root_path.join(&hash);
-            inner.cache_config.on_cache_update_async(&mod_cache_path); // call on success
+        if let Some(bytes) = serialize(state, &val_to_cache) {
+            if inner.update_data(&hash, &bytes).is_some() {
+                let mod_cache_path = inner.root_path.join(&hash);
+                inner.cache_config.on_cache_update_async(&mod_cache_path); // call on success
+            }
         }
         Ok(val_to_cache)
     }
@@ -118,27 +149,19 @@ impl<'config> ModuleCacheEntryInner<'config> {
         }
     }
 
-    fn get_data<T>(&self, hash: &str) -> Option<T>
-    where
-        T: for<'a> Deserialize<'a>,
-    {
+    fn get_data(&self, hash: &str) -> Option<Vec<u8>> {
         let mod_cache_path = self.root_path.join(hash);
         trace!("get_data() for path: {}", mod_cache_path.display());
         let compressed_cache_bytes = fs::read(&mod_cache_path).ok()?;
         let cache_bytes = zstd::decode_all(&compressed_cache_bytes[..])
             .map_err(|err| warn!("Failed to decompress cached code: {}", err))
             .ok()?;
-        bincode::deserialize(&cache_bytes[..])
-            .map_err(|err| warn!("Failed to deserialize cached code: {}", err))
-            .ok()
+        Some(cache_bytes)
     }
 
-    fn update_data<T: Serialize>(&self, hash: &str, data: &T) -> Option<()> {
+    fn update_data(&self, hash: &str, serialized_data: &[u8]) -> Option<()> {
         let mod_cache_path = self.root_path.join(hash);
         trace!("update_data() for path: {}", mod_cache_path.display());
-        let serialized_data = bincode::serialize(&data)
-            .map_err(|err| warn!("Failed to serialize cached code: {}", err))
-            .ok()?;
         let compressed_data = zstd::encode_all(
             &serialized_data[..],
             self.cache_config.baseline_compression_level(),

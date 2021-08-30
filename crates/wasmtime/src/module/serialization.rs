@@ -1,27 +1,66 @@
 //! Implements module serialization.
+//!
+//! This module implements the serialization format for `wasmtime::Module`.
+//! This includes both the binary format of the final artifact as well as
+//! validation on ingestion of artifacts.
+//!
+//! There are two main pieces of data associated with a binary artifact:
+//!
+//! 1. A list of compiled modules. The reason this is a list as opposed to one
+//!    singular module is that a module-linking module may encompass a number
+//!    of other modules.
+//! 2. Compilation metadata shared by all modules, including the global
+//!    `TypeTables` information. This metadata is validated for compilation
+//!    settings and also has information shared by all modules (such as the
+//!    shared `TypeTables`).
+//!
+//! Compiled modules are, at this time, represented as an ELF file. This ELF
+//! file contains all the necessary data needed to decode each individual
+//! module, and conveniently also handles things like alignment so we can
+//! actually directly `mmap` compilation artifacts from disk.
+//!
+//! With all this in mind, the current serialization format is as follows:
+//!
+//! * The first, primary, module starts the final artifact. This means that the
+//!   final artifact is actually, and conveniently, a valid ELF file. ELF files
+//!   don't place any restrictions on data coming after the ELF file itself,
+//!   so that's where everything else will go. Another reason for using this
+//!   format is that our compilation artifacts are then consumable by standard
+//!   debugging tools like `objdump` to poke around and see what's what.
+//!
+//! * Next, all other modules are encoded. Each module has its own alignment,
+//!   though, so modules aren't simply concatenated. Instead directly after an
+//!   ELF file there is a 64-bit little-endian integer which is the offset,
+//!   from the end of the previous ELF file, to the next ELF file.
+//!
+//! * Finally, once all modules have been encoded (there's always at least
+//!   one), the 8-byte value `u64::MAX` is encoded. Following this is a
+//!   number of fields:
+//!
+//!   1. The `HEADER` value
+//!   2. A byte indicating how long the next field is
+//!   3. A version string of the length of the previous byte value
+//!   4. A `bincode`-encoded `Metadata` structure.
+//!
+//!   This is hoped to help distinguish easily Wasmtime-based ELF files from
+//!   other random ELF files, as well as provide better error messages for
+//!   using wasmtime artifacts across versions.
+//!
+//! This format is implemented by the `to_bytes` and `from_mmap` function.
 
 use crate::{Engine, Module};
 use anyhow::{anyhow, bail, Context, Result};
-use bincode::Options;
+use object::read::elf::FileHeader;
+use object::{Bytes, File, Object, ObjectSection};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasmtime_environ::{Compiler, FlagValue, Tunables};
-use wasmtime_jit::{CompilationArtifacts, CompiledModule, TypeTables};
+use wasmtime_jit::{subslice_range, CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
 
 const HEADER: &[u8] = b"\0wasmtime-aot";
-
-fn bincode_options() -> impl Options {
-    // Use a variable-length integer encoding instead of fixed length. The
-    // module shown on #2318 gets compressed from ~160MB to ~110MB simply using
-    // this, presumably because there's a lot of 8-byte integers which generally
-    // have small values. Local testing shows that the deserialization
-    // performance, while higher, is in the few-percent range. For huge size
-    // savings this seems worthwhile to lose a small percentage of
-    // deserialization performance.
-    bincode::DefaultOptions::new().with_varint_encoding()
-}
 
 // This exists because `wasmparser::WasmFeatures` isn't serializable
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
@@ -78,6 +117,12 @@ enum MyCow<'a, T> {
 }
 
 impl<'a, T> MyCow<'a, T> {
+    fn as_ref(&self) -> &T {
+        match self {
+            MyCow::Owned(val) => val,
+            MyCow::Borrowed(val) => val,
+        }
+    }
     fn unwrap_owned(self) -> T {
         match self {
             MyCow::Owned(val) => val,
@@ -149,14 +194,18 @@ impl SerializedModuleUpvar {
     }
 }
 
-#[derive(Serialize, Deserialize)]
 pub struct SerializedModule<'a> {
+    artifacts: Vec<MyCow<'a, MmapVec>>,
+    metadata: Metadata<'a>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Metadata<'a> {
     target: String,
     shared_flags: BTreeMap<String, FlagValue>,
     isa_flags: BTreeMap<String, FlagValue>,
     tunables: Tunables,
     features: WasmFeatures,
-    artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
     module_upvars: Vec<SerializedModuleUpvar>,
     types: MyCow<'a, TypeTables>,
 }
@@ -168,10 +217,8 @@ impl<'a> SerializedModule<'a> {
             .inner
             .artifact_upvars
             .iter()
-            .map(|m| MyCow::Borrowed(m.compilation_artifacts()))
-            .chain(Some(MyCow::Borrowed(
-                module.inner.module.compilation_artifacts(),
-            )))
+            .map(|m| MyCow::Borrowed(m.mmap()))
+            .chain(Some(MyCow::Borrowed(module.inner.module.mmap())))
             .collect::<Vec<_>>();
         let module_upvars = module
             .inner
@@ -191,12 +238,12 @@ impl<'a> SerializedModule<'a> {
     #[cfg(compiler)]
     pub fn from_artifacts(
         engine: &Engine,
-        artifacts: &'a Vec<CompilationArtifacts>,
+        artifacts: impl IntoIterator<Item = &'a MmapVec>,
         types: &'a TypeTables,
     ) -> Self {
         Self::with_data(
             engine,
-            artifacts.iter().map(MyCow::Borrowed).collect(),
+            artifacts.into_iter().map(MyCow::Borrowed).collect(),
             Vec::new(),
             MyCow::Borrowed(types),
         )
@@ -205,23 +252,42 @@ impl<'a> SerializedModule<'a> {
     #[cfg(compiler)]
     fn with_data(
         engine: &Engine,
-        artifacts: Vec<MyCow<'a, CompilationArtifacts>>,
+        artifacts: Vec<MyCow<'a, MmapVec>>,
         module_upvars: Vec<SerializedModuleUpvar>,
         types: MyCow<'a, TypeTables>,
     ) -> Self {
         Self {
-            target: engine.compiler().triple().to_string(),
-            shared_flags: engine.compiler().flags(),
-            isa_flags: engine.compiler().isa_flags(),
-            tunables: engine.config().tunables.clone(),
-            features: (&engine.config().features).into(),
             artifacts,
-            module_upvars,
-            types,
+            metadata: Metadata {
+                target: engine.compiler().triple().to_string(),
+                shared_flags: engine.compiler().flags(),
+                isa_flags: engine.compiler().isa_flags(),
+                tunables: engine.config().tunables.clone(),
+                features: (&engine.config().features).into(),
+                module_upvars,
+                types,
+            },
         }
     }
 
-    pub fn into_module(mut self, engine: &Engine) -> Result<Module> {
+    pub fn into_module(self, engine: &Engine) -> Result<Module> {
+        let (main_module, modules, types, upvars) = self.into_parts(engine)?;
+        let modules = engine.run_maybe_parallel(modules, |(i, m)| {
+            CompiledModule::from_artifacts(i, m, &*engine.config().profiler)
+        })?;
+
+        Module::from_parts(engine, modules, main_module, Arc::new(types), &upvars)
+    }
+
+    pub fn into_parts(
+        mut self,
+        engine: &Engine,
+    ) -> Result<(
+        usize,
+        Vec<(MmapVec, Option<CompiledModuleInfo>)>,
+        TypeTables,
+        Vec<SerializedModuleUpvar>,
+    )> {
         // Verify that the module we're loading matches the triple that `engine`
         // is configured for. If compilation is disabled within engine then the
         // assumed triple is the host itself.
@@ -245,64 +311,106 @@ impl<'a> SerializedModule<'a> {
         self.check_tunables(&engine.config().tunables)?;
         self.check_features(&engine.config().features)?;
 
-        let modules = engine.run_maybe_parallel(self.artifacts, |i| {
-            CompiledModule::from_artifacts(i.unwrap_owned(), None, &*engine.config().profiler)
-        })?;
-
-        assert!(!modules.is_empty());
+        assert!(!self.artifacts.is_empty());
+        let modules = self.artifacts.into_iter().map(|i| (i.unwrap_owned(), None));
 
         let main_module = modules.len() - 1;
 
-        Module::from_parts(
-            engine,
-            modules,
+        Ok((
             main_module,
-            Arc::new(self.types.unwrap_owned()),
-            &self.module_upvars,
-        )
+            modules.collect(),
+            self.metadata.types.unwrap_owned(),
+            self.metadata.module_upvars,
+        ))
     }
 
     pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        use std::io::Write;
+        // First up, create a linked-ish list of ELF files. For more
+        // information on this format, see the doc comment on this module.
+        // The only semi-tricky bit here is that we leave an
+        // offset-to-the-next-file between each set of ELF files. The list
+        // is then terminated with `u64::MAX`.
+        let mut ret = Vec::new();
+        for (i, obj) in self.artifacts.iter().enumerate() {
+            // Anything after the first object needs to respect the alignment of
+            // the object's sections, so insert padding as necessary. Note that
+            // the +8 to the length here is to accomodate the size we'll write
+            // to get to the next object.
+            if i > 0 {
+                let obj = File::parse(&obj.as_ref()[..])?;
+                let align = obj.sections().map(|s| s.align()).max().unwrap_or(0).max(1);
+                let align = usize::try_from(align).unwrap();
+                let new_size = align_to(ret.len() + 8, align);
+                ret.extend_from_slice(&(new_size as u64).to_le_bytes());
+                ret.resize(new_size, 0);
+            }
+            ret.extend_from_slice(obj.as_ref());
+        }
+        ret.extend_from_slice(&[0xff; 8]);
 
-        let mut bytes = Vec::new();
-
-        bytes.write_all(HEADER)?;
-
-        // Preface the data with a version so we can do a version check independent
-        // of the serialized data.
+        // The last part of our artifact is the bincode-encoded `Metadata`
+        // section with a few other guards to help give better error messages.
+        ret.extend_from_slice(HEADER);
         let version = env!("CARGO_PKG_VERSION");
         assert!(
             version.len() < 256,
             "package version must be less than 256 bytes"
         );
-        bytes.write(&[version.len() as u8])?;
+        ret.push(version.len() as u8);
+        ret.extend_from_slice(version.as_bytes());
+        bincode::serialize_into(&mut ret, &self.metadata)?;
 
-        bytes.write_all(version.as_bytes())?;
-
-        bincode_options().serialize_into(&mut bytes, self)?;
-
-        Ok(bytes)
+        Ok(ret)
     }
 
     pub fn from_bytes(bytes: &[u8], check_version: bool) -> Result<Self> {
-        if !bytes.starts_with(HEADER) {
-            bail!("bytes are not a compatible serialized wasmtime module");
-        }
+        Self::from_mmap(MmapVec::from_slice(bytes)?, check_version)
+    }
 
-        let bytes = &bytes[HEADER.len()..];
+    pub fn from_mmap(mut mmap: MmapVec, check_version: bool) -> Result<Self> {
+        // Artifacts always start with an ELF file, so read that first.
+        // Afterwards we continually read ELF files until we see the `u64::MAX`
+        // marker, meaning we've reached the end.
+        let first_module = read_file(&mut mmap)?;
+        let mut pos = first_module.len();
+        let mut artifacts = vec![MyCow::Owned(first_module)];
 
-        if bytes.is_empty() {
+        let metadata = loop {
+            if mmap.len() < 8 {
+                bail!("invalid serialized data");
+            }
+            let next_file_start = u64::from_le_bytes([
+                mmap[0], mmap[1], mmap[2], mmap[3], mmap[4], mmap[5], mmap[6], mmap[7],
+            ]);
+            if next_file_start == u64::MAX {
+                mmap.drain(..8);
+                break mmap;
+            }
+
+            // Remove padding leading up to the next file
+            let next_file_start = usize::try_from(next_file_start).unwrap();
+            let _padding = mmap.drain(..next_file_start - pos);
+            let data = read_file(&mut mmap)?;
+            pos = next_file_start + data.len();
+            artifacts.push(MyCow::Owned(data));
+        };
+
+        // Once we've reached the end we parse a `Metadata` object. This has a
+        // few guards up front which we process first, and eventually this
+        // bottoms out in a `bincode::deserialize` call.
+        let metadata = metadata
+            .strip_prefix(HEADER)
+            .ok_or_else(|| anyhow!("bytes are not a compatible serialized wasmtime module"))?;
+        if metadata.is_empty() {
             bail!("serialized data data is empty");
         }
-
-        let version_len = bytes[0] as usize;
-        if bytes.len() < version_len + 1 {
+        let version_len = metadata[0] as usize;
+        if metadata.len() < version_len + 1 {
             bail!("serialized data is malformed");
         }
 
         if check_version {
-            let version = std::str::from_utf8(&bytes[1..1 + version_len])?;
+            let version = std::str::from_utf8(&metadata[1..1 + version_len])?;
             if version != env!("CARGO_PKG_VERSION") {
                 bail!(
                     "Module was compiled with incompatible Wasmtime version '{}'",
@@ -311,13 +419,47 @@ impl<'a> SerializedModule<'a> {
             }
         }
 
-        Ok(bincode_options()
-            .deserialize::<SerializedModule<'_>>(&bytes[1 + version_len..])
-            .context("deserialize compilation artifacts")?)
+        let metadata = bincode::deserialize::<Metadata>(&metadata[1 + version_len..])
+            .context("deserialize compilation artifacts")?;
+
+        return Ok(SerializedModule {
+            artifacts,
+            metadata,
+        });
+
+        /// This function will drain the beginning contents of `mmap` which
+        /// correspond to an ELF object file. The ELF file is only very lightly
+        /// validated.
+        ///
+        /// The `mmap` passed in will be reset to just after the ELF file, and
+        /// the `MmapVec` returned represents the extend of the ELF file
+        /// itself.
+        fn read_file(mmap: &mut MmapVec) -> Result<MmapVec> {
+            use object::NativeEndian as NE;
+            // There's not actually a great utility for figuring out where
+            // the end of an ELF file is in the `object` crate. In lieu of that
+            // we build our own which leverages the format of ELF files, which
+            // is that the header comes first, that tells us where the section
+            // headers are, and for our ELF files the end of the file is the
+            // end of the section headers.
+            let mut bytes = Bytes(mmap);
+            let header = bytes
+                .read::<object::elf::FileHeader64<NE>>()
+                .map_err(|()| anyhow!("artifact truncated, can't read header"))?;
+            if !header.is_supported() {
+                bail!("invalid elf header");
+            }
+            let sections = header
+                .section_headers(NE, &mmap[..])
+                .context("failed to read section headers")?;
+            let range = subslice_range(object::bytes_of_slice(sections), mmap);
+            Ok(mmap.drain(..range.end))
+        }
     }
 
     fn check_triple(&self, other: &target_lexicon::Triple) -> Result<()> {
-        let triple = target_lexicon::Triple::from_str(&self.target).map_err(|e| anyhow!(e))?;
+        let triple =
+            target_lexicon::Triple::from_str(&self.metadata.target).map_err(|e| anyhow!(e))?;
 
         if triple.architecture != other.architecture {
             bail!(
@@ -337,7 +479,7 @@ impl<'a> SerializedModule<'a> {
     }
 
     fn check_shared_flags(&mut self, compiler: &dyn Compiler) -> Result<()> {
-        let mut shared_flags = std::mem::take(&mut self.shared_flags);
+        let mut shared_flags = std::mem::take(&mut self.metadata.shared_flags);
         for (name, host) in compiler.flags() {
             match shared_flags.remove(&name) {
                 Some(v) => {
@@ -360,7 +502,7 @@ impl<'a> SerializedModule<'a> {
     }
 
     fn check_isa_flags(&mut self, compiler: &dyn Compiler) -> Result<()> {
-        let mut isa_flags = std::mem::take(&mut self.isa_flags);
+        let mut isa_flags = std::mem::take(&mut self.metadata.isa_flags);
         for (name, host) in compiler.isa_flags() {
             match isa_flags.remove(&name) {
                 Some(v) => match (&v, &host) {
@@ -432,7 +574,7 @@ impl<'a> SerializedModule<'a> {
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
-        } = self.tunables;
+        } = self.metadata.tunables;
 
         Self::check_int(
             static_memory_bound,
@@ -488,7 +630,7 @@ impl<'a> SerializedModule<'a> {
             multi_memory,
             exceptions,
             memory64,
-        } = self.features;
+        } = self.metadata.features;
 
         Self::check_bool(
             reference_types,
@@ -538,6 +680,12 @@ impl<'a> SerializedModule<'a> {
     }
 }
 
+/// Aligns the `val` specified up to `align`, which must be a power of two
+fn align_to(val: usize, align: usize) -> usize {
+    debug_assert!(align.is_power_of_two());
+    (val + (align - 1)) & (!(align - 1))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -550,7 +698,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.target = "unknown-generic-linux".to_string();
+        serialized.metadata.target = "unknown-generic-linux".to_string();
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
@@ -569,7 +717,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.target = format!(
+        serialized.metadata.target = format!(
             "{}-generic-unknown",
             target_lexicon::Triple::host().architecture
         );
@@ -591,7 +739,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.shared_flags.insert(
+        serialized.metadata.shared_flags.insert(
             "opt_level".to_string(),
             FlagValue::Enum(Cow::Borrowed("none")),
         );
@@ -615,6 +763,7 @@ mod test {
         let mut serialized = SerializedModule::new(&module);
 
         serialized
+            .metadata
             .isa_flags
             .insert("not_a_flag".to_string(), FlagValue::Bool(true));
 
@@ -636,7 +785,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.strategy = CompilationStrategy::Lightbeam;
+        serialized.metadata.strategy = CompilationStrategy::Lightbeam;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
@@ -655,7 +804,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.tunables.static_memory_offset_guard_size = 0;
+        serialized.metadata.tunables.static_memory_offset_guard_size = 0;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
@@ -674,7 +823,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.tunables.interruptable = false;
+        serialized.metadata.tunables.interruptable = false;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
@@ -691,7 +840,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.tunables.interruptable = true;
+        serialized.metadata.tunables.interruptable = true;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
@@ -713,7 +862,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.features.simd = false;
+        serialized.metadata.features.simd = false;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),
@@ -727,7 +876,7 @@ mod test {
         let module = Module::new(&engine, "(module)")?;
 
         let mut serialized = SerializedModule::new(&module);
-        serialized.features.simd = true;
+        serialized.metadata.features.simd = true;
 
         match serialized.into_module(&engine) {
             Ok(_) => unreachable!(),

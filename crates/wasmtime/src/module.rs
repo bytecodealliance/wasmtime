@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 use wasmparser::Validator;
 use wasmtime_environ::{ModuleEnvironment, ModuleIndex, PrimaryMap};
-use wasmtime_jit::{CompilationArtifacts, CompiledModule, CompiledModuleInfo, TypeTables};
+use wasmtime_jit::{CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
 
 mod registry;
 mod serialization;
@@ -299,21 +299,44 @@ impl Module {
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "cache")] {
+                let state = (HashedEngineCompileEnv(engine), binary);
                 let (main_module, artifacts, types) = wasmtime_cache::ModuleCacheEntry::new(
                     "wasmtime",
                     engine.cache_config(),
                 )
-                .get_data((HashedEngineCompileEnv(engine), binary), |(engine, binary)| {
-                    Module::build_artifacts(engine.0, binary)
-                })?;
+                .get_data_raw(
+                    &state,
+
+                    // Cache miss, compute the actual artifacts
+                    |(engine, wasm)| Module::build_artifacts(engine.0, wasm),
+
+                    // Implementation of how to serialize artifacts
+                    |(engine, _wasm), (_, artifacts, types)| {
+                        SerializedModule::from_artifacts(
+                            engine.0,
+                            artifacts.iter().map(|p| &p.0),
+                            types,
+                        ).to_bytes().ok()
+                    },
+
+                    // Cache hit, deserialize the provided artifacts
+                    |(engine, _wasm), serialized_bytes| {
+                        let (i, m, t, upvars) = SerializedModule::from_bytes(&serialized_bytes, true)
+                            .ok()?
+                            .into_parts(engine.0)
+                            .ok()?;
+                        // This upvars list is always empty for top-level modules
+                        assert!(upvars.is_empty());
+                        Some((i, m, t))
+                    },
+                )?;
             } else {
-                let (main_module, artifacts, types) =
-                    Module::build_artifacts(engine, binary)?;
+                let (main_module, artifacts, types) = Module::build_artifacts(engine, binary)?;
             }
         };
 
-        let modules = engine.run_maybe_parallel(artifacts, |(a, i)| {
-            CompiledModule::from_artifacts(a, Some(i), &*engine.config().profiler)
+        let modules = engine.run_maybe_parallel(artifacts, |(a, b)| {
+            CompiledModule::from_artifacts(a, b, &*engine.config().profiler)
         })?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
@@ -329,9 +352,10 @@ impl Module {
     /// * The index into the second field of the "main module". The "main
     ///   module" in this case is the outermost module described by the `wasm`
     ///   input, and is here for the module linking proposal.
-    /// * A list of `CompilationArtifacts` for each module found within `wasm`.
+    /// * A list of compilation artifacts for each module found within `wasm`.
     ///   Note that if module linking is disabled then this list will always
-    ///   have a size of exactly 1.
+    ///   have a size of exactly 1. These pairs are returned by
+    ///   `wasmtime_jit::finish_compile`.
     /// * Type information about all the modules returned. All returned modules
     ///   have local type information with indices that refer to these returned
     ///   tables.
@@ -341,7 +365,7 @@ impl Module {
         wasm: &[u8],
     ) -> Result<(
         usize,
-        Vec<(CompilationArtifacts, CompiledModuleInfo)>,
+        Vec<(MmapVec, Option<CompiledModuleInfo>)>,
         TypeTables,
     )> {
         let tunables = &engine.config().tunables;
@@ -388,12 +412,8 @@ impl Module {
                 translation.try_paged_init();
             }
 
-            Ok(CompilationArtifacts::new(
-                translation,
-                obj,
-                funcs,
-                tunables,
-            )?)
+            let (mmap, info) = wasmtime_jit::finish_compile(translation, obj, funcs, tunables)?;
+            Ok((mmap, Some(info)))
         })?;
 
         Ok((
