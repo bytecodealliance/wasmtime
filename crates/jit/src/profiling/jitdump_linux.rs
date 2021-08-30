@@ -14,8 +14,6 @@
 use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
 use object::{Object, ObjectSection};
-use scroll::{IOwrite, SizeWith, NATIVE};
-use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
 use std::io;
@@ -44,7 +42,7 @@ pub enum RecordId {
 }
 
 /// Each record starts with this fixed size record header which describes the record that follows
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, IOwrite, SizeWith)]
+#[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct RecordHeader {
     /// uint32_t id: a value identifying the record type (see below)
@@ -55,8 +53,10 @@ pub struct RecordHeader {
     timestamp: u64,
 }
 
+unsafe impl object::Pod for RecordHeader {}
+
 /// The CodeLoadRecord is used for describing jitted functions
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, IOwrite, SizeWith)]
+#[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct CodeLoadRecord {
     /// Fixed sized header that describes this record
@@ -75,8 +75,10 @@ pub struct CodeLoadRecord {
     index: u64,
 }
 
+unsafe impl object::Pod for CodeLoadRecord {}
+
 /// Describes source line information for a jitted function
-#[derive(Serialize, Deserialize, Debug, Default)]
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct DebugEntry {
     /// uint64_t code_addr: address of function for which the debug information is generated
@@ -92,7 +94,7 @@ pub struct DebugEntry {
 /// Describes debug information for a jitted function. An array of debug entries are
 /// appended to this record during writting. Note, this record must preceed the code
 /// load record that describes the same jitted function.
-#[derive(Serialize, Deserialize, Debug, Default, Clone, Copy, IOwrite, SizeWith)]
+#[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct DebugInfoRecord {
     /// Fixed sized header that describes this record
@@ -103,8 +105,10 @@ pub struct DebugInfoRecord {
     count: u64,
 }
 
+unsafe impl object::Pod for DebugInfoRecord {}
+
 /// Fixed-sized header for each jitdump file
-#[derive(Serialize, Deserialize, Debug, Default, IOwrite, SizeWith)]
+#[derive(Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct FileHeader {
     /// uint32_t magic: a magic number tagging the file type. The value is 4-byte long and represents the
@@ -126,6 +130,8 @@ pub struct FileHeader {
     /// uint64_t flags: a bitmask of flags
     flags: u64,
 }
+
+unsafe impl object::Pod for FileHeader {}
 
 /// Interface for driving the creation of jitdump files
 pub struct JitDumpAgent {
@@ -246,7 +252,7 @@ impl State {
             flags: 0,
         };
 
-        self.jitdump_file.iowrite_with(header, NATIVE)?;
+        self.jitdump_file.write_all(object::bytes_of(&header))?;
         Ok(())
     }
 
@@ -256,7 +262,7 @@ impl State {
         cl_record: CodeLoadRecord,
         code_buffer: &[u8],
     ) -> Result<()> {
-        self.jitdump_file.iowrite_with(cl_record, NATIVE)?;
+        self.jitdump_file.write_all(object::bytes_of(&cl_record))?;
         self.jitdump_file.write_all(record_name.as_bytes())?;
         self.jitdump_file.write_all(b"\0")?;
         self.jitdump_file.write_all(code_buffer)?;
@@ -266,7 +272,7 @@ impl State {
     /// Write DebugInfoRecord to open jit dump file.
     /// Must be written before the corresponding CodeLoadRecord.
     fn write_debug_info_record(&mut self, dir_record: DebugInfoRecord) -> Result<()> {
-        self.jitdump_file.iowrite_with(dir_record, NATIVE)?;
+        self.jitdump_file.write_all(object::bytes_of(&dir_record))?;
         Ok(())
     }
 
@@ -274,10 +280,11 @@ impl State {
     /// Must be written before the corresponding CodeLoadRecord.
     fn write_debug_info_entries(&mut self, die_entries: Vec<DebugEntry>) -> Result<()> {
         for entry in die_entries.iter() {
-            self.jitdump_file.iowrite_with(entry.address, NATIVE)?;
-            self.jitdump_file.iowrite_with(entry.line, NATIVE)?;
             self.jitdump_file
-                .iowrite_with(entry.discriminator, NATIVE)?;
+                .write_all(object::bytes_of(&entry.address))?;
+            self.jitdump_file.write_all(object::bytes_of(&entry.line))?;
+            self.jitdump_file
+                .write_all(object::bytes_of(&entry.discriminator))?;
             self.jitdump_file.write_all(entry.filename.as_bytes())?;
             self.jitdump_file.write_all(b"\0")?;
         }
