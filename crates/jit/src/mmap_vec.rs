@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Error, Result};
 use object::write::{Object, WritableBuffer};
 use std::convert::TryFrom;
-use std::fs::File;
+use std::fs::OpenOptions;
 use std::ops::{Deref, DerefMut, Range, RangeTo};
 use std::path::Path;
 use std::sync::Arc;
@@ -84,8 +84,17 @@ impl MmapVec {
     /// into memory. This will return an error if the file doesn't exist or if
     /// it's too large to be fully mapped into memory.
     pub fn from_file(path: &Path) -> Result<MmapVec> {
-        let file =
-            File::open(path).with_context(|| format!("failed to open: {}", path.display()))?;
+        let mut opts = OpenOptions::new();
+        #[cfg(windows)]
+        {
+            use std::os::windows::prelude::*;
+            use winapi::um::winnt::*;
+
+            opts.share_mode(FILE_SHARE_READ);
+        }
+        let file = opts
+            .open(path)
+            .with_context(|| format!("failed to open: {}", path.display()))?;
         let len = file
             .metadata()
             .context("failed to get file metadata")?

@@ -369,7 +369,12 @@ impl<'a> SerializedModule<'a> {
     }
 
     pub fn from_file(path: &Path, check_version: bool) -> Result<Self> {
-        Self::from_mmap(MmapVec::from_file(path)?, check_version)
+        Self::from_mmap(
+            MmapVec::from_file(path).with_context(|| {
+                format!("failed to create file mapping for: {}", path.display())
+            })?,
+            check_version,
+        )
     }
 
     pub fn from_mmap(mut mmap: MmapVec, check_version: bool) -> Result<Self> {
