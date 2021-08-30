@@ -360,7 +360,7 @@ impl<'a> SerializedModule<'a> {
         ret.extend_from_slice(version.as_bytes());
         bincode::serialize_into(&mut ret, &self.metadata)?;
 
-        return Ok(ret);
+        Ok(ret)
     }
 
     pub fn from_bytes(bytes: &[u8], check_version: bool) -> Result<Self> {

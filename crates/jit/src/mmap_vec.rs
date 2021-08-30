@@ -87,7 +87,7 @@ impl MmapVec {
     /// `MmapVec`. In other words ownership of the drain'd bytes is returned
     /// through the `MmapVec` return value.
     ///
-    /// This `MmapVec` will srhink by `range.end` bytes, and it will only refer
+    /// This `MmapVec` will shrink by `range.end` bytes, and it will only refer
     /// to the bytes that come after the drain range.
     ///
     /// This is an `O(1)` operation which does not involve copies.

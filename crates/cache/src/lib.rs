@@ -42,7 +42,7 @@ impl<'config> ModuleCacheEntry<'config> {
         Self(Some(inner))
     }
 
-    /// Gets cached data if state matches, otherwise calls the `compute`.
+    /// Gets cached data if state matches, otherwise calls `compute`.
     ///
     /// Data is automatically serialized/deserialized with `bincode`.
     pub fn get_data<T, U, E>(&self, state: T, compute: fn(&T) -> Result<U, E>) -> Result<U, E>
@@ -58,7 +58,7 @@ impl<'config> ModuleCacheEntry<'config> {
         )
     }
 
-    /// Gets cached data if state matches, otherwise calls the `compute`.
+    /// Gets cached data if state matches, otherwise calls `compute`.
     ///
     /// If the cache is disabled or no cached data is found then `compute` is
     /// called to calculate the data. If the data was found in cache it is
