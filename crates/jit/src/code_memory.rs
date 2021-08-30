@@ -1,44 +1,31 @@
 //! Memory management for executable code.
 
 use crate::unwind::UnwindRegistration;
-use anyhow::{Context, Result};
-use object::read::{File as ObjectFile, Object, ObjectSection};
+use crate::MmapVec;
+use anyhow::{bail, Context, Result};
+use object::read::{File, Object, ObjectSection};
 use std::mem::ManuallyDrop;
-use wasmtime_runtime::Mmap;
 
-struct CodeMemoryEntry {
-    mmap: ManuallyDrop<Mmap>,
+/// Management of executable memory within a `MmapVec`
+///
+/// This type consumes ownership of a region of memory and will manage the
+/// executable permissions of the contained JIT code as necessary.
+pub struct CodeMemory {
+    // NB: these are `ManuallyDrop` because `unwind_registration` must be
+    // dropped first since it refers to memory owned by `mmap`.
+    mmap: ManuallyDrop<MmapVec>,
     unwind_registration: ManuallyDrop<Option<UnwindRegistration>>,
-    text_len: usize,
-    unwind_info_len: usize,
+    published: bool,
 }
 
-impl CodeMemoryEntry {
-    fn new(text_len: usize, unwind_info_len: usize) -> Result<Self> {
-        let mmap = ManuallyDrop::new(Mmap::with_at_least(text_len + unwind_info_len)?);
-        Ok(Self {
-            mmap,
-            unwind_registration: ManuallyDrop::new(None),
-            text_len,
-            unwind_info_len,
-        })
-    }
-}
-
-impl Drop for CodeMemoryEntry {
+impl Drop for CodeMemory {
     fn drop(&mut self) {
+        // Drop `unwind_registration` before `self.mmap`
         unsafe {
-            // The registry needs to be dropped before the mmap
             ManuallyDrop::drop(&mut self.unwind_registration);
             ManuallyDrop::drop(&mut self.mmap);
         }
     }
-}
-
-/// Memory manager for executable code.
-pub struct CodeMemory {
-    entries: Vec<CodeMemoryEntry>,
-    published: usize,
 }
 
 fn _assert() {
@@ -46,102 +33,155 @@ fn _assert() {
     _assert_send_sync::<CodeMemory>();
 }
 
+/// Result of publishing a `CodeMemory`, containing references to the parsed
+/// internals.
+pub struct Publish<'a> {
+    /// The parsed ELF image that resides within the original `MmapVec`.
+    pub obj: File<'a>,
+
+    /// Reference to the entire `MmapVec` and its contents.
+    pub mmap: &'a [u8],
+
+    /// Reference to just the text section of the object file, a subslice of
+    /// `mmap`.
+    pub text: &'a [u8],
+}
+
 impl CodeMemory {
-    /// Create a new `CodeMemory` instance.
-    pub fn new() -> Self {
+    /// Creates a new `CodeMemory` by taking ownership of the provided
+    /// `MmapVec`.
+    ///
+    /// The returned `CodeMemory` manages the internal `MmapVec` and the
+    /// `publish` method is used to actually make the memory executable.
+    pub fn new(mmap: MmapVec) -> Self {
         Self {
-            entries: Vec::new(),
-            published: 0,
+            mmap: ManuallyDrop::new(mmap),
+            unwind_registration: ManuallyDrop::new(None),
+            published: false,
         }
     }
 
-    /// Make all allocated memory executable.
-    pub fn publish(&mut self) {
-        for entry in &mut self.entries[self.published..] {
-            assert!(!entry.mmap.is_empty());
+    /// Returns a reference to the underlying `MmapVec` this memory owns.
+    pub fn mmap(&self) -> &MmapVec {
+        &self.mmap
+    }
 
-            unsafe {
-                // Switch the executable portion from read/write to
-                // read/execute, notably not using read/write/execute to prevent
-                // modifications.
-                region::protect(
-                    entry.mmap.as_mut_ptr(),
-                    entry.text_len,
-                    region::Protection::READ_EXECUTE,
-                )
-                .expect("unable to make memory readonly and executable");
+    /// Publishes the internal ELF image to be ready for execution.
+    ///
+    /// This method can only be called once and will panic if called twice. This
+    /// will parse the ELF image from the original `MmapVec` and do everything
+    /// necessary to get it ready for execution, including:
+    ///
+    /// * Change page protections from read/write to read/execute.
+    /// * Register unwinding information with the OS
+    ///
+    /// After this function executes all JIT code should be ready to execute.
+    /// The various parsed results of the internals of the `MmapVec` are
+    /// returned through the `Publish` structure.
+    pub fn publish(&mut self) -> Result<Publish<'_>> {
+        assert!(!self.published);
+        self.published = true;
 
-                if entry.unwind_info_len == 0 {
-                    continue;
-                }
+        let mut ret = Publish {
+            obj: File::parse(&self.mmap[..])
+                .with_context(|| "failed to parse internal compilation artifact")?,
+            mmap: &self.mmap,
+            text: &[],
+        };
 
-                // With all our memory setup use the platform-specific
-                // `UnwindRegistration` implementation to inform the general
-                // runtime that there's unwinding information available for all
-                // our just-published JIT functions.
-                *entry.unwind_registration = Some(
-                    UnwindRegistration::new(
-                        entry.mmap.as_mut_ptr(),
-                        entry.mmap.as_mut_ptr().add(entry.text_len),
-                        entry.unwind_info_len,
-                    )
-                    .expect("failed to create unwind info registration"),
+        // Sanity-check that all sections are aligned correctly.
+        for section in ret.obj.sections() {
+            let data = match section.data() {
+                Ok(data) => data,
+                Err(_) => continue,
+            };
+            if section.align() == 0 || data.len() == 0 {
+                continue;
+            }
+            if data.as_ptr() as u64 % section.align() != 0 {
+                bail!(
+                    "section `{}` isn't aligned to {:#x}",
+                    section.name().unwrap_or("ERROR"),
+                    section.align()
                 );
             }
         }
 
-        self.published = self.entries.len();
-    }
+        // Find the `.text` section with executable code in it.
+        let text = match ret.obj.section_by_name(".text") {
+            Some(section) => section,
+            None => return Ok(ret),
+        };
+        ret.text = match text.data() {
+            Ok(data) if !data.is_empty() => data,
+            _ => return Ok(ret),
+        };
 
-    /// Alternative to `allocate_for_object`, but when the object file isn't
-    /// already parsed.
-    pub fn allocate_for_object_unparsed<'a, 'b>(
-        &'a mut self,
-        obj: &'b [u8],
-    ) -> Result<(&'a mut [u8], ObjectFile<'b>)> {
-        let obj = ObjectFile::parse(obj)?;
-        Ok((self.allocate_for_object(&obj)?, obj))
-    }
+        // The unsafety here comes from a few things:
+        //
+        // * First in `apply_reloc` we're walking around the `File` that the
+        //   `object` crate has to get a mutable view into the text section.
+        //   Currently the `object` crate doesn't support easily parsing a file
+        //   and updating small bits and pieces of it, so we work around it for
+        //   now. ELF's file format should guarantee that `text_mut` doesn't
+        //   collide with any memory accessed by `text.relocations()`.
+        //
+        // * Second we're actually updating some page protections to executable
+        //   memory.
+        //
+        // * Finally we're registering unwinding information which relies on the
+        //   correctness of the information in the first place. This applies to
+        //   both the actual unwinding tables as well as the validity of the
+        //   pointers we pass in itself.
+        unsafe {
+            let text_mut =
+                std::slice::from_raw_parts_mut(ret.text.as_ptr() as *mut u8, ret.text.len());
+            for (offset, r) in text.relocations() {
+                crate::link::apply_reloc(&ret.obj, text_mut, offset, r);
+            }
 
-    /// Allocates and copies the ELF image code section into CodeMemory.
-    /// Returns references to functions and trampolines defined there.
-    pub fn allocate_for_object(&mut self, obj: &ObjectFile) -> Result<&mut [u8]> {
-        let text_section = obj.section_by_name(".text").unwrap();
-        let text_section_size = text_section.size() as usize;
-
-        if text_section_size == 0 {
-            // No code in the image.
-            return Ok(&mut []);
-        }
-
-        // Find the platform-specific unwind section, if present, which contains
-        // unwinding tables that will be used to load unwinding information
-        // dynamically at runtime.
-        let unwind_section = obj.section_by_name(UnwindRegistration::section_name());
-        let unwind_section_size = unwind_section
-            .as_ref()
-            .map(|s| s.size() as usize)
-            .unwrap_or(0);
-
-        // Allocate memory for the text section and unwinding information if it
-        // is present. Then we can copy in all of the code and unwinding memory
-        // over.
-        let entry = CodeMemoryEntry::new(text_section_size, unwind_section_size)?;
-        self.entries.push(entry);
-        let entry = self.entries.last_mut().unwrap();
-        entry.mmap.as_mut_slice()[..text_section_size].copy_from_slice(
-            text_section
-                .data()
-                .with_context(|| "cannot read text section data")?,
-        );
-        if let Some(section) = unwind_section {
-            entry.mmap.as_mut_slice()[text_section_size..][..unwind_section_size].copy_from_slice(
-                section
-                    .data()
-                    .with_context(|| "cannot read unwind section data")?,
+            // Switch the executable portion from read/write to
+            // read/execute, notably not using read/write/execute to prevent
+            // modifications.
+            assert!(
+                ret.text.as_ptr() as usize % region::page::size() == 0,
+                "text section is not page-aligned"
             );
+            region::protect(
+                ret.text.as_ptr() as *mut _,
+                ret.text.len(),
+                region::Protection::READ_EXECUTE,
+            )
+            .expect("unable to make memory readonly and executable");
+
+            // With all our memory set up use the platform-specific
+            // `UnwindRegistration` implementation to inform the general
+            // runtime that there's unwinding information available for all
+            // our just-published JIT functions.
+            *self.unwind_registration = register_unwind_info(&ret.obj, ret.text)?;
         }
 
-        Ok(&mut entry.mmap.as_mut_slice()[..text_section_size])
+        Ok(ret)
     }
+}
+
+unsafe fn register_unwind_info(obj: &File, text: &[u8]) -> Result<Option<UnwindRegistration>> {
+    let unwind_info = match obj
+        .section_by_name(UnwindRegistration::section_name())
+        .and_then(|s| s.data().ok())
+    {
+        Some(info) => info,
+        None => return Ok(None),
+    };
+    if unwind_info.len() == 0 {
+        return Ok(None);
+    }
+    Ok(Some(
+        UnwindRegistration::new(
+            text.as_ptr() as *mut _,
+            unwind_info.as_ptr() as *mut _,
+            unwind_info.len(),
+        )
+        .context("failed to create unwind info registration")?,
+    ))
 }

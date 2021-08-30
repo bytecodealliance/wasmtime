@@ -6,7 +6,7 @@ use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureIndex};
-use wasmtime_jit::CodeMemory;
+use wasmtime_jit::{CodeMemory, MmapVec};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     OnDemandInstanceAllocator, VMContext, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
@@ -82,20 +82,18 @@ pub fn create_function(
         stub_fn as usize,
         &mut obj,
     )?;
-    let obj = obj.write()?;
+    let obj = MmapVec::from_obj(obj)?;
 
     // Copy the results of JIT compilation into executable memory, and this will
     // also take care of unwind table registration.
-    let mut code_memory = CodeMemory::new();
-    let (alloc, _obj) = code_memory.allocate_for_object_unparsed(&obj)?;
+    let mut code_memory = CodeMemory::new(obj);
+    let code = code_memory.publish()?;
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.
-    let host_trampoline = alloc[t1.start as usize..][..t1.length as usize].as_ptr();
-    let wasm_trampoline = &mut alloc[t2.start as usize..][..t2.length as usize];
-    let wasm_trampoline = wasm_trampoline as *mut [u8] as *mut [VMFunctionBody];
-
-    code_memory.publish();
+    let host_trampoline = code.text[t1.start as usize..][..t1.length as usize].as_ptr();
+    let wasm_trampoline = &code.text[t2.start as usize..][..t2.length as usize];
+    let wasm_trampoline = wasm_trampoline as *const [u8] as *mut [VMFunctionBody];
 
     let sig = engine.signatures().register(ft.as_wasm_func_type());
 

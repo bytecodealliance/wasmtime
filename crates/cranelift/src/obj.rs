@@ -396,7 +396,7 @@ impl<'a> ObjectBuilder<'a> {
             unwind_info.extend_from_slice(&info.end.to_le_bytes());
             unwind_info.extend_from_slice(&info.unwind_address.to_le_bytes());
         }
-        self.obj.append_section_data(section_id, &unwind_info, 1);
+        self.obj.append_section_data(section_id, &unwind_info, 4);
     }
 
     /// This function appends a nonstandard section to the object which is only

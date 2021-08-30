@@ -5,7 +5,6 @@
 
 use crate::code_memory::CodeMemory;
 use crate::debug::create_gdbjit_image;
-use crate::link::link_module;
 use crate::{MmapVec, ProfilingAgent};
 use anyhow::{anyhow, Context, Result};
 use object::write::{Object, StandardSegment};
@@ -237,33 +236,18 @@ pub struct TypeTables {
     pub instance_signatures: PrimaryMap<InstanceTypeIndex, InstanceSignature>,
 }
 
-/// Container for data needed for an Instance function to exist.
-pub struct ModuleCode {
-    range: (usize, usize),
-    #[allow(dead_code)]
-    code_memory: CodeMemory,
-    #[allow(dead_code)]
-    dbg_jit_registration: Option<GdbJitImageRegistration>,
-}
-
-impl ModuleCode {
-    /// Gets the [begin, end) range of the module's code.
-    pub fn range(&self) -> (usize, usize) {
-        self.range
-    }
-}
-
 /// A compiled wasm module, ready to be instantiated.
 pub struct CompiledModule {
     wasm_data: Range<usize>,
     address_map_data: Range<usize>,
     trap_data: Range<usize>,
-    mmap: MmapVec,
     module: Arc<Module>,
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
     trampolines: Vec<Trampoline>,
     meta: Metadata,
-    code: Arc<ModuleCode>,
+    code: Range<usize>,
+    code_memory: CodeMemory,
+    dbg_jit_registration: Option<GdbJitImageRegistration>,
 }
 
 impl CompiledModule {
@@ -288,11 +272,18 @@ impl CompiledModule {
         info: Option<CompiledModuleInfo>,
         profiler: &dyn ProfilingAgent,
     ) -> Result<Arc<Self>> {
-        let obj = File::parse(&mmap[..])
-            .with_context(|| "failed to parse internal ELF compilation artifact")?;
+        // Transfer ownership of `obj` to a `CodeMemory` object which will
+        // manage permissions, such as the executable bit. Once it's located
+        // there we also publish it for being able to execute. Note that this
+        // step will also resolve pending relocations in the compiled image.
+        let mut code_memory = CodeMemory::new(mmap);
+        let code = code_memory
+            .publish()
+            .context("failed to publish code memory")?;
 
         let section = |name: &str| {
-            obj.section_by_name(name)
+            code.obj
+                .section_by_name(name)
                 .and_then(|s| s.data().ok())
                 .ok_or_else(|| anyhow!("missing section `{}` in compilation artifacts", name))
         };
@@ -304,39 +295,18 @@ impl CompiledModule {
             None => bincode::deserialize(section(ELF_WASMTIME_INFO)?)
                 .context("failed to deserialize wasmtime module info")?,
         };
-        let module = Arc::new(info.module);
-        let funcs = info.funcs;
-        let trampolines = info.trampolines;
-        let wasm_data = subslice_range(section(ELF_WASM_DATA)?, &mmap);
-        let address_map_data = subslice_range(section(ELF_WASMTIME_ADDRMAP)?, &mmap);
-        let trap_data = subslice_range(section(ELF_WASMTIME_TRAPS)?, &mmap);
-
-        // Allocate all of the compiled functions into executable memory,
-        // copying over their contents.
-        let (code_memory, code_range) = build_code_memory(&obj).map_err(|message| {
-            SetupError::Instantiate(InstantiationError::Resource(anyhow::anyhow!(
-                "failed to build code memory for functions: {}",
-                message
-            )))
-        })?;
-
-        let start = code_range.0 as usize;
-        let end = start + code_range.1;
 
         let mut ret = Self {
             meta: info.meta,
-            funcs,
-            trampolines,
-            module,
-            mmap,
-            wasm_data,
-            address_map_data,
-            trap_data,
-            code: Arc::new(ModuleCode {
-                range: (start, end),
-                code_memory,
-                dbg_jit_registration: None,
-            }),
+            module: Arc::new(info.module),
+            funcs: info.funcs,
+            trampolines: info.trampolines,
+            wasm_data: subslice_range(section(ELF_WASM_DATA)?, code.mmap),
+            address_map_data: subslice_range(section(ELF_WASMTIME_ADDRMAP)?, code.mmap),
+            trap_data: subslice_range(section(ELF_WASMTIME_TRAPS)?, code.mmap),
+            code: subslice_range(code.text, code.mmap),
+            dbg_jit_registration: None,
+            code_memory,
         };
         ret.register_debug_and_profiling(profiler)?;
 
@@ -345,31 +315,23 @@ impl CompiledModule {
 
     fn register_debug_and_profiling(&mut self, profiler: &dyn ProfilingAgent) -> Result<()> {
         // Register GDB JIT images; initialize profiler and load the wasm module.
-        let dbg_jit_registration = if self.meta.native_debug_info_present {
-            let bytes = create_gdbjit_image(
-                self.mmap.to_vec(),
-                (
-                    self.code.range.0 as *const u8,
-                    self.code.range.1 - self.code.range.0,
-                ),
-            )
-            .map_err(SetupError::DebugInfo)?;
+        if self.meta.native_debug_info_present {
+            let code = self.code();
+            let bytes = create_gdbjit_image(self.mmap().to_vec(), (code.as_ptr(), code.len()))
+                .map_err(SetupError::DebugInfo)?;
             profiler.module_load(self, Some(&bytes));
             let reg = GdbJitImageRegistration::register(bytes);
-            Some(reg)
+            self.dbg_jit_registration = Some(reg);
         } else {
             profiler.module_load(self, None);
-            None
-        };
-
-        Arc::get_mut(&mut self.code).unwrap().dbg_jit_registration = dbg_jit_registration;
+        }
         Ok(())
     }
 
     /// Returns the underlying memory which contains the compiled module's
     /// image.
     pub fn mmap(&self) -> &MmapVec {
-        &self.mmap
+        self.code_memory.mmap()
     }
 
     /// Returns the concatenated list of all data associated with this wasm
@@ -378,20 +340,27 @@ impl CompiledModule {
     /// This is used for initialization of memories and all data ranges stored
     /// in a `Module` are relative to the slice returned here.
     pub fn wasm_data(&self) -> &[u8] {
-        &self.mmap[self.wasm_data.clone()]
+        &self.mmap()[self.wasm_data.clone()]
     }
 
     /// Returns the encoded address map section used to pass to
     /// `wasmtime_environ::lookup_file_pos`.
     pub fn address_map_data(&self) -> &[u8] {
-        &self.mmap[self.address_map_data.clone()]
+        &self.mmap()[self.address_map_data.clone()]
     }
 
     /// Returns the encoded trap information for this compiled image.
     ///
     /// For more information see `wasmtime_environ::trap_encoding`.
     pub fn trap_data(&self) -> &[u8] {
-        &self.mmap[self.trap_data.clone()]
+        &self.mmap()[self.trap_data.clone()]
+    }
+
+    /// Returns the text section of the ELF image for this compiled module.
+    ///
+    /// This memory should have the read/execute permissions.
+    pub fn code(&self) -> &[u8] {
+        &self.mmap()[self.code.clone()]
     }
 
     /// Return a reference-counting pointer to a module.
@@ -414,12 +383,14 @@ impl CompiledModule {
     pub fn finished_functions(
         &self,
     ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *mut [VMFunctionBody])> + '_ {
+        let code = self.code();
         self.funcs.iter().map(move |(i, info)| {
+            let func = &code[info.start as usize..][..info.length as usize];
             (
                 i,
                 std::ptr::slice_from_raw_parts_mut(
-                    (self.code.range.0 + info.start as usize) as *mut VMFunctionBody,
-                    info.length as usize,
+                    func.as_ptr() as *mut VMFunctionBody,
+                    func.len(),
                 ),
             )
         })
@@ -427,10 +398,11 @@ impl CompiledModule {
 
     /// Returns the per-signature trampolines for this module.
     pub fn trampolines(&self) -> impl Iterator<Item = (SignatureIndex, VMTrampoline)> + '_ {
+        let code = self.code();
         self.trampolines.iter().map(move |info| {
             (info.signature, unsafe {
-                let ptr = self.code.range.0 + info.start as usize;
-                std::mem::transmute::<usize, VMTrampoline>(ptr)
+                let ptr = &code[info.start as usize];
+                std::mem::transmute::<*const u8, VMTrampoline>(ptr)
             })
         })
     }
@@ -492,11 +464,6 @@ impl CompiledModule {
             .expect("defined function should be present")
     }
 
-    /// Returns module's JIT code.
-    pub fn code(&self) -> &Arc<ModuleCode> {
-        &self.code
-    }
-
     /// Creates a new symbolication context which can be used to further
     /// symbolicate stack traces.
     ///
@@ -507,7 +474,7 @@ impl CompiledModule {
         if !self.meta.has_wasm_debuginfo {
             return Ok(None);
         }
-        let obj = File::parse(&self.mmap[..])
+        let obj = File::parse(&self.mmap()[..])
             .context("failed to parse internal ELF file representation")?;
         let dwarf = gimli::Dwarf::load(|id| -> Result<_> {
             let data = obj
@@ -552,21 +519,6 @@ impl<'a> SymbolizeContext<'a> {
     pub fn code_section_offset(&self) -> u64 {
         self.code_section_offset
     }
-}
-
-fn build_code_memory(obj: &File) -> Result<(CodeMemory, (*const u8, usize))> {
-    let mut code_memory = CodeMemory::new();
-
-    let allocation = code_memory.allocate_for_object(obj)?;
-
-    link_module(obj, allocation);
-
-    let code_range = (allocation.as_ptr(), allocation.len());
-
-    // Make all code compiled thus far executable.
-    code_memory.publish();
-
-    Ok((code_memory, code_range))
 }
 
 /// Returns the range of `inner` within `outer`, such that `outer[range]` is the
