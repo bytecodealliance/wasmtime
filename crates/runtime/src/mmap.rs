@@ -309,6 +309,7 @@ impl Mmap {
 
     /// Return the allocated memory as a mutable slice of u8.
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        debug_assert!(!self.is_readonly());
         unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
     }
 
@@ -330,6 +331,12 @@ impl Mmap {
     /// Return whether any memory has been allocated.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Returns whether the underlying mapping is readonly, meaning that
+    /// attempts to write will fault.
+    pub fn is_readonly(&self) -> bool {
+        self.file.is_some()
     }
 }
 

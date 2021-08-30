@@ -134,19 +134,31 @@ impl CodeMemory {
         //   both the actual unwinding tables as well as the validity of the
         //   pointers we pass in itself.
         unsafe {
+            assert!(
+                ret.text.as_ptr() as usize % region::page::size() == 0,
+                "text section is not page-aligned"
+            );
             let text_mut =
                 std::slice::from_raw_parts_mut(ret.text.as_ptr() as *mut u8, ret.text.len());
+            let mut text_section_readwrite = false;
             for (offset, r) in text.relocations() {
+                // If the text section was mapped at readonly we need to make it
+                // briefly read/write here as we apply relocations.
+                if !text_section_readwrite && self.mmap.is_readonly() {
+                    region::protect(
+                        text_mut.as_ptr(),
+                        text_mut.len(),
+                        region::Protection::READ_WRITE,
+                    )
+                    .expect("unable to make memory readonly and executable");
+                    text_section_readwrite = true;
+                }
                 crate::link::apply_reloc(&ret.obj, text_mut, offset, r);
             }
 
             // Switch the executable portion from read/write to
             // read/execute, notably not using read/write/execute to prevent
             // modifications.
-            assert!(
-                ret.text.as_ptr() as usize % region::page::size() == 0,
-                "text section is not page-aligned"
-            );
             region::protect(
                 ret.text.as_ptr() as *mut _,
                 ret.text.len(),

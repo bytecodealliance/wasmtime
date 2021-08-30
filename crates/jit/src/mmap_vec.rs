@@ -96,6 +96,11 @@ impl MmapVec {
         Ok(MmapVec::new(mmap, len))
     }
 
+    /// Returns whether the original mmap was created from a readonly mapping.
+    pub fn is_readonly(&self) -> bool {
+        self.mmap.is_readonly()
+    }
+
     /// "Drains" leading bytes up to the end specified in `range` from this
     /// `MmapVec`, returning a separately owned `MmapVec` which retains access
     /// to the bytes.
@@ -140,6 +145,7 @@ impl Deref for MmapVec {
 
 impl DerefMut for MmapVec {
     fn deref_mut(&mut self) -> &mut [u8] {
+        debug_assert!(!self.is_readonly());
         // SAFETY: The underlying mmap is protected behind an `Arc` which means
         // there there can be many references to it. We are guaranteed, though,
         // that each reference to the underlying `mmap` has a disjoint `range`
