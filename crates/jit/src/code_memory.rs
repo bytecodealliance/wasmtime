@@ -52,7 +52,7 @@ impl CodeMemory {
     /// `MmapVec`.
     ///
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
-    /// `publish` method is used to acstually make the memory executable.
+    /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Self {
         Self {
             mmap: ManuallyDrop::new(mmap),
@@ -84,7 +84,7 @@ impl CodeMemory {
 
         let mut ret = Publish {
             obj: File::parse(&self.mmap[..])
-                .with_context(|| "failed to parse internal  compilation artifact")?,
+                .with_context(|| "failed to parse internal compilation artifact")?,
             mmap: &self.mmap,
             text: &[],
         };
