@@ -27,23 +27,9 @@ struct JITDescriptor {
     first_entry: *mut JITCodeEntry,
 }
 
-#[no_mangle]
-#[used]
-static mut __jit_debug_descriptor: JITDescriptor = JITDescriptor {
-    version: 1,
-    action_flag: JIT_NOACTION,
-    relevant_entry: ptr::null_mut(),
-    first_entry: ptr::null_mut(),
-};
-
-#[no_mangle]
-#[inline(never)]
-extern "C" fn __jit_debug_register_code() {
-    // Hack to not allow inlining even when Rust wants to do it in release mode.
-    let x = 3;
-    unsafe {
-        std::ptr::read_volatile(&x);
-    }
+extern "C" {
+    fn wasmtime_jit_debug_descriptor() -> *mut JITDescriptor;
+    fn __jit_debug_register_code();
 }
 
 lazy_static! {
@@ -102,41 +88,43 @@ unsafe impl Sync for GdbJitImageRegistration {}
 
 unsafe fn register_gdb_jit_image(entry: *mut JITCodeEntry) {
     let _lock = GDB_REGISTRATION.lock().unwrap();
+    let desc = &mut *wasmtime_jit_debug_descriptor();
 
     // Add it to the linked list in the JIT descriptor.
-    (*entry).next_entry = __jit_debug_descriptor.first_entry;
-    if !__jit_debug_descriptor.first_entry.is_null() {
-        (*__jit_debug_descriptor.first_entry).prev_entry = entry;
+    (*entry).next_entry = desc.first_entry;
+    if !desc.first_entry.is_null() {
+        (*desc.first_entry).prev_entry = entry;
     }
-    __jit_debug_descriptor.first_entry = entry;
+    desc.first_entry = entry;
     // Point the relevant_entry field of the descriptor at the entry.
-    __jit_debug_descriptor.relevant_entry = entry;
+    desc.relevant_entry = entry;
     // Set action_flag to JIT_REGISTER and call __jit_debug_register_code.
-    __jit_debug_descriptor.action_flag = JIT_REGISTER_FN;
+    desc.action_flag = JIT_REGISTER_FN;
     __jit_debug_register_code();
 
-    __jit_debug_descriptor.action_flag = JIT_NOACTION;
-    __jit_debug_descriptor.relevant_entry = ptr::null_mut();
+    desc.action_flag = JIT_NOACTION;
+    desc.relevant_entry = ptr::null_mut();
 }
 
 unsafe fn unregister_gdb_jit_image(entry: *mut JITCodeEntry) {
     let _lock = GDB_REGISTRATION.lock().unwrap();
+    let desc = &mut *wasmtime_jit_debug_descriptor();
 
     // Remove the code entry corresponding to the code from the linked list.
     if !(*entry).prev_entry.is_null() {
         (*(*entry).prev_entry).next_entry = (*entry).next_entry;
     } else {
-        __jit_debug_descriptor.first_entry = (*entry).next_entry;
+        desc.first_entry = (*entry).next_entry;
     }
     if !(*entry).next_entry.is_null() {
         (*(*entry).next_entry).prev_entry = (*entry).prev_entry;
     }
     // Point the relevant_entry field of the descriptor at the code entry.
-    __jit_debug_descriptor.relevant_entry = entry;
+    desc.relevant_entry = entry;
     // Set action_flag to JIT_UNREGISTER and call __jit_debug_register_code.
-    __jit_debug_descriptor.action_flag = JIT_UNREGISTER_FN;
+    desc.action_flag = JIT_UNREGISTER_FN;
     __jit_debug_register_code();
 
-    __jit_debug_descriptor.action_flag = JIT_NOACTION;
-    __jit_debug_descriptor.relevant_entry = ptr::null_mut();
+    desc.action_flag = JIT_NOACTION;
+    desc.relevant_entry = ptr::null_mut();
 }
