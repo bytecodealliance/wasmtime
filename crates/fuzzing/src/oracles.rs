@@ -21,6 +21,11 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
+#[cfg(not(windows))]
+pub use v8::*;
+#[cfg(not(windows))]
+mod v8;
+
 static CNT: AtomicUsize = AtomicUsize::new(0);
 
 fn log_wasm(wasm: &[u8]) {
@@ -563,9 +568,11 @@ pub fn table_ops(
 /// conform to certain specifications: one exported function, one exported
 /// memory.
 #[derive(Default, Debug, Arbitrary, Clone)]
-pub struct SingleFunctionModuleConfig;
+pub struct SingleFunctionModuleConfig<const SIMD: bool, const BULK: bool>;
 
-impl wasm_smith::Config for SingleFunctionModuleConfig {
+impl<const SIMD: bool, const BULK: bool> wasm_smith::Config
+    for SingleFunctionModuleConfig<SIMD, BULK>
+{
     fn allow_start_export(&self) -> bool {
         false
     }
@@ -611,6 +618,14 @@ impl wasm_smith::Config for SingleFunctionModuleConfig {
     fn canonicalize_nans(&self) -> bool {
         true
     }
+
+    fn simd_enabled(&self) -> bool {
+        SIMD
+    }
+
+    fn bulk_memory_enabled(&self) -> bool {
+        BULK
+    }
 }
 
 /// Perform differential execution between Cranelift and wasmi, diffing the
@@ -638,7 +653,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
 
     // Introspect wasmtime module to find name of an exported function and of an
     // exported memory.
-    let func_name = first_exported_function(&wasmtime_module)?;
+    let (func_name, _ty) = first_exported_function(&wasmtime_module)?;
     let memory_name = first_exported_memory(&wasmtime_module)?;
 
     let wasmi_mem_export = wasmi_instance.export_by_name(memory_name).unwrap();
@@ -816,7 +831,7 @@ fn run_in_wasmtime(
         .context("Wasmtime cannot instantiate module")?;
 
     // Find the first exported function.
-    let func_name =
+    let (func_name, _ty) =
         first_exported_function(&wasmtime_module).context("Cannot find exported function")?;
     let wasmtime_main = wasmtime_instance
         .get_func(&mut wasmtime_store, &func_name[..])
@@ -828,10 +843,10 @@ fn run_in_wasmtime(
 }
 
 // Introspect wasmtime module to find the name of the first exported function.
-fn first_exported_function(module: &wasmtime::Module) -> Option<&str> {
+fn first_exported_function(module: &wasmtime::Module) -> Option<(&str, FuncType)> {
     for e in module.exports() {
         match e.ty() {
-            wasmtime::ExternType::Func(..) => return Some(e.name()),
+            wasmtime::ExternType::Func(ty) => return Some((e.name(), ty)),
             _ => {}
         }
     }

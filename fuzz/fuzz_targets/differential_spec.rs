@@ -11,7 +11,7 @@ static EXECUTED: AtomicUsize = AtomicUsize::new(0);
 
 fuzz_target!(|data: (
     generators::Config,
-    wasm_smith::ConfiguredModule<oracles::SingleFunctionModuleConfig>
+    wasm_smith::ConfiguredModule<oracles::SingleFunctionModuleConfig<false, false>>
 )| {
     let (config, mut wasm) = data;
     wasm.module.ensure_termination(1000);
