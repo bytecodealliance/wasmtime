@@ -10,6 +10,10 @@ use wasmtime::*;
 /// imports, and then run it in Wasmtime with the `config` specified and V8 with
 /// default settings. The first export is executed and if memory is exported
 /// it's compared as well.
+///
+/// Note that it's the caller's responsibility to ensure that the `wasm`
+/// doesn't infinitely loop as no protections are done in v8 to prevent this
+/// from happening.
 pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
     // Wasmtime setup
     crate::init_fuzzing();
