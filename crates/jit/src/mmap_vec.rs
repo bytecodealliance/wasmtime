@@ -1,7 +1,5 @@
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{Context, Error, Result};
 use object::write::{Object, WritableBuffer};
-use std::convert::TryFrom;
-use std::fs::OpenOptions;
 use std::ops::{Deref, DerefMut, Range, RangeTo};
 use std::path::Path;
 use std::sync::Arc;
@@ -84,24 +82,9 @@ impl MmapVec {
     /// into memory. This will return an error if the file doesn't exist or if
     /// it's too large to be fully mapped into memory.
     pub fn from_file(path: &Path) -> Result<MmapVec> {
-        let mut opts = OpenOptions::new();
-        #[cfg(windows)]
-        {
-            use std::os::windows::prelude::*;
-            use winapi::um::winnt::*;
-
-            opts.share_mode(FILE_SHARE_READ);
-        }
-        let file = opts
-            .open(path)
-            .with_context(|| format!("failed to open: {}", path.display()))?;
-        let len = file
-            .metadata()
-            .context("failed to get file metadata")?
-            .len();
-        let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
-
-        let mmap = Mmap::new_file(file, len).context("failed to create mmap for file")?;
+        let mmap = Mmap::from_file(path)
+            .with_context(|| format!("failed to create mmap for file: {}", path.display()))?;
+        let len = mmap.len();
         Ok(MmapVec::new(mmap, len))
     }
 
@@ -141,6 +124,18 @@ impl MmapVec {
         };
         self.range.start += amt;
         return ret;
+    }
+
+    /// Makes the specified `range` within this `mmap` to be read/write.
+    pub unsafe fn make_writable(&self, range: Range<usize>) -> Result<()> {
+        self.mmap
+            .make_writable(range.start + self.range.start..range.end + self.range.start)
+    }
+
+    /// Makes the specified `range` within this `mmap` to be read/execute.
+    pub unsafe fn make_executable(&self, range: Range<usize>) -> Result<()> {
+        self.mmap
+            .make_executable(range.start + self.range.start..range.end + self.range.start)
     }
 }
 
