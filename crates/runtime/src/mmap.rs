@@ -12,11 +12,6 @@ use std::path::Path;
 use std::ptr;
 use std::slice;
 
-/// Round `size` up to the nearest multiple of `page_size`.
-fn round_up_to_page_size(size: usize, page_size: usize) -> usize {
-    (size + (page_size - 1)) & !(page_size - 1)
-}
-
 /// A simple struct consisting of a page-aligned pointer to page-aligned
 /// and initially-zeroed memory and a length.
 #[derive(Debug)]
@@ -46,8 +41,7 @@ impl Mmap {
 
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned accessible memory.
     pub fn with_at_least(size: usize) -> Result<Self> {
-        let page_size = region::page::size();
-        let rounded_size = round_up_to_page_size(size, page_size);
+        let rounded_size = region::page::ceil(size);
         Self::accessible_reserved(rounded_size, rounded_size)
     }
 
@@ -471,17 +465,4 @@ impl Drop for Mmap {
 fn _assert() {
     fn _assert_send_sync<T: Send + Sync>() {}
     _assert_send_sync::<Mmap>();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_round_up_to_page_size() {
-        assert_eq!(round_up_to_page_size(0, 4096), 0);
-        assert_eq!(round_up_to_page_size(1, 4096), 4096);
-        assert_eq!(round_up_to_page_size(4096, 4096), 4096);
-        assert_eq!(round_up_to_page_size(4097, 4096), 8192);
-    }
 }

@@ -1,19 +1,12 @@
-#[cfg(not(any(feature = "selinux-fix", windows)))]
-use libc;
-
 #[cfg(feature = "selinux-fix")]
 use memmap2::MmapMut;
 
-use region;
+#[cfg(not(any(feature = "selinux-fix", windows)))]
+use std::alloc;
 use std::convert::TryFrom;
 use std::io;
 use std::mem;
 use std::ptr;
-
-/// Round `size` up to the nearest multiple of `page_size`.
-fn round_up_to_page_size(size: usize, page_size: usize) -> usize {
-    (size + (page_size - 1)) & !(page_size - 1)
-}
 
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
@@ -40,8 +33,7 @@ impl PtrLen {
     /// suitably sized and aligned for memory protection.
     #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
     fn with_size(size: usize) -> io::Result<Self> {
-        let page_size = region::page::size();
-        let alloc_size = round_up_to_page_size(size, page_size);
+        let alloc_size = region::page::ceil(size);
         MmapMut::map_anon(alloc_size).map(|mut mmap| {
             // The order here is important; we assign the pointer first to get
             // around compile time borrow errors.
@@ -55,29 +47,23 @@ impl PtrLen {
 
     #[cfg(all(not(target_os = "windows"), not(feature = "selinux-fix")))]
     fn with_size(size: usize) -> io::Result<Self> {
-        let mut ptr = ptr::null_mut();
+        assert_ne!(size, 0);
         let page_size = region::page::size();
-        let alloc_size = round_up_to_page_size(size, page_size);
-        unsafe {
-            let err = libc::posix_memalign(&mut ptr, page_size, alloc_size);
+        let alloc_size = region::page::ceil(size);
+        let layout = alloc::Layout::from_size_align(alloc_size, page_size).unwrap();
+        // Safety: We assert that the size is non-zero above.
+        let ptr = unsafe { alloc::alloc(layout) };
 
-            if err == 0 {
-                Ok(Self {
-                    ptr: ptr as *mut u8,
-                    len: alloc_size,
-                })
-            } else {
-                Err(io::Error::from_raw_os_error(err))
-            }
-        }
+        Ok(Self {
+            ptr,
+            len: alloc_size,
+        })
     }
 
     #[cfg(target_os = "windows")]
     fn with_size(size: usize) -> io::Result<Self> {
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_READWRITE};
-
-        let page_size = region::page::size();
 
         // VirtualAlloc always rounds up to the next multiple of the page size
         let ptr = unsafe {
@@ -91,7 +77,7 @@ impl PtrLen {
         if !ptr.is_null() {
             Ok(Self {
                 ptr: ptr as *mut u8,
-                len: round_up_to_page_size(size, page_size),
+                len: region::page::ceil(size),
             })
         } else {
             Err(io::Error::last_os_error())
@@ -104,10 +90,12 @@ impl PtrLen {
 impl Drop for PtrLen {
     fn drop(&mut self) {
         if !self.ptr.is_null() {
+            let page_size = region::page::size();
+            let layout = alloc::Layout::from_size_align(self.len, page_size).unwrap();
             unsafe {
                 region::protect(self.ptr, self.len, region::Protection::READ_WRITE)
                     .expect("unable to unprotect memory");
-                libc::free(self.ptr as _);
+                alloc::dealloc(self.ptr, layout)
             }
         }
     }
@@ -235,18 +223,5 @@ impl Drop for Memory {
         mem::replace(&mut self.allocations, Vec::new())
             .into_iter()
             .for_each(mem::forget);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_round_up_to_page_size() {
-        assert_eq!(round_up_to_page_size(0, 4096), 0);
-        assert_eq!(round_up_to_page_size(1, 4096), 4096);
-        assert_eq!(round_up_to_page_size(4096, 4096), 4096);
-        assert_eq!(round_up_to_page_size(4097, 4096), 8192);
     }
 }
