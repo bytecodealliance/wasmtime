@@ -368,6 +368,7 @@ macro_rules! impl_wasm_params {
                 }
             }
 
+            #[inline]
             fn into_abi(self, _store: &mut StoreOpaque) -> Option<Self::Abi> {
                 let ($($t,)*) = self;
                 $(
@@ -446,6 +447,7 @@ macro_rules! impl_wasm_results {
         {
             type ResultAbi = ($($t::Abi,)*);
 
+            #[inline]
             unsafe fn from_abi(store: &mut StoreOpaque, abi: Self::ResultAbi) -> Self {
                 let ($($t,)*) = abi;
                 ($($t::from_abi($t, store),)*)
