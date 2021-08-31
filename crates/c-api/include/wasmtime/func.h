@@ -172,6 +172,63 @@ WASM_API_EXTERN bool wasmtime_caller_export_get(
  */
 WASM_API_EXTERN wasmtime_context_t* wasmtime_caller_context(wasmtime_caller_t* caller);
 
+
+/**
+ * \typedef wasmtime_func_storage_t
+ * \brief Alias to #wasmtime_func_storage_t
+ *
+ * \brief Structure used to optimize calling WebAssembly functions.
+ * \struct wasmtime_func_storage_t
+ *
+ * This structure is used in conjunction with the
+ * #wasmtime_func_call_with_storage API where storage necessary for the call
+ * into WebAssembly can be allocated ahead of time with a particular function
+ * type, and then when calling a function of that type the storage can be used
+ * to avoid extra allocations when calling the function.
+ */
+typedef struct wasmtime_func_storage wasmtime_func_storage_t;
+
+/**
+ * \brief Creates a new storage area used to invoke functions of the specified
+ * type signature.
+ *
+ * \param engine the engine in which the area will be used
+ * \param ty the function type this allocated area can be used to call
+ *
+ * The returned pointer must be deleted with #wasmtime_func_storage_delete when
+ * it's done being used.
+ */
+wasmtime_func_storage_t *wasmtime_func_storage_new(wasm_engine_t *engine, wasm_functype_t *ty);
+
+/**
+ * \brief Deallocates a previously allocated #wasmtime_func_storage_t
+ */
+void wasmtime_func_storage_delete(wasmtime_func_storage_t *storage);
+
+/**
+ * \brief Same as #wasmtime_func_call, but has an extra #wasmtime_func_storage_t
+ * parameter.
+ *
+ * This function behaves the same way as #wasmtime_func_call for a host to call
+ * a WebAssembly function. Unlike #wasmtime_func_call, though, this function
+ * uses a #wasmtime_func_storage_t to help optimize this call with pre-allocated
+ * storage.
+ *
+ * In addition to the errors of #wasmtime_func_call this function can also
+ * return an error if the function type of `storage` does not match the type for
+ * the function being called.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_func_call_with_storage(
+    wasmtime_context_t *store,
+    const wasmtime_func_t *func,
+    wasmtime_func_storage_t *storage,
+    const wasmtime_val_t *args,
+    size_t nargs,
+    wasmtime_val_t *results,
+    size_t nresults,
+    wasm_trap_t **trap
+);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

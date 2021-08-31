@@ -1,7 +1,8 @@
 use crate::wasm_trap_t;
 use crate::{
-    wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext, CStoreContextMut,
+    wasm_engine_t, wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t,
+    wasmtime_error_t, wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext,
+    CStoreContextMut,
 };
 use anyhow::anyhow;
 use std::ffi::c_void;
@@ -9,7 +10,7 @@ use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
-use wasmtime::{AsContextMut, Caller, Extern, Func, Trap, Val};
+use wasmtime::{AsContextMut, Caller, Extern, Func, FuncStorage, Trap, Val};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -345,4 +346,60 @@ pub unsafe extern "C" fn wasmtime_caller_export_get(
     };
     crate::initialize(item, which.into());
     true
+}
+
+pub struct wasmtime_func_storage_t {
+    storage: FuncStorage,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_storage_new(
+    engine: &wasm_engine_t,
+    ty: &wasm_functype_t,
+) -> Box<wasmtime_func_storage_t> {
+    Box::new(wasmtime_func_storage_t {
+        storage: FuncStorage::new(&engine.engine, ty.ty().ty.clone()),
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn wasmtime_func_storage_delete(_: Box<wasmtime_func_storage_t>) {}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_call_with_storage(
+    store: CStoreContextMut<'_>,
+    func: &Func,
+    storage: &mut wasmtime_func_storage_t,
+    args: *const wasmtime_val_t,
+    nargs: usize,
+    results: *mut MaybeUninit<wasmtime_val_t>,
+    nresults: usize,
+    trap_ret: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let params = crate::slice_from_raw_parts(args, nargs)
+        .iter()
+        .map(|i| i.to_val());
+    let results = crate::slice_from_raw_parts_mut(results, nresults);
+
+    let result = func.call_with_storage(store, &mut storage.storage, params);
+    match result {
+        Ok(func_results) => {
+            if func_results.len() != results.len() {
+                return Some(Box::new(wasmtime_error_t::from(anyhow!(
+                    "wrong number of results provided"
+                ))));
+            }
+            for (slot, val) in results.iter_mut().zip(func_results) {
+                crate::initialize(slot, wasmtime_val_t::from_val(val));
+            }
+            None
+        }
+        Err(trap) => match trap.downcast::<Trap>() {
+            Ok(trap) => {
+                *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(trap)));
+                None
+            }
+            Err(err) => Some(Box::new(wasmtime_error_t::from(err))),
+        },
+    }
 }

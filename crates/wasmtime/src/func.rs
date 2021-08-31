@@ -4,7 +4,6 @@ use crate::{
     StoreContextMut, Trap, Val, ValType,
 };
 use anyhow::{bail, Context as _, Result};
-use std::cmp::max;
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -671,18 +670,50 @@ impl Func {
     /// trap will occur. If a trap occurs while executing this function, then a
     /// trap will also be returned.
     ///
+    /// Note that this function is not heavily optimized and is not the fastest
+    /// way to call a WebAssembly function. For a faster alternative consider
+    /// using [`Func::typed`], or if you don't know the type up front
+    /// [`Func::call_with_storage`] can also be used.
+    ///
     /// # Panics
     ///
     /// This function will panic if called on a function belonging to an async
     /// store. Asynchronous stores must always use `call_async`.
     /// initiates a panic. Also panics if `store` does not own this function.
     pub fn call(&self, mut store: impl AsContextMut, params: &[Val]) -> Result<Box<[Val]>> {
+        let mut storage = FuncStorage::new(store.as_context().engine(), self.ty(&store));
+        let results =
+            self.call_with_storage(store.as_context_mut(), &mut storage, params.iter().cloned())?;
+        Ok(results.collect())
+    }
+
+    /// Invokes this function with the `params` given using the auxiliary
+    /// `storage` space for any allocations required to call the function.
+    ///
+    /// This function is the same as [`Func::call`] except that the `storage`
+    /// parameter provided can help optimize function calls.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if called on a function belonging to an async
+    /// store. Asynchronous stores must always use `call_async`.
+    /// initiates a panic. Also panics if `store` does not own this function.
+    pub fn call_with_storage<'a, T: 'a>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+        storage: &'a mut FuncStorage,
+        params: impl IntoIterator<Item = Val> + 'a,
+    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
+        let store = store.into();
+
+        // It's a programmer error to use the wrong method of invocation
+        // relative to async support
         assert!(
-            !store.as_context().async_support(),
+            !store.0.async_support(),
             "must use `call_async` when async support is enabled on the config",
         );
-        let my_ty = self.ty(&store);
-        self.call_impl(&mut store.as_context_mut(), my_ty, params)
+
+        storage.call(self, store, params)
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -722,89 +753,15 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config",
         );
-        let my_ty = self.ty(&store);
         let result = store
-            .on_fiber(|store| self.call_impl(store, my_ty, params))
+            .on_fiber(|store| -> Result<_> {
+                let store = store.as_context_mut();
+                let mut storage = FuncStorage::new(store.engine(), self.ty(&store));
+                let results = storage.call(self, store, params.iter().cloned())?;
+                Ok(results.collect())
+            })
             .await??;
         Ok(result)
-    }
-
-    fn call_impl<T>(
-        &self,
-        store: &mut StoreContextMut<'_, T>,
-        my_ty: FuncType,
-        params: &[Val],
-    ) -> Result<Box<[Val]>> {
-        let mut values_vec = write_params(store.0, &my_ty, params)?;
-
-        // Call the trampoline.
-        unsafe {
-            let data = &store.0.store_data()[self.0];
-            let trampoline = data.trampoline();
-            let anyfunc = data.export().anyfunc;
-            invoke_wasm_and_catch_traps(store, |callee| {
-                trampoline(
-                    (*anyfunc.as_ptr()).vmctx,
-                    callee,
-                    (*anyfunc.as_ptr()).func_ptr.as_ptr(),
-                    values_vec.as_mut_ptr(),
-                )
-            })?;
-        }
-
-        return Ok(read_results(store.0, &my_ty, &values_vec));
-
-        fn write_params(
-            store: &mut StoreOpaque,
-            ty: &FuncType,
-            params: &[Val],
-        ) -> Result<Vec<u128>> {
-            // We need to perform a dynamic check that the arguments given to us
-            // match the signature of this function and are appropriate to pass to
-            // this function. This involves checking to make sure we have the right
-            // number and types of arguments as well as making sure everything is
-            // from the same `Store`.
-            if ty.params().len() != params.len() {
-                bail!(
-                    "expected {} arguments, got {}",
-                    ty.params().len(),
-                    params.len()
-                );
-            }
-
-            let mut values_vec = vec![0; max(params.len(), ty.results().len())];
-
-            // Store the argument values into `values_vec`.
-            let param_tys = ty.params();
-            for ((arg, slot), ty) in params.iter().cloned().zip(&mut values_vec).zip(param_tys) {
-                if arg.ty() != ty {
-                    bail!(
-                        "argument type mismatch: found {} but expected {}",
-                        arg.ty(),
-                        ty
-                    );
-                }
-                if !arg.comes_from_same_store(store) {
-                    bail!("cross-`Store` values are not currently supported");
-                }
-                unsafe {
-                    arg.write_value_to(store, slot);
-                }
-            }
-
-            Ok(values_vec)
-        }
-
-        fn read_results(store: &mut StoreOpaque, ty: &FuncType, values_vec: &[u128]) -> Box<[Val]> {
-            let mut results = Vec::with_capacity(ty.results().len());
-            for (index, ty) in ty.results().enumerate() {
-                unsafe {
-                    let ptr = &values_vec[index];
-                    results.push(Val::read_value_from(store, ptr, ty));
-                }
-            }
-            results.into()
-        }
     }
 
     #[inline]
@@ -1987,6 +1944,120 @@ impl FuncData {
             FuncData::StoreOwned { export, .. } => export,
             FuncData::SharedHost(host) => &host.export,
             FuncData::Host(host) => &host.export,
+        }
+    }
+}
+
+/// A pre-allocated space that can be used with [`Func::call_with_storage`] to
+/// optimize the [`Func::call`] function.
+///
+/// This type is used to represent preallocated space for a function call to
+/// happen within. The internals of this are Wasmtime-specific but using a type
+/// like this can improve the performance of [`Func::call`] which otherwise may
+/// need to dynamically allocate storage space for arguments and return values.
+///
+/// A [`FuncStorage`] is tied to a particular [`Engine`] and [`FuncType`]. These
+/// are specified on creation andd the [`FuncStorage`] can only be used with the
+/// functions within the specified [`Engine`] that have the same type as used to
+/// create this storage.
+pub struct FuncStorage {
+    engine: Engine,
+    ty: FuncType,
+    sig: VMSharedSignatureIndex,
+    storage: Vec<u128>,
+}
+
+impl FuncStorage {
+    /// Creates a new function storage space within `engine` suitable for
+    /// calling functions of the type `ty`.
+    ///
+    /// This storage can be used with [`Func::call_with_storage`].
+    pub fn new(engine: &Engine, ty: FuncType) -> FuncStorage {
+        let size = ty.params().len().max(ty.results().len());
+        FuncStorage {
+            engine: engine.clone(),
+            sig: engine.signatures().register(ty.as_wasm_func_type()),
+            ty,
+            storage: vec![0; size],
+        }
+    }
+
+    fn call<'a, T: 'a>(
+        &'a mut self,
+        func: &Func,
+        mut store: StoreContextMut<'a, T>,
+        params: impl IntoIterator<Item = Val>,
+    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
+        // Make sure that this `FuncStorage` has the right type, and this check
+        // only works within the same engine, so we also check for the same
+        // engine.
+        if !Engine::same(store.engine(), &self.engine) {
+            bail!("cannot use `FuncStorage` across engines");
+        }
+        let data = &store.0.store_data()[func.0];
+        let trampoline = data.trampoline();
+        let anyfunc = unsafe { &*data.export().anyfunc.as_ptr() };
+        if anyfunc.type_index != self.sig {
+            bail!("wrong type of `FuncStorage` to call function with");
+        }
+
+        self.set_params(store.0, params.into_iter())?;
+
+        unsafe {
+            invoke_wasm_and_catch_traps(&mut store, |callee| {
+                trampoline(
+                    anyfunc.vmctx,
+                    callee,
+                    anyfunc.func_ptr.as_ptr(),
+                    self.storage.as_mut_ptr(),
+                )
+            })?;
+
+            debug_assert!(self.ty.results().len() <= self.storage.len());
+            Ok(self
+                .ty
+                .results()
+                .zip(&self.storage)
+                .map(move |(ty, slot)| Val::read_value_from(store.0, slot, ty)))
+        }
+    }
+
+    fn set_params(
+        &mut self,
+        store: &mut StoreOpaque,
+        mut params: impl Iterator<Item = Val>,
+    ) -> Result<()> {
+        debug_assert!(self.ty.params().len() <= self.storage.len());
+        for (ty, slot) in self.ty.params().zip(&mut self.storage) {
+            let param = match params.next() {
+                Some(param) => param,
+                None => bail!("too few parameters supplied to call"),
+            };
+            if param.ty() != ty {
+                bail!(
+                    "argument type mismatch: found {} but expected {}",
+                    param.ty(),
+                    ty
+                );
+            }
+            if !param.comes_from_same_store(store) {
+                bail!("cross-`Store` values are not currently supported");
+            }
+            unsafe {
+                param.write_value_to(store, slot);
+            }
+        }
+        if params.next().is_some() {
+            bail!("too many parameters supplied to call");
+        }
+        Ok(())
+    }
+}
+
+impl Drop for FuncStorage {
+    fn drop(&mut self) {
+        unsafe {
+            self.engine.signatures().unregister(self.sig);
         }
     }
 }

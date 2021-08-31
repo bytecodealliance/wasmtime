@@ -330,7 +330,7 @@ fn mismatched_arguments() -> Result<()> {
     let func = instance.get_func(&mut store, "foo").unwrap();
     assert_eq!(
         func.call(&mut store, &[]).unwrap_err().to_string(),
-        "expected 1 arguments, got 0"
+        "too few parameters supplied to call",
     );
     assert_eq!(
         func.call(&mut store, &[Val::F32(0)])
@@ -342,7 +342,7 @@ fn mismatched_arguments() -> Result<()> {
         func.call(&mut store, &[Val::I32(0), Val::I32(1)])
             .unwrap_err()
             .to_string(),
-        "expected 1 arguments, got 2"
+        "too many parameters supplied to call",
     );
     Ok(())
 }
