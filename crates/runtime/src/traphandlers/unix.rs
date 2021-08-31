@@ -251,7 +251,8 @@ unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
 /// always large enough for our signal handling code. Override it by creating
 /// and registering our own alternate stack that is large enough and has a guard
 /// page.
-pub fn lazy_per_thread_init() -> Result<(), Trap> {
+#[cold]
+pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
     // This thread local is purely used to register a `Stack` to get deallocated
     // when the thread exists. Otherwise this function is only ever called at
     // most once per-thread.
@@ -273,7 +274,7 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
         Ok(())
     });
 
-    unsafe fn allocate_sigaltstack() -> Result<Option<Stack>, Trap> {
+    unsafe fn allocate_sigaltstack() -> Result<Option<Stack>, Box<Trap>> {
         // Check to see if the existing sigaltstack, if it exists, is big
         // enough. If so we don't need to allocate our own.
         let mut old_stack = mem::zeroed();
@@ -303,7 +304,7 @@ pub fn lazy_per_thread_init() -> Result<(), Trap> {
             0,
         );
         if ptr == libc::MAP_FAILED {
-            return Err(Trap::oom());
+            return Err(Box::new(Trap::oom()));
         }
 
         // Prepare the stack with readable/writable memory and then register it

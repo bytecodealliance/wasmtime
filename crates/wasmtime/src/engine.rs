@@ -87,7 +87,7 @@ impl Engine {
     /// latency of WebAssembly calls are extra-important, which is not
     /// necessarily true of all embeddings.
     pub fn tls_eager_initialize() -> Result<(), Trap> {
-        wasmtime_runtime::tls_eager_initialize().map_err(Trap::from_runtime)
+        wasmtime_runtime::tls_eager_initialize().map_err(Trap::from_runtime_box)
     }
 
     /// Returns the configuration settings that this engine is using.
