@@ -474,6 +474,25 @@ impl Module {
         module.into_module(engine)
     }
 
+    /// Same as [`deserialize`], except that the contents of `path` are read to
+    /// deserialize into a [`Module`].
+    ///
+    /// For more information see the documentation of the [`deserialize`]
+    /// method for why this function is `unsafe`.
+    ///
+    /// This method is provided because it can be faster than [`deserialize`]
+    /// since the data doesn't need to be copied around, but rather the module
+    /// can be used directly from an mmap'd view of the file provided.
+    ///
+    /// [`deserialize`]: Module::deserialize
+    pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
+        let module = SerializedModule::from_file(
+            path.as_ref(),
+            engine.config().deserialize_check_wasmtime_version,
+        )?;
+        module.into_module(engine)
+    }
+
     fn from_parts(
         engine: &Engine,
         mut modules: Vec<Arc<CompiledModule>>,

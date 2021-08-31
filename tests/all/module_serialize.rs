@@ -1,7 +1,8 @@
 use anyhow::{bail, Result};
+use std::fs;
 use wasmtime::*;
 
-fn serialize(engine: &Engine, wat: &'static str) -> Result<Vec<u8>> {
+fn serialize(engine: &Engine, wat: &str) -> Result<Vec<u8>> {
     let module = Module::new(&engine, wat)?;
     Ok(module.serialize()?)
 }
@@ -67,4 +68,33 @@ fn test_module_serialize_fail() -> Result<()> {
         Err(_) => (),
     }
     Ok(())
+}
+
+#[test]
+fn test_deserialize_from_file() -> Result<()> {
+    serialize_and_call("(module (func (export \"run\") (result i32) i32.const 42))")?;
+    serialize_and_call(
+        "(module
+            (func (export \"run\") (result i32)
+                call $answer)
+
+            (func $answer (result i32)
+                i32.const 42))
+        ",
+    )?;
+    return Ok(());
+
+    fn serialize_and_call(wat: &str) -> Result<()> {
+        let mut store = Store::<()>::default();
+        let td = tempfile::TempDir::new()?;
+        let buffer = serialize(store.engine(), wat)?;
+
+        let path = td.path().join("module.bin");
+        fs::write(&path, &buffer)?;
+        let module = unsafe { Module::deserialize_file(store.engine(), &path)? };
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let func = instance.get_typed_func::<(), i32, _>(&mut store, "run")?;
+        assert_eq!(func.call(&mut store, ())?, 42);
+        Ok(())
+    }
 }

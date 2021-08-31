@@ -165,6 +165,26 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_module_deserialize(
     wasmtime_module_t **ret
 );
 
+/**
+ * \brief Deserialize a module from an on-disk file.
+ *
+ * This function is the same as #wasmtime_module_deserialize except that it
+ * reads the data for the serialized module from the path on disk. This can be
+ * faster than the alternative which may require copying the data around.
+ *
+ * This function does not take ownership of any of its arguments, but the
+ * returned error and module are owned by the caller.
+ *
+ * This function is not safe to receive arbitrary user input. See the Rust
+ * documentation for more information on what inputs are safe to pass in here
+ * (e.g. only that of #wasmtime_module_serialize)
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_module_deserialize_file(
+    wasm_engine_t *engine,
+    const char *path,
+    wasmtime_module_t **ret
+);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif

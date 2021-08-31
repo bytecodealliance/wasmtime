@@ -55,6 +55,7 @@ use object::{Bytes, File, Object, ObjectSection};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 use wasmtime_environ::{Compiler, FlagValue, Tunables};
@@ -365,6 +366,15 @@ impl<'a> SerializedModule<'a> {
 
     pub fn from_bytes(bytes: &[u8], check_version: bool) -> Result<Self> {
         Self::from_mmap(MmapVec::from_slice(bytes)?, check_version)
+    }
+
+    pub fn from_file(path: &Path, check_version: bool) -> Result<Self> {
+        Self::from_mmap(
+            MmapVec::from_file(path).with_context(|| {
+                format!("failed to create file mapping for: {}", path.display())
+            })?,
+            check_version,
+        )
     }
 
     pub fn from_mmap(mut mmap: MmapVec, check_version: bool) -> Result<Self> {

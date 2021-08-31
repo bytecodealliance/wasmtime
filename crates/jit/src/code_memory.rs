@@ -136,23 +136,27 @@ impl CodeMemory {
         unsafe {
             let text_mut =
                 std::slice::from_raw_parts_mut(ret.text.as_ptr() as *mut u8, ret.text.len());
+            let text_offset = ret.text.as_ptr() as usize - ret.mmap.as_ptr() as usize;
+            let text_range = text_offset..text_offset + text_mut.len();
+            let mut text_section_readwrite = false;
             for (offset, r) in text.relocations() {
+                // If the text section was mapped at readonly we need to make it
+                // briefly read/write here as we apply relocations.
+                if !text_section_readwrite && self.mmap.is_readonly() {
+                    self.mmap
+                        .make_writable(text_range.clone())
+                        .expect("unable to make memory writable");
+                    text_section_readwrite = true;
+                }
                 crate::link::apply_reloc(&ret.obj, text_mut, offset, r);
             }
 
             // Switch the executable portion from read/write to
             // read/execute, notably not using read/write/execute to prevent
             // modifications.
-            assert!(
-                ret.text.as_ptr() as usize % region::page::size() == 0,
-                "text section is not page-aligned"
-            );
-            region::protect(
-                ret.text.as_ptr() as *mut _,
-                ret.text.len(),
-                region::Protection::READ_EXECUTE,
-            )
-            .expect("unable to make memory readonly and executable");
+            self.mmap
+                .make_executable(text_range.clone())
+                .expect("unable to make memory executable");
 
             // With all our memory set up use the platform-specific
             // `UnwindRegistration` implementation to inform the general

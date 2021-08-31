@@ -1,6 +1,7 @@
-use anyhow::{Error, Result};
+use anyhow::{Context, Error, Result};
 use object::write::{Object, WritableBuffer};
 use std::ops::{Deref, DerefMut, Range, RangeTo};
+use std::path::Path;
 use std::sync::Arc;
 use wasmtime_runtime::Mmap;
 
@@ -73,6 +74,25 @@ impl MmapVec {
         }
     }
 
+    /// Creates a new `MmapVec` which is the `path` specified mmap'd into
+    /// memory.
+    ///
+    /// This function will attempt to open the file located at `path` and will
+    /// then use that file to learn about its size and map the full contents
+    /// into memory. This will return an error if the file doesn't exist or if
+    /// it's too large to be fully mapped into memory.
+    pub fn from_file(path: &Path) -> Result<MmapVec> {
+        let mmap = Mmap::from_file(path)
+            .with_context(|| format!("failed to create mmap for file: {}", path.display()))?;
+        let len = mmap.len();
+        Ok(MmapVec::new(mmap, len))
+    }
+
+    /// Returns whether the original mmap was created from a readonly mapping.
+    pub fn is_readonly(&self) -> bool {
+        self.mmap.is_readonly()
+    }
+
     /// "Drains" leading bytes up to the end specified in `range` from this
     /// `MmapVec`, returning a separately owned `MmapVec` which retains access
     /// to the bytes.
@@ -105,6 +125,18 @@ impl MmapVec {
         self.range.start += amt;
         return ret;
     }
+
+    /// Makes the specified `range` within this `mmap` to be read/write.
+    pub unsafe fn make_writable(&self, range: Range<usize>) -> Result<()> {
+        self.mmap
+            .make_writable(range.start + self.range.start..range.end + self.range.start)
+    }
+
+    /// Makes the specified `range` within this `mmap` to be read/execute.
+    pub unsafe fn make_executable(&self, range: Range<usize>) -> Result<()> {
+        self.mmap
+            .make_executable(range.start + self.range.start..range.end + self.range.start)
+    }
 }
 
 impl Deref for MmapVec {
@@ -117,6 +149,7 @@ impl Deref for MmapVec {
 
 impl DerefMut for MmapVec {
     fn deref_mut(&mut self) -> &mut [u8] {
+        debug_assert!(!self.is_readonly());
         // SAFETY: The underlying mmap is protected behind an `Arc` which means
         // there there can be many references to it. We are guaranteed, though,
         // that each reference to the underlying `mmap` has a disjoint `range`
