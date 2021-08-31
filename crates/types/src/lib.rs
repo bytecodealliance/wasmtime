@@ -71,29 +71,66 @@ impl From<WasmType> for wasmparser::Type {
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct WasmFuncType {
+    params: Box<[WasmType]>,
+    externref_params_count: usize,
+    returns: Box<[WasmType]>,
+    externref_returns_count: usize,
+}
+
+impl WasmFuncType {
+    #[inline]
+    pub fn new(params: Box<[WasmType]>, returns: Box<[WasmType]>) -> Self {
+        let externref_params_count = params.iter().filter(|p| **p == WasmType::ExternRef).count();
+        let externref_returns_count = params.iter().filter(|r| **r == WasmType::ExternRef).count();
+        WasmFuncType {
+            params,
+            externref_params_count,
+            returns,
+            externref_returns_count,
+        }
+    }
+
     /// Function params types.
-    pub params: Box<[WasmType]>,
+    #[inline]
+    pub fn params(&self) -> &[WasmType] {
+        &self.params
+    }
+
+    /// How many `externref`s are in this function's params?
+    #[inline]
+    pub fn externref_params_count(&self) -> usize {
+        self.externref_params_count
+    }
+
     /// Returns params types.
-    pub returns: Box<[WasmType]>,
+    #[inline]
+    pub fn returns(&self) -> &[WasmType] {
+        &self.returns
+    }
+
+    /// How many `externref`s are in this function's returns?
+    #[inline]
+    pub fn externref_returns_count(&self) -> usize {
+        self.externref_returns_count
+    }
 }
 
 impl TryFrom<wasmparser::FuncType> for WasmFuncType {
     type Error = WasmError;
     fn try_from(ty: wasmparser::FuncType) -> Result<Self, Self::Error> {
-        Ok(Self {
-            params: ty
-                .params
-                .into_vec()
-                .into_iter()
-                .map(WasmType::try_from)
-                .collect::<Result<_, Self::Error>>()?,
-            returns: ty
-                .returns
-                .into_vec()
-                .into_iter()
-                .map(WasmType::try_from)
-                .collect::<Result<_, Self::Error>>()?,
-        })
+        let params = ty
+            .params
+            .into_vec()
+            .into_iter()
+            .map(WasmType::try_from)
+            .collect::<Result<_, Self::Error>>()?;
+        let returns = ty
+            .returns
+            .into_vec()
+            .into_iter()
+            .map(WasmType::try_from)
+            .collect::<Result<_, Self::Error>>()?;
+        Ok(Self::new(params, returns))
     }
 }
 

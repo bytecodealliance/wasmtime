@@ -1,5 +1,5 @@
 use super::{invoke_wasm_and_catch_traps, HostAbi};
-use crate::store::StoreOpaque;
+use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{AsContextMut, ExternRef, Func, StoreContextMut, Trap, ValType};
 use anyhow::{bail, Result};
 use std::marker;
@@ -115,15 +115,33 @@ where
         store: &mut StoreContextMut<'_, T>,
         params: Params,
     ) -> Result<Results, Trap> {
+        // See the comment in `Func::call_impl`'s `write_params` function.
+        if params.externrefs_count()
+            > store
+                .0
+                .externref_activations_table()
+                .bump_capacity_remaining()
+        {
+            store.gc();
+        }
+
         // Validate that all runtime values flowing into this store indeed
         // belong within this store, otherwise it would be unsafe for store
         // values to cross each other.
-        let params = match params.into_abi(store.0) {
-            Some(abi) => abi,
-            None => {
-                return Err(Trap::new(
-                    "attempt to pass cross-`Store` value to Wasm as function argument",
-                ))
+
+        let params = {
+            // GC is not safe here, since we move refs into the activations
+            // table but don't hold a strong reference onto them until we enter
+            // the Wasm frame and they get referenced from the stack maps.
+            let mut store = AutoAssertNoGc::new(&mut **store.as_context_mut().0);
+
+            match params.into_abi(&mut store) {
+                Some(abi) => abi,
+                None => {
+                    return Err(Trap::new(
+                        "attempt to pass cross-`Store` value to Wasm as function argument",
+                    ))
+                }
             }
         };
 
@@ -183,6 +201,8 @@ pub unsafe trait WasmTy: Send {
     #[doc(hidden)]
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool;
     #[doc(hidden)]
+    fn is_externref(&self) -> bool;
+    #[doc(hidden)]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi;
     #[doc(hidden)]
     unsafe fn from_abi(abi: Self::Abi, store: &mut StoreOpaque) -> Self;
@@ -199,6 +219,10 @@ macro_rules! primitives {
             #[inline]
             fn compatible_with_store(&self, _: &StoreOpaque) -> bool {
                 true
+            }
+            #[inline]
+            fn is_externref(&self) -> bool {
+                false
             }
             #[inline]
             fn into_abi(self, _store: &mut StoreOpaque) -> Self::Abi {
@@ -235,11 +259,45 @@ unsafe impl WasmTy for Option<ExternRef> {
     }
 
     #[inline]
+    fn is_externref(&self) -> bool {
+        true
+    }
+
+    #[inline]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
         if let Some(x) = self {
             let abi = x.inner.as_raw();
             unsafe {
-                store.insert_vmexternref(x.inner);
+                // NB: We _must not_ trigger a GC when passing refs from host
+                // code into Wasm (e.g. returned from a host function or passed
+                // as arguments to a Wasm function). After insertion into the
+                // table, this reference is no longer rooted. If multiple
+                // references are being sent from the host into Wasm and we
+                // allowed GCs during insertion, then the following events could
+                // happen:
+                //
+                // * Reference A is inserted into the activations
+                //   table. This does not trigger a GC, but does fill the table
+                //   to capacity.
+                //
+                // * The caller's reference to A is removed. Now the only
+                //   reference to A is from the activations table.
+                //
+                // * Reference B is inserted into the activations table. Because
+                //   the table is at capacity, a GC is triggered.
+                //
+                // * A is reclaimed because the only reference keeping it alive
+                //   was the activation table's reference (it isn't inside any
+                //   Wasm frames on the stack yet, so stack scanning and stack
+                //   maps don't increment its reference count).
+                //
+                // * We transfer control to Wasm, giving it A and B. Wasm uses
+                //   A. That's a use after free.
+                //
+                // In conclusion, to prevent uses after free, we cannot GC
+                // during this insertion.
+                let mut store = AutoAssertNoGc::new(store);
+                store.insert_vmexternref_without_gc(x.inner);
             }
             abi
         } else {
@@ -277,6 +335,11 @@ unsafe impl WasmTy for Option<Func> {
     }
 
     #[inline]
+    fn is_externref(&self) -> bool {
+        false
+    }
+
+    #[inline]
     fn into_abi(self, store: &mut StoreOpaque) -> Self::Abi {
         if let Some(f) = self {
             f.caller_checked_anyfunc(store).as_ptr()
@@ -299,10 +362,16 @@ unsafe impl WasmTy for Option<Func> {
 pub unsafe trait WasmParams: Send {
     #[doc(hidden)]
     type Abi: Copy;
+
     #[doc(hidden)]
     fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()>;
+
+    #[doc(hidden)]
+    fn externrefs_count(&self) -> usize;
+
     #[doc(hidden)]
     fn into_abi(self, store: &mut StoreOpaque) -> Option<Self::Abi>;
+
     #[doc(hidden)]
     unsafe fn invoke<R: WasmResults>(
         func: *const VMFunctionBody,
@@ -323,10 +392,17 @@ where
     fn typecheck(params: impl ExactSizeIterator<Item = crate::ValType>) -> Result<()> {
         <(T,) as WasmParams>::typecheck(params)
     }
+
+    #[inline]
+    fn externrefs_count(&self) -> usize {
+        T::is_externref(self) as usize
+    }
+
     #[inline]
     fn into_abi(self, store: &mut StoreOpaque) -> Option<Self::Abi> {
         <(T,) as WasmParams>::into_abi((self,), store)
     }
+
     unsafe fn invoke<R: WasmResults>(
         func: *const VMFunctionBody,
         vmctx1: *mut VMContext,
@@ -364,6 +440,15 @@ macro_rules! impl_wasm_params {
                     },
                 }
             }
+
+            #[inline]
+            fn externrefs_count(&self) -> usize {
+                let ($(ref $t,)*) = self;
+                0 $(
+                    + $t.is_externref() as usize
+                )*
+            }
+
 
             #[inline]
             fn into_abi(self, _store: &mut StoreOpaque) -> Option<Self::Abi> {

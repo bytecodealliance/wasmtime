@@ -688,8 +688,8 @@ impl<'data> ModuleEnvironment<'data> for DummyEnvironment {
                 WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => reference_type,
             })
         };
-        sig.params.extend(wasm.params.iter().map(&mut cvt));
-        sig.returns.extend(wasm.returns.iter().map(&mut cvt));
+        sig.params.extend(wasm.params().iter().map(&mut cvt));
+        sig.returns.extend(wasm.returns().iter().map(&mut cvt));
         self.info.signatures.push(sig);
         Ok(())
     }

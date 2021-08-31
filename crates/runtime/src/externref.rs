@@ -489,7 +489,7 @@ type TableElem = UnsafeCell<Option<VMExternRef>>;
 ///
 /// Under the covers, this is a simple bump allocator that allows duplicate
 /// entries. Deduplication happens at GC time.
-#[repr(C)] // `alloc` must be the first member, it's accessed from JIT code
+#[repr(C)] // `alloc` must be the first member, it's accessed from JIT code.
 pub struct VMExternRefActivationsTable {
     /// Structures used to perform fast bump allocation of storage of externref
     /// values.
@@ -521,9 +521,14 @@ pub struct VMExternRefActivationsTable {
     /// inside-a-Wasm-frame roots, and doing a GC could lead to freeing one of
     /// those missed roots, and use after free.
     stack_canary: Option<usize>,
+
+    /// A debug-only field for asserting that we are in a region of code where
+    /// GC is okay to preform.
+    #[cfg(debug_assertions)]
+    gc_okay: bool,
 }
 
-#[repr(C)] // this is accessed from JTI code
+#[repr(C)] // This is accessed from JIT code.
 struct VMExternRefTableAlloc {
     /// Bump-allocation finger within the `chunk`.
     ///
@@ -573,12 +578,22 @@ impl VMExternRefActivationsTable {
             over_approximated_stack_roots: HashSet::with_capacity(Self::CHUNK_SIZE),
             precise_stack_roots: HashSet::with_capacity(Self::CHUNK_SIZE),
             stack_canary: None,
+            #[cfg(debug_assertions)]
+            gc_okay: true,
         }
     }
 
     fn new_chunk(size: usize) -> Box<[UnsafeCell<Option<VMExternRef>>]> {
         assert!(size >= Self::CHUNK_SIZE);
         (0..size).map(|_| UnsafeCell::new(None)).collect()
+    }
+
+    /// Get the available capacity in the bump allocation chunk.
+    #[inline]
+    pub fn bump_capacity_remaining(&self) -> usize {
+        let end = self.alloc.end.as_ptr() as usize;
+        let next = unsafe { *self.alloc.next.get() };
+        end - next.as_ptr() as usize
     }
 
     /// Try and insert a `VMExternRef` into this table.
@@ -624,6 +639,9 @@ impl VMExternRefActivationsTable {
         externref: VMExternRef,
         module_info_lookup: &dyn ModuleInfoLookup,
     ) {
+        #[cfg(debug_assertions)]
+        assert!(self.gc_okay);
+
         if let Err(externref) = self.try_insert(externref) {
             self.gc_and_insert_slow(externref, module_info_lookup);
         }
@@ -640,6 +658,20 @@ impl VMExternRefActivationsTable {
         // Might as well insert right into the hash set, rather than the bump
         // chunk, since we are already on a slow path and we get de-duplication
         // this way.
+        self.over_approximated_stack_roots
+            .insert(VMExternRefWithTraits(externref));
+    }
+
+    /// Insert a reference into the table, without ever performing GC.
+    #[inline]
+    pub fn insert_without_gc(&mut self, externref: VMExternRef) {
+        if let Err(externref) = self.try_insert(externref) {
+            self.insert_slow_without_gc(externref);
+        }
+    }
+
+    #[inline(never)]
+    fn insert_slow_without_gc(&mut self, externref: VMExternRef) {
         self.over_approximated_stack_roots
             .insert(VMExternRefWithTraits(externref));
     }
@@ -742,6 +774,24 @@ impl VMExternRefActivationsTable {
     pub fn set_stack_canary(&mut self, canary: Option<usize>) {
         self.stack_canary = canary;
     }
+
+    /// Set whether it is okay to GC or not right now.
+    ///
+    /// This is provided as a helper for enabling various debug-only assertions
+    /// and checking places where the `wasmtime-runtime` user expects there not
+    /// to be any GCs.
+    #[inline]
+    pub fn set_gc_okay(&mut self, okay: bool) -> bool {
+        #[cfg(debug_assertions)]
+        {
+            return std::mem::replace(&mut self.gc_okay, okay);
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            let _ = okay;
+            return true;
+        }
+    }
 }
 
 /// Used by the runtime to lookup information about a module given a
@@ -806,6 +856,9 @@ pub unsafe fn gc(
     externref_activations_table: &mut VMExternRefActivationsTable,
 ) {
     log::debug!("start GC");
+
+    #[cfg(debug_assertions)]
+    assert!(externref_activations_table.gc_okay);
 
     debug_assert!({
         // This set is only non-empty within this function. It is built up when

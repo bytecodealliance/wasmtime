@@ -774,6 +774,21 @@ impl Func {
 
             let mut values_vec = vec![0; max(params.len(), ty.results().len())];
 
+            // Whenever we pass `externref`s from host code to Wasm code, they
+            // go into the `VMExternRefActivationsTable`. But the table might be
+            // at capacity already, so check for that. If it is at capacity
+            // (unlikely) then do a GC to free up space. This is necessary
+            // because otherwise we would either keep filling up the bump chunk
+            // and making it larger and larger or we would always take the slow
+            // path when inserting references into the table.
+            if ty.as_wasm_func_type().externref_params_count()
+                > store
+                    .externref_activations_table()
+                    .bump_capacity_remaining()
+            {
+                store.gc();
+            }
+
             // Store the argument values into `values_vec`.
             let param_tys = ty.params();
             for ((arg, slot), ty) in params.iter().cloned().zip(&mut values_vec).zip(param_tys) {
@@ -788,7 +803,7 @@ impl Func {
                     bail!("cross-`Store` values are not currently supported");
                 }
                 unsafe {
-                    arg.write_value_to(store, slot);
+                    arg.write_value_without_gc(store, slot);
                 }
             }
 
@@ -871,6 +886,17 @@ impl Func {
         let (params, results) = val_vec.split_at_mut(nparams);
         func(caller.sub_caller(), params, results)?;
 
+        // See the comment in `Func::call_impl`'s `write_params` function.
+        if ty.as_wasm_func_type().externref_returns_count()
+            > caller
+                .store
+                .0
+                .externref_activations_table()
+                .bump_capacity_remaining()
+        {
+            caller.store.gc();
+        }
+
         // Unlike our arguments we need to dynamically check that the return
         // values produced are correct. There could be a bug in `func` that
         // produces the wrong number, wrong types, or wrong stores of
@@ -887,7 +913,7 @@ impl Func {
                 ));
             }
             unsafe {
-                ret.write_value_to(caller.store.0, values_vec.add(i));
+                ret.write_value_without_gc(caller.store.0, values_vec.add(i));
             }
         }
 

@@ -290,6 +290,67 @@ unsafe impl Send for AsyncState {}
 #[cfg(feature = "async")]
 unsafe impl Sync for AsyncState {}
 
+/// An RAII type to automatically mark a region of code as unsafe for GC.
+pub(crate) struct AutoAssertNoGc<T>
+where
+    T: std::ops::DerefMut<Target = StoreOpaque>,
+{
+    #[cfg(debug_assertions)]
+    prev_okay: bool,
+    store: T,
+}
+
+impl<T> AutoAssertNoGc<T>
+where
+    T: std::ops::DerefMut<Target = StoreOpaque>,
+{
+    pub fn new(mut store: T) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            let prev_okay = store.externref_activations_table.set_gc_okay(false);
+            return AutoAssertNoGc { store, prev_okay };
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            return AutoAssertNoGc { store };
+        }
+    }
+}
+
+impl<T> std::ops::Deref for AutoAssertNoGc<T>
+where
+    T: std::ops::DerefMut<Target = StoreOpaque>,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.store
+    }
+}
+
+impl<T> std::ops::DerefMut for AutoAssertNoGc<T>
+where
+    T: std::ops::DerefMut<Target = StoreOpaque>,
+{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.store
+    }
+}
+
+impl<T> Drop for AutoAssertNoGc<T>
+where
+    T: std::ops::DerefMut<Target = StoreOpaque>,
+{
+    fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            self.store
+                .externref_activations_table
+                .set_gc_okay(self.prev_okay);
+        }
+    }
+}
+
 /// Used to associate instances with the store.
 ///
 /// This is needed to track if the instance was allocated explicitly with the on-demand
@@ -1039,9 +1100,8 @@ impl StoreOpaque {
         &*self.interrupts as *const VMInterrupts as *mut VMInterrupts
     }
 
-    pub unsafe fn insert_vmexternref(&mut self, r: VMExternRef) {
-        self.externref_activations_table
-            .insert_with_gc(r, &self.modules)
+    pub unsafe fn insert_vmexternref_without_gc(&mut self, r: VMExternRef) {
+        self.externref_activations_table.insert_without_gc(r);
     }
 
     #[inline]

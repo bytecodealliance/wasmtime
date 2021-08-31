@@ -93,17 +93,17 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn write_value_to(&self, store: &mut StoreOpaque, p: *mut u128) {
-        match self {
-            Val::I32(i) => ptr::write(p as *mut i32, *i),
-            Val::I64(i) => ptr::write(p as *mut i64, *i),
-            Val::F32(u) => ptr::write(p as *mut u32, *u),
-            Val::F64(u) => ptr::write(p as *mut u64, *u),
-            Val::V128(b) => ptr::write(p as *mut u128, *b),
+    pub(crate) unsafe fn write_value_without_gc(&self, store: &mut StoreOpaque, p: *mut u128) {
+        match *self {
+            Val::I32(i) => ptr::write(p as *mut i32, i),
+            Val::I64(i) => ptr::write(p as *mut i64, i),
+            Val::F32(u) => ptr::write(p as *mut u32, u),
+            Val::F64(u) => ptr::write(p as *mut u64, u),
+            Val::V128(b) => ptr::write(p as *mut u128, b),
             Val::ExternRef(None) => ptr::write(p, 0),
-            Val::ExternRef(Some(x)) => {
+            Val::ExternRef(Some(ref x)) => {
                 let externref_ptr = x.inner.as_raw();
-                store.insert_vmexternref(x.inner.clone());
+                store.insert_vmexternref_without_gc(x.clone().inner);
                 ptr::write(p as *mut *mut u8, externref_ptr)
             }
             Val::FuncRef(f) => ptr::write(
