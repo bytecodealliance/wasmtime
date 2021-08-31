@@ -529,11 +529,26 @@ where
         Opcode::UremImm => binary_unsigned_can_trap(Value::rem, arg(0)?, imm())?,
         Opcode::SremImm => binary_can_trap(Value::rem, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::IrsubImm => binary(Value::sub, imm_as_ctrl_ty()?, arg(0)?)?,
-        Opcode::IaddCin => unimplemented!("IaddCin"),
+        Opcode::IaddCin => choose(
+            Value::into_bool(arg(2)?)?,
+            Value::add(Value::add(arg(0)?, arg(1)?)?, Value::int(1, ctrl_ty)?)?,
+            Value::add(arg(0)?, arg(1)?)?,
+        ),
         Opcode::IaddIfcin => unimplemented!("IaddIfcin"),
-        Opcode::IaddCout => unimplemented!("IaddCout"),
+        Opcode::IaddCout => {
+            let sum = Value::add(arg(0)?, arg(1)?)?;
+            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
+            assign_multiple(&[sum, Value::bool(carry, types::B1)?])
+        }
         Opcode::IaddIfcout => unimplemented!("IaddIfcout"),
-        Opcode::IaddCarry => unimplemented!("IaddCarry"),
+        Opcode::IaddCarry => {
+            let mut sum = Value::add(arg(0)?, arg(1)?)?;
+            if Value::into_bool(arg(2)?)? {
+                sum = Value::add(sum, Value::int(1, ctrl_ty)?)?
+            }
+            let carry = Value::lt(&sum, &arg(0)?)? && Value::lt(&sum, &arg(1)?)?;
+            assign_multiple(&[sum, Value::bool(carry, types::B1)?])
+        }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
         Opcode::IsubBin => unimplemented!("IsubBin"),
         Opcode::IsubIfbin => unimplemented!("IsubIfbin"),

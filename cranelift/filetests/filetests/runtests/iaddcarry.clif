@@ -1,0 +1,97 @@
+test interpret
+
+function %iaddcarry_i8_v(i8, i8, b1) -> i8 {
+block0(v0: i8, v1: i8, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v3
+}
+; run: %iaddcarry_i8_v(0, 1, true) == 2
+; run: %iaddcarry_i8_v(0, 1, false) == 1
+; run: %iaddcarry_i8_v(100, 27, true) == -128
+; run: %iaddcarry_i8_v(100, 27, false) == 127
+; run: %iaddcarry_i8_v(127, 127, true) == -1
+; run: %iaddcarry_i8_v(127, 127, false) == -2
+
+function %iaddcarry_i8_c(i8, i8, b1) -> b1 {
+block0(v0: i8, v1: i8, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v4
+}
+; run: %iaddcarry_i8_c(0, 1, true) == false
+; run: %iaddcarry_i8_c(0, 1, false) == false
+; run: %iaddcarry_i8_c(100, 27, true) == true
+; run: %iaddcarry_i8_c(100, 27, false) == false
+; run: %iaddcarry_i8_c(127, 127, true) == true
+; run: %iaddcarry_i8_c(127, 127, false) == true
+
+function %iaddcarry_i16_v(i16, i16, b1) -> i16 {
+block0(v0: i16, v1: i16, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v3
+}
+; run: %iaddcarry_i16_v(0, 1, true) == 2
+; run: %iaddcarry_i16_v(0, 1, false) == 1
+; run: %iaddcarry_i16_v(100, 27, true) == 128
+; run: %iaddcarry_i16_v(100, 27, false) == 127
+; run: %iaddcarry_i16_v(32000, 767, true) == -32768
+; run: %iaddcarry_i16_v(32000, 767, false) == 32767
+
+function %iaddcarry_i16_c(i16, i16, b1) -> b1 {
+block0(v0: i16, v1: i16, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v4
+}
+; run: %iaddcarry_i16_c(0, 1, true) == false
+; run: %iaddcarry_i16_c(0, 1, false) == false
+; run: %iaddcarry_i16_c(100, 27, true) == false
+; run: %iaddcarry_i16_c(100, 27, false) == false
+; run: %iaddcarry_i16_c(32000, 767, true) == true
+; run: %iaddcarry_i16_c(32000, 767, false) == false
+
+function %iaddcarry_i32_v(i32, i32, b1) -> i32 {
+block0(v0: i32, v1: i32, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v3
+}
+; run: %iaddcarry_i32_v(0, 1, true) == 2
+; run: %iaddcarry_i32_v(0, 1, false) == 1
+; run: %iaddcarry_i32_v(100, 27, true) == 128
+; run: %iaddcarry_i32_v(100, 27, false) == 127
+; run: %iaddcarry_i32_v(2000000000, 147483647, true) == -2147483648
+; run: %iaddcarry_i32_v(2000000000, 147483647, false) == 2147483647
+
+function %iaddcarry_i32_c(i32, i32, b1) -> b1 {
+block0(v0: i32, v1: i32, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v4
+}
+; run: %iaddcarry_i32_c(0, 1, true) == false
+; run: %iaddcarry_i32_c(0, 1, false) == false
+; run: %iaddcarry_i32_c(100, 27, true) == false
+; run: %iaddcarry_i32_c(100, 27, false) == false
+; run: %iaddcarry_i32_c(2000000000, 147483647, true) == true
+; run: %iaddcarry_i32_c(2000000000, 147483647, false) == false
+
+function %iaddcarry_i64_v(i64, i64, b1) -> i64 {
+block0(v0: i64, v1: i64, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v3
+}
+; run: %iaddcarry_i64_v(0, 1, true) == 2
+; run: %iaddcarry_i64_v(0, 1, false) == 1
+; run: %iaddcarry_i64_v(100, 27, true) == 128
+; run: %iaddcarry_i64_v(100, 27, false) == 127
+; run: %iaddcarry_i64_v(9000000000000000000, 223372036854775807, true) == -9223372036854775808
+; run: %iaddcarry_i64_v(9000000000000000000, 223372036854775807, false) == 9223372036854775807
+
+function %iaddcarry_i64_c(i64, i64, b1) -> b1 {
+block0(v0: i64, v1: i64, v2: b1):
+    v3, v4 = iadd_carry v0, v1, v2
+    return v4
+}
+; run: %iaddcarry_i64_c(0, 1, true) == false
+; run: %iaddcarry_i64_c(0, 1, false) == false
+; run: %iaddcarry_i64_c(100, 27, true) == false
+; run: %iaddcarry_i64_c(100, 27, false) == false
+; run: %iaddcarry_i64_c(9000000000000000000, 223372036854775807, true) == true
+; run: %iaddcarry_i64_c(9000000000000000000, 223372036854775807, false) == false

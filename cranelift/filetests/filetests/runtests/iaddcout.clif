@@ -1,0 +1,87 @@
+test interpret
+
+function %iaddcout_i8_v(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2, v3 = iadd_cout v0, v1
+    return v2
+}
+; run: %iaddcout_i8_v(0, 1) == 1
+; run: %iaddcout_i8_v(100, 27) == 127
+; run: %iaddcout_i8_v(100, -20) == 80
+; run: %iaddcout_i8_v(100, 28) == -128
+
+function %iaddcout_i8_c(i8, i8) -> b1 {
+block0(v0: i8, v1: i8):
+    v2, v3 = iadd_cout v0, v1
+    return v3
+}
+; run: %iaddcout_i8_c(0, 1) == false
+; run: %iaddcout_i8_c(100, 27) == false
+; run: %iaddcout_i8_c(100, -20) == false
+; run: %iaddcout_i8_c(100, 28) == true
+
+function %iaddcout_i16_v(i16, i16) -> i16 {
+block0(v0: i16, v1: i16):
+    v2, v3 = iadd_cout v0, v1
+    return v2
+}
+; run: %iaddcout_i16_v(0, 1) == 1
+; run: %iaddcout_i16_v(100, 27) == 127
+; run: %iaddcout_i16_v(100, 28) == 128
+; run: %iaddcout_i16_v(32000, 767) == 32767
+; run: %iaddcout_i16_v(32000, 768) == -32768
+
+function %iaddcout_i16_c(i16, i16) -> b1 {
+block0(v0: i16, v1: i16):
+    v2, v3 = iadd_cout v0, v1
+    return v3
+}
+; run: %iaddcout_i16_c(0, 1) == false
+; run: %iaddcout_i16_c(100, 27) == false
+; run: %iaddcout_i16_c(100, 28) == false
+; run: %iaddcout_i16_c(32000, 767) == false
+; run: %iaddcout_i16_c(32000, 768) == true
+
+function %iaddcout_i32_v(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2, v3 = iadd_cout v0, v1
+    return v2
+}
+; run: %iaddcout_i32_v(0, 1) == 1
+; run: %iaddcout_i32_v(100, 27) == 127
+; run: %iaddcout_i32_v(100, 28) == 128
+; run: %iaddcout_i32_v(2000000000, 147483647) == 2147483647
+; run: %iaddcout_i32_v(2000000000, 147483648) == -2147483648
+
+function %iaddcout_i32_c(i32, i32) -> b1 {
+block0(v0: i32, v1: i32):
+    v2, v3 = iadd_cout v0, v1
+    return v3
+}
+; run: %iaddcout_i32_c(0, 1) == false
+; run: %iaddcout_i32_c(100, 27) == false
+; run: %iaddcout_i32_c(100, 28) == false
+; run: %iaddcout_i32_c(2000000000, 147483647) == false
+; run: %iaddcout_i32_c(2000000000, 147483648) == true
+
+function %iaddcout_i64_v(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2, v3 = iadd_cout v0, v1
+    return v2
+}
+; run: %iaddcout_i64_v(0, 1) == 1
+; run: %iaddcout_i64_v(100, 27) == 127
+; run: %iaddcout_i64_v(100, 28) == 128
+; run: %iaddcout_i64_v(2000000000, 147483647) == 2147483647
+; run: %iaddcout_i64_v(2000000000, 147483648) == 2147483648
+
+function %iaddcout_i64_c(i64, i64) -> b1 {
+block0(v0: i64, v1: i64):
+    v2, v3 = iadd_cout v0, v1
+    return v3
+}
+; run: %iaddcout_i64_c(0, 1) == false
+; run: %iaddcout_i64_c(100, 27) == false
+; run: %iaddcout_i64_c(100, 28) == false
+; run: %iaddcout_i64_c(2000000000, 147483647) == false
+; run: %iaddcout_i64_c(2000000000, 147483648) == false
