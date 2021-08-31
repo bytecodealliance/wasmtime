@@ -13,7 +13,6 @@ edition = "2018"
 [dependencies]
 wasmtime-environ = { path = "../environ", version = "0.30.0" }
 wasmtime-runtime = { path = "../runtime", version = "0.30.0" }
-region = "2.2.0"
 thiserror = "1.0.4"
 target-lexicon = { version = "0.12.0", default-features = false }
 wasmparser = "0.80"
@@ -25,7 +24,7 @@ gimli = { version = "0.25.0", default-features = false, features = ["std", "read
 object = { version = "0.26.0", default-features = false, features = ["std", "read_core", "elf"] }
 serde = { version = "1.0.94", features = ["derive"] }
 addr2line = { version = "0.16.0", default-features = false }
-libc = { version = "0.2.60", default-features = false, optional = true }
+rsix = { version = "0.23.0", optional = true }
 ittapi-rs = { version = "0.1.5", optional = true  }
 bincode = "1.2.1"
 
@@ -33,7 +32,7 @@ bincode = "1.2.1"
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
 [features]
-jitdump = ['libc']
+jitdump = ['rsix']
 vtune = ['ittapi-rs']
 
 [badges]

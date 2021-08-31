@@ -1,6 +1,5 @@
 use crate::traphandlers::{tls, wasmtime_longjmp, Trap};
 use std::cell::RefCell;
-use std::convert::TryInto;
 use std::io;
 use std::mem::{self, MaybeUninit};
 use std::ptr::{self, null_mut};
@@ -291,36 +290,27 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
 
         // ... but failing that we need to allocate our own, so do all that
         // here.
-        let page_size: usize = libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap();
+        let page_size: usize = region::page::size();
         let guard_size = page_size;
         let alloc_size = guard_size + MIN_STACK_SIZE;
 
-        let ptr = libc::mmap(
+        let ptr = rsix::io::mmap_anonymous(
             null_mut(),
             alloc_size,
-            libc::PROT_NONE,
-            libc::MAP_PRIVATE | libc::MAP_ANON,
-            -1,
-            0,
-        );
-        if ptr == libc::MAP_FAILED {
-            return Err(Box::new(Trap::oom()));
-        }
+            rsix::io::ProtFlags::NONE,
+            rsix::io::MapFlags::PRIVATE,
+        )
+        .map_err(|_| Box::new(Trap::oom()))?;
 
         // Prepare the stack with readable/writable memory and then register it
         // with `sigaltstack`.
-        let stack_ptr = (ptr as usize + guard_size) as *mut libc::c_void;
-        let r = libc::mprotect(
+        let stack_ptr = (ptr as usize + guard_size) as *mut std::ffi::c_void;
+        rsix::io::mprotect(
             stack_ptr,
             MIN_STACK_SIZE,
-            libc::PROT_READ | libc::PROT_WRITE,
-        );
-        assert_eq!(
-            r,
-            0,
-            "mprotect to configure memory for sigaltstack failed: {}",
-            io::Error::last_os_error()
-        );
+            rsix::io::MprotectFlags::READ | rsix::io::MprotectFlags::WRITE,
+        )
+        .expect("mprotect to configure memory for sigaltstack failed");
         let new_stack = libc::stack_t {
             ss_sp: stack_ptr,
             ss_flags: 0,
@@ -344,8 +334,8 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
         fn drop(&mut self) {
             unsafe {
                 // Deallocate the stack memory.
-                let r = libc::munmap(self.mmap_ptr, self.mmap_size);
-                debug_assert_eq!(r, 0, "munmap failed during thread shutdown");
+                let r = rsix::io::munmap(self.mmap_ptr, self.mmap_size);
+                debug_assert!(r.is_ok(), "munmap failed during thread shutdown");
             }
         }
     }

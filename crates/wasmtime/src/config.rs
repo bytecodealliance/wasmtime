@@ -1343,7 +1343,7 @@ fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
 }
 
 fn round_up_to_pages(val: u64) -> u64 {
-    let page_size = region::page::size() as u64;
+    let page_size = rsix::process::page_size() as u64;
     debug_assert!(page_size.is_power_of_two());
     val.checked_add(page_size - 1)
         .map(|val| val & !(page_size - 1))

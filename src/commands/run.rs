@@ -207,7 +207,7 @@ impl RunCommand {
                     // than a simple failure.
                     if cfg!(unix) {
                         // On Unix, return the error code of an abort.
-                        process::exit(128 + libc::SIGABRT);
+                        process::exit(rsix::process::EXIT_SIGNALED_SIGABRT);
                     } else if cfg!(windows) {
                         // On Windows, return 3.
                         // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019

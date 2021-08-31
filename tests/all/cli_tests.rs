@@ -137,7 +137,7 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 
     // Test for the specific error code Wasmtime uses to indicate a trap return.
     #[cfg(unix)]
-    assert_eq!(code, 128 + libc::SIGABRT);
+    assert_eq!(code, rsix::process::EXIT_SIGNALED_SIGABRT);
     #[cfg(windows)]
     assert_eq!(code, 3);
     Ok(())
@@ -255,7 +255,10 @@ fn exit126_wasi_snapshot0() -> Result<()> {
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 3);
     } else {
-        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
+        assert_eq!(
+            output.status.code().unwrap(),
+            rsix::process::EXIT_SIGNALED_SIGABRT
+        );
     }
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
@@ -270,7 +273,10 @@ fn exit126_wasi_snapshot1() -> Result<()> {
     if cfg!(windows) {
         assert_eq!(output.status.code().unwrap(), 3);
     } else {
-        assert_eq!(output.status.code().unwrap(), 128 + libc::SIGABRT);
+        assert_eq!(
+            output.status.code().unwrap(),
+            rsix::process::EXIT_SIGNALED_SIGABRT
+        );
     }
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));

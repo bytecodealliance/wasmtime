@@ -15,6 +15,7 @@ wasmtime-environ = { path = "../environ", version = "0.30.0" }
 wasmtime-fiber = { path = "../fiber", version = "0.30.0", optional = true }
 region = "2.1.0"
 libc = { version = "0.2.82", default-features = false }
+rsix = "0.23.0"
 log = "0.4.8"
 memoffset = "0.6.0"
 indexmap = "1.0.2"

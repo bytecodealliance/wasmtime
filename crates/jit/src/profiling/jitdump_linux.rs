@@ -16,9 +16,7 @@ use anyhow::Result;
 use object::{Object, ObjectSection};
 use std::fmt::Debug;
 use std::fs::{File, OpenOptions};
-use std::io;
 use std::io::Write;
-use std::os::unix::prelude::*;
 use std::ptr;
 use std::sync::Mutex;
 use std::{borrow, mem, process};
@@ -177,17 +175,14 @@ impl JitDumpAgent {
         // To match what some perf examples are doing we keep this `mmap` alive
         // until this agent goes away.
         let map_addr = unsafe {
-            let ptr = libc::mmap(
+            let ptr = rsix::io::mmap(
                 ptr::null_mut(),
-                libc::sysconf(libc::_SC_PAGESIZE) as usize,
-                libc::PROT_EXEC | libc::PROT_READ,
-                libc::MAP_PRIVATE,
-                jitdump_file.as_raw_fd(),
+                rsix::process::page_size(),
+                rsix::io::ProtFlags::EXEC | rsix::io::ProtFlags::READ,
+                rsix::io::MapFlags::PRIVATE,
+                &jitdump_file,
                 0,
-            );
-            if ptr == libc::MAP_FAILED {
-                return Err(io::Error::last_os_error().into());
-            }
+            )?;
             ptr as usize
         };
         let mut state = State {
@@ -216,16 +211,9 @@ impl State {
         // conveniently also uses, but `Instant` doesn't allow us to get access
         // to nanoseconds as an internal detail, so we calculate the nanoseconds
         // ourselves here.
-        unsafe {
-            let mut ts = mem::MaybeUninit::zeroed();
-            assert_eq!(
-                libc::clock_gettime(libc::CLOCK_MONOTONIC, ts.as_mut_ptr()),
-                0
-            );
-            let ts = ts.assume_init();
-            // TODO: What does it mean for either sec or nsec to be negative?
-            (ts.tv_sec * 1_000_000_000 + ts.tv_nsec) as u64
-        }
+        let ts = rsix::time::clock_gettime(rsix::time::ClockId::Monotonic);
+        // TODO: What does it mean for either sec or nsec to be negative?
+        (ts.tv_sec * 1_000_000_000 + ts.tv_nsec) as u64
     }
 
     /// Returns the ELF machine architecture.
@@ -649,10 +637,7 @@ impl State {
 impl Drop for State {
     fn drop(&mut self) {
         unsafe {
-            libc::munmap(
-                self.map_addr as *mut _,
-                libc::sysconf(libc::_SC_PAGESIZE) as usize,
-            );
+            rsix::io::munmap(self.map_addr as *mut _, rsix::process::page_size()).unwrap();
         }
     }
 }

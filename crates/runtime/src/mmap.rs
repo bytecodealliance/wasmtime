@@ -2,11 +2,10 @@
 //! of memory.
 
 use anyhow::anyhow;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use more_asserts::assert_le;
 use std::convert::TryFrom;
 use std::fs::File;
-use std::io;
 use std::ops::Range;
 use std::path::Path;
 use std::ptr;
@@ -57,8 +56,6 @@ impl Mmap {
     pub fn from_file(path: &Path) -> Result<Self> {
         #[cfg(unix)]
         {
-            use std::os::unix::prelude::*;
-
             let file = File::open(path).context("failed to open file")?;
             let len = file
                 .metadata()
@@ -66,19 +63,16 @@ impl Mmap {
                 .len();
             let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
             let ptr = unsafe {
-                libc::mmap(
+                rsix::io::mmap(
                     ptr::null_mut(),
                     len,
-                    libc::PROT_READ,
-                    libc::MAP_PRIVATE,
-                    file.as_raw_fd(),
+                    rsix::io::ProtFlags::READ,
+                    rsix::io::MapFlags::PRIVATE,
+                    &file,
                     0,
                 )
+                .context(format!("mmap failed to allocate {:#x} bytes", len))?
             };
-            if ptr as isize == -1_isize {
-                return Err(io::Error::last_os_error())
-                    .context(format!("mmap failed to allocate {:#x} bytes", len));
-            }
 
             Ok(Self {
                 ptr: ptr as usize,
@@ -175,22 +169,14 @@ impl Mmap {
         Ok(if accessible_size == mapping_size {
             // Allocate a single read-write region at once.
             let ptr = unsafe {
-                libc::mmap(
+                rsix::io::mmap_anonymous(
                     ptr::null_mut(),
                     mapping_size,
-                    libc::PROT_READ | libc::PROT_WRITE,
-                    libc::MAP_PRIVATE | libc::MAP_ANON,
-                    -1,
-                    0,
+                    rsix::io::ProtFlags::READ | rsix::io::ProtFlags::WRITE,
+                    rsix::io::MapFlags::PRIVATE,
                 )
+                .context(format!("mmap failed to allocate {:#x} bytes", mapping_size))?
             };
-            if ptr as isize == -1_isize {
-                bail!(
-                    "mmap failed to allocate {:#x} bytes: {}",
-                    mapping_size,
-                    io::Error::last_os_error()
-                );
-            }
 
             Self {
                 ptr: ptr as usize,
@@ -200,22 +186,14 @@ impl Mmap {
         } else {
             // Reserve the mapping size.
             let ptr = unsafe {
-                libc::mmap(
+                rsix::io::mmap_anonymous(
                     ptr::null_mut(),
                     mapping_size,
-                    libc::PROT_NONE,
-                    libc::MAP_PRIVATE | libc::MAP_ANON,
-                    -1,
-                    0,
+                    rsix::io::ProtFlags::NONE,
+                    rsix::io::MapFlags::PRIVATE,
                 )
+                .context(format!("mmap failed to allocate {:#x} bytes", mapping_size))?
             };
-            if ptr as isize == -1_isize {
-                bail!(
-                    "mmap failed to allocate {:#x} bytes: {}",
-                    mapping_size,
-                    io::Error::last_os_error()
-                );
-            }
 
             let mut result = Self {
                 ptr: ptr as usize,
@@ -237,6 +215,7 @@ impl Mmap {
     /// must be native page-size multiples.
     #[cfg(target_os = "windows")]
     pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
+        use anyhow::bail;
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
 
@@ -440,8 +419,8 @@ impl Drop for Mmap {
     #[cfg(not(target_os = "windows"))]
     fn drop(&mut self) {
         if self.len != 0 {
-            let r = unsafe { libc::munmap(self.ptr as *mut libc::c_void, self.len) };
-            assert_eq!(r, 0, "munmap failed: {}", io::Error::last_os_error());
+            unsafe { rsix::io::munmap(self.ptr as *mut std::ffi::c_void, self.len) }
+                .expect("munmap failed");
         }
     }
 

@@ -15,7 +15,7 @@ cranelift-codegen = { path = "../codegen", version = "0.77.0", default-features 
 target-lexicon = "0.12"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
-libc = "0.2.95"
+rsix = "0.23.0"
 
 [features]
 default = ["std"]

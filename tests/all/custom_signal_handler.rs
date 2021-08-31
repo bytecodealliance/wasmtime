@@ -4,6 +4,7 @@
 ))]
 mod tests {
     use anyhow::Result;
+    use rsix::io::{mprotect, MprotectFlags};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use wasmtime::unix::StoreExt;
@@ -59,7 +60,7 @@ mod tests {
 
         // So we can later trigger SIGSEGV by performing a read
         unsafe {
-            libc::mprotect(base as *mut libc::c_void, length, libc::PROT_NONE);
+            mprotect(base as *mut std::ffi::c_void, length, MprotectFlags::NONE).unwrap();
         }
 
         println!("memory: base={:?}, length={}", base, length);
@@ -81,11 +82,12 @@ mod tests {
             let result = (si_addr as u64) < (base as u64) + (length as u64);
             // Remove protections so the execution may resume
             unsafe {
-                libc::mprotect(
+                mprotect(
                     base as *mut libc::c_void,
                     length,
-                    libc::PROT_READ | libc::PROT_WRITE,
-                );
+                    MprotectFlags::READ | MprotectFlags::WRITE,
+                )
+                .unwrap();
             }
             println!("signal handled: {}", result);
             result
@@ -213,11 +215,12 @@ mod tests {
                 let instance1_handler_triggered = instance1_handler_triggered.clone();
                 move |_signum, _siginfo, _context| {
                     // Remove protections so the execution may resume
-                    libc::mprotect(
+                    mprotect(
                         base1 as *mut libc::c_void,
                         length1,
-                        libc::PROT_READ | libc::PROT_WRITE,
-                    );
+                        MprotectFlags::READ | MprotectFlags::WRITE,
+                    )
+                    .unwrap();
                     instance1_handler_triggered.store(true, Ordering::SeqCst);
                     println!(
                         "Hello from instance1 signal handler! {}",
@@ -258,11 +261,12 @@ mod tests {
                 let instance2_handler_triggered = instance2_handler_triggered.clone();
                 move |_signum, _siginfo, _context| {
                     // Remove protections so the execution may resume
-                    libc::mprotect(
+                    mprotect(
                         base2 as *mut libc::c_void,
                         length2,
-                        libc::PROT_READ | libc::PROT_WRITE,
-                    );
+                        MprotectFlags::READ | MprotectFlags::WRITE,
+                    )
+                    .unwrap();
                     instance2_handler_triggered.store(true, Ordering::SeqCst);
                     println!(
                         "Hello from instance2 signal handler! {}",

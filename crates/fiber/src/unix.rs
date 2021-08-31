@@ -45,38 +45,30 @@ pub struct FiberStack {
 
 impl FiberStack {
     pub fn new(size: usize) -> io::Result<Self> {
-        unsafe {
-            // Round up our stack size request to the nearest multiple of the
-            // page size.
-            let page_size = libc::sysconf(libc::_SC_PAGESIZE) as usize;
-            let size = if size == 0 {
-                page_size
-            } else {
-                (size + (page_size - 1)) & (!(page_size - 1))
-            };
+        // Round up our stack size request to the nearest multiple of the
+        // page size.
+        let page_size = rsix::process::page_size();
+        let size = if size == 0 {
+            page_size
+        } else {
+            (size + (page_size - 1)) & (!(page_size - 1))
+        };
 
+        unsafe {
             // Add in one page for a guard page and then ask for some memory.
             let mmap_len = size + page_size;
-            let mmap = libc::mmap(
+            let mmap = rsix::io::mmap_anonymous(
                 ptr::null_mut(),
                 mmap_len,
-                libc::PROT_NONE,
-                libc::MAP_ANON | libc::MAP_PRIVATE,
-                -1,
-                0,
-            );
-            if mmap == libc::MAP_FAILED {
-                return Err(io::Error::last_os_error());
-            }
+                rsix::io::ProtFlags::NONE,
+                rsix::io::MapFlags::PRIVATE,
+            )?;
 
-            if libc::mprotect(
+            rsix::io::mprotect(
                 mmap.cast::<u8>().add(page_size).cast(),
                 size,
-                libc::PROT_READ | libc::PROT_WRITE,
-            ) != 0
-            {
-                return Err(io::Error::last_os_error());
-            }
+                rsix::io::MprotectFlags::READ | rsix::io::MprotectFlags::WRITE,
+            )?;
 
             Ok(Self {
                 top: mmap.cast::<u8>().add(mmap_len),
@@ -98,8 +90,8 @@ impl Drop for FiberStack {
     fn drop(&mut self) {
         unsafe {
             if let Some(len) = self.len {
-                let ret = libc::munmap(self.top.sub(len) as _, len);
-                debug_assert!(ret == 0);
+                let ret = rsix::io::munmap(self.top.sub(len) as _, len);
+                debug_assert!(ret.is_ok());
             }
         }
     }
