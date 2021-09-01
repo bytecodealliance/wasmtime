@@ -974,14 +974,7 @@ where
     let arg0 = extractlanes(&x, vector_type.lane_type())?;
     let arg1 = extractlanes(&y, vector_type.lane_type())?;
     let mut result = SimdVec::new();
-    for pair in arg0.chunks(2) {
-        let lhs: V = Value::int(pair[0], vector_type.lane_type())?;
-        let rhs: V = Value::int(pair[1], vector_type.lane_type())?;
-        let sum = op(lhs, rhs)?;
-        let sum = sum.into_int()?;
-        result.push(sum);
-    }
-    for pair in arg1.chunks(2) {
+    for pair in arg0.chunks(2).chain(arg1.chunks(2)) {
         let lhs: V = Value::int(pair[0], vector_type.lane_type())?;
         let rhs: V = Value::int(pair[1], vector_type.lane_type())?;
         let sum = op(lhs, rhs)?;
