@@ -298,6 +298,7 @@ impl InstructionData {
             &InstructionData::UnaryBool { imm, .. } => Some(DataValue::from(imm)),
             // 8-bit.
             &InstructionData::BinaryImm8 { imm, .. }
+            | &InstructionData::TernaryImm8 { imm, .. }
             | &InstructionData::BranchTableEntry { imm, .. } => Some(DataValue::from(imm as i8)), // Note the switch from unsigned to signed.
             // 32-bit
             &InstructionData::UnaryIeee32 { imm, .. } => Some(DataValue::from(imm)),
