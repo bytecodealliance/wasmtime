@@ -557,7 +557,7 @@ impl<I: VCodeInst> VCode<I> {
                 let next_block_size = next_block_range.1 - next_block_range.0;
                 let worst_case_next_bb = I::worst_case_size() * next_block_size;
                 if buffer.island_needed(worst_case_next_bb) {
-                    buffer.emit_island();
+                    buffer.emit_island(worst_case_next_bb);
                 }
             }
         }

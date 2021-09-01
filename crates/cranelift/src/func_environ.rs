@@ -1297,9 +1297,22 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
         Ok(func.import_function(ir::ExtFuncData {
             name,
             signature,
-            // We currently allocate all code segments independently, so nothing
-            // is colocated.
-            colocated: false,
+
+            // The value of this flag determines the codegen for calls to this
+            // function. If this flag is `false` then absolute relocations will
+            // be generated for references to the function, which requires
+            // load-time relocation resolution. If this flag is set to `true`
+            // then relative relocations are emitted which can be resolved at
+            // object-link-time, just after all functions are compiled.
+            //
+            // This flag is set to `true` for functions defined in the object
+            // we'll be defining in this compilation unit, or everything local
+            // to the wasm module. This means that between functions in a wasm
+            // module there's relative calls encoded. All calls external to a
+            // wasm module (e.g. imports or libcalls) are either encoded through
+            // the `VMContext` as relative jumps (hence no relocations) or
+            // they're libcalls with absolute relocations.
+            colocated: self.module.defined_func_index(index).is_some(),
         }))
     }
 

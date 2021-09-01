@@ -6,7 +6,10 @@ use crate::isa::s390x::settings as s390x_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::Builder as IsaBuilder;
-use crate::machinst::{compile, MachBackend, MachCompileResult, TargetIsaAdapter, VCode};
+use crate::machinst::{
+    compile, MachBackend, MachCompileResult, MachTextSectionBuilder, TargetIsaAdapter,
+    TextSectionBuilder, VCode,
+};
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 
@@ -164,6 +167,10 @@ impl MachBackend for S390xBackend {
     #[cfg(feature = "unwind")]
     fn map_reg_to_dwarf(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
+    }
+
+    fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
+        Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
     }
 }
 

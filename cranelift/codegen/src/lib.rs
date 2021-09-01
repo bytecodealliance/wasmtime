@@ -85,6 +85,7 @@ pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::MachSrcLoc;
+pub use crate::machinst::TextSectionBuilder;
 
 mod abi;
 mod bitset;

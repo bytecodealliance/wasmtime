@@ -16,12 +16,13 @@
 use crate::debug::{DwarfSection, DwarfSectionRelocTarget};
 use crate::{CompiledFunction, Relocation, RelocationTarget};
 use anyhow::Result;
-use cranelift_codegen::binemit::Reloc;
-use cranelift_codegen::ir::{JumpTableOffsets, LibCall};
+use cranelift_codegen::binemit::{Addend, Reloc};
+use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::{
     unwind::{systemv, UnwindInfo},
     TargetIsa,
 };
+use cranelift_codegen::TextSectionBuilder;
 use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{
@@ -29,11 +30,12 @@ use object::write::{
     SymbolSection,
 };
 use object::{
-    elf, Architecture, RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind,
+    Architecture, RelocationEncoding, RelocationKind, SectionKind, SymbolFlags, SymbolKind,
     SymbolScope,
 };
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::mem;
 use std::ops::Range;
 use wasmtime_environ::obj;
 use wasmtime_environ::{
@@ -91,16 +93,52 @@ fn write_libcall_symbols(obj: &mut Object) -> HashMap<LibCall, SymbolId> {
     libcalls
 }
 
+/// A helper structure used to assemble the final text section of an exectuable,
+/// plus unwinding information and other related details.
+///
+/// This builder relies on Cranelift-specific internals but assembles into a
+/// generic `Object` which will get further appended to in a compiler-agnostic
+/// fashion later.
 pub struct ObjectBuilder<'a> {
+    /// The target that we're compiling for, used to query target-specific
+    /// information as necessary.
+    isa: &'a dyn TargetIsa,
+
+    /// The object file that we're generating code into.
     obj: &'a mut Object,
+
+    /// The WebAssembly module we're generating code for.
     module: &'a Module,
-    text_section: SectionId,
-    func_symbols: PrimaryMap<FuncIndex, SymbolId>,
-    jump_tables: PrimaryMap<DefinedFuncIndex, &'a JumpTableOffsets>,
+
+    /// Map of injected symbols for all possible libcalls, used whenever there's
+    /// a relocation against a libcall.
     libcalls: HashMap<LibCall, SymbolId>,
-    pending_relocations: Vec<(u64, &'a [Relocation])>,
+
+    /// Packed form of windows unwind tables which, if present, will get emitted
+    /// to a windows-specific unwind info section.
     windows_unwind_info: Vec<RUNTIME_FUNCTION>,
+
+    /// Pending unwinding information for DWARF-based platforms. This is used to
+    /// build a `.eh_frame` lookalike at the very end of object building.
     systemv_unwind_info: Vec<(u64, &'a systemv::UnwindInfo)>,
+
+    /// The corresponding symbol for each function, inserted as they're defined.
+    ///
+    /// If an index isn't here yet then it hasn't been defined yet.
+    func_symbols: PrimaryMap<FuncIndex, SymbolId>,
+
+    /// `object`-crate identifier for the text section.
+    text_section: SectionId,
+
+    /// Relocations to be added once we've got all function symbols available to
+    /// us. The first entry is the relocation that we're applying, relative
+    /// within a function, and the second entry here is the offset of the
+    /// function that contains this relocation.
+    relocations: Vec<(&'a Relocation, u64)>,
+
+    /// In-progress text section that we're using cranelift's `MachBuffer` to
+    /// build to resolve relocations (calls) between functions.
+    pub text: Box<dyn TextSectionBuilder>,
 }
 
 // This is a mirror of `RUNTIME_FUNCTION` in the Windows API, but defined here
@@ -116,7 +154,7 @@ struct RUNTIME_FUNCTION {
 }
 
 impl<'a> ObjectBuilder<'a> {
-    pub fn new(obj: &'a mut Object, module: &'a Module) -> Self {
+    pub fn new(obj: &'a mut Object, module: &'a Module, isa: &'a dyn TargetIsa) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
         let text_section = obj.add_section(
@@ -146,15 +184,21 @@ impl<'a> ObjectBuilder<'a> {
         let libcalls = write_libcall_symbols(obj);
 
         Self {
+            isa,
             obj,
             module,
             text_section,
             func_symbols,
             libcalls,
-            pending_relocations: Vec::new(),
-            jump_tables: PrimaryMap::with_capacity(module.functions.len()),
             windows_unwind_info: Vec::new(),
             systemv_unwind_info: Vec::new(),
+            relocations: Vec::new(),
+            text: match isa.get_mach_backend() {
+                Some(backend) => backend.text_section_builder(
+                    (module.functions.len() - module.num_imported_funcs) as u32,
+                ),
+                None => Box::new(DummyBuilder::default()),
+            },
         }
     }
 
@@ -162,14 +206,19 @@ impl<'a> ObjectBuilder<'a> {
     ///
     /// Returns the symbol associated with the function as well as the range
     /// that the function resides within the text section.
-    fn append_func(&mut self, name: Vec<u8>, func: &'a CompiledFunction) -> (SymbolId, Range<u64>) {
-        let off = self
-            .obj
-            .append_section_data(self.text_section, &func.body, 1);
+    fn append_func(
+        &mut self,
+        wat: bool,
+        name: Vec<u8>,
+        func: &'a CompiledFunction,
+    ) -> (SymbolId, Range<u64>) {
+        let body_len = func.body.len() as u64;
+        let off = self.text.append(wat, &func.body, 1);
+
         let symbol_id = self.obj.add_symbol(Symbol {
             name,
             value: off,
-            size: func.body.len() as u64,
+            size: body_len,
             kind: SymbolKind::Text,
             scope: SymbolScope::Compilation,
             weak: false,
@@ -190,12 +239,10 @@ impl<'a> ObjectBuilder<'a> {
                 let unwind_size = info.emit_size();
                 let mut unwind_info = vec![0; unwind_size];
                 info.emit(&mut unwind_info);
-                let unwind_off = self
-                    .obj
-                    .append_section_data(self.text_section, &unwind_info, 4);
+                let unwind_off = self.text.append(false, &unwind_info, 4);
                 self.windows_unwind_info.push(RUNTIME_FUNCTION {
                     begin: u32::try_from(off).unwrap(),
-                    end: u32::try_from(off + func.body.len() as u64).unwrap(),
+                    end: u32::try_from(off + body_len).unwrap(),
                     unwind_address: u32::try_from(unwind_off).unwrap(),
                 });
             }
@@ -209,39 +256,97 @@ impl<'a> ObjectBuilder<'a> {
             Some(_) => panic!("some unwind info isn't handled here"),
             None => {}
         }
-        if !func.relocations.is_empty() {
-            self.pending_relocations.push((off, &func.relocations));
+
+        for r in func.relocations.iter() {
+            let (symbol, symbol_offset) = match r.reloc_target {
+                // Relocations against user-defined functions means that this is
+                // a relocation against a module-local function, typically a
+                // call between functions. The `text` field is given priority to
+                // resolve this relocation before we actually emit an object
+                // file, but if it can't handle it then we pass through the
+                // relocation.
+                RelocationTarget::UserFunc(index) => {
+                    let defined_index = self.module.defined_func_index(index).unwrap();
+                    if self.text.resolve_reloc(
+                        off + u64::from(r.offset),
+                        r.reloc,
+                        r.addend,
+                        defined_index.as_u32(),
+                    ) {
+                        continue;
+                    }
+
+                    // FIXME(#3009) once the old backend is removed all
+                    // inter-function relocations should be handled by
+                    // `self.text`. This can become `unreachable!()` in that
+                    // case.
+                    self.relocations.push((r, off));
+                    continue;
+                }
+
+                // These relocations, unlike against user funcs above, typically
+                // involve absolute addresses and need to get resolved at load
+                // time. These are persisted immediately into the object file.
+                //
+                // FIXME: these, like user-defined-functions, should probably
+                // use relative jumps and avoid absolute relocations. They don't
+                // seem too common though so aren't necessarily that important
+                // to optimize.
+                RelocationTarget::LibCall(call) => (self.libcalls[&call], 0),
+                RelocationTarget::JumpTable(jt) => (symbol_id, func.jt_offsets[jt]),
+            };
+            let (kind, encoding, size) = match r.reloc {
+                Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
+                Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
+
+                // This is emitted by the old x86 backend and is only present
+                // for when the constant rodata is separated from the code
+                // itself. We don't do that, though, so we ignore these
+                // relocations since the offsets already listed here are already
+                // correct.
+                //
+                // FIXME(#3009): when the old backend is removed delete this
+                // case.
+                Reloc::X86PCRelRodata4 => continue,
+
+                other => unimplemented!("Unimplemented relocation {:?}", other),
+            };
+            self.obj
+                .add_relocation(
+                    self.text_section,
+                    ObjectRelocation {
+                        offset: off + r.offset as u64,
+                        size,
+                        kind,
+                        encoding,
+                        symbol,
+                        addend: r.addend.wrapping_add(symbol_offset as i64),
+                    },
+                )
+                .unwrap();
         }
-        (symbol_id, off..off + func.body.len() as u64)
+        (symbol_id, off..off + body_len)
     }
 
-    /// Pushes a new defined function from the a wasm module into this object,
-    /// returning the range that the compiled code will live at relative in the
-    /// text section of the final executable.
+    /// Appends a function to this object file.
     ///
-    /// Note that functions must be pushed in the order of their
-    /// `DefinedFuncIndex`.
+    /// This is expected to be called in-order for ascending `index` values.
     pub fn func(&mut self, index: DefinedFuncIndex, func: &'a CompiledFunction) -> Range<u64> {
-        assert_eq!(self.jump_tables.push(&func.jt_offsets), index);
         let index = self.module.func_index(index);
         let name = obj::func_symbol_name(index);
-        let (symbol_id, range) = self.append_func(name.into_bytes(), func);
+        let (symbol_id, range) = self.append_func(true, name.into_bytes(), func);
         assert_eq!(self.func_symbols.push(symbol_id), index);
         range
     }
 
     pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) -> Trampoline {
         let name = obj::trampoline_symbol_name(sig);
-        let (_, range) = self.append_func(name.into_bytes(), func);
+        let (_, range) = self.append_func(false, name.into_bytes(), func);
         Trampoline {
             signature: sig,
             start: range.start,
             length: u32::try_from(range.end - range.start).unwrap(),
         }
-    }
-
-    pub fn align_text_to(&mut self, align: u64) {
-        self.obj.append_section_data(self.text_section, &[], align);
     }
 
     pub fn dwarf_sections(&mut self, sections: &[DwarfSection]) -> Result<()> {
@@ -289,80 +394,50 @@ impl<'a> ObjectBuilder<'a> {
         Ok(())
     }
 
-    pub fn finish(&mut self, isa: &dyn TargetIsa) -> Result<()> {
-        self.append_relocations()?;
+    pub fn finish(&mut self) -> Result<()> {
+        // Now that all function symbols are available register all final
+        // relocations between functions.
+        //
+        // FIXME(#3009) once the old backend is removed this loop should be
+        // deleted since there won't be any relocations here.
+        for (r, off) in mem::take(&mut self.relocations) {
+            let symbol = match r.reloc_target {
+                RelocationTarget::UserFunc(index) => self.func_symbols[index],
+                _ => unreachable!("should be handled in `append_func`"),
+            };
+            let (kind, encoding, size) = match r.reloc {
+                Reloc::X86CallPCRel4 => {
+                    (RelocationKind::Relative, RelocationEncoding::X86Branch, 32)
+                }
+                other => unimplemented!("Unimplemented relocation {:?}", other),
+            };
+            self.obj.add_relocation(
+                self.text_section,
+                ObjectRelocation {
+                    offset: off + u64::from(r.offset),
+                    size,
+                    kind,
+                    encoding,
+                    symbol,
+                    addend: r.addend,
+                },
+            )?;
+        }
+
+        // Finish up the text section now that we're done adding functions.
+        const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
+        let text = self.text.finish();
+        self.obj
+            .section_mut(self.text_section)
+            .set_data(text, CODE_SECTION_ALIGNMENT);
+
+        // With all functions added we can also emit the fully-formed unwinding
+        // information sections.
         if self.windows_unwind_info.len() > 0 {
             self.append_windows_unwind_info();
         }
         if self.systemv_unwind_info.len() > 0 {
-            self.append_systemv_unwind_info(isa);
-        }
-        Ok(())
-    }
-
-    fn append_relocations(&mut self) -> Result<()> {
-        for (off, relocations) in self.pending_relocations.iter() {
-            for r in relocations.iter() {
-                let (symbol, symbol_offset) = match r.reloc_target {
-                    RelocationTarget::UserFunc(index) => (self.func_symbols[index], 0),
-                    RelocationTarget::LibCall(call) => (self.libcalls[&call], 0),
-                    RelocationTarget::JumpTable(f, jt) => {
-                        let df = self.module.defined_func_index(f).unwrap();
-                        let offset = *self
-                            .jump_tables
-                            .get(df)
-                            .and_then(|t| t.get(jt))
-                            .expect("func jump table");
-                        (self.func_symbols[f], offset)
-                    }
-                };
-                let (kind, encoding, size) = match r.reloc {
-                    Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
-                    Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
-                    Reloc::X86PCRel4 => (RelocationKind::Relative, RelocationEncoding::Generic, 32),
-                    Reloc::X86CallPCRel4 => {
-                        (RelocationKind::Relative, RelocationEncoding::X86Branch, 32)
-                    }
-                    // TODO: Get Cranelift to tell us when we can use
-                    // R_X86_64_GOTPCRELX/R_X86_64_REX_GOTPCRELX.
-                    Reloc::X86CallPLTRel4 => (
-                        RelocationKind::PltRelative,
-                        RelocationEncoding::X86Branch,
-                        32,
-                    ),
-                    Reloc::X86GOTPCRel4 => {
-                        (RelocationKind::GotRelative, RelocationEncoding::Generic, 32)
-                    }
-                    Reloc::ElfX86_64TlsGd => (
-                        RelocationKind::Elf(elf::R_X86_64_TLSGD),
-                        RelocationEncoding::Generic,
-                        32,
-                    ),
-                    Reloc::X86PCRelRodata4 => {
-                        continue;
-                    }
-                    Reloc::Arm64Call => (
-                        RelocationKind::Elf(elf::R_AARCH64_CALL26),
-                        RelocationEncoding::Generic,
-                        32,
-                    ),
-                    Reloc::S390xPCRel32Dbl => {
-                        (RelocationKind::Relative, RelocationEncoding::S390xDbl, 32)
-                    }
-                    other => unimplemented!("Unimplemented relocation {:?}", other),
-                };
-                self.obj.add_relocation(
-                    self.text_section,
-                    ObjectRelocation {
-                        offset: off + r.offset as u64,
-                        size,
-                        kind,
-                        encoding,
-                        symbol,
-                        addend: r.addend.wrapping_add(symbol_offset as i64),
-                    },
-                )?;
-            }
+            self.append_systemv_unwind_info();
         }
         Ok(())
     }
@@ -437,14 +512,15 @@ impl<'a> ObjectBuilder<'a> {
     /// This allows `.eh_frame` to have different virtual memory permissions,
     /// such as being purely read-only instead of read/execute like the code
     /// bits.
-    fn append_systemv_unwind_info(&mut self, isa: &dyn TargetIsa) {
+    fn append_systemv_unwind_info(&mut self) {
         let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
         let section_id = self.obj.add_section(
             segment,
             b"_wasmtime_eh_frame".to_vec(),
             SectionKind::ReadOnlyData,
         );
-        let mut cie = isa
+        let mut cie = self
+            .isa
             .create_systemv_cie()
             .expect("must be able to create a CIE for system-v unwind info");
         let mut table = FrameTable::default();
@@ -465,7 +541,7 @@ impl<'a> ObjectBuilder<'a> {
             let fde = unwind_info.to_fde(Address::Constant(actual_offset as u64));
             table.add_fde(cie_id, fde);
         }
-        let endian = match isa.triple().endianness().unwrap() {
+        let endian = match self.isa.triple().endianness().unwrap() {
             target_lexicon::Endianness::Little => RunTimeEndian::Little,
             target_lexicon::Endianness::Big => RunTimeEndian::Big,
         };
@@ -524,5 +600,39 @@ impl<'a> ObjectBuilder<'a> {
                 self.write_eh_pointer_data(val, eh_pe.format(), size)
             }
         }
+    }
+}
+
+#[derive(Default)]
+struct DummyBuilder {
+    data: Vec<u8>,
+}
+
+impl TextSectionBuilder for DummyBuilder {
+    fn append(&mut self, _named: bool, func: &[u8], align: u32) -> u64 {
+        while self.data.len() % align as usize != 0 {
+            self.data.push(0);
+        }
+        let pos = self.data.len() as u64;
+        self.data.extend_from_slice(func);
+        pos
+    }
+
+    fn resolve_reloc(
+        &mut self,
+        _offset: u64,
+        _reloc: Reloc,
+        _addend: Addend,
+        _target: u32,
+    ) -> bool {
+        false
+    }
+
+    fn force_veneers(&mut self) {
+        // not implemented
+    }
+
+    fn finish(&mut self) -> Vec<u8> {
+        mem::take(&mut self.data)
     }
 }

@@ -2,7 +2,7 @@
 
 #![allow(dead_code)]
 
-use crate::binemit::CodeOffset;
+use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::types::{B1, B16, B32, B8, I16, I32, I8, IFLAGS};
 use crate::ir::{ExternalName, Opcode, TrapCode, Type};
 use crate::machinst::*;
@@ -1316,6 +1316,10 @@ impl MachInstLabelUse for LabelUse {
         _veneer_offset: CodeOffset,
     ) -> (CodeOffset, LabelUse) {
         panic!("Veneer not supported yet.")
+    }
+
+    fn from_reloc(_reloc: Reloc, _addend: Addend) -> Option<LabelUse> {
+        None
     }
 }
 
