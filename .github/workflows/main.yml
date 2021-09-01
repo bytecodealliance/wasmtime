@@ -80,7 +80,8 @@ jobs:
         cargo install --root ${{ runner.tool_cache }}/mdbook --version ${{ env.CARGO_MDBOOK_VERSION }} mdbook
     - run: (cd docs && mdbook build)
     - run: cargo build -p wasmtime-wasi --features wasmtime/wat,wasmtime/cranelift
-    - run: (cd docs && mdbook test -L ../target/debug/deps)
+    - run: (cd docs/rust_wasi_markdown_parser && cargo build)
+    - run: (cd docs && mdbook test -L ../target/debug/deps,./rust_wasi_markdown_parser/target/debug/deps)
 
     # Build Rust API documentation
     - run: |
