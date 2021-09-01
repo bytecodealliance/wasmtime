@@ -1,0 +1,49 @@
+test interpret
+
+function %isubbin_i8(i8, i8, b1) -> i8 {
+block0(v0: i8, v1: i8, v2: b1):
+    v3 = isub_bin v0, v1, v2
+    return v3
+}
+; run: %isubbin_i8(0, 1, true) == -2
+; run: %isubbin_i8(0, 1, false) == -1
+; run: %isubbin_i8(100, 20, true) == 79
+; run: %isubbin_i8(100, 20, false) == 80
+; run: %isubbin_i8(-128, 1, true) == 126
+; run: %isubbin_i8(-128, 1, false) == 127
+
+function %isubbin_i16(i16, i16, b1) -> i16 {
+block0(v0: i16, v1: i16, v2: b1):
+    v3 = isub_bin v0, v1, v2
+    return v3
+}
+; run: %isubbin_i16(0, 1, true) == -2
+; run: %isubbin_i16(0, 1, false) == -1
+; run: %isubbin_i16(100, 20, true) == 79
+; run: %isubbin_i16(100, 20, false) == 80
+; run: %isubbin_i16(-32768, 1, true) == 32766
+; run: %isubbin_i16(-32768, 1, false) == 32767
+
+function %isubbin_i32(i32, i32, b1) -> i32 {
+block0(v0: i32, v1: i32, v2: b1):
+    v3 = isub_bin v0, v1, v2
+    return v3
+}
+; run: %isubbin_i32(0, 1, true) == -2
+; run: %isubbin_i32(0, 1, false) == -1
+; run: %isubbin_i32(100, 20, true) == 79
+; run: %isubbin_i32(100, 20, false) == 80
+; run: %isubbin_i32(-2147483648, 1, true) == 2147483646
+; run: %isubbin_i32(-2147483648, 1, false) == 2147483647
+
+function %isubbin_i64(i64, i64, b1) -> i64 {
+block0(v0: i64, v1: i64, v2: b1):
+    v3 = isub_bin v0, v1, v2
+    return v3
+}
+; run: %isubbin_i64(0, 1, true) == -2
+; run: %isubbin_i64(0, 1, false) == -1
+; run: %isubbin_i64(100, 20, true) == 79
+; run: %isubbin_i64(100, 20, false) == 80
+; run: %isubbin_i64(-2147483648, 1, true) == -2147483650
+; run: %isubbin_i64(-2147483648, 1, false) == -2147483649

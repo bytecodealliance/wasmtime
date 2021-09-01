@@ -550,11 +550,28 @@ where
             assign_multiple(&[sum, Value::bool(carry, types::B1)?])
         }
         Opcode::IaddIfcarry => unimplemented!("IaddIfcarry"),
-        Opcode::IsubBin => unimplemented!("IsubBin"),
+        Opcode::IsubBin => choose(
+            Value::into_bool(arg(2)?)?,
+            Value::sub(arg(0)?, Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?)?,
+            Value::sub(arg(0)?, arg(1)?)?,
+        ),
         Opcode::IsubIfbin => unimplemented!("IsubIfbin"),
-        Opcode::IsubBout => unimplemented!("IsubBout"),
+        Opcode::IsubBout => {
+            let sum = Value::sub(arg(0)?, arg(1)?)?;
+            let borrow = Value::lt(&arg(0)?, &arg(1)?)?;
+            assign_multiple(&[sum, Value::bool(borrow, types::B1)?])
+        }
         Opcode::IsubIfbout => unimplemented!("IsubIfbout"),
-        Opcode::IsubBorrow => unimplemented!("IsubBorrow"),
+        Opcode::IsubBorrow => {
+            let rhs = if Value::into_bool(arg(2)?)? {
+                Value::add(arg(1)?, Value::int(1, ctrl_ty)?)?
+            } else {
+                arg(1)?
+            };
+            let borrow = Value::lt(&arg(0)?, &rhs)?;
+            let sum = Value::sub(arg(0)?, rhs)?;
+            assign_multiple(&[sum, Value::bool(borrow, types::B1)?])
+        }
         Opcode::IsubIfborrow => unimplemented!("IsubIfborrow"),
         Opcode::Band => binary(Value::and, arg(0)?, arg(1)?)?,
         Opcode::Bor => binary(Value::or, arg(0)?, arg(1)?)?,
