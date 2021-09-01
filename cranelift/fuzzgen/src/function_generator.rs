@@ -8,6 +8,7 @@ use cranelift::codegen::ir::{
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use cranelift::prelude::{EntityRef, InstBuilder, IntCC};
+use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
 
@@ -112,6 +113,11 @@ where
         }
     }
 
+    /// Generates a random value for config `param`
+    fn param(&mut self, param: &RangeInclusive<usize>) -> Result<usize> {
+        Ok(self.u.int_in_range(param.clone())?)
+    }
+
     fn generate_callconv(&mut self) -> Result<CallConv> {
         // TODO: Generate random CallConvs per target
         Ok(CallConv::SystemV)
@@ -162,11 +168,11 @@ where
         let callconv = self.generate_callconv()?;
         let mut sig = Signature::new(callconv);
 
-        for _ in 0..self.u.int_in_range(self.config.signature_params.clone())? {
+        for _ in 0..self.param(&self.config.signature_params)? {
             sig.params.push(self.generate_abi_param()?);
         }
 
-        for _ in 0..self.u.int_in_range(self.config.signature_rets.clone())? {
+        for _ in 0..self.param(&self.config.signature_rets)? {
             sig.returns.push(self.generate_abi_param()?);
         }
 
@@ -324,10 +330,7 @@ where
 
     /// Fills the current block with random instructions
     fn generate_instructions(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        for _ in 0..self
-            .u
-            .int_in_range(self.config.instructions_per_block.clone())?
-        {
+        for _ in 0..self.param(&self.config.instructions_per_block)? {
             let (op, args, rets, inserter) = *self.u.choose(OPCODE_SIGNATURES)?;
             inserter(self, builder, op, args, rets)?;
         }
@@ -341,9 +344,7 @@ where
         builder: &mut FunctionBuilder,
         sig: &Signature,
     ) -> Result<Vec<(Block, BlockSignature)>> {
-        let extra_block_count = self
-            .u
-            .int_in_range(self.config.blocks_per_function.clone())?;
+        let extra_block_count = self.param(&self.config.blocks_per_function)?;
 
         // We must always have at least one block, so we generate the "extra" blocks and add 1 for
         // the entry block.
@@ -372,9 +373,7 @@ where
     }
 
     fn generate_block_signature(&mut self) -> Result<BlockSignature> {
-        let param_count = self
-            .u
-            .int_in_range(self.config.block_signature_params.clone())?;
+        let param_count = self.param(&self.config.block_signature_params)?;
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
@@ -395,7 +394,7 @@ where
         }
 
         // Create a pool of vars that are going to be used in this function
-        for _ in 0..self.u.int_in_range(self.config.vars_per_function.clone())? {
+        for _ in 0..self.param(&self.config.vars_per_function)? {
             let ty = self.generate_type()?;
             let var = self.create_var(builder, ty)?;
             let value = self.generate_const(builder, ty)?;
