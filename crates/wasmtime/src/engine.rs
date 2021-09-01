@@ -148,7 +148,8 @@ impl Engine {
         let bytes = wat::parse_bytes(&bytes)?;
         let (_, artifacts, types) = crate::Module::build_artifacts(self, &bytes)?;
         let artifacts = artifacts.into_iter().map(|i| i.0).collect::<Vec<_>>();
-        crate::module::SerializedModule::from_artifacts(self, &artifacts, &types).to_bytes()
+        crate::module::SerializedModule::from_artifacts(self, &artifacts, &types)
+            .to_bytes(&self.config().module_version)
     }
 
     pub(crate) fn run_maybe_parallel<

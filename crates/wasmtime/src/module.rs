@@ -316,12 +316,12 @@ impl Module {
                             engine.0,
                             artifacts.iter().map(|p| &p.0),
                             types,
-                        ).to_bytes().ok()
+                        ).to_bytes(&engine.0.config().module_version).ok()
                     },
 
                     // Cache hit, deserialize the provided artifacts
                     |(engine, _wasm), serialized_bytes| {
-                        let (i, m, t, upvars) = SerializedModule::from_bytes(&serialized_bytes, true)
+                        let (i, m, t, upvars) = SerializedModule::from_bytes(&serialized_bytes, &engine.0.config().module_version)
                             .ok()?
                             .into_parts(engine.0)
                             .ok()?;
@@ -467,10 +467,7 @@ impl Module {
     /// blobs across versions of wasmtime you can be safely guaranteed that
     /// future versions of wasmtime will reject old cache entries).
     pub unsafe fn deserialize(engine: &Engine, bytes: impl AsRef<[u8]>) -> Result<Module> {
-        let module = SerializedModule::from_bytes(
-            bytes.as_ref(),
-            engine.config().deserialize_check_wasmtime_version,
-        )?;
+        let module = SerializedModule::from_bytes(bytes.as_ref(), &engine.config().module_version)?;
         module.into_module(engine)
     }
 
@@ -486,10 +483,7 @@ impl Module {
     ///
     /// [`deserialize`]: Module::deserialize
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
-        let module = SerializedModule::from_file(
-            path.as_ref(),
-            engine.config().deserialize_check_wasmtime_version,
-        )?;
+        let module = SerializedModule::from_file(path.as_ref(), &engine.config().module_version)?;
         module.into_module(engine)
     }
 
@@ -625,7 +619,7 @@ impl Module {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
-        SerializedModule::new(self).to_bytes()
+        SerializedModule::new(self).to_bytes(&self.inner.engine.config().module_version)
     }
 
     /// Creates a submodule `Module` value from the specified parameters.

@@ -48,7 +48,7 @@
 //!
 //! This format is implemented by the `to_bytes` and `from_mmap` function.
 
-use crate::{Engine, Module};
+use crate::{Engine, Module, ModuleVersionStrategy};
 use anyhow::{anyhow, bail, Context, Result};
 use object::read::elf::FileHeader;
 use object::{Bytes, File, Object, ObjectSection};
@@ -325,7 +325,7 @@ impl<'a> SerializedModule<'a> {
         ))
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>> {
+    pub fn to_bytes(&self, version_strat: &ModuleVersionStrategy) -> Result<Vec<u8>> {
         // First up, create a linked-ish list of ELF files. For more
         // information on this format, see the doc comment on this module.
         // The only semi-tricky bit here is that we leave an
@@ -352,7 +352,12 @@ impl<'a> SerializedModule<'a> {
         // The last part of our artifact is the bincode-encoded `Metadata`
         // section with a few other guards to help give better error messages.
         ret.extend_from_slice(HEADER);
-        let version = env!("CARGO_PKG_VERSION");
+        let version = match version_strat {
+            ModuleVersionStrategy::WasmtimeVersion => env!("CARGO_PKG_VERSION"),
+            ModuleVersionStrategy::Custom(c) => &c,
+            ModuleVersionStrategy::None => "",
+        };
+        // This precondition is checked in Config::module_version:
         assert!(
             version.len() < 256,
             "package version must be less than 256 bytes"
@@ -364,20 +369,20 @@ impl<'a> SerializedModule<'a> {
         Ok(ret)
     }
 
-    pub fn from_bytes(bytes: &[u8], check_version: bool) -> Result<Self> {
-        Self::from_mmap(MmapVec::from_slice(bytes)?, check_version)
+    pub fn from_bytes(bytes: &[u8], version_strat: &ModuleVersionStrategy) -> Result<Self> {
+        Self::from_mmap(MmapVec::from_slice(bytes)?, version_strat)
     }
 
-    pub fn from_file(path: &Path, check_version: bool) -> Result<Self> {
+    pub fn from_file(path: &Path, version_strat: &ModuleVersionStrategy) -> Result<Self> {
         Self::from_mmap(
             MmapVec::from_file(path).with_context(|| {
                 format!("failed to create file mapping for: {}", path.display())
             })?,
-            check_version,
+            version_strat,
         )
     }
 
-    pub fn from_mmap(mut mmap: MmapVec, check_version: bool) -> Result<Self> {
+    pub fn from_mmap(mut mmap: MmapVec, version_strat: &ModuleVersionStrategy) -> Result<Self> {
         // Artifacts always start with an ELF file, so read that first.
         // Afterwards we continually read ELF files until we see the `u64::MAX`
         // marker, meaning we've reached the end.
@@ -419,14 +424,26 @@ impl<'a> SerializedModule<'a> {
             bail!("serialized data is malformed");
         }
 
-        if check_version {
-            let version = std::str::from_utf8(&metadata[1..1 + version_len])?;
-            if version != env!("CARGO_PKG_VERSION") {
-                bail!(
-                    "Module was compiled with incompatible Wasmtime version '{}'",
-                    version
-                );
+        match version_strat {
+            ModuleVersionStrategy::WasmtimeVersion => {
+                let version = std::str::from_utf8(&metadata[1..1 + version_len])?;
+                if version != env!("CARGO_PKG_VERSION") {
+                    bail!(
+                        "Module was compiled with incompatible Wasmtime version '{}'",
+                        version
+                    );
+                }
             }
+            ModuleVersionStrategy::Custom(v) => {
+                let version = std::str::from_utf8(&metadata[1..1 + version_len])?;
+                if version != v {
+                    bail!(
+                        "Module was compiled with incompatible version '{}'",
+                        version
+                    );
+                }
+            }
+            ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
         }
 
         let metadata = bincode::deserialize::<Metadata>(&metadata[1 + version_len..])
