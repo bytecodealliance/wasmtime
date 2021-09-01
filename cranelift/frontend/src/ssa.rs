@@ -8,6 +8,7 @@
 //! <https://link.springer.com/content/pdf/10.1007/978-3-642-37051-9_6.pdf>
 
 use crate::Variable;
+use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 use core::convert::TryInto;
 use core::mem;
@@ -271,18 +272,58 @@ impl SSABuilder {
         (value, side_effects)
     }
 
+    /// There are two conditions for being able to optimize the lookup of a non local var:
+    ///  * The block must have a single predecessor
+    ///  * The block cannot be part of a predecessor loop
+    ///
+    /// To check for these conditions we perform a graph search over block predecessors
+    /// marking visited blocks and aborting if we find a previously seen block.
+    /// We stop the search if we find a block with multiple predecessors since the
+    /// original algorithm can handle these cases.
+    fn can_optimize_var_lookup(&self, block: Block) -> bool {
+        // Check that the initial block only has one predecessor. This is only a requirement
+        // for the first block.
+        if self.predecessors(block).len() != 1 {
+            return false;
+        }
+
+        let mut visited = BTreeSet::new();
+        let mut current = block;
+        loop {
+            let predecessors = self.predecessors(current);
+
+            // We haven't found the original block and we have either reached the entry
+            // block, or we found the end of this line of dead blocks, either way we are
+            // safe to optimize this line of lookups.
+            if predecessors.len() == 0 {
+                return true;
+            }
+
+            // We can stop the search here, the algorithm can handle these cases, even if they are
+            // in an undefined island.
+            if predecessors.len() > 1 {
+                return true;
+            }
+
+            if visited.contains(&current) {
+                return false;
+            }
+            visited.insert(current);
+            current = predecessors[0].block;
+        }
+    }
+
     /// Resolve the minimal SSA Value of `var` in `block` by traversing predecessors.
     ///
     /// This function sets up state for `run_state_machine()` but does not execute it.
     fn use_var_nonlocal(&mut self, func: &mut Function, var: Variable, ty: Type, block: Block) {
         // This function is split into two parts to appease the borrow checker.
         // Part 1: With a mutable borrow of self, update the DataFlowGraph if necessary.
+        let optimize_var_lookup = self.can_optimize_var_lookup(block);
         let data = &mut self.ssa_blocks[block];
         let case = if data.sealed {
-            // The block has multiple predecessors so we append a Block parameter that
-            // will serve as a value.
-            if data.predecessors.len() == 1 {
-                // Optimize the common case of one predecessor: no param needed.
+            // Optimize the common case of one predecessor: no param needed.
+            if optimize_var_lookup {
                 UseVarCases::SealedOnePredecessor(data.predecessors[0].block)
             } else {
                 // Break potential cycles by eagerly adding an operandless param.
@@ -1362,5 +1403,67 @@ mod tests {
                 panic!("function failed to verify");
             }
         }
+    }
+
+    #[test]
+    fn reassign_with_predecessor_loop_hangs() {
+        // Here is the pseudo-program we want to translate:
+        // block0:
+        //    var0 = iconst 0
+        //    return;
+        // block1:
+        //    jump block2;
+        // block2:
+        //    ; phantom use of var0
+        //    var0 = iconst 1
+        //    jump block1;
+
+        let mut func = Function::new();
+        let mut ssa = SSABuilder::new();
+        let block0 = func.dfg.make_block();
+        let block1 = func.dfg.make_block();
+        let block2 = func.dfg.make_block();
+        let var0 = Variable::new(0);
+
+        {
+            let mut cur = FuncCursor::new(&mut func);
+            for block in [block0, block1, block2] {
+                cur.insert_block(block);
+                ssa.declare_block(block);
+            }
+        }
+
+        // block0
+        {
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
+
+            let var0_iconst = cur.ins().iconst(I32, 0);
+            ssa.def_var(var0, var0_iconst, block0);
+
+            cur.ins().return_(&[]);
+        }
+
+        // block1
+        {
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block1);
+
+            let jump = cur.ins().jump(block2, &[]);
+            ssa.declare_block_predecessor(block2, block1, jump);
+        }
+
+        // block2
+        {
+            let mut cur = FuncCursor::new(&mut func).at_bottom(block2);
+
+            let _ = ssa.use_var(&mut cur.func, var0, I32, block2).0;
+            let var0_iconst = cur.ins().iconst(I32, 1);
+            ssa.def_var(var0, var0_iconst, block2);
+
+            let jump = cur.ins().jump(block1, &[]);
+            ssa.declare_block_predecessor(block1, block1, jump);
+        }
+
+        // The sealing algorithm would enter a infinite loop here
+        ssa.seal_all_blocks(&mut func);
     }
 }
