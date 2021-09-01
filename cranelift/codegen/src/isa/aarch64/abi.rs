@@ -619,9 +619,8 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
+    fn gen_debug_frame_info(flags: &settings::Flags) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::Aarch64SetPointerAuth {
@@ -629,6 +628,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 },
             });
         }
+        insts
+    }
+
+    fn gen_prologue_frame_setup(flags: &settings::Flags) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::new();
 
         // stp fp (x29), lr (x30), [sp, #-16]!
         insts.push(Inst::StoreP64 {
