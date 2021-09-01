@@ -1,4 +1,4 @@
-use crate::config::{AsyncConf, ErrorConf};
+use crate::config::{AsyncConf, ErrorConf, SkipNames};
 use anyhow::{anyhow, Error};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -12,6 +12,7 @@ pub struct CodegenSettings {
     pub errors: ErrorTransform,
     pub async_: AsyncConf,
     pub wasmtime: bool,
+    pub skip_names: SkipNames,
 }
 impl CodegenSettings {
     pub fn new(
@@ -19,12 +20,14 @@ impl CodegenSettings {
         async_: &AsyncConf,
         doc: &Document,
         wasmtime: bool,
+        skip_names: &SkipNames,
     ) -> Result<Self, Error> {
         let errors = ErrorTransform::new(error_conf, doc)?;
         Ok(Self {
             errors,
             async_: async_.clone(),
             wasmtime,
+            skip_names: skip_names.clone(),
         })
     }
     pub fn get_async(&self, module: &Module, func: &InterfaceFunc) -> Asyncness {

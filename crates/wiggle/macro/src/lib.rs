@@ -41,6 +41,9 @@ use syn::parse_macro_input;
 ///   WebAssembly execution by trapping.
 /// * Optional: `async` takes a set of witx modules and functions which are
 ///   made Rust `async` functions in the module trait.
+/// * Optional: `skip` takes a list of function names and skips them when
+///   generating code; this can be helpful when attempting to use Wiggle
+///   alongside raw implementions of a witx interface.
 ///
 /// ## Example
 ///
@@ -153,6 +156,7 @@ pub fn from_witx(args: TokenStream) -> TokenStream {
         &config.async_,
         &doc,
         cfg!(feature = "wasmtime") && config.wasmtime,
+        &config.skip,
     )
     .expect("validating codegen settings");
 
@@ -195,6 +199,7 @@ pub fn wasmtime_integration(args: TokenStream) -> TokenStream {
         &config.c.async_,
         &doc,
         cfg!(feature = "wasmtime"),
+        &config.c.skip,
     )
     .expect("validating codegen settings");
 

@@ -54,6 +54,7 @@ pub fn generate(doc: &witx::Document, names: &Names, settings: &CodegenSettings)
         let modname = names.module(&module.name);
         let fs = module
             .funcs()
+            .filter(|f| !settings.skip_names.should_skip(f))
             .map(|f| define_func(&names, &module, &f, &settings));
         let modtrait = define_module_trait(&names, &module, &settings);
         let wasmtime = if settings.wasmtime {

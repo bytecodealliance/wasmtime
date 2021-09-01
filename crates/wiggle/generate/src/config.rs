@@ -15,6 +15,7 @@ pub struct Config {
     pub errors: ErrorConf,
     pub async_: AsyncConf,
     pub wasmtime: bool,
+    pub skip: SkipNames,
 }
 
 mod kw {
@@ -22,6 +23,7 @@ mod kw {
     syn::custom_keyword!(witx_literal);
     syn::custom_keyword!(block_on);
     syn::custom_keyword!(errors);
+    syn::custom_keyword!(skip);
     syn::custom_keyword!(target);
     syn::custom_keyword!(wasmtime);
 }
@@ -32,6 +34,7 @@ pub enum ConfigField {
     Error(ErrorConf),
     Async(AsyncConf),
     Wasmtime(bool),
+    Skip(SkipNames),
 }
 
 impl Parse for ConfigField {
@@ -67,6 +70,10 @@ impl Parse for ConfigField {
             input.parse::<kw::wasmtime>()?;
             input.parse::<Token![:]>()?;
             Ok(ConfigField::Wasmtime(input.parse::<syn::LitBool>()?.value))
+        } else if lookahead.peek(kw::skip) {
+            input.parse::<kw::skip>()?;
+            input.parse::<Token![:]>()?;
+            Ok(ConfigField::Skip(input.parse()?))
         } else {
             Err(lookahead.error())
         }
@@ -79,6 +86,7 @@ impl Config {
         let mut errors = None;
         let mut async_ = None;
         let mut wasmtime = None;
+        let mut skip = None;
         for f in fields {
             match f {
                 ConfigField::Witx(c) => {
@@ -105,6 +113,12 @@ impl Config {
                     }
                     wasmtime = Some(c);
                 }
+                ConfigField::Skip(c) => {
+                    if skip.is_some() {
+                        return Err(Error::new(err_loc, "duplicate `skip` field"));
+                    }
+                    skip = Some(c);
+                }
             }
         }
         Ok(Config {
@@ -114,6 +128,7 @@ impl Config {
             errors: errors.take().unwrap_or_default(),
             async_: async_.take().unwrap_or_default(),
             wasmtime: wasmtime.unwrap_or(true),
+            skip: skip.unwrap_or_default(),
         })
     }
 
@@ -548,5 +563,27 @@ impl Parse for WasmtimeConfigField {
         } else {
             Err(lookahead.error())
         }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct SkipNames(Vec<String>);
+impl Parse for SkipNames {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        let _ = bracketed!(content in input);
+        let name_literals: Punctuated<LitStr, Token![,]> =
+            content.parse_terminated(Parse::parse)?;
+        let names = name_literals
+            .iter()
+            .map(LitStr::value)
+            .collect::<Vec<String>>();
+
+        Ok(SkipNames(names))
+    }
+}
+impl SkipNames {
+    pub fn should_skip(&self, func: &witx::InterfaceFunc) -> bool {
+        self.0.iter().any(|n| n.as_str() == func.name)
     }
 }

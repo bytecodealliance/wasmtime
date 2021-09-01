@@ -21,7 +21,10 @@ pub fn link_module(
 
     let mut bodies = Vec::new();
     let mut bounds = HashSet::new();
-    for f in module.funcs() {
+    for f in module
+        .funcs()
+        .filter(|f| !settings.skip_names.should_skip(f))
+    {
         let asyncness = settings.async_.get(module.name.as_str(), f.name.as_str());
         bodies.push(generate_func(&module, &f, names, target_path, asyncness));
         let bound = func_bounds(names, module, &f, settings);
