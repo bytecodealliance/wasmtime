@@ -425,11 +425,10 @@ impl<'a> ObjectBuilder<'a> {
         }
 
         // Finish up the text section now that we're done adding functions.
-        const CODE_SECTION_ALIGNMENT: u64 = 0x1000;
         let text = self.text.finish();
         self.obj
             .section_mut(self.text_section)
-            .set_data(text, CODE_SECTION_ALIGNMENT);
+            .set_data(text, self.isa.code_section_alignment());
 
         // With all functions added we can also emit the fully-formed unwinding
         // information sections.
@@ -457,7 +456,8 @@ impl<'a> ObjectBuilder<'a> {
 
         // Page-align the text section so the unwind info can reside on a
         // separate page that doesn't need executable permissions.
-        self.obj.append_section_data(self.text_section, &[], 0x1000);
+        self.obj
+            .append_section_data(self.text_section, &[], self.isa.code_section_alignment());
 
         let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
         let section_id = self.obj.add_section(
@@ -527,10 +527,12 @@ impl<'a> ObjectBuilder<'a> {
         cie.fde_address_encoding = gimli::constants::DW_EH_PE_pcrel;
         let cie_id = table.add_cie(cie);
 
-        // This write will align the text section to a page boundary (0x1000)
+        // This write will align the text section to a page boundary
         // and then return the offset at that point. This gives us the full size
         // of the text section at that point, after alignment.
-        let text_section_size = self.obj.append_section_data(self.text_section, &[], 0x1000);
+        let text_section_size =
+            self.obj
+                .append_section_data(self.text_section, &[], self.isa.code_section_alignment());
         for (text_section_off, unwind_info) in self.systemv_unwind_info.iter() {
             let backwards_off = text_section_size - text_section_off;
             let actual_offset = -i64::try_from(backwards_off).unwrap();
