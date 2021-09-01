@@ -1073,11 +1073,11 @@ impl<I: VCodeInst> MachBuffer<I> {
         self.worst_case_end_of_island(distance) > self.island_deadline
     }
 
-    /// Returns the maximal offset that islands can be reach if `distance` more
+    /// Returns the maximal offset that islands can reach if `distance` more
     /// bytes are appended.
     ///
     /// This is used to determine if veneers need insertions since jumps that
-    /// can't reach past this point must get a veneer of some form
+    /// can't reach past this point must get a veneer of some form.
     fn worst_case_end_of_island(&self, distance: CodeOffset) -> CodeOffset {
         self.cur_offset()
             .saturating_add(distance)
@@ -1130,7 +1130,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             if label_offset != UNKNOWN_LABEL_OFFSET {
                 // If the offset of the label for this fixup is known then
                 // we're going to do something here-and-now. We're either going
-                // to patch the original offset because it's in in-bounds jump,
+                // to patch the original offset because it's an in-bounds jump,
                 // or we're going to generate a veneer, patch the fixup to jump
                 // to the veneer, and then keep going.
                 //
@@ -1275,7 +1275,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         addend: Addend,
     ) {
         let name = name.clone();
-        // FIXME: This should use `I::LabelUse::from_reloc` to optionally
+        // FIXME(#3277): This should use `I::LabelUse::from_reloc` to optionally
         // generate a label-use statement to track whether an island is possibly
         // needed to escape this function to actually get to the external name.
         // This is most likely to come up on AArch64 where calls between
