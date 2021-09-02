@@ -745,7 +745,7 @@ where
         Opcode::Fence => unimplemented!("Fence"),
         Opcode::WideningPairwiseDotProductS => unimplemented!("WideningPairwiseDotProductS"),
         Opcode::SqmulRoundSat => unimplemented!("SqmulRoundSat"),
-        Opcode::IaddPairwise => unimplemented!("IaddPairwise"),
+        Opcode::IaddPairwise => assign(binary_pairwise(arg(0)?, arg(1)?, ctrl_ty, Value::add)?),
 
         // TODO: these instructions should be removed once the new backend makes these obsolete
         // (see https://github.com/bytecodealliance/wasmtime/issues/1936); additionally, the
@@ -992,6 +992,27 @@ where
             lhs = lhs.convert(ValueConversionKind::ToUnsigned)?;
             rhs = rhs.convert(ValueConversionKind::ToUnsigned)?;
         }
+        let sum = op(lhs, rhs)?;
+        let sum = sum.into_int()?;
+        result.push(sum);
+    }
+    vectorizelanes(&result, vector_type)
+}
+
+/// Performs the supplied pairwise arithmetic `op` on two SIMD vectors, where
+/// pairs are formed from adjacent vector elements and the vectors are
+/// concatenated at the end.
+fn binary_pairwise<V, F>(x: V, y: V, vector_type: types::Type, op: F) -> ValueResult<V>
+where
+    V: Value,
+    F: Fn(V, V) -> ValueResult<V>,
+{
+    let arg0 = extractlanes(&x, vector_type.lane_type())?;
+    let arg1 = extractlanes(&y, vector_type.lane_type())?;
+    let mut result = SimdVec::new();
+    for pair in arg0.chunks(2).chain(arg1.chunks(2)) {
+        let lhs: V = Value::int(pair[0], vector_type.lane_type())?;
+        let rhs: V = Value::int(pair[1], vector_type.lane_type())?;
         let sum = op(lhs, rhs)?;
         let sum = sum.into_int()?;
         result.push(sum);
