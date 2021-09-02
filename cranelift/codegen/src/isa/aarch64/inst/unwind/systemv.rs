@@ -143,7 +143,10 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{:?}", fde), "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [] }");
+        assert_eq!(
+            format!("{:?}", fde),
+            "FrameDescriptionEntry { address: Constant(4321), length: 16, lsda: None, instructions: [(0, ValExpression(Register(34), Expression { operations: [Simple(DwOp(48))] }))] }"
+        );
     }
 
     fn create_multi_return_function(call_conv: CallConv) -> Function {

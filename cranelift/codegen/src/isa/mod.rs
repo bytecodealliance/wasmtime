@@ -314,6 +314,21 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         }
     }
 
+    /// Returns the code (text) section alignment for this ISA.
+    fn code_section_alignment(&self) -> u64 {
+        use target_lexicon::*;
+        match (self.triple().operating_system, self.triple().architecture) {
+            (
+                OperatingSystem::MacOSX { .. }
+                | OperatingSystem::Darwin
+                | OperatingSystem::Ios
+                | OperatingSystem::Tvos,
+                Architecture::Aarch64(..),
+            ) => 0x4000,
+            _ => 0x1000,
+        }
+    }
+
     /// Get the pointer type of this ISA.
     fn pointer_type(&self) -> ir::Type {
         ir::Type::int(u16::from(self.pointer_bits())).unwrap()

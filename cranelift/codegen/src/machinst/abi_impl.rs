@@ -417,6 +417,13 @@ pub trait ABIMachineSpec {
     /// Generate a meta-instruction that adjusts the nominal SP offset.
     fn gen_nominal_sp_adj(amount: i32) -> Self::I;
 
+    /// Generates extra unwind instructions for a new frame  for this
+    /// architecture, whether the frame has a prologue sequence or not.
+    fn gen_debug_frame_info(_flags: &settings::Flags) -> SmallInstVec<Self::I> {
+        // By default, generates nothing.
+        smallvec![]
+    }
+
     /// Generate the usual frame-setup sequence for this architecture: e.g.,
     /// `push rbp / mov rbp, rsp` on x86-64, or `stp fp, lr, [sp, #-16]!` on
     /// AArch64.
@@ -1288,6 +1295,8 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 clobbered_callee_saves.len(),
                 self.fixed_frame_storage_size,
             );
+
+            insts.extend(M::gen_debug_frame_info(&self.flags).into_iter());
 
             if self.setup_frame {
                 // set up frame

@@ -86,6 +86,7 @@ FUNCTION(wasmtime_fiber_start):
         0x06,            /* DW_OP_deref */ \
         0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
 
+    .cfi_rel_offset x29, -0x08
     .cfi_rel_offset lr, -0x10
     .cfi_rel_offset x19, -0x18
     .cfi_rel_offset x20, -0x20
@@ -96,7 +97,6 @@ FUNCTION(wasmtime_fiber_start):
     .cfi_rel_offset x25, -0x48
     .cfi_rel_offset x26, -0x50
     .cfi_rel_offset x27, -0x58
-    .cfi_rel_offset x29, -0x60
 
     // Load our two arguments from the stack, where x1 is our start procedure
     // and x0 is its first argument. This also blows away the stack space used
