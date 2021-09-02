@@ -7202,8 +7202,15 @@ impl LowerBackend for X64Backend {
 
                 Opcode::BrTable => {
                     let jt_size = targets.len() - 1;
-                    assert!(jt_size <= u32::max_value() as usize);
+                    assert!(jt_size <= u32::MAX as usize);
                     let jt_size = jt_size as u32;
+
+                    let ty = ctx.input_ty(branches[0], 0);
+                    let ext_spec = match ty {
+                        types::I128 => panic!("BrTable unimplemented for I128"),
+                        types::I64 => ExtSpec::ZeroExtendTo64,
+                        _ => ExtSpec::ZeroExtendTo32,
+                    };
 
                     let idx = extend_input_to_reg(
                         ctx,
@@ -7211,15 +7218,18 @@ impl LowerBackend for X64Backend {
                             insn: branches[0],
                             input: 0,
                         },
-                        ExtSpec::ZeroExtendTo32,
+                        ext_spec,
                     );
 
                     // Bounds-check (compute flags from idx - jt_size) and branch to default.
-                    ctx.emit(Inst::cmp_rmi_r(
-                        OperandSize::Size32,
-                        RegMemImm::imm(jt_size),
-                        idx,
-                    ));
+                    // We only support u32::MAX entries, but we compare the full 64 bit register
+                    // when doing the bounds check.
+                    let cmp_size = if ty == types::I64 {
+                        OperandSize::Size64
+                    } else {
+                        OperandSize::Size32
+                    };
+                    ctx.emit(Inst::cmp_rmi_r(cmp_size, RegMemImm::imm(jt_size), idx));
 
                     // Emit the compound instruction that does:
                     //
