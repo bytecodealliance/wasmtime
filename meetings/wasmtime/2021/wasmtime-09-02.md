@@ -11,6 +11,7 @@
 1. Announcements
     1. _Sumbit a PR to add your announcement here_
 1. Other agenda items
+    1. Improvements to precompiled module load times (Alex, 5-10 min)
     1. _Sumbit a PR to add your item here_
 
 ## Notes
