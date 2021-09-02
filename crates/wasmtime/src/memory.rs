@@ -220,10 +220,10 @@ impl Memory {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
-        Memory::_new(&mut store.as_context_mut().opaque(), ty)
+        Memory::_new(store.as_context_mut().0, ty)
     }
 
-    fn _new(store: &mut StoreOpaque<'_>, ty: MemoryType) -> Result<Memory> {
+    fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
         unsafe {
             let export = generate_memory_export(store, &ty)?;
             Ok(Memory::from_wasmtime_memory(export, store))
@@ -450,10 +450,10 @@ impl Memory {
     /// # }
     /// ```
     pub fn grow(&self, mut store: impl AsContextMut, delta: u64) -> Result<u64> {
-        let mem = self.wasmtime_memory(&mut store.as_context_mut().opaque());
-        let store = store.as_context_mut();
+        let store = store.as_context_mut().0;
+        let mem = self.wasmtime_memory(store);
         unsafe {
-            match (*mem).grow(delta, store.0.limiter()) {
+            match (*mem).grow(delta, store.limiter()) {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
                     *store[self.0].definition = vm;
@@ -464,7 +464,7 @@ impl Memory {
         }
     }
 
-    fn wasmtime_memory(&self, store: &mut StoreOpaque<'_>) -> *mut wasmtime_runtime::Memory {
+    fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut wasmtime_runtime::Memory {
         unsafe {
             let export = &store[self.0];
             let mut handle = wasmtime_runtime::InstanceHandle::from_vmctx(export.vmctx);
@@ -484,7 +484,7 @@ impl Memory {
         &store[self.0].memory.memory
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque<'_>) -> wasmtime_runtime::VMMemoryImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMMemoryImport {
         let export = &store[self.0];
         wasmtime_runtime::VMMemoryImport {
             from: export.definition,

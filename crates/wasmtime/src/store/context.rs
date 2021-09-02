@@ -1,5 +1,4 @@
-use crate::store::{Store, StoreInner, StoreInnermost};
-use std::ops::{Deref, DerefMut};
+use crate::store::{Store, StoreInner};
 
 /// A temporary handle to a [`&Store<T>`][`Store`].
 ///
@@ -36,27 +35,6 @@ impl<'a, T> StoreContextMut<'a, T> {
         store: *mut dyn wasmtime_runtime::Store,
     ) -> StoreContextMut<'a, T> {
         StoreContextMut(&mut *(store as *mut StoreInner<T>))
-    }
-
-    /// A helper method to erase the `T` on `Self` so the returned type has no
-    /// generics. For some more information see [`StoreOpaque`] itself.
-    ///
-    /// The primary purpose of this is to help improve compile times where
-    /// non-generic code can be compiled into libwasmtime.rlib.
-    pub(crate) fn opaque(mut self) -> StoreOpaque<'a> {
-        StoreOpaque {
-            traitobj: self.traitobj(),
-            inner: self.0,
-        }
-    }
-
-    fn traitobj(&mut self) -> *mut dyn wasmtime_runtime::Store {
-        unsafe {
-            std::mem::transmute::<
-                *mut (dyn wasmtime_runtime::Store + '_),
-                *mut (dyn wasmtime_runtime::Store + 'static),
-            >(self.0)
-        }
     }
 }
 
@@ -183,6 +161,33 @@ impl<T> AsContextMut for StoreContextMut<'_, T> {
     }
 }
 
+// Implementations for internal consumers, but these aren't public types so
+// they're not publicly accessible for crate consumers.
+impl<T> AsContext for &'_ StoreInner<T> {
+    type Data = T;
+
+    #[inline]
+    fn as_context(&self) -> StoreContext<'_, T> {
+        StoreContext(self)
+    }
+}
+
+impl<T> AsContext for &'_ mut StoreInner<T> {
+    type Data = T;
+
+    #[inline]
+    fn as_context(&self) -> StoreContext<'_, T> {
+        StoreContext(self)
+    }
+}
+
+impl<T> AsContextMut for &'_ mut StoreInner<T> {
+    #[inline]
+    fn as_context_mut(&mut self) -> StoreContextMut<'_, T> {
+        StoreContextMut(&mut **self)
+    }
+}
+
 // forward AsContext for &T
 impl<T: AsContext> AsContext for &'_ T {
     type Data = T::Data;
@@ -227,48 +232,5 @@ impl<'a, T: AsContext> From<&'a mut T> for StoreContext<'a, T::Data> {
 impl<'a, T: AsContextMut> From<&'a mut T> for StoreContextMut<'a, T::Data> {
     fn from(t: &'a mut T) -> StoreContextMut<'a, T::Data> {
         t.as_context_mut()
-    }
-}
-
-/// This structure is akin to a `StoreContextMut` except that the `T` is
-/// "erased" to an opaque type.
-///
-/// This structure is used pervasively through wasmtime whenever the `T` isn't
-/// needed (quite common!). This allows the compiler to erase generics and
-/// compile more code in the wasmtime crate itself instead of monomorphizing
-/// everything into consumer crates. The primary purpose of this is to help
-/// compile times.
-#[doc(hidden)] // this is part of `WasmTy`, but a hidden part, so hide this
-pub struct StoreOpaque<'a> {
-    /// The actual pointer to the `StoreInner` internals.
-    inner: &'a mut StoreInnermost,
-
-    /// A raw trait object that can be used to invoke functions with. Note that
-    /// this is a pointer which aliases with `inner` above, so extreme care
-    /// needs to be used when using this (the above `inner` cannot be actively
-    /// borrowed).
-    pub traitobj: *mut dyn wasmtime_runtime::Store,
-}
-
-impl<'a> StoreOpaque<'a> {
-    pub fn into_inner(self) -> &'a StoreInnermost {
-        self.inner
-    }
-}
-
-// Deref impls to forward all methods on `StoreOpaque` to `StoreInner`.
-impl<'a> Deref for StoreOpaque<'a> {
-    type Target = StoreInnermost;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &*self.inner
-    }
-}
-
-impl<'a> DerefMut for StoreOpaque<'a> {
-    #[inline]
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut *self.inner
     }
 }

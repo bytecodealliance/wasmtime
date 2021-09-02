@@ -118,7 +118,7 @@ where
         // Validate that all runtime values flowing into this store indeed
         // belong within this store, otherwise it would be unsafe for store
         // values to cross each other.
-        let params = match params.into_abi(&mut store.as_context_mut().opaque()) {
+        let params = match params.into_abi(store.0) {
             Some(abi) => abi,
             None => {
                 return Err(Trap::new(
@@ -154,10 +154,7 @@ where
         let (_, ret, _, returned) = captures;
         debug_assert_eq!(result.is_ok(), returned);
         result?;
-        Ok(Results::from_abi(
-            &mut store.as_context_mut().opaque(),
-            ret.assume_init(),
-        ))
+        Ok(Results::from_abi(store.0, ret.assume_init()))
     }
 }
 

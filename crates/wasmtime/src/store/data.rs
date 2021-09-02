@@ -158,7 +158,7 @@ where
 }
 
 // forward StoreOpaque => StoreData
-impl<I> Index<I> for StoreOpaque<'_>
+impl<I> Index<I> for StoreOpaque
 where
     StoreData: Index<I>,
 {
@@ -169,7 +169,7 @@ where
         self.store_data().index(index)
     }
 }
-impl<I> IndexMut<I> for StoreOpaque<'_>
+impl<I> IndexMut<I> for StoreOpaque
 where
     StoreData: IndexMut<I>,
 {

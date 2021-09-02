@@ -27,7 +27,7 @@ impl<T> StoreExt for Store<T> {
         H: 'static + Fn(winapi::um::winnt::PEXCEPTION_POINTERS) -> bool + Send + Sync,
     {
         self.as_context_mut()
-            .opaque()
+            .0
             .set_signal_handler(Some(Box::new(handler)));
     }
 }

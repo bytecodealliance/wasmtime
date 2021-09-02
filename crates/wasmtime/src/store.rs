@@ -1,3 +1,81 @@
+//! Wasmtime's "store" type
+//!
+//! This module, and its submodules, contain the `Store` type and various types
+//! used to interact with it. At first glance this is a pretty confusing module
+//! where you need to know the difference between:
+//!
+//! * `Store<T>`
+//! * `StoreContext<T>`
+//! * `StoreContextMut<T>`
+//! * `AsContext`
+//! * `AsContextMut`
+//! * `StoreInner<T>`
+//! * `StoreOpaque`
+//! * `StoreData`
+//!
+//! There's... quite a lot going on here, and it's easy to be confused. This
+//! comment is ideally going to serve the purpose of clarifying what all these
+//! types are for and why they're motivated.
+//!
+//! First it's important to know what's "internal" and what's "external". Almost
+//! everything above is defined as `pub`, but only some of the items are
+//! reexported to the outside world to be usable from this crate. Otherwise all
+//! items are `pub` within this `store` module, and the `store` module is
+//! private to the `wasmtime` crate. Notably `Store<T>`, `StoreContext<T>`,
+//! `StoreContextMut<T>`, `AsContext`, and `AsContextMut` are all public
+//! interfaces to the `wasmtime` crate. You can think of these as:
+//!
+//! * `Store<T>` - an owned reference to a store, the "root of everything"
+//! * `StoreContext<T>` - basically `&StoreInner<T>`
+//! * `StoreContextMut<T>` - more-or-less `&mut StoreInner<T>` with caveats.
+//!   Explained later.
+//! * `AsContext` - similar to `AsRef`, but produces `StoreContext<T>`
+//! * `AsContextMut` - similar to `AsMut`, but produces `StoreContextMut<T>`
+//!
+//! Next comes the internal structure of the `Store<T>` itself. This looks like:
+//!
+//! * `Store<T>` - this type is just a pointer large. It's primarily just
+//!   intended to be consumed by the outside world. Note that the "just a
+//!   pointer large" is a load-bearing implementation detail in Wasmtime. This
+//!   enables it to store a pointer to its own trait object which doesn't need
+//!   to change over time.
+//!
+//! * `StoreInner<T>` - the first layer of the contents of a `Store<T>`, what's
+//!   stored inside the `Box`. This is the general Rust pattern when one struct
+//!   is a layer over another. The surprising part, though, is that this is
+//!   further subdivided. This structure only contains things which actually
+//!   need `T` itself. The downside of this structure is that it's always
+//!   generic and means that code is monomorphized into consumer crates. We
+//!   strive to have things be as monomorphic as possible in `wasmtime` so this
+//!   type is not heavily used.
+//!
+//! * `StoreOpaque` - this is the primary contents of the `StoreInner<T>` type.
+//!   Stored inline in the outer type the "opaque" here means that it's a
+//!   "store" but it doesn't have access to the `T`. This is the primary
+//!   "internal" reference that Wasmtime uses since `T` is rarely needed by the
+//!   internals of Wasmtime.
+//!
+//! * `StoreData` - this is a final helper struct stored within `StoreOpaque`.
+//!   All references of Wasm items into a `Store` are actually indices into a
+//!   table in this structure, and the `StoreData` being separate makes it a bit
+//!   easier to manage/define/work with. There's no real fundamental reason this
+//!   is split out, although sometimes it's useful to have separate borrows into
+//!   these tables than the `StoreOpaque`.
+//!
+//! A major caveat with these representations is that the internal `&mut
+//! StoreInner<T>` is never handed out publicly to consumers of this crate, only
+//! through a wrapper of `StoreContextMut<'_, T>`. The reason for this is that
+//! we want to provide mutable, but not destructive, access to the contents of a
+//! `Store`. For example if a `StoreInner<T>` were replaced with some other
+//! `StoreInner<T>` then that would drop live instances, possibly those
+//! currently executing beneath the current stack frame. This would not be a
+//! safe operation.
+//!
+//! This means, though, that the `wasmtime` crate, which liberally uses `&mut
+//! StoreOpaque` internally, has to be careful to never actually destroy the
+//! contents of `StoreOpaque`. This is an invariant that we, as the authors of
+//! `wasmtime`, must uphold for the public interface to be safe.
+
 use crate::{module::ModuleRegistry, Engine, Module, Trap};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
@@ -79,14 +157,50 @@ pub struct Store<T> {
     inner: ManuallyDrop<Box<StoreInner<T>>>,
 }
 
+/// Internal contents of a `Store<T>` that live on the heap.
+///
+/// The members of this struct are those that need to be generic over `T`, the
+/// store's internal type storage. Otherwise all things that don't rely on `T`
+/// should go into `StoreOpaque`.
 pub struct StoreInner<T> {
-    // This `StoreInner<T>` structure has references to itself. These aren't
+    /// Generic metadata about the store that doesn't need access to `T`.
+    inner: StoreOpaque,
+
+    limiter: Option<Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>>,
+    entering_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
+    exiting_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
+    // for comments about `ManuallyDrop`, see `Store::into_data`
+    data: ManuallyDrop<T>,
+}
+
+// Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
+impl<T> Deref for StoreInner<T> {
+    type Target = StoreOpaque;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for StoreInner<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+/// Monomorphic storage for a `Store<T>`.
+///
+/// This structure contains the bulk of the metadata about a `Store`. This is
+/// used internally in Wasmtime when dependence on the `T` of `Store<T>` isn't
+/// necessary, allowing code to be monomorphic and compiled into the `wasmtime`
+/// crate itself.
+pub struct StoreOpaque {
+    // This `StoreOpaque` structure has references to itself. These aren't
     // immediately evident, however, so we need to tell the compiler that it
     // contains self-references. This notably suppresses `noalias` annotations
     // when this shows up in compiled code because types of this structure do
-    // indeed alias itself. The best example of this is `StoreOpaque` which
-    // contains a `&mut StoreInner` and a `*mut dyn Store` which are actually
-    // the same pointer, indeed aliasing!
+    // indeed alias itself. An example of this is `default_callee` holds a
+    // `*mut dyn Store` to the address of this `StoreOpaque` itself, indeed
+    // aliasing!
     //
     // It's somewhat unclear to me at this time if this is 100% sufficient to
     // get all the right codegen in all the right places. For example does
@@ -102,30 +216,7 @@ pub struct StoreInner<T> {
     // least telling the compiler something about all the aliasing happening
     // within a `Store`.
     _marker: marker::PhantomPinned,
-    inner: StoreInnermost,
-    limiter: Option<Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>>,
-    entering_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
-    exiting_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
-    // for comments about `ManuallyDrop`, see `Store::into_data`
-    data: ManuallyDrop<T>,
-}
 
-impl<T> Deref for StoreInner<T> {
-    type Target = StoreInnermost;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-impl<T> DerefMut for StoreInner<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-// I apologize for the convoluted structure and the terrible naming of this struct.
-// This exists so that most of wasmtime can be monomorphic on StoreInnermost, without
-// having to care about the generic in StoreInner<T>.
-pub struct StoreInnermost {
     engine: Engine,
     interrupts: Arc<VMInterrupts>,
     instances: Vec<StoreInstance>,
@@ -217,8 +308,8 @@ impl<T> Store<T> {
                 .expect("failed to allocate default callee")
         };
         let mut inner = Box::new(StoreInner {
-            _marker: marker::PhantomPinned,
-            inner: StoreInnermost {
+            inner: StoreOpaque {
+                _marker: marker::PhantomPinned,
                 engine: engine.clone(),
                 interrupts: Default::default(),
                 instances: Vec::new(),
@@ -249,11 +340,18 @@ impl<T> Store<T> {
         });
 
         // Once we've actually allocated the store itself we can configure the
-        // trait object pointer of the default callee.
-        let store = StoreContextMut(&mut *inner).opaque().traitobj;
+        // trait object pointer of the default callee. Note the erasure of the
+        // lifetime here into `'static`, so in general usage of this trait
+        // object must be strictly bounded to the `Store` itself, and is a
+        // variant that we have to maintain throughout Wasmtime.
         unsafe {
-            inner.default_callee.set_store(store);
+            let traitobj = std::mem::transmute::<
+                *mut (dyn wasmtime_runtime::Store + '_),
+                *mut (dyn wasmtime_runtime::Store + 'static),
+            >(&mut *inner);
+            inner.default_callee.set_store(traitobj);
         }
+
         Self {
             inner: ManuallyDrop::new(inner),
         }
@@ -696,7 +794,7 @@ impl<T> StoreInner<T> {
     }
 }
 
-impl StoreInnermost {
+impl StoreOpaque {
     pub fn bump_resource_counts(&mut self, module: &Module) -> Result<()> {
         fn bump(slot: &mut usize, max: usize, amt: usize, desc: &str) -> Result<()> {
             let new = slot.saturating_add(amt);
@@ -953,6 +1051,10 @@ impl StoreInnermost {
     #[inline]
     pub fn default_callee(&self) -> *mut VMContext {
         self.default_callee.vmctx_ptr()
+    }
+
+    pub fn traitobj(&self) -> *mut dyn wasmtime_runtime::Store {
+        self.default_callee.store()
     }
 }
 
@@ -1243,7 +1345,7 @@ impl AsyncCx {
 
 unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
     fn vminterrupts(&self) -> *mut VMInterrupts {
-        <StoreInnermost>::vminterrupts(self)
+        <StoreOpaque>::vminterrupts(self)
     }
 
     fn externref_activations_table(
@@ -1273,7 +1375,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 }
                 *injection_count -= 1;
                 let fuel = *fuel_to_inject;
-                StoreContextMut(self).opaque().out_of_gas_yield(fuel)?;
+                self.out_of_gas_yield(fuel)?;
                 Ok(())
             }
             #[cfg(not(feature = "async"))]
@@ -1319,7 +1421,7 @@ impl<T> Drop for Store<T> {
     }
 }
 
-impl Drop for StoreInnermost {
+impl Drop for StoreOpaque {
     fn drop(&mut self) {
         // NB it's important that this destructor does not access `self.data`.
         // That is deallocated by `Drop for Store<T>` above.

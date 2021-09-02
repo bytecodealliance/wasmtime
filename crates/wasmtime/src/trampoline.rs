@@ -24,7 +24,7 @@ use wasmtime_runtime::{
 
 fn create_handle(
     module: Module,
-    store: &mut StoreOpaque<'_>,
+    store: &mut StoreOpaque,
     host_state: Box<dyn Any + Send + Sync>,
     func_imports: &[VMFunctionImport],
     shared_signature_id: Option<VMSharedSignatureIndex>,
@@ -46,7 +46,7 @@ fn create_handle(
                 imports,
                 shared_signatures: shared_signature_id.into(),
                 host_state,
-                store: Some(store.traitobj),
+                store: Some(store.traitobj()),
                 wasm_data: &[],
             },
         )?;
@@ -56,7 +56,7 @@ fn create_handle(
 }
 
 pub fn generate_global_export(
-    store: &mut StoreOpaque<'_>,
+    store: &mut StoreOpaque,
     gt: &GlobalType,
     val: Val,
 ) -> Result<wasmtime_runtime::ExportGlobal> {
@@ -69,7 +69,7 @@ pub fn generate_global_export(
 }
 
 pub fn generate_memory_export(
-    store: &mut StoreOpaque<'_>,
+    store: &mut StoreOpaque,
     m: &MemoryType,
 ) -> Result<wasmtime_runtime::ExportMemory> {
     let instance = create_memory(store, m)?;
@@ -81,7 +81,7 @@ pub fn generate_memory_export(
 }
 
 pub fn generate_table_export(
-    store: &mut StoreOpaque<'_>,
+    store: &mut StoreOpaque,
     t: &TableType,
 ) -> Result<wasmtime_runtime::ExportTable> {
     let instance = create_table(store, t)?;

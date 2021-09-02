@@ -4,7 +4,7 @@ use crate::TableType;
 use anyhow::Result;
 use wasmtime_environ::{EntityIndex, Module};
 
-pub fn create_table(store: &mut StoreOpaque<'_>, table: &TableType) -> Result<InstanceId> {
+pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<InstanceId> {
     let mut module = Module::new();
     let table_plan = wasmtime_environ::TablePlan::for_table(
         table.wasmtime_table().clone(),

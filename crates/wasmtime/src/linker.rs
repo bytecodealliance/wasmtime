@@ -137,7 +137,7 @@ macro_rules! generate_wrap_async_func {
                 ),
             );
             self.func_wrap(module, name, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                let async_cx = caller.store.as_context_mut().opaque().async_cx();
+                let async_cx = caller.store.as_context_mut().0.async_cx();
                 let mut future = Pin::from(func(caller, $($args),*));
                 match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
@@ -331,7 +331,7 @@ impl<T> Linker<T> {
             "cannot use `func_new_async` without enabling async support in the config"
         );
         self.func_new(module, name, ty, move |mut caller, params, results| {
-            let async_cx = caller.store.as_context_mut().opaque().async_cx();
+            let async_cx = caller.store.as_context_mut().0.async_cx();
             let mut future = Pin::from(func(caller, params, results));
             match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(())) => Ok(()),
@@ -999,6 +999,7 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         module: &Module,
     ) -> Result<InstancePre<T>> {
+        let store = store.as_context_mut().0;
         let imports = module
             .imports()
             .map(|import| {
@@ -1006,7 +1007,7 @@ impl<T> Linker<T> {
                     .ok_or_else(|| self.link_error(&import))
             })
             .collect::<Result<_>>()?;
-        unsafe { InstancePre::new(&mut store.as_context_mut().opaque(), module, imports) }
+        unsafe { InstancePre::new(store, module, imports) }
     }
 
     fn link_error(&self, import: &ImportType) -> Error {
@@ -1031,12 +1032,12 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T> + 'p,
     ) -> impl Iterator<Item = (&str, &str, Extern)> + 'p {
         self.map.iter().map(move |(key, item)| {
-            let mut store = store.as_context_mut().opaque();
+            let store = store.as_context_mut();
             (
                 &*self.strings[key.module],
                 &*self.strings[key.name],
                 // Should be safe since `T` is connecting the linker and store
-                unsafe { item.to_extern(&mut store) },
+                unsafe { item.to_extern(store.0) },
             )
         })
     }
@@ -1052,9 +1053,9 @@ impl<T> Linker<T> {
         module: &str,
         name: Option<&str>,
     ) -> Option<Extern> {
-        let mut store = store.as_context_mut().opaque();
+        let store = store.as_context_mut().0;
         // Should be safe since `T` is connecting the linker and store
-        Some(unsafe { self._get(module, name)?.to_extern(&mut store) })
+        Some(unsafe { self._get(module, name)?.to_extern(store) })
     }
 
     fn _get(&self, module: &str, name: Option<&str>) -> Option<&Definition> {
@@ -1077,9 +1078,9 @@ impl<T> Linker<T> {
         mut store: impl AsContextMut<Data = T>,
         import: &ImportType,
     ) -> Option<Extern> {
-        let mut store = store.as_context_mut().opaque();
+        let store = store.as_context_mut().0;
         // Should be safe since `T` is connecting the linker and store
-        Some(unsafe { self._get_by_import(import)?.to_extern(&mut store) })
+        Some(unsafe { self._get_by_import(import)?.to_extern(store) })
     }
 
     fn _get_by_import(&self, import: &ImportType) -> Option<Definition> {

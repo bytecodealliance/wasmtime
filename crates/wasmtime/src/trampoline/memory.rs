@@ -8,7 +8,7 @@ use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, MemoryPlan, MemoryStyle, Module, WASM_PAGE_SIZE};
 use wasmtime_runtime::{RuntimeLinearMemory, RuntimeMemoryCreator, VMMemoryDefinition};
 
-pub fn create_memory(store: &mut StoreOpaque<'_>, memory: &MemoryType) -> Result<InstanceId> {
+pub fn create_memory(store: &mut StoreOpaque, memory: &MemoryType) -> Result<InstanceId> {
     let mut module = Module::new();
 
     let memory_plan = wasmtime_environ::MemoryPlan::for_memory(
