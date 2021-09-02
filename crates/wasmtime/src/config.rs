@@ -330,6 +330,23 @@ impl Default for InstanceAllocationStrategy {
     }
 }
 
+#[derive(Clone)]
+/// Configure the strategy used for versioning in serializing and deserializing [`crate::Module`].
+pub enum ModuleVersionStrategy {
+    /// Use the wasmtime crate's Cargo package version.
+    WasmtimeVersion,
+    /// Use a custom version string. Must be at most 255 bytes.
+    Custom(String),
+    /// Emit no version string in serialization, and accept all version strings in deserialization.
+    None,
+}
+
+impl Default for ModuleVersionStrategy {
+    fn default() -> Self {
+        ModuleVersionStrategy::WasmtimeVersion
+    }
+}
+
 /// Global configuration options used to create an [`Engine`](crate::Engine)
 /// and customize its behavior.
 ///
@@ -350,7 +367,7 @@ pub struct Config {
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     pub(crate) async_support: bool,
-    pub(crate) deserialize_check_wasmtime_version: bool,
+    pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
     pub(crate) paged_memory_initialization: bool,
 }
@@ -374,7 +391,7 @@ impl Config {
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             async_support: false,
-            deserialize_check_wasmtime_version: true,
+            module_version: ModuleVersionStrategy::default(),
             parallel_compilation: true,
             // Default to paged memory initialization when using uffd on linux
             paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
@@ -1254,18 +1271,23 @@ impl Config {
         self
     }
 
-    /// Configure whether deserialized modules should validate version
-    /// information. This only effects [`crate::Module::deserialize()`], which is
-    /// used to load compiled code from trusted sources.  When true,
-    /// [`crate::Module::deserialize()`] verifies that the wasmtime crate's
-    /// `CARGO_PKG_VERSION` matches with the version in the binary, which was
-    /// produced by [`crate::Module::serialize`] or
-    /// [`crate::Engine::precompile_module`].
+    /// Configure the version information used in serialized and deserialzied [`crate::Module`]s.
+    /// This effects the behavior of [`crate::Module::serialize()`], as well as
+    /// [`crate::Module::deserialize()`] and related functions.
     ///
-    /// This value defaults to true.
-    pub fn deserialize_check_wasmtime_version(&mut self, check: bool) -> &mut Self {
-        self.deserialize_check_wasmtime_version = check;
-        self
+    /// The default strategy is to use the wasmtime crate's Cargo package version.
+    pub fn module_version(&mut self, strategy: ModuleVersionStrategy) -> Result<&mut Self> {
+        match strategy {
+            // This case requires special precondition for assertion in SerializedModule::to_bytes
+            ModuleVersionStrategy::Custom(ref v) => {
+                if v.as_bytes().len() > 255 {
+                    bail!("custom module version cannot be more than 255 bytes: {}", v);
+                }
+            }
+            _ => {}
+        }
+        self.module_version = strategy;
+        Ok(self)
     }
 
     /// Configure wether wasmtime should compile a module using multiple threads.
@@ -1351,7 +1373,7 @@ impl Clone for Config {
             async_support: self.async_support,
             #[cfg(feature = "async")]
             async_stack_size: self.async_stack_size,
-            deserialize_check_wasmtime_version: self.deserialize_check_wasmtime_version,
+            module_version: self.module_version.clone(),
             parallel_compilation: self.parallel_compilation,
             paged_memory_initialization: self.paged_memory_initialization,
         }

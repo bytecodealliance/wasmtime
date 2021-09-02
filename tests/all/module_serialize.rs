@@ -15,24 +15,29 @@ unsafe fn deserialize_and_instantiate(store: &mut Store<()>, buffer: &[u8]) -> R
 #[test]
 fn test_version_mismatch() -> Result<()> {
     let engine = Engine::default();
-    let mut buffer = serialize(&engine, "(module)")?;
-    const HEADER: &[u8] = b"\0wasmtime-aot";
-    let pos = memchr::memmem::rfind_iter(&buffer, HEADER).next().unwrap();
-    buffer[pos + HEADER.len() + 1 /* version length */] = 'x' as u8;
+    let buffer = serialize(&engine, "(module)")?;
 
-    match unsafe { Module::deserialize(&engine, &buffer) } {
+    let mut config = Config::new();
+    config
+        .module_version(ModuleVersionStrategy::Custom("custom!".to_owned()))
+        .unwrap();
+    let custom_version_engine = Engine::new(&config).unwrap();
+    match unsafe { Module::deserialize(&custom_version_engine, &buffer) } {
         Ok(_) => bail!("expected deserialization to fail"),
         Err(e) => assert!(e
             .to_string()
-            .starts_with("Module was compiled with incompatible Wasmtime version")),
+            .starts_with("Module was compiled with incompatible version")),
     }
 
-    // Test deserialize_check_wasmtime_version, which disables the logic which rejects the above.
     let mut config = Config::new();
-    config.deserialize_check_wasmtime_version(false);
-    let engine = Engine::new(&config).unwrap();
-    unsafe { Module::deserialize(&engine, &buffer) }
-        .expect("module with corrupt version should deserialize when check is disabled");
+    config.module_version(ModuleVersionStrategy::None).unwrap();
+    let none_version_engine = Engine::new(&config).unwrap();
+    unsafe { Module::deserialize(&none_version_engine, &buffer) }
+        .expect("accepts the wasmtime versioned module");
+
+    let buffer = serialize(&custom_version_engine, "(module)")?;
+    unsafe { Module::deserialize(&none_version_engine, &buffer) }
+        .expect("accepts the custom versioned module");
 
     Ok(())
 }
