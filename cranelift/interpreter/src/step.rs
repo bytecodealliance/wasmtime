@@ -704,7 +704,11 @@ where
         Opcode::Shuffle => unimplemented!("Shuffle"),
         Opcode::Swizzle => unimplemented!("Swizzle"),
         Opcode::Splat => unimplemented!("Splat"),
-        Opcode::Insertlane => unimplemented!("Insertlane"),
+        Opcode::Insertlane => {
+            let mut vector = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+            vector[Value::into_int(imm())? as usize] = arg(1)?.into_int()?;
+            assign(vectorizelanes(&vector, ctrl_ty)?)
+        }
         Opcode::Extractlane => {
             let value =
                 extractlanes(&arg(0)?, ctrl_ty.lane_type())?[Value::into_int(imm())? as usize];
