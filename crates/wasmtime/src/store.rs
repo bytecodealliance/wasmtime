@@ -1233,9 +1233,9 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
-            let before = wasmtime_runtime::TlsRestore::take().map_err(Trap::from_runtime)?;
+            let before = wasmtime_runtime::TlsRestore::take().map_err(Trap::from_runtime_box)?;
             let res = (*suspend).suspend(());
-            before.replace().map_err(Trap::from_runtime)?;
+            before.replace().map_err(Trap::from_runtime_box)?;
             res?;
         }
     }
