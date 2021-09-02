@@ -74,7 +74,7 @@ unsafe extern "system" fn exception_handler(exception_info: PEXCEPTION_POINTERS)
     })
 }
 
-pub fn lazy_per_thread_init() -> Result<(), Trap> {
+pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
     // Unused on Windows
     Ok(())
 }

@@ -409,7 +409,8 @@ unsafe extern "C" fn unwind(wasm_pc: *const u8) -> ! {
 /// unhandled thread-level exceptions get automatically forwarded to the
 /// task-level port which is where we'd expected things like breakpad/crashpad
 /// exception handlers to get registered.
-pub fn lazy_per_thread_init() -> Result<(), Trap> {
+#[cold]
+pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
     unsafe {
         assert!(WASMTIME_PORT != MACH_PORT_NULL);
         let this_thread = mach_thread_self();

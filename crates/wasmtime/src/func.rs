@@ -1056,7 +1056,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         );
         exit_wasm(store, exit);
         store.0.entering_native_hook()?;
-        result.map_err(Trap::from_runtime)
+        result.map_err(Trap::from_runtime_box)
     }
 }
 

@@ -726,6 +726,7 @@ impl StoreInnermost {
 
         Ok(())
     }
+
     #[inline]
     pub fn async_support(&self) -> bool {
         cfg!(feature = "async") && self.engine().config().async_support
@@ -736,10 +737,12 @@ impl StoreInnermost {
         &self.engine
     }
 
+    #[inline]
     pub fn store_data(&self) -> &StoreData {
         &self.store_data
     }
 
+    #[inline]
     pub fn store_data_mut(&mut self) -> &mut StoreData {
         &mut self.store_data
     }
@@ -1230,9 +1233,9 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
-            let before = wasmtime_runtime::TlsRestore::take().map_err(Trap::from_runtime)?;
+            let before = wasmtime_runtime::TlsRestore::take().map_err(Trap::from_runtime_box)?;
             let res = (*suspend).suspend(());
-            before.replace().map_err(Trap::from_runtime)?;
+            before.replace().map_err(Trap::from_runtime_box)?;
             res?;
         }
     }

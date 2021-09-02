@@ -173,7 +173,7 @@ pub unsafe fn catch_traps<'a, F>(
     signal_handler: Option<*const SignalHandler<'static>>,
     callee: *mut VMContext,
     mut closure: F,
-) -> Result<(), Trap>
+) -> Result<(), Box<Trap>>
 where
     F: FnMut(*mut VMContext),
 {
@@ -227,26 +227,31 @@ impl CallThreadState {
         self,
         interrupts: *mut VMInterrupts,
         closure: impl FnOnce(&CallThreadState) -> i32,
-    ) -> Result<(), Trap> {
+    ) -> Result<(), Box<Trap>> {
         let ret = tls::set(&self, || closure(&self))?;
         if ret != 0 {
-            return Ok(());
+            Ok(())
+        } else {
+            Err(unsafe { self.read_trap(interrupts) })
         }
-        match unsafe { (*self.unwind.get()).as_ptr().read() } {
-            UnwindReason::UserTrap(data) => Err(Trap::User(data)),
-            UnwindReason::LibTrap(trap) => Err(trap),
+    }
+
+    #[cold]
+    unsafe fn read_trap(&self, interrupts: *mut VMInterrupts) -> Box<Trap> {
+        Box::new(match (*self.unwind.get()).as_ptr().read() {
+            UnwindReason::UserTrap(data) => Trap::User(data),
+            UnwindReason::LibTrap(trap) => trap,
             UnwindReason::JitTrap { backtrace, pc } => {
-                let maybe_interrupted = unsafe {
-                    (*interrupts).stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED
-                };
-                Err(Trap::Jit {
+                let maybe_interrupted =
+                    (*interrupts).stack_limit.load(SeqCst) == wasmtime_environ::INTERRUPTED;
+                Trap::Jit {
                     pc,
                     backtrace,
                     maybe_interrupted,
-                })
+                }
             }
             UnwindReason::Panic(panic) => std::panic::resume_unwind(panic),
-        }
+        })
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
@@ -372,17 +377,16 @@ mod tls {
         thread_local!(static PTR: Cell<(Ptr, bool)> = Cell::new((ptr::null(), false)));
 
         #[inline(never)] // see module docs for why this is here
-        pub fn replace(val: Ptr) -> Result<Ptr, Trap> {
+        pub fn replace(val: Ptr) -> Result<Ptr, Box<Trap>> {
             PTR.with(|p| {
                 // When a new value is configured that means that we may be
                 // entering WebAssembly so check to see if this thread has
                 // performed per-thread initialization for traps.
-                let (prev, mut initialized) = p.get();
+                let (prev, initialized) = p.get();
                 if !initialized {
                     super::super::sys::lazy_per_thread_init()?;
-                    initialized = true;
                 }
-                p.set((val, initialized));
+                p.set((val, true));
                 Ok(prev)
             })
         }
@@ -390,7 +394,7 @@ mod tls {
         #[inline(never)]
         /// Eagerly initialize thread-local runtime functionality. This will be performed
         /// lazily by the runtime if users do not perform it eagerly.
-        pub fn initialize() -> Result<(), Trap> {
+        pub fn initialize() -> Result<(), Box<Trap>> {
             PTR.with(|p| {
                 let (state, initialized) = p.get();
                 if initialized {
@@ -420,7 +424,7 @@ mod tls {
         ///
         /// This is not a safe operation since it's intended to only be used
         /// with stack switching found with fibers and async wasmtime.
-        pub unsafe fn take() -> Result<TlsRestore, Trap> {
+        pub unsafe fn take() -> Result<TlsRestore, Box<Trap>> {
             // Our tls pointer must be set at this time, and it must not be
             // null. We need to restore the previous pointer since we're
             // removing ourselves from the call-stack, and in the process we
@@ -437,7 +441,7 @@ mod tls {
         ///
         /// This is unsafe because it's intended to only be used within the
         /// context of stack switching within wasmtime.
-        pub unsafe fn replace(self) -> Result<(), super::Trap> {
+        pub unsafe fn replace(self) -> Result<(), Box<super::Trap>> {
             // We need to configure our previous TLS pointer to whatever is in
             // TLS at this time, and then we set the current state to ourselves.
             let prev = raw::get();
@@ -452,7 +456,7 @@ mod tls {
     /// execution of `closure` any call to `with` will yield `ptr`, unless this
     /// is recursively called again.
     #[inline]
-    pub fn set<R>(state: &CallThreadState, closure: impl FnOnce() -> R) -> Result<R, Trap> {
+    pub fn set<R>(state: &CallThreadState, closure: impl FnOnce() -> R) -> Result<R, Box<Trap>> {
         struct Reset<'a>(&'a CallThreadState);
 
         impl Drop for Reset<'_> {

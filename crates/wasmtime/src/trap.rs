@@ -162,6 +162,11 @@ impl Trap {
     }
 
     #[cold] // see Trap::new
+    pub(crate) fn from_runtime_box(runtime_trap: Box<wasmtime_runtime::Trap>) -> Self {
+        Self::from_runtime(*runtime_trap)
+    }
+
+    #[cold] // see Trap::new
     pub(crate) fn from_runtime(runtime_trap: wasmtime_runtime::Trap) -> Self {
         match runtime_trap {
             wasmtime_runtime::Trap::User(error) => Trap::from(error),
