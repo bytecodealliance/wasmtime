@@ -1,0 +1,40 @@
+test interpret
+test run
+target aarch64
+; x86_64 only supports `i16`, `i32`, and `i64`
+
+function %umulhi_i8(i8, i8) -> i8 {
+block0(v0: i8, v1: i8):
+    v2 = umulhi v0, v1
+    return v2
+}
+; run: %umulhi_i8(2, 4) == 0
+; run: %umulhi_i8(255, 255) == 254
+
+function %umulhi_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = umulhi v0, v1
+    return v2
+}
+; run: %umulhi_i8x16([1 2 3 4 5 6 7 8 255 255 255 255 255 255 255 255], [9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 255]) == [0 0 0 0 0 0 0 0 16 17 18 19 20 21 22 254]
+
+function %umulhi_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = umulhi v0, v1
+    return v2
+}
+; run: %umulhi_i16x8([1 2 255 255 255 255 65535 65535], [3 4 5 6 7 8 9 65535]) == [0 0 0 0 0 0 8 65534]
+
+function %umulhi_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = umulhi v0, v1
+    return v2
+}
+; run: %umulhi_i32x4([1 255 65535 4294967295], [2 65535 4294967295 4294967295]) == [0 0 65534 4294967294]
+
+function %umulhi_i64x2(i64x2, i64x2) -> i64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = umulhi v0, v1
+    return v2
+}
+; run: %umulhi_i64x2([1 18446744073709551615], [2 18446744073709551615]) == [0 18446744073709551614]
