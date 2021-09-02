@@ -264,24 +264,19 @@ impl Switch {
                 }
             };
 
-            let discr = if bx.func.dfg.value_type(discr).bits() > 32 {
-                // Check for overflow of cast to u32.
+            let discr = if bx.func.dfg.value_type(discr).bits() > 64 {
+                // Check for overflow of cast to u32. This is the max supported jump table entries.
                 let new_block = bx.create_block();
                 let bigger_than_u32 =
                     bx.ins()
-                        .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::max_value() as i64);
+                        .icmp_imm(IntCC::UnsignedGreaterThan, discr, u32::MAX as i64);
                 bx.ins().brnz(bigger_than_u32, otherwise, &[]);
                 bx.ins().jump(new_block, &[]);
                 bx.seal_block(new_block);
                 bx.switch_to_block(new_block);
 
-                // Cast to u32, as br_table is not implemented for integers bigger than 32bits.
-                let discr = if bx.func.dfg.value_type(discr) == types::I128 {
-                    bx.ins().isplit(discr).0
-                } else {
-                    discr
-                };
-                bx.ins().ireduce(types::I32, discr)
+                // Cast to u64, as br_table is not implemented for i128
+                bx.ins().isplit(discr).0
             } else {
                 discr
             };
@@ -616,13 +611,7 @@ block0:
     jump block4
 
 block4:
-    v1 = icmp_imm.i64 ugt v0, 0xffff_ffff
-    brnz v1, block3
-    jump block5
-
-block5:
-    v2 = ireduce.i32 v0
-    br_table v2, block3, jt0"
+    br_table.i64 v0, block3, jt0"
         );
     }
 
@@ -663,8 +652,7 @@ block4:
 
 block5:
     v2, v3 = isplit.i128 v0
-    v4 = ireduce.i32 v2
-    br_table v4, block3, jt0"
+    br_table v2, block3, jt0"
         );
     }
 }
