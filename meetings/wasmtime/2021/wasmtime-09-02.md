@@ -64,7 +64,7 @@
   - TS: using direct calls -- makes things faster?
     - AC: probably!
     - CF: spectre mitigations disable indirect predictor entirely or partly (?)
-      so indirect calls are somewhat expenive; this should be better
+      so indirect calls are somewhat expensive; this should be better
   - TS: think that maybe we did direct calls before but maybe not?
     - CF: we just did an Abs8 constant loaded into a register, to avoid
       problems with range
@@ -88,4 +88,3 @@
     - TS: all runtimes are slow enough that this doesn't stick out; in other
       runtimes calls have to go through JS
   - AC: want to get at least wasm to host overhead as low as possible
-
