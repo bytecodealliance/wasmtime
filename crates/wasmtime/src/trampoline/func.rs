@@ -12,17 +12,19 @@ use wasmtime_runtime::{
     OnDemandInstanceAllocator, VMContext, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
 };
 
-struct TrampolineState {
-    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
+struct TrampolineState<F> {
+    func: F,
     #[allow(dead_code)]
     code_memory: CodeMemory,
 }
 
-unsafe extern "C" fn stub_fn(
+unsafe extern "C" fn stub_fn<F>(
     vmctx: *mut VMContext,
     caller_vmctx: *mut VMContext,
     values_vec: *mut u128,
-) {
+) where
+    F: Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + 'static,
+{
     // Here we are careful to use `catch_unwind` to ensure Rust panics don't
     // unwind past us. The primary reason for this is that Rust considers it UB
     // to unwind past an `extern "C"` function. Here we are in an `extern "C"`
@@ -37,7 +39,13 @@ unsafe extern "C" fn stub_fn(
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        call_stub(vmctx, caller_vmctx, values_vec)
+        // Double-check ourselves in debug mode, but we control
+        // the `Any` here so an unsafe downcast should also
+        // work.
+        let state = (*vmctx).host_state();
+        debug_assert!(state.is::<TrampolineState<F>>());
+        let state = &*(state as *const _ as *const TrampolineState<F>);
+        (state.func)(caller_vmctx, values_vec)
     }));
 
     match result {
@@ -55,31 +63,21 @@ unsafe extern "C" fn stub_fn(
         // platforms.
         Err(panic) => wasmtime_runtime::resume_panic(panic),
     }
-
-    unsafe fn call_stub(
-        vmctx: *mut VMContext,
-        caller_vmctx: *mut VMContext,
-        values_vec: *mut u128,
-    ) -> Result<(), Trap> {
-        let instance = InstanceHandle::from_vmctx(vmctx);
-        let state = &instance
-            .host_state()
-            .downcast_ref::<TrampolineState>()
-            .expect("state");
-        (state.func)(caller_vmctx, values_vec)
-    }
 }
 
 #[cfg(compiler)]
-pub fn create_function(
+pub fn create_function<F>(
     ft: &FuncType,
-    func: Box<dyn Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync>,
+    func: F,
     engine: &Engine,
-) -> Result<(InstanceHandle, VMTrampoline)> {
+) -> Result<(InstanceHandle, VMTrampoline)>
+where
+    F: Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync + 'static,
+{
     let mut obj = engine.compiler().object()?;
     let (t1, t2) = engine.compiler().emit_trampoline_obj(
         ft.as_wasm_func_type(),
-        stub_fn as usize,
+        stub_fn::<F> as usize,
         &mut obj,
     )?;
     let obj = MmapVec::from_obj(obj)?;
