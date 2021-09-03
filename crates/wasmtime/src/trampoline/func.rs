@@ -39,7 +39,14 @@ unsafe extern "C" fn stub_fn<F>(
     // have any. To prevent leaks we avoid having any local destructors by
     // avoiding local variables.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        call_stub::<F>(vmctx, caller_vmctx, values_vec)
+        // Double-check ourselves in debug mode, but we control
+        // the `Any` here so an unsafe downcast should also
+        // work.
+        let state = (*vmctx).host_state();
+        debug_assert!(state.is::<TrampolineState<F>>());
+        let state = &*(state as *const _ as *const TrampolineState<F>);
+        (state.func)(caller_vmctx, values_vec)
+        // call_stub::<F>(vmctx, caller_vmctx, values_vec)
     }));
 
     match result {
@@ -56,23 +63,6 @@ unsafe extern "C" fn stub_fn<F>(
         // form of unwinding that's safe to jump over wasm code on all
         // platforms.
         Err(panic) => wasmtime_runtime::resume_panic(panic),
-    }
-
-    unsafe fn call_stub<F>(
-        vmctx: *mut VMContext,
-        caller_vmctx: *mut VMContext,
-        values_vec: *mut u128,
-    ) -> Result<(), Trap>
-    where
-        F: Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + 'static,
-    {
-        // Double-check ourselves in debug mode, but we control
-        // the `Any` here so an unsafe downcast should also
-        // work.
-        let state = (*vmctx).host_state();
-        debug_assert!(state.is::<TrampolineState<F>>());
-        let state = &*(state as *const _ as *const TrampolineState<F>);
-        (state.func)(caller_vmctx, values_vec)
     }
 }
 
