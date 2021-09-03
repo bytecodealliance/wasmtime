@@ -1106,7 +1106,7 @@ impl<'a> Parser<'a> {
             err!(self.loc, "Expected a controlling vector type, not {}", ty)
         } else {
             let constant_data = match ty.lane_type() {
-                I8 => consume!(ty, self.match_uimm8("Expected an 8-bit unsigned integer")?),
+                I8 => consume!(ty, self.match_imm8("Expected an 8-bit integer")?),
                 I16 => consume!(ty, self.match_imm16("Expected a 16-bit integer")?),
                 I32 => consume!(ty, self.match_imm32("Expected a 32-bit integer")?),
                 I64 => consume!(ty, self.match_imm64("Expected a 64-bit integer")?),
