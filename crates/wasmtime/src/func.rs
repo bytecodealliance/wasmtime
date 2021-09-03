@@ -796,11 +796,7 @@ impl Func {
             Ok(values_vec)
         }
 
-        fn read_results(
-            store: &mut StoreOpaque,
-            ty: &FuncType,
-            values_vec: &[u128],
-        ) -> Box<[Val]> {
+        fn read_results(store: &mut StoreOpaque, ty: &FuncType, values_vec: &[u128]) -> Box<[Val]> {
             let mut results = Vec::with_capacity(ty.results().len());
             for (index, ty) in ty.results().enumerate() {
                 unsafe {
