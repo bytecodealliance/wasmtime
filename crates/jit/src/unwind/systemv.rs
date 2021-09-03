@@ -63,7 +63,7 @@ impl UnwindRegistration {
     }
 
     pub fn section_name() -> &'static str {
-        "_wasmtime_eh_frame"
+        ".eh_frame"
     }
 }
 

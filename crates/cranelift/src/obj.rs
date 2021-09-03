@@ -516,7 +516,7 @@ impl<'a> ObjectBuilder<'a> {
         let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
         let section_id = self.obj.add_section(
             segment,
-            b"_wasmtime_eh_frame".to_vec(),
+            b".eh_frame".to_vec(),
             SectionKind::ReadOnlyData,
         );
         let mut cie = self
