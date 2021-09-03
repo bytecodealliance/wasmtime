@@ -16,6 +16,8 @@ pub struct Config {
     /// This value does not apply to block0 which takes the function params
     /// and is thus governed by `signature_params`
     pub block_signature_params: RangeInclusive<usize>,
+    pub jump_tables_per_function: RangeInclusive<usize>,
+    pub jump_table_entries: RangeInclusive<usize>,
 }
 
 impl Default for Config {
@@ -28,6 +30,8 @@ impl Default for Config {
             vars_per_function: 0..=16,
             blocks_per_function: 0..=16,
             block_signature_params: 0..=16,
+            jump_tables_per_function: 0..=4,
+            jump_table_entries: 0..=16,
         }
     }
 }

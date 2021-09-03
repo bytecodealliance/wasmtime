@@ -3,11 +3,12 @@ use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
 use cranelift::codegen::ir::types::*;
 use cranelift::codegen::ir::{
-    AbiParam, Block, ExternalName, Function, Opcode, Signature, Type, Value,
+    AbiParam, Block, ExternalName, Function, JumpTable, Opcode, Signature, Type, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use cranelift::prelude::{EntityRef, InstBuilder, IntCC};
+use cranelift::prelude::{EntityRef, InstBuilder, IntCC, JumpTableData};
+use std::ops::RangeInclusive;
 
 type BlockSignature = Vec<Type>;
 
@@ -97,6 +98,7 @@ where
     config: &'r Config,
     vars: Vec<(Type, Variable)>,
     blocks: Vec<(Block, BlockSignature)>,
+    jump_tables: Vec<JumpTable>,
 }
 
 impl<'r, 'data> FunctionGenerator<'r, 'data>
@@ -109,7 +111,13 @@ where
             config,
             vars: vec![],
             blocks: vec![],
+            jump_tables: vec![],
         }
+    }
+
+    /// Generates a random value for config `param`
+    fn param(&mut self, param: &RangeInclusive<usize>) -> Result<usize> {
+        Ok(self.u.int_in_range(param.clone())?)
     }
 
     fn generate_callconv(&mut self) -> Result<CallConv> {
@@ -162,11 +170,11 @@ where
         let callconv = self.generate_callconv()?;
         let mut sig = Signature::new(callconv);
 
-        for _ in 0..self.u.int_in_range(self.config.signature_params.clone())? {
+        for _ in 0..self.param(&self.config.signature_params)? {
             sig.params.push(self.generate_abi_param()?);
         }
 
-        for _ in 0..self.u.int_in_range(self.config.signature_rets.clone())? {
+        for _ in 0..self.param(&self.config.signature_rets)? {
             sig.returns.push(self.generate_abi_param()?);
         }
 
@@ -229,6 +237,16 @@ where
         Ok((block, args))
     }
 
+    /// Valid blocks for jump tables have to have no parameters in the signature, and must also
+    /// not be the first block.
+    fn generate_valid_jumptable_target_blocks(&mut self) -> Vec<Block> {
+        self.blocks[1..]
+            .iter()
+            .filter(|(_, sig)| sig.len() == 0)
+            .map(|(b, _)| *b)
+            .collect()
+    }
+
     fn generate_values_for_signature<I: Iterator<Item = Type>>(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -257,6 +275,20 @@ where
     fn generate_jump(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
         let (block, args) = self.generate_target_block(builder)?;
         builder.ins().jump(block, &args[..]);
+        Ok(())
+    }
+
+    /// Generates a br_table into a random block
+    fn generate_br_table(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let _type = *self.u.choose(&[I8, I16, I32, I64][..])?;
+        let var = self.get_variable_of_type(_type)?;
+        let val = builder.use_var(var);
+
+        let valid_blocks = self.generate_valid_jumptable_target_blocks();
+        let default_block = *self.u.choose(&valid_blocks[..])?;
+
+        let jt = *self.u.choose(&self.jump_tables[..])?;
+        builder.ins().br_table(val, default_block, jt);
         Ok(())
     }
 
@@ -314,6 +346,7 @@ where
             &[
                 Self::generate_bricmp,
                 Self::generate_br,
+                Self::generate_br_table,
                 Self::generate_jump,
                 Self::generate_return,
             ][..],
@@ -324,14 +357,27 @@ where
 
     /// Fills the current block with random instructions
     fn generate_instructions(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
-        for _ in 0..self
-            .u
-            .int_in_range(self.config.instructions_per_block.clone())?
-        {
+        for _ in 0..self.param(&self.config.instructions_per_block)? {
             let (op, args, rets, inserter) = *self.u.choose(OPCODE_SIGNATURES)?;
             inserter(self, builder, op, args, rets)?;
         }
 
+        Ok(())
+    }
+
+    fn generate_jumptables(&mut self, builder: &mut FunctionBuilder) -> Result<()> {
+        let valid_blocks = self.generate_valid_jumptable_target_blocks();
+
+        for _ in 0..self.param(&self.config.jump_tables_per_function)? {
+            let mut jt_data = JumpTableData::new();
+
+            for _ in 0..self.param(&self.config.jump_table_entries)? {
+                let block = *self.u.choose(&valid_blocks[..])?;
+                jt_data.push_entry(block);
+            }
+
+            self.jump_tables.push(builder.create_jump_table(jt_data));
+        }
         Ok(())
     }
 
@@ -341,9 +387,7 @@ where
         builder: &mut FunctionBuilder,
         sig: &Signature,
     ) -> Result<Vec<(Block, BlockSignature)>> {
-        let extra_block_count = self
-            .u
-            .int_in_range(self.config.blocks_per_function.clone())?;
+        let extra_block_count = self.param(&self.config.blocks_per_function)?;
 
         // We must always have at least one block, so we generate the "extra" blocks and add 1 for
         // the entry block.
@@ -372,9 +416,7 @@ where
     }
 
     fn generate_block_signature(&mut self) -> Result<BlockSignature> {
-        let param_count = self
-            .u
-            .int_in_range(self.config.block_signature_params.clone())?;
+        let param_count = self.param(&self.config.block_signature_params)?;
 
         let mut params = Vec::with_capacity(param_count);
         for _ in 0..param_count {
@@ -395,7 +437,7 @@ where
         }
 
         // Create a pool of vars that are going to be used in this function
-        for _ in 0..self.u.int_in_range(self.config.vars_per_function.clone())? {
+        for _ in 0..self.param(&self.config.vars_per_function)? {
             let ty = self.generate_type()?;
             let var = self.create_var(builder, ty)?;
             let value = self.generate_const(builder, ty)?;
@@ -422,6 +464,9 @@ where
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_builder_ctx);
 
         self.blocks = self.generate_blocks(&mut builder, &sig)?;
+
+        // Function preamble
+        self.generate_jumptables(&mut builder)?;
 
         // Main instruction generation loop
         for (i, (block, block_sig)) in self.blocks.clone().iter().enumerate() {
