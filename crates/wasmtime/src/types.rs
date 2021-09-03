@@ -22,6 +22,8 @@ pub enum Mutability {
 /// A list of all possible value types in WebAssembly.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum ValType {
+    // NB: the ordering here is intended to match the ordering in
+    // `wasmtime_types::WasmType` to help improve codegen when converting.
     /// Signed 32 bit integer.
     I32,
     /// Signed 64 bit integer.
@@ -32,10 +34,10 @@ pub enum ValType {
     F64,
     /// A 128 bit number.
     V128,
-    /// A reference to opaque data in the Wasm instance.
-    ExternRef, /* = 128 */
     /// A reference to a Wasm function.
     FuncRef,
+    /// A reference to opaque data in the Wasm instance.
+    ExternRef,
 }
 
 impl fmt::Display for ValType {

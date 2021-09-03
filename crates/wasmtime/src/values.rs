@@ -9,6 +9,8 @@ use wasmtime_runtime::{self as runtime, VMExternRef};
 /// produce.
 #[derive(Debug, Clone)]
 pub enum Val {
+    // NB: the ordering here is intended to match the ordering in
+    // `ValType` to improve codegen when learning the type of a value.
     /// A 32-bit integer
     I32(i32),
 
@@ -27,12 +29,8 @@ pub enum Val {
     /// `f64::from_bits` to create an `f64` value.
     F64(u64),
 
-    /// An `externref` value which can hold opaque data to the Wasm instance
-    /// itself.
-    ///
-    /// `ExternRef(None)` is the null external reference, created by `ref.null
-    /// extern` in Wasm.
-    ExternRef(Option<ExternRef>),
+    /// A 128-bit number
+    V128(u128),
 
     /// A first-class reference to a WebAssembly function.
     ///
@@ -40,14 +38,19 @@ pub enum Val {
     /// func` in Wasm.
     FuncRef(Option<Func>),
 
-    /// A 128-bit number
-    V128(u128),
+    /// An `externref` value which can hold opaque data to the Wasm instance
+    /// itself.
+    ///
+    /// `ExternRef(None)` is the null external reference, created by `ref.null
+    /// extern` in Wasm.
+    ExternRef(Option<ExternRef>),
 }
 
 macro_rules! accessors {
     ($bind:ident $(($variant:ident($ty:ty) $get:ident $unwrap:ident $cvt:expr))*) => ($(
         /// Attempt to access the underlying value of this `Val`, returning
         /// `None` if it is not the correct type.
+        #[inline]
         pub fn $get(&self) -> Option<$ty> {
             if let Val::$variant($bind) = self {
                 Some($cvt)
@@ -62,6 +65,7 @@ macro_rules! accessors {
         /// # Panics
         ///
         /// Panics if `self` is not of the right type.
+        #[inline]
         pub fn $unwrap(&self) -> $ty {
             self.$get().expect(concat!("expected ", stringify!($ty)))
         }
@@ -70,11 +74,13 @@ macro_rules! accessors {
 
 impl Val {
     /// Returns a null `externref` value.
+    #[inline]
     pub fn null() -> Val {
         Val::ExternRef(None)
     }
 
     /// Returns the corresponding [`ValType`] for this `Val`.
+    #[inline]
     pub fn ty(&self) -> ValType {
         match self {
             Val::I32(_) => ValType::I32,
@@ -156,6 +162,7 @@ impl Val {
     /// If this is a null `externref`, then `Some(None)` is returned.
     ///
     /// If this is a non-null `externref`, then `Some(Some(..))` is returned.
+    #[inline]
     pub fn externref(&self) -> Option<Option<ExternRef>> {
         match self {
             Val::ExternRef(e) => Some(e.clone()),
@@ -173,6 +180,7 @@ impl Val {
     /// # Panics
     ///
     /// Panics if `self` is not a (nullable) `externref`.
+    #[inline]
     pub fn unwrap_externref(&self) -> Option<ExternRef> {
         self.externref().expect("expected externref")
     }
@@ -204,6 +212,7 @@ impl Val {
         }
     }
 
+    #[inline]
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque<'_>) -> bool {
         match self {
             Val::FuncRef(Some(f)) => f.comes_from_same_store(store),
@@ -223,54 +232,63 @@ impl Val {
 }
 
 impl From<i32> for Val {
+    #[inline]
     fn from(val: i32) -> Val {
         Val::I32(val)
     }
 }
 
 impl From<i64> for Val {
+    #[inline]
     fn from(val: i64) -> Val {
         Val::I64(val)
     }
 }
 
 impl From<f32> for Val {
+    #[inline]
     fn from(val: f32) -> Val {
         Val::F32(val.to_bits())
     }
 }
 
 impl From<f64> for Val {
+    #[inline]
     fn from(val: f64) -> Val {
         Val::F64(val.to_bits())
     }
 }
 
 impl From<ExternRef> for Val {
+    #[inline]
     fn from(val: ExternRef) -> Val {
         Val::ExternRef(Some(val))
     }
 }
 
 impl From<Option<ExternRef>> for Val {
+    #[inline]
     fn from(val: Option<ExternRef>) -> Val {
         Val::ExternRef(val)
     }
 }
 
 impl From<Option<Func>> for Val {
+    #[inline]
     fn from(val: Option<Func>) -> Val {
         Val::FuncRef(val)
     }
 }
 
 impl From<Func> for Val {
+    #[inline]
     fn from(val: Func) -> Val {
         Val::FuncRef(Some(val))
     }
 }
 
 impl From<u128> for Val {
+    #[inline]
     fn from(val: u128) -> Val {
         Val::V128(val)
     }
