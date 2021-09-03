@@ -26,6 +26,12 @@ impl IntoBytes for u8 {
     }
 }
 
+impl IntoBytes for i8 {
+    fn into_bytes(self) -> Vec<u8> {
+        vec![self as u8]
+    }
+}
+
 impl IntoBytes for i16 {
     fn into_bytes(self) -> Vec<u8> {
         self.to_le_bytes().to_vec()
