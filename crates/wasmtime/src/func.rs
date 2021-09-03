@@ -1894,11 +1894,11 @@ impl HostFunc {
         let ty_clone = ty.clone();
 
         // Create a trampoline that converts raw u128 values to `Val`
-        let func = Box::new(move |caller_vmctx, values_vec: *mut u128| unsafe {
+        let func = move |caller_vmctx, values_vec: *mut u128| unsafe {
             Caller::with(caller_vmctx, |caller| {
                 Func::invoke(caller, &ty_clone, values_vec, &func)
             })
-        });
+        };
 
         let (instance, trampoline) = crate::trampoline::create_function(&ty, func, engine)
             .expect("failed to create function");
