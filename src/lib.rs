@@ -94,15 +94,12 @@ lazy_static::lazy_static! {
 }
 
 pub mod commands;
-mod obj;
 
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use wasmtime::{Config, ProfilingStrategy, Strategy};
-
-pub use obj::compile_to_obj;
 
 fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strategy> {
     Ok(match (lightbeam, cranelift) {
