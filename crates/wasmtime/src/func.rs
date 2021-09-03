@@ -4,7 +4,6 @@ use crate::{
     StoreContextMut, Trap, Val, ValType,
 };
 use anyhow::{bail, Context as _, Result};
-use smallvec::{smallvec, SmallVec};
 use std::cmp::max;
 use std::error::Error;
 use std::fmt;
@@ -847,35 +846,42 @@ impl Func {
         func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
     ) -> Result<(), Trap> {
         caller.store.0.entering_native_hook()?;
-        // We have a dynamic guarantee that `values_vec` has the right
-        // number of arguments and the right types of arguments. As a result
-        // we should be able to safely run through them all and read them.
-        const STACK_ARGS: usize = 4;
-        const STACK_RETURNS: usize = 2;
-        let mut args: SmallVec<[Val; STACK_ARGS]> = SmallVec::with_capacity(ty.params().len());
+
+        // Translate the raw JIT arguments in `values_vec` into a `Val` which
+        // we'll be passing as a slice. The storage for our slice-of-`Val` we'll
+        // be taking from the `Store`. We preserve our slice back into the
+        // `Store` after the hostcall, ideally amortizing the cost of allocating
+        // the storage across wasm->host calls.
+        //
+        // Note that we have a dynamic guarantee that `values_vec` is the
+        // appropriate length to both read all arguments from as well as store
+        // all results into.
+        let mut val_vec = caller.store.0.take_hostcall_val_storage();
+        debug_assert!(val_vec.is_empty());
+        let nparams = ty.params().len();
+        val_vec.reserve(nparams + ty.results().len());
         for (i, ty) in ty.params().enumerate() {
             unsafe {
                 let val = Val::read_value_from(caller.store.0, values_vec.add(i), ty);
-                args.push(val);
+                val_vec.push(val);
             }
         }
 
-        let mut returns: SmallVec<[Val; STACK_RETURNS]> =
-            smallvec![Val::null(); ty.results().len()];
-
-        func(caller.sub_caller(), &args, &mut returns)?;
+        val_vec.extend((0..ty.results().len()).map(|_| Val::null()));
+        let (params, results) = val_vec.split_at_mut(nparams);
+        func(caller.sub_caller(), params, results)?;
 
         // Unlike our arguments we need to dynamically check that the return
         // values produced are correct. There could be a bug in `func` that
         // produces the wrong number, wrong types, or wrong stores of
         // values, and we need to catch that here.
-        for (i, (ret, ty)) in returns.into_iter().zip(ty.results()).enumerate() {
+        for (i, (ret, ty)) in results.iter().zip(ty.results()).enumerate() {
             if ret.ty() != ty {
                 return Err(Trap::new(
                     "function attempted to return an incompatible value",
                 ));
             }
-            if !ret.comes_from_same_store(&caller.store.0) {
+            if !ret.comes_from_same_store(caller.store.0) {
                 return Err(Trap::new(
                     "cross-`Store` values are not currently supported",
                 ));
@@ -885,6 +891,10 @@ impl Func {
             }
         }
 
+        // Restore our `val_vec` back into the store so it's usable for the next
+        // hostcall to reuse our own storage.
+        val_vec.truncate(0);
+        caller.store.0.save_hostcall_val_storage(val_vec);
         caller.store.0.exiting_native_hook()?;
         Ok(())
     }

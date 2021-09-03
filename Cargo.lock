@@ -3567,7 +3567,6 @@ dependencies = [
  "region",
  "rustc-demangle",
  "serde",
- "smallvec",
  "target-lexicon",
  "tempfile",
  "wasi-cap-std-sync",
