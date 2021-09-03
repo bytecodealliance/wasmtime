@@ -33,7 +33,7 @@ impl<T> StoreExt for Store<T> {
             + Sync,
     {
         self.as_context_mut()
-            .opaque()
+            .0
             .set_signal_handler(Some(Box::new(handler)));
     }
 }

@@ -119,7 +119,7 @@ impl Extern {
 
     pub(crate) unsafe fn from_wasmtime_export(
         wasmtime_export: wasmtime_runtime::Export,
-        store: &mut StoreOpaque<'_>,
+        store: &mut StoreOpaque,
     ) -> Extern {
         match wasmtime_export {
             wasmtime_runtime::Export::Function(f) => {
@@ -137,7 +137,7 @@ impl Extern {
         }
     }
 
-    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque<'_>) -> bool {
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
             Extern::Func(f) => f.comes_from_same_store(store),
             Extern::Global(g) => store.store_data().contains(g.0),
@@ -259,10 +259,10 @@ impl Global {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: GlobalType, val: Val) -> Result<Global> {
-        Global::_new(&mut store.as_context_mut().opaque(), ty, val)
+        Global::_new(store.as_context_mut().0, ty, val)
     }
 
-    fn _new(store: &mut StoreOpaque<'_>, ty: GlobalType, val: Val) -> Result<Global> {
+    fn _new(store: &mut StoreOpaque, ty: GlobalType, val: Val) -> Result<Global> {
         if !val.comes_from_same_store(store) {
             bail!("cross-`Store` globals are not supported");
         }
@@ -307,7 +307,7 @@ impl Global {
                         .map(|inner| ExternRef { inner }),
                 ),
                 ValType::FuncRef => {
-                    from_checked_anyfunc(definition.as_anyfunc() as *mut _, &mut store.opaque())
+                    from_checked_anyfunc(definition.as_anyfunc() as *mut _, store.0)
                 }
                 ValType::V128 => Val::V128(*definition.as_u128()),
             }
@@ -326,7 +326,7 @@ impl Global {
     ///
     /// Panics if `store` does not own this global.
     pub fn set(&self, mut store: impl AsContextMut, val: Val) -> Result<()> {
-        let store = store.as_context_mut();
+        let store = store.as_context_mut().0;
         let ty = self.ty(&store);
         if ty.mutability() != Mutability::Var {
             bail!("immutable global cannot be set");
@@ -335,8 +335,7 @@ impl Global {
         if val.ty() != *ty {
             bail!("global of type {:?} cannot be set to {:?}", ty, val.ty());
         }
-        let mut store = store.opaque();
-        if !val.comes_from_same_store(&store) {
+        if !val.comes_from_same_store(store) {
             bail!("cross-`Store` values are not supported");
         }
         unsafe {
@@ -348,7 +347,7 @@ impl Global {
                 Val::F64(f) => *definition.as_u64_mut() = f,
                 Val::FuncRef(f) => {
                     *definition.as_anyfunc_mut() = f.map_or(ptr::null(), |f| {
-                        f.caller_checked_anyfunc(&mut store).as_ptr() as *const _
+                        f.caller_checked_anyfunc(store).as_ptr() as *const _
                     });
                 }
                 Val::ExternRef(x) => {
@@ -363,7 +362,7 @@ impl Global {
 
     pub(crate) unsafe fn from_wasmtime_global(
         wasmtime_export: wasmtime_runtime::ExportGlobal,
-        store: &mut StoreOpaque<'_>,
+        store: &mut StoreOpaque,
     ) -> Global {
         Global(store.store_data_mut().insert(wasmtime_export))
     }
@@ -372,7 +371,7 @@ impl Global {
         &data[self.0].global
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque<'_>) -> wasmtime_runtime::VMGlobalImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMGlobalImport {
         wasmtime_runtime::VMGlobalImport {
             from: store[self.0].definition,
         }
@@ -435,7 +434,7 @@ impl Table {
     /// # }
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: TableType, init: Val) -> Result<Table> {
-        Table::_new(&mut store.as_context_mut().opaque(), ty, init)
+        Table::_new(store.as_context_mut().0, ty, init)
     }
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
@@ -483,7 +482,7 @@ impl Table {
         TableType::from_wasmtime_table(ty)
     }
 
-    fn wasmtime_table(&self, store: &mut StoreOpaque<'_>) -> *mut runtime::Table {
+    fn wasmtime_table(&self, store: &mut StoreOpaque) -> *mut runtime::Table {
         unsafe {
             let export = &store[self.0];
             let mut handle = InstanceHandle::from_vmctx(export.vmctx);
@@ -500,11 +499,11 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn get(&self, mut store: impl AsContextMut, index: u32) -> Option<Val> {
-        let mut store = store.as_context_mut().opaque();
-        let table = self.wasmtime_table(&mut store);
+        let store = store.as_context_mut().0;
+        let table = self.wasmtime_table(store);
         unsafe {
             match (*table).get(index)? {
-                runtime::TableElement::FuncRef(f) => Some(from_checked_anyfunc(f, &mut store)),
+                runtime::TableElement::FuncRef(f) => Some(from_checked_anyfunc(f, store)),
                 runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
                 runtime::TableElement::ExternRef(Some(x)) => {
                     Some(Val::ExternRef(Some(ExternRef { inner: x })))
@@ -525,10 +524,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn set(&self, mut store: impl AsContextMut, index: u32, val: Val) -> Result<()> {
+        let store = store.as_context_mut().0;
         let ty = self.ty(&store).element().clone();
-        let mut store = store.as_context_mut().opaque();
-        let val = val.into_table_element(&mut store, ty)?;
-        let table = self.wasmtime_table(&mut store);
+        let val = val.into_table_element(store, ty)?;
+        let table = self.wasmtime_table(store);
         unsafe {
             (*table)
                 .set(index, val)
@@ -562,12 +561,12 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
+        let store = store.as_context_mut().0;
         let ty = self.ty(&store).element().clone();
-        let init = init.into_table_element(&mut store.as_context_mut().opaque(), ty)?;
-        let table = self.wasmtime_table(&mut store.as_context_mut().opaque());
-        let store = store.as_context_mut();
+        let init = init.into_table_element(store, ty)?;
+        let table = self.wasmtime_table(store);
         unsafe {
-            match (*table).grow(delta, init, store.0.limiter()) {
+            match (*table).grow(delta, init, store.limiter()) {
                 Some(size) => {
                     let vm = (*table).vmtable();
                     *store[self.0].definition = vm;
@@ -597,14 +596,13 @@ impl Table {
         src_index: u32,
         len: u32,
     ) -> Result<()> {
+        let store = store.as_context_mut().0;
         if dst_table.ty(&store).element() != src_table.ty(&store).element() {
             bail!("tables do not have the same element type");
         }
 
-        let mut store = store.as_context_mut().opaque();
-
-        let dst = dst_table.wasmtime_table(&mut store);
-        let src = src_table.wasmtime_table(&mut store);
+        let dst = dst_table.wasmtime_table(store);
+        let src = src_table.wasmtime_table(store);
         unsafe {
             runtime::Table::copy(dst, src, dst_index, src_index, len)
                 .map_err(Trap::from_runtime)?;
@@ -629,11 +627,11 @@ impl Table {
     ///
     /// Panics if `store` does not own either `dst_table` or `src_table`.
     pub fn fill(&self, mut store: impl AsContextMut, dst: u32, val: Val, len: u32) -> Result<()> {
+        let store = store.as_context_mut().0;
         let ty = self.ty(&store).element().clone();
-        let mut store = store.as_context_mut().opaque();
-        let val = val.into_table_element(&mut store, ty)?;
+        let val = val.into_table_element(store, ty)?;
 
-        let table = self.wasmtime_table(&mut store);
+        let table = self.wasmtime_table(store);
         unsafe {
             (*table).fill(dst, val, len).map_err(Trap::from_runtime)?;
         }
@@ -643,7 +641,7 @@ impl Table {
 
     pub(crate) unsafe fn from_wasmtime_table(
         wasmtime_export: wasmtime_runtime::ExportTable,
-        store: &mut StoreOpaque<'_>,
+        store: &mut StoreOpaque,
     ) -> Table {
         Table(store.store_data_mut().insert(wasmtime_export))
     }
@@ -652,7 +650,7 @@ impl Table {
         &data[self.0].table.table
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque<'_>) -> wasmtime_runtime::VMTableImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> wasmtime_runtime::VMTableImport {
         let export = &store[self.0];
         wasmtime_runtime::VMTableImport {
             from: export.definition,

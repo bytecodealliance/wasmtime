@@ -187,7 +187,7 @@ impl Val {
 
     pub(crate) fn into_table_element(
         self,
-        store: &mut StoreOpaque<'_>,
+        store: &mut StoreOpaque,
         ty: ValType,
     ) -> Result<runtime::TableElement> {
         match (self, ty) {
@@ -213,7 +213,7 @@ impl Val {
     }
 
     #[inline]
-    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque<'_>) -> bool {
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
             Val::FuncRef(Some(f)) => f.comes_from_same_store(store),
             Val::FuncRef(None) => true,

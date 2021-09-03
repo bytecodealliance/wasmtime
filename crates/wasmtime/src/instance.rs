@@ -121,12 +121,12 @@ impl Instance {
     ) -> Result<Instance, Error> {
         // This unsafety comes from `Instantiator::new` where we must typecheck
         // first, which we are sure to do here.
+        let mut store = store.as_context_mut();
         let mut i = unsafe {
-            let mut cx = store.as_context_mut().opaque();
-            typecheck_externs(&mut cx, module, imports)?;
-            Instantiator::new(&mut cx, module, ImportSource::Externs(imports))?
+            typecheck_externs(store.0, module, imports)?;
+            Instantiator::new(store.0, module, ImportSource::Externs(imports))?
         };
-        i.run(&mut store.as_context_mut())
+        i.run(&mut store)
     }
 
     /// Same as [`Instance::new`], except for usage in [asynchronous stores].
@@ -157,12 +157,12 @@ impl Instance {
         T: Send,
     {
         // See `new` for unsafety comments
+        let mut store = store.as_context_mut();
         let mut i = unsafe {
-            let mut cx = store.as_context_mut().opaque();
-            typecheck_externs(&mut cx, module, imports)?;
-            Instantiator::new(&mut cx, module, ImportSource::Externs(imports))?
+            typecheck_externs(store.0, module, imports)?;
+            Instantiator::new(store.0, module, ImportSource::Externs(imports))?
         };
-        i.run_async(&mut store.as_context_mut()).await
+        i.run_async(&mut store).await
     }
 
     pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
@@ -211,12 +211,12 @@ impl Instance {
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        self._exports(store.into().opaque())
+        self._exports(store.into().0)
     }
 
     fn _exports<'a>(
         &'a self,
-        mut store: StoreOpaque<'a>,
+        store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
         // If this is an `Instantiated` instance then all the `exports` may not
         // be filled in. Fill them all in now if that's the case.
@@ -224,18 +224,17 @@ impl Instance {
             if exports.iter().any(|e| e.is_none()) {
                 let module = Arc::clone(store.instance(*id).module());
                 for name in module.exports.keys() {
-                    self._get_export(&mut store, name);
+                    self._get_export(store, name);
                 }
             }
         }
 
-        let inner = store.into_inner();
-        return match &inner.store_data()[self.0] {
+        return match &store.store_data()[self.0] {
             InstanceData::Synthetic(names) => {
                 Either::A(names.iter().map(|(k, v)| Export::new(k, v.clone())))
             }
             InstanceData::Instantiated { exports, id, .. } => {
-                let module = inner.instance(*id).module();
+                let module = store.instance(*id).module();
                 Either::B(
                     module
                         .exports
@@ -305,10 +304,10 @@ impl Instance {
     /// instantiating a module faster, but also means this method requires a
     /// mutable context.
     pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
-        self._get_export(&mut store.as_context_mut().opaque(), name)
+        self._get_export(store.as_context_mut().0, name)
     }
 
-    fn _get_export(&self, store: &mut StoreOpaque<'_>, name: &str) -> Option<Extern> {
+    fn _get_export(&self, store: &mut StoreOpaque, name: &str) -> Option<Extern> {
         match &store[self.0] {
             // Synthetic instances always have their entire list of exports
             // already specified.
@@ -458,7 +457,7 @@ impl<'a> Instantiator<'a> {
     ///
     /// * The `imports` must all come from the `store` specified.
     unsafe fn new(
-        store: &mut StoreOpaque<'_>,
+        store: &StoreOpaque,
         module: &Module,
         imports: ImportSource<'a>,
     ) -> Result<Instantiator<'a>> {
@@ -481,9 +480,7 @@ impl<'a> Instantiator<'a> {
         // NB: this is the same code as `run_async`. It's intentionally
         // small but should be kept in sync (modulo the async bits).
         loop {
-            if let Some((instance, start, toplevel)) =
-                self.step(&mut store.as_context_mut().opaque())?
-            {
+            if let Some((instance, start, toplevel)) = self.step(store.0)? {
                 if let Some(start) = start {
                     Instantiator::start_raw(store, instance, start)?;
                 }
@@ -507,7 +504,7 @@ impl<'a> Instantiator<'a> {
         // NB: this is the same code as `run`. It's intentionally
         // small but should be kept in sync (modulo the async bits).
         loop {
-            let step = self.step(&mut store.as_context_mut().opaque())?;
+            let step = self.step(store.0)?;
             if let Some((instance, start, toplevel)) = step {
                 if let Some(start) = start {
                     store
@@ -543,7 +540,7 @@ impl<'a> Instantiator<'a> {
     ///   defined here.
     fn step(
         &mut self,
-        store: &mut StoreOpaque<'_>,
+        store: &mut StoreOpaque,
     ) -> Result<Option<(Instance, Option<FuncIndex>, bool)>> {
         if self.cur.initializer == 0 {
             store.bump_resource_counts(&self.cur.module)?;
@@ -707,7 +704,7 @@ impl<'a> Instantiator<'a> {
 
     fn instantiate_raw(
         &mut self,
-        store: &mut StoreOpaque<'_>,
+        store: &mut StoreOpaque,
     ) -> Result<(Instance, Option<FuncIndex>)> {
         let compiled_module = self.cur.module.compiled_module();
 
@@ -737,7 +734,7 @@ impl<'a> Instantiator<'a> {
                         imports: self.cur.build(),
                         shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),
-                        store: Some(store.traitobj),
+                        store: Some(store.traitobj()),
                         wasm_data: compiled_module.wasm_data(),
                     })?;
 
@@ -877,7 +874,7 @@ impl<'a> ImportsBuilder<'a> {
         }
     }
 
-    fn push(&mut self, item: Extern, store: &mut StoreOpaque<'_>) {
+    fn push(&mut self, item: Extern, store: &mut StoreOpaque) {
         match item {
             Extern::Func(i) => {
                 self.functions.push(i.vmimport(store));
@@ -962,16 +959,16 @@ impl<T> InstancePre<T> {
         // structure and then othrewise the `T` of `InstancePre<T>` connects any
         // host functions we have in our definition list to the `store` that was
         // passed in.
+        let mut store = store.as_context_mut();
         let mut instantiator = unsafe {
-            let mut store = store.as_context_mut().opaque();
-            self.ensure_comes_from_same_store(&store)?;
+            self.ensure_comes_from_same_store(&store.0)?;
             Instantiator::new(
-                &mut store,
+                store.0,
                 &self.module,
                 ImportSource::Definitions(&self.items),
             )?
         };
-        instantiator.run(&mut store.as_context_mut())
+        instantiator.run(&mut store)
     }
 
     /// Creates a new instance, running the start function asynchronously
@@ -994,11 +991,11 @@ impl<T> InstancePre<T> {
         T: Send,
     {
         // For the unsafety here see above
+        let mut store = store.as_context_mut();
         let mut i = unsafe {
-            let mut store = store.as_context_mut().opaque();
-            self.ensure_comes_from_same_store(&store)?;
+            self.ensure_comes_from_same_store(&store.0)?;
             Instantiator::new(
-                &mut store,
+                store.0,
                 &self.module,
                 ImportSource::Definitions(&self.items),
             )?
@@ -1006,7 +1003,7 @@ impl<T> InstancePre<T> {
         i.run_async(&mut store.as_context_mut()).await
     }
 
-    fn ensure_comes_from_same_store(&self, store: &StoreOpaque<'_>) -> Result<()> {
+    fn ensure_comes_from_same_store(&self, store: &StoreOpaque) -> Result<()> {
         for import in self.items.iter() {
             if !import.comes_from_same_store(store) {
                 bail!("cross-`Store` instantiation is not currently supported");

@@ -5,7 +5,7 @@ use anyhow::Result;
 use wasmtime_environ::{EntityIndex, Global, GlobalInit, Module, ModuleType, SignatureIndex};
 use wasmtime_runtime::VMFunctionImport;
 
-pub fn create_global(store: &mut StoreOpaque<'_>, gt: &GlobalType, val: Val) -> Result<InstanceId> {
+pub fn create_global(store: &mut StoreOpaque, gt: &GlobalType, val: Val) -> Result<InstanceId> {
     let mut module = Module::new();
     let mut func_imports = Vec::new();
     let mut externref_init = None;

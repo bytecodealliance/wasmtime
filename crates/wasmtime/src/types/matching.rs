@@ -1,6 +1,6 @@
 use crate::instance::InstanceData;
 use crate::linker::Definition;
-use crate::store::StoreInnermost;
+use crate::store::StoreOpaque;
 use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Context, Result};
 use wasmtime_environ::{
@@ -12,7 +12,7 @@ use wasmtime_runtime::VMSharedSignatureIndex;
 pub struct MatchCx<'a> {
     pub signatures: &'a SignatureCollection,
     pub types: &'a TypeTables,
-    pub store: &'a StoreInnermost,
+    pub store: &'a StoreOpaque,
     pub engine: &'a Engine,
 }
 

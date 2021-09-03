@@ -1,4 +1,4 @@
-use crate::store::{StoreData, StoreInnermost, StoreOpaque, Stored};
+use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
     AsContext, AsContextMut, Engine, Extern, FuncType, Instance, InterruptHandle, StoreContext,
     StoreContextMut, Trap, Val, ValType,
@@ -259,7 +259,7 @@ macro_rules! generate_wrap_async_func {
         {
             assert!(store.as_context().async_support(), concat!("cannot use `wrap", $num, "_async` without enabling async support on the config"));
             Func::wrap(store, move |mut caller: Caller<'_, T>, $($args: $args),*| {
-                let async_cx = caller.store.as_context_mut().opaque().async_cx();
+                let async_cx = caller.store.as_context_mut().0.async_cx();
                 let mut future = Pin::from(func(caller, $($args),*));
                 match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
@@ -307,13 +307,13 @@ impl Func {
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
-        let mut store = store.as_context_mut().opaque();
+        let store = store.as_context_mut().0;
 
         // part of this unsafety is about matching the `T` to a `Store<T>`,
         // which is done through the `AsContextMut` bound above.
         unsafe {
             let host = HostFunc::new(store.engine(), ty, func);
-            host.into_func(&mut store)
+            host.into_func(store)
         }
     }
 
@@ -398,7 +398,7 @@ impl Func {
             "cannot use `new_async` without enabling async support in the config"
         );
         Func::new(store, ty, move |mut caller, params, results| {
-            let async_cx = caller.store.as_context_mut().opaque().async_cx();
+            let async_cx = caller.store.as_context_mut().0.async_cx();
             let mut future = Pin::from(func(caller, params, results));
             match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(())) => Ok(()),
@@ -631,12 +631,12 @@ impl Func {
         mut store: impl AsContextMut<Data = T>,
         func: impl IntoFunc<T, Params, Results>,
     ) -> Func {
-        let mut store = store.as_context_mut().opaque();
+        let store = store.as_context_mut().0;
         // part of this unsafety is about matching the `T` to a `Store<T>`,
         // which is done through the `AsContextMut` bound above.
         unsafe {
             let host = HostFunc::wrap(store.engine(), func);
-            host.into_func(&mut store)
+            host.into_func(store)
         }
     }
 
@@ -736,7 +736,7 @@ impl Func {
         my_ty: FuncType,
         params: &[Val],
     ) -> Result<Box<[Val]>> {
-        let mut values_vec = write_params(&mut store.as_context_mut().opaque(), &my_ty, params)?;
+        let mut values_vec = write_params(store.0, &my_ty, params)?;
 
         // Call the trampoline.
         unsafe {
@@ -753,14 +753,10 @@ impl Func {
             })?;
         }
 
-        return Ok(read_results(
-            &mut store.as_context_mut().opaque(),
-            &my_ty,
-            &values_vec,
-        ));
+        return Ok(read_results(store.0, &my_ty, &values_vec));
 
         fn write_params(
-            store: &mut StoreOpaque<'_>,
+            store: &mut StoreOpaque,
             ty: &FuncType,
             params: &[Val],
         ) -> Result<Vec<u128>> {
@@ -800,11 +796,7 @@ impl Func {
             Ok(values_vec)
         }
 
-        fn read_results(
-            store: &mut StoreOpaque<'_>,
-            ty: &FuncType,
-            values_vec: &[u128],
-        ) -> Box<[Val]> {
+        fn read_results(store: &mut StoreOpaque, ty: &FuncType, values_vec: &[u128]) -> Box<[Val]> {
             let mut results = Vec::with_capacity(ty.results().len());
             for (index, ty) in ty.results().enumerate() {
                 unsafe {
@@ -819,7 +811,7 @@ impl Func {
     #[inline]
     pub(crate) fn caller_checked_anyfunc(
         &self,
-        store: &StoreInnermost,
+        store: &StoreOpaque,
     ) -> NonNull<VMCallerCheckedAnyfunc> {
         store.store_data()[self.0].export().anyfunc
     }
@@ -834,7 +826,7 @@ impl Func {
         Func(store.store_data_mut().insert(data))
     }
 
-    pub(crate) fn vmimport(&self, store: &mut StoreOpaque<'_>) -> VMFunctionImport {
+    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> VMFunctionImport {
         unsafe {
             let f = self.caller_checked_anyfunc(store);
             VMFunctionImport {
@@ -861,10 +853,9 @@ impl Func {
         const STACK_ARGS: usize = 4;
         const STACK_RETURNS: usize = 2;
         let mut args: SmallVec<[Val; STACK_ARGS]> = SmallVec::with_capacity(ty.params().len());
-        let mut store = caller.store.as_context_mut().opaque();
         for (i, ty) in ty.params().enumerate() {
             unsafe {
-                let val = Val::read_value_from(&mut store, values_vec.add(i), ty);
+                let val = Val::read_value_from(caller.store.0, values_vec.add(i), ty);
                 args.push(val);
             }
         }
@@ -878,20 +869,19 @@ impl Func {
         // values produced are correct. There could be a bug in `func` that
         // produces the wrong number, wrong types, or wrong stores of
         // values, and we need to catch that here.
-        let mut store = caller.store.as_context_mut().opaque();
         for (i, (ret, ty)) in returns.into_iter().zip(ty.results()).enumerate() {
             if ret.ty() != ty {
                 return Err(Trap::new(
                     "function attempted to return an incompatible value",
                 ));
             }
-            if !ret.comes_from_same_store(&store) {
+            if !ret.comes_from_same_store(&caller.store.0) {
                 return Err(Trap::new(
                     "cross-`Store` values are not currently supported",
                 ));
             }
             unsafe {
-                ret.write_value_to(&mut store, values_vec.add(i));
+                ret.write_value_to(caller.store.0, values_vec.add(i));
             }
         }
 
@@ -1744,8 +1734,7 @@ macro_rules! impl_into_func {
                                 if let Err(trap) = caller.store.0.entering_native_hook() {
                                     return R::fallible_from_trap(trap);
                                 }
-                                let mut _store = caller.sub_caller().store.opaque();
-                                $(let $args = $args::from_abi($args, &mut _store);)*
+                                $(let $args = $args::from_abi($args, caller.store.0);)*
                                 let r = func(
                                     caller.sub_caller(),
                                     $( $args, )*
@@ -1770,11 +1759,10 @@ macro_rules! impl_into_func {
                                 // Because the wrapped function is not `unsafe`, we
                                 // can't assume it returned a value that is
                                 // compatible with this store.
-                                let mut store = caller.store.opaque();
-                                if !ret.compatible_with_store(&store) {
+                                if !ret.compatible_with_store(caller.store.0) {
                                     CallResult::Trap(cross_store_trap())
                                 } else {
-                                    match ret.into_abi_for_ret(&mut store, retptr) {
+                                    match ret.into_abi_for_ret(caller.store.0, retptr) {
                                         Ok(val) => CallResult::Ok(val),
                                         Err(trap) => CallResult::Trap(trap.into()),
                                     }
@@ -1938,19 +1926,19 @@ impl HostFunc {
     ///
     /// Can only be inserted into stores with a matching `T` relative to when
     /// this `HostFunc` was first created.
-    pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque<'_>) -> Func {
+    pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
         self.register_trampoline(store);
         let me = self.clone();
         Func(store.store_data_mut().insert(FuncData::SharedHost(me)))
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
-    unsafe fn into_func(self, store: &mut StoreOpaque<'_>) -> Func {
+    unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
         self.register_trampoline(store);
         Func(store.store_data_mut().insert(FuncData::Host(self)))
     }
 
-    unsafe fn register_trampoline(&self, store: &mut StoreOpaque<'_>) {
+    unsafe fn register_trampoline(&self, store: &mut StoreOpaque) {
         let idx = self.export.anyfunc.as_ref().type_index;
         store.register_host_trampoline(idx, self.trampoline);
     }
