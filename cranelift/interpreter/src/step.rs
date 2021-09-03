@@ -516,7 +516,52 @@ where
         Opcode::Ineg => binary(Value::sub, Value::int(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Iabs => unimplemented!("Iabs"),
         Opcode::Imul => binary(Value::mul, arg(0)?, arg(1)?)?,
-        Opcode::Umulhi => unimplemented!("Umulhi"),
+        Opcode::Umulhi => {
+            if ctrl_ty.is_vector() {
+                let double_length = match ctrl_ty.lane_bits() {
+                    8 => types::I16,
+                    16 => types::I32,
+                    32 => types::I64,
+                    64 => types::I128,
+                    _ => unimplemented!("Unsupported integer length {}", ctrl_ty.bits()),
+                };
+                let mut new_vec = SimdVec::new();
+                let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+                let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
+                for (x, y) in arg0.into_iter().zip(arg1) {
+                    let x: V = Value::int(x, double_length)?;
+                    let y: V = Value::int(y, double_length)?;
+                    new_vec.push(
+                        Value::mul(x, y)?
+                            .convert(ValueConversionKind::ExtractUpper(ctrl_ty.lane_type()))?
+                            .into_int()?,
+                    )
+                }
+                assign(vectorizelanes(&new_vec, ctrl_ty)?)
+            } else {
+                let double_length = match ctrl_ty.bits() {
+                    8 => types::I16,
+                    16 => types::I32,
+                    32 => types::I64,
+                    64 => types::I128,
+                    _ => unimplemented!("Unsupported integer length {}", ctrl_ty.bits()),
+                };
+                let x: V = Value::int(
+                    arg(0)?
+                        .convert(ValueConversionKind::ToUnsigned)?
+                        .into_int()?,
+                    double_length,
+                )?;
+                let y: V = Value::int(
+                    arg(1)?
+                        .convert(ValueConversionKind::ToUnsigned)?
+                        .into_int()?,
+                    double_length,
+                )?;
+                let z = Value::mul(x, y)?.convert(ValueConversionKind::ExtractUpper(ctrl_ty))?;
+                assign(z)
+            }
+        }
         Opcode::Smulhi => unimplemented!("Smulhi"),
         Opcode::Udiv => binary_unsigned_can_trap(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Sdiv => binary_can_trap(Value::div, arg(0)?, arg(1)?)?,

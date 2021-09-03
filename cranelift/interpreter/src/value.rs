@@ -273,7 +273,7 @@ impl Value for DataValue {
                     kind
                 );
 
-                let shift_amt = 128 - (ty.bytes() * 8);
+                let shift_amt = (self.ty().bytes() * 8) - (ty.bytes() * 8);
                 let mask = (1 << (ty.bytes() * 8)) - 1i128;
                 let shifted_mask = mask << shift_amt;
 
