@@ -76,7 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::{module::ModuleRegistry, Engine, Module, Trap};
+use crate::{module::ModuleRegistry, Engine, Module, Trap, Val};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
@@ -85,7 +85,7 @@ use std::error::Error;
 use std::fmt;
 use std::future::Future;
 use std::marker;
-use std::mem::ManuallyDrop;
+use std::mem::{self, ManuallyDrop};
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::ptr;
@@ -239,6 +239,11 @@ pub struct StoreOpaque {
     out_of_gas_behavior: OutOfGas,
     store_data: StoreData,
     default_callee: InstanceHandle,
+
+    /// Used to optimzed wasm->host calls when the host function is defined with
+    /// `Func::new` to avoid allocating a new vector each time a function is
+    /// called.
+    hostcall_val_storage: Vec<Val>,
 }
 
 #[cfg(feature = "async")]
@@ -332,6 +337,7 @@ impl<T> Store<T> {
                 out_of_gas_behavior: OutOfGas::Trap,
                 store_data: StoreData::new(),
                 default_callee,
+                hostcall_val_storage: Vec::new(),
             },
             limiter: None,
             entering_native_hook: None,
@@ -1055,6 +1061,21 @@ impl StoreOpaque {
 
     pub fn traitobj(&self) -> *mut dyn wasmtime_runtime::Store {
         self.default_callee.store()
+    }
+
+    /// Takes the cached `Vec<Val>` stored internally across hostcalls to get
+    /// used as part of calling the host in a `Func::new` method invocation.
+    pub fn take_hostcall_val_storage(&mut self) -> Vec<Val> {
+        mem::take(&mut self.hostcall_val_storage)
+    }
+
+    /// Restores the vector previously taken by `take_hostcall_val_storage`
+    /// above back into the store, allowing it to be used in the future for the
+    /// next wasm->host call.
+    pub fn save_hostcall_val_storage(&mut self, storage: Vec<Val>) {
+        if storage.capacity() > self.hostcall_val_storage.capacity() {
+            self.hostcall_val_storage = storage;
+        }
     }
 }
 

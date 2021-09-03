@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use std::ffi::c_void;
-use std::mem::MaybeUninit;
+use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
 use std::ptr;
 use std::str;
@@ -217,18 +217,21 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> impl Fn(Caller<'_, crate::StoreData>, &[Val], &mut [Val]) -> Result<(), Trap> {
     let foreign = crate::ForeignData { data, finalizer };
-    move |caller, params, results| {
-        let params = params
-            .iter()
-            .cloned()
-            .map(|p| wasmtime_val_t::from_val(p))
-            .collect::<Vec<_>>();
-        let mut out_results = (0..results.len())
-            .map(|_| wasmtime_val_t {
-                kind: crate::WASMTIME_I32,
-                of: wasmtime_val_union { i32: 0 },
-            })
-            .collect::<Vec<_>>();
+    move |mut caller, params, results| {
+        // Convert `params/results` to `wasmtime_val_t`. Use the previous
+        // storage in `hostcall_val_storage` to help avoid allocations all the
+        // time.
+        let mut vals = mem::take(&mut caller.data_mut().hostcall_val_storage);
+        debug_assert!(vals.is_empty());
+        vals.reserve(params.len() + results.len());
+        vals.extend(params.iter().cloned().map(|p| wasmtime_val_t::from_val(p)));
+        vals.extend((0..results.len()).map(|_| wasmtime_val_t {
+            kind: crate::WASMTIME_I32,
+            of: wasmtime_val_union { i32: 0 },
+        }));
+        let (params, out_results) = vals.split_at_mut(params.len());
+
+        // Invoke the C function pointer, getting the results.
         let mut caller = wasmtime_caller_t { caller };
         let out = callback(
             foreign.data,
@@ -242,9 +245,16 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
             return Err(trap.trap);
         }
 
+        // Translate the `wasmtime_val_t` results into the `results` space
         for (i, result) in out_results.iter().enumerate() {
             results[i] = unsafe { result.to_val() };
         }
+
+        // Move our `vals` storage back into the store now that we no longer
+        // need it. This'll get picked up by the next hostcall and reuse our
+        // same storage.
+        vals.truncate(0);
+        caller.caller.data_mut().hostcall_val_storage = vals;
         Ok(())
     }
 }

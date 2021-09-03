@@ -1,4 +1,4 @@
-use crate::{wasm_engine_t, wasmtime_error_t, ForeignData};
+use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -67,6 +67,10 @@ pub struct StoreData {
     foreign: crate::ForeignData,
     #[cfg(feature = "wasi")]
     pub(crate) wasi: Option<wasmtime_wasi::WasiCtx>,
+
+    /// Temporary storage for usage during a wasm->host call to store values
+    /// in a slice we pass to the C API.
+    pub hostcall_val_storage: Vec<wasmtime_val_t>,
 }
 
 #[no_mangle]
@@ -85,6 +89,7 @@ pub extern "C" fn wasmtime_store_new(
                 foreign: ForeignData { data, finalizer },
                 #[cfg(feature = "wasi")]
                 wasi: None,
+                hostcall_val_storage: Vec::new(),
             },
         ),
     })
