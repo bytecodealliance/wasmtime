@@ -4,6 +4,7 @@ use std::io::stdin;
 use std::io::Read;
 
 mod ast;
+mod codegen;
 mod compile;
 mod error;
 mod ir;
@@ -16,13 +17,7 @@ fn main() -> Result<(), error::Error> {
     let mut input = String::new();
     stdin().read_to_string(&mut input)?;
     let mut parser = parser::Parser::new("<stdin>", &input[..]);
-    let defs = parser.parse_defs()?;
-    let mut compiler = compile::Compiler::new(&defs)?;
-    compiler.build_sequences()?;
-    compiler.collect_tree_summaries()?;
+    let _defs = parser.parse_defs()?;
 
-    for seq in compiler.to_sequences() {
-        println!("---\nsequence\n---\n{:?}\n", seq);
-    }
     Ok(())
 }
