@@ -22,8 +22,9 @@ use wasmtime_wasi_crypto::WasiCryptoCtx;
 fn parse_module(s: &OsStr) -> Result<PathBuf, OsString> {
     // Do not accept wasmtime subcommand names as the module name
     match s.to_str() {
-        Some("help") | Some("config") | Some("run") | Some("wasm2obj") | Some("wast")
-        | Some("compile") => Err("module name cannot be the same as a subcommand".into()),
+        Some("help") | Some("config") | Some("run") | Some("wast") | Some("compile") => {
+            Err("module name cannot be the same as a subcommand".into())
+        }
         _ => Ok(s.into()),
     }
 }

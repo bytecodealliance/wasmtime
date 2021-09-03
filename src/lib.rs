@@ -100,7 +100,6 @@ use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use target_lexicon::Triple;
 use wasmtime::{Config, ProfilingStrategy, Strategy};
 
 pub use obj::compile_to_obj;
@@ -526,11 +525,6 @@ fn parse_cranelift_flag(name_and_value: &str) -> Result<(String, String)> {
         bail!("missing value in cranelift flag");
     };
     Ok((name, value))
-}
-
-fn parse_target(s: &str) -> Result<Triple> {
-    use std::str::FromStr;
-    Triple::from_str(&s).map_err(|e| anyhow::anyhow!(e))
 }
 
 #[cfg(test)]

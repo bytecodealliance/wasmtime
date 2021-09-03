@@ -71,16 +71,6 @@ $ wasmtime config new
 
 And that'll print out the path to the file you can edit.
 
-## `wasm2obj`
-
-This is an experimental subcommand to compile a WebAssembly module to native
-code. Work for this is still heavily under development, but you can execute this
-with:
-
-```sh
-$ wasmtime wasm2obj foo.wasm foo.o
-```
-
 ## `compile`
 
 This subcommand is used to Ahead-Of-Time (AOT) compile a WebAssembly module to produce
