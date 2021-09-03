@@ -46,7 +46,6 @@ unsafe extern "C" fn stub_fn<F>(
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
         (state.func)(caller_vmctx, values_vec)
-        // call_stub::<F>(vmctx, caller_vmctx, values_vec)
     }));
 
     match result {
