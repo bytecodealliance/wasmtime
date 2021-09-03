@@ -24,7 +24,7 @@ fn test_import_calling_export() {
             caller
                 .data()
                 .unwrap()
-                .call(&mut caller, &[])
+                .call(&mut caller, &[], &mut [])
                 .expect("expected function not to trap");
             Ok(())
         },
@@ -44,7 +44,7 @@ fn test_import_calling_export() {
     *store.data_mut() = Some(other_func);
 
     run_func
-        .call(&mut store, &[])
+        .call(&mut store, &[], &mut [])
         .expect("expected function not to trap");
 }
 
@@ -79,8 +79,9 @@ fn test_returns_incorrect_type() -> Result<()> {
         .get_func(&mut store, "run")
         .expect("expected a run func in the module");
 
+    let mut result = [Val::I32(0)];
     let trap = run_func
-        .call(&mut store, &[])
+        .call(&mut store, &[], &mut result)
         .expect_err("the execution should fail")
         .downcast::<Trap>()?;
     assert!(trap

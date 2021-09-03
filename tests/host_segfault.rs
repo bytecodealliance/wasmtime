@@ -139,7 +139,7 @@ fn main() {
                         overrun_the_stack();
                     })
                 });
-                run_future(f.call_async(&mut store, &[])).unwrap();
+                run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
                 unreachable!();
             },
             true,
@@ -157,7 +157,7 @@ fn main() {
                         overrun_the_stack();
                     })
                 });
-                run_future(f.call_async(&mut store, &[])).unwrap();
+                run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
                 unreachable!();
             },
             true,

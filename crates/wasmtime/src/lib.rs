@@ -440,7 +440,7 @@ fn _assert_send_sync() {
 
     #[cfg(feature = "async")]
     fn _call_async(s: &mut Store<()>, f: Func) {
-        _assert_send(f.call_async(&mut *s, &[]))
+        _assert_send(f.call_async(&mut *s, &[], &mut []))
     }
     #[cfg(feature = "async")]
     fn _typed_call_async(s: &mut Store<()>, f: TypedFunc<(), ()>) {

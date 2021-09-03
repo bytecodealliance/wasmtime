@@ -279,10 +279,12 @@ fn import_works() -> Result<()> {
                 f.as_ref().unwrap().data().downcast_ref::<String>().unwrap(),
                 "hello"
             );
-            assert_eq!(
-                g.as_ref().unwrap().call(&mut caller, &[]).unwrap()[0].unwrap_i32(),
-                42
-            );
+            let mut results = [Val::I32(0)];
+            g.as_ref()
+                .unwrap()
+                .call(&mut caller, &[], &mut results)
+                .unwrap();
+            assert_eq!(results[0].unwrap_i32(), 42);
             assert_eq!(HITS.fetch_add(1, SeqCst), 3);
         },
     )?;
@@ -299,6 +301,7 @@ fn import_works() -> Result<()> {
             Val::ExternRef(Some(ExternRef::new("hello".to_string()))),
             funcref,
         ],
+        &mut [],
     )?;
 
     assert_eq!(HITS.load(SeqCst), 4);
@@ -360,7 +363,7 @@ fn call_import_many_args() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let instance = linker.instantiate(&mut store, &module)?;
     let run = instance.get_func(&mut store, "run").unwrap();
-    run.call(&mut store, &[])?;
+    run.call(&mut store, &[], &mut [])?;
 
     Ok(())
 }
@@ -422,6 +425,7 @@ fn call_wasm_many_args() -> Result<()> {
             9.into(),
             10.into(),
         ],
+        &mut [],
     )?;
 
     let typed_run = instance
@@ -431,7 +435,7 @@ fn call_wasm_many_args() -> Result<()> {
     typed_run.call(&mut store, (1, 2, 3, 4, 5, 6, 7, 8, 9, 10))?;
 
     let test = instance.get_func(&mut store, "test").unwrap();
-    test.call(&mut store, &[])?;
+    test.call(&mut store, &[], &mut [])?;
 
     Ok(())
 }
@@ -450,7 +454,10 @@ fn trap_smoke() -> Result<()> {
         .into_func()
         .unwrap();
 
-    let err = f.call(&mut store, &[]).unwrap_err().downcast::<Trap>()?;
+    let err = f
+        .call(&mut store, &[], &mut [])
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     assert!(err.to_string().contains("test"));
     assert!(err.i32_exit_status().is_none());
@@ -524,6 +531,7 @@ fn new_from_signature() -> Result<()> {
 fn call_wrapped_func() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
+    let mut results = [Val::I32(0)];
 
     linker.func_wrap("", "f1", |a: i32, b: i64, c: f32, d: f64| {
         assert_eq!(a, 1);
@@ -550,6 +558,7 @@ fn call_wrapped_func() -> Result<()> {
     f.call(
         &mut store,
         &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
+        &mut [],
     )?;
     f.typed::<(i32, i64, f32, f64), (), _>(&store)?
         .call(&mut store, (1, 2, 3.0, 4.0))?;
@@ -559,8 +568,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i32(), 1);
     assert_eq!(f.typed::<(), i32, _>(&store)?.call(&mut store, ())?, 1);
 
@@ -569,8 +577,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i64(), 2);
     assert_eq!(f.typed::<(), i64, _>(&store)?.call(&mut store, ())?, 2);
 
@@ -579,8 +586,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_f32(), 3.0);
     assert_eq!(f.typed::<(), f32, _>(&store)?.call(&mut store, ())?, 3.0);
 
@@ -589,8 +595,7 @@ fn call_wrapped_func() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_f64(), 4.0);
     assert_eq!(f.typed::<(), f64, _>(&store)?.call(&mut store, ())?, 4.0);
 
@@ -610,7 +615,10 @@ fn func_return_nothing() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let err = f.call(&mut store, &[]).unwrap_err().downcast::<Trap>()?;
+    let err = f
+        .call(&mut store, &[], &mut [Val::I32(0)])
+        .unwrap_err()
+        .downcast::<Trap>()?;
     assert!(err
         .to_string()
         .contains("function attempted to return an incompatible value"));
@@ -658,18 +666,17 @@ fn call_via_funcref() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    let results = instance
+    let mut results = [Val::I32(0), Val::I32(0)];
+    instance
         .get_func(&mut store, "call")
         .unwrap()
-        .call(&mut store, &[f.into()])?;
-
-    assert_eq!(results.len(), 2);
+        .call(&mut store, &[f.into()], &mut results)?;
     assert_eq!(results[0].unwrap_i32(), 7);
 
     {
         let f = results[1].unwrap_funcref().unwrap();
-        let results = f.call(&mut store, &[1.into(), 2.into()])?;
-        assert_eq!(results.len(), 1);
+        let mut results = [Val::I32(0)];
+        f.call(&mut store, &[1.into(), 2.into()], &mut results)?;
         assert_eq!(results[0].unwrap_i32(), 3);
     }
 
@@ -706,7 +713,7 @@ fn store_with_context() -> Result<()> {
         .unwrap()
         .into_func()
         .unwrap();
-    f.call(&mut store, &[])?;
+    f.call(&mut store, &[], &mut [])?;
 
     assert!(store.data().called);
 
