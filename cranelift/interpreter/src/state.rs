@@ -3,7 +3,7 @@
 use crate::address::{Address, AddressSize};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::{FuncRef, Function, StackSlot, Type, Value};
+use cranelift_codegen::ir::{FuncRef, Function, GlobalValue, Heap, StackSlot, Type, Value};
 use cranelift_entity::PrimaryMap;
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -67,19 +67,29 @@ pub trait State<'a, V> {
         offset: u64,
     ) -> Result<Address, MemoryError>;
     /// Computes a heap address
-    fn heap_address(&self, size: AddressSize, offset: u64) -> Result<Address, MemoryError>;
+    fn heap_address(
+        &self,
+        size: AddressSize,
+        heap: Heap,
+        offset: u64,
+    ) -> Result<Address, MemoryError>;
     /// Retrieve a value `V` from memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes loaded corresponds to the specified [Type].
     fn checked_load(&self, address: Address, ty: Type) -> Result<V, MemoryError>;
     /// Store a value `V` into memory at the given `address`, checking if it belongs either to the
     /// stack or to one of the heaps; the number of bytes stored corresponds to the specified [Type].
     fn checked_store(&mut self, address: Address, v: V) -> Result<(), MemoryError>;
+
+    /// Given a global value, compute the
+    fn resolve_global_value(&self, gv: GlobalValue) -> Result<V, MemoryError>;
 }
 
 #[derive(Error, Debug)]
 pub enum MemoryError {
     #[error("Invalid DataValue passed as an address: {0}")]
     InvalidAddress(DataValue),
+    #[error("Tried to address invalid heap: {0}")]
+    InvalidHeapAddressed(Heap),
     #[error("Invalid type for address: {0}")]
     InvalidAddressType(Type),
     #[error("Requested an the entry {entry} but only {max} entries are allowed")]
@@ -151,7 +161,12 @@ where
         unimplemented!()
     }
 
-    fn heap_address(&self, _size: AddressSize, _offset: u64) -> Result<Address, MemoryError> {
+    fn heap_address(
+        &self,
+        _size: AddressSize,
+        _heap: Heap,
+        _offset: u64,
+    ) -> Result<Address, MemoryError> {
         unimplemented!()
     }
 
@@ -160,6 +175,10 @@ where
     }
 
     fn checked_store(&mut self, _addr: Address, _v: V) -> Result<(), MemoryError> {
+        unimplemented!()
+    }
+
+    fn resolve_global_value(&self, _gv: GlobalValue) -> Result<V, MemoryError> {
         unimplemented!()
     }
 }

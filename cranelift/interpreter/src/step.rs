@@ -116,6 +116,7 @@ where
 
     let memerror_to_trap = |e: MemoryError| match e {
         MemoryError::InvalidAddress(_) => TrapCode::HeapOutOfBounds,
+        MemoryError::InvalidHeapAddressed(_) => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidAddressType(_) => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidOffset { .. } => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,
@@ -383,7 +384,21 @@ where
         Opcode::GlobalValue => unimplemented!("GlobalValue"),
         Opcode::SymbolValue => unimplemented!("SymbolValue"),
         Opcode::TlsValue => unimplemented!("TlsValue"),
-        Opcode::HeapAddr => unimplemented!("HeapAddr"),
+        Opcode::HeapAddr => {
+            if let InstructionData::HeapAddr { heap, .. } = inst {
+                let load_ty = inst_context.controlling_type().unwrap();
+                let offset = calculate_addr(imm(), args()?)? as u64;
+                assign_or_memtrap({
+                    AddressSize::try_from(load_ty).and_then(|addr_size| {
+                        let addr = state.heap_address(addr_size, heap, offset)?;
+                        let dv = DataValue::try_from(addr)?;
+                        Ok(dv.into())
+                    })
+                })
+            } else {
+                unreachable!()
+            }
+        }
         Opcode::GetPinnedReg => unimplemented!("GetPinnedReg"),
         Opcode::SetPinnedReg => unimplemented!("SetPinnedReg"),
         Opcode::TableAddr => unimplemented!("TableAddr"),

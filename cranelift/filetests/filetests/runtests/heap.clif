@@ -1,3 +1,4 @@
+test interpret
 test run
 target x86_64
 target s390x
@@ -128,6 +129,41 @@ block0(v0: i64, v1: i32, v2: i32):
 ; run: %multi_heap_load_store(1, 2) == 3
 ; run: %multi_heap_load_store(4, 5) == 9
 
+
+
+; Uses multiple heaps, but heap0 refers to the second heap, and heap1 refers to the first heap
+; This is a regression test for the interpreter
+function %multi_heap_out_of_order_load_store(i64 vmctx, i32, i32) -> i32 {
+    gv0 = vmctx
+    gv1 = load.i64 notrap aligned gv0+0
+    gv2 = load.i64 notrap aligned gv0+16
+    gv3 = load.i64 notrap aligned gv0+24
+    heap0 = dynamic gv2, bound gv3, offset_guard 0, index_type i32
+    heap1 = static gv1, min 0x1000, bound 0x1_0000_0000, offset_guard 0, index_type i64
+
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = iconst.i64 0
+    v4 = iconst.i32 0
+
+    ; Store lhs in heap0
+    v5 = heap_addr.i64 heap0, v3, 4
+    store.i32 v1, v5
+
+    ; Store rhs in heap1
+    v6 = heap_addr.i64 heap1, v4, 4
+    store.i32 v2, v6
+
+
+    v7 = load.i32 v5
+    v8 = load.i32 v6
+
+    v9 = iadd.i32 v7, v8
+    return v9
+}
+; heap: static, size=0x1000, ptr=vmctx+0, bound=vmctx+8
+; heap: dynamic, size=0x1000, ptr=vmctx+16, bound=vmctx+24
+; run: %multi_heap_out_of_order_load_store(1, 2) == 3
+; run: %multi_heap_out_of_order_load_store(4, 5) == 9
 
 
 function %static_heap_i64_load_store_unaligned(i64 vmctx, i64, i32) -> i32 {
