@@ -1,5 +1,6 @@
 //! Generate Rust code from a series of Sequences.
 
+use crate::error::Error;
 use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence, Value};
 use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
 use peepmatic_automata::{Automaton, Builder as AutomatonBuilder};
@@ -70,6 +71,8 @@ struct TermFunctionsBuilder<'a> {
 
 impl<'a> TermFunctionsBuilder<'a> {
     fn new(typeenv: &'a TypeEnv, termenv: &'a TermEnv) -> Self {
+        log::trace!("typeenv: {:?}", typeenv);
+        log::trace!("termenv: {:?}", termenv);
         Self {
             builders_by_input: HashMap::new(),
             builders_by_output: HashMap::new(),
@@ -82,6 +85,14 @@ impl<'a> TermFunctionsBuilder<'a> {
         for rule in 0..self.termenv.rules.len() {
             let rule = RuleId(rule);
             let (lhs_root, pattern, rhs_root, expr) = lower_rule(self.typeenv, self.termenv, rule);
+            log::trace!(
+                "build:\n- rule {:?}\n- lhs_root {:?} rhs_root {:?}\n- pattern {:?}\n- expr {:?}",
+                self.termenv.rules[rule.index()],
+                lhs_root,
+                rhs_root,
+                pattern,
+                expr
+            );
             if let Some(input_root_term) = lhs_root {
                 self.builders_by_input
                     .entry(input_root_term)
@@ -115,9 +126,16 @@ impl<'a> TermFunctionsBuilder<'a> {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Automata {
     pub automata_by_input: HashMap<TermId, Automaton<PatternInst, (), ExprSequence>>,
     pub automata_by_output: HashMap<TermId, Automaton<PatternInst, (), ExprSequence>>,
 }
 
-impl Automata {}
+impl Automata {
+    pub fn compile(typeenv: &TypeEnv, termenv: &TermEnv) -> Result<Automata, Error> {
+        let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
+        builder.build();
+        Ok(builder.create_automata())
+    }
+}
