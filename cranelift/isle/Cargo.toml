@@ -9,4 +9,3 @@ license = "Apache-2.0 WITH LLVM-exception"
 log = "0.4"
 env_logger = "0.8"
 thiserror = "1.0"
-peepmatic-automata = { version = "*", path = "wasmtime/cranelift/peepmatic/crates/automata" }

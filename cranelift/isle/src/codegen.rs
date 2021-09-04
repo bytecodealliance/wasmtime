@@ -3,11 +3,10 @@
 use crate::error::Error;
 use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence, Value};
 use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
-use peepmatic_automata::{Automaton, Builder as AutomatonBuilder};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-/// One "input symbol" for the automaton that handles matching on a
-/// term. Each symbol represents one step: we either run a match op,
+/// One "input symbol" for the decision tree that handles matching on
+/// a term. Each symbol represents one step: we either run a match op,
 /// or we get a result from it.
 ///
 /// Note that in the original Peepmatic scheme, the problem that this
@@ -53,25 +52,166 @@ use std::collections::HashMap;
 /// privileging one over the other based on the order of the
 /// arguments.
 ///
-/// Instead, we add a priority to every rule (optionally specified in
-/// the source and defaulting to `0` otherwise) that conceptually
-/// augments match-ops. Then, when we examine out-edges from a state
-/// to decide on the next match, we sort these by highest priority
-/// first.
+/// Instead, we need a data structure that can associate matching
+/// inputs *with priorities* to outputs, and provide us with a
+/// decision tree as output.
 ///
-/// This, too, sacrifices some deduplication, so we refine the idea a
-/// bit. First, we add an "End of Match" alphabet symbol that
-/// represents a successful match. Then we stipulate that priorities
-/// are attached *only* to "End of Match"...
+/// Why a tree and not a fully general FSM?  Because we're compiling
+/// to a structured language, Rust, and states become *program points*
+/// rather than *data*, we cannot easily support a DAG structure. In
+/// other words, we are not producing a FSM that we can interpret at
+/// runtime; rather we are compiling code in which each state
+/// corresponds to a sequence of statements and control-flow that
+/// branches to a next state, we naturally need nesting; we cannot
+/// codegen arbitrary state transitions in an efficient manner. We
+/// could support a limited form of DAG that reifies "diamonds" (two
+/// alternate paths that reconverge), but supporting this in a way
+/// that lets the output refer to values from either side is very
+/// complex (we need to invent phi-nodes), and the cases where we want
+/// to do this rather than invoke a sub-term (that is compiled to a
+/// separate function) are rare. Finally, note that one reason to
+/// deduplicate nodes and turn a tree back into a DAG --
+/// "output-suffix sharing" as some other instruction-rewriter
+/// engines, such as Peepmatic, do -- is not done. However,
+/// "output-prefix sharing" is more important to deduplicate code and
+/// we do do this.)
 ///
-/// -- ah, this doesn't work because we need the (min, max) priority
-/// range on outbound edges. When we see a possible transition to EOM
-/// at prio 10 or a match op that could lead to an EOM at prio 0 or
-/// 20, we need to do both, NFA-style.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum AutomataInput {
+/// We prepare for codegen by building a "prioritized trie", where the
+/// trie associates input strings with priorities to output values.
+/// Each input string is a sequence of match operators followed by an
+/// "end of match" token, and each output is a sequence of ops that
+/// build the output expression. Each input-output mapping is
+/// associated with a priority. The goal of the trie is to generate a
+/// decision-tree procedure that lets us execute match ops in a
+/// deterministic way, eventually landing at a state that corresponds
+/// to the highest-priority matching rule and can produce the output.
+///
+/// To build this trie, we construct nodes with edges to child nodes;
+/// each edge consists of (i) one input token (a `PatternInst` or
+/// EOM), and (ii) the minimum and maximum priorities of rules along
+/// this edge. In a way this resembles an interval tree, though the
+/// intervals of children need not be disjoint.
+///
+/// To add a rule to this trie, we perform the usual trie-insertion
+/// logic, creating edges and subnodes where necessary, and updating
+/// the priority-range of each edge that we traverse to include the
+/// priority of the inserted rule.
+///
+/// However, we need to be a little bit careful, because with only
+/// priority ranges in place and the potential for overlap, we have
+/// something that resembles an NFA. For example, consider the case
+/// where we reach a node in the trie and have two edges with two
+/// match ops, one corresponding to a rule with priority 10, and the
+/// other corresponding to two rules, with priorities 20 and 0. The
+/// final match could lie along *either* path, so we have to traverse
+/// both.
+///
+/// So, to avoid this, we perform a sort of NFA-to-DFA conversion "on
+/// the fly" as we insert nodes by duplicating subtrees. At any node,
+/// when inserting with a priority P and when outgoing edges lie in a
+/// range [P_lo, P_hi] such that P >= P_lo and P <= P_hi, we
+/// "priority-split the edges" at priority P.
+///
+/// To priority-split the edges in a node at priority P:
+///
+/// - For each out-edge with priority [P_lo, P_hi] s.g. P \in [P_lo,
+///   P_hi], and token T:
+///   - Trim the subnode at P, yielding children C_lo and C_hi.
+///   - Both children must be non-empty (have at least one leaf)
+///     because the original node must have had a leaf at P_lo
+///     and a leaf at P_hi.
+///   - Replace the one edge with two edges, one for each child, with
+///     the original match op, and with ranges calculated according to
+///     the trimmed children.
+///
+/// To trim a node into range [P_lo, P_hi]:
+///
+/// - For a decision node:
+///   - If any edges have a range outside the bounds of the trimming
+///     range, trim the bounds of the edge, and trim the subtree under the
+///     edge into the trimmed edge's range. If the subtree is trimmed
+///     to `None`, remove the edge.
+///   - If all edges are removed, the decision node becomes `None`.
+/// - For a leaf node:
+///   - If the priority is outside the range, the node becomes `None`.
+///
+/// As we descend a path to insert a leaf node, we (i) priority-split
+/// if any edges' priority ranges overlap the insertion priority
+/// range, and (ii) expand priority ranges on edges to include the new
+/// leaf node's priority.
+///
+/// As long as we do this, we ensure the two key priority-trie
+/// invariants:
+///
+/// 1. At a given node, no two edges exist with priority ranges R_1,
+///    R_2 such that R_1 ∩ R_2 ≠ ∅, unless R_1 and R_2 are unit ranges
+///    ([x, x]) and are on edges with different match-ops.
+/// 2. Along the path from the root to any leaf node with priority P,
+///    each edge has a priority range R such that P ∈ R.
+///
+/// Note that this means that multiple edges with a single match-op
+/// may exist, with different priorities.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum TrieSymbol {
     Match { op: PatternInst },
-    EndOfMatch { prio: i32 },
+    EndOfMatch,
+}
+
+#[derive(Clone, Debug)]
+struct TrieEdge {
+    key: (PrioRange, TrieSymbol),
+    node: Box<TrieNode>,
+}
+
+type Prio = i64;
+
+#[derive(Clone, Copy, Debug)]
+struct PrioRange(Prio, Prio);
+
+impl std::cmp::PartialOrd for PrioRange {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl std::cmp::Ord for PrioRange {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.1 < other.0 {
+            std::cmp::Ordering::Less
+        } else if self.0 > other.1 {
+            std::cmp::Ordering::Greater
+        } else {
+            std::cmp::Ordering::Equal
+        }
+    }
+}
+impl std::cmp::PartialEq for PrioRange {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == std::cmp::Ordering::Equal
+    }
+}
+impl std::cmp::Eq for PrioRange {}
+
+#[derive(Clone, Debug)]
+enum TrieNode {
+    Decision {
+        edges: BTreeMap<(PrioRange, TrieSymbol), TrieNode>,
+    },
+    Leaf {
+        prio: Prio,
+        output: Vec<ExprSequence>,
+    },
+    Empty,
+}
+
+impl TrieNode {
+    fn insert(
+        &mut self,
+        prio: Prio,
+        input: impl Iterator<Item = PatternInst>,
+        output: ExprSequence,
+    ) {
+        unimplemented!()
+    }
 }
 
 /// Builder context for one function in generated code corresponding
@@ -86,53 +226,20 @@ enum AutomataInput {
 /// the calling term).
 struct TermFunctionBuilder {
     root_term: TermId,
-    automaton: AutomatonBuilder<AutomataInput, (), ExprSequence>,
+    trie: TrieNode,
 }
 
 impl TermFunctionBuilder {
     fn new(root_term: TermId) -> Self {
         TermFunctionBuilder {
             root_term,
-            automaton: AutomatonBuilder::new(),
+            trie: TrieNode::Empty,
         }
     }
 
-    fn add_rule(&mut self, pattern_seq: PatternSequence, expr_seq: ExprSequence) {
-        let mut insertion = self.automaton.insert();
-
-        let mut out_idx = 0;
-        for (i, inst) in pattern_seq.insts.into_iter().enumerate() {
-            // Determine how much of the output we can emit at this
-            // stage (with the `Value`s that will be defined so far,
-            // given input insts 0..=i).
-            let out_start = out_idx;
-            let mut out_end = out_start;
-            while out_end < expr_seq.insts.len() {
-                let mut max_input_inst = 0;
-                expr_seq.insts[out_end].visit_values(|val| {
-                    if let Value::Pattern { inst, .. } = val {
-                        max_input_inst = std::cmp::max(max_input_inst, inst.index());
-                    }
-                });
-                if max_input_inst > i {
-                    break;
-                }
-                out_end += 1;
-            }
-
-            // Create an ExprSequence for the instructions that we can
-            // output at this point.
-            let out_insts = expr_seq.insts[out_start..out_end]
-                .iter()
-                .cloned()
-                .collect::<Vec<_>>();
-            let out_seq = ExprSequence { insts: out_insts };
-            out_idx = out_end;
-
-            insertion.next(inst, out_seq);
-        }
-
-        insertion.finish();
+    fn add_rule(&mut self, prio: Prio, pattern_seq: PatternSequence, expr_seq: ExprSequence) {
+        self.trie
+            .insert(prio, pattern_seq.insts.into_iter(), expr_seq);
     }
 }
 
@@ -158,6 +265,8 @@ impl<'a> TermFunctionsBuilder<'a> {
     fn build(&mut self) {
         for rule in 0..self.termenv.rules.len() {
             let rule = RuleId(rule);
+            let prio = self.termenv.rules[rule.index()].prio.unwrap_or(0);
+
             let (lhs_root, pattern, rhs_root, expr) = lower_rule(self.typeenv, self.termenv, rule);
             log::trace!(
                 "build:\n- rule {:?}\n- lhs_root {:?} rhs_root {:?}\n- pattern {:?}\n- expr {:?}",
@@ -171,45 +280,29 @@ impl<'a> TermFunctionsBuilder<'a> {
                 self.builders_by_input
                     .entry(input_root_term)
                     .or_insert_with(|| TermFunctionBuilder::new(input_root_term))
-                    .add_rule(pattern.clone(), expr.clone());
+                    .add_rule(prio, pattern.clone(), expr.clone());
             }
             if let Some(output_root_term) = rhs_root {
                 self.builders_by_output
                     .entry(output_root_term)
                     .or_insert_with(|| TermFunctionBuilder::new(output_root_term))
-                    .add_rule(pattern, expr);
+                    .add_rule(prio, pattern, expr);
             }
-        }
-    }
-
-    fn create_automata(self) -> Automata {
-        let automata_by_input = self
-            .builders_by_input
-            .into_iter()
-            .map(|(k, mut v)| (k, v.automaton.finish()))
-            .collect::<HashMap<_, _>>();
-        let automata_by_output = self
-            .builders_by_output
-            .into_iter()
-            .map(|(k, mut v)| (k, v.automaton.finish()))
-            .collect::<HashMap<_, _>>();
-        Automata {
-            automata_by_input,
-            automata_by_output,
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Automata {
-    pub automata_by_input: HashMap<TermId, Automaton<PatternInst, (), ExprSequence>>,
-    pub automata_by_output: HashMap<TermId, Automaton<PatternInst, (), ExprSequence>>,
+    pub automata_by_input: HashMap<TermId, ()>,
+    pub automata_by_output: HashMap<TermId, ()>,
 }
 
 impl Automata {
     pub fn compile(typeenv: &TypeEnv, termenv: &TermEnv) -> Result<Automata, Error> {
         let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
         builder.build();
-        Ok(builder.create_automata())
+        // TODO
+        Ok(Automata::default())
     }
 }
