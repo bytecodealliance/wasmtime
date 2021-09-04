@@ -30,7 +30,7 @@ declare_id!(VarId);
 
 #[derive(Clone, Debug)]
 pub struct TypeEnv {
-    pub filename: String,
+    pub filenames: Vec<String>,
     pub syms: Vec<String>,
     pub sym_map: HashMap<String, Sym>,
     pub types: Vec<Type>,
@@ -158,7 +158,7 @@ impl Expr {
 impl TypeEnv {
     pub fn from_ast(defs: &ast::Defs) -> SemaResult<TypeEnv> {
         let mut tyenv = TypeEnv {
-            filename: defs.filename.clone(),
+            filenames: defs.filenames.clone(),
             syms: vec![],
             sym_map: HashMap::new(),
             types: vec![],
@@ -270,7 +270,7 @@ impl TypeEnv {
 
     fn error(&self, pos: Pos, msg: String) -> SemaError {
         SemaError {
-            filename: self.filename.clone(),
+            filename: self.filenames[pos.file].clone(),
             pos,
             msg,
         }

@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
-use std::io::stdin;
-use std::io::Read;
+use clap::{App, Arg};
 
 mod ast;
 mod codegen;
@@ -14,11 +13,47 @@ mod sema;
 
 fn main() -> Result<(), error::Error> {
     let _ = env_logger::try_init();
-    let mut input = String::new();
-    stdin().read_to_string(&mut input)?;
-    let mut parser = parser::Parser::new("<stdin>", &input[..]);
+
+    let matches = App::new("isle")
+        .version(env!("CARGO_PKG_VERSION"))
+        .author("Chris Fallin <chris@cfallin.org>")
+        .about("Instruction selection logic engine (ISLE) code generator")
+        .arg(
+            Arg::with_name("input")
+                .short("i")
+                .long("input")
+                .value_name("FILE.isle")
+                .takes_value(true)
+                .multiple(true)
+                .required(true),
+        )
+        .arg(
+            Arg::with_name("output")
+                .short("o")
+                .long("output")
+                .value_name("FILE.rs")
+                .takes_value(true)
+                .required(true),
+        )
+        .get_matches();
+
+    let input_files = matches
+        .values_of("input")
+        .unwrap()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+    let output_file = matches.value_of("output").unwrap();
+
+    let lexer = lexer::Lexer::from_files(input_files)?;
+    let mut parser = parser::Parser::new(lexer);
     let defs = parser.parse_defs()?;
     let code = compile::compile(&defs)?;
-    println!("{}", code);
+
+    {
+        use std::io::Write;
+        let mut f = std::fs::File::create(output_file)?;
+        writeln!(&mut f, "{}", code)?;
+    }
+
     Ok(())
 }

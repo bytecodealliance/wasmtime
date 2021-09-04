@@ -6,42 +6,37 @@ use crate::lexer::{Lexer, Pos, Token};
 
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
-    filename: &'a str,
     lexer: Lexer<'a>,
 }
 
 pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 impl<'a> Parser<'a> {
-    pub fn new(filename: &'a str, s: &'a str) -> Parser<'a> {
-        Parser {
-            filename,
-            lexer: Lexer::new(s),
-        }
+    pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
+        Parser { lexer }
     }
 
     pub fn error(&self, pos: Pos, msg: String) -> ParseError {
         ParseError {
-            filename: self.filename.to_string(),
+            filename: self.lexer.filenames[pos.file].clone(),
             pos,
             msg,
         }
     }
 
-    fn take<F: Fn(Token) -> bool>(&mut self, f: F) -> ParseResult<Token<'a>> {
-        if let Some((pos, peek)) = self.lexer.peek() {
+    fn take<F: Fn(&Token) -> bool>(&mut self, f: F) -> ParseResult<Token> {
+        if let Some(&(pos, ref peek)) = self.lexer.peek() {
             if !f(peek) {
                 return Err(self.error(pos, format!("Unexpected token {:?}", peek)));
             }
-            self.lexer.next();
-            Ok(peek)
+            Ok(self.lexer.next().unwrap().1)
         } else {
             Err(self.error(self.lexer.pos(), "Unexpected EOF".to_string()))
         }
     }
 
-    fn is<F: Fn(Token) -> bool>(&self, f: F) -> bool {
-        if let Some((_, peek)) = self.lexer.peek() {
+    fn is<F: Fn(&Token) -> bool>(&self, f: F) -> bool {
+        if let Some(&(_, ref peek)) = self.lexer.peek() {
             f(peek)
         } else {
             false
@@ -49,14 +44,14 @@ impl<'a> Parser<'a> {
     }
 
     fn pos(&self) -> Option<Pos> {
-        self.lexer.peek().map(|(pos, _)| pos)
+        self.lexer.peek().map(|(pos, _)| *pos)
     }
 
     fn is_lparen(&self) -> bool {
-        self.is(|tok| tok == Token::LParen)
+        self.is(|tok| *tok == Token::LParen)
     }
     fn is_rparen(&self) -> bool {
-        self.is(|tok| tok == Token::RParen)
+        self.is(|tok| *tok == Token::RParen)
     }
     fn is_sym(&self) -> bool {
         self.is(|tok| tok.is_sym())
@@ -65,17 +60,20 @@ impl<'a> Parser<'a> {
         self.is(|tok| tok.is_int())
     }
     fn is_sym_str(&self, s: &str) -> bool {
-        self.is(|tok| tok == Token::Symbol(s))
+        self.is(|tok| match tok {
+            &Token::Symbol(ref tok_s) if tok_s == s => true,
+            _ => false,
+        })
     }
 
     fn lparen(&mut self) -> ParseResult<()> {
-        self.take(|tok| tok == Token::LParen).map(|_| ())
+        self.take(|tok| *tok == Token::LParen).map(|_| ())
     }
     fn rparen(&mut self) -> ParseResult<()> {
-        self.take(|tok| tok == Token::RParen).map(|_| ())
+        self.take(|tok| *tok == Token::RParen).map(|_| ())
     }
 
-    fn symbol(&mut self) -> ParseResult<&'a str> {
+    fn symbol(&mut self) -> ParseResult<String> {
         match self.take(|tok| tok.is_sym())? {
             Token::Symbol(s) => Ok(s),
             _ => unreachable!(),
@@ -96,14 +94,14 @@ impl<'a> Parser<'a> {
         }
         Ok(Defs {
             defs,
-            filename: self.filename.to_string(),
+            filenames: self.lexer.filenames.clone(),
         })
     }
 
     fn parse_def(&mut self) -> ParseResult<Def> {
         self.lparen()?;
         let pos = self.pos();
-        let def = match self.symbol()? {
+        let def = match &self.symbol()?[..] {
             "type" => Def::Type(self.parse_type()?),
             "rule" => Def::Rule(self.parse_rule()?),
             "decl" => Def::Decl(self.parse_decl()?),
@@ -143,7 +141,7 @@ impl<'a> Parser<'a> {
     fn parse_ident(&mut self) -> ParseResult<Ident> {
         let pos = self.pos();
         let s = self.symbol()?;
-        self.str_to_ident(pos.unwrap(), s)
+        self.str_to_ident(pos.unwrap(), &s)
     }
 
     fn parse_type(&mut self) -> ParseResult<Type> {
@@ -285,7 +283,7 @@ impl<'a> Parser<'a> {
                 let var = self.str_to_ident(pos.unwrap(), s)?;
                 Ok(Pattern::Var { var })
             } else {
-                let var = self.str_to_ident(pos.unwrap(), s)?;
+                let var = self.str_to_ident(pos.unwrap(), &s)?;
                 if self.is_sym_str("@") {
                     self.symbol()?;
                     let subpat = Box::new(self.parse_pattern()?);

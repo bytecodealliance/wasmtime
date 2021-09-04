@@ -4,7 +4,7 @@ use crate::lexer::Pos;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Defs {
     pub defs: Vec<Def>,
-    pub filename: String,
+    pub filenames: Vec<String>,
 }
 
 /// One toplevel form in an ISLE file.
