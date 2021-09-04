@@ -117,7 +117,6 @@ where
 
     let memerror_to_trap = |e: MemoryError| match e {
         MemoryError::InvalidAddress(_) => TrapCode::HeapOutOfBounds,
-        MemoryError::InvalidHeapAddressed(_) => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidAddressType(_) => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidOffset { .. } => TrapCode::HeapOutOfBounds,
         MemoryError::InvalidEntry { .. } => TrapCode::HeapOutOfBounds,

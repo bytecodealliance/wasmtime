@@ -88,8 +88,6 @@ pub trait State<'a, V> {
 pub enum MemoryError {
     #[error("Invalid DataValue passed as an address: {0}")]
     InvalidAddress(DataValue),
-    #[error("Tried to address invalid heap: {0}")]
-    InvalidHeapAddressed(Heap),
     #[error("Invalid type for address: {0}")]
     InvalidAddressType(Type),
     #[error("Requested an the entry {entry} but only {max} entries are allowed")]
