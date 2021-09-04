@@ -11,6 +11,8 @@ pub enum Error {
     SemaError(#[from] SemaError),
     #[error("IO error")]
     IoError(#[from] std::io::Error),
+    #[error("Formatting error")]
+    FmtError(#[from] std::fmt::Error),
 }
 
 #[derive(Clone, Debug, Error)]

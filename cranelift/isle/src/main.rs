@@ -18,7 +18,7 @@ fn main() -> Result<(), error::Error> {
     stdin().read_to_string(&mut input)?;
     let mut parser = parser::Parser::new("<stdin>", &input[..]);
     let defs = parser.parse_defs()?;
-    let automata = compile::compile(&defs)?;
-    println!("automata: {:?}", automata);
+    let code = compile::compile(&defs)?;
+    println!("{}", code);
     Ok(())
 }
