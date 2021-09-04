@@ -14,6 +14,15 @@ pub struct Pos {
     pub col: usize,
 }
 
+impl Pos {
+    pub fn pretty_print(&self, filename: &str) -> String {
+        format!("{}:{}:{}", filename, self.line, self.col)
+    }
+    pub fn pretty_print_line(&self, filename: &str) -> String {
+        format!("{} line {}", filename, self.line)
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Token<'a> {
     LParen,

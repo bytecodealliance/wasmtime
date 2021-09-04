@@ -50,7 +50,7 @@ pub enum Type {
 }
 
 impl Type {
-    fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
+    pub fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
         match self {
             Self::Primitive(_, name) | Self::Enum { name, .. } => &tyenv.syms[name.index()],
         }
@@ -60,6 +60,7 @@ impl Type {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Variant {
     pub name: Sym,
+    pub fullname: Sym,
     pub id: VariantId,
     pub fields: Vec<Field>,
 }
@@ -209,9 +210,10 @@ impl TypeEnv {
                 let mut variants = vec![];
                 for variant in ty_variants {
                     let combined_ident = ast::Ident(format!("{}.{}", ty.name.0, variant.name.0));
-                    let var_name = self.intern_mut(&combined_ident);
+                    let fullname = self.intern_mut(&combined_ident);
+                    let name = self.intern_mut(&variant.name);
                     let id = VariantId(variants.len());
-                    if variants.iter().any(|v: &Variant| v.name == var_name) {
+                    if variants.iter().any(|v: &Variant| v.name == name) {
                         return Err(self.error(
                             ty.pos,
                             format!("Duplicate variant name in type: '{}'", variant.name.0),
@@ -249,7 +251,8 @@ impl TypeEnv {
                         });
                     }
                     variants.push(Variant {
-                        name: var_name,
+                        name,
+                        fullname,
                         id,
                         fields,
                     });
@@ -376,12 +379,12 @@ impl TermEnv {
                     ..
                 } => {
                     for variant in variants {
-                        if self.term_map.contains_key(&variant.name) {
+                        if self.term_map.contains_key(&variant.fullname) {
                             return Err(tyenv.error(
                                 pos,
                                 format!(
                                     "Duplicate enum variant constructor: '{}'",
-                                    tyenv.syms[variant.name.index()]
+                                    tyenv.syms[variant.fullname.index()]
                                 ),
                             ));
                         }
@@ -390,14 +393,14 @@ impl TermEnv {
                         let ret_ty = id;
                         self.terms.push(Term {
                             id: tid,
-                            name: variant.name,
+                            name: variant.fullname,
                             arg_tys,
                             ret_ty,
                             kind: TermKind::EnumVariant {
                                 variant: variant.id,
                             },
                         });
-                        self.term_map.insert(variant.name, tid);
+                        self.term_map.insert(variant.fullname, tid);
                     }
                 }
                 _ => {}
