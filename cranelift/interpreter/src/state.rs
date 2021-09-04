@@ -80,7 +80,8 @@ pub trait State<'a, V> {
     /// stack or to one of the heaps; the number of bytes stored corresponds to the specified [Type].
     fn checked_store(&mut self, address: Address, v: V) -> Result<(), MemoryError>;
 
-    /// Given a global value, compute the
+    /// Given a global value, compute the final value for that global value, applying all operations
+    /// in intermediate global values.
     fn resolve_global_value(&self, gv: GlobalValue) -> Result<V, MemoryError>;
 }
 
