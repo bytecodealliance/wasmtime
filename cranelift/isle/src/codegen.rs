@@ -1,9 +1,9 @@
 //! Generate Rust code from a series of Sequences.
 
 use crate::error::Error;
-use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence, Value};
+use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence};
 use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 /// One "input symbol" for the decision tree that handles matching on
 /// a term. Each symbol represents one step: we either run a match op,
@@ -157,10 +157,13 @@ enum TrieSymbol {
     EndOfMatch,
 }
 
-#[derive(Clone, Debug)]
-struct TrieEdge {
-    key: (PrioRange, TrieSymbol),
-    node: Box<TrieNode>,
+impl TrieSymbol {
+    fn is_eom(&self) -> bool {
+        match self {
+            TrieSymbol::EndOfMatch => true,
+            _ => false,
+        }
+    }
 }
 
 type Prio = i64;
@@ -168,49 +171,220 @@ type Prio = i64;
 #[derive(Clone, Copy, Debug)]
 struct PrioRange(Prio, Prio);
 
-impl std::cmp::PartialOrd for PrioRange {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+impl PrioRange {
+    fn contains(&self, prio: Prio) -> bool {
+        prio >= self.0 && prio <= self.1
     }
-}
-impl std::cmp::Ord for PrioRange {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.1 < other.0 {
-            std::cmp::Ordering::Less
-        } else if self.0 > other.1 {
-            std::cmp::Ordering::Greater
+
+    fn is_unit(&self) -> bool {
+        self.0 == self.1
+    }
+
+    fn overlaps(&self, other: PrioRange) -> bool {
+        // This can be derived via DeMorgan: !(self.begin > other.end
+        // OR other.begin > self.end).
+        self.0 <= other.1 && other.0 <= self.1
+    }
+
+    fn intersect(&self, other: PrioRange) -> PrioRange {
+        PrioRange(
+            std::cmp::max(self.0, other.0),
+            std::cmp::min(self.1, other.1),
+        )
+    }
+
+    fn union(&self, other: PrioRange) -> PrioRange {
+        PrioRange(
+            std::cmp::min(self.0, other.0),
+            std::cmp::max(self.1, other.1),
+        )
+    }
+
+    fn split_at(&self, prio: Prio) -> (PrioRange, PrioRange) {
+        assert!(self.contains(prio));
+        assert!(!self.is_unit());
+        if prio == self.0 {
+            (PrioRange(self.0, self.0), PrioRange(self.0 + 1, self.1))
         } else {
-            std::cmp::Ordering::Equal
+            (PrioRange(self.0, prio - 1), PrioRange(prio, self.1))
         }
     }
 }
-impl std::cmp::PartialEq for PrioRange {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == std::cmp::Ordering::Equal
-    }
+
+#[derive(Clone, Debug)]
+struct TrieEdge {
+    range: PrioRange,
+    symbol: TrieSymbol,
+    node: TrieNode,
 }
-impl std::cmp::Eq for PrioRange {}
 
 #[derive(Clone, Debug)]
 enum TrieNode {
-    Decision {
-        edges: BTreeMap<(PrioRange, TrieSymbol), TrieNode>,
-    },
-    Leaf {
-        prio: Prio,
-        output: Vec<ExprSequence>,
-    },
+    Decision { edges: Vec<TrieEdge> },
+    Leaf { prio: Prio, output: ExprSequence },
     Empty,
 }
 
 impl TrieNode {
+    fn is_empty(&self) -> bool {
+        match self {
+            &TrieNode::Empty => true,
+            _ => false,
+        }
+    }
+
     fn insert(
         &mut self,
         prio: Prio,
-        input: impl Iterator<Item = PatternInst>,
+        mut input: impl Iterator<Item = TrieSymbol>,
         output: ExprSequence,
-    ) {
-        unimplemented!()
+    ) -> bool {
+        // Take one input symbol. There must be *at least* one, EOM if
+        // nothing else.
+        let op = input
+            .next()
+            .expect("Cannot insert into trie with empty input sequence");
+        let is_last = op.is_eom();
+
+        // If we are empty, turn into a decision node.
+        if self.is_empty() {
+            *self = TrieNode::Decision { edges: vec![] };
+        }
+
+        // We must be a decision node.
+        let edges = match self {
+            &mut TrieNode::Decision { ref mut edges } => edges,
+            _ => panic!("insert on leaf node!"),
+        };
+
+        // Do we need to split?
+        let needs_split = edges
+            .iter()
+            .any(|edge| edge.range.contains(prio) && !edge.range.is_unit());
+
+        // If so, pass over all edges/subnodes and split each.
+        if needs_split {
+            let mut new_edges = vec![];
+            for edge in std::mem::take(edges) {
+                if !edge.range.contains(prio) || edge.range.is_unit() {
+                    new_edges.push(edge);
+                    continue;
+                }
+
+                let (lo_range, hi_range) = edge.range.split_at(prio);
+                let lo = edge.node.trim(lo_range);
+                let hi = edge.node.trim(hi_range);
+                if let Some((node, range)) = lo {
+                    new_edges.push(TrieEdge {
+                        range,
+                        symbol: edge.symbol.clone(),
+                        node,
+                    });
+                }
+                if let Some((node, range)) = hi {
+                    new_edges.push(TrieEdge {
+                        range,
+                        symbol: edge.symbol,
+                        node,
+                    });
+                }
+            }
+            *edges = new_edges;
+        }
+
+        // Now find or insert the appropriate edge.
+        let mut edge: Option<usize> = None;
+        for i in 0..edges.len() {
+            if edges[i].range.contains(prio) && edges[i].symbol == op {
+                edge = Some(i);
+                break;
+            }
+            if prio > edges[i].range.1 {
+                edges.insert(
+                    i,
+                    TrieEdge {
+                        range: PrioRange(prio, prio),
+                        symbol: op.clone(),
+                        node: TrieNode::Empty,
+                    },
+                );
+                edge = Some(i);
+                break;
+            }
+        }
+        let edge = edge.unwrap_or_else(|| {
+            edges.push(TrieEdge {
+                range: PrioRange(prio, prio),
+                symbol: op.clone(),
+                node: TrieNode::Empty,
+            });
+            edges.len() - 1
+        });
+        let edge = &mut edges[edge];
+
+        if is_last {
+            if !edge.node.is_empty() {
+                // If a leaf node already exists at an overlapping
+                // prio for this op, there are two competing rules, so
+                // we can't insert this one.
+                return false;
+            }
+            edge.node = TrieNode::Leaf { prio, output };
+            true
+        } else {
+            edge.node.insert(prio, input, output)
+        }
+    }
+
+    fn trim(&self, range: PrioRange) -> Option<(TrieNode, PrioRange)> {
+        match self {
+            &TrieNode::Empty => None,
+            &TrieNode::Leaf { prio, ref output } => {
+                if range.contains(prio) {
+                    Some((
+                        TrieNode::Leaf {
+                            prio,
+                            output: output.clone(),
+                        },
+                        PrioRange(prio, prio),
+                    ))
+                } else {
+                    None
+                }
+            }
+            &TrieNode::Decision { ref edges } => {
+                let edges = edges
+                    .iter()
+                    .filter_map(|edge| {
+                        if !edge.range.overlaps(range) {
+                            None
+                        } else {
+                            let range = range.intersect(edge.range);
+                            if let Some((node, range)) = edge.node.trim(range) {
+                                Some(TrieEdge {
+                                    range,
+                                    symbol: edge.symbol.clone(),
+                                    node,
+                                })
+                            } else {
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                if edges.is_empty() {
+                    None
+                } else {
+                    let range = edges
+                        .iter()
+                        .map(|edge| edge.range)
+                        .reduce(|a, b| a.union(b))
+                        .expect("reduce on non-empty vec must not return None");
+                    Some((TrieNode::Decision { edges }, range))
+                }
+            }
+        }
     }
 }
 
@@ -224,6 +398,7 @@ impl TrieNode {
 /// trying to match another rule's left-hand side against an input to
 /// produce the term in question (when the term is used in the LHS of
 /// the calling term).
+#[derive(Debug)]
 struct TermFunctionBuilder {
     root_term: TermId,
     trie: TrieNode,
@@ -238,11 +413,16 @@ impl TermFunctionBuilder {
     }
 
     fn add_rule(&mut self, prio: Prio, pattern_seq: PatternSequence, expr_seq: ExprSequence) {
-        self.trie
-            .insert(prio, pattern_seq.insts.into_iter(), expr_seq);
+        let symbols = pattern_seq
+            .insts
+            .into_iter()
+            .map(|op| TrieSymbol::Match { op })
+            .chain(std::iter::once(TrieSymbol::EndOfMatch));
+        self.trie.insert(prio, symbols, expr_seq);
     }
 }
 
+#[derive(Debug)]
 struct TermFunctionsBuilder<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
@@ -302,6 +482,7 @@ impl Automata {
     pub fn compile(typeenv: &TypeEnv, termenv: &TermEnv) -> Result<Automata, Error> {
         let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
         builder.build();
+        log::trace!("builder: {:?}", builder);
         // TODO
         Ok(Automata::default())
     }
