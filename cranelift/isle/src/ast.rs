@@ -122,6 +122,8 @@ pub enum Extern {
         func: Ident,
         /// The position of this decl.
         pos: Pos,
+        /// Whether this extractor is infallible (always matches).
+        infallible: bool,
     },
     /// An external constructor: `(constructor Term rustfunc)` form.
     Constructor {

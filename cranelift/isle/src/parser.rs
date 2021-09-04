@@ -238,12 +238,19 @@ impl<'a> Parser<'a> {
 
     fn parse_etor(&mut self) -> ParseResult<Extern> {
         let pos = self.pos();
+        let infallible = if self.is_sym_str("infallible") {
+            self.symbol()?;
+            true
+        } else {
+            false
+        };
         let term = self.parse_ident()?;
         let func = self.parse_ident()?;
         Ok(Extern::Extractor {
             term,
             func,
             pos: pos.unwrap(),
+            infallible,
         })
     }
 

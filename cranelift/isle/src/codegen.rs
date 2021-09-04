@@ -6,13 +6,87 @@ use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
 use peepmatic_automata::{Automaton, Builder as AutomatonBuilder};
 use std::collections::HashMap;
 
-// TODO: automata built by output term as well
+/// One "input symbol" for the automaton that handles matching on a
+/// term. Each symbol represents one step: we either run a match op,
+/// or we get a result from it.
+///
+/// Note that in the original Peepmatic scheme, the problem that this
+/// solves was handled slightly differently. The automaton responded
+/// to alphabet symbols that corresponded only to match results, and
+/// the "extra state" was used at each automaton node to represent the
+/// op to run next. This extra state differentiated nodes that would
+/// otherwise be merged together by deduplication. That scheme works
+/// well enough, but the "extra state" is slightly confusing and
+/// diverges slightly from a pure automaton.
+///
+/// Instead, here, we imagine that the user of the automaton can query
+/// the possible transition edges out of the current state. Each of
+/// these edges corresponds to one possible match op to run. After
+/// running a match op, we reach a new state corresponding to
+/// successful matches up to that point.
+///
+/// However, it's a bit more subtle than this; we add one additional
+/// dimension to each match op, and an additional alphabet symbol.
+///
+/// First, consider the prioritization problem. We want to give the
+/// DSL user the ability to change the order in which rules apply, for
+/// example to have a tier of "fallback rules" that apply only if more
+/// custom rules do not match.
+///
+/// A somewhat simplistic answer to this problem is "more specific
+/// rule wins". However, this implies the existence of a total
+/// ordering of linearized match sequences that may not fully capture
+/// the intuitive meaning of "more specific". Consider four left-hand
+/// sides:
+///
+/// - (A _ _)
+/// - (A (B _) _)
+/// - (A _ (B _))
+///
+/// Intuitively, the first is the least specific. Given the input `(A
+/// (B 1) (B 2)`, we can say for sure that the first should not be
+/// chosen, because either the second or third would match "more" of
+/// the input tree. But which of the second and third should be
+/// chosen? A "lexicographic ordering" rule would say that we sort
+/// left-hand sides such that the `(B _)` sub-pattern comes before the
+/// wildcard `_`, so the second rule wins. But that is arbitrarily
+/// privileging one over the other based on the order of the
+/// arguments.
+///
+/// Instead, we add a priority to every rule (optionally specified in
+/// the source and defaulting to `0` otherwise) that conceptually
+/// augments match-ops. Then, when we examine out-edges from a state
+/// to decide on the next match, we sort these by highest priority
+/// first.
+///
+/// This, too, sacrifices some deduplication, so we refine the idea a
+/// bit. First, we add an "End of Match" alphabet symbol that
+/// represents a successful match. Then we stipulate that priorities
+/// are attached *only* to "End of Match"...
+///
+/// -- ah, this doesn't work because we need the (min, max) priority
+/// range on outbound edges. When we see a possible transition to EOM
+/// at prio 10 or a match op that could lead to an EOM at prio 0 or
+/// 20, we need to do both, NFA-style.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum AutomataInput {
+    Match { op: PatternInst },
+    EndOfMatch { prio: i32 },
+}
 
 /// Builder context for one function in generated code corresponding
 /// to one root input term.
+///
+/// A `TermFunctionBuilder` can correspond to the matching
+/// control-flow and operations that we execute either when evaluating
+/// *forward* on a term, trying to match left-hand sides against it
+/// and transforming it into another term; or *backward* on a term,
+/// trying to match another rule's left-hand side against an input to
+/// produce the term in question (when the term is used in the LHS of
+/// the calling term).
 struct TermFunctionBuilder {
     root_term: TermId,
-    automaton: AutomatonBuilder<PatternInst, (), ExprSequence>,
+    automaton: AutomatonBuilder<AutomataInput, (), ExprSequence>,
 }
 
 impl TermFunctionBuilder {

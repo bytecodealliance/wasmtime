@@ -90,13 +90,18 @@ pub struct Term {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermKind {
     EnumVariant {
+        /// Which variant of the enum: e.g. for enum type `A` if a
+        /// term is `(A.A1 ...)` then the variant ID corresponds to
+        /// `A1`.
         variant: VariantId,
     },
     Regular {
         // Producer and consumer rules are catalogued separately after
         // building Sequences. Here we just record whether an
         // extractor and/or constructor is known.
-        extractor: Option<Sym>,
+        /// Extractor func and `infallible` flag.
+        extractor: Option<(Sym, bool)>,
+        /// Constructor func.
         constructor: Option<Sym>,
     },
 }
@@ -472,6 +477,7 @@ impl TermEnv {
                     ref term,
                     ref func,
                     pos,
+                    infallible,
                 }) => {
                     let term_sym = tyenv.intern_mut(term);
                     let func_sym = tyenv.intern_mut(func);
@@ -503,7 +509,7 @@ impl TermEnv {
                                     ),
                                 ));
                             }
-                            *extractor = Some(func_sym);
+                            *extractor = Some((func_sym, infallible));
                         }
                     }
                 }
