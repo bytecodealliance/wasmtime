@@ -254,11 +254,14 @@ impl<'a> InterpreterState<'a> {
     /// let heap_base = state.get_heap_address(I64, heap_ref, 0);
     /// let heap_bound = state.get_heap_address(I64, heap_ref, 1024);
     /// ```
-    pub fn get_heap_address(&self, ty: Type, heap: Heap, offset: u64) -> DataValue {
-        let size = AddressSize::try_from(ty).unwrap();
-        let addr =
-            Address::from_parts(size, AddressRegion::Heap, heap.as_u32() as u64, offset).unwrap();
-        addr.try_into().unwrap()
+    pub fn get_heap_address(
+        &self,
+        ty: Type,
+        heap: Heap,
+        offset: u64,
+    ) -> Result<DataValue, MemoryError> {
+        let size = AddressSize::try_from(ty)?;
+        Ok(self.heap_address(size, heap, offset)?.try_into()?)
     }
 
     fn current_frame_mut(&mut self) -> &mut Frame<'a> {
@@ -374,15 +377,26 @@ impl<'a> State<'a, DataValue> for InterpreterState<'a> {
         heap: Heap,
         offset: u64,
     ) -> Result<Address, MemoryError> {
-        let heap_data = &self.get_current_function().heaps[heap];
-        let heap_base = self.resolve_global_value(heap_data.base)?;
-        let mut addr = Address::try_from(heap_base)?;
-        addr.size = size;
-        addr.offset += offset;
+        // It is possible for this function to be called before the interpreter has started
+        // execution (see `InterpreterState::get_heap_address`). If this happens we cannot
+        // perform global value resolution, and have to build an address directly referencing
+        // the `heap` that was provided.
+        let has_current_function = self.frame_stack.len() == 0;
+        let addr = if has_current_function {
+            let heap_id = heap.as_u32() as u64;
+            Address::from_parts(size, AddressRegion::Heap, heap_id, offset)?
+        } else {
+            let heap_data = &self.get_current_function().heaps[heap];
+            let heap_base = self.resolve_global_value(heap_data.base)?;
+            let mut addr = Address::try_from(heap_base)?;
+            addr.size = size;
+            addr.offset += offset;
+            addr
+        };
 
         let heap = &self.heaps[heap.as_u32() as usize];
         let heap_len = heap.len() as u64;
-        if addr.offset >= heap_len {
+        if addr.offset > heap_len {
             return Err(MemoryError::InvalidOffset {
                 offset: addr.offset,
                 max: heap_len,
@@ -945,7 +959,7 @@ mod tests {
         let mut state = InterpreterState::default().with_function_store(env);
 
         let heap0 = state.register_heap(HeapInit::Zeroed(0x1000));
-        let base_addr = state.get_heap_address(I64, heap0, 0);
+        let base_addr = state.get_heap_address(I64, heap0, 0).unwrap();
 
         // Build a vmctx struct by writing the base pointer at index 0
         let mut vmctx_struct = vec![0u8; 8];
@@ -953,7 +967,7 @@ mod tests {
 
         // This is our vmctx "heap"
         let vmctx = state.register_heap(HeapInit::FromBacking(vmctx_struct));
-        let vmctx_addr = state.get_heap_address(I64, vmctx, 0);
+        let vmctx_addr = state.get_heap_address(I64, vmctx, 0).unwrap();
 
         let result = Interpreter::new(state)
             .call_by_name("%heap_load_store", &[vmctx_addr])

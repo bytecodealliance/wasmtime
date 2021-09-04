@@ -7,11 +7,12 @@ use crate::value::{Value, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Value as ValueRef,
+    types, Block, FuncRef, Function, InstructionData, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
 use std::convert::{TryFrom, TryInto};
+use std::fmt::Debug;
 use std::ops::RangeFrom;
 use thiserror::Error;
 
@@ -136,11 +137,11 @@ where
         Err(e) => ControlFlow::Trap(CraneliftTrap::User(memerror_to_trap(e))),
     };
 
-    let calculate_addr = |imm: V, args: SmallVec<[V; 1]>| -> ValueResult<u64> {
-        let imm = imm.convert(ValueConversionKind::ZeroExtend(ctrl_ty))?;
+    let calculate_addr = |addr_ty: Type, imm: V, args: SmallVec<[V; 1]>| -> ValueResult<u64> {
+        let imm = imm.convert(ValueConversionKind::ZeroExtend(addr_ty))?;
         let args = args
             .into_iter()
-            .map(|v| v.convert(ValueConversionKind::ZeroExtend(ctrl_ty)))
+            .map(|v| v.convert(ValueConversionKind::ZeroExtend(addr_ty)))
             .collect::<ValueResult<SmallVec<[V; 1]>>>()?;
 
         Ok(sum(imm, args)? as u64)
@@ -316,7 +317,7 @@ where
                 _ => unreachable!(),
             };
 
-            let addr_value = calculate_addr(imm(), args()?)?;
+            let addr_value = calculate_addr(types::I64, imm(), args()?)?;
             let loaded = assign_or_memtrap(
                 Address::try_from(addr_value).and_then(|addr| state.checked_load(addr, load_ty)),
             );
@@ -339,7 +340,7 @@ where
                 _ => unreachable!(),
             };
 
-            let addr_value = calculate_addr(imm(), args_range(1..)?)?;
+            let addr_value = calculate_addr(types::I64, imm(), args_range(1..)?)?;
             let reduced = if let Some(c) = kind {
                 arg(0)?.convert(c)?
             } else {
@@ -387,7 +388,7 @@ where
         Opcode::HeapAddr => {
             if let InstructionData::HeapAddr { heap, .. } = inst {
                 let load_ty = inst_context.controlling_type().unwrap();
-                let offset = calculate_addr(imm(), args()?)? as u64;
+                let offset = calculate_addr(ctrl_ty, imm(), args()?)? as u64;
                 assign_or_memtrap({
                     AddressSize::try_from(load_ty).and_then(|addr_size| {
                         let addr = state.heap_address(addr_size, heap, offset)?;

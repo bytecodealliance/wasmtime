@@ -1,6 +1,5 @@
 use anyhow::anyhow;
-use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::Type;
+use cranelift_codegen::ir::{ArgumentPurpose, Function};
 use cranelift_reader::parse_heap_command;
 use cranelift_reader::{Comment, HeapCommand};
 
@@ -45,68 +44,37 @@ impl RuntestEnvironment {
         !self.heaps.is_empty()
     }
 
-    /// Allocates a struct to be injected into the test.
-    pub fn runtime_struct(&self) -> RuntestContext {
-        RuntestContext::new(&self)
-    }
-}
-
-type HeapMemory = Vec<u8>;
-
-/// A struct that provides info about the environment to the test
-#[derive(Debug, Clone)]
-pub struct RuntestContext {
-    /// Store the heap memory alongside the context info so that we don't accidentally deallocate
-    /// it too early.
-    #[allow(dead_code)]
-    heaps: Vec<HeapMemory>,
-
-    /// This is the actual struct that gets passed into the `vmctx`  argument of the tests.
-    /// It has a specific memory layout that all tests agree with.
-    ///
-    /// Currently we only have to store heap info, so we store the heap start and end addresses in
-    /// a 64 bit slot for each heap.
-    ///
-    /// ┌────────────┐
-    /// │heap0: start│
-    /// ├────────────┤
-    /// │heap0: end  │
-    /// ├────────────┤
-    /// │heap1: start│
-    /// ├────────────┤
-    /// │heap1: end  │
-    /// ├────────────┤
-    /// │etc...      │
-    /// └────────────┘
-    context_struct: Vec<u64>,
-}
-
-impl RuntestContext {
-    pub fn new(env: &RuntestEnvironment) -> Self {
-        let heaps: Vec<HeapMemory> = env
-            .heaps
+    /// Allocates memory for heaps
+    pub fn allocate_memory(&self) -> Vec<HeapMemory> {
+        self.heaps
             .iter()
             .map(|cmd| {
                 let size: u64 = cmd.size.into();
                 vec![0u8; size as usize]
             })
-            .collect();
-
-        let context_struct = heaps
-            .iter()
-            .flat_map(|heap| [heap.as_ptr(), heap.as_ptr().wrapping_add(heap.len())])
-            .map(|p| p as usize as u64)
-            .collect();
-
-        Self {
-            heaps,
-            context_struct,
-        }
+            .collect()
     }
 
-    /// Creates a [DataValue] with a target isa pointer type to the context struct.
-    pub fn pointer(&self, ty: Type) -> DataValue {
-        let ptr = self.context_struct.as_ptr() as usize as i128;
-        DataValue::from_integer(ptr, ty).expect("Failed to cast pointer to native target size")
+    /// Validates the signature of a [Function] ensuring that if this environment is active, the
+    /// function has a `vmctx` argument
+    pub fn validate_signature(&self, func: &Function) -> Result<(), String> {
+        let first_arg_is_vmctx = func
+            .signature
+            .params
+            .first()
+            .map(|p| p.purpose == ArgumentPurpose::VMContext)
+            .unwrap_or(false);
+
+        if !first_arg_is_vmctx && self.is_active() {
+            return Err(concat!(
+                "This test requests a heap, but the first argument is not `i64 vmctx`.\n",
+                "See docs/testing.md for more info on using heap annotations."
+            )
+            .to_string());
+        }
+
+        Ok(())
     }
 }
+
+pub(crate) type HeapMemory = Vec<u8>;
