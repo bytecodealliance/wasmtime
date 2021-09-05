@@ -712,7 +712,11 @@ impl<'a> Codegen<'a> {
 
             let mut body_ctx: BodyContext = Default::default();
             body_ctx.expected_return_vals = 1;
-            self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
+            let returned =
+                self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
+            if !returned {
+                writeln!(code, "    return None;")?;
+            }
 
             writeln!(code, "}}")?;
         }
@@ -768,7 +772,11 @@ impl<'a> Codegen<'a> {
             let mut body_ctx: BodyContext = Default::default();
             body_ctx.expected_return_vals = ret_tuple_tys.len();
             body_ctx.tuple_return = true;
-            self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
+            let returned =
+                self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
+            if !returned {
+                writeln!(code, "    return None;")?;
+            }
             writeln!(code, "}}")?;
         }
 
@@ -1092,9 +1100,6 @@ impl<'a> Codegen<'a> {
             }
         }
 
-        if !returned {
-            writeln!(code, "{}return None;", indent)?;
-        }
         Ok(returned)
     }
 }
