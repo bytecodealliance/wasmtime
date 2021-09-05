@@ -1,8 +1,8 @@
 //! Generate Rust code from a series of Sequences.
 
-use crate::error::Error;
 use crate::ir::{lower_rule, ExprInst, ExprSequence, InstId, PatternInst, PatternSequence, Value};
-use crate::sema::{RuleId, Term, TermEnv, TermId, TermKind, Type, TypeEnv, TypeId};
+use crate::sema::{RuleId, TermEnv, TermId, TermKind, Type, TypeEnv, TypeId};
+use crate::{error::Error, ir::reverse_rule};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
@@ -463,11 +463,14 @@ impl<'a> TermFunctionsBuilder<'a> {
                     .or_insert_with(|| TermFunctionBuilder::new(input_root_term))
                     .add_rule(prio, pattern.clone(), expr.clone());
             }
+
             if let Some(output_root_term) = rhs_root {
-                self.builders_by_output
-                    .entry(output_root_term)
-                    .or_insert_with(|| TermFunctionBuilder::new(output_root_term))
-                    .add_rule(prio, pattern, expr);
+                if let Some((reverse_pattern, reverse_expr)) = reverse_rule(&pattern, &expr) {
+                    self.builders_by_output
+                        .entry(output_root_term)
+                        .or_insert_with(|| TermFunctionBuilder::new(output_root_term))
+                        .add_rule(prio, reverse_pattern, reverse_expr);
+                }
             }
         }
     }
@@ -498,6 +501,8 @@ pub struct Codegen<'a> {
 #[derive(Clone, Debug, Default)]
 struct BodyContext {
     borrowed_values: HashSet<Value>,
+    expected_return_vals: usize,
+    tuple_return: bool,
 }
 
 impl<'a> Codegen<'a> {
@@ -694,7 +699,8 @@ impl<'a> Codegen<'a> {
                 self.type_name(termdata.ret_ty, /* by_ref = */ None)
             )?;
 
-            let mut body_ctx = Default::default();
+            let mut body_ctx: BodyContext = Default::default();
+            body_ctx.expected_return_vals = 1;
             self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
 
             writeln!(code, "}}")?;
@@ -717,7 +723,7 @@ impl<'a> Codegen<'a> {
             // Get the name of the term and build up the signature.
             let (func_name, _) = self.extractor_name_and_infallible(termid);
             let arg = format!(
-                "arg: {}",
+                "arg0: {}",
                 self.type_name(termdata.ret_ty, /* by_ref = */ Some("&"))
             );
             let ret_tuple_tys = termdata
@@ -735,30 +741,20 @@ impl<'a> Codegen<'a> {
             )?;
             writeln!(
                 code,
-                "fn {}<'a, C>(ctx: &mut C, {}) -> Option<({})> {{",
+                "fn {}<C>(ctx: &mut C, {}) -> Option<({},)> {{",
                 func_name,
                 arg,
                 ret_tuple_tys.join(", "),
             )?;
 
-            let mut body_ctx = Default::default();
-            self.generate_extractor_header(code, termdata, &mut body_ctx)?;
+            let mut body_ctx: BodyContext = Default::default();
+            body_ctx.expected_return_vals = ret_tuple_tys.len();
+            body_ctx.tuple_return = true;
             self.generate_body(code, /* depth = */ 0, trie, "        ", &mut body_ctx)?;
             writeln!(code, "    }}")?;
             writeln!(code, "}}")?;
         }
 
-        Ok(())
-    }
-
-    fn generate_extractor_header(
-        &self,
-        code: &mut dyn Write,
-        termdata: &Term,
-        ctx: &mut BodyContext,
-    ) -> Result<(), Error> {
-        writeln!(code, "    {{")?;
-        todo!();
         Ok(())
     }
 
@@ -769,6 +765,7 @@ impl<'a> Codegen<'a> {
         inst: &ExprInst,
         indent: &str,
         ctx: &mut BodyContext,
+        returns: &mut Vec<(usize, String)>,
     ) -> Result<(), Error> {
         match inst {
             &ExprInst::ConstInt { ty, val } => {
@@ -843,9 +840,11 @@ impl<'a> Codegen<'a> {
                 )?;
                 self.define_val(&output, ctx, /* is_ref = */ false);
             }
-            &ExprInst::Return { ref value, .. } => {
+            &ExprInst::Return {
+                index, ref value, ..
+            } => {
                 let value_expr = self.value_by_val(value, ctx);
-                writeln!(code, "{}return Some({});", indent, value_expr)?;
+                returns.push((index, value_expr));
             }
         }
 
@@ -936,9 +935,9 @@ impl<'a> Codegen<'a> {
             }
             &PatternInst::Extract {
                 ref input,
-                input_ty,
                 ref arg_tys,
                 term,
+                ..
             } => {
                 let input = self.value_by_ref(input, ctx);
                 let (etor_name, infallible) = self.extractor_name_and_infallible(term);
@@ -946,7 +945,7 @@ impl<'a> Codegen<'a> {
                 let args = arg_tys
                     .iter()
                     .enumerate()
-                    .map(|(i, ty)| {
+                    .map(|(i, _ty)| {
                         let value = Value::Pattern {
                             inst: id,
                             output: i,
@@ -959,7 +958,7 @@ impl<'a> Codegen<'a> {
                 if infallible {
                     writeln!(
                         code,
-                        "{}let Some(({})) = {}(ctx, {});",
+                        "{}let Some(({},)) = {}(ctx, {});",
                         indent,
                         args.join(", "),
                         etor_name,
@@ -969,7 +968,7 @@ impl<'a> Codegen<'a> {
                 } else {
                     writeln!(
                         code,
-                        "{}if let Some(({})) = {}(ctx, {}) {{",
+                        "{}if let Some(({},)) = {}(ctx, {}) {{",
                         indent,
                         args.join(", "),
                         etor_name,
@@ -1002,14 +1001,26 @@ impl<'a> Codegen<'a> {
                     output.pos.pretty_print_line(&self.typeenv.filenames[..])
                 )?;
                 // If this is a leaf node, generate the ExprSequence and return.
+                let mut returns = vec![];
                 for (id, inst) in output.insts.iter().enumerate() {
                     let id = InstId(id);
-                    self.generate_expr_inst(code, id, inst, indent, ctx)?;
-                    if let &ExprInst::Return { .. } = inst {
-                        returned = true;
-                        break;
-                    }
+                    self.generate_expr_inst(code, id, inst, indent, ctx, &mut returns)?;
                 }
+
+                assert_eq!(returns.len(), ctx.expected_return_vals);
+                returns.sort_by_key(|(index, _)| *index);
+                if ctx.tuple_return {
+                    let return_values = returns
+                        .into_iter()
+                        .map(|(_, expr)| expr)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    writeln!(code, "{}return Some(({},));", indent, return_values)?;
+                } else {
+                    writeln!(code, "{}return Some({});", indent, returns[0].1)?;
+                }
+
+                returned = true;
             }
 
             &TrieNode::Decision { ref edges } => {

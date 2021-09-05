@@ -71,8 +71,8 @@ pub enum ExprInst {
         term: TermId,
     },
 
-    /// Set the return value. Produces no values.
-    Return { ty: TypeId, value: Value },
+    /// Set the Nth return value. Produces no values.
+    Return { index: usize, ty: TypeId, value: Value },
 }
 
 impl ExprInst {
@@ -294,7 +294,11 @@ impl ExprSequence {
     }
 
     fn add_return(&mut self, ty: TypeId, value: Value) {
-        self.add_inst(ExprInst::Return { ty, value });
+        self.add_inst(ExprInst::Return { index: 0, ty, value });
+    }
+
+    fn add_multi_return(&mut self, index: usize, ty: TypeId, value: Value) {
+        self.add_inst(ExprInst::Return { index, ty, value });
     }
 
     /// Creates a sequence of ExprInsts to generate the given
@@ -369,4 +373,103 @@ pub fn lower_rule(
     expr_seq.add_return(output_ty, rhs_root);
 
     (lhs_root_term, pattern_seq, rhs_root_term, expr_seq)
+}
+
+/// Reverse a sequence to form an extractor from a constructor.
+pub fn reverse_rule(
+    orig_pat: &PatternSequence,
+    orig_expr: &ExprSequence,
+) -> Option<(
+    PatternSequence,
+    ExprSequence,
+    )>
+{
+    let mut pattern_seq = PatternSequence::default();
+    let mut expr_seq = ExprSequence::default();
+    expr_seq.pos = orig_expr.pos;
+
+    let mut value_map = HashMap::new();
+
+    for (id, inst) in orig_expr.insts.iter().enumerate().rev() {
+        let id = InstId(id);
+        match inst {
+            &ExprInst::Return { index, ty, value } => {
+                let new_value = pattern_seq.add_arg(index, ty);
+                value_map.insert(value, new_value);
+            }
+            &ExprInst::Construct { ref inputs, ty, term } => {
+                let arg_tys = inputs.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+                let input_ty = ty;
+                // Input to the Extract is the output of the Construct.
+                let input = value_map.get(&Value::Expr { inst: id, output: 0 })?.clone();
+                let outputs = pattern_seq.add_extract(input, input_ty, &arg_tys[..], term);
+                for (input, output) in inputs.iter().map(|(val, _)| val).zip(outputs.into_iter()) {
+                    value_map.insert(*input, output);
+                }
+            }
+            &ExprInst::CreateVariant { ref inputs, ty, variant } => {
+                let arg_tys = inputs.iter().map(|(_, ty)| *ty).collect::<Vec<_>>();
+                let input_ty = ty;
+                // Input to the MatchVariant is the output of the CreateVariant.
+                let input = value_map.get(&Value::Expr { inst: id, output: 0 })?.clone();
+                let outputs = pattern_seq.add_match_variant(input, input_ty, &arg_tys[..], variant);
+                for (input, output) in inputs.iter().map(|(val, _)| val).zip(outputs.into_iter()) {
+                    value_map.insert(*input, output);
+                }
+            }
+            &ExprInst::ConstInt { ty, val } => {
+                let input = value_map.get(&Value::Expr { inst: id, output: 0 })?.clone();
+                pattern_seq.add_match_int(input, ty, val);
+            }
+        }
+    }
+
+    for (id, inst) in orig_pat.insts.iter().enumerate().rev() {
+        let id = InstId(id);
+        match inst {
+            &PatternInst::Extract { input, input_ty, ref arg_tys, term } => {
+                let mut inputs = vec![];
+                for i in 0..arg_tys.len() {
+                    let value = Value::Pattern { inst: id, output: i };
+                    let new_value = value_map.get(&value)?.clone();
+                    inputs.push((new_value, arg_tys[i]));
+                }
+                let output = expr_seq.add_construct(&inputs[..], input_ty, term);
+                value_map.insert(input, output);
+                
+            }
+            &PatternInst::MatchVariant { input, input_ty, ref arg_tys, variant } => {
+                let mut inputs = vec![];
+                for i in 0..arg_tys.len() {
+                    let value = Value::Pattern { inst: id, output: i };
+                    let new_value = value_map.get(&value)?.clone();
+                    inputs.push((new_value, arg_tys[i]));
+                }
+                let output = expr_seq.add_create_variant(&inputs[..], input_ty, variant);
+                value_map.insert(input, output);
+            }
+            &PatternInst::MatchEqual { a, b, .. } => {
+                if let Some(new_a) = value_map.get(&a).cloned() {
+                    if !value_map.contains_key(&b) {
+                        value_map.insert(b, new_a);
+                    }
+                } else if let Some(new_b) = value_map.get(&b).cloned() {
+                    if !value_map.contains_key(&a) {
+                        value_map.insert(a, new_b);
+                    }
+                }
+            }
+            &PatternInst::MatchInt { input, ty, int_val } => {
+                let output = expr_seq.add_const_int(ty, int_val);
+                value_map.insert(input, output);
+            }
+            &PatternInst::Arg { index, ty } => {
+                let value = Value::Pattern { inst: id, output: 0 };
+                let new_value = value_map.get(&value)?.clone();
+                expr_seq.add_multi_return(index, ty, new_value);
+            }
+        }
+    }
+
+    Some((pattern_seq, expr_seq))
 }

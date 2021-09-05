@@ -10,3 +10,12 @@
 (rule
   (Lower (A.A1 sub @ (Input (A.A2 42))))
   (B.B2 sub))
+
+(decl Extractor (B) A)
+(rule
+  (A.A2 x)
+  (Extractor (B.B1 x)))
+
+(rule
+  (Lower (Extractor b))
+  b)
