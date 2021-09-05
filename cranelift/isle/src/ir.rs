@@ -17,8 +17,9 @@ pub enum Value {
 /// A single Pattern instruction.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PatternInst {
-    /// Get the input root-term value.
-    Arg { ty: TypeId },
+    /// Get the Nth input argument, which corresponds to the Nth field
+    /// of the root term.
+    Arg { index: usize, ty: TypeId },
 
     /// Match a value as equal to another value. Produces no values.
     MatchEqual { a: Value, b: Value, ty: TypeId },
@@ -118,9 +119,9 @@ impl PatternSequence {
         id
     }
 
-    fn add_arg(&mut self, ty: TypeId) -> Value {
+    fn add_arg(&mut self, index: usize, ty: TypeId) -> Value {
         let inst = InstId(self.insts.len());
-        self.add_inst(PatternInst::Arg { ty });
+        self.add_inst(PatternInst::Arg { index, ty });
         Value::Pattern { inst, output: 0 }
     }
 
@@ -183,7 +184,9 @@ impl PatternSequence {
     /// this pattern, if any.
     fn gen_pattern(
         &mut self,
-        input: Value,
+        // If `input` is `None`, then this is the root pattern, and is
+        // implicitly an extraction with the N args as results.
+        input: Option<Value>,
         typeenv: &TypeEnv,
         termenv: &TermEnv,
         pat: &Pattern,
@@ -193,8 +196,9 @@ impl PatternSequence {
             &Pattern::BindPattern(_ty, var, ref subpat) => {
                 // Bind the appropriate variable and recurse.
                 assert!(!vars.contains_key(&var));
-                vars.insert(var, (None, input)); // bind first, so subpat can use it
-                let root_term = self.gen_pattern(input, typeenv, termenv, &*subpat, vars);
+                vars.insert(var, (None, input.unwrap())); // bind first, so subpat can use it
+                let root_term =
+                    self.gen_pattern(input, typeenv, termenv, &*subpat, vars);
                 vars.get_mut(&var).unwrap().0 = root_term;
                 root_term
             }
@@ -204,13 +208,22 @@ impl PatternSequence {
                     .get(&var)
                     .cloned()
                     .expect("Variable should already be bound");
-                self.add_match_equal(input, var_val, ty);
+                self.add_match_equal(input.unwrap(), var_val, ty);
                 var_val_term
             }
             &Pattern::ConstInt(ty, value) => {
                 // Assert that the value matches the constant integer.
-                self.add_match_int(input, ty, value);
+                self.add_match_int(input.unwrap(), ty, value);
                 None
+            }
+            &Pattern::Term(_, term, ref args) if input.is_none() => {
+                let termdata = &termenv.terms[term.index()];
+                let arg_tys = &termdata.arg_tys[..];
+                for (i, subpat) in args.iter().enumerate() {
+                    let value = self.add_arg(i, arg_tys[i]);
+                    self.gen_pattern(Some(value), typeenv, termenv, subpat, vars);
+                }
+                Some(term)
             }
             &Pattern::Term(ty, term, ref args) => {
                 // Determine whether the term has an external extractor or not.
@@ -218,16 +231,17 @@ impl PatternSequence {
                 let arg_tys = &termdata.arg_tys[..];
                 match &termdata.kind {
                     &TermKind::EnumVariant { variant } => {
-                        let arg_values = self.add_match_variant(input, ty, arg_tys, variant);
+                        let arg_values =
+                            self.add_match_variant(input.unwrap(), ty, arg_tys, variant);
                         for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
-                            self.gen_pattern(value, typeenv, termenv, subpat, vars);
+                            self.gen_pattern(Some(value), typeenv, termenv, subpat, vars);
                         }
                         None
                     }
                     &TermKind::Regular { .. } => {
-                        let arg_values = self.add_extract(input, ty, arg_tys, term);
+                        let arg_values = self.add_extract(input.unwrap(), ty, arg_tys, term);
                         for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
-                            self.gen_pattern(value, typeenv, termenv, subpat, vars);
+                            self.gen_pattern(Some(value), typeenv, termenv, subpat, vars);
                         }
                         Some(term)
                     }
@@ -341,10 +355,8 @@ pub fn lower_rule(
 
     // Lower the pattern, starting from the root input value.
     let ruledata = &termenv.rules[rule.index()];
-    let input_ty = ruledata.lhs.ty();
-    let input = pattern_seq.add_arg(input_ty);
     let mut vars = HashMap::new();
-    let lhs_root_term = pattern_seq.gen_pattern(input, tyenv, termenv, &ruledata.lhs, &mut vars);
+    let lhs_root_term = pattern_seq.gen_pattern(None, tyenv, termenv, &ruledata.lhs, &mut vars);
 
     // Lower the expression, making use of the bound variables
     // from the pattern.

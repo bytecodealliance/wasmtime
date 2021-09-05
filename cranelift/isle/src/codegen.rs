@@ -1,9 +1,9 @@
 //! Generate Rust code from a series of Sequences.
 
 use crate::error::Error;
-use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence};
-use crate::sema::{RuleId, TermEnv, TermId, TermKind, Type, TypeEnv, TypeId};
-use std::collections::HashMap;
+use crate::ir::{lower_rule, ExprInst, ExprSequence, InstId, PatternInst, PatternSequence, Value};
+use crate::sema::{RuleId, Term, TermEnv, TermId, TermKind, Type, TypeEnv, TypeId};
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 /// One "input symbol" for the decision tree that handles matching on
@@ -495,6 +495,11 @@ pub struct Codegen<'a> {
     functions_by_output: HashMap<TermId, TrieNode>,
 }
 
+#[derive(Clone, Debug, Default)]
+struct BodyContext {
+    borrowed_values: HashSet<Value>,
+}
+
 impl<'a> Codegen<'a> {
     pub fn compile(typeenv: &'a TypeEnv, termenv: &'a TermEnv) -> Result<Codegen<'a>, Error> {
         let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
@@ -591,19 +596,70 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    fn type_name(&self, typeid: TypeId, by_ref: bool) -> String {
+    fn extractor_name_and_infallible(&self, term: TermId) -> (String, bool) {
+        let termdata = &self.termenv.terms[term.index()];
+        match &termdata.kind {
+            &TermKind::EnumVariant { .. } => panic!("using enum variant as extractor"),
+            &TermKind::Regular {
+                extractor: Some((sym, infallible)),
+                ..
+            } => (self.typeenv.syms[sym.index()].clone(), infallible),
+            &TermKind::Regular {
+                extractor: None, ..
+            } => (
+                format!("extractor_{}", self.typeenv.syms[termdata.name.index()]),
+                false,
+            ),
+        }
+    }
+
+    fn type_name(&self, typeid: TypeId, by_ref: Option<&str>) -> String {
         match &self.typeenv.types[typeid.index()] {
             &Type::Primitive(_, sym) => self.typeenv.syms[sym.index()].clone(),
             &Type::Enum { name, .. } => {
-                let r = if by_ref { "&" } else { "" };
+                let r = by_ref.unwrap_or("");
                 format!("{}{}", r, self.typeenv.syms[name.index()])
             }
+        }
+    }
+
+    fn value_name(&self, value: &Value) -> String {
+        match value {
+            &Value::Pattern { inst, output } => format!("pattern{}_{}", inst.index(), output),
+            &Value::Expr { inst, output } => format!("expr{}_{}", inst.index(), output),
+        }
+    }
+
+    fn value_by_ref(&self, value: &Value, ctx: &BodyContext) -> String {
+        let raw_name = self.value_name(value);
+        let name_is_ref = ctx.borrowed_values.contains(value);
+        if name_is_ref {
+            raw_name
+        } else {
+            format!("&{}", raw_name)
+        }
+    }
+
+    fn value_by_val(&self, value: &Value, ctx: &BodyContext) -> String {
+        let raw_name = self.value_name(value);
+        let name_is_ref = ctx.borrowed_values.contains(value);
+        if name_is_ref {
+            format!("{}.clone()", raw_name)
+        } else {
+            raw_name
+        }
+    }
+
+    fn define_val(&self, value: &Value, ctx: &mut BodyContext, is_ref: bool) {
+        if is_ref {
+            ctx.borrowed_values.insert(value.clone());
         }
     }
 
     fn generate_internal_term_constructors(&self, code: &mut dyn Write) -> Result<(), Error> {
         for (&termid, trie) in &self.functions_by_input {
             let termdata = &self.termenv.terms[termid.index()];
+
             // Skip terms that are enum variants or that have external constructors.
             match &termdata.kind {
                 &TermKind::EnumVariant { .. } => continue,
@@ -618,7 +674,11 @@ impl<'a> Codegen<'a> {
                 .iter()
                 .enumerate()
                 .map(|(i, &arg_ty)| {
-                    format!("arg{}: {}", i, self.type_name(arg_ty, /* by_ref = */ true))
+                    format!(
+                        "arg{}: {}",
+                        i,
+                        self.type_name(arg_ty, /* by_ref = */ Some("&"))
+                    )
                 })
                 .collect::<Vec<_>>();
             writeln!(
@@ -631,10 +691,11 @@ impl<'a> Codegen<'a> {
                 "fn {}<C>(ctx: &mut C, {}) -> Option<{}> {{",
                 func_name,
                 args.join(", "),
-                self.type_name(termdata.ret_ty, /* by_ref = */ false)
+                self.type_name(termdata.ret_ty, /* by_ref = */ None)
             )?;
 
-            self.generate_body(code, termid, trie)?;
+            let mut body_ctx = Default::default();
+            self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
 
             writeln!(code, "}}")?;
         }
@@ -642,16 +703,322 @@ impl<'a> Codegen<'a> {
         Ok(())
     }
 
-    fn generate_internal_term_extractors(&self, _code: &mut dyn Write) -> Result<(), Error> {
+    fn generate_internal_term_extractors(&self, code: &mut dyn Write) -> Result<(), Error> {
+        for (&termid, trie) in &self.functions_by_output {
+            let termdata = &self.termenv.terms[termid.index()];
+
+            // Skip terms that are enum variants or that have external extractors.
+            match &termdata.kind {
+                &TermKind::EnumVariant { .. } => continue,
+                &TermKind::Regular { extractor, .. } if extractor.is_some() => continue,
+                _ => {}
+            }
+
+            // Get the name of the term and build up the signature.
+            let (func_name, _) = self.extractor_name_and_infallible(termid);
+            let arg = format!(
+                "arg: {}",
+                self.type_name(termdata.ret_ty, /* by_ref = */ Some("&"))
+            );
+            let ret_tuple_tys = termdata
+                .arg_tys
+                .iter()
+                .map(|ty| {
+                    self.type_name(*ty, /* by_ref = */ None)
+                })
+                .collect::<Vec<_>>();
+
+            writeln!(
+                code,
+                "\n// Generated as internal extractor for term {}.",
+                self.typeenv.syms[termdata.name.index()],
+            )?;
+            writeln!(
+                code,
+                "fn {}<'a, C>(ctx: &mut C, {}) -> Option<({})> {{",
+                func_name,
+                arg,
+                ret_tuple_tys.join(", "),
+            )?;
+
+            let mut body_ctx = Default::default();
+            self.generate_extractor_header(code, termdata, &mut body_ctx)?;
+            self.generate_body(code, /* depth = */ 0, trie, "        ", &mut body_ctx)?;
+            writeln!(code, "    }}")?;
+            writeln!(code, "}}")?;
+        }
+
+        Ok(())
+    }
+
+    fn generate_extractor_header(
+        &self,
+        code: &mut dyn Write,
+        termdata: &Term,
+        ctx: &mut BodyContext,
+    ) -> Result<(), Error> {
+        writeln!(code, "    {{")?;
+        todo!();
+        Ok(())
+    }
+
+    fn generate_expr_inst(
+        &self,
+        code: &mut dyn Write,
+        id: InstId,
+        inst: &ExprInst,
+        indent: &str,
+        ctx: &mut BodyContext,
+    ) -> Result<(), Error> {
+        match inst {
+            &ExprInst::ConstInt { ty, val } => {
+                let value = Value::Expr {
+                    inst: id,
+                    output: 0,
+                };
+                let name = self.value_name(&value);
+                let ty = self.type_name(ty, /* by_ref = */ None);
+                self.define_val(&value, ctx, /* is_ref = */ false);
+                writeln!(code, "{}let {}: {} = {};", indent, name, ty, val)?;
+            }
+            &ExprInst::CreateVariant {
+                ref inputs,
+                ty,
+                variant,
+            } => {
+                let variantinfo = match &self.typeenv.types[ty.index()] {
+                    &Type::Primitive(..) => panic!("CreateVariant with primitive type"),
+                    &Type::Enum { ref variants, .. } => &variants[variant.index()],
+                };
+                let mut input_fields = vec![];
+                for ((input_value, _), field) in inputs.iter().zip(variantinfo.fields.iter()) {
+                    let field_name = &self.typeenv.syms[field.name.index()];
+                    let value_expr = self.value_by_val(input_value, ctx);
+                    input_fields.push(format!("{}: {}", field_name, value_expr));
+                }
+
+                let output = Value::Expr {
+                    inst: id,
+                    output: 0,
+                };
+                let outputname = self.value_name(&output);
+                let full_variant_name = format!(
+                    "{}::{}",
+                    self.type_name(ty, None),
+                    self.typeenv.syms[variantinfo.name.index()]
+                );
+                writeln!(
+                    code,
+                    "{}let {} = {} {{",
+                    indent, outputname, full_variant_name
+                )?;
+                for input_field in input_fields {
+                    writeln!(code, "{}    {},", indent, input_field)?;
+                }
+                writeln!(code, "{}}};", indent)?;
+                self.define_val(&output, ctx, /* is_ref = */ false);
+            }
+            &ExprInst::Construct {
+                ref inputs, term, ..
+            } => {
+                let mut input_exprs = vec![];
+                for (input_value, _) in inputs {
+                    let value_expr = self.value_by_val(input_value, ctx);
+                    input_exprs.push(value_expr);
+                }
+
+                let output = Value::Expr {
+                    inst: id,
+                    output: 0,
+                };
+                let outputname = self.value_name(&output);
+                let ctor_name = self.constructor_name(term);
+                writeln!(
+                    code,
+                    "{}let {} = {}(ctx, {});",
+                    indent,
+                    outputname,
+                    ctor_name,
+                    input_exprs.join(", "),
+                )?;
+                self.define_val(&output, ctx, /* is_ref = */ false);
+            }
+            &ExprInst::Return { ref value, .. } => {
+                let value_expr = self.value_by_val(value, ctx);
+                writeln!(code, "{}return Some({});", indent, value_expr)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn generate_pattern_inst(
+        &self,
+        code: &mut dyn Write,
+        id: InstId,
+        inst: &PatternInst,
+        indent: &str,
+        ctx: &mut BodyContext,
+    ) -> Result<(), Error> {
+        match inst {
+            &PatternInst::Arg { index, .. } => {
+                let output = Value::Expr {
+                    inst: id,
+                    output: 0,
+                };
+                let outputname = self.value_name(&output);
+                writeln!(code, "{}let {} = arg{};", indent, outputname, index)?;
+                writeln!(code, "{}{{", indent)?;
+            }
+            &PatternInst::MatchEqual { ref a, ref b, .. } => {
+                let a = self.value_by_ref(a, ctx);
+                let b = self.value_by_ref(b, ctx);
+                writeln!(code, "{}if {} == {} {{", indent, a, b)?;
+            }
+            &PatternInst::MatchInt {
+                ref input, int_val, ..
+            } => {
+                let input = self.value_by_val(input, ctx);
+                writeln!(code, "{}if {} == {} {{", indent, input, int_val)?;
+            }
+            &PatternInst::MatchVariant {
+                ref input,
+                input_ty,
+                variant,
+                ref arg_tys,
+            } => {
+                let input = self.value_by_ref(input, ctx);
+                let variants = match &self.typeenv.types[input_ty.index()] {
+                    &Type::Primitive(..) => panic!("primitive type input to MatchVariant"),
+                    &Type::Enum { ref variants, .. } => variants,
+                };
+                let ty_name = self.type_name(input_ty, /* is_ref = */ Some("&"));
+                let variant = &variants[variant.index()];
+                let variantname = &self.typeenv.syms[variant.name.index()];
+                let args = arg_tys
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ty)| {
+                        let value = Value::Pattern {
+                            inst: id,
+                            output: i,
+                        };
+                        let valuename = self.value_name(&value);
+                        match &self.typeenv.types[ty.index()] {
+                            &Type::Primitive(..) => {
+                                self.define_val(&value, ctx, /* is_ref = */ false);
+                                valuename
+                            }
+                            &Type::Enum { .. } => {
+                                self.define_val(&value, ctx, /* is_ref = */ true);
+                                format!("ref {}", valuename)
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                writeln!(
+                    code,
+                    "{}if let {}::{} {{ {} }} = {} {{",
+                    indent,
+                    ty_name,
+                    variantname,
+                    args.join(", "),
+                    input
+                )?;
+            }
+            &PatternInst::Extract {
+                ref input,
+                input_ty,
+                ref arg_tys,
+                term,
+            } => {
+                let input = self.value_by_ref(input, ctx);
+                let (etor_name, infallible) = self.extractor_name_and_infallible(term);
+
+                let args = arg_tys
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ty)| {
+                        let value = Value::Pattern {
+                            inst: id,
+                            output: i,
+                        };
+                        self.define_val(&value, ctx, /* is_ref = */ false);
+                        self.value_name(&value)
+                    })
+                    .collect::<Vec<_>>();
+
+                if infallible {
+                    writeln!(
+                        code,
+                        "{}let Some(({})) = {}(ctx, {});",
+                        indent,
+                        args.join(", "),
+                        etor_name,
+                        input
+                    )?;
+                    writeln!(code, "{}{{", indent)?;
+                } else {
+                    writeln!(
+                        code,
+                        "{}if let Some(({})) = {}(ctx, {}) {{",
+                        indent,
+                        args.join(", "),
+                        etor_name,
+                        input
+                    )?;
+                }
+            }
+        }
+
         Ok(())
     }
 
     fn generate_body(
         &self,
-        _code: &mut dyn Write,
-        _termid: TermId,
-        _trie: &TrieNode,
+        code: &mut dyn Write,
+        depth: usize,
+        trie: &TrieNode,
+        indent: &str,
+        ctx: &mut BodyContext,
     ) -> Result<(), Error> {
+        match trie {
+            &TrieNode::Empty => {}
+
+            &TrieNode::Leaf { ref output, .. } => {
+                // If this is a leaf node, generate the ExprSequence and return.
+                for (id, inst) in output.insts.iter().enumerate() {
+                    let id = InstId(id);
+                    self.generate_expr_inst(code, id, inst, indent, ctx)?;
+                }
+            }
+
+            &TrieNode::Decision { ref edges } => {
+                let subindent = format!("{}    ", indent);
+                // if this is a decision node, generate each match op
+                // in turn (in priority order).
+                for &TrieEdge {
+                    ref symbol,
+                    ref node,
+                    ..
+                } in edges
+                {
+                    match symbol {
+                        &TrieSymbol::EndOfMatch => {
+                            self.generate_body(code, depth + 1, node, &subindent, ctx)?;
+                        }
+                        &TrieSymbol::Match { ref op } => {
+                            let id = InstId(depth);
+                            self.generate_pattern_inst(code, id, op, &subindent, ctx)?;
+                            self.generate_body(code, depth + 1, node, &subindent, ctx)?;
+                            writeln!(code, "{}}}", subindent)?;
+                        }
+                    }
+                }
+            }
+        }
+
+        writeln!(code, "{}return None;", indent)?;
         Ok(())
     }
 }

@@ -772,6 +772,7 @@ impl TermEnv {
 mod test {
     use super::*;
     use crate::ast::Ident;
+    use crate::lexer::Lexer;
     use crate::parser::Parser;
 
     #[test]
@@ -780,14 +781,16 @@ mod test {
             (type u32 (primitive u32))
             (type A extern (enum (B (f1 u32) (f2 u32)) (C (f1 u32))))
         ";
-        let ast = Parser::new("file.isle", text)
+        let ast = Parser::new(Lexer::from_str(text, "file.isle"))
             .parse_defs()
             .expect("should parse");
         let tyenv = TypeEnv::from_ast(&ast).expect("should not have type-definition errors");
 
         let sym_a = tyenv.intern(&Ident("A".to_string())).unwrap();
-        let sym_b = tyenv.intern(&Ident("A.B".to_string())).unwrap();
-        let sym_c = tyenv.intern(&Ident("A.C".to_string())).unwrap();
+        let sym_b = tyenv.intern(&Ident("B".to_string())).unwrap();
+        let sym_c = tyenv.intern(&Ident("C".to_string())).unwrap();
+        let sym_a_b = tyenv.intern(&Ident("A.B".to_string())).unwrap();
+        let sym_a_c = tyenv.intern(&Ident("A.C".to_string())).unwrap();
         let sym_u32 = tyenv.intern(&Ident("u32".to_string())).unwrap();
         let sym_f1 = tyenv.intern(&Ident("f1".to_string())).unwrap();
         let sym_f2 = tyenv.intern(&Ident("f2".to_string())).unwrap();
@@ -806,6 +809,7 @@ mod test {
                     variants: vec![
                         Variant {
                             name: sym_b,
+                            fullname: sym_a_b,
                             id: VariantId(0),
                             fields: vec![
                                 Field {
@@ -822,6 +826,7 @@ mod test {
                         },
                         Variant {
                             name: sym_c,
+                            fullname: sym_a_c,
                             id: VariantId(1),
                             fields: vec![Field {
                                 name: sym_f1,
@@ -831,6 +836,7 @@ mod test {
                         },
                     ],
                     pos: Pos {
+                        file: 0,
                         offset: 58,
                         line: 3,
                         col: 18,
@@ -862,7 +868,7 @@ mod test {
             (rule -1
               (T3 _) (A.C 3))
         ";
-        let ast = Parser::new("file.isle", text)
+        let ast = Parser::new(Lexer::from_str(text, "file.isle"))
             .parse_defs()
             .expect("should parse");
         let mut tyenv = TypeEnv::from_ast(&ast).expect("should not have type-definition errors");
