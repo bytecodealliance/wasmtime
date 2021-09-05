@@ -113,6 +113,7 @@ pub struct Rule {
     pub lhs: Pattern,
     pub rhs: Expr,
     pub prio: Option<i64>,
+    pub pos: Pos,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -414,6 +415,7 @@ impl TermEnv {
         for def in &defs.defs {
             match def {
                 &ast::Def::Rule(ref rule) => {
+                    let pos = rule.pos;
                     let mut bindings = Bindings {
                         next_var: 0,
                         vars: vec![],
@@ -434,6 +436,7 @@ impl TermEnv {
                         lhs,
                         rhs,
                         prio: rule.prio,
+                        pos,
                     });
                 }
                 &ast::Def::Extern(ast::Extern::Constructor {

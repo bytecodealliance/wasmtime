@@ -1,6 +1,7 @@
 //! Lowered matching IR.
 
 use crate::declare_id;
+use crate::lexer::Pos;
 use crate::sema::*;
 use std::collections::HashMap;
 
@@ -110,6 +111,8 @@ pub struct ExprSequence {
     /// Instruction sequence for expression. InstId indexes into this
     /// sequence for `Value::Expr` values.
     pub insts: Vec<ExprInst>,
+    /// Position at which the rule producing this sequence was located.
+    pub pos: Pos,
 }
 
 impl PatternSequence {
@@ -197,8 +200,7 @@ impl PatternSequence {
                 // Bind the appropriate variable and recurse.
                 assert!(!vars.contains_key(&var));
                 vars.insert(var, (None, input.unwrap())); // bind first, so subpat can use it
-                let root_term =
-                    self.gen_pattern(input, typeenv, termenv, &*subpat, vars);
+                let root_term = self.gen_pattern(input, typeenv, termenv, &*subpat, vars);
                 vars.get_mut(&var).unwrap().0 = root_term;
                 root_term
             }
@@ -352,6 +354,7 @@ pub fn lower_rule(
 ) {
     let mut pattern_seq: PatternSequence = Default::default();
     let mut expr_seq: ExprSequence = Default::default();
+    expr_seq.pos = termenv.rules[rule.index()].pos;
 
     // Lower the pattern, starting from the root input value.
     let ruledata = &termenv.rules[rule.index()];

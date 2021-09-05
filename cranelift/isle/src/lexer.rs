@@ -18,7 +18,7 @@ enum LexerInput<'a> {
     File { content: String, filename: String },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Pos {
     pub file: usize,
     pub offset: usize,

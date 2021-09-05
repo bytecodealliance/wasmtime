@@ -852,6 +852,8 @@ impl<'a> Codegen<'a> {
         Ok(())
     }
 
+    /// Returns a `bool` indicating whether this pattern inst is
+    /// infallible.
     fn generate_pattern_inst(
         &self,
         code: &mut dyn Write,
@@ -859,27 +861,30 @@ impl<'a> Codegen<'a> {
         inst: &PatternInst,
         indent: &str,
         ctx: &mut BodyContext,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
         match inst {
             &PatternInst::Arg { index, .. } => {
-                let output = Value::Expr {
+                let output = Value::Pattern {
                     inst: id,
                     output: 0,
                 };
                 let outputname = self.value_name(&output);
                 writeln!(code, "{}let {} = arg{};", indent, outputname, index)?;
                 writeln!(code, "{}{{", indent)?;
+                Ok(true)
             }
             &PatternInst::MatchEqual { ref a, ref b, .. } => {
                 let a = self.value_by_ref(a, ctx);
                 let b = self.value_by_ref(b, ctx);
                 writeln!(code, "{}if {} == {} {{", indent, a, b)?;
+                Ok(false)
             }
             &PatternInst::MatchInt {
                 ref input, int_val, ..
             } => {
                 let input = self.value_by_val(input, ctx);
                 writeln!(code, "{}if {} == {} {{", indent, input, int_val)?;
+                Ok(false)
             }
             &PatternInst::MatchVariant {
                 ref input,
@@ -897,21 +902,23 @@ impl<'a> Codegen<'a> {
                 let variantname = &self.typeenv.syms[variant.name.index()];
                 let args = arg_tys
                     .iter()
+                    .zip(variant.fields.iter())
                     .enumerate()
-                    .map(|(i, ty)| {
+                    .map(|(i, (ty, field))| {
                         let value = Value::Pattern {
                             inst: id,
                             output: i,
                         };
                         let valuename = self.value_name(&value);
+                        let fieldname = &self.typeenv.syms[field.name.index()];
                         match &self.typeenv.types[ty.index()] {
                             &Type::Primitive(..) => {
                                 self.define_val(&value, ctx, /* is_ref = */ false);
-                                valuename
+                                format!("{}: {}", fieldname, valuename)
                             }
                             &Type::Enum { .. } => {
                                 self.define_val(&value, ctx, /* is_ref = */ true);
-                                format!("ref {}", valuename)
+                                format!("{}: ref {}", fieldname, valuename)
                             }
                         }
                     })
@@ -925,6 +932,7 @@ impl<'a> Codegen<'a> {
                     args.join(", "),
                     input
                 )?;
+                Ok(false)
             }
             &PatternInst::Extract {
                 ref input,
@@ -968,10 +976,9 @@ impl<'a> Codegen<'a> {
                         input
                     )?;
                 }
+                Ok(infallible)
             }
         }
-
-        Ok(())
     }
 
     fn generate_body(
@@ -981,15 +988,27 @@ impl<'a> Codegen<'a> {
         trie: &TrieNode,
         indent: &str,
         ctx: &mut BodyContext,
-    ) -> Result<(), Error> {
+    ) -> Result<bool, Error> {
+        log::trace!("generate_body: trie {:?}", trie);
+        let mut returned = false;
         match trie {
             &TrieNode::Empty => {}
 
             &TrieNode::Leaf { ref output, .. } => {
+                writeln!(
+                    code,
+                    "{}// Rule at {}.",
+                    indent,
+                    output.pos.pretty_print_line(&self.typeenv.filenames[..])
+                )?;
                 // If this is a leaf node, generate the ExprSequence and return.
                 for (id, inst) in output.insts.iter().enumerate() {
                     let id = InstId(id);
                     self.generate_expr_inst(code, id, inst, indent, ctx)?;
+                    if let &ExprInst::Return { .. } = inst {
+                        returned = true;
+                        break;
+                    }
                 }
             }
 
@@ -1005,20 +1024,28 @@ impl<'a> Codegen<'a> {
                 {
                     match symbol {
                         &TrieSymbol::EndOfMatch => {
-                            self.generate_body(code, depth + 1, node, &subindent, ctx)?;
+                            returned = self.generate_body(code, depth + 1, node, indent, ctx)?;
                         }
                         &TrieSymbol::Match { ref op } => {
                             let id = InstId(depth);
-                            self.generate_pattern_inst(code, id, op, &subindent, ctx)?;
-                            self.generate_body(code, depth + 1, node, &subindent, ctx)?;
-                            writeln!(code, "{}}}", subindent)?;
+                            let infallible =
+                                self.generate_pattern_inst(code, id, op, indent, ctx)?;
+                            let sub_returned =
+                                self.generate_body(code, depth + 1, node, &subindent, ctx)?;
+                            writeln!(code, "{}}}", indent)?;
+                            if infallible && sub_returned {
+                                returned = true;
+                                break;
+                            }
                         }
                     }
                 }
             }
         }
 
-        writeln!(code, "{}return None;", indent)?;
-        Ok(())
+        if !returned {
+            writeln!(code, "{}return None;", indent)?;
+        }
+        Ok(returned)
     }
 }
