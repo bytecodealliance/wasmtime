@@ -1,8 +1,8 @@
 //! Generate Rust code from a series of Sequences.
 
+use crate::error::Error;
 use crate::ir::{lower_rule, ExprInst, ExprSequence, InstId, PatternInst, PatternSequence, Value};
 use crate::sema::{RuleId, TermEnv, TermId, TermKind, Type, TypeEnv, TypeId};
-use crate::{error::Error, ir::reverse_rule};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
@@ -448,29 +448,40 @@ impl<'a> TermFunctionsBuilder<'a> {
             let rule = RuleId(rule);
             let prio = self.termenv.rules[rule.index()].prio.unwrap_or(0);
 
-            let (lhs_root, pattern, rhs_root, expr) = lower_rule(self.typeenv, self.termenv, rule);
-            log::trace!(
-                "build:\n- rule {:?}\n- lhs_root {:?} rhs_root {:?}\n- pattern {:?}\n- expr {:?}",
-                self.termenv.rules[rule.index()],
-                lhs_root,
-                rhs_root,
-                pattern,
-                expr
-            );
-            if let Some(input_root_term) = lhs_root {
+            if let Some((pattern, expr, lhs_root)) = lower_rule(
+                self.typeenv,
+                self.termenv,
+                rule,
+                /* forward_dir = */ true,
+            ) {
+                log::trace!(
+                    "build:\n- rule {:?}\n- fwd pattern {:?}\n- fwd expr {:?}",
+                    self.termenv.rules[rule.index()],
+                    pattern,
+                    expr
+                );
                 self.builders_by_input
-                    .entry(input_root_term)
-                    .or_insert_with(|| TermFunctionBuilder::new(input_root_term))
+                    .entry(lhs_root)
+                    .or_insert_with(|| TermFunctionBuilder::new(lhs_root))
                     .add_rule(prio, pattern.clone(), expr.clone());
             }
 
-            if let Some(output_root_term) = rhs_root {
-                if let Some((reverse_pattern, reverse_expr)) = reverse_rule(&pattern, &expr) {
-                    self.builders_by_output
-                        .entry(output_root_term)
-                        .or_insert_with(|| TermFunctionBuilder::new(output_root_term))
-                        .add_rule(prio, reverse_pattern, reverse_expr);
-                }
+            if let Some((pattern, expr, rhs_root)) = lower_rule(
+                self.typeenv,
+                self.termenv,
+                rule,
+                /* forward_dir = */ false,
+            ) {
+                log::trace!(
+                    "build:\n- rule {:?}\n- rev pattern {:?}\n- rev expr {:?}",
+                    self.termenv.rules[rule.index()],
+                    pattern,
+                    expr
+                );
+                self.builders_by_output
+                    .entry(rhs_root)
+                    .or_insert_with(|| TermFunctionBuilder::new(rhs_root))
+                    .add_rule(prio, pattern, expr);
             }
         }
     }
