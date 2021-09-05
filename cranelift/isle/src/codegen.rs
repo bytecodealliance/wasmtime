@@ -8,35 +8,34 @@ use std::fmt::Write;
 
 /// One "input symbol" for the decision tree that handles matching on
 /// a term. Each symbol represents one step: we either run a match op,
-/// or we get a result from it.
+/// or we finish the match.
 ///
-/// Note that in the original Peepmatic scheme, the problem that this
-/// solves was handled slightly differently. The automaton responded
-/// to alphabet symbols that corresponded only to match results, and
-/// the "extra state" was used at each automaton node to represent the
-/// op to run next. This extra state differentiated nodes that would
-/// otherwise be merged together by deduplication. That scheme works
-/// well enough, but the "extra state" is slightly confusing and
-/// diverges slightly from a pure automaton.
+/// Note that in the original Peepmatic scheme, the input-symbol to
+/// the FSM was specified slightly differently. The automaton
+/// responded to alphabet symbols that corresponded only to match
+/// results, and the "extra state" was used at each automaton node to
+/// represent the op to run next. This extra state differentiated
+/// nodes that would otherwise be merged together by
+/// deduplication. That scheme works well enough, but the "extra
+/// state" is slightly confusing and diverges slightly from a pure
+/// automaton.
 ///
-/// Instead, here, we imagine that the user of the automaton can query
-/// the possible transition edges out of the current state. Each of
-/// these edges corresponds to one possible match op to run. After
+/// Instead, here, we imagine that the user of the automaton/trie can
+/// query the possible transition edges out of the current state. Each
+/// of these edges corresponds to one possible match op to run. After
 /// running a match op, we reach a new state corresponding to
 /// successful matches up to that point.
 ///
-/// However, it's a bit more subtle than this; we add one additional
-/// dimension to each match op, and an additional alphabet symbol.
-///
-/// First, consider the prioritization problem. We want to give the
-/// DSL user the ability to change the order in which rules apply, for
-/// example to have a tier of "fallback rules" that apply only if more
-/// custom rules do not match.
+/// However, it's a bit more subtle than this. Consider the
+/// prioritization problem. We want to give the DSL user the ability
+/// to change the order in which rules apply, for example to have a
+/// tier of "fallback rules" that apply only if more custom rules do
+/// not match.
 ///
 /// A somewhat simplistic answer to this problem is "more specific
 /// rule wins". However, this implies the existence of a total
 /// ordering of linearized match sequences that may not fully capture
-/// the intuitive meaning of "more specific". Consider four left-hand
+/// the intuitive meaning of "more specific". Consider three left-hand
 /// sides:
 ///
 /// - (A _ _)
@@ -44,7 +43,7 @@ use std::fmt::Write;
 /// - (A _ (B _))
 ///
 /// Intuitively, the first is the least specific. Given the input `(A
-/// (B 1) (B 2)`, we can say for sure that the first should not be
+/// (B 1) (B 2))`, we can say for sure that the first should not be
 /// chosen, because either the second or third would match "more" of
 /// the input tree. But which of the second and third should be
 /// chosen? A "lexicographic ordering" rule would say that we sort
@@ -53,29 +52,35 @@ use std::fmt::Write;
 /// privileging one over the other based on the order of the
 /// arguments.
 ///
-/// Instead, we need a data structure that can associate matching
-/// inputs *with priorities* to outputs, and provide us with a
-/// decision tree as output.
+/// Instead, we can accept explicit priorities from the user to allow
+/// either choice. So we need a data structure that can associate
+/// matching inputs *with priorities* to outputs.
 ///
-/// Why a tree and not a fully general FSM?  Because we're compiling
-/// to a structured language, Rust, and states become *program points*
-/// rather than *data*, we cannot easily support a DAG structure. In
-/// other words, we are not producing a FSM that we can interpret at
-/// runtime; rather we are compiling code in which each state
-/// corresponds to a sequence of statements and control-flow that
-/// branches to a next state, we naturally need nesting; we cannot
-/// codegen arbitrary state transitions in an efficient manner. We
-/// could support a limited form of DAG that reifies "diamonds" (two
-/// alternate paths that reconverge), but supporting this in a way
-/// that lets the output refer to values from either side is very
-/// complex (we need to invent phi-nodes), and the cases where we want
-/// to do this rather than invoke a sub-term (that is compiled to a
-/// separate function) are rare. Finally, note that one reason to
-/// deduplicate nodes and turn a tree back into a DAG --
+/// Next, we build a decision tree rather than an FSM. Why? Because
+/// we're compiling to a structured language, Rust, and states become
+/// *program points* rather than *data*, we cannot easily support a
+/// DAG structure. In other words, we are not producing a FSM that we
+/// can interpret at runtime; rather we are compiling code in which
+/// each state corresponds to a sequence of statements and
+/// control-flow that branches to a next state, we naturally need
+/// nesting; we cannot codegen arbitrary state transitions in an
+/// efficient manner. We could support a limited form of DAG that
+/// reifies "diamonds" (two alternate paths that reconverge), but
+/// supporting this in a way that lets the output refer to values from
+/// either side is very complex (we need to invent phi-nodes), and the
+/// cases where we want to do this rather than invoke a sub-term (that
+/// is compiled to a separate function) are rare. Finally, note that
+/// one reason to deduplicate nodes and turn a tree back into a DAG --
 /// "output-suffix sharing" as some other instruction-rewriter
-/// engines, such as Peepmatic, do -- is not done. However,
-/// "output-prefix sharing" is more important to deduplicate code and
-/// we do do this.)
+/// engines, such as Peepmatic, do -- is not done, because all
+/// "output" occurs at leaf nodes; this is necessary because we do not
+/// want to start invoking external constructors until we are sure of
+/// the match. Some of the code-sharing advantages of the "suffix
+/// sharing" scheme can be obtained in a more flexible and
+/// user-controllable way (with less understanding of internal
+/// compiler logic needed) by factoring logic into different internal
+/// terms, which become different compiled functions. This is likely
+/// to happen anyway as part of good software engineering practice.
 ///
 /// We prepare for codegen by building a "prioritized trie", where the
 /// trie associates input strings with priorities to output values.
@@ -107,11 +112,12 @@ use std::fmt::Write;
 /// final match could lie along *either* path, so we have to traverse
 /// both.
 ///
-/// So, to avoid this, we perform a sort of NFA-to-DFA conversion "on
-/// the fly" as we insert nodes by duplicating subtrees. At any node,
-/// when inserting with a priority P and when outgoing edges lie in a
-/// range [P_lo, P_hi] such that P >= P_lo and P <= P_hi, we
-/// "priority-split the edges" at priority P.
+/// So, to avoid this, we perform a sort of moral equivalent to the
+/// NFA-to-DFA conversion "on the fly" as we insert nodes by
+/// duplicating subtrees. At any node, when inserting with a priority
+/// P and when outgoing edges lie in a range [P_lo, P_hi] such that P
+/// >= P_lo and P <= P_hi, we "priority-split the edges" at priority
+/// P.
 ///
 /// To priority-split the edges in a node at priority P:
 ///
