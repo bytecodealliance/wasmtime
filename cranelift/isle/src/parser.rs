@@ -368,13 +368,13 @@ mod test {
               (Load (a Reg) (dest Reg))))
             (type u32 (primitive u32))
             ";
-        let defs = Parser::new("(none)", text)
+        let defs = Parser::new(Lexer::from_str(text, "(none)"))
             .parse_defs()
             .expect("should parse");
         assert_eq!(
             defs,
             Defs {
-                filename: "(none)".to_string(),
+                filenames: vec!["(none)".to_string()],
                 defs: vec![
                     Def::Type(Type {
                         name: Ident("Inst".to_string()),
@@ -412,8 +412,9 @@ mod test {
                             }
                         ]),
                         pos: Pos {
+                            file: 0,
                             offset: 42,
-                            line: 4,
+                            line: 3,
                             col: 18,
                         },
                     }),
@@ -422,8 +423,9 @@ mod test {
                         is_extern: false,
                         ty: TypeValue::Primitive(Ident("u32".to_string())),
                         pos: Pos {
+                            file: 0,
                             offset: 167,
-                            line: 7,
+                            line: 6,
                             col: 18,
                         },
                     }),

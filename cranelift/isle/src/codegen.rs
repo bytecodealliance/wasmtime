@@ -577,7 +577,7 @@ impl<'a> Codegen<'a> {
                         pos.pretty_print_line(&self.typeenv.filenames[..])
                     )?;
                     writeln!(code, "#[derive(Clone, Debug)]")?;
-                    writeln!(code, "enum {} {{", name)?;
+                    writeln!(code, "pub enum {} {{", name)?;
                     for variant in variants {
                         let name = &self.typeenv.syms[variant.name.index()];
                         writeln!(code, "    {} {{", name)?;
@@ -733,9 +733,16 @@ impl<'a> Codegen<'a> {
 
             // Get the name of the term and build up the signature.
             let (func_name, _) = self.extractor_name_and_infallible(termid);
+            let arg_is_prim = match &self.typeenv.types[termdata.ret_ty.index()] {
+                &Type::Primitive(..) => true,
+                _ => false,
+            };
             let arg = format!(
                 "arg0: {}",
-                self.type_name(termdata.ret_ty, /* by_ref = */ Some("&"))
+                self.type_name(
+                    termdata.ret_ty,
+                    /* by_ref = */ if arg_is_prim { None } else { Some("&") }
+                ),
             );
             let ret_tuple_tys = termdata
                 .arg_tys
@@ -761,8 +768,7 @@ impl<'a> Codegen<'a> {
             let mut body_ctx: BodyContext = Default::default();
             body_ctx.expected_return_vals = ret_tuple_tys.len();
             body_ctx.tuple_return = true;
-            self.generate_body(code, /* depth = */ 0, trie, "        ", &mut body_ctx)?;
-            writeln!(code, "    }}")?;
+            self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
             writeln!(code, "}}")?;
         }
 
@@ -873,14 +879,26 @@ impl<'a> Codegen<'a> {
         ctx: &mut BodyContext,
     ) -> Result<bool, Error> {
         match inst {
-            &PatternInst::Arg { index, .. } => {
+            &PatternInst::Arg { index, ty } => {
                 let output = Value::Pattern {
                     inst: id,
                     output: 0,
                 };
                 let outputname = self.value_name(&output);
+                let is_ref = match &self.typeenv.types[ty.index()] {
+                    &Type::Primitive(..) => false,
+                    _ => true,
+                };
                 writeln!(code, "{}let {} = arg{};", indent, outputname, index)?;
                 writeln!(code, "{}{{", indent)?;
+                self.define_val(
+                    &Value::Pattern {
+                        inst: id,
+                        output: 0,
+                    },
+                    ctx,
+                    is_ref,
+                );
                 Ok(true)
             }
             &PatternInst::MatchEqual { ref a, ref b, .. } => {
@@ -946,11 +964,20 @@ impl<'a> Codegen<'a> {
             }
             &PatternInst::Extract {
                 ref input,
+                input_ty,
                 ref arg_tys,
                 term,
                 ..
             } => {
-                let input = self.value_by_ref(input, ctx);
+                let input_ty_prim = match &self.typeenv.types[input_ty.index()] {
+                    &Type::Primitive(..) => true,
+                    _ => false,
+                };
+                let input = if input_ty_prim {
+                    self.value_by_val(input, ctx)
+                } else {
+                    self.value_by_ref(input, ctx)
+                };
                 let (etor_name, infallible) = self.extractor_name_and_infallible(term);
 
                 let args = arg_tys
