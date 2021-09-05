@@ -301,12 +301,21 @@ impl TrieNode {
 
         // Now find or insert the appropriate edge.
         let mut edge: Option<usize> = None;
-        for i in 0..edges.len() {
-            if edges[i].range.contains(prio) && edges[i].symbol == op {
-                edge = Some(i);
-                break;
-            }
-            if prio > edges[i].range.1 {
+        let mut last_edge_with_op: Option<usize> = None;
+        let mut last_edge_with_op_prio: Option<Prio> = None;
+        for i in 0..(edges.len() + 1) {
+            if i == edges.len() || prio > edges[i].range.1 {
+                // We've passed all edges with overlapping priority
+                // ranges. Maybe the last edge we saw with the op
+                // we're inserting can have its range expanded,
+                // however.
+                if last_edge_with_op.is_some() && edges[last_edge_with_op.unwrap()].symbol == op {
+                    // Move it to the end of the run of equal-unit-range ops.
+                    edges.swap(last_edge_with_op.unwrap(), i - 1);
+                    edge = Some(i - 1);
+                    edges[i - 1].range.1 = prio;
+                    break;
+                }
                 edges.insert(
                     i,
                     TrieEdge {
@@ -318,15 +327,25 @@ impl TrieNode {
                 edge = Some(i);
                 break;
             }
+            if i == edges.len() {
+                break;
+            }
+            if edges[i].symbol == op {
+                last_edge_with_op = Some(i);
+                last_edge_with_op_prio = Some(edges[i].range.1);
+            }
+            if last_edge_with_op_prio.is_some()
+                && last_edge_with_op_prio.unwrap() < edges[i].range.1
+            {
+                last_edge_with_op = None;
+                last_edge_with_op_prio = None;
+            }
+            if edges[i].range.contains(prio) && edges[i].symbol == op {
+                edge = Some(i);
+                break;
+            }
         }
-        let edge = edge.unwrap_or_else(|| {
-            edges.push(TrieEdge {
-                range: PrioRange(prio, prio),
-                symbol: op.clone(),
-                node: TrieNode::Empty,
-            });
-            edges.len() - 1
-        });
+        let edge = edge.expect("Must have found an edge at least at last iter");
         let edge = &mut edges[edge];
 
         if is_last {

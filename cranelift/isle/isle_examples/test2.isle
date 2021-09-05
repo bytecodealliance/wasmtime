@@ -10,7 +10,7 @@
   (A2B (A.A1 _ (B.B1 x)))
   (B.B1 x))
 
-(rule 1
+(rule 0
   (A2B (A.A1 (B.B1 x) _))
   (B.B1 x))
 
