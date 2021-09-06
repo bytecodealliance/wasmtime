@@ -2,7 +2,7 @@
 use core::mem;
 use cranelift_codegen::binemit::{NullRelocSink, NullStackMapSink, NullTrapSink};
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature, Type};
+use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature};
 use cranelift_codegen::isa::{BackendVariant, TargetIsa};
 use cranelift_codegen::{ir, settings, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
@@ -297,13 +297,16 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
         .enumerate()
         .map(|(i, param)| {
             // Calculate the type to load from memory, using integers for booleans (no encodings).
-            let ty = if param.value_type.is_bool() {
-                Type::int(max(param.value_type.bits(), 8)).expect(
-                    "to be able to convert any boolean type to its equal-width integer type",
-                )
+            let is_scalar_bool = param.value_type.is_bool();
+            let is_vector_bool =
+                param.value_type.is_vector() && param.value_type.lane_type().is_bool();
+
+            let ty = if is_scalar_bool || is_vector_bool {
+                param.value_type.as_int()
             } else {
                 param.value_type
             };
+
             // Load the value.
             let loaded = builder.ins().load(
                 ty,
@@ -314,8 +317,12 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
             // For booleans, we want to type-convert the loaded integer into a boolean and ensure
             // that we are using the architecture's canonical boolean representation (presumably
             // comparison will emit this).
-            if param.value_type.is_bool() {
+            if is_scalar_bool {
                 builder.ins().icmp_imm(IntCC::NotEqual, loaded, 0)
+            } else if is_vector_bool {
+                let zero_constant = builder.func.dfg.constants.insert(vec![0; 16].into());
+                let zero_vec = builder.ins().vconst(ty, zero_constant);
+                builder.ins().icmp(IntCC::NotEqual, loaded, zero_vec)
             } else {
                 loaded
             }
@@ -332,9 +339,8 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
     let results = builder.func.dfg.inst_results(call).to_vec();
     for ((i, value), param) in results.iter().enumerate().zip(&signature.returns) {
         // Before storing return values, we convert booleans to their integer representation.
-        let value = if param.value_type.is_bool() {
-            let ty = Type::int(max(param.value_type.bits(), 8))
-                .expect("to be able to convert any boolean type to its equal-width integer type");
+        let value = if param.value_type.lane_type().is_bool() {
+            let ty = param.value_type.lane_type().as_int();
             builder.ins().bint(ty, *value)
         } else {
             *value
