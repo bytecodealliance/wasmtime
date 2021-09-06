@@ -1,7 +1,3 @@
-- Convert series of if-lets from MatchVariants into a match { ... }.
-  - Should be pretty simple; just need to recognize adjacent edges in
-    priority-order that are all MatchVariants on the same input.
-
 - Document semantics carefully, especially wrt extractors.
-
-- Verify that priorities work as expected.
+- Build out an initial set of bindings for Cranelift LowerCtx with extractors
+  for instruction info.
