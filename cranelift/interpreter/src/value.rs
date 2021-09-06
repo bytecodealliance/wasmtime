@@ -428,7 +428,7 @@ impl Value for DataValue {
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {
-        binary_match!(|(&self, &other); [I8, I16, I32, I64])
+        binary_match!(|(&self, &other); [B, I8, I16, I32, I64])
     }
 
     fn xor(self, other: Self) -> ValueResult<Self> {

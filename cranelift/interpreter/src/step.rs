@@ -794,7 +794,12 @@ where
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
         Opcode::Vselect => unimplemented!("Vselect"),
-        Opcode::VanyTrue => unimplemented!("VanyTrue"),
+        Opcode::VanyTrue => assign(fold_vector(
+            arg(0)?,
+            ctrl_ty,
+            V::bool(false, types::B1)?,
+            |acc, lane| acc.or(lane),
+        )?),
         Opcode::VallTrue => assign(fold_vector(
             arg(0)?,
             ctrl_ty,
