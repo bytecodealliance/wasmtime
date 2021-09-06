@@ -55,7 +55,7 @@ use wasm_encoder::SectionId;
 /// ```
 ///
 /// NB: we re-export nested instantiations as a whole instance export because we
-/// can do this without disturbing existing isntances' indices. If we were to
+/// can do this without disturbing existing instances' indices. If we were to
 /// export their memories and globals individually, that would disturb the
 /// modules locally defined memoryies' and globals' indices, which would require
 /// rewriting the code section, which would break debug info offsets.
