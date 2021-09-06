@@ -1,8 +1,12 @@
+mod test;
 
-pub fn get_input<C>(ctx: &mut C, x: u32) -> Option<(test::A,)> {
-    None
+struct Context;
+impl test::Context for Context {
+    fn get_input(&mut self, x: u32) -> Option<(test::A,)> {
+        Some((test::A::A1 { x: x + 1 },))
+    }
 }
 
-fn main() {}
-
-mod test;
+fn main() {
+    test::constructor_Lower(&mut Context, &test::A::A1 { x: 42 });
+}

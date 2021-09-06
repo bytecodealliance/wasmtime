@@ -559,6 +559,7 @@ impl<'a> Codegen<'a> {
         let mut code = String::new();
 
         self.generate_header(&mut code)?;
+        self.generate_ctx_trait(&mut code)?;
         self.generate_internal_types(&mut code)?;
         self.generate_internal_term_constructors(&mut code)?;
         self.generate_internal_term_extractors(&mut code)?;
@@ -576,10 +577,104 @@ impl<'a> Codegen<'a> {
         for file in &self.typeenv.filenames {
             writeln!(code, "// - {}", file)?;
         }
+
         writeln!(
             code,
-            "\nuse super::*;  // Pulls in all external types and ctors/etors"
+            "\n#![allow(dead_code, unreachable_code, unused_imports, unused_variables, non_snake_case)]"
         )?;
+
+        writeln!(code, "\nuse super::*;  // Pulls in all external types.")?;
+
+        Ok(())
+    }
+
+    fn generate_ctx_trait(&self, code: &mut dyn Write) -> Result<(), Error> {
+        writeln!(code, "")?;
+        writeln!(
+            code,
+            "/// Context during lowering: an implementation of this trait"
+        )?;
+        writeln!(
+            code,
+            "/// must be provided with all external constructors and extractors."
+        )?;
+        writeln!(
+            code,
+            "/// A mutable borrow is passed along through all lowering logic."
+        )?;
+        writeln!(code, "pub trait Context {{")?;
+        for term in &self.termenv.terms {
+            if let &TermKind::Regular {
+                extractor,
+                constructor,
+                ..
+            } = &term.kind
+            {
+                if let Some((etor_name, infallible)) = extractor {
+                    let etor_name = &self.typeenv.syms[etor_name.index()];
+                    let arg_is_prim = match &self.typeenv.types[term.ret_ty.index()] {
+                        &Type::Primitive(..) => true,
+                        _ => false,
+                    };
+                    let arg = format!(
+                        "arg0: {}",
+                        self.type_name(
+                            term.ret_ty,
+                            /* by_ref = */ if arg_is_prim { None } else { Some("&") }
+                        ),
+                    );
+                    let ret_tuple_tys = term
+                        .arg_tys
+                        .iter()
+                        .map(|ty| {
+                            self.type_name(*ty, /* by_ref = */ None)
+                        })
+                        .collect::<Vec<_>>();
+                    if infallible {
+                        writeln!(
+                            code,
+                            "    fn {}(&mut self, {}) -> ({},);",
+                            etor_name,
+                            arg,
+                            ret_tuple_tys.join(", ")
+                        )?;
+                    } else {
+                        writeln!(
+                            code,
+                            "    fn {}(&mut self, {}) -> Option<({},)>;",
+                            etor_name,
+                            arg,
+                            ret_tuple_tys.join(", ")
+                        )?;
+                    }
+                }
+
+                if let Some(ctor_name) = constructor {
+                    let ctor_name = &self.typeenv.syms[ctor_name.index()];
+                    let args = term
+                        .arg_tys
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &arg_ty)| {
+                            format!(
+                                "arg{}: {}",
+                                i,
+                                self.type_name(arg_ty, /* by_ref = */ Some("&"))
+                            )
+                        })
+                        .collect::<Vec<_>>();
+                    let ret = self.type_name(term.ret_ty, /* by_ref = */ None);
+                    writeln!(
+                        code,
+                        "fn {}(&mut self, {}) -> Option<{}>;",
+                        ctor_name,
+                        args.join(", "),
+                        ret,
+                    )?;
+                }
+            }
+        }
+        writeln!(code, "}}")?;
 
         Ok(())
     }
@@ -628,7 +723,7 @@ impl<'a> Codegen<'a> {
             &TermKind::Regular {
                 constructor: Some(sym),
                 ..
-            } => self.typeenv.syms[sym.index()].clone(),
+            } => format!("C::{}", self.typeenv.syms[sym.index()]),
             &TermKind::Regular {
                 constructor: None, ..
             } => {
@@ -644,7 +739,7 @@ impl<'a> Codegen<'a> {
             &TermKind::Regular {
                 extractor: Some((sym, infallible)),
                 ..
-            } => (self.typeenv.syms[sym.index()].clone(), infallible),
+            } => (format!("C::{}", self.typeenv.syms[sym.index()]), infallible),
             &TermKind::Regular {
                 extractor: None, ..
             } => (
@@ -729,7 +824,7 @@ impl<'a> Codegen<'a> {
             )?;
             writeln!(
                 code,
-                "fn {}<C>(ctx: &mut C, {}) -> Option<{}> {{",
+                "pub fn {}<C: Context>(ctx: &mut C, {}) -> Option<{}> {{",
                 func_name,
                 args.join(", "),
                 self.type_name(termdata.ret_ty, /* by_ref = */ None)
@@ -788,7 +883,7 @@ impl<'a> Codegen<'a> {
             )?;
             writeln!(
                 code,
-                "fn {}<C>(ctx: &mut C, {}) -> Option<({},)> {{",
+                "pub fn {}<C: Context>(ctx: &mut C, {}) -> Option<({},)> {{",
                 func_name,
                 arg,
                 ret_tuple_tys.join(", "),
@@ -1114,7 +1209,7 @@ impl<'a> Codegen<'a> {
                 // chain of if-lets.
                 let mut edges = edges.clone();
                 edges.sort_by(|e1, e2| (-e1.range.0, &e1.symbol).cmp(&(-e2.range.0, &e2.symbol)));
-                
+
                 let mut i = 0;
                 while i < edges.len() {
                     let mut last = i;
