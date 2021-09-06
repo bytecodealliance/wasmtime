@@ -2469,8 +2469,7 @@ pub(crate) fn define(
         Signed integer multiplication, producing the high half of a
         double-length result.
 
-        Polymorphic over all scalar integer types, but does not support vector
-        types.
+        Polymorphic over all integer types (vector and scalar).
         "#,
             &formats.binary,
         )
