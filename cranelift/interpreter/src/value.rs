@@ -301,14 +301,14 @@ impl Value for DataValue {
                 let extracted = (self.into_int()? & shifted_mask) >> shift_amt;
                 Self::from_integer(extracted, ty)?
             }
-            ValueConversionKind::SignExtend(ty) => match (self.ty(), ty) {
-                (types::I8, types::I16) => unimplemented!(),
-                (types::I8, types::I32) => unimplemented!(),
-                (types::I8, types::I64) => unimplemented!(),
-                (types::I16, types::I32) => unimplemented!(),
-                (types::I16, types::I64) => unimplemented!(),
-                (types::I32, types::I64) => unimplemented!(),
-                _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
+            ValueConversionKind::SignExtend(ty) => match (self, ty) {
+                (DataValue::I8(n), types::I16) => DataValue::I16(n as i16),
+                (DataValue::I8(n), types::I32) => DataValue::I32(n as i32),
+                (DataValue::I8(n), types::I64) => DataValue::I64(n as i64),
+                (DataValue::I16(n), types::I32) => DataValue::I32(n as i32),
+                (DataValue::I16(n), types::I64) => DataValue::I64(n as i64),
+                (DataValue::I32(n), types::I64) => DataValue::I64(n as i64),
+                (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::ZeroExtend(ty) => match (self, ty) {
                 (DataValue::U8(n), types::I16) => DataValue::U16(n as u16),
