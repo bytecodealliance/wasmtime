@@ -795,7 +795,12 @@ where
         Opcode::Vconcat => unimplemented!("Vconcat"),
         Opcode::Vselect => unimplemented!("Vselect"),
         Opcode::VanyTrue => unimplemented!("VanyTrue"),
-        Opcode::VallTrue => unimplemented!("VallTrue"),
+        Opcode::VallTrue => assign(fold_vector(
+            arg(0)?,
+            ctrl_ty,
+            V::bool(true, types::B1)?,
+            |acc, lane| acc.and(lane),
+        )?),
         Opcode::SwidenLow => unimplemented!("SwidenLow"),
         Opcode::SwidenHigh => unimplemented!("SwidenHigh"),
         Opcode::UwidenLow => unimplemented!("UwidenLow"),
@@ -1006,10 +1011,10 @@ where
     V: Value,
 {
     let iterations = match lane_type {
-        types::I8 => 1,
-        types::I16 => 2,
-        types::I32 => 4,
-        types::I64 => 8,
+        types::I8 | types::B1 | types::B8 => 1,
+        types::I16 | types::B16 => 2,
+        types::I32 | types::B32 => 4,
+        types::I64 | types::B64 => 8,
         _ => unimplemented!("Only 128-bit vectors are currently supported."),
     };
 
@@ -1024,7 +1029,11 @@ where
             lane += (x[i + j] as i128) << (8 * j);
         }
 
-        let lane_val: V = Value::int(lane, lane_type)?;
+        let lane_val: V = if lane_type.is_bool() {
+            Value::bool(lane != 0, lane_type)?
+        } else {
+            Value::int(lane, lane_type)?
+        };
         lanes.push(lane_val);
     }
     return Ok(lanes);
@@ -1050,6 +1059,17 @@ where
         }
     }
     Value::vector(result, vector_type)
+}
+
+/// Performs a lanewise fold on a vector type
+fn fold_vector<V, F>(v: V, ty: types::Type, init: V, op: F) -> ValueResult<V>
+where
+    V: Value,
+    F: FnMut(V, V) -> ValueResult<V>,
+{
+    extractlanes(&v, ty.lane_type())?
+        .into_iter()
+        .try_fold(init, op)
 }
 
 /// Performs the supplied binary arithmetic `op` on two SIMD vectors.
