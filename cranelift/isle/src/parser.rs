@@ -184,14 +184,22 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_type_variant(&mut self) -> ParseResult<Variant> {
-        self.lparen()?;
-        let name = self.parse_ident()?;
-        let mut fields = vec![];
-        while !self.is_rparen() {
-            fields.push(self.parse_type_field()?);
+        if self.is_sym() {
+            let name = self.parse_ident()?;
+            Ok(Variant {
+                name,
+                fields: vec![],
+            })
+        } else {
+            self.lparen()?;
+            let name = self.parse_ident()?;
+            let mut fields = vec![];
+            while !self.is_rparen() {
+                fields.push(self.parse_type_field()?);
+            }
+            self.rparen()?;
+            Ok(Variant { name, fields })
         }
-        self.rparen()?;
-        Ok(Variant { name, fields })
     }
 
     fn parse_type_field(&mut self) -> ParseResult<Field> {

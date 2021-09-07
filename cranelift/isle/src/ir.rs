@@ -324,13 +324,18 @@ impl ExprSequence {
         vars: &HashMap<VarId, (Option<TermId>, Value)>,
         gen_final_construct: bool,
     ) -> (Option<TermId>, Vec<Value>) {
+        log::trace!(
+            "gen_expr: expr {:?} gen_final_construct {}",
+            expr,
+            gen_final_construct
+        );
         match expr {
             &Expr::ConstInt(ty, val) => (None, vec![self.add_const_int(ty, val)]),
             &Expr::Let(_ty, ref bindings, ref subexpr) => {
                 let mut vars = vars.clone();
                 for &(var, _var_ty, ref var_expr) in bindings {
                     let (var_value_term, var_value) =
-                        self.gen_expr(typeenv, termenv, &*var_expr, &vars, false);
+                        self.gen_expr(typeenv, termenv, &*var_expr, &vars, true);
                     let var_value = var_value[0];
                     vars.insert(var, (var_value_term, var_value));
                 }
@@ -343,9 +348,11 @@ impl ExprSequence {
             &Expr::Term(ty, term, ref arg_exprs) => {
                 let termdata = &termenv.terms[term.index()];
                 let mut arg_values_tys = vec![];
+                log::trace!("Term gen_expr term {}", term.index());
                 for (arg_ty, arg_expr) in termdata.arg_tys.iter().cloned().zip(arg_exprs.iter()) {
+                    log::trace!("generating for arg_expr {:?}", arg_expr);
                     arg_values_tys.push((
-                        self.gen_expr(typeenv, termenv, &*arg_expr, &vars, false).1[0],
+                        self.gen_expr(typeenv, termenv, &*arg_expr, &vars, true).1[0],
                         arg_ty,
                     ));
                 }
@@ -383,7 +390,21 @@ pub fn lower_rule(
     let ruledata = &termenv.rules[rule.index()];
     let mut vars = HashMap::new();
 
+    log::trace!(
+        "lower_rule: ruledata {:?} forward {}",
+        ruledata,
+        is_forward_dir
+    );
+
     if is_forward_dir {
+        let can_do_forward = match &ruledata.lhs {
+            &Pattern::Term(..) => true,
+            _ => false,
+        };
+        if !can_do_forward {
+            return None;
+        }
+
         let lhs_root_term = pattern_seq.gen_pattern(None, tyenv, termenv, &ruledata.lhs, &mut vars);
         let root_term = match lhs_root_term {
             Some(t) => t,
@@ -407,6 +428,14 @@ pub fn lower_rule(
         expr_seq.add_return(output_ty, rhs_root_vals[0]);
         Some((pattern_seq, expr_seq, root_term))
     } else {
+        let can_reverse = match &ruledata.rhs {
+            &Expr::Term(..) => true,
+            _ => false,
+        };
+        if !can_reverse {
+            return None;
+        }
+
         let arg = pattern_seq.add_arg(0, ruledata.lhs.ty());
         let _ = pattern_seq.gen_pattern(Some(arg), tyenv, termenv, &ruledata.lhs, &mut vars);
         let (rhs_root_term, rhs_root_vals) = expr_seq.gen_expr(

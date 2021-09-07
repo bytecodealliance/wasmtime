@@ -1,0 +1,57 @@
+(type Opcode extern (enum
+  Iadd
+  Isub
+  Load
+  Store))
+
+(type Inst (primitive Inst))
+(type Reg (primitive Reg))
+(type u32 (primitive u32))
+
+(decl Op (Opcode) Inst)
+(extractor Op get_opcode)
+
+(decl InputToReg (Inst u32) Reg)
+(constructor InputToReg put_input_in_reg)
+
+(type MachInst (enum
+  (Add (a Reg) (b Reg))
+  (Sub (a Reg) (b Reg))))
+
+(decl Lower (Inst) MachInst)
+
+;; These can be made nicer by defining some extractors -- see below.
+(rule
+  (Lower inst @ (Op (Opcode.Iadd)))
+  (MachInst.Add (InputToReg inst 0) (InputToReg inst 1)))
+(rule
+  (Lower inst @ (Op (Opcode.Isub)))
+  (MachInst.Sub (InputToReg inst 0) (InputToReg inst 1)))
+
+;; Extractors that give syntax sugar for (Iadd ra rb), etc.
+;;
+;; Note that this is somewhat simplistic: it directly connects inputs to
+;; MachInst regs; really we'd want to return a VReg or InstInput that we can use
+;; another extractor to connect to another (producer) inst.
+;;
+;; Also, note that while it looks a little indirect, a verification effort could
+;; define equivalences across the `rule` LHS/RHS pairs, and the types ensure that
+;; we are dealing (at the semantic level) with pure value equivalences of
+;; "terms", not arbitrary side-effecting calls.
+
+(decl Iadd (Reg Reg) Inst)
+(decl Isub (Reg Reg) Inst)
+(rule
+ inst @ (Op Opcode.Iadd)
+ (Iadd (InputToReg inst 0) (InputToReg inst 1)))
+(rule
+ inst @ (Op Opcode.Isub)
+ (Isub (InputToReg inst 0) (InputToReg inst 1)))
+
+;; Now the nice syntax-sugar that "end-user" backend authors can write:
+(rule
+ (Lower (Iadd ra rb))
+ (MachInst.Add ra rb))
+(rule
+ (Lower (Isub ra rb))
+ (MachInst.Sub ra rb))

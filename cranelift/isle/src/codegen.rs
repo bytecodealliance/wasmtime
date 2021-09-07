@@ -666,7 +666,7 @@ impl<'a> Codegen<'a> {
                     let ret = self.type_name(term.ret_ty, /* by_ref = */ None);
                     writeln!(
                         code,
-                        "fn {}(&mut self, {}) -> Option<{}>;",
+                        "    fn {}(&mut self, {}) -> Option<{}>;",
                         ctor_name,
                         args.join(", "),
                         ret,
@@ -700,13 +700,18 @@ impl<'a> Codegen<'a> {
                     writeln!(code, "pub enum {} {{", name)?;
                     for variant in variants {
                         let name = &self.typeenv.syms[variant.name.index()];
-                        writeln!(code, "    {} {{", name)?;
-                        for field in &variant.fields {
-                            let name = &self.typeenv.syms[field.name.index()];
-                            let ty_name = self.typeenv.types[field.ty.index()].name(&self.typeenv);
-                            writeln!(code, "        {}: {},", name, ty_name)?;
+                        if variant.fields.is_empty() {
+                            writeln!(code, "    {},", name)?;
+                        } else {
+                            writeln!(code, "    {} {{", name)?;
+                            for field in &variant.fields {
+                                let name = &self.typeenv.syms[field.name.index()];
+                                let ty_name =
+                                    self.typeenv.types[field.ty.index()].name(&self.typeenv);
+                                writeln!(code, "        {}: {},", name, ty_name)?;
+                            }
+                            writeln!(code, "    }},")?;
                         }
-                        writeln!(code, "    }},")?;
                     }
                     writeln!(code, "}}")?;
                 }
@@ -796,10 +801,15 @@ impl<'a> Codegen<'a> {
         for (&termid, trie) in &self.functions_by_input {
             let termdata = &self.termenv.terms[termid.index()];
 
-            // Skip terms that are enum variants or that have external constructors.
+            // Skip terms that are enum variants or that have external
+            // constructors/extractors.
             match &termdata.kind {
                 &TermKind::EnumVariant { .. } => continue,
-                &TermKind::Regular { constructor, .. } if constructor.is_some() => continue,
+                &TermKind::Regular {
+                    constructor,
+                    extractor,
+                    ..
+                } if constructor.is_some() || extractor.is_some() => continue,
                 _ => {}
             }
 
@@ -851,7 +861,11 @@ impl<'a> Codegen<'a> {
             // Skip terms that are enum variants or that have external extractors.
             match &termdata.kind {
                 &TermKind::EnumVariant { .. } => continue,
-                &TermKind::Regular { extractor, .. } if extractor.is_some() => continue,
+                &TermKind::Regular {
+                    constructor,
+                    extractor,
+                    ..
+                } if constructor.is_some() || extractor.is_some() => continue,
                 _ => {}
             }
 
@@ -949,15 +963,23 @@ impl<'a> Codegen<'a> {
                     self.type_name(ty, None),
                     self.typeenv.syms[variantinfo.name.index()]
                 );
-                writeln!(
-                    code,
-                    "{}let {} = {} {{",
-                    indent, outputname, full_variant_name
-                )?;
-                for input_field in input_fields {
-                    writeln!(code, "{}    {},", indent, input_field)?;
+                if input_fields.is_empty() {
+                    writeln!(
+                        code,
+                        "{}let {} = {};",
+                        indent, outputname, full_variant_name
+                    )?;
+                } else {
+                    writeln!(
+                        code,
+                        "{}let {} = {} {{",
+                        indent, outputname, full_variant_name
+                    )?;
+                    for input_field in input_fields {
+                        writeln!(code, "{}    {},", indent, input_field)?;
+                    }
+                    writeln!(code, "{}}};", indent)?;
                 }
-                writeln!(code, "{}}};", indent)?;
                 self.define_val(&output, ctx, /* is_ref = */ false);
             }
             &ExprInst::Construct {
@@ -1089,14 +1111,15 @@ impl<'a> Codegen<'a> {
                 let variant = &variants[variant.index()];
                 let variantname = &self.typeenv.syms[variant.name.index()];
                 let args = self.match_variant_binders(variant, &arg_tys[..], id, ctx);
+                let args = if args.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("{{ {} }}", args.join(", "))
+                };
                 writeln!(
                     code,
-                    "{}if let {}::{} {{ {} }} = {} {{",
-                    indent,
-                    ty_name,
-                    variantname,
-                    args.join(", "),
-                    input
+                    "{}if let {}::{} {} = {} {{",
+                    indent, ty_name, variantname, args, input
                 )?;
                 Ok(false)
             }
@@ -1339,13 +1362,15 @@ impl<'a> Codegen<'a> {
             let variantinfo = &variants[variant.index()];
             let variantname = &self.typeenv.syms[variantinfo.name.index()];
             let fields = self.match_variant_binders(variantinfo, arg_tys, id, ctx);
+            let fields = if fields.is_empty() {
+                "".to_string()
+            } else {
+                format!("{{ {} }}", fields.join(", "))
+            };
             writeln!(
                 code,
-                "{}    &{}::{} {{ {} }} => {{",
-                indent,
-                input_ty_name,
-                variantname,
-                fields.join(", ")
+                "{}    &{}::{} {} => {{",
+                indent, input_ty_name, variantname, fields,
             )?;
             let subindent = format!("{}        ", indent);
             self.generate_body(code, depth + 1, node, &subindent, ctx)?;
