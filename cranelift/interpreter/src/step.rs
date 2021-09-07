@@ -791,7 +791,7 @@ where
         Opcode::Splat => {
             let mut new_vector = SimdVec::new();
             for _ in 0..ctrl_ty.lane_count() {
-                new_vector.push(arg(0)?.into_int()?);
+                new_vector.push(arg(0)?);
             }
             assign(vectorizelanes(&new_vector, ctrl_ty)?)
         }
