@@ -777,8 +777,24 @@ where
             ValueConversionKind::RoundNearestEven(ctrl_ty),
         )?),
         Opcode::Shuffle => unimplemented!("Shuffle"),
-        Opcode::Swizzle => unimplemented!("Swizzle"),
-        Opcode::Splat => unimplemented!("Splat"),
+        Opcode::Swizzle => {
+            let x = Value::into_array(&arg(0)?)?;
+            let s = Value::into_array(&arg(1)?)?;
+            let mut new = [0u8; 16];
+            for i in 0..new.len() {
+                if (s[i] as usize) < new.len() {
+                    new[i] = x[s[i] as usize];
+                } // else leave as 0
+            }
+            assign(Value::vector(new, ctrl_ty)?)
+        }
+        Opcode::Splat => {
+            let mut new_vector = SimdVec::new();
+            for _ in 0..ctrl_ty.lane_count() {
+                new_vector.push(arg(0)?.into_int()?);
+            }
+            assign(vectorizelanes(&new_vector, ctrl_ty)?)
+        }
         Opcode::Insertlane => {
             let idx = imm().into_int()? as usize;
             let mut vector = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;

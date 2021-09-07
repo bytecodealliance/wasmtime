@@ -1,0 +1,33 @@
+test interpret
+test run
+target aarch64
+set enable_simd
+target x86_64 machinst
+
+function %swizzle_i8x16(i8x16, i8x16) -> i8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swizzle.i8x16 v0, v1
+    return v2
+}
+; run: %swizzle_i8x16([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [0 9 15 1 6 13 7 11 10 8 100 12 4 2 3 5]) == [1 10 16 2 7 14 8 12 11 9 0 13 5 3 4 6]
+
+function %swizzle_i16x8(i8x16, i8x16) -> i16x8 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swizzle.i16x8 v0, v1
+    return v2
+}
+; run: %swizzle_i16x8([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [0 9 15 1 6 13 7 11 10 8 100 12 4 2 3 5]) == 0x060403050d00090b0c080e0702100a01
+
+function %swizzle_i32x4(i8x16, i8x16) -> i32x4 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swizzle.i32x4 v0, v1
+    return v2
+}
+; run: %swizzle_i32x4([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [0 9 15 1 6 13 7 11 10 8 100 12 4 2 3 5]) == 0x060403050d00090b0c080e0702100a01
+
+function %swizzle_i64x2(i8x16, i8x16) -> i64x2 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = swizzle.i64x2 v0, v1
+    return v2
+}
+; run: %swizzle_i64x2([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [0 9 15 1 6 13 7 11 10 8 100 12 4 2 3 5]) == 0x060403050d00090b0c080e0702100a01
