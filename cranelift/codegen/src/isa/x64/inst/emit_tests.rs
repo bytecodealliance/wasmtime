@@ -4688,6 +4688,17 @@ fn test_x64_emit() {
         "%rax = macho_tls_get_addr User { namespace: 0, index: 0 }",
     ));
 
+    insns.push((
+        Inst::CoffTlsGetAddr {
+            symbol: ExternalName::User {
+                namespace: 0,
+                index: 0,
+            },
+        },
+        "8B050000000065488B0C2558000000488B04C1488D8000000000",
+        "%rax = coff_tls_get_addr User { namespace: 0, index: 0 }",
+    ));
+
     // ========================================================
     // Actually run the tests!
     let mut flag_builder = settings::builder();

@@ -493,6 +493,10 @@
        ;; `rax`.
        (MachOTlsGetAddr (symbol ExternalName))
 
+       ;; A Coff TLS symbol access. Returns address of the TLS symbol in
+       ;; `rax`.
+       (CoffTlsGetAddr (symbol ExternalName))
+
        ;; An unwind pseudoinstruction describing the state of the machine at
        ;; this program point.
        (Unwind (inst UnwindInst))

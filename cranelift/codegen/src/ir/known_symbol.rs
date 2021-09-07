@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 pub enum KnownSymbol {
     /// ELF well-known linker symbol _GLOBAL_OFFSET_TABLE_
     ElfGlobalOffsetTable,
+    /// TLS index symbol for the current thread.
+    /// Used in COFF/PE file formats.
+    CoffTlsIndex,
 }
 
 impl fmt::Display for KnownSymbol {
@@ -23,6 +26,7 @@ impl FromStr for KnownSymbol {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "ElfGlobalOffsetTable" => Ok(Self::ElfGlobalOffsetTable),
+            "CoffTlsIndex" => Ok(Self::TlsIndex),
             _ => Err(()),
         }
     }
@@ -38,5 +42,6 @@ mod tests {
             "ElfGlobalOffsetTable".parse(),
             Ok(KnownSymbol::ElfGlobalOffsetTable)
         );
+        assert_eq!("CoffTlsIndex".parse(), Ok(KnownSymbol::TlsIndex));
     }
 }
