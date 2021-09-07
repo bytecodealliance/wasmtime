@@ -305,13 +305,23 @@ impl<'a> Parser<'a> {
             }
         } else if self.is_lparen() {
             self.lparen()?;
-            let sym = self.parse_ident()?;
-            let mut args = vec![];
-            while !self.is_rparen() {
-                args.push(self.parse_pattern()?);
+            if self.is_sym_str("and") {
+                self.symbol()?;
+                let mut subpats = vec![];
+                while !self.is_rparen() {
+                    subpats.push(self.parse_pattern()?);
+                }
+                self.rparen()?;
+                Ok(Pattern::And { subpats })
+            } else {
+                let sym = self.parse_ident()?;
+                let mut args = vec![];
+                while !self.is_rparen() {
+                    args.push(self.parse_pattern()?);
+                }
+                self.rparen()?;
+                Ok(Pattern::Term { sym, args })
             }
-            self.rparen()?;
-            Ok(Pattern::Term { sym, args })
         } else {
             Err(self.error(pos.unwrap(), "Unexpected pattern".into()))
         }

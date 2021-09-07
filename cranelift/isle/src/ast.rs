@@ -83,6 +83,8 @@ pub enum Pattern {
     Term { sym: Ident, args: Vec<Pattern> },
     /// An operator that matches anything.
     Wildcard,
+    /// N sub-patterns that must all match.
+    And { subpats: Vec<Pattern> },
 }
 
 /// An expression: the right-hand side of a rule.

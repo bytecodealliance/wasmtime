@@ -1,4 +1,3 @@
-- `and` combinator in input.
 - inputs to external extractors? "polarity" of args?
 - "extractor macros" rather than full rule reversal? (rule ...) and (pattern ...)?
 - Document semantics carefully, especially wrt extractors.

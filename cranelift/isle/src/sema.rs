@@ -123,6 +123,7 @@ pub enum Pattern {
     ConstInt(TypeId, i64),
     Term(TypeId, TermId, Vec<Pattern>),
     Wildcard(TypeId),
+    And(TypeId, Vec<Pattern>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -141,6 +142,7 @@ impl Pattern {
             &Self::ConstInt(t, ..) => t,
             &Self::Term(t, ..) => t,
             &Self::Wildcard(t, ..) => t,
+            &Self::And(t, ..) => t,
         }
     }
 }
@@ -293,11 +295,13 @@ impl TypeEnv {
     }
 }
 
+#[derive(Clone)]
 struct Bindings {
     next_var: usize,
     vars: Vec<BoundVar>,
 }
 
+#[derive(Clone)]
 struct BoundVar {
     name: Sym,
     id: VarId,
@@ -547,6 +551,21 @@ impl TermEnv {
                     tyenv.error(pos, "Need an implied type for a wildcard".into())
                 })?;
                 Ok((Pattern::Wildcard(ty), ty))
+            }
+            &ast::Pattern::And { ref subpats } => {
+                let mut expected_ty = expected_ty;
+                let mut children = vec![];
+                for subpat in subpats {
+                    let (subpat, ty) =
+                        self.translate_pattern(tyenv, pos, &*subpat, expected_ty, bindings)?;
+                    expected_ty = expected_ty.or(Some(ty));
+                    children.push(subpat);
+                }
+                if expected_ty.is_none() {
+                    return Err(tyenv.error(pos, "No type for (and ...) form.".to_string()));
+                }
+                let ty = expected_ty.unwrap();
+                Ok((Pattern::And(ty, children), ty))
             }
             &ast::Pattern::BindPattern {
                 ref var,

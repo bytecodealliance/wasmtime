@@ -253,6 +253,13 @@ impl PatternSequence {
                     }
                 }
             }
+            &Pattern::And(_ty, ref children) => {
+                let input = input.unwrap();
+                for child in children {
+                    self.gen_pattern(Some(input), typeenv, termenv, child, vars);
+                }
+                None
+            }
             &Pattern::Wildcard(_ty) => {
                 // Nothing!
                 None
