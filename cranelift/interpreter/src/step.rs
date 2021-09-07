@@ -557,7 +557,30 @@ where
             false,
         )?),
         Opcode::Ineg => binary(Value::sub, Value::int(0, ctrl_ty)?, arg(0)?)?,
-        Opcode::Iabs => unimplemented!("Iabs"),
+        Opcode::Iabs => {
+            let (min_val, _) = ctrl_ty.lane_type().bounds(true);
+            let min_val: V = Value::int(min_val as i128, ctrl_ty.lane_type())?;
+            if ctrl_ty.is_vector() {
+                let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+                let new_vec = arg0
+                    .into_iter()
+                    .map(|lane| {
+                        if Value::eq(&lane, &min_val)? {
+                            Ok(min_val.clone())
+                        } else {
+                            Value::int(lane.into_int()?.abs(), ctrl_ty.lane_type())
+                        }
+                    })
+                    .collect::<ValueResult<SimdVec<V>>>()?;
+                assign(vectorizelanes(&new_vec, ctrl_ty)?)
+            } else {
+                assign(if Value::eq(&arg(0)?, &min_val)? {
+                    min_val.clone()
+                } else {
+                    Value::int(arg(0)?.into_int()?.abs(), ctrl_ty.lane_type())?
+                })
+            }
+        }
         Opcode::Imul => binary(Value::mul, arg(0)?, arg(1)?)?,
         Opcode::Umulhi | Opcode::Smulhi => {
             let double_length = match ctrl_ty.lane_bits() {
