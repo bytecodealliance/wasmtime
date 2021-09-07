@@ -11,7 +11,7 @@ use cranelift_codegen::ir::{
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::ops::RangeFrom;
 use thiserror::Error;
 
@@ -63,7 +63,22 @@ where
     };
 
     // Retrieve the immediate value for an instruction, expecting it to exist.
-    let imm = || -> V { V::from(inst.imm_value().unwrap()) };
+    let imm = || -> V {
+        V::from(match inst {
+            InstructionData::UnaryConst {
+                constant_handle, ..
+            } => {
+                let buffer = state
+                    .get_current_function()
+                    .dfg
+                    .constants
+                    .get(constant_handle.clone())
+                    .as_slice();
+                DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
+            }
+            _ => inst.imm_value().unwrap(),
+        })
+    };
 
     // Retrieve the immediate value for an instruction and convert it to the controlling type of the
     // instruction. For example, since `InstructionData` stores all integer immediates in a 64-bit
@@ -408,7 +423,7 @@ where
         Opcode::F32const => assign(imm()),
         Opcode::F64const => assign(imm()),
         Opcode::Bconst => assign(imm()),
-        Opcode::Vconst => unimplemented!("Vconst"),
+        Opcode::Vconst => assign(imm()),
         Opcode::ConstAddr => unimplemented!("ConstAddr"),
         Opcode::Null => unimplemented!("Null"),
         Opcode::Nop => ControlFlow::Continue,
@@ -537,19 +552,22 @@ where
                     64 => types::I128,
                     _ => unimplemented!("Unsupported integer length {}", ctrl_ty.bits()),
                 };
-                let mut new_vec = SimdVec::new();
                 let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
                 let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
-                for (x, y) in arg0.into_iter().zip(arg1) {
-                    let x: V = Value::int(x, double_length)?;
-                    let y: V = Value::int(y, double_length)?;
-                    new_vec.push(
-                        Value::mul(x, y)?
-                            .convert(ValueConversionKind::ExtractUpper(ctrl_ty.lane_type()))?
-                            .into_int()?,
-                    )
-                }
-                assign(vectorizelanes(&new_vec, ctrl_ty)?)
+
+                let res = arg0
+                    .into_iter()
+                    .zip(arg1)
+                    .map(|(x, y)| {
+                        let x = x.convert(ValueConversionKind::ZeroExtend(double_length))?;
+                        let y = y.convert(ValueConversionKind::ZeroExtend(double_length))?;
+
+                        Ok(Value::mul(x, y)?
+                            .convert(ValueConversionKind::ExtractUpper(ctrl_ty.lane_type()))?)
+                    })
+                    .collect::<ValueResult<SimdVec<V>>>()?;
+
+                assign(vectorizelanes(&res, ctrl_ty)?)
             } else {
                 let double_length = match ctrl_ty.bits() {
                     8 => types::I16,
@@ -762,21 +780,32 @@ where
         Opcode::Swizzle => unimplemented!("Swizzle"),
         Opcode::Splat => unimplemented!("Splat"),
         Opcode::Insertlane => {
+            let idx = imm().into_int()? as usize;
             let mut vector = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
-            vector[Value::into_int(imm())? as usize] = arg(1)?.into_int()?;
+            vector[idx] = arg(1)?;
             assign(vectorizelanes(&vector, ctrl_ty)?)
         }
         Opcode::Extractlane => {
-            let value =
-                extractlanes(&arg(0)?, ctrl_ty.lane_type())?[Value::into_int(imm())? as usize];
-            assign(Value::int(value, ctrl_ty.lane_type())?)
+            let idx = imm().into_int()? as usize;
+            let lanes = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+            assign(lanes[idx].clone())
         }
         Opcode::VhighBits => unimplemented!("VhighBits"),
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
         Opcode::Vselect => unimplemented!("Vselect"),
-        Opcode::VanyTrue => unimplemented!("VanyTrue"),
-        Opcode::VallTrue => unimplemented!("VallTrue"),
+        Opcode::VanyTrue => assign(fold_vector(
+            arg(0)?,
+            ctrl_ty,
+            V::bool(false, types::B1)?,
+            |acc, lane| acc.or(lane),
+        )?),
+        Opcode::VallTrue => assign(fold_vector(
+            arg(0)?,
+            ctrl_ty,
+            V::bool(true, types::B1)?,
+            |acc, lane| acc.and(lane),
+        )?),
         Opcode::SwidenLow => unimplemented!("SwidenLow"),
         Opcode::SwidenHigh => unimplemented!("SwidenHigh"),
         Opcode::UwidenLow => unimplemented!("UwidenLow"),
@@ -979,18 +1008,18 @@ where
     })
 }
 
-type SimdVec = SmallVec<[i128; 4]>;
+type SimdVec<V> = SmallVec<[V; 4]>;
 
-/// Converts a SIMD vector value into a Rust vector of i128 for processing.
-fn extractlanes<V>(x: &V, lane_type: types::Type) -> ValueResult<SimdVec>
+/// Converts a SIMD vector value into a Rust array of [Value] for processing.
+fn extractlanes<V>(x: &V, lane_type: types::Type) -> ValueResult<SimdVec<V>>
 where
     V: Value,
 {
     let iterations = match lane_type {
-        types::I8 => 1,
-        types::I16 => 2,
-        types::I32 => 4,
-        types::I64 => 8,
+        types::I8 | types::B1 | types::B8 => 1,
+        types::I16 | types::B16 => 2,
+        types::I32 | types::B32 => 4,
+        types::I64 | types::B64 => 8,
         _ => unimplemented!("Only 128-bit vectors are currently supported."),
     };
 
@@ -1004,13 +1033,19 @@ where
         for j in 0..iterations {
             lane += (x[i + j] as i128) << (8 * j);
         }
-        lanes.push(lane);
+
+        let lane_val: V = if lane_type.is_bool() {
+            Value::bool(lane != 0, lane_type)?
+        } else {
+            Value::int(lane, lane_type)?
+        };
+        lanes.push(lane_val);
     }
     return Ok(lanes);
 }
 
 /// Convert a Rust array of i128s back into a `Value::vector`.
-fn vectorizelanes<V>(x: &[i128], vector_type: types::Type) -> ValueResult<V>
+fn vectorizelanes<V>(x: &[V], vector_type: types::Type) -> ValueResult<V>
 where
     V: Value,
 {
@@ -1023,12 +1058,23 @@ where
     };
     let mut result: [u8; 16] = [0; 16];
     for (i, val) in x.iter().enumerate() {
-        let val = *val;
+        let val = val.clone().into_int()?;
         for j in 0..iterations {
             result[(i * iterations) + j] = (val >> (8 * j)) as u8;
         }
     }
     Value::vector(result, vector_type)
+}
+
+/// Performs a lanewise fold on a vector type
+fn fold_vector<V, F>(v: V, ty: types::Type, init: V, op: F) -> ValueResult<V>
+where
+    V: Value,
+    F: FnMut(V, V) -> ValueResult<V>,
+{
+    extractlanes(&v, ty.lane_type())?
+        .into_iter()
+        .try_fold(init, op)
 }
 
 /// Performs the supplied binary arithmetic `op` on two SIMD vectors.
@@ -1039,20 +1085,19 @@ where
 {
     let arg0 = extractlanes(&x, vector_type.lane_type())?;
     let arg1 = extractlanes(&y, vector_type.lane_type())?;
-    let mut result = Vec::new();
-    for (lhs, rhs) in arg0.into_iter().zip(arg1) {
-        // The initial Value::int needs to be on a separate line so the
-        // compiler can determine concrete types.
-        let mut lhs: V = Value::int(lhs, vector_type.lane_type())?;
-        let mut rhs: V = Value::int(rhs, vector_type.lane_type())?;
-        if unsigned {
-            lhs = lhs.convert(ValueConversionKind::ToUnsigned)?;
-            rhs = rhs.convert(ValueConversionKind::ToUnsigned)?;
-        }
-        let sum = op(lhs, rhs)?;
-        let sum = sum.into_int()?;
-        result.push(sum);
-    }
+
+    let result = arg0
+        .into_iter()
+        .zip(arg1)
+        .map(|(mut lhs, mut rhs)| {
+            if unsigned {
+                lhs = lhs.convert(ValueConversionKind::ToUnsigned)?;
+                rhs = rhs.convert(ValueConversionKind::ToUnsigned)?;
+            }
+            Ok(op(lhs, rhs)?)
+        })
+        .collect::<ValueResult<SimdVec<V>>>()?;
+
     vectorizelanes(&result, vector_type)
 }
 
@@ -1066,13 +1111,12 @@ where
 {
     let arg0 = extractlanes(&x, vector_type.lane_type())?;
     let arg1 = extractlanes(&y, vector_type.lane_type())?;
-    let mut result = SimdVec::new();
-    for pair in arg0.chunks(2).chain(arg1.chunks(2)) {
-        let lhs: V = Value::int(pair[0], vector_type.lane_type())?;
-        let rhs: V = Value::int(pair[1], vector_type.lane_type())?;
-        let sum = op(lhs, rhs)?;
-        let sum = sum.into_int()?;
-        result.push(sum);
-    }
+
+    let result = arg0
+        .chunks(2)
+        .chain(arg1.chunks(2))
+        .map(|pair| op(pair[0].clone(), pair[1].clone()))
+        .collect::<ValueResult<SimdVec<V>>>()?;
+
     vectorizelanes(&result, vector_type)
 }

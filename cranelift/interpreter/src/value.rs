@@ -290,15 +290,15 @@ impl Value for DataValue {
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::ZeroExtend(ty) => match (self, ty) {
-                (DataValue::I8(_), types::I16) => unimplemented!(),
-                (DataValue::I8(_), types::I32) => unimplemented!(),
-                (DataValue::I8(_), types::I64) => unimplemented!(),
-                (DataValue::I16(_), types::I32) => unimplemented!(),
-                (DataValue::I16(_), types::I64) => unimplemented!(),
+                (DataValue::I8(n), types::I16) => DataValue::I16(n as u8 as i16),
+                (DataValue::I8(n), types::I32) => DataValue::I32(n as u8 as i32),
+                (DataValue::I8(n), types::I64) => DataValue::I64(n as u8 as i64),
+                (DataValue::I16(n), types::I32) => DataValue::I32(n as u16 as i32),
+                (DataValue::I16(n), types::I64) => DataValue::I64(n as u16 as i64),
                 (DataValue::U32(n), types::I64) => DataValue::U64(n as u64),
                 (DataValue::I32(n), types::I64) => DataValue::I64(n as u32 as i64),
-                (DataValue::U64(n), types::I64) => DataValue::U64(n),
-                (DataValue::I64(n), types::I64) => DataValue::I64(n),
+                (DataValue::I64(n), types::I128) => DataValue::I128(n as u64 as i128),
+                (from, to) if from.ty() == to => from,
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::ToUnsigned => match self {
@@ -428,7 +428,7 @@ impl Value for DataValue {
     }
 
     fn or(self, other: Self) -> ValueResult<Self> {
-        binary_match!(|(&self, &other); [I8, I16, I32, I64])
+        binary_match!(|(&self, &other); [B, I8, I16, I32, I64])
     }
 
     fn xor(self, other: Self) -> ValueResult<Self> {

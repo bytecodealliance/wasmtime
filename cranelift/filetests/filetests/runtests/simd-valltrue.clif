@@ -1,0 +1,69 @@
+test interpret
+test run
+target aarch64
+target x86_64 machinst
+
+; TODO: Refactor this once we support simd bools in the trampoline
+
+function %vall_true_b8x16() -> b1, b1, b1 {
+block0:
+    v0 = vconst.b8x16 [false false false false false false false false false false false false false false false false]
+    v1 = vall_true v0
+
+    v2 = vconst.b8x16 [true false false false false false false false false false false false false false false false]
+    v3 = vall_true v2
+
+    v4 = vconst.b8x16 [true true true true true true true true true true true true true true true true]
+    v5 = vall_true v4
+
+    return v1, v3, v5
+}
+; run: %vall_true_b8x16() == [false, false, true]
+
+
+function %vall_true_b16x8() -> b1, b1, b1 {
+block0:
+    v0 = vconst.b16x8 [false false false false false false false false]
+    v1 = vall_true v0
+
+    v2 = vconst.b16x8 [true false false false false false false false]
+    v3 = vall_true v2
+
+    v4 = vconst.b16x8 [true true true true true true true true]
+    v5 = vall_true v4
+
+    return v1, v3, v5
+}
+; run: %vall_true_b16x8() == [false, false, true]
+
+
+function %vall_true_b32x4() -> b1, b1, b1 {
+block0:
+    v0 = vconst.b32x4 [false false false false]
+    v1 = vall_true v0
+
+    v2 = vconst.b32x4 [true false false false]
+    v3 = vall_true v2
+
+    v4 = vconst.b32x4 [true true true true]
+    v5 = vall_true v4
+
+    return v1, v3, v5
+}
+; run: %vall_true_b32x4() == [false, false, true]
+
+
+function %vall_true_b64x2() -> b1, b1, b1 {
+block0:
+    v0 = vconst.b64x2 [false false]
+    v1 = vall_true v0
+
+    v2 = vconst.b64x2 [true false]
+    v3 = vall_true v2
+
+    v4 = vconst.b64x2 [true true]
+    v5 = vall_true v4
+
+    return v1, v3, v5
+}
+; run: %vall_true_b64x2() == [false, false, true]
