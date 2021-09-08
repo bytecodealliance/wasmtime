@@ -70,6 +70,15 @@ use std::sync::Arc;
 /// point only the [`Store`] that owns the [`Global`] can be used to instantiate
 /// modules.
 ///
+/// ## Multiple `Engine`s
+///
+/// The [`Linker`] type is not compatible with usage between multiple [`Engine`]
+/// values. An [`Engine`] is provided when a [`Linker`] is created and only
+/// stores and items which originate from that [`Engine`] can be used with this
+/// [`Linker`]. If more than one [`Engine`] is used with a [`Linker`] then that
+/// may cause a panic at runtime, similar to how if a [`Func`] is used with the
+/// wrong [`Store`] that can also panic at runtime.
+///
 /// [`Store`]: crate::Store
 /// [`Global`]: crate::Global
 pub struct Linker<T> {
@@ -150,6 +159,11 @@ macro_rules! generate_wrap_async_func {
 
 impl<T> Linker<T> {
     /// Creates a new [`Linker`].
+    ///
+    /// The linker will define functions within the context of the `engine`
+    /// provided and can only instantiate modules for a [`Store`] that is also
+    /// defined within the same [`Engine`]. Usage of stores with different
+    /// [`Engine`]s may cause a panic when used with this [`Linker`].
     pub fn new(engine: &Engine) -> Linker<T> {
         Linker {
             engine: engine.clone(),
@@ -235,9 +249,6 @@ impl<T> Linker<T> {
     /// Returns an error if the `module` and `name` already identify an item
     /// of the same type as the `item` provided and if shadowing is disallowed.
     /// For more information see the documentation on [`Linker`].
-    ///
-    /// Also returns an error if `item` comes from a different store than this
-    /// [`Linker`] was created with.
     ///
     /// # Examples
     ///
@@ -417,6 +428,11 @@ impl<T> Linker<T> {
     /// for each export is `module_name`, and the name for each export is the
     /// name in the instance itself.
     ///
+    /// Note that when this API is used the [`Linker`] is no longer compatible
+    /// with multi-[`Store` ] instantiation because the items defined within
+    /// this store will belong to the `store` provided, and only the `store`
+    /// provided.
+    ///
     /// # Errors
     ///
     /// Returns an error if the any item is redefined twice in this linker (for
@@ -505,7 +521,8 @@ impl<T> Linker<T> {
     /// # Panics
     ///
     /// Panics if any item used to instantiate the provided [`Module`] is not
-    /// owned by `store`.
+    /// owned by `store`, or if the `store` provided comes from a different
+    /// [`Engine`] than this [`Linker`].
     ///
     /// # Examples
     ///
@@ -602,6 +619,15 @@ impl<T> Linker<T> {
     {
         // NB: this is intended to function the same as `Linker::module_async`,
         // they should be kept in sync.
+
+        // This assert isn't strictly necessary since it'll bottom out in the
+        // `HostFunc::to_func` method anyway. This is placed earlier for this
+        // function though to prevent the functions created here from delaying
+        // the panic until they're called.
+        assert!(
+            Engine::same(&self.engine, store.as_context().engine()),
+            "different engines for this linker and the store provided"
+        );
         match ModuleKind::categorize(module)? {
             ModuleKind::Command => {
                 self.command(
@@ -672,6 +698,10 @@ impl<T> Linker<T> {
     {
         // NB: this is intended to function the same as `Linker::module`, they
         // should be kept in sync.
+        assert!(
+            Engine::same(&self.engine, store.as_context().engine()),
+            "different engines for this linker and the store provided"
+        );
         match ModuleKind::categorize(module)? {
             ModuleKind::Command => self.command(
                 store,
@@ -899,7 +929,8 @@ impl<T> Linker<T> {
     /// # Panics
     ///
     /// Panics if any item used to instantiate `module` is not owned by
-    /// `store`.
+    /// `store`. Additionally this will panic if the [`Engine`] that the `store`
+    /// belongs to is different than this [`Linker`].
     ///
     /// # Examples
     ///
@@ -958,7 +989,9 @@ impl<T> Linker<T> {
     /// # Panics
     ///
     /// This method will panic if any item defined in this linker used by
-    /// `module` is not owned by `store`.
+    /// `module` is not owned by `store`. Additionally this will panic if the
+    /// [`Engine`] that the `store` belongs to is different than this
+    /// [`Linker`].
     ///
     /// # Examples
     ///
@@ -1027,6 +1060,11 @@ impl<T> Linker<T> {
     ///
     /// Note that multiple `Extern` items may be defined for the same
     /// module/name pair.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the `store` provided does not come from the
+    /// same [`Engine`] that this linker was created with.
     pub fn iter<'a: 'p, 'p>(
         &'a self,
         mut store: impl AsContextMut<Data = T> + 'p,
@@ -1047,6 +1085,11 @@ impl<T> Linker<T> {
     ///
     /// Returns `None` if this name was not previously defined in this
     /// [`Linker`].
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the `store` provided does not come from the
+    /// same [`Engine`] that this linker was created with.
     pub fn get(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1073,6 +1116,11 @@ impl<T> Linker<T> {
     /// provided.
     ///
     /// Returns `None` if no match was found.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the `store` provided does not come from the
+    /// same [`Engine`] that this linker was created with.
     pub fn get_by_import(
         &self,
         mut store: impl AsContextMut<Data = T>,
@@ -1126,7 +1174,9 @@ impl<T> Linker<T> {
     ///
     /// # Panics
     ///
-    /// Panics if the default function found is not owned by `store`.
+    /// Panics if the default function found is not owned by `store`. This
+    /// function will also panic if the `store` provided does not come from the
+    /// same [`Engine`] that this linker was created with.
     pub fn get_default(
         &self,
         mut store: impl AsContextMut<Data = T>,

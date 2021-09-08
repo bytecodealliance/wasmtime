@@ -953,7 +953,9 @@ impl<T> InstancePre<T> {
     /// # Panics
     ///
     /// Panics if any import closed over by this [`InstancePre`] isn't owned by
-    /// `store`, or if `store` has async support enabled.
+    /// `store`, or if `store` has async support enabled. Additionally this
+    /// function will panic if the `store` provided comes from a different
+    /// [`Engine`] than the [`InstancePre`] originally came from.
     pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
         // For the unsafety here the typecheck happened at creation time of this
         // structure and then othrewise the `T` of `InstancePre<T>` connects any

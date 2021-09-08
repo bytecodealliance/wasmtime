@@ -256,7 +256,7 @@ fn get_host_function() -> Result<()> {
 
     let mut linker = Linker::new(&engine);
     linker.func_wrap("mod", "f1", || {})?;
-    let mut store = Store::<()>::default();
+    let mut store = Store::new(&engine, ());
     assert!(linker
         .get_by_import(&mut store, &module.imports().nth(0).unwrap())
         .is_some());
