@@ -779,19 +779,36 @@ where
             arg(0)?,
             ValueConversionKind::Exact(ctrl_ty),
         )?),
-        Opcode::Snarrow => assign(Value::convert(
-            arg(0)?,
-            ValueConversionKind::Truncate(ctrl_ty),
-        )?),
+        Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
+            let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+            let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
+            let mut new_vec = SimdVec::new();
+            let new_type = ctrl_ty.split_lanes().unwrap();
+            let (min, max) = new_type.bounds(inst.opcode() == Opcode::Snarrow);
+            let mut min: V = Value::int(min, ctrl_ty.lane_type())?;
+            let mut max: V = Value::int(max, ctrl_ty.lane_type())?;
+            if inst.opcode() == Opcode::Uunarrow {
+                min = min.convert(ValueConversionKind::ToUnsigned)?;
+                max = max.convert(ValueConversionKind::ToUnsigned)?;
+            }
+            for mut lane in arg0.into_iter().chain(arg1) {
+                if inst.opcode() == Opcode::Uunarrow {
+                    lane = lane.convert(ValueConversionKind::ToUnsigned)?;
+                }
+                lane = Value::max(lane, min.clone())?;
+                lane = Value::min(lane, max.clone())?;
+                lane = lane.convert(ValueConversionKind::Truncate(new_type.lane_type()))?;
+                if inst.opcode() == Opcode::Unarrow || inst.opcode() == Opcode::Uunarrow {
+                    lane = lane.convert(ValueConversionKind::ToUnsigned)?;
+                }
+                new_vec.push(lane);
+            }
+            assign(vectorizelanes(&new_vec, new_type)?)
+        }
         Opcode::Sextend => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::SignExtend(ctrl_ty),
         )?),
-        Opcode::Unarrow => assign(Value::convert(
-            arg(0)?,
-            ValueConversionKind::Truncate(ctrl_ty),
-        )?),
-        Opcode::Uunarrow => unimplemented!("Uunarrow"),
         Opcode::Uextend => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::ZeroExtend(ctrl_ty),

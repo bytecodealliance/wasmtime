@@ -26,6 +26,9 @@ pub trait Value: Clone + From<DataValue> {
     fn convert(self, kind: ValueConversionKind) -> ValueResult<Self>;
     fn concat(self, other: Self) -> ValueResult<Self>;
 
+    fn max(self, other: Self) -> ValueResult<Self>;
+    fn min(self, other: Self) -> ValueResult<Self>;
+
     // Comparison.
     fn eq(&self, other: &Self) -> ValueResult<bool>;
     fn gt(&self, other: &Self) -> ValueResult<bool>;
@@ -302,11 +305,17 @@ impl Value for DataValue {
                 Self::from_integer(extracted, ty)?
             }
             ValueConversionKind::SignExtend(ty) => match (self, ty) {
+                (DataValue::U8(n), types::I16) => DataValue::U16(n as u16),
+                (DataValue::U8(n), types::I32) => DataValue::U32(n as u32),
+                (DataValue::U8(n), types::I64) => DataValue::U64(n as u64),
                 (DataValue::I8(n), types::I16) => DataValue::I16(n as i16),
                 (DataValue::I8(n), types::I32) => DataValue::I32(n as i32),
                 (DataValue::I8(n), types::I64) => DataValue::I64(n as i64),
+                (DataValue::U16(n), types::I32) => DataValue::U32(n as u32),
+                (DataValue::U16(n), types::I64) => DataValue::U64(n as u64),
                 (DataValue::I16(n), types::I32) => DataValue::I32(n as i32),
                 (DataValue::I16(n), types::I64) => DataValue::I64(n as i64),
+                (DataValue::U32(n), types::I64) => DataValue::U64(n as u64),
                 (DataValue::I32(n), types::I64) => DataValue::I64(n as i64),
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
@@ -359,6 +368,22 @@ impl Value for DataValue {
                 (((lhs as u64) as u128) | (((rhs as u64) as u128) << 64)) as i128,
             )),
             (lhs, rhs) => unimplemented!("concat: {} -> {}", lhs.ty(), rhs.ty()),
+        }
+    }
+
+    fn max(self, other: Self) -> ValueResult<Self> {
+        if Value::gt(&self, &other)? {
+            Ok(self)
+        } else {
+            Ok(other)
+        }
+    }
+
+    fn min(self, other: Self) -> ValueResult<Self> {
+        if Value::lt(&self, &other)? {
+            Ok(self)
+        } else {
+            Ok(other)
         }
     }
 
