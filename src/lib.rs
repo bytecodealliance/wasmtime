@@ -94,16 +94,12 @@ lazy_static::lazy_static! {
 }
 
 pub mod commands;
-mod obj;
 
 use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use target_lexicon::Triple;
 use wasmtime::{Config, ProfilingStrategy, Strategy};
-
-pub use obj::compile_to_obj;
 
 fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strategy> {
     Ok(match (lightbeam, cranelift) {
@@ -526,11 +522,6 @@ fn parse_cranelift_flag(name_and_value: &str) -> Result<(String, String)> {
         bail!("missing value in cranelift flag");
     };
     Ok((name, value))
-}
-
-fn parse_target(s: &str) -> Result<Triple> {
-    use std::str::FromStr;
-    Triple::from_str(&s).map_err(|e| anyhow::anyhow!(e))
 }
 
 #[cfg(test)]
