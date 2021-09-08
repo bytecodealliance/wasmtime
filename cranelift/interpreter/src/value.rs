@@ -139,10 +139,10 @@ pub enum ValueConversionKind {
 
 /// Helper for creating match expressions over [DataValue].
 macro_rules! unary_match {
-    ( $op:ident($arg1:expr); [ $( $data_value_ty:ident ),* ]; $return_value_ty:ident ) => {
+    ( $op:ident($arg1:expr); [ $( $data_value_ty:ident ),* ]; [ $( $return_value_ty:ident ),* ] ) => {
         match $arg1 {
             $( DataValue::$data_value_ty(a) => {
-                Ok(DataValue::$return_value_ty(a.$op()))
+                Ok(DataValue::$data_value_ty($return_value_ty::try_from(a.$op()).unwrap()))
             } )*
             _ => unimplemented!()
         }
@@ -461,19 +461,19 @@ impl Value for DataValue {
     }
 
     fn count_ones(self) -> ValueResult<Self> {
-        unary_match!(count_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+        unary_match!(count_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
     }
 
     fn leading_ones(self) -> ValueResult<Self> {
-        unary_match!(leading_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+        unary_match!(leading_ones(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
     }
 
     fn leading_zeros(self) -> ValueResult<Self> {
-        unary_match!(leading_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+        unary_match!(leading_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
     }
 
     fn trailing_zeros(self) -> ValueResult<Self> {
-        unary_match!(trailing_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; U32)
+        unary_match!(trailing_zeros(&self); [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128]; [i8, i16, i32, i64, i128, u8, u16, u32, u64, u128])
     }
 
     fn reverse_bits(self) -> ValueResult<Self> {

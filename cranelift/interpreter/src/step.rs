@@ -669,36 +669,25 @@ where
         Opcode::UshrImm => binary(Value::ushr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::SshrImm => binary(Value::ishr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::Bitrev => assign(Value::reverse_bits(arg(0)?)?),
-        // For `Clz`, `Cls`, `Ctz`, and `Popcnt`, the underlying Rust function
-        // always returns `u32` (and therefore a `Value` of type `U32`), so this
-        // is switched back to the correct type by recreating the `Value`.
-        Opcode::Clz => assign(Value::int(
-            Value::leading_zeros(arg(0)?)?.into_int()?,
-            ctrl_ty,
-        )?),
+        Opcode::Clz => assign(arg(0)?.leading_zeros()?),
         Opcode::Cls => {
             let count = if Value::lt(&arg(0)?, &Value::int(0, ctrl_ty)?)? {
-                Value::int(Value::leading_ones(arg(0)?)?.into_int()?, ctrl_ty)?
+                arg(0)?.leading_ones()?
             } else {
-                Value::int(Value::leading_zeros(arg(0)?)?.into_int()?, ctrl_ty)?
+                arg(0)?.leading_zeros()?
             };
             assign(Value::sub(count, Value::int(1, ctrl_ty)?)?)
         }
-        Opcode::Ctz => assign(Value::int(
-            Value::trailing_zeros(arg(0)?)?.into_int()?,
-            ctrl_ty,
-        )?),
+        Opcode::Ctz => assign(arg(0)?.trailing_zeros()?),
         Opcode::Popcnt => {
             let count = if arg(0)?.ty().is_int() {
-                Value::int(Value::count_ones(arg(0)?)?.into_int()?, ctrl_ty)?
+                arg(0)?.count_ones()?
             } else {
-                let lanes = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
-                let mut new_vec = SimdVec::new();
-                for i in lanes {
-                    let c: V = Value::count_ones(i)?;
-                    new_vec.push(c);
-                }
-                vectorizelanes(&new_vec, ctrl_ty)?
+                let lanes = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
+                    .into_iter()
+                    .map(|lane| lane.count_ones().unwrap())
+                    .collect::<SimdVec<V>>();
+                vectorizelanes(&lanes, ctrl_ty)?
             };
             assign(count)
         }
