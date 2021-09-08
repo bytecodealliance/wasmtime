@@ -1,4 +1,5 @@
 mod async_functions;
+mod call_hook;
 mod cli_tests;
 mod custom_signal_handler;
 mod debug;
@@ -23,7 +24,6 @@ mod module;
 mod module_linking;
 mod module_serialize;
 mod name;
-mod native_hooks;
 mod pooling_allocator;
 mod relocs;
 mod stack_overflow;

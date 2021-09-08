@@ -157,6 +157,37 @@ pub struct Store<T> {
     inner: ManuallyDrop<Box<StoreInner<T>>>,
 }
 
+#[derive(Copy, Clone, Debug)]
+/// Passed to the argument of [`Store::call_hook`] to indicate a state transition in
+/// the WebAssembly VM.
+pub enum CallHook {
+    /// Indicates the VM is calling a WebAssembly function, from the host.
+    CallingWasm,
+    /// Indicates the VM is returning from a WebAssembly function, to the host.
+    ReturningFromWasm,
+    /// Indicates the VM is calling a host function, from WebAssembly.
+    CallingHost,
+    /// Indicates the VM is returning from a host function, to WebAssembly.
+    ReturningFromHost,
+}
+
+impl CallHook {
+    /// Indicates the VM is entering host code (exiting WebAssembly code)
+    pub fn entering_host(&self) -> bool {
+        match self {
+            CallHook::ReturningFromWasm | CallHook::CallingHost => true,
+            _ => false,
+        }
+    }
+    /// Indicates the VM is exiting host code (entering WebAssembly code)
+    pub fn exiting_host(&self) -> bool {
+        match self {
+            CallHook::ReturningFromHost | CallHook::CallingWasm => true,
+            _ => false,
+        }
+    }
+}
+
 /// Internal contents of a `Store<T>` that live on the heap.
 ///
 /// The members of this struct are those that need to be generic over `T`, the
@@ -167,8 +198,7 @@ pub struct StoreInner<T> {
     inner: StoreOpaque,
 
     limiter: Option<Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>>,
-    entering_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
-    exiting_native_hook: Option<Box<dyn FnMut(&mut T) -> Result<(), crate::Trap> + Send + Sync>>,
+    call_hook: Option<Box<dyn FnMut(&mut T, CallHook) -> Result<(), crate::Trap> + Send + Sync>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
 }
@@ -340,8 +370,7 @@ impl<T> Store<T> {
                 hostcall_val_storage: Vec::new(),
             },
             limiter: None,
-            entering_native_hook: None,
-            exiting_native_hook: None,
+            call_hook: None,
             data: ManuallyDrop::new(data),
         });
 
@@ -433,56 +462,25 @@ impl<T> Store<T> {
         inner.limiter = Some(Box::new(limiter));
     }
 
-    /// Configure a function that runs each time the host resumes execution from
-    /// WebAssembly.
+    /// Configure a function that runs on calls and returns between WebAssembly
+    /// and host code.
     ///
-    /// This hook is called in two circumstances:
-    ///
-    /// * When WebAssembly calls a function defined by the host, this hook is
-    ///   called before other host code runs.
-    /// * When WebAssembly returns back to the host after being called, this
-    ///   hook is called.
-    ///
-    /// This method can be used with [`Store::exiting_native_code_hook`] to track
-    /// execution time of WebAssembly, for example, by starting/stopping timers
-    /// in the enter/exit hooks.
+    /// The function is passed a [`CallHook`] argument, which indicates which
+    /// state transition the VM is making.
     ///
     /// This function may return a [`Trap`]. If a trap is returned when an
     /// import was called, it is immediately raised as-if the host import had
     /// returned the trap. If a trap is returned after wasm returns to the host
     /// then the wasm function's result is ignored and this trap is returned
     /// instead.
-    pub fn entering_native_code_hook(
+    ///
+    /// After this function returns a trap, it may be called for subsequent returns
+    /// to host or wasm code as the trap propogates to the root call.
+    pub fn call_hook(
         &mut self,
-        hook: impl FnMut(&mut T) -> Result<(), Trap> + Send + Sync + 'static,
+        hook: impl FnMut(&mut T, CallHook) -> Result<(), Trap> + Send + Sync + 'static,
     ) {
-        self.inner.entering_native_hook = Some(Box::new(hook));
-    }
-
-    /// Configure a function that runs just before WebAssembly code starts
-    /// executing.
-    ///
-    /// The closure provided is called in two circumstances:
-    ///
-    /// * When the host calls a WebAssembly function, the hook is called just
-    ///   before WebAssembly starts executing.
-    /// * When a host function returns back to WebAssembly this hook is called
-    ///   just before the return.
-    ///
-    /// This method can be used with [`Store::entering_native_code_hook`] to track
-    /// execution time of WebAssembly, for example, by starting/stopping timers
-    /// in the enter/exit hooks.
-    ///
-    /// This function may return a [`Trap`]. If a trap is returned when an
-    /// imported host function is returning, then the imported host function's
-    /// result is ignored and the trap is raised. If a trap is returned when
-    /// the host is about to start executing WebAssembly, then no WebAssembly
-    /// code is run and the trap is returned instead.
-    pub fn exiting_native_code_hook(
-        &mut self,
-        hook: impl FnMut(&mut T) -> Result<(), Trap> + Send + Sync + 'static,
-    ) {
-        self.inner.exiting_native_hook = Some(Box::new(hook));
+        self.inner.call_hook = Some(Box::new(hook));
     }
 
     /// Returns the [`Engine`] that this store is associated with.
@@ -783,17 +781,9 @@ impl<T> StoreInner<T> {
         Some(accessor(&mut self.data))
     }
 
-    pub fn entering_native_hook(&mut self) -> Result<(), Trap> {
-        if let Some(hook) = &mut self.entering_native_hook {
-            hook(&mut self.data)
-        } else {
-            Ok(())
-        }
-    }
-
-    pub fn exiting_native_hook(&mut self) -> Result<(), Trap> {
-        if let Some(hook) = &mut self.exiting_native_hook {
-            hook(&mut self.data)
+    pub fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
+        if let Some(hook) = &mut self.call_hook {
+            hook(&mut self.data, s)
         } else {
             Ok(())
         }

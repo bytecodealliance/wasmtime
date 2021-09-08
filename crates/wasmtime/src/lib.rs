@@ -401,7 +401,7 @@ pub use crate::memory::*;
 pub use crate::module::{FrameInfo, FrameSymbol, Module};
 pub use crate::r#ref::ExternRef;
 pub use crate::store::{
-    AsContext, AsContextMut, InterruptHandle, Store, StoreContext, StoreContextMut,
+    AsContext, AsContextMut, CallHook, InterruptHandle, Store, StoreContext, StoreContextMut,
 };
 pub use crate::trap::*;
 pub use crate::types::*;
