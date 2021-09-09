@@ -12,7 +12,7 @@ use self::global::create_global;
 use self::memory::create_memory;
 use self::table::create_table;
 use crate::store::{InstanceId, StoreOpaque};
-use crate::{GlobalType, MemoryType, TableType, Val};
+use crate::{GlobalType, MemoryType, TableType, Trap, Val};
 use anyhow::Result;
 use std::any::Any;
 use std::sync::Arc;
@@ -21,6 +21,14 @@ use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator,
     VMFunctionImport, VMSharedSignatureIndex,
 };
+
+// For more information see `host_to_c_trampoline` in the cranelift compiler.
+pub type CTrampoline = extern "C" fn(
+    usize,     // user-provided void*
+    usize,     // &mut Caller<'_, T>
+    *mut u128, // storage for parameters and results
+    usize,     // actual host function to indirectly call
+) -> *mut Trap;
 
 fn create_handle(
     module: Module,

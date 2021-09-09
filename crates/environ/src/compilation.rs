@@ -175,19 +175,23 @@ pub trait Compiler: Send + Sync {
         obj: &mut Object,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)>;
 
-    /// Inserts two functions for host-to-wasm and wasm-to-host trampolines into
-    /// the `obj` provided.
+    /// Inserts various trampolines for interacting with the wasm function
+    /// siganture `ty` into the `obj` provided.
     ///
     /// This will configure the same sections as `emit_obj`, but will likely be
-    /// much smaller. The two returned `Trampoline` structures describe where to
-    /// find the host-to-wasm and wasm-to-host trampolines in the text section,
-    /// respectively.
+    /// much smaller. The returned `Trampoline` structures at this time are:
+    ///
+    /// * Where to find the host-to-wasm trampoline.
+    /// * Where to find the wasm-to-host trampoline.
+    /// * Where to fidn the host-to-c trampoline.
+    ///
+    /// All trampoline offsets are relative to the text section.
     fn emit_trampoline_obj(
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
         obj: &mut Object,
-    ) -> Result<(Trampoline, Trampoline)>;
+    ) -> Result<(Trampoline, Trampoline, Trampoline)>;
 
     /// Creates a new `Object` file which is used to build the results of a
     /// compilation into.

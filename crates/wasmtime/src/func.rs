@@ -1,4 +1,5 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::trampoline::CTrampoline;
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, InterruptHandle,
     StoreContext, StoreContextMut, Trap, Val, ValType,
@@ -314,6 +315,131 @@ impl Func {
             let host = HostFunc::new(store.engine(), ty, func);
             host.into_func(store)
         }
+    }
+
+    /// Creates a new `Func` where, when called, will invoke a host-defined
+    /// function with a well-defined C ABI.
+    ///
+    /// > **Note**: This function is primarily here for Wasmtime's C API and
+    /// > probably doesn't want to be used by Rust consumers directly because
+    /// > `Func::wrap` is faster, more ergonomic, and safer.
+    ///
+    /// This function will interpret the `func` paramter as a C-ABI function
+    /// pointer. The signature of `func` depends on the `ty` specified, and the
+    /// caller of this function is unsafely asserting that `func` is indeed a
+    /// valid function pointer with the correct signature.
+    ///
+    /// The `data` specified will be the first parameter to the `func` provided
+    /// (more on the signature in a moment). The optional `finalizer` specified
+    /// can be used to destroy the `data` when the returned `Func` is destroyed.
+    ///
+    /// ## C ABI Translation
+    ///
+    /// The `func` argument should always have the C ABI. It also always takes
+    /// two pointer-sized parameters as its first two arguments. The first
+    /// argument will be the `data` value provided here. The second argument is
+    /// `&mut Caller<'_, T>` to learn about caller-based information.
+    ///
+    /// After these two arguments the C function will receive all the wasm
+    /// function's parameters as individual arguments. The mapping from Wasm
+    /// type to native host type is as follows:
+    ///
+    /// |  WebAssembly type | Rust type | C type           |
+    /// |-------------------|-----------|------------------|
+    /// | `i32`             | `i32`     | `int32_t`        |
+    /// | `i64`             | `i64`     | `int64_t`        |
+    /// | `f32`             | `f32`     | `float`          |
+    /// | `f64`             | `f64`     | `double`         |
+    /// | `v128`            | `&u128`   | `const uint8_t*` |
+    ///
+    /// The `funcref` and `externref` types are not supported with this
+    /// function at this time. These types, if specified, will return an error
+    /// from the `wrap_cabi` function.
+    ///
+    /// Note that all values are passed by-value except for the `v128` type
+    /// which is passed indirectly.
+    ///
+    /// After the WebAssembly parameters the function receives a single
+    /// out-pointer for each WebAssembly result type. This out-pointer has
+    /// the type corresponding to the native host type.
+    ///
+    /// Finally, the C function must return an `Option<Box<Trap>>`, or a
+    /// nullable pointer to a trap. If `None` or `NULL` is returned then
+    /// the function won't trap. In this case the results will be read from as
+    /// they were stored by the callee. If a trap is returned, though, then the
+    /// results of the function are discarded and a trap is generated.
+    ///
+    /// Here are some Rust-based examples of translating between a wasm
+    /// function signature and the C ABI:
+    ///
+    /// ```
+    /// use wasmtime::{Caller, Trap};
+    ///
+    /// // (func)
+    /// extern "C" fn f1(userdata: usize, caller: &mut Caller<'_, ()>) -> Option<Box<Trap>> {
+    ///     // ...
+    /// # None
+    /// }
+    ///
+    /// // (func (param i32))
+    /// extern "C" fn f2(
+    ///     userdata: usize,
+    ///     caller: &mut Caller<'_, ()>,
+    ///     wasm_param: i32,
+    /// ) -> Option<Box<Trap>> {
+    ///     // ...
+    /// # None
+    /// }
+    ///
+    /// // (func (result f32))
+    /// extern "C" fn f3(
+    ///     userdata: usize,
+    ///     caller: &mut Caller<'_, ()>,
+    ///     wasm_result: &mut f32,
+    /// ) -> Option<Box<Trap>> {
+    ///     // ...
+    /// # None
+    /// }
+    ///
+    /// // (func (param i64 f64 v128) (result f32 i32))
+    /// extern "C" fn f3(
+    ///     userdata: usize,
+    ///     caller: &mut Caller<'_, ()>,
+    ///     wasm_param1: i64,
+    ///     wasm_param2: f64,
+    ///     wasm_param3: &u128,
+    ///     wasm_result1: &mut f32,
+    ///     wasm_result2: &mut i32,
+    /// ) -> Option<Box<Trap>> {
+    ///     // ...
+    /// # None
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if the `ty` specified uses the
+    /// `externref` or the `funcref` types.
+    ///
+    /// # Unsafety
+    ///
+    /// This is not a safe method because the validity of `func` cannot be
+    /// guaranteed. It's up to the caller to ensure that `func` has the right
+    /// function signature corresponding to the dynamically-provided WebAssembly
+    /// type signature in `ty`.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub unsafe fn wrap_cabi<T>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: FuncType,
+        func: usize,
+        data: usize,
+        finalizer: Option<extern "C" fn(usize)>,
+    ) -> Result<Self> {
+        let store = store.as_context_mut().0;
+
+        let host = HostFunc::wrap_cabi::<T>(store.engine(), ty, func, data, finalizer)?;
+        Ok(host.into_func(store))
     }
 
     /// Creates a new host-defined WebAssembly function which, when called,
@@ -1892,7 +2018,7 @@ impl HostFunc {
         let ty_clone = ty.clone();
 
         // Create a trampoline that converts raw u128 values to `Val`
-        let func = move |caller_vmctx, values_vec: *mut u128| unsafe {
+        let func = move |caller_vmctx, values_vec: *mut u128, _| unsafe {
             Caller::with(caller_vmctx, |caller| {
                 Func::invoke(caller, &ty_clone, values_vec, &func)
             })
@@ -1901,6 +2027,64 @@ impl HostFunc {
         let (instance, trampoline) = crate::trampoline::create_function(&ty, func, engine)
             .expect("failed to create function");
         HostFunc::_new(engine, instance, trampoline)
+    }
+
+    /// Analog of [`Func::wrap_cabi`]
+    #[cfg(compiler)]
+    pub unsafe fn wrap_cabi<T>(
+        engine: &Engine,
+        ty: FuncType,
+        func: usize,
+        data: usize,
+        finalizer: Option<extern "C" fn(usize)>,
+    ) -> Result<Self> {
+        struct CFinalizer {
+            data: usize,
+            finalizer: Option<extern "C" fn(usize)>,
+        }
+        impl Drop for CFinalizer {
+            fn drop(&mut self) {
+                if let Some(dtor) = self.finalizer {
+                    dtor(self.data);
+                }
+            }
+        }
+
+        // See documentation for `Func::wrap_cabi`, but not all function
+        // parameters/results are supported here.
+        for ty in ty.params().chain(ty.results()) {
+            match ty {
+                ValType::I32 | ValType::I64 | ValType::F32 | ValType::F64 | ValType::V128 => {}
+                ValType::ExternRef => {
+                    bail!("cannot use `wrap_cabi` on functions with externref params/results")
+                }
+                ValType::FuncRef => {
+                    bail!("cannot use `wrap_cabi` on functions with funcref params/results")
+                }
+            }
+        }
+
+        // Create a trampoline that converts raw u128 values to `Val`
+        let data = CFinalizer { data, finalizer };
+        let func = move |caller_vmctx, values_vec: *mut u128, c_trampoline: CTrampoline| unsafe {
+            Caller::<T>::with(caller_vmctx, |mut caller| {
+                let trap = c_trampoline(
+                    data.data,
+                    &mut caller as *mut Caller<'_, T> as usize,
+                    values_vec,
+                    func,
+                );
+                if trap.is_null() {
+                    Ok(())
+                } else {
+                    Err(*Box::from_raw(trap))
+                }
+            })
+        };
+
+        let (instance, trampoline) = crate::trampoline::create_function(&ty, func, engine)
+            .expect("failed to create function");
+        Ok(HostFunc::_new(engine, instance, trampoline))
     }
 
     /// Analog of [`Func::wrap`]

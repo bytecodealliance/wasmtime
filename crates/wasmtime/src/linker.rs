@@ -304,6 +304,26 @@ impl<T> Linker<T> {
         Ok(self)
     }
 
+    /// Creates a [`Func::wrap_cabi`]-style function named in this linker.
+    ///
+    /// For more information see [`Linker::func_wrap`].
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub unsafe fn func_wrap_cabi(
+        &mut self,
+        module: &str,
+        name: &str,
+        ty: FuncType,
+        func: usize,
+        data: usize,
+        finalizer: Option<extern "C" fn(usize)>,
+    ) -> Result<&mut Self> {
+        let func = HostFunc::wrap_cabi::<T>(&self.engine, ty, func, data, finalizer)?;
+        let key = self.import_key(module, Some(name));
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        Ok(self)
+    }
+
     /// Creates a [`Func::new_async`]-style function named in this linker.
     ///
     /// For more information see [`Linker::func_wrap`].

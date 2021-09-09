@@ -75,6 +75,29 @@ pub unsafe extern "C" fn wasmtime_linker_define_func(
     handle_result(linker.linker.func_new(module, name, ty, cb), |_linker| ())
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_linker_func_wrap(
+    linker: &mut wasmtime_linker_t,
+    module: *const u8,
+    module_len: usize,
+    name: *const u8,
+    name_len: usize,
+    ty: &wasm_functype_t,
+    callback: usize,
+    data: usize,
+    finalizer: Option<extern "C" fn(usize)>,
+) -> Option<Box<wasmtime_error_t>> {
+    let ty = ty.ty().ty.clone();
+    let module = to_str!(module, module_len);
+    let name = to_str!(name, name_len);
+    handle_result(
+        linker
+            .linker
+            .func_wrap_cabi(module, name, ty, callback, data, finalizer),
+        |_linker| (),
+    )
+}
+
 #[cfg(feature = "wasi")]
 #[no_mangle]
 pub extern "C" fn wasmtime_linker_define_wasi(

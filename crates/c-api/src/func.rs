@@ -1,7 +1,8 @@
 use crate::wasm_trap_t;
 use crate::{
-    wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext, CStoreContextMut,
+    handle_result, wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t,
+    wasmtime_error_t, wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext,
+    CStoreContextMut,
 };
 use anyhow::anyhow;
 use std::ffi::c_void;
@@ -182,7 +183,10 @@ pub extern "C" fn wasm_func_as_extern_const(f: &wasm_func_t) -> &wasm_extern_t {
     &(*f).ext
 }
 
-#[repr(C)]
+// Note the `transparent` annotation which is required due to the
+// `wasmtime_func_wrap` function where the C code uses `*mut wasmtime_caller_t`
+// to represent the `&mut Caller<'_, T>` type in Rust.
+#[repr(transparent)]
 pub struct wasmtime_caller_t<'a> {
     caller: Caller<'a, crate::StoreData>,
 }
@@ -209,6 +213,22 @@ pub unsafe extern "C" fn wasmtime_func_new(
     let cb = c_callback_to_rust_fn(callback, data, finalizer);
     let f = Func::new(store, ty, cb);
     *func = f;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_func_wrap(
+    store: CStoreContextMut<'_>,
+    ty: &wasm_functype_t,
+    callback: usize,
+    data: usize,
+    finalizer: Option<extern "C" fn(usize)>,
+    func: &mut Func,
+) -> Option<Box<wasmtime_error_t>> {
+    let ty = ty.ty().ty.clone();
+
+    handle_result(Func::wrap_cabi(store, ty, callback, data, finalizer), |f| {
+        *func = f;
+    })
 }
 
 pub(crate) unsafe fn c_callback_to_rust_fn(

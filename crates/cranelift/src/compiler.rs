@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
-use cranelift_codegen::isa::TargetIsa;
+use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings;
 use cranelift_codegen::MachSrcLoc;
@@ -29,7 +29,7 @@ use std::sync::Mutex;
 use wasmtime_environ::{
     AddressMapSection, CompileError, FilePos, FlagValue, FunctionBodyData, FunctionInfo,
     InstructionAddressMap, Module, ModuleTranslation, StackMapInformation, Trampoline, TrapCode,
-    TrapEncodingBuilder, TrapInformation, Tunables, TypeTables, VMOffsets,
+    TrapEncodingBuilder, TrapInformation, Tunables, TypeTables, VMOffsets, WasmType,
 };
 
 /// A compiler that compiles a WebAssembly module with Compiler, translating
@@ -325,16 +325,18 @@ impl wasmtime_environ::Compiler for Compiler {
         ty: &WasmFuncType,
         host_fn: usize,
         obj: &mut Object,
-    ) -> Result<(Trampoline, Trampoline)> {
+    ) -> Result<(Trampoline, Trampoline, Trampoline)> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
+        let host_to_c = self.host_to_c_trampoline(ty)?;
         let module = Module::new();
         let mut builder = ObjectBuilder::new(obj, &module, &*self.isa);
         let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
         let b = builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
+        let c = builder.trampoline(SignatureIndex::new(2), &host_to_c);
         builder.unwind_info();
         builder.finish()?;
-        Ok((a, b))
+        Ok((a, b, c))
     }
 
     fn triple(&self) -> &target_lexicon::Triple {
@@ -518,6 +520,116 @@ impl Compiler {
             results.push(load);
         }
         builder.ins().return_(&results);
+        builder.finalize();
+
+        let func = self.finish_trampoline(context, isa)?;
+        self.save_translator(func_translator);
+        Ok(func)
+    }
+
+    fn host_to_c_trampoline(&self, ty: &WasmFuncType) -> Result<CompiledFunction, CompileError> {
+        let isa = &*self.isa;
+        let pointer_type = isa.pointer_type();
+
+        // This is the signature of the C stub that this trampoline calls.
+        // Effectively this is the definition of how wasmtime translates a wasm
+        // signature to a C signature. Currently the signature parameters are:
+        //
+        // * a void* pointer argument (user-provided)
+        // * a pointer argument for a "caller" structure (`wasmtime::Caller`)
+        // * each wasm type as an individual parameter
+        // * each wasm return as an out-pointer
+        //
+        // And then the function returns a pointer which is a trap object. The
+        // trap is a nullable pointer.
+        let mut c_sig = ir::Signature::new(CallConv::triple_default(isa.triple()));
+        c_sig.params.push(ir::AbiParam::new(pointer_type));
+        c_sig.params.push(ir::AbiParam::new(pointer_type));
+        for ty in ty.params.iter() {
+            let ty = match ty {
+                WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 => {
+                    value_type(isa, *ty)
+                }
+                WasmType::V128 => pointer_type,
+                WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => unimplemented!(),
+            };
+            c_sig.params.push(ir::AbiParam::new(ty));
+        }
+        for _ in ty.returns.iter() {
+            c_sig.params.push(ir::AbiParam::new(pointer_type));
+        }
+        c_sig.returns.push(ir::AbiParam::new(pointer_type));
+
+        // This trampoline itself has a fixed signature so it can be called from
+        // Rust. The parameters here are:
+        //
+        // * a void* pionter argument (user-provided)
+        // * a pointer argument for a "caller" structure (`wasmtime::Caller`)
+        // * the `*const u128` values_vec allocation for arguments/returns
+        // * the C function that we'll be calling
+        //
+        // This function returns a pointer which is the trap the C function
+        // returns.
+        let mut stub_signature = ir::Signature::new(CallConv::triple_default(isa.triple()));
+        stub_signature.params.push(ir::AbiParam::new(pointer_type));
+        stub_signature.params.push(ir::AbiParam::new(pointer_type));
+        stub_signature.params.push(ir::AbiParam::new(pointer_type));
+        stub_signature.params.push(ir::AbiParam::new(pointer_type));
+        stub_signature.returns.push(ir::AbiParam::new(pointer_type));
+
+        let value_size = mem::size_of::<u128>();
+        let mut context = Context::new();
+        context.func =
+            ir::Function::with_name_signature(ir::ExternalName::user(0, 0), stub_signature);
+        let mut func_translator = self.take_translator();
+        let mut builder = FunctionBuilder::new(&mut context.func, func_translator.context());
+        let block0 = builder.create_block();
+        builder.append_block_params_for_function_params(block0);
+        builder.switch_to_block(block0);
+        builder.seal_block(block0);
+
+        // Build the arguments to the C function that we're going to call. The
+        // first two arguments are simply forwarding our own first two
+        // arguments. Next comes all the wasm parameters which are passed
+        // by-value. Finally all returns get a return pointer which points back
+        // into our `values_vec` parameter.
+        let mut args = Vec::new();
+        args.push(builder.func.dfg.block_params(block0)[0]);
+        args.push(builder.func.dfg.block_params(block0)[1]);
+        let values_vec_ptr_val = builder.func.dfg.block_params(block0)[2];
+        for (i, ty) in ty.params.iter().enumerate() {
+            let offset = (i * value_size) as i32;
+            let arg = match ty {
+                WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 => {
+                    builder.ins().load(
+                        value_type(isa, *ty),
+                        MemFlags::trusted(),
+                        values_vec_ptr_val,
+                        offset,
+                    )
+                }
+                WasmType::V128 => builder
+                    .ins()
+                    .iadd_imm(values_vec_ptr_val, i64::from(offset)),
+                WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => unimplemented!(),
+            };
+            args.push(arg);
+        }
+        for (i, _ty) in ty.returns.iter().enumerate() {
+            let addr = builder
+                .ins()
+                .iadd_imm(values_vec_ptr_val, (i * value_size) as i64);
+            args.push(addr);
+        }
+
+        // With all the arguments we call the indirect function passed as a
+        // parameter to our function, then we're good to go and we simply return
+        // that function's value.
+        let new_sig = builder.import_signature(c_sig);
+        let callee_value = builder.func.dfg.block_params(block0)[3];
+        let call = builder.ins().call_indirect(new_sig, callee_value, &args);
+        let trap = builder.inst_results(call)[0];
+        builder.ins().return_(&[trap]);
         builder.finalize();
 
         let func = self.finish_trampoline(context, isa)?;

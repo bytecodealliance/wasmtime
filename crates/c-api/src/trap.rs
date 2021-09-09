@@ -2,7 +2,12 @@ use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
 use once_cell::unsync::OnceCell;
 use wasmtime::{Trap, TrapCode};
 
-#[repr(C)]
+// Note the `transparent` representation here which is required by the
+// `wasmtime_func_wrap` API since the C-ABI function pointers return `*mut
+// wasm_trap_t` which is interpreted as `Option<Box<Trap>>` in Rust. Note that
+// `wasm_trap_t` is opaque in C, though, so it's always asking this library to
+// allocate.
+#[repr(transparent)]
 #[derive(Clone)]
 pub struct wasm_trap_t {
     pub(crate) trap: Trap,

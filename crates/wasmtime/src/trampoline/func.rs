@@ -1,5 +1,6 @@
 //! Support for a calling of an imported function.
 
+use super::CTrampoline;
 use crate::{Engine, FuncType, Trap};
 use anyhow::Result;
 use std::any::Any;
@@ -14,6 +15,7 @@ use wasmtime_runtime::{
 
 struct TrampolineState<F> {
     func: F,
+    c_trampoline: CTrampoline,
     #[allow(dead_code)]
     code_memory: CodeMemory,
 }
@@ -23,7 +25,7 @@ unsafe extern "C" fn stub_fn<F>(
     caller_vmctx: *mut VMContext,
     values_vec: *mut u128,
 ) where
-    F: Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + 'static,
+    F: Fn(*mut VMContext, *mut u128, CTrampoline) -> Result<(), Trap> + 'static,
 {
     // Here we are careful to use `catch_unwind` to ensure Rust panics don't
     // unwind past us. The primary reason for this is that Rust considers it UB
@@ -45,7 +47,7 @@ unsafe extern "C" fn stub_fn<F>(
         let state = (*vmctx).host_state();
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
-        (state.func)(caller_vmctx, values_vec)
+        (state.func)(caller_vmctx, values_vec, state.c_trampoline)
     }));
 
     match result {
@@ -72,10 +74,10 @@ pub fn create_function<F>(
     engine: &Engine,
 ) -> Result<(InstanceHandle, VMTrampoline)>
 where
-    F: Fn(*mut VMContext, *mut u128) -> Result<(), Trap> + Send + Sync + 'static,
+    F: Fn(*mut VMContext, *mut u128, CTrampoline) -> Result<(), Trap> + Send + Sync + 'static,
 {
     let mut obj = engine.compiler().object()?;
-    let (t1, t2) = engine.compiler().emit_trampoline_obj(
+    let (t1, t2, t3) = engine.compiler().emit_trampoline_obj(
         ft.as_wasm_func_type(),
         stub_fn::<F> as usize,
         &mut obj,
@@ -89,20 +91,25 @@ where
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.
-    let host_trampoline = code.text[t1.start as usize..][..t1.length as usize].as_ptr();
-    let wasm_trampoline = &code.text[t2.start as usize..][..t2.length as usize];
-    let wasm_trampoline = wasm_trampoline as *const [u8] as *mut [VMFunctionBody];
+    let host_to_wasm = &code.text[t1.start as usize..][..t1.length as usize];
+    let wasm_to_host = &code.text[t2.start as usize..][..t2.length as usize];
+    let host_to_c = &code.text[t3.start as usize..][..t3.length as usize];
 
     let sig = engine.signatures().register(ft.as_wasm_func_type());
 
     unsafe {
+        let host_to_wasm = std::mem::transmute::<*const u8, VMTrampoline>(host_to_wasm.as_ptr());
+        let c_trampoline = std::mem::transmute::<*const u8, CTrampoline>(host_to_c.as_ptr());
         let instance = create_raw_function(
-            wasm_trampoline,
+            wasm_to_host as *const [u8] as *mut [VMFunctionBody],
             sig,
-            Box::new(TrampolineState { func, code_memory }),
+            Box::new(TrampolineState {
+                func,
+                c_trampoline,
+                code_memory,
+            }),
         )?;
-        let host_trampoline = std::mem::transmute::<*const u8, VMTrampoline>(host_trampoline);
-        Ok((instance, host_trampoline))
+        Ok((instance, host_to_wasm))
     }
 }
 

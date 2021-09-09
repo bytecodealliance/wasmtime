@@ -921,3 +921,271 @@ fn typed_funcs_count_params_correctly_in_error_messages() -> anyhow::Result<()> 
 
     Ok(())
 }
+
+#[test]
+fn wrap_cabi() -> anyhow::Result<()> {
+    unsafe {
+        let mut store = Store::<()>::default();
+        let host = Func::wrap_cabi(
+            &mut store,
+            FuncType::new([], []),
+            host_thunk as usize,
+            0,
+            None,
+        )?;
+        assert!(host.call(&mut store, &[]).is_ok());
+
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (import "" "" (func))
+                    (start 0))
+            "#,
+        )?;
+        Instance::new(&mut store, &module, &[host.into()])?;
+    }
+    return Ok(());
+
+    extern "C" fn host_thunk(param: usize, _caller: &mut Caller<'_, ()>) -> Option<Box<Trap>> {
+        assert_eq!(param, 0);
+        None
+    }
+}
+
+#[test]
+fn cabi_dtor() -> anyhow::Result<()> {
+    static HITS: AtomicUsize = AtomicUsize::new(0);
+
+    struct A;
+
+    impl Drop for A {
+        fn drop(&mut self) {
+            HITS.fetch_add(1, SeqCst);
+        }
+    }
+
+    unsafe {
+        let mut store = Store::<()>::default();
+        assert_eq!(HITS.load(SeqCst), 0);
+        Func::wrap_cabi(
+            &mut store,
+            FuncType::new([], []),
+            host_thunk as usize,
+            Box::into_raw(Box::new(A)) as usize,
+            Some(finalize),
+        )?;
+        assert_eq!(HITS.load(SeqCst), 0);
+    }
+    assert_eq!(HITS.load(SeqCst), 1);
+    return Ok(());
+
+    extern "C" fn host_thunk(_param: usize, _caller: &mut Caller<'_, ()>) -> Option<Box<Trap>> {
+        None
+    }
+
+    extern "C" fn finalize(param: usize) {
+        unsafe {
+            drop(Box::from_raw(param as *mut A));
+        }
+    }
+}
+
+#[test]
+fn cabi_trap() -> anyhow::Result<()> {
+    unsafe {
+        let mut store = Store::<()>::default();
+        let func = Func::wrap_cabi(
+            &mut store,
+            FuncType::new([], []),
+            host_thunk as usize,
+            0,
+            None,
+        )?;
+        let trap = match func.call(&mut store, &[]) {
+            Ok(_) => panic!(),
+            Err(e) => e.downcast::<Trap>()?,
+        };
+        assert_eq!(trap.display_reason().to_string(), "hello");
+    }
+    return Ok(());
+
+    extern "C" fn host_thunk(_param: usize, _caller: &mut Caller<'_, ()>) -> Option<Box<Trap>> {
+        Some(Box::new(Trap::new("hello")))
+    }
+}
+
+#[test]
+fn cabi_type_mappings() -> anyhow::Result<()> {
+    unsafe {
+        let mut store = Store::<()>::default();
+        let func = Func::wrap_cabi(
+            &mut store,
+            FuncType::new(
+                [
+                    ValType::I32,
+                    ValType::I64,
+                    ValType::F32,
+                    ValType::F64,
+                    ValType::V128,
+                ],
+                [
+                    ValType::I32,
+                    ValType::I64,
+                    ValType::F32,
+                    ValType::F64,
+                    ValType::V128,
+                ],
+            ),
+            host_impl as usize,
+            0,
+            None,
+        )?;
+        let results = func.call(
+            &mut store,
+            &[
+                Val::I32(1),
+                Val::I64(2),
+                3.0f32.into(),
+                4.0f64.into(),
+                Val::V128(5),
+            ],
+        )?;
+        assert_eq!(results.len(), 5);
+        assert_eq!(results[0].i32(), Some(6));
+        assert_eq!(results[1].i64(), Some(7));
+        assert_eq!(results[2].f32(), Some(8.));
+        assert_eq!(results[3].f64(), Some(9.));
+        assert_eq!(results[4].v128(), Some(10));
+    }
+    return Ok(());
+
+    extern "C" fn host_impl(
+        _param: usize,
+        _caller: &mut Caller<'_, ()>,
+        arg1: i32,
+        arg2: i64,
+        arg3: f32,
+        arg4: f64,
+        arg5: &u128,
+        out1: &mut i32,
+        out2: &mut i64,
+        out3: &mut f32,
+        out4: &mut f64,
+        out5: &mut u128,
+    ) -> Option<Box<Trap>> {
+        assert_eq!(arg1, 1);
+        assert_eq!(arg2, 2);
+        assert_eq!(arg3, 3.);
+        assert_eq!(arg4, 4.);
+        assert_eq!(*arg5, 5);
+        *out1 = 6;
+        *out2 = 7;
+        *out3 = 8.;
+        *out4 = 9.;
+        *out5 = 10;
+        None
+    }
+}
+
+#[test]
+fn cabi_call_typed() -> anyhow::Result<()> {
+    unsafe {
+        let mut store = Store::<()>::default();
+        let func = Func::wrap_cabi(
+            &mut store,
+            FuncType::new([ValType::I32], [ValType::I64]),
+            host_impl as usize,
+            0,
+            None,
+        )?;
+        let func = func.typed::<i32, i64, _>(&store)?;
+        assert_eq!(func.call(&mut store, 1)?, 2);
+    }
+    return Ok(());
+
+    extern "C" fn host_impl(
+        _param: usize,
+        _caller: &mut Caller<'_, ()>,
+        arg: i32,
+        out: &mut i64,
+    ) -> Option<Box<Trap>> {
+        assert_eq!(arg, 1);
+        *out = 2;
+        None
+    }
+}
+
+#[test]
+fn cabi_wasm_interop_works() -> anyhow::Result<()> {
+    unsafe {
+        let mut config = Config::new();
+        config.wasm_simd(true);
+        let engine = Engine::new(&config)?;
+        let mut store = Store::new(&engine, ());
+        let a = Func::wrap_cabi(
+            &mut store,
+            FuncType::new(
+                [ValType::I32, ValType::F32],
+                [ValType::I64, ValType::F64, ValType::V128],
+            ),
+            a_impl as usize,
+            0,
+            None,
+        )?;
+        let b = Func::wrap_cabi(
+            &mut store,
+            FuncType::new([ValType::I64, ValType::F64, ValType::V128], []),
+            b_impl as usize,
+            0,
+            None,
+        )?;
+        let module = Module::new(
+            store.engine(),
+            r#"
+                (module
+                    (import "" "a" (func $a (param i32 f32) (result i64 f64 v128)))
+                    (import "" "b" (func $b (param i64 f64 v128)))
+                    (func (export "")
+                        i32.const 100
+                        f32.const 200
+                        call $a
+                        call $b))
+            "#,
+        )?;
+        let i = Instance::new(&mut store, &module, &[a.into(), b.into()])?;
+        let f = i.get_typed_func::<(), (), _>(&mut store, "")?;
+        f.call(&mut store, ())?;
+    }
+    return Ok(());
+
+    extern "C" fn a_impl(
+        _param: usize,
+        _caller: &mut Caller<'_, ()>,
+        arg1: i32,
+        arg2: f32,
+        out1: &mut i64,
+        out2: &mut f64,
+        out3: &mut u128,
+    ) -> Option<Box<Trap>> {
+        assert_eq!(arg1, 100);
+        assert_eq!(arg2, 200.);
+        *out1 = 300;
+        *out2 = 400.;
+        *out3 = 500;
+        None
+    }
+
+    extern "C" fn b_impl(
+        _param: usize,
+        _caller: &mut Caller<'_, ()>,
+        arg1: i64,
+        arg2: f64,
+        arg3: &mut u128,
+    ) -> Option<Box<Trap>> {
+        assert_eq!(arg1, 300);
+        assert_eq!(arg2, 400.);
+        assert_eq!(*arg3, 500);
+        None
+    }
+}

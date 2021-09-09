@@ -88,6 +88,61 @@ WASM_API_EXTERN void wasmtime_func_new(
 );
 
 /**
+ * \brief Creates a new host-defined function with a custom signature.
+ *
+ * This function is the same as #wasmtime_func_new except that the signature of
+ * `callback` is different. The signature of `callback` must correspond to the
+ * function `type` specified, if it's not then calling the function is UB.
+ *
+ * \param store the store in which to create the function
+ * \param type the wasm type of the function that's being created
+ * \param callback the host-defined callback to invoke
+ * \param env host-specific data passed to the callback invocation, can be
+ * `NULL`
+ * \param finalizer optional finalizer for `env`, can be `NULL`
+ * \param ret the #wasmtime_func_t return value to be filled in.
+ *
+ * The returned function can only be used with the specified `store`.
+ *
+ * The signature of `callback` is as follows:
+ *
+ * * First it takes a `void*` parameter which is the `env` provided here.
+ * * Next it receives a `wasmtime_caller_t*` which is only valid for the
+ *   duration of that one call.
+ * * Next it receives each WebAssembly argument individually. Mapping from wasm
+ *   types to host types is provided below.
+ * * Next it receives an out-pointer for each WebAssembly result individually.
+ * * Finally the function must return a `wasm_trap_t*` indicating whether the
+ *   host function should trap or not.
+ *
+ * The mapping of WebAssembly types to host types is:
+ *
+ * * `i32 <=> int32_t`
+ * * `i64 <=> int64_t`
+ * * `f32 <=> float`
+ * * `f64 <=> double`
+ * * `v128`
+ *   * Received indirectly as `const uint8_t*` when passed as an argument
+ *   * Also passed as `const uint8_t*` for an out-pointer.
+ * * `extenref` - not supported
+ * * `funcref` - not supported
+ *
+ * All arguments are passed by-value except for `v128`, which is passed
+ * indirectly to the host function.
+ *
+ * This function will return an error if the `type` specified uses either
+ * `externref` or `funcref`.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_func_wrap(
+  wasmtime_context_t *store,
+  const wasm_functype_t* type,
+  size_t callback,
+  void *env,
+  void (*finalizer)(void*),
+  wasmtime_func_t *ret
+);
+
+/**
  * \brief Returns the type of the function specified
  *
  * The returned #wasm_functype_t is owned by the caller.
