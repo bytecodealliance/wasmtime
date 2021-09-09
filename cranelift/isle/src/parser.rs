@@ -423,6 +423,12 @@ impl<'a> Parser<'a> {
                 self.rparen()?;
                 Ok(Expr::Term { sym, args })
             }
+        } else if self.is_sym_str("#t") {
+            self.symbol()?;
+            Ok(Expr::ConstInt { val: 1 })
+        } else if self.is_sym_str("#f") {
+            self.symbol()?;
+            Ok(Expr::ConstInt { val: 0 })
         } else if self.is_sym() {
             let name = self.parse_ident()?;
             Ok(Expr::Var { name })

@@ -519,7 +519,7 @@ impl ExprSequence {
                             &arg_values_tys[..],
                             ty,
                             term,
-                            /* infallible = */ true,
+                            /* infallible = */ false,
                         )
                     }
                     &TermKind::ExternalConstructor { .. } => {
@@ -527,7 +527,7 @@ impl ExprSequence {
                             &arg_values_tys[..],
                             ty,
                             term,
-                            /* infallible = */ false,
+                            /* infallible = */ true,
                         )
                     }
                     _ => panic!("Should have been caught by typechecking"),

@@ -711,6 +711,18 @@ impl<'a> Codegen<'a> {
         ctx.values.insert(value.clone(), (is_ref, ty));
     }
 
+    fn const_int(&self, val: i64, ty: TypeId) -> String {
+        let is_bool = match &self.typeenv.types[ty.index()] {
+            &Type::Primitive(_, name) => &self.typeenv.syms[name.index()] == "bool",
+            _ => unreachable!(),
+        };
+        if is_bool {
+            format!("{}", val != 0)
+        } else {
+            format!("{}", val)
+        }
+    }
+
     fn generate_internal_term_constructors(&self, code: &mut dyn Write) -> Result<(), Error> {
         for (&termid, trie) in &self.functions_by_term {
             let termdata = &self.termenv.terms[termid.index()];
@@ -775,8 +787,15 @@ impl<'a> Codegen<'a> {
                 };
                 self.define_val(&value, ctx, /* is_ref = */ false, ty);
                 let name = self.value_name(&value);
-                let ty = self.type_name(ty, /* by_ref = */ false);
-                writeln!(code, "{}let {}: {} = {};", indent, name, ty, val)?;
+                let ty_name = self.type_name(ty, /* by_ref = */ false);
+                writeln!(
+                    code,
+                    "{}let {}: {} = {};",
+                    indent,
+                    name,
+                    ty_name,
+                    self.const_int(val, ty)
+                )?;
             }
             &ExprInst::CreateVariant {
                 ref inputs,
@@ -1027,7 +1046,7 @@ impl<'a> Codegen<'a> {
                     "{}let {} = {};",
                     indent,
                     self.value_name(&output),
-                    val
+                    self.const_int(val, ty),
                 )?;
                 self.define_val(&output, ctx, /* is_ref = */ false, ty);
                 Ok(true)

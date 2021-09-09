@@ -1,10 +1,14 @@
 (type u32 (primitive u32))
+(type bool (primitive bool))
 (type A (enum (A1 (x u32))))
 
 (decl Ext1 (u32) A)
 (decl Ext2 (u32) A)
 (extern extractor Ext1 ext1)
 (extern extractor Ext2 ext2)
+
+(decl C (bool) A)
+(extern constructor C c)
 
 (decl Lower (A) A)
 
@@ -14,4 +18,4 @@
       a
       (Ext1 x)
       (Ext2 =x)))
-  a)
+  (C #t))
