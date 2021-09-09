@@ -53,6 +53,12 @@ impl<'a> Parser<'a> {
     fn is_rparen(&self) -> bool {
         self.is(|tok| *tok == Token::RParen)
     }
+    fn is_at(&self) -> bool {
+        self.is(|tok| *tok == Token::At)
+    }
+    fn is_lt(&self) -> bool {
+        self.is(|tok| *tok == Token::Lt)
+    }
     fn is_sym(&self) -> bool {
         self.is(|tok| tok.is_sym())
     }
@@ -71,6 +77,12 @@ impl<'a> Parser<'a> {
     }
     fn rparen(&mut self) -> ParseResult<()> {
         self.take(|tok| *tok == Token::RParen).map(|_| ())
+    }
+    fn at(&mut self) -> ParseResult<()> {
+        self.take(|tok| *tok == Token::At).map(|_| ())
+    }
+    fn lt(&mut self) -> ParseResult<()> {
+        self.take(|tok| *tok == Token::Lt).map(|_| ())
     }
 
     fn symbol(&mut self) -> ParseResult<String> {
@@ -103,10 +115,10 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         let def = match &self.symbol()?[..] {
             "type" => Def::Type(self.parse_type()?),
-            "rule" => Def::Rule(self.parse_rule()?),
             "decl" => Def::Decl(self.parse_decl()?),
-            "constructor" => Def::Extern(self.parse_ctor()?),
-            "extractor" => Def::Extern(self.parse_etor()?),
+            "rule" => Def::Rule(self.parse_rule()?),
+            "extractor" => Def::Extractor(self.parse_etor()?),
+            "extern" => Def::Extern(self.parse_extern()?),
             s => {
                 return Err(self.error(pos.unwrap(), format!("Unexpected identifier: {}", s)));
             }
@@ -231,32 +243,72 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_ctor(&mut self) -> ParseResult<Extern> {
+    fn parse_extern(&mut self) -> ParseResult<Extern> {
         let pos = self.pos();
-        let term = self.parse_ident()?;
-        let func = self.parse_ident()?;
-        Ok(Extern::Constructor {
-            term,
-            func,
-            pos: pos.unwrap(),
-        })
+        if self.is_sym_str("constructor") {
+            self.symbol()?;
+            let term = self.parse_ident()?;
+            let func = self.parse_ident()?;
+            Ok(Extern::Constructor {
+                term,
+                func,
+                pos: pos.unwrap(),
+            })
+        } else if self.is_sym_str("extractor") {
+            self.symbol()?;
+            let term = self.parse_ident()?;
+            let func = self.parse_ident()?;
+            let arg_polarity = if self.is_lparen() {
+                let mut pol = vec![];
+                self.lparen()?;
+                while !self.is_rparen() {
+                    if self.is_sym_str("in") {
+                        self.symbol()?;
+                        pol.push(ArgPolarity::Input);
+                    } else if self.is_sym_str("out") {
+                        self.symbol()?;
+                        pol.push(ArgPolarity::Output);
+                    } else {
+                        return Err(
+                            self.error(pos.unwrap(), "Invalid argument polarity".to_string())
+                        );
+                    }
+                }
+                self.rparen()?;
+                Some(pol)
+            } else {
+                None
+            };
+            Ok(Extern::Extractor {
+                term,
+                func,
+                pos: pos.unwrap(),
+                arg_polarity,
+            })
+        } else {
+            Err(self.error(
+                pos.unwrap(),
+                "Invalid extern: must be (extern constructor ...) or (extern extractor ...)"
+                    .to_string(),
+            ))
+        }
     }
 
-    fn parse_etor(&mut self) -> ParseResult<Extern> {
+    fn parse_etor(&mut self) -> ParseResult<Extractor> {
         let pos = self.pos();
-        let infallible = if self.is_sym_str("infallible") {
-            self.symbol()?;
-            true
-        } else {
-            false
-        };
+        self.lparen()?;
         let term = self.parse_ident()?;
-        let func = self.parse_ident()?;
-        Ok(Extern::Extractor {
+        let mut args = vec![];
+        while !self.is_rparen() {
+            args.push(self.parse_ident()?);
+        }
+        self.rparen()?;
+        let template = self.parse_pattern()?;
+        Ok(Extractor {
             term,
-            func,
+            args,
+            template,
             pos: pos.unwrap(),
-            infallible,
         })
     }
 
@@ -292,8 +344,8 @@ impl<'a> Parser<'a> {
                 Ok(Pattern::Var { var })
             } else {
                 let var = self.str_to_ident(pos.unwrap(), &s)?;
-                if self.is_sym_str("@") {
-                    self.symbol()?;
+                if self.is_at() {
+                    self.at()?;
                     let subpat = Box::new(self.parse_pattern()?);
                     Ok(Pattern::BindPattern { var, subpat })
                 } else {
@@ -317,13 +369,22 @@ impl<'a> Parser<'a> {
                 let sym = self.parse_ident()?;
                 let mut args = vec![];
                 while !self.is_rparen() {
-                    args.push(self.parse_pattern()?);
+                    args.push(self.parse_pattern_term_arg()?);
                 }
                 self.rparen()?;
                 Ok(Pattern::Term { sym, args })
             }
         } else {
             Err(self.error(pos.unwrap(), "Unexpected pattern".into()))
+        }
+    }
+
+    fn parse_pattern_term_arg(&mut self) -> ParseResult<TermArgPattern> {
+        if self.is_lt() {
+            self.lt()?;
+            Ok(TermArgPattern::Expr(self.parse_expr()?))
+        } else {
+            Ok(TermArgPattern::Pattern(self.parse_pattern()?))
         }
     }
 

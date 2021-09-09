@@ -1,8 +1,8 @@
 //! Generate Rust code from a series of Sequences.
 
-use crate::error::Error;
 use crate::ir::{lower_rule, ExprInst, ExprSequence, InstId, PatternInst, PatternSequence, Value};
-use crate::sema::{RuleId, TermEnv, TermId, TermKind, Type, TypeEnv, TypeId, Variant};
+use crate::sema::{RuleId, TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
+use crate::{error::Error, sema::ExternalSig};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
@@ -452,8 +452,7 @@ impl TermFunctionBuilder {
 struct TermFunctionsBuilder<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
-    builders_by_input: HashMap<TermId, TermFunctionBuilder>,
-    builders_by_output: HashMap<TermId, TermFunctionBuilder>,
+    builders_by_term: HashMap<TermId, TermFunctionBuilder>,
 }
 
 impl<'a> TermFunctionsBuilder<'a> {
@@ -461,8 +460,7 @@ impl<'a> TermFunctionsBuilder<'a> {
         log::trace!("typeenv: {:?}", typeenv);
         log::trace!("termenv: {:?}", termenv);
         Self {
-            builders_by_input: HashMap::new(),
-            builders_by_output: HashMap::new(),
+            builders_by_term: HashMap::new(),
             typeenv,
             termenv,
         }
@@ -473,56 +471,29 @@ impl<'a> TermFunctionsBuilder<'a> {
             let rule = RuleId(rule);
             let prio = self.termenv.rules[rule.index()].prio.unwrap_or(0);
 
-            if let Some((pattern, expr, lhs_root)) = lower_rule(
-                self.typeenv,
-                self.termenv,
-                rule,
-                /* forward_dir = */ true,
-            ) {
-                log::trace!(
-                    "build:\n- rule {:?}\n- fwd pattern {:?}\n- fwd expr {:?}",
-                    self.termenv.rules[rule.index()],
-                    pattern,
-                    expr
-                );
-                self.builders_by_input
-                    .entry(lhs_root)
-                    .or_insert_with(|| TermFunctionBuilder::new(lhs_root))
-                    .add_rule(prio, pattern.clone(), expr.clone());
-            }
+            let (pattern, expr) = lower_rule(self.typeenv, self.termenv, rule);
+            let root_term = self.termenv.rules[rule.index()].lhs.root_term().unwrap();
 
-            if let Some((pattern, expr, rhs_root)) = lower_rule(
-                self.typeenv,
-                self.termenv,
-                rule,
-                /* forward_dir = */ false,
-            ) {
-                log::trace!(
-                    "build:\n- rule {:?}\n- rev pattern {:?}\n- rev expr {:?}",
-                    self.termenv.rules[rule.index()],
-                    pattern,
-                    expr
-                );
-                self.builders_by_output
-                    .entry(rhs_root)
-                    .or_insert_with(|| TermFunctionBuilder::new(rhs_root))
-                    .add_rule(prio, pattern, expr);
-            }
+            log::trace!(
+                "build:\n- rule {:?}\n- pattern {:?}\n- expr {:?}",
+                self.termenv.rules[rule.index()],
+                pattern,
+                expr
+            );
+            self.builders_by_term
+                .entry(root_term)
+                .or_insert_with(|| TermFunctionBuilder::new(root_term))
+                .add_rule(prio, pattern.clone(), expr.clone());
         }
     }
 
-    fn finalize(self) -> (HashMap<TermId, TrieNode>, HashMap<TermId, TrieNode>) {
-        let functions_by_input = self
-            .builders_by_input
+    fn finalize(self) -> HashMap<TermId, TrieNode> {
+        let functions_by_term = self
+            .builders_by_term
             .into_iter()
             .map(|(term, builder)| (term, builder.trie))
             .collect::<HashMap<_, _>>();
-        let functions_by_output = self
-            .builders_by_output
-            .into_iter()
-            .map(|(term, builder)| (term, builder.trie))
-            .collect::<HashMap<_, _>>();
-        (functions_by_input, functions_by_output)
+        functions_by_term
     }
 }
 
@@ -530,15 +501,13 @@ impl<'a> TermFunctionsBuilder<'a> {
 pub struct Codegen<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
-    functions_by_input: HashMap<TermId, TrieNode>,
-    functions_by_output: HashMap<TermId, TrieNode>,
+    functions_by_term: HashMap<TermId, TrieNode>,
 }
 
 #[derive(Clone, Debug, Default)]
 struct BodyContext {
-    borrowed_values: HashSet<Value>,
-    expected_return_vals: usize,
-    tuple_return: bool,
+    /// For each value: (is_ref, ty).
+    values: HashMap<Value, (bool, TypeId)>,
 }
 
 impl<'a> Codegen<'a> {
@@ -546,12 +515,11 @@ impl<'a> Codegen<'a> {
         let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
         builder.build();
         log::trace!("builder: {:?}", builder);
-        let (functions_by_input, functions_by_output) = builder.finalize();
+        let functions_by_term = builder.finalize();
         Ok(Codegen {
             typeenv,
             termenv,
-            functions_by_input,
-            functions_by_output,
+            functions_by_term,
         })
     }
 
@@ -562,7 +530,6 @@ impl<'a> Codegen<'a> {
         self.generate_ctx_trait(&mut code)?;
         self.generate_internal_types(&mut code)?;
         self.generate_internal_term_constructors(&mut code)?;
-        self.generate_internal_term_extractors(&mut code)?;
 
         Ok(code)
     }
@@ -580,11 +547,41 @@ impl<'a> Codegen<'a> {
 
         writeln!(
             code,
-            "\n#![allow(dead_code, unreachable_code, unused_imports, unused_variables, non_snake_case)]"
+            "\n#![allow(dead_code, unreachable_code, unreachable_patterns)]"
+        )?;
+        writeln!(
+            code,
+            "#![allow(unused_imports, unused_variables, non_snake_case)]"
         )?;
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.")?;
 
+        Ok(())
+    }
+
+    fn generate_trait_sig(
+        &self,
+        code: &mut dyn Write,
+        indent: &str,
+        sig: &ExternalSig,
+    ) -> Result<(), Error> {
+        writeln!(
+            code,
+            "{}fn {}(&mut self, {}) -> Option<({},)>;",
+            indent,
+            sig.func_name,
+            sig.arg_tys
+                .iter()
+                .enumerate()
+                .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
+                .collect::<Vec<_>>()
+                .join(", "),
+            sig.ret_tys
+                .iter()
+                .map(|&ty| self.type_name(ty, /* by_ref = */ false))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )?;
         Ok(())
     }
 
@@ -604,74 +601,9 @@ impl<'a> Codegen<'a> {
         )?;
         writeln!(code, "pub trait Context {{")?;
         for term in &self.termenv.terms {
-            if let &TermKind::Regular {
-                extractor,
-                constructor,
-                ..
-            } = &term.kind
-            {
-                if let Some((etor_name, infallible)) = extractor {
-                    let etor_name = &self.typeenv.syms[etor_name.index()];
-                    let arg_is_prim = match &self.typeenv.types[term.ret_ty.index()] {
-                        &Type::Primitive(..) => true,
-                        _ => false,
-                    };
-                    let arg = format!(
-                        "arg0: {}",
-                        self.type_name(
-                            term.ret_ty,
-                            /* by_ref = */ if arg_is_prim { None } else { Some("&") }
-                        ),
-                    );
-                    let ret_tuple_tys = term
-                        .arg_tys
-                        .iter()
-                        .map(|ty| {
-                            self.type_name(*ty, /* by_ref = */ None)
-                        })
-                        .collect::<Vec<_>>();
-                    if infallible {
-                        writeln!(
-                            code,
-                            "    fn {}(&mut self, {}) -> ({},);",
-                            etor_name,
-                            arg,
-                            ret_tuple_tys.join(", ")
-                        )?;
-                    } else {
-                        writeln!(
-                            code,
-                            "    fn {}(&mut self, {}) -> Option<({},)>;",
-                            etor_name,
-                            arg,
-                            ret_tuple_tys.join(", ")
-                        )?;
-                    }
-                }
-
-                if let Some(ctor_name) = constructor {
-                    let ctor_name = &self.typeenv.syms[ctor_name.index()];
-                    let args = term
-                        .arg_tys
-                        .iter()
-                        .enumerate()
-                        .map(|(i, &arg_ty)| {
-                            format!(
-                                "arg{}: {}",
-                                i,
-                                self.type_name(arg_ty, /* by_ref = */ Some("&"))
-                            )
-                        })
-                        .collect::<Vec<_>>();
-                    let ret = self.type_name(term.ret_ty, /* by_ref = */ None);
-                    writeln!(
-                        code,
-                        "    fn {}(&mut self, {}) -> Option<{}>;",
-                        ctor_name,
-                        args.join(", "),
-                        ret,
-                    )?;
-                }
+            if term.is_external() {
+                let ext_sig = term.to_sig(self.typeenv).unwrap();
+                self.generate_trait_sig(code, "    ", &ext_sig)?;
             }
         }
         writeln!(code, "}}")?;
@@ -721,44 +653,11 @@ impl<'a> Codegen<'a> {
         Ok(())
     }
 
-    fn constructor_name(&self, term: TermId) -> String {
-        let termdata = &self.termenv.terms[term.index()];
-        match &termdata.kind {
-            &TermKind::EnumVariant { .. } => panic!("using enum variant as constructor"),
-            &TermKind::Regular {
-                constructor: Some(sym),
-                ..
-            } => format!("C::{}", self.typeenv.syms[sym.index()]),
-            &TermKind::Regular {
-                constructor: None, ..
-            } => {
-                format!("constructor_{}", self.typeenv.syms[termdata.name.index()])
-            }
-        }
-    }
-
-    fn extractor_name_and_infallible(&self, term: TermId) -> (String, bool) {
-        let termdata = &self.termenv.terms[term.index()];
-        match &termdata.kind {
-            &TermKind::EnumVariant { .. } => panic!("using enum variant as extractor"),
-            &TermKind::Regular {
-                extractor: Some((sym, infallible)),
-                ..
-            } => (format!("C::{}", self.typeenv.syms[sym.index()]), infallible),
-            &TermKind::Regular {
-                extractor: None, ..
-            } => (
-                format!("extractor_{}", self.typeenv.syms[termdata.name.index()]),
-                false,
-            ),
-        }
-    }
-
-    fn type_name(&self, typeid: TypeId, by_ref: Option<&str>) -> String {
+    fn type_name(&self, typeid: TypeId, by_ref: bool) -> String {
         match &self.typeenv.types[typeid.index()] {
             &Type::Primitive(_, sym) => self.typeenv.syms[sym.index()].clone(),
             &Type::Enum { name, .. } => {
-                let r = by_ref.unwrap_or("");
+                let r = if by_ref { "&" } else { "" };
                 format!("{}{}", r, self.typeenv.syms[name.index()])
             }
         }
@@ -771,10 +670,24 @@ impl<'a> Codegen<'a> {
         }
     }
 
+    fn ty_prim(&self, ty: TypeId) -> bool {
+        self.typeenv.types[ty.index()].is_prim()
+    }
+
+    fn value_binder(&self, value: &Value, is_ref: bool, ty: TypeId) -> String {
+        let prim = self.ty_prim(ty);
+        if prim || !is_ref {
+            format!("{}", self.value_name(value))
+        } else {
+            format!("ref {}", self.value_name(value))
+        }
+    }
+
     fn value_by_ref(&self, value: &Value, ctx: &BodyContext) -> String {
         let raw_name = self.value_name(value);
-        let name_is_ref = ctx.borrowed_values.contains(value);
-        if name_is_ref {
+        let &(is_ref, ty) = ctx.values.get(value).unwrap();
+        let prim = self.ty_prim(ty);
+        if is_ref || prim {
             raw_name
         } else {
             format!("&{}", raw_name)
@@ -783,50 +696,41 @@ impl<'a> Codegen<'a> {
 
     fn value_by_val(&self, value: &Value, ctx: &BodyContext) -> String {
         let raw_name = self.value_name(value);
-        let name_is_ref = ctx.borrowed_values.contains(value);
-        if name_is_ref {
+        let &(is_ref, _) = ctx.values.get(value).unwrap();
+        if is_ref {
             format!("{}.clone()", raw_name)
         } else {
             raw_name
         }
     }
 
-    fn define_val(&self, value: &Value, ctx: &mut BodyContext, is_ref: bool) {
-        if is_ref {
-            ctx.borrowed_values.insert(value.clone());
-        }
+    fn define_val(&self, value: &Value, ctx: &mut BodyContext, is_ref: bool, ty: TypeId) {
+        let is_ref = !self.ty_prim(ty) && is_ref;
+        ctx.values.insert(value.clone(), (is_ref, ty));
     }
 
     fn generate_internal_term_constructors(&self, code: &mut dyn Write) -> Result<(), Error> {
-        for (&termid, trie) in &self.functions_by_input {
+        for (&termid, trie) in &self.functions_by_term {
             let termdata = &self.termenv.terms[termid.index()];
 
             // Skip terms that are enum variants or that have external
             // constructors/extractors.
-            match &termdata.kind {
-                &TermKind::EnumVariant { .. } => continue,
-                &TermKind::Regular {
-                    constructor,
-                    extractor,
-                    ..
-                } if constructor.is_some() || extractor.is_some() => continue,
-                _ => {}
+            if !termdata.is_constructor() || termdata.is_external() {
+                continue;
             }
 
-            // Get the name of the term and build up the signature.
-            let func_name = self.constructor_name(termid);
-            let args = termdata
+            let sig = termdata.to_sig(self.typeenv).unwrap();
+
+            let args = sig
                 .arg_tys
                 .iter()
                 .enumerate()
-                .map(|(i, &arg_ty)| {
-                    format!(
-                        "arg{}: {}",
-                        i,
-                        self.type_name(arg_ty, /* by_ref = */ Some("&"))
-                    )
-                })
-                .collect::<Vec<_>>();
+                .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, true)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            assert_eq!(sig.ret_tys.len(), 1);
+            let ret = self.type_name(sig.ret_tys[0], false);
+
             writeln!(
                 code,
                 "\n// Generated as internal constructor for term {}.",
@@ -835,82 +739,16 @@ impl<'a> Codegen<'a> {
             writeln!(
                 code,
                 "pub fn {}<C: Context>(ctx: &mut C, {}) -> Option<{}> {{",
-                func_name,
-                args.join(", "),
-                self.type_name(termdata.ret_ty, /* by_ref = */ None)
+                sig.func_name, args, ret,
             )?;
 
             let mut body_ctx: BodyContext = Default::default();
-            body_ctx.expected_return_vals = 1;
             let returned =
                 self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
             if !returned {
                 writeln!(code, "    return None;")?;
             }
 
-            writeln!(code, "}}")?;
-        }
-
-        Ok(())
-    }
-
-    fn generate_internal_term_extractors(&self, code: &mut dyn Write) -> Result<(), Error> {
-        for (&termid, trie) in &self.functions_by_output {
-            let termdata = &self.termenv.terms[termid.index()];
-
-            // Skip terms that are enum variants or that have external extractors.
-            match &termdata.kind {
-                &TermKind::EnumVariant { .. } => continue,
-                &TermKind::Regular {
-                    constructor,
-                    extractor,
-                    ..
-                } if constructor.is_some() || extractor.is_some() => continue,
-                _ => {}
-            }
-
-            // Get the name of the term and build up the signature.
-            let (func_name, _) = self.extractor_name_and_infallible(termid);
-            let arg_is_prim = match &self.typeenv.types[termdata.ret_ty.index()] {
-                &Type::Primitive(..) => true,
-                _ => false,
-            };
-            let arg = format!(
-                "arg0: {}",
-                self.type_name(
-                    termdata.ret_ty,
-                    /* by_ref = */ if arg_is_prim { None } else { Some("&") }
-                ),
-            );
-            let ret_tuple_tys = termdata
-                .arg_tys
-                .iter()
-                .map(|ty| {
-                    self.type_name(*ty, /* by_ref = */ None)
-                })
-                .collect::<Vec<_>>();
-
-            writeln!(
-                code,
-                "\n// Generated as internal extractor for term {}.",
-                self.typeenv.syms[termdata.name.index()],
-            )?;
-            writeln!(
-                code,
-                "pub fn {}<C: Context>(ctx: &mut C, {}) -> Option<({},)> {{",
-                func_name,
-                arg,
-                ret_tuple_tys.join(", "),
-            )?;
-
-            let mut body_ctx: BodyContext = Default::default();
-            body_ctx.expected_return_vals = ret_tuple_tys.len();
-            body_ctx.tuple_return = true;
-            let returned =
-                self.generate_body(code, /* depth = */ 0, trie, "    ", &mut body_ctx)?;
-            if !returned {
-                writeln!(code, "    return None;")?;
-            }
             writeln!(code, "}}")?;
         }
 
@@ -926,15 +764,16 @@ impl<'a> Codegen<'a> {
         ctx: &mut BodyContext,
         returns: &mut Vec<(usize, String)>,
     ) -> Result<(), Error> {
+        log::trace!("generate_expr_inst: {:?}", inst);
         match inst {
             &ExprInst::ConstInt { ty, val } => {
                 let value = Value::Expr {
                     inst: id,
                     output: 0,
                 };
+                self.define_val(&value, ctx, /* is_ref = */ false, ty);
                 let name = self.value_name(&value);
-                let ty = self.type_name(ty, /* by_ref = */ None);
-                self.define_val(&value, ctx, /* is_ref = */ false);
+                let ty = self.type_name(ty, /* by_ref = */ false);
                 writeln!(code, "{}let {}: {} = {};", indent, name, ty, val)?;
             }
             &ExprInst::CreateVariant {
@@ -960,7 +799,7 @@ impl<'a> Codegen<'a> {
                 let outputname = self.value_name(&output);
                 let full_variant_name = format!(
                     "{}::{}",
-                    self.type_name(ty, None),
+                    self.type_name(ty, false),
                     self.typeenv.syms[variantinfo.name.index()]
                 );
                 if input_fields.is_empty() {
@@ -980,7 +819,7 @@ impl<'a> Codegen<'a> {
                     }
                     writeln!(code, "{}}};", indent)?;
                 }
-                self.define_val(&output, ctx, /* is_ref = */ false);
+                self.define_val(&output, ctx, /* is_ref = */ false, ty);
             }
             &ExprInst::Construct {
                 ref inputs, term, ..
@@ -996,16 +835,18 @@ impl<'a> Codegen<'a> {
                     output: 0,
                 };
                 let outputname = self.value_name(&output);
-                let ctor_name = self.constructor_name(term);
+                let termdata = &self.termenv.terms[term.index()];
+                let sig = termdata.to_sig(self.typeenv).unwrap();
+                assert_eq!(input_exprs.len(), sig.arg_tys.len());
                 writeln!(
                     code,
                     "{}let {} = {}(ctx, {});",
                     indent,
                     outputname,
-                    ctor_name,
+                    sig.full_name,
                     input_exprs.join(", "),
                 )?;
-                self.define_val(&output, ctx, /* is_ref = */ false);
+                self.define_val(&output, ctx, /* is_ref = */ false, termdata.ret_ty);
             }
             &ExprInst::Return {
                 index, ref value, ..
@@ -1029,23 +870,15 @@ impl<'a> Codegen<'a> {
             .iter()
             .zip(variant.fields.iter())
             .enumerate()
-            .map(|(i, (ty, field))| {
+            .map(|(i, (&ty, field))| {
                 let value = Value::Pattern {
                     inst: id,
                     output: i,
                 };
-                let valuename = self.value_name(&value);
+                let valuename = self.value_binder(&value, /* is_ref = */ true, ty);
                 let fieldname = &self.typeenv.syms[field.name.index()];
-                match &self.typeenv.types[ty.index()] {
-                    &Type::Primitive(..) => {
-                        self.define_val(&value, ctx, /* is_ref = */ false);
-                        format!("{}: {}", fieldname, valuename)
-                    }
-                    &Type::Enum { .. } => {
-                        self.define_val(&value, ctx, /* is_ref = */ true);
-                        format!("{}: ref {}", fieldname, valuename)
-                    }
-                }
+                self.define_val(&value, ctx, /* is_ref = */ false, field.ty);
+                format!("{}: {}", fieldname, valuename)
             })
             .collect::<Vec<_>>()
     }
@@ -1080,6 +913,7 @@ impl<'a> Codegen<'a> {
                     },
                     ctx,
                     is_ref,
+                    ty,
                 );
                 Ok(true)
             }
@@ -1107,7 +941,7 @@ impl<'a> Codegen<'a> {
                     &Type::Primitive(..) => panic!("primitive type input to MatchVariant"),
                     &Type::Enum { ref variants, .. } => variants,
                 };
-                let ty_name = self.type_name(input_ty, /* is_ref = */ Some("&"));
+                let ty_name = self.type_name(input_ty, /* is_ref = */ true);
                 let variant = &variants[variant.index()];
                 let variantname = &self.typeenv.syms[variant.name.index()];
                 let args = self.match_variant_binders(variant, &arg_tys[..], id, ctx);
@@ -1124,57 +958,70 @@ impl<'a> Codegen<'a> {
                 Ok(false)
             }
             &PatternInst::Extract {
-                ref input,
-                input_ty,
-                ref arg_tys,
+                ref inputs,
+                ref output_tys,
                 term,
                 ..
             } => {
-                let input_ty_prim = match &self.typeenv.types[input_ty.index()] {
-                    &Type::Primitive(..) => true,
-                    _ => false,
-                };
-                let input = if input_ty_prim {
-                    self.value_by_val(input, ctx)
-                } else {
-                    self.value_by_ref(input, ctx)
-                };
-                let (etor_name, infallible) = self.extractor_name_and_infallible(term);
+                let termdata = &self.termenv.terms[term.index()];
+                let sig = termdata.to_sig(self.typeenv).unwrap();
 
-                let args = arg_tys
+                let input_values = inputs
+                    .iter()
+                    .map(|input| self.value_by_ref(input, ctx))
+                    .collect::<Vec<_>>();
+                let output_binders = output_tys
                     .iter()
                     .enumerate()
-                    .map(|(i, _ty)| {
-                        let value = Value::Pattern {
+                    .map(|(i, &ty)| {
+                        let output_val = Value::Pattern {
                             inst: id,
                             output: i,
                         };
-                        self.define_val(&value, ctx, /* is_ref = */ false);
-                        self.value_name(&value)
+                        self.define_val(&output_val, ctx, /* is_ref = */ false, ty);
+                        self.value_binder(&output_val, /* is_ref = */ false, ty)
                     })
                     .collect::<Vec<_>>();
 
-                if infallible {
-                    writeln!(
-                        code,
-                        "{}let Some(({},)) = {}(ctx, {});",
-                        indent,
-                        args.join(", "),
-                        etor_name,
-                        input
-                    )?;
-                    writeln!(code, "{}{{", indent)?;
-                } else {
-                    writeln!(
-                        code,
-                        "{}if let Some(({},)) = {}(ctx, {}) {{",
-                        indent,
-                        args.join(", "),
-                        etor_name,
-                        input
-                    )?;
+                writeln!(
+                    code,
+                    "{}if let Some(({},)) = {}(ctx, {}) {{",
+                    indent,
+                    output_binders.join(", "),
+                    sig.full_name,
+                    input_values.join(", "),
+                )?;
+
+                Ok(false)
+            }
+            &PatternInst::Expr { ref seq, output_ty, .. } => {
+                let closure_name = format!("closure{}", id.index());
+                writeln!(code, "{}let {} = || {{", indent, closure_name)?;
+                let subindent = format!("{}    ", indent);
+                let mut subctx = ctx.clone();
+                let mut returns = vec![];
+                for (id, inst) in seq.insts.iter().enumerate() {
+                    let id = InstId(id);
+                    self.generate_expr_inst(code, id, inst, &subindent, &mut subctx, &mut returns)?;
                 }
-                Ok(infallible)
+                assert_eq!(returns.len(), 1);
+                writeln!(code, "{}return Some({});", subindent, returns[0].1)?;
+                writeln!(code, "{}}};", indent)?;
+
+                let output = Value::Pattern {
+                    inst: id,
+                    output: 0,
+                };
+                writeln!(
+                    code,
+                    "{}if let Some({}) = {}() {{",
+                    indent,
+                    self.value_binder(&output, /* is_ref = */ false, output_ty),
+                    closure_name
+                )?;
+                self.define_val(&output, ctx, /* is_ref = */ false, output_ty);
+
+                Ok(false)
             }
         }
     }
@@ -1206,18 +1053,8 @@ impl<'a> Codegen<'a> {
                     self.generate_expr_inst(code, id, inst, indent, ctx, &mut returns)?;
                 }
 
-                assert_eq!(returns.len(), ctx.expected_return_vals);
-                returns.sort_by_key(|(index, _)| *index);
-                if ctx.tuple_return {
-                    let return_values = returns
-                        .into_iter()
-                        .map(|(_, expr)| expr)
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    writeln!(code, "{}return Some(({},));", indent, return_values)?;
-                } else {
-                    writeln!(code, "{}return Some({});", indent, returns[0].1)?;
-                }
+                assert_eq!(returns.len(), 1);
+                writeln!(code, "{}return Some({});", indent, returns[0].1)?;
 
                 returned = true;
             }

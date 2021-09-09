@@ -3,8 +3,8 @@
 
 (decl Ext1 (u32) A)
 (decl Ext2 (u32) A)
-(extractor Ext1 ext1)
-(extractor Ext2 ext2)
+(extern extractor Ext1 ext1)
+(extern extractor Ext2 ext2)
 
 (decl Lower (A) A)
 

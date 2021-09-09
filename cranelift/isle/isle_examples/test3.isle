@@ -5,28 +5,28 @@
   Store))
 
 (type Inst (primitive Inst))
+(type InstInput (primitive InstInput))
 (type Reg (primitive Reg))
 (type u32 (primitive u32))
 
 (decl Op (Opcode) Inst)
-(extractor Op get_opcode)
+(extern extractor Op get_opcode)
 
-(decl InputToReg (Inst u32) Reg)
-(constructor InputToReg put_input_in_reg)
+(decl InstInput (InstInput u32) Inst)
+(extern extractor InstInput get_inst_input (out in))
+
+(decl Producer (Inst) InstInput)
+(extern extractor Producer get_input_producer)
+
+(decl UseInput (InstInput) Reg)
+(extern constructor UseInput put_input_in_reg)
 
 (type MachInst (enum
   (Add (a Reg) (b Reg))
+  (Add3 (a Reg) (b Reg) (c Reg))
   (Sub (a Reg) (b Reg))))
 
 (decl Lower (Inst) MachInst)
-
-;; These can be made nicer by defining some extractors -- see below.
-(rule
-  (Lower inst @ (Op (Opcode.Iadd)))
-  (MachInst.Add (InputToReg inst 0) (InputToReg inst 1)))
-(rule
-  (Lower inst @ (Op (Opcode.Isub)))
-  (MachInst.Sub (InputToReg inst 0) (InputToReg inst 1)))
 
 ;; Extractors that give syntax sugar for (Iadd ra rb), etc.
 ;;
@@ -39,19 +39,28 @@
 ;; we are dealing (at the semantic level) with pure value equivalences of
 ;; "terms", not arbitrary side-effecting calls.
 
-(decl Iadd (Reg Reg) Inst)
-(decl Isub (Reg Reg) Inst)
-(rule
- inst @ (Op Opcode.Iadd)
- (Iadd (InputToReg inst 0) (InputToReg inst 1)))
-(rule
- inst @ (Op Opcode.Isub)
- (Isub (InputToReg inst 0) (InputToReg inst 1)))
+(decl Iadd (InstInput InstInput) Inst)
+(decl Isub (InstInput InstInput) Inst)
+(extractor
+  (Iadd a b)
+  (and
+    (Op (Opcode.Iadd))
+    (InstInput a <0)
+    (InstInput b <1)))
+(extractor
+  (Isub a b)
+  (and
+    (Op (Opcode.Isub))
+    (InstInput a <0)
+    (InstInput b <1)))
 
 ;; Now the nice syntax-sugar that "end-user" backend authors can write:
 (rule
- (Lower (Iadd ra rb))
- (MachInst.Add ra rb))
+  (Lower (Iadd ra rb))
+  (MachInst.Add (UseInput ra) (UseInput rb)))
 (rule
- (Lower (Isub ra rb))
- (MachInst.Sub ra rb))
+  (Lower (Iadd (Producer (Iadd ra rb)) rc))
+  (MachInst.Add3 (UseInput ra) (UseInput rb) (UseInput rc)))
+(rule
+  (Lower (Isub ra rb))
+  (MachInst.Sub (UseInput ra) (UseInput rb)))

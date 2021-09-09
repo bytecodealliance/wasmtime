@@ -1,5 +1,8 @@
-- inputs to external extractors? "polarity" of args?
-- "extractor macros" rather than full rule reversal? (rule ...) and (pattern ...)?
+- Optimizations
+  - Infallible patterns; optimize away control flow when possible.
+  - Don't do the closure-wrapping thing for expressions inside of patterns.
+
 - Document semantics carefully, especially wrt extractors.
+
 - Build out an initial set of bindings for Cranelift LowerCtx with extractors
   for instruction info.

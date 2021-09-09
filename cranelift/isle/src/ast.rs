@@ -12,6 +12,7 @@ pub struct Defs {
 pub enum Def {
     Type(Type),
     Rule(Rule),
+    Extractor(Extractor),
     Decl(Decl),
     Extern(Extern),
 }
@@ -69,6 +70,16 @@ pub struct Rule {
     pub prio: Option<i64>,
 }
 
+/// An extractor macro: (A x y) becomes (B x _ y ...). Expanded during
+/// ast-to-sema pass.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Extractor {
+    pub term: Ident,
+    pub args: Vec<Ident>,
+    pub template: Pattern,
+    pub pos: Pos,
+}
+
 /// A pattern: the left-hand side of a rule.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Pattern {
@@ -80,11 +91,38 @@ pub enum Pattern {
     /// An operator that matches a constant integer value.
     ConstInt { val: i64 },
     /// An application of a type variant or term.
-    Term { sym: Ident, args: Vec<Pattern> },
+    Term {
+        sym: Ident,
+        args: Vec<TermArgPattern>,
+    },
     /// An operator that matches anything.
     Wildcard,
     /// N sub-patterns that must all match.
     And { subpats: Vec<Pattern> },
+}
+
+impl Pattern {
+    pub fn root_term(&self) -> Option<&Ident> {
+        match self {
+            &Pattern::BindPattern { ref subpat, .. } => subpat.root_term(),
+            &Pattern::Term { ref sym, .. } => Some(sym),
+            _ => None,
+        }
+    }
+}
+
+/// A pattern in a term argument. Adds "evaluated expression" to kinds
+/// of patterns in addition to all options in `Pattern`.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum TermArgPattern {
+    /// A regular pattern that must match the existing value in the term's argument.
+    Pattern(Pattern),
+    /// An expression that is evaluated during the match phase and can
+    /// be given into an extractor. This is essentially a limited form
+    /// of unification or bidirectional argument flow (a la Prolog):
+    /// we can pass an arg *into* an extractor rather than getting the
+    /// arg *out of* it.
+    Expr(Expr),
 }
 
 /// An expression: the right-hand side of a rule.
@@ -124,8 +162,15 @@ pub enum Extern {
         func: Ident,
         /// The position of this decl.
         pos: Pos,
-        /// Whether this extractor is infallible (always matches).
-        infallible: bool,
+        /// Poliarity of args: whether values are inputs or outputs to
+        /// the external extractor function. This is a sort of
+        /// statically-defined approximation to Prolog-style
+        /// unification; we allow for the same flexible directionality
+        /// but fix it at DSL-definition time. By default, every arg
+        /// is an *output* from the extractor (and the 'retval", or
+        /// more precisely the term value that we are extracting, is
+        /// an "input").
+        arg_polarity: Option<Vec<ArgPolarity>>,
     },
     /// An external constructor: `(constructor Term rustfunc)` form.
     Constructor {
@@ -136,4 +181,14 @@ pub enum Extern {
         /// The position of this decl.
         pos: Pos,
     },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArgPolarity {
+    /// An arg that must be given an Expr in the pattern and passes
+    /// data *to* the extractor op.
+    Input,
+    /// An arg that must be given a regular pattern (not Expr) and
+    /// receives data *from* the extractor op.
+    Output,
 }

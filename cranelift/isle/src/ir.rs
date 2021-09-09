@@ -41,13 +41,24 @@ pub enum PatternInst {
         variant: VariantId,
     },
 
-    /// Invoke an extractor, taking the given value as input and
-    /// producing `|arg_tys|` values as output.
+    /// Invoke an extractor, taking the given values as input (the
+    /// first is the value to extract, the other are the
+    /// `Input`-polarity extractor args) and producing an output valu
+    /// efor each `Output`-polarity extractor arg.
     Extract {
-        input: Value,
-        input_ty: TypeId,
-        arg_tys: Vec<TypeId>,
+        inputs: Vec<Value>,
+        input_tys: Vec<TypeId>,
+        output_tys: Vec<TypeId>,
         term: TermId,
+    },
+
+    /// Evaluate an expression and provide the given value as the
+    /// result of this match instruction. The expression has access to
+    /// the pattern-values up to this point in the sequence.
+    Expr {
+        seq: ExprSequence,
+        output: Value,
+        output_ty: TypeId,
     },
 }
 
@@ -110,13 +121,28 @@ pub struct PatternSequence {
 /// A linear sequence of instructions that produce a new value from
 /// the right-hand side of a rule, given bindings that come from a
 /// `Pattern` derived from the left-hand side.
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub struct ExprSequence {
     /// Instruction sequence for expression. InstId indexes into this
     /// sequence for `Value::Expr` values.
     pub insts: Vec<ExprInst>,
     /// Position at which the rule producing this sequence was located.
     pub pos: Pos,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ValueOrArgs {
+    Value(Value),
+    ImplicitTermFromArgs(TermId),
+}
+
+impl ValueOrArgs {
+    fn to_value(&self) -> Option<Value> {
+        match self {
+            &ValueOrArgs::Value(v) => Some(v),
+            _ => None,
+        }
+    }
 }
 
 impl PatternSequence {
@@ -165,104 +191,198 @@ impl PatternSequence {
 
     fn add_extract(
         &mut self,
-        input: Value,
-        input_ty: TypeId,
-        arg_tys: &[TypeId],
+        inputs: Vec<Value>,
+        input_tys: Vec<TypeId>,
+        output_tys: Vec<TypeId>,
         term: TermId,
     ) -> Vec<Value> {
         let inst = InstId(self.insts.len());
         let mut outs = vec![];
-        for (i, _arg_ty) in arg_tys.iter().enumerate() {
+        for i in 0..output_tys.len() {
             let val = Value::Pattern { inst, output: i };
             outs.push(val);
         }
-        let arg_tys = arg_tys.iter().cloned().collect();
+        let output_tys = output_tys.iter().cloned().collect();
         self.add_inst(PatternInst::Extract {
-            input,
-            input_ty,
-            arg_tys,
+            inputs,
+            input_tys,
+            output_tys,
             term,
         });
         outs
     }
 
+    fn add_expr_seq(&mut self, seq: ExprSequence, output: Value, output_ty: TypeId) -> Value {
+        let inst = self.add_inst(PatternInst::Expr {
+            seq,
+            output,
+            output_ty,
+        });
+
+        // Create values for all outputs.
+        Value::Pattern { inst, output: 0 }
+    }
+
     /// Generate PatternInsts to match the given (sub)pattern. Works
-    /// recursively down the AST. Returns the root term matched by
-    /// this pattern, if any.
+    /// recursively down the AST.
     fn gen_pattern(
         &mut self,
-        // If `input` is `None`, then this is the root pattern, and is
-        // implicitly an extraction with the N args as results.
-        input: Option<Value>,
+        input: ValueOrArgs,
         typeenv: &TypeEnv,
         termenv: &TermEnv,
         pat: &Pattern,
-        vars: &mut HashMap<VarId, (Option<TermId>, Value)>,
-    ) -> Option<TermId> {
+        vars: &mut HashMap<VarId, Value>,
+    ) {
         match pat {
             &Pattern::BindPattern(_ty, var, ref subpat) => {
                 // Bind the appropriate variable and recurse.
                 assert!(!vars.contains_key(&var));
-                vars.insert(var, (None, input.unwrap())); // bind first, so subpat can use it
+                if let Some(v) = input.to_value() {
+                    vars.insert(var, v);
+                }
                 let root_term = self.gen_pattern(input, typeenv, termenv, &*subpat, vars);
-                vars.get_mut(&var).unwrap().0 = root_term;
                 root_term
             }
             &Pattern::Var(ty, var) => {
                 // Assert that the value matches the existing bound var.
-                let (var_val_term, var_val) = vars
+                let var_val = vars
                     .get(&var)
                     .cloned()
                     .expect("Variable should already be bound");
-                self.add_match_equal(input.unwrap(), var_val, ty);
-                var_val_term
+                let input_val = input
+                    .to_value()
+                    .expect("Cannot match an =var pattern against root term");
+                self.add_match_equal(input_val, var_val, ty);
             }
             &Pattern::ConstInt(ty, value) => {
                 // Assert that the value matches the constant integer.
-                self.add_match_int(input.unwrap(), ty, value);
-                None
-            }
-            &Pattern::Term(_, term, ref args) if input.is_none() => {
-                let termdata = &termenv.terms[term.index()];
-                let arg_tys = &termdata.arg_tys[..];
-                for (i, subpat) in args.iter().enumerate() {
-                    let value = self.add_arg(i, arg_tys[i]);
-                    self.gen_pattern(Some(value), typeenv, termenv, subpat, vars);
-                }
-                Some(term)
+                let input_val = input
+                    .to_value()
+                    .expect("Cannot match an =var pattern against root term");
+                self.add_match_int(input_val, ty, value);
             }
             &Pattern::Term(ty, term, ref args) => {
-                // Determine whether the term has an external extractor or not.
-                let termdata = &termenv.terms[term.index()];
-                let arg_tys = &termdata.arg_tys[..];
-                match &termdata.kind {
-                    &TermKind::EnumVariant { variant } => {
-                        let arg_values =
-                            self.add_match_variant(input.unwrap(), ty, arg_tys, variant);
-                        for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
-                            self.gen_pattern(Some(value), typeenv, termenv, subpat, vars);
+                match input {
+                    ValueOrArgs::ImplicitTermFromArgs(termid) => {
+                        assert_eq!(
+                            termid, term,
+                            "Cannot match a different term against root pattern"
+                        );
+                        let termdata = &termenv.terms[term.index()];
+                        let arg_tys = &termdata.arg_tys[..];
+                        for (i, subpat) in args.iter().enumerate() {
+                            let value = self.add_arg(i, arg_tys[i]);
+                            let subpat = match subpat {
+                                &TermArgPattern::Expr(..) => {
+                                    panic!("Should have been caught in typechecking")
+                                }
+                                &TermArgPattern::Pattern(ref pat) => pat,
+                            };
+                            self.gen_pattern(
+                                ValueOrArgs::Value(value),
+                                typeenv,
+                                termenv,
+                                subpat,
+                                vars,
+                            );
                         }
-                        None
                     }
-                    &TermKind::Regular { .. } => {
-                        let arg_values = self.add_extract(input.unwrap(), ty, arg_tys, term);
-                        for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
-                            self.gen_pattern(Some(value), typeenv, termenv, subpat, vars);
+                    ValueOrArgs::Value(input) => {
+                        // Determine whether the term has an external extractor or not.
+                        let termdata = &termenv.terms[term.index()];
+                        let arg_tys = &termdata.arg_tys[..];
+                        match &termdata.kind {
+                            &TermKind::Declared => {
+                                panic!("Pattern invocation of undefined term body");
+                            }
+                            &TermKind::EnumVariant { variant } => {
+                                let arg_values =
+                                    self.add_match_variant(input, ty, arg_tys, variant);
+                                for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
+                                    let subpat = match subpat {
+                                        &TermArgPattern::Pattern(ref pat) => pat,
+                                        _ => unreachable!("Should have been caught by sema"),
+                                    };
+                                    self.gen_pattern(
+                                        ValueOrArgs::Value(value),
+                                        typeenv,
+                                        termenv,
+                                        subpat,
+                                        vars,
+                                    );
+                                }
+                            }
+                            &TermKind::InternalConstructor
+                            | &TermKind::ExternalConstructor { .. } => {
+                                panic!("Should not invoke constructor in pattern");
+                            }
+                            &TermKind::InternalExtractor { .. } => {
+                                panic!("Should have been expanded away");
+                            }
+                            &TermKind::ExternalExtractor {
+                                ref arg_polarity, ..
+                            } => {
+                                // Evaluate all `input` args.
+                                let mut inputs = vec![];
+                                let mut input_tys = vec![];
+                                let mut output_tys = vec![];
+                                let mut output_pats = vec![];
+                                inputs.push(input);
+                                input_tys.push(termdata.ret_ty);
+                                for (arg, pol) in args.iter().zip(arg_polarity.iter()) {
+                                    match pol {
+                                        &ArgPolarity::Input => {
+                                            let expr = match arg {
+                                                &TermArgPattern::Expr(ref expr) => expr,
+                                                _ => panic!(
+                                                    "Should have been caught by typechecking"
+                                                ),
+                                            };
+                                            let mut seq = ExprSequence::default();
+                                            let value = seq.gen_expr(typeenv, termenv, expr, vars);
+                                            seq.add_return(expr.ty(), value);
+                                            let value = self.add_expr_seq(seq, value, expr.ty());
+                                            inputs.push(value);
+                                            input_tys.push(expr.ty());
+                                        }
+                                        &ArgPolarity::Output => {
+                                            let pat = match arg {
+                                                &TermArgPattern::Pattern(ref pat) => pat,
+                                                _ => panic!(
+                                                    "Should have been caught by typechecking"
+                                                ),
+                                            };
+                                            output_tys.push(pat.ty());
+                                            output_pats.push(pat);
+                                        }
+                                    }
+                                }
+
+                                // Invoke the extractor.
+                                let arg_values =
+                                    self.add_extract(inputs, input_tys, output_tys, term);
+
+                                for (pat, &val) in output_pats.iter().zip(arg_values.iter()) {
+                                    self.gen_pattern(
+                                        ValueOrArgs::Value(val),
+                                        typeenv,
+                                        termenv,
+                                        pat,
+                                        vars,
+                                    );
+                                }
+                            }
                         }
-                        Some(term)
                     }
                 }
             }
             &Pattern::And(_ty, ref children) => {
-                let input = input.unwrap();
                 for child in children {
-                    self.gen_pattern(Some(input), typeenv, termenv, child, vars);
+                    self.gen_pattern(input, typeenv, termenv, child, vars);
                 }
-                None
             }
             &Pattern::Wildcard(_ty) => {
                 // Nothing!
-                None
             }
         }
     }
@@ -319,63 +439,40 @@ impl ExprSequence {
     /// Creates a sequence of ExprInsts to generate the given
     /// expression value. Returns the value ID as well as the root
     /// term ID, if any.
-    ///
-    /// If `gen_final_construct` is false and the value is a
-    /// constructor call, this returns the arguments instead. This is
-    /// used when codegen'ing extractors for internal terms.
     fn gen_expr(
         &mut self,
         typeenv: &TypeEnv,
         termenv: &TermEnv,
         expr: &Expr,
-        vars: &HashMap<VarId, (Option<TermId>, Value)>,
-        gen_final_construct: bool,
-    ) -> (Option<TermId>, Vec<Value>) {
-        log::trace!(
-            "gen_expr: expr {:?} gen_final_construct {}",
-            expr,
-            gen_final_construct
-        );
+        vars: &HashMap<VarId, Value>,
+    ) -> Value {
+        log::trace!("gen_expr: expr {:?}", expr);
         match expr {
-            &Expr::ConstInt(ty, val) => (None, vec![self.add_const_int(ty, val)]),
+            &Expr::ConstInt(ty, val) => self.add_const_int(ty, val),
             &Expr::Let(_ty, ref bindings, ref subexpr) => {
                 let mut vars = vars.clone();
                 for &(var, _var_ty, ref var_expr) in bindings {
-                    let (var_value_term, var_value) =
-                        self.gen_expr(typeenv, termenv, &*var_expr, &vars, true);
-                    let var_value = var_value[0];
-                    vars.insert(var, (var_value_term, var_value));
+                    let var_value = self.gen_expr(typeenv, termenv, &*var_expr, &vars);
+                    vars.insert(var, var_value);
                 }
-                self.gen_expr(typeenv, termenv, &*subexpr, &vars, gen_final_construct)
+                self.gen_expr(typeenv, termenv, &*subexpr, &vars)
             }
-            &Expr::Var(_ty, var_id) => {
-                let (root_term, value) = vars.get(&var_id).cloned().unwrap();
-                (root_term, vec![value])
-            }
+            &Expr::Var(_ty, var_id) => vars.get(&var_id).cloned().unwrap(),
             &Expr::Term(ty, term, ref arg_exprs) => {
                 let termdata = &termenv.terms[term.index()];
                 let mut arg_values_tys = vec![];
-                log::trace!("Term gen_expr term {}", term.index());
                 for (arg_ty, arg_expr) in termdata.arg_tys.iter().cloned().zip(arg_exprs.iter()) {
-                    log::trace!("generating for arg_expr {:?}", arg_expr);
-                    arg_values_tys.push((
-                        self.gen_expr(typeenv, termenv, &*arg_expr, &vars, true).1[0],
-                        arg_ty,
-                    ));
+                    arg_values_tys
+                        .push((self.gen_expr(typeenv, termenv, &*arg_expr, &vars), arg_ty));
                 }
                 match &termdata.kind {
-                    &TermKind::EnumVariant { variant } => (
-                        None,
-                        vec![self.add_create_variant(&arg_values_tys[..], ty, variant)],
-                    ),
-                    &TermKind::Regular { .. } if !gen_final_construct => (
-                        Some(termdata.id),
-                        arg_values_tys.into_iter().map(|(val, _ty)| val).collect(),
-                    ),
-                    &TermKind::Regular { .. } => (
-                        Some(termdata.id),
-                        vec![self.add_construct(&arg_values_tys[..], ty, term)],
-                    ),
+                    &TermKind::EnumVariant { variant } => {
+                        self.add_create_variant(&arg_values_tys[..], ty, variant)
+                    }
+                    &TermKind::InternalConstructor | &TermKind::ExternalConstructor { .. } => {
+                        self.add_construct(&arg_values_tys[..], ty, term)
+                    }
+                    _ => panic!("Should have been caught by typechecking"),
                 }
             }
         }
@@ -387,114 +484,34 @@ pub fn lower_rule(
     tyenv: &TypeEnv,
     termenv: &TermEnv,
     rule: RuleId,
-    is_forward_dir: bool,
-) -> Option<(PatternSequence, ExprSequence, TermId)> {
+) -> (PatternSequence, ExprSequence) {
     let mut pattern_seq: PatternSequence = Default::default();
     let mut expr_seq: ExprSequence = Default::default();
     expr_seq.pos = termenv.rules[rule.index()].pos;
 
-    // Lower the pattern, starting from the root input value.
     let ruledata = &termenv.rules[rule.index()];
     let mut vars = HashMap::new();
+    let root_term = ruledata
+        .lhs
+        .root_term()
+        .expect("Pattern must have a term at the root");
 
-    log::trace!(
-        "lower_rule: ruledata {:?} forward {}",
-        ruledata,
-        is_forward_dir
+    log::trace!("lower_rule: ruledata {:?}", ruledata,);
+
+    // Lower the pattern, starting from the root input value.
+    pattern_seq.gen_pattern(
+        ValueOrArgs::ImplicitTermFromArgs(root_term),
+        tyenv,
+        termenv,
+        &ruledata.lhs,
+        &mut vars,
     );
 
-    if is_forward_dir {
-        let can_do_forward = match &ruledata.lhs {
-            &Pattern::Term(..) => true,
-            _ => false,
-        };
-        if !can_do_forward {
-            return None;
-        }
-
-        let lhs_root_term = pattern_seq.gen_pattern(None, tyenv, termenv, &ruledata.lhs, &mut vars);
-        let root_term = match lhs_root_term {
-            Some(t) => t,
-            None => {
-                return None;
-            }
-        };
-
-        // Lower the expression, making use of the bound variables
-        // from the pattern.
-        let (_, rhs_root_vals) = expr_seq.gen_expr(
-            tyenv,
-            termenv,
-            &ruledata.rhs,
-            &vars,
-            /* final_construct = */ true,
-        );
-        // Return the root RHS value.
-        let output_ty = ruledata.rhs.ty();
-        assert_eq!(rhs_root_vals.len(), 1);
-        expr_seq.add_return(output_ty, rhs_root_vals[0]);
-        Some((pattern_seq, expr_seq, root_term))
-    } else {
-        let can_reverse = match &ruledata.rhs {
-            &Expr::Term(..) => true,
-            _ => false,
-        };
-        if !can_reverse {
-            return None;
-        }
-
-        let arg = pattern_seq.add_arg(0, ruledata.lhs.ty());
-        let _ = pattern_seq.gen_pattern(Some(arg), tyenv, termenv, &ruledata.lhs, &mut vars);
-        let (rhs_root_term, rhs_root_vals) = expr_seq.gen_expr(
-            tyenv,
-            termenv,
-            &ruledata.rhs,
-            &vars,
-            /* final_construct = */ false,
-        );
-
-        let root_term = match rhs_root_term {
-            Some(t) => t,
-            None => {
-                return None;
-            }
-        };
-        let termdata = &termenv.terms[root_term.index()];
-        for (i, (val, ty)) in rhs_root_vals
-            .into_iter()
-            .zip(termdata.arg_tys.iter())
-            .enumerate()
-        {
-            expr_seq.add_multi_return(i, *ty, val);
-        }
-
-        Some((pattern_seq, expr_seq, root_term))
-    }
-}
-
-/// Trim the final Construct and Return ops in an ExprSequence in
-/// order to allow the extractor to be codegen'd.
-pub fn trim_expr_for_extractor(mut expr: ExprSequence) -> ExprSequence {
-    let ret_inst = expr.insts.pop().unwrap();
-    let retval = match ret_inst {
-        ExprInst::Return { value, .. } => value,
-        _ => panic!("Last instruction is not a return"),
-    };
-    assert_eq!(
-        retval,
-        Value::Expr {
-            inst: InstId(expr.insts.len() - 1),
-            output: 0
-        }
-    );
-    let construct_inst = expr.insts.pop().unwrap();
-    let inputs = match construct_inst {
-        ExprInst::Construct { inputs, .. } => inputs,
-        _ => panic!("Returned value is not a construct call"),
-    };
-    for (i, (value, ty)) in inputs.into_iter().enumerate() {
-        expr.add_multi_return(i, ty, value);
-    }
-
-    expr
+    // Lower the expression, making use of the bound variables
+    // from the pattern.
+    let rhs_root_val = expr_seq.gen_expr(tyenv, termenv, &ruledata.rhs, &vars);
+    // Return the root RHS value.
+    let output_ty = ruledata.rhs.ty();
+    expr_seq.add_return(output_ty, rhs_root_val);
+    (pattern_seq, expr_seq)
 }

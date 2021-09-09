@@ -18,7 +18,7 @@ enum LexerInput<'a> {
     File { content: String, filename: String },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash, PartialOrd, Ord)]
 pub struct Pos {
     pub file: usize,
     pub offset: usize,
@@ -41,6 +41,8 @@ pub enum Token {
     RParen,
     Symbol(String),
     Int(i64),
+    At,
+    Lt,
 }
 
 impl<'a> Lexer<'a> {
@@ -133,7 +135,7 @@ impl<'a> Lexer<'a> {
         }
         fn is_sym_other_char(c: u8) -> bool {
             match c {
-                b'(' | b')' | b';' => false,
+                b'(' | b')' | b';' | b'@' | b'<' => false,
                 c if c.is_ascii_whitespace() => false,
                 _ => true,
             }
@@ -167,6 +169,14 @@ impl<'a> Lexer<'a> {
             b')' => {
                 self.advance_pos();
                 Some((char_pos, Token::RParen))
+            }
+            b'@' => {
+                self.advance_pos();
+                Some((char_pos, Token::At))
+            }
+            b'<' => {
+                self.advance_pos();
+                Some((char_pos, Token::Lt))
             }
             c if is_sym_first_char(c) => {
                 let start = self.pos.offset;
