@@ -826,24 +826,20 @@ where
         Opcode::SwidenHigh => unimplemented!("SwidenHigh"),
         Opcode::UwidenLow => {
             let new_type = ctrl_ty.merge_lanes().unwrap();
-            let mut new_vec = SimdVec::new();
-            let mut arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
-            arg0.truncate(new_type.lane_count() as usize);
-            for lane in arg0 {
-                let lane = lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type()))?;
-                new_vec.push(lane);
-            }
+            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
+                .into_iter()
+                .take(new_type.lane_count() as usize)
+                .map(|lane| lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type())))
+                .collect::<ValueResult<Vec<_>>>()?;
             assign(vectorizelanes(&new_vec, new_type)?)
         }
         Opcode::UwidenHigh => {
             let new_type = ctrl_ty.merge_lanes().unwrap();
-            let mut new_vec = SimdVec::new();
-            let mut arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
-            arg0.drain(0..new_type.lane_count() as usize);
-            for lane in arg0 {
-                let lane = lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type()))?;
-                new_vec.push(lane);
-            }
+            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
+                .into_iter()
+                .skip(new_type.lane_count() as usize)
+                .map(|lane| lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type())))
+                .collect::<ValueResult<Vec<_>>>()?;
             assign(vectorizelanes(&new_vec, new_type)?)
         }
         Opcode::FcvtToUint => unimplemented!("FcvtToUint"),
