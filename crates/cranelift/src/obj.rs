@@ -114,9 +114,13 @@ pub struct ObjectBuilder<'a> {
     /// a relocation against a libcall.
     libcalls: HashMap<LibCall, SymbolId>,
 
+    windows_unwind_info_id: Option<SectionId>,
+
     /// Packed form of windows unwind tables which, if present, will get emitted
     /// to a windows-specific unwind info section.
     windows_unwind_info: Vec<RUNTIME_FUNCTION>,
+
+    systemv_unwind_info_id: Option<SectionId>,
 
     /// Pending unwinding information for DWARF-based platforms. This is used to
     /// build a `.eh_frame` lookalike at the very end of object building.
@@ -139,6 +143,11 @@ pub struct ObjectBuilder<'a> {
     /// In-progress text section that we're using cranelift's `MachBuffer` to
     /// build to resolve relocations (calls) between functions.
     pub text: Box<dyn TextSectionBuilder>,
+
+    /// The unwind info _must_ come directly after the text section. Our FDE's
+    /// instructions are encoded to rely on this placement. We use this `bool`
+    /// for debug assertions to ensure that we get the ordering correct.
+    added_unwind_info: bool,
 }
 
 // This is a mirror of `RUNTIME_FUNCTION` in the Windows API, but defined here
@@ -190,7 +199,9 @@ impl<'a> ObjectBuilder<'a> {
             text_section,
             func_symbols,
             libcalls,
+            windows_unwind_info_id: None,
             windows_unwind_info: Vec::new(),
+            systemv_unwind_info_id: None,
             systemv_unwind_info: Vec::new(),
             relocations: Vec::new(),
             text: match isa.get_mach_backend() {
@@ -199,6 +210,7 @@ impl<'a> ObjectBuilder<'a> {
                 ),
                 None => Box::new(DummyBuilder::default()),
             },
+            added_unwind_info: false,
         }
     }
 
@@ -332,6 +344,7 @@ impl<'a> ObjectBuilder<'a> {
     ///
     /// This is expected to be called in-order for ascending `index` values.
     pub fn func(&mut self, index: DefinedFuncIndex, func: &'a CompiledFunction) -> Range<u64> {
+        assert!(!self.added_unwind_info);
         let index = self.module.func_index(index);
         let name = obj::func_symbol_name(index);
         let (symbol_id, range) = self.append_func(true, name.into_bytes(), func);
@@ -340,6 +353,7 @@ impl<'a> ObjectBuilder<'a> {
     }
 
     pub fn trampoline(&mut self, sig: SignatureIndex, func: &'a CompiledFunction) -> Trampoline {
+        assert!(!self.added_unwind_info);
         let name = obj::trampoline_symbol_name(sig);
         let (_, range) = self.append_func(false, name.into_bytes(), func);
         Trampoline {
@@ -350,6 +364,11 @@ impl<'a> ObjectBuilder<'a> {
     }
 
     pub fn dwarf_sections(&mut self, sections: &[DwarfSection]) -> Result<()> {
+        assert!(
+            self.added_unwind_info,
+            "can't add dwarf yet; unwind info must directly follow the text section"
+        );
+
         // If we have DWARF data, write it in the object file.
         let (debug_bodies, debug_relocs): (Vec<_>, Vec<_>) = sections
             .iter()
@@ -392,6 +411,29 @@ impl<'a> ObjectBuilder<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn unwind_info(&mut self) {
+        assert!(!self.added_unwind_info);
+
+        if self.windows_unwind_info.len() > 0 {
+            let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
+            self.windows_unwind_info_id = Some(self.obj.add_section(
+                segment,
+                b"_wasmtime_winx64_unwind".to_vec(),
+                SectionKind::ReadOnlyData,
+            ));
+        }
+        if self.systemv_unwind_info.len() > 0 {
+            let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
+            self.systemv_unwind_info_id = Some(self.obj.add_section(
+                segment,
+                b".eh_frame".to_vec(),
+                SectionKind::ReadOnlyData,
+            ));
+        }
+
+        self.added_unwind_info = true;
     }
 
     pub fn finish(&mut self) -> Result<()> {
@@ -438,6 +480,7 @@ impl<'a> ObjectBuilder<'a> {
         if self.systemv_unwind_info.len() > 0 {
             self.append_systemv_unwind_info();
         }
+
         Ok(())
     }
 
@@ -454,17 +497,13 @@ impl<'a> ObjectBuilder<'a> {
         // This may need updates for other platforms.
         assert_eq!(self.obj.architecture(), Architecture::X86_64);
 
+        let section_id = self.windows_unwind_info_id.unwrap();
+
         // Page-align the text section so the unwind info can reside on a
         // separate page that doesn't need executable permissions.
         self.obj
             .append_section_data(self.text_section, &[], self.isa.code_section_alignment());
 
-        let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
-        let section_id = self.obj.add_section(
-            segment,
-            b"_wasmtime_winx64_unwind".to_vec(),
-            SectionKind::ReadOnlyData,
-        );
         let mut unwind_info = Vec::with_capacity(self.windows_unwind_info.len() * 3 * 4);
         for info in self.windows_unwind_info.iter() {
             unwind_info.extend_from_slice(&info.begin.to_le_bytes());
@@ -513,12 +552,7 @@ impl<'a> ObjectBuilder<'a> {
     /// such as being purely read-only instead of read/execute like the code
     /// bits.
     fn append_systemv_unwind_info(&mut self) {
-        let segment = self.obj.segment_name(StandardSegment::Data).to_vec();
-        let section_id = self.obj.add_section(
-            segment,
-            b".eh_frame".to_vec(),
-            SectionKind::ReadOnlyData,
-        );
+        let section_id = self.systemv_unwind_info_id.unwrap();
         let mut cie = self
             .isa
             .create_systemv_cie()

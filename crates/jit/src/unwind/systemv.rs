@@ -25,6 +25,12 @@ impl UnwindRegistration {
         unwind_info: *mut u8,
         unwind_len: usize,
     ) -> Result<UnwindRegistration> {
+        debug_assert_eq!(
+            unwind_info as usize % region::page::size(),
+            0,
+            "The unwind info must always be aligned to a page"
+        );
+
         let mut registrations = Vec::new();
         if cfg!(any(
             all(target_os = "linux", target_env = "gnu"),
