@@ -1,8 +1,10 @@
-- Optimizations
-  - Infallible patterns; optimize away control flow when possible.
-  - Don't do the closure-wrapping thing for expressions inside of patterns.
+- Document the semantics of the DSL!
 
-- Document semantics carefully, especially wrt extractors.
+- Clean up and factor the codegen properly.
 
-- Build out an initial set of bindings for Cranelift LowerCtx with extractors
-  for instruction info.
+- Look into whether optimizations are possible:
+  - More in-depth fallibility analysis (avoid failure edges where possible)
+
+- Slightly nicer human-readable generated code
+  - Include full rule body (S-expression) in comment, not just line number
+  - Inline some expressions (no more `let val23 = 1234; ... f(val23);`)

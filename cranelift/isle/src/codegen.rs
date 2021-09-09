@@ -567,7 +567,7 @@ impl<'a> Codegen<'a> {
     ) -> Result<(), Error> {
         writeln!(
             code,
-            "{}fn {}(&mut self, {}) -> Option<({},)>;",
+            "{}fn {}(&mut self, {}) -> {}({},){};",
             indent,
             sig.func_name,
             sig.arg_tys
@@ -576,11 +576,13 @@ impl<'a> Codegen<'a> {
                 .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
                 .collect::<Vec<_>>()
                 .join(", "),
+            if sig.infallible { "" } else { "Option<" },
             sig.ret_tys
                 .iter()
                 .map(|&ty| self.type_name(ty, /* by_ref = */ false))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            if sig.infallible { "" } else { ">" },
         )?;
         Ok(())
     }
@@ -822,7 +824,10 @@ impl<'a> Codegen<'a> {
                 self.define_val(&output, ctx, /* is_ref = */ false, ty);
             }
             &ExprInst::Construct {
-                ref inputs, term, ..
+                ref inputs,
+                term,
+                infallible,
+                ..
             } => {
                 let mut input_exprs = vec![];
                 for (input_value, _) in inputs {
@@ -838,13 +843,15 @@ impl<'a> Codegen<'a> {
                 let termdata = &self.termenv.terms[term.index()];
                 let sig = termdata.to_sig(self.typeenv).unwrap();
                 assert_eq!(input_exprs.len(), sig.arg_tys.len());
+                let fallible_try = if infallible { "" } else { "?" };
                 writeln!(
                     code,
-                    "{}let {} = {}(ctx, {});",
+                    "{}let {} = {}(ctx, {}){};",
                     indent,
                     outputname,
                     sig.full_name,
                     input_exprs.join(", "),
+                    fallible_try,
                 )?;
                 self.define_val(&output, ctx, /* is_ref = */ false, termdata.ret_ty);
             }
@@ -905,7 +912,6 @@ impl<'a> Codegen<'a> {
                     _ => true,
                 };
                 writeln!(code, "{}let {} = arg{};", indent, outputname, index)?;
-                writeln!(code, "{}{{", indent)?;
                 self.define_val(
                     &Value::Pattern {
                         inst: id,
@@ -961,6 +967,7 @@ impl<'a> Codegen<'a> {
                 ref inputs,
                 ref output_tys,
                 term,
+                infallible,
                 ..
             } => {
                 let termdata = &self.termenv.terms[term.index()];
@@ -983,18 +990,51 @@ impl<'a> Codegen<'a> {
                     })
                     .collect::<Vec<_>>();
 
+                if infallible {
+                    writeln!(
+                        code,
+                        "{}let ({},) = {}(ctx, {});",
+                        indent,
+                        output_binders.join(", "),
+                        sig.full_name,
+                        input_values.join(", "),
+                    )?;
+                    Ok(true)
+                } else {
+                    writeln!(
+                        code,
+                        "{}if let Some(({},)) = {}(ctx, {}) {{",
+                        indent,
+                        output_binders.join(", "),
+                        sig.full_name,
+                        input_values.join(", "),
+                    )?;
+                    Ok(false)
+                }
+            }
+            &PatternInst::Expr {
+                ref seq, output_ty, ..
+            } if seq.is_const_int().is_some() => {
+                let (ty, val) = seq.is_const_int().unwrap();
+                assert_eq!(ty, output_ty);
+
+                let output = Value::Pattern {
+                    inst: id,
+                    output: 0,
+                };
                 writeln!(
                     code,
-                    "{}if let Some(({},)) = {}(ctx, {}) {{",
+                    "{}let {} = {};",
                     indent,
-                    output_binders.join(", "),
-                    sig.full_name,
-                    input_values.join(", "),
+                    self.value_name(&output),
+                    val
                 )?;
-
-                Ok(false)
+                self.define_val(&output, ctx, /* is_ref = */ false, ty);
+                Ok(true)
             }
-            &PatternInst::Expr { ref seq, output_ty, .. } => {
+            &PatternInst::Expr {
+                ref seq, output_ty, ..
+            } => {
                 let closure_name = format!("closure{}", id.index());
                 writeln!(code, "{}let {} = || {{", indent, closure_name)?;
                 let subindent = format!("{}    ", indent);
@@ -1124,9 +1164,12 @@ impl<'a> Codegen<'a> {
                                 let id = InstId(depth);
                                 let infallible =
                                     self.generate_pattern_inst(code, id, op, indent, ctx)?;
+                                let i = if infallible { indent } else { &subindent[..] };
                                 let sub_returned =
-                                    self.generate_body(code, depth + 1, node, &subindent, ctx)?;
-                                writeln!(code, "{}}}", indent)?;
+                                    self.generate_body(code, depth + 1, node, i, ctx)?;
+                                if !infallible {
+                                    writeln!(code, "{}}}", indent)?;
+                                }
                                 if infallible && sub_returned {
                                     returned = true;
                                     break;

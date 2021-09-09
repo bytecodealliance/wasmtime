@@ -120,6 +120,8 @@ pub enum TermKind {
         name: Sym,
         /// Which arguments of the extractor are inputs and which are outputs?
         arg_polarity: Vec<ArgPolarity>,
+        /// Is the external extractor infallible?
+        infallible: bool,
     },
     /// A term defined solely by an external constructor function.
     ExternalConstructor {
@@ -138,6 +140,7 @@ pub struct ExternalSig {
     pub full_name: String,
     pub arg_tys: Vec<TypeId>,
     pub ret_tys: Vec<TypeId>,
+    pub infallible: bool,
 }
 
 impl Term {
@@ -180,10 +183,12 @@ impl Term {
                 full_name: format!("C::{}", tyenv.syms[name.index()]),
                 arg_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
+                infallible: true,
             }),
             &TermKind::ExternalExtractor {
                 name,
                 ref arg_polarity,
+                infallible,
             } => {
                 let mut arg_tys = vec![];
                 let mut ret_tys = vec![];
@@ -203,6 +208,7 @@ impl Term {
                     full_name: format!("C::{}", tyenv.syms[name.index()]),
                     arg_tys,
                     ret_tys,
+                    infallible,
                 })
             }
             &TermKind::InternalConstructor { .. } => {
@@ -212,6 +218,7 @@ impl Term {
                     full_name: name,
                     arg_tys: self.arg_tys.clone(),
                     ret_tys: vec![self.ret_ty],
+                    infallible: false,
                 })
             }
             _ => None,
@@ -688,6 +695,7 @@ impl TermEnv {
                     ref func,
                     pos,
                     ref arg_polarity,
+                    infallible,
                 }) => {
                     let term_sym = tyenv.intern_mut(term);
                     let func_sym = tyenv.intern_mut(func);
@@ -717,6 +725,7 @@ impl TermEnv {
                             termdata.kind = TermKind::ExternalExtractor {
                                 name: func_sym,
                                 arg_polarity,
+                                infallible,
                             };
                         }
                         _ => {

@@ -256,8 +256,17 @@ impl<'a> Parser<'a> {
             })
         } else if self.is_sym_str("extractor") {
             self.symbol()?;
+
+            let infallible = if self.is_sym_str("infallible") {
+                self.symbol()?;
+                true
+            } else {
+                false
+            };
+
             let term = self.parse_ident()?;
             let func = self.parse_ident()?;
+
             let arg_polarity = if self.is_lparen() {
                 let mut pol = vec![];
                 self.lparen()?;
@@ -284,6 +293,7 @@ impl<'a> Parser<'a> {
                 func,
                 pos: pos.unwrap(),
                 arg_polarity,
+                infallible,
             })
         } else {
             Err(self.error(

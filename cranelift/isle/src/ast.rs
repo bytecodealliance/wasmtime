@@ -171,6 +171,11 @@ pub enum Extern {
         /// more precisely the term value that we are extracting, is
         /// an "input").
         arg_polarity: Option<Vec<ArgPolarity>>,
+        /// Infallibility: if an external extractor returns `(T1, T2,
+        /// ...)` rather than `Option<(T1, T2, ...)>`, and hence can
+        /// never fail, it is declared as such and allows for slightly
+        /// better code to be generated.
+        infallible: bool,
     },
     /// An external constructor: `(constructor Term rustfunc)` form.
     Constructor {

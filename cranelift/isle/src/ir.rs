@@ -50,6 +50,7 @@ pub enum PatternInst {
         input_tys: Vec<TypeId>,
         output_tys: Vec<TypeId>,
         term: TermId,
+        infallible: bool,
     },
 
     /// Evaluate an expression and provide the given value as the
@@ -80,6 +81,7 @@ pub enum ExprInst {
         inputs: Vec<(Value, TypeId)>,
         ty: TypeId,
         term: TermId,
+        infallible: bool,
     },
 
     /// Set the Nth return value. Produces no values.
@@ -128,6 +130,34 @@ pub struct ExprSequence {
     pub insts: Vec<ExprInst>,
     /// Position at which the rule producing this sequence was located.
     pub pos: Pos,
+}
+
+impl ExprSequence {
+    pub fn is_const_int(&self) -> Option<(TypeId, i64)> {
+        if self.insts.len() == 2 && matches!(&self.insts[1], &ExprInst::Return { .. }) {
+            match &self.insts[0] {
+                &ExprInst::ConstInt { ty, val } => Some((ty, val)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn is_const_variant(&self) -> Option<(TypeId, VariantId)> {
+        if self.insts.len() == 2 && matches!(&self.insts[1], &ExprInst::Return { .. }) {
+            match &self.insts[0] {
+                &ExprInst::CreateVariant {
+                    ref inputs,
+                    ty,
+                    variant,
+                } if inputs.len() == 0 => Some((ty, variant)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -195,6 +225,7 @@ impl PatternSequence {
         input_tys: Vec<TypeId>,
         output_tys: Vec<TypeId>,
         term: TermId,
+        infallible: bool,
     ) -> Vec<Value> {
         let inst = InstId(self.insts.len());
         let mut outs = vec![];
@@ -208,6 +239,7 @@ impl PatternSequence {
             input_tys,
             output_tys,
             term,
+            infallible,
         });
         outs
     }
@@ -320,7 +352,9 @@ impl PatternSequence {
                                 panic!("Should have been expanded away");
                             }
                             &TermKind::ExternalExtractor {
-                                ref arg_polarity, ..
+                                ref arg_polarity,
+                                infallible,
+                                ..
                             } => {
                                 // Evaluate all `input` args.
                                 let mut inputs = vec![];
@@ -359,8 +393,8 @@ impl PatternSequence {
                                 }
 
                                 // Invoke the extractor.
-                                let arg_values =
-                                    self.add_extract(inputs, input_tys, output_tys, term);
+                                let arg_values = self
+                                    .add_extract(inputs, input_tys, output_tys, term, infallible);
 
                                 for (pat, &val) in output_pats.iter().zip(arg_values.iter()) {
                                     self.gen_pattern(
@@ -417,10 +451,21 @@ impl ExprSequence {
         Value::Expr { inst, output: 0 }
     }
 
-    fn add_construct(&mut self, inputs: &[(Value, TypeId)], ty: TypeId, term: TermId) -> Value {
+    fn add_construct(
+        &mut self,
+        inputs: &[(Value, TypeId)],
+        ty: TypeId,
+        term: TermId,
+        infallible: bool,
+    ) -> Value {
         let inst = InstId(self.insts.len());
         let inputs = inputs.iter().cloned().collect();
-        self.add_inst(ExprInst::Construct { inputs, ty, term });
+        self.add_inst(ExprInst::Construct {
+            inputs,
+            ty,
+            term,
+            infallible,
+        });
         Value::Expr { inst, output: 0 }
     }
 
@@ -469,8 +514,21 @@ impl ExprSequence {
                     &TermKind::EnumVariant { variant } => {
                         self.add_create_variant(&arg_values_tys[..], ty, variant)
                     }
-                    &TermKind::InternalConstructor | &TermKind::ExternalConstructor { .. } => {
-                        self.add_construct(&arg_values_tys[..], ty, term)
+                    &TermKind::InternalConstructor => {
+                        self.add_construct(
+                            &arg_values_tys[..],
+                            ty,
+                            term,
+                            /* infallible = */ true,
+                        )
+                    }
+                    &TermKind::ExternalConstructor { .. } => {
+                        self.add_construct(
+                            &arg_values_tys[..],
+                            ty,
+                            term,
+                            /* infallible = */ false,
+                        )
                     }
                     _ => panic!("Should have been caught by typechecking"),
                 }

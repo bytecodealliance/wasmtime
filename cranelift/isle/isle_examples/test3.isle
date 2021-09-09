@@ -10,10 +10,10 @@
 (type u32 (primitive u32))
 
 (decl Op (Opcode) Inst)
-(extern extractor Op get_opcode)
+(extern extractor infallible Op get_opcode)
 
 (decl InstInput (InstInput u32) Inst)
-(extern extractor InstInput get_inst_input (out in))
+(extern extractor infallible InstInput get_inst_input (out in))
 
 (decl Producer (Inst) InstInput)
 (extern extractor Producer get_input_producer)
