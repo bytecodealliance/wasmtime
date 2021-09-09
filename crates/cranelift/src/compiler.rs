@@ -271,6 +271,8 @@ impl wasmtime_environ::Compiler for Compiler {
             trampolines.push(builder.trampoline(*i, &func));
         }
 
+        builder.unwind_info();
+
         if emit_dwarf && funcs.len() > 0 {
             let ofs = VMOffsets::new(
                 self.isa
@@ -330,6 +332,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut builder = ObjectBuilder::new(obj, &module, &*self.isa);
         let a = builder.trampoline(SignatureIndex::new(0), &host_to_wasm);
         let b = builder.trampoline(SignatureIndex::new(1), &wasm_to_host);
+        builder.unwind_info();
         builder.finish()?;
         Ok((a, b))
     }

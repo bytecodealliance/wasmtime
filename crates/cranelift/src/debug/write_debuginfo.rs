@@ -54,6 +54,9 @@ fn emit_dwarf_sections(
     sections.for_each_mut(|id, s| -> anyhow::Result<()> {
         let name = id.name();
         let body = s.writer.take();
+        if body.is_empty() {
+            return Ok(());
+        }
         let mut relocs = vec![];
         ::std::mem::swap(&mut relocs, &mut s.relocs);
         result.push(DwarfSection { name, body, relocs });
