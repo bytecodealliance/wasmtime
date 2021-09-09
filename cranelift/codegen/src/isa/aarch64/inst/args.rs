@@ -550,6 +550,8 @@ impl OperandSize {
 
     /// Convert from an integer type into the smallest size that fits.
     pub fn from_ty(ty: Type) -> OperandSize {
+        debug_assert!(!ty.is_vector());
+
         Self::from_bits(ty_bits(ty))
     }
 
@@ -611,6 +613,8 @@ impl ScalarSize {
 
     /// Convert from a type into the smallest size that fits.
     pub fn from_ty(ty: Type) -> ScalarSize {
+        debug_assert!(!ty.is_vector());
+
         Self::from_bits(ty_bits(ty))
     }
 
@@ -655,6 +659,8 @@ impl VectorSize {
 
     /// Convert from a type into a vector operand size.
     pub fn from_ty(ty: Type) -> VectorSize {
+        debug_assert!(ty.is_vector());
+
         match ty {
             B8X16 => VectorSize::Size8x16,
             B16X8 => VectorSize::Size16x8,

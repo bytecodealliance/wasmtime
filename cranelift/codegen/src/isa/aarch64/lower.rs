@@ -1098,10 +1098,7 @@ pub(crate) fn lower_vector_compare<C: LowerCtx<I = Inst>>(
     ty: Type,
     cond: Cond,
 ) -> CodegenResult<()> {
-    let is_float = match ty {
-        F32X4 | F64X2 => true,
-        _ => false,
-    };
+    let is_float = ty.lane_type().is_float();
     let size = VectorSize::from_ty(ty);
 
     if is_float && (cond == Cond::Vc || cond == Cond::Vs) {
@@ -1831,14 +1828,14 @@ fn load_op_to_ty(op: Opcode) -> Option<Type> {
 /// a load can sometimes be merged into another operation.
 pub(crate) fn lower_load<
     C: LowerCtx<I = Inst>,
-    F: FnMut(&mut C, ValueRegs<Writable<Reg>>, Type, AMode),
+    F: FnMut(&mut C, ValueRegs<Writable<Reg>>, Type, AMode) -> CodegenResult<()>,
 >(
     ctx: &mut C,
     ir_inst: IRInst,
     inputs: &[InsnInput],
     output: InsnOutput,
     mut f: F,
-) {
+) -> CodegenResult<()> {
     let op = ctx.data(ir_inst).opcode();
 
     let elem_ty = load_op_to_ty(op).unwrap_or_else(|| ctx.output_ty(ir_inst, 0));
@@ -1847,7 +1844,7 @@ pub(crate) fn lower_load<
     let mem = lower_address(ctx, elem_ty, &inputs[..], off);
     let rd = get_output_reg(ctx, output);
 
-    f(ctx, rd, elem_ty, mem);
+    f(ctx, rd, elem_ty, mem)
 }
 
 pub(crate) fn emit_shl_i128<C: LowerCtx<I = Inst>>(
