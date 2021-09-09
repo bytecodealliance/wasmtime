@@ -894,7 +894,7 @@ impl Module {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn get_export<'module>(&'module self, name: &'module str) -> Option<ExternType> {
+    pub fn get_export(&self, name: &str) -> Option<ExternType> {
         let module = self.compiled_module().module();
         let entity_index = module.exports.get(name)?;
         Some(ExternType::from_wasmtime(
