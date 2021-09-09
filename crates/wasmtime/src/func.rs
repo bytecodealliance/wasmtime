@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
-    AsContext, AsContextMut, Engine, Extern, FuncType, Instance, InterruptHandle, StoreContext,
-    StoreContextMut, Trap, Val, ValType,
+    AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, InterruptHandle,
+    StoreContext, StoreContextMut, Trap, Val, ValType,
 };
 use anyhow::{bail, Context as _, Result};
 use std::cmp::max;
@@ -845,7 +845,7 @@ impl Func {
         values_vec: *mut u128,
         func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
     ) -> Result<(), Trap> {
-        caller.store.0.entering_native_hook()?;
+        caller.store.0.call_hook(CallHook::CallingHost)?;
 
         // Translate the raw JIT arguments in `values_vec` into a `Val` which
         // we'll be passing as a slice. The storage for our slice-of-`Val` we'll
@@ -895,7 +895,7 @@ impl Func {
         // hostcall to reuse our own storage.
         val_vec.truncate(0);
         caller.store.0.save_hostcall_val_storage(val_vec);
-        caller.store.0.exiting_native_hook()?;
+        caller.store.0.call_hook(CallHook::ReturningFromHost)?;
         Ok(())
     }
 
@@ -1044,7 +1044,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     unsafe {
         let exit = enter_wasm(store)?;
 
-        if let Err(trap) = store.0.exiting_native_hook() {
+        if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
             exit_wasm(store, exit);
             return Err(trap);
         }
@@ -1055,7 +1055,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
             closure,
         );
         exit_wasm(store, exit);
-        store.0.entering_native_hook()?;
+        store.0.call_hook(CallHook::ReturningFromWasm)?;
         result.map_err(Trap::from_runtime_box)
     }
 }
@@ -1741,7 +1741,7 @@ macro_rules! impl_into_func {
 
                         let ret = {
                             panic::catch_unwind(AssertUnwindSafe(|| {
-                                if let Err(trap) = caller.store.0.entering_native_hook() {
+                                if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
                                     return R::fallible_from_trap(trap);
                                 }
                                 $(let $args = $args::from_abi($args, caller.store.0);)*
@@ -1749,7 +1749,7 @@ macro_rules! impl_into_func {
                                     caller.sub_caller(),
                                     $( $args, )*
                                 );
-                                if let Err(trap) = caller.store.0.exiting_native_hook() {
+                                if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
                                     return R::fallible_from_trap(trap);
                                 }
                                 r.into_fallible()
