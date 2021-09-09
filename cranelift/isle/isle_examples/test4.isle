@@ -19,3 +19,16 @@
       (Ext1 x)
       (Ext2 =x)))
   (C #t))
+
+(type Opcode (enum A B C))
+(type MachInst (enum D E F))
+(decl Lower2 (Opcode) MachInst)
+(rule
+  (Lower2 (Opcode.A))
+  (MachInst.D))
+(rule
+  (Lower2 (Opcode.B))
+  (MachInst.E))
+(rule
+  (Lower2 (Opcode.C))
+  (MachInst.F))
