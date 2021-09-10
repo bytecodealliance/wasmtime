@@ -147,7 +147,7 @@ impl<'a> Parser<'a> {
                 ),
             ));
         }
-        Ok(Ident(s.to_string()))
+        Ok(Ident(s.to_string(), pos))
     }
 
     fn parse_ident(&mut self) -> ParseResult<Ident> {
@@ -180,7 +180,8 @@ impl<'a> Parser<'a> {
             self.symbol()?;
             let primitive_ident = self.parse_ident()?;
             self.rparen()?;
-            Ok(TypeValue::Primitive(primitive_ident))
+            let pos = pos.unwrap();
+            Ok(TypeValue::Primitive(primitive_ident, pos))
         } else if self.is_sym_str("enum") {
             self.symbol()?;
             let mut variants = vec![];
@@ -189,7 +190,8 @@ impl<'a> Parser<'a> {
                 variants.push(variant);
             }
             self.rparen()?;
-            Ok(TypeValue::Enum(variants))
+            let pos = pos.unwrap();
+            Ok(TypeValue::Enum(variants, pos))
         } else {
             Err(self.error(pos.unwrap(), "Unknown type definition".to_string()))
         }
@@ -197,12 +199,15 @@ impl<'a> Parser<'a> {
 
     fn parse_type_variant(&mut self) -> ParseResult<Variant> {
         if self.is_sym() {
+            let pos = self.pos().unwrap();
             let name = self.parse_ident()?;
             Ok(Variant {
                 name,
                 fields: vec![],
+                pos,
             })
         } else {
+            let pos = self.pos();
             self.lparen()?;
             let name = self.parse_ident()?;
             let mut fields = vec![];
@@ -210,16 +215,19 @@ impl<'a> Parser<'a> {
                 fields.push(self.parse_type_field()?);
             }
             self.rparen()?;
-            Ok(Variant { name, fields })
+            let pos = pos.unwrap();
+            Ok(Variant { name, fields, pos })
         }
     }
 
     fn parse_type_field(&mut self) -> ParseResult<Field> {
+        let pos = self.pos();
         self.lparen()?;
         let name = self.parse_ident()?;
         let ty = self.parse_ident()?;
         self.rparen()?;
-        Ok(Field { name, ty })
+        let pos = pos.unwrap();
+        Ok(Field { name, ty, pos })
     }
 
     fn parse_decl(&mut self) -> ParseResult<Decl> {
@@ -342,30 +350,38 @@ impl<'a> Parser<'a> {
     fn parse_pattern(&mut self) -> ParseResult<Pattern> {
         let pos = self.pos();
         if self.is_int() {
-            Ok(Pattern::ConstInt { val: self.int()? })
+            let pos = pos.unwrap();
+            Ok(Pattern::ConstInt {
+                val: self.int()?,
+                pos,
+            })
         } else if self.is_sym_str("_") {
+            let pos = pos.unwrap();
             self.symbol()?;
-            Ok(Pattern::Wildcard)
+            Ok(Pattern::Wildcard { pos })
         } else if self.is_sym() {
+            let pos = pos.unwrap();
             let s = self.symbol()?;
             if s.starts_with("=") {
                 let s = &s[1..];
-                let var = self.str_to_ident(pos.unwrap(), s)?;
-                Ok(Pattern::Var { var })
+                let var = self.str_to_ident(pos, s)?;
+                Ok(Pattern::Var { var, pos })
             } else {
-                let var = self.str_to_ident(pos.unwrap(), &s)?;
+                let var = self.str_to_ident(pos, &s)?;
                 if self.is_at() {
                     self.at()?;
                     let subpat = Box::new(self.parse_pattern()?);
-                    Ok(Pattern::BindPattern { var, subpat })
+                    Ok(Pattern::BindPattern { var, subpat, pos })
                 } else {
                     Ok(Pattern::BindPattern {
                         var,
-                        subpat: Box::new(Pattern::Wildcard),
+                        subpat: Box::new(Pattern::Wildcard { pos }),
+                        pos,
                     })
                 }
             }
         } else if self.is_lparen() {
+            let pos = pos.unwrap();
             self.lparen()?;
             if self.is_sym_str("and") {
                 self.symbol()?;
@@ -374,7 +390,7 @@ impl<'a> Parser<'a> {
                     subpats.push(self.parse_pattern()?);
                 }
                 self.rparen()?;
-                Ok(Pattern::And { subpats })
+                Ok(Pattern::And { subpats, pos })
             } else {
                 let sym = self.parse_ident()?;
                 let mut args = vec![];
@@ -382,7 +398,7 @@ impl<'a> Parser<'a> {
                     args.push(self.parse_pattern_term_arg()?);
                 }
                 self.rparen()?;
-                Ok(Pattern::Term { sym, args })
+                Ok(Pattern::Term { sym, args, pos })
             }
         } else {
             Err(self.error(pos.unwrap(), "Unexpected pattern".into()))
@@ -401,6 +417,7 @@ impl<'a> Parser<'a> {
     fn parse_expr(&mut self) -> ParseResult<Expr> {
         let pos = self.pos();
         if self.is_lparen() {
+            let pos = pos.unwrap();
             self.lparen()?;
             if self.is_sym_str("let") {
                 self.symbol()?;
@@ -413,7 +430,7 @@ impl<'a> Parser<'a> {
                 self.rparen()?;
                 let body = Box::new(self.parse_expr()?);
                 self.rparen()?;
-                Ok(Expr::Let { defs, body })
+                Ok(Expr::Let { defs, body, pos })
             } else {
                 let sym = self.parse_ident()?;
                 let mut args = vec![];
@@ -421,111 +438,37 @@ impl<'a> Parser<'a> {
                     args.push(self.parse_expr()?);
                 }
                 self.rparen()?;
-                Ok(Expr::Term { sym, args })
+                Ok(Expr::Term { sym, args, pos })
             }
         } else if self.is_sym_str("#t") {
+            let pos = pos.unwrap();
             self.symbol()?;
-            Ok(Expr::ConstInt { val: 1 })
+            Ok(Expr::ConstInt { val: 1, pos })
         } else if self.is_sym_str("#f") {
+            let pos = pos.unwrap();
             self.symbol()?;
-            Ok(Expr::ConstInt { val: 0 })
+            Ok(Expr::ConstInt { val: 0, pos })
         } else if self.is_sym() {
+            let pos = pos.unwrap();
             let name = self.parse_ident()?;
-            Ok(Expr::Var { name })
+            Ok(Expr::Var { name, pos })
         } else if self.is_int() {
+            let pos = pos.unwrap();
             let val = self.int()?;
-            Ok(Expr::ConstInt { val })
+            Ok(Expr::ConstInt { val, pos })
         } else {
             Err(self.error(pos.unwrap(), "Invalid expression".into()))
         }
     }
 
     fn parse_letdef(&mut self) -> ParseResult<LetDef> {
+        let pos = self.pos();
         self.lparen()?;
+        let pos = pos.unwrap();
         let var = self.parse_ident()?;
         let ty = self.parse_ident()?;
         let val = Box::new(self.parse_expr()?);
         self.rparen()?;
-        Ok(LetDef { var, ty, val })
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn parse_type() {
-        let text = r"
-            ;; comment
-            (type Inst extern (enum
-              (Alu (a Reg) (b Reg) (dest Reg))
-              (Load (a Reg) (dest Reg))))
-            (type u32 (primitive u32))
-            ";
-        let defs = Parser::new(Lexer::from_str(text, "(none)"))
-            .parse_defs()
-            .expect("should parse");
-        assert_eq!(
-            defs,
-            Defs {
-                filenames: vec!["(none)".to_string()],
-                defs: vec![
-                    Def::Type(Type {
-                        name: Ident("Inst".to_string()),
-                        is_extern: true,
-                        ty: TypeValue::Enum(vec![
-                            Variant {
-                                name: Ident("Alu".to_string()),
-                                fields: vec![
-                                    Field {
-                                        name: Ident("a".to_string()),
-                                        ty: Ident("Reg".to_string()),
-                                    },
-                                    Field {
-                                        name: Ident("b".to_string()),
-                                        ty: Ident("Reg".to_string()),
-                                    },
-                                    Field {
-                                        name: Ident("dest".to_string()),
-                                        ty: Ident("Reg".to_string()),
-                                    },
-                                ],
-                            },
-                            Variant {
-                                name: Ident("Load".to_string()),
-                                fields: vec![
-                                    Field {
-                                        name: Ident("a".to_string()),
-                                        ty: Ident("Reg".to_string()),
-                                    },
-                                    Field {
-                                        name: Ident("dest".to_string()),
-                                        ty: Ident("Reg".to_string()),
-                                    },
-                                ],
-                            }
-                        ]),
-                        pos: Pos {
-                            file: 0,
-                            offset: 42,
-                            line: 3,
-                            col: 18,
-                        },
-                    }),
-                    Def::Type(Type {
-                        name: Ident("u32".to_string()),
-                        is_extern: false,
-                        ty: TypeValue::Primitive(Ident("u32".to_string())),
-                        pos: Pos {
-                            file: 0,
-                            offset: 167,
-                            line: 6,
-                            col: 18,
-                        },
-                    }),
-                ]
-            }
-        );
+        Ok(LetDef { var, ty, val, pos })
     }
 }

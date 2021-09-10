@@ -46,7 +46,14 @@ fn main() -> Result<(), error::Error> {
 
     let lexer = lexer::Lexer::from_files(input_files)?;
     let mut parser = parser::Parser::new(lexer);
-    let defs = parser.parse_defs()?;
+    let defs = match parser.parse_defs() {
+        Ok(defs) => defs,
+        Err(error) => {
+            eprintln!("{}", error);
+            eprintln!("Failed to parse input.");
+            std::process::exit(1);
+        }
+    };
     let code = match compile::compile(&defs) {
         Ok(code) => code,
         Err(errors) => {

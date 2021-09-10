@@ -19,7 +19,7 @@ pub enum Def {
 
 /// An identifier -- a variable, term symbol, or type.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Ident(pub String);
+pub struct Ident(pub String, pub Pos);
 
 /// A declaration of a type.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -35,8 +35,8 @@ pub struct Type {
 /// TODO: add structs as well?
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum TypeValue {
-    Primitive(Ident),
-    Enum(Vec<Variant>),
+    Primitive(Ident, Pos),
+    Enum(Vec<Variant>, Pos),
 }
 
 /// One variant of an enum type.
@@ -44,6 +44,7 @@ pub enum TypeValue {
 pub struct Variant {
     pub name: Ident,
     pub fields: Vec<Field>,
+    pub pos: Pos,
 }
 
 /// One field of an enum variant.
@@ -51,6 +52,7 @@ pub struct Variant {
 pub struct Field {
     pub name: Ident,
     pub ty: Ident,
+    pub pos: Pos,
 }
 
 /// A declaration of a term with its argument and return types.
@@ -85,22 +87,27 @@ pub struct Extractor {
 pub enum Pattern {
     /// An operator that binds a variable to a subterm and match the
     /// subpattern.
-    BindPattern { var: Ident, subpat: Box<Pattern> },
+    BindPattern {
+        var: Ident,
+        subpat: Box<Pattern>,
+        pos: Pos,
+    },
     /// A variable that has already been bound (`=x` syntax).
-    Var { var: Ident },
+    Var { var: Ident, pos: Pos },
     /// An operator that matches a constant integer value.
-    ConstInt { val: i64 },
+    ConstInt { val: i64, pos: Pos },
     /// An application of a type variant or term.
     Term {
         sym: Ident,
         args: Vec<TermArgPattern>,
+        pos: Pos,
     },
     /// An operator that matches anything.
-    Wildcard,
+    Wildcard { pos: Pos },
     /// N sub-patterns that must all match.
-    And { subpats: Vec<Pattern> },
+    And { subpats: Vec<Pattern>, pos: Pos },
     /// Internal use only: macro argument in a template.
-    MacroArg { index: usize },
+    MacroArg { index: usize, pos: Pos },
 }
 
 impl Pattern {
@@ -118,9 +125,11 @@ impl Pattern {
             &Pattern::BindPattern {
                 ref var,
                 ref subpat,
-            } if matches!(&**subpat, &Pattern::Wildcard) => {
+                pos,
+                ..
+            } if matches!(&**subpat, &Pattern::Wildcard { .. }) => {
                 if let Some(i) = macro_args.iter().position(|arg| arg == var) {
-                    Pattern::MacroArg { index: i }
+                    Pattern::MacroArg { index: i, pos }
                 } else {
                     self.clone()
                 }
@@ -128,18 +137,24 @@ impl Pattern {
             &Pattern::BindPattern {
                 ref var,
                 ref subpat,
+                pos,
             } => Pattern::BindPattern {
                 var: var.clone(),
                 subpat: Box::new(subpat.make_macro_template(macro_args)),
+                pos,
             },
-            &Pattern::And { ref subpats } => {
+            &Pattern::And { ref subpats, pos } => {
                 let subpats = subpats
                     .iter()
                     .map(|subpat| subpat.make_macro_template(macro_args))
                     .collect::<Vec<_>>();
-                Pattern::And { subpats }
+                Pattern::And { subpats, pos }
             }
-            &Pattern::Term { ref sym, ref args } => {
+            &Pattern::Term {
+                ref sym,
+                ref args,
+                pos,
+            } => {
                 let args = args
                     .iter()
                     .map(|arg| arg.make_macro_template(macro_args))
@@ -147,10 +162,13 @@ impl Pattern {
                 Pattern::Term {
                     sym: sym.clone(),
                     args,
+                    pos,
                 }
             }
 
-            &Pattern::Var { .. } | &Pattern::Wildcard | &Pattern::ConstInt { .. } => self.clone(),
+            &Pattern::Var { .. } | &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } => {
+                self.clone()
+            }
             &Pattern::MacroArg { .. } => unreachable!(),
         }
     }
@@ -160,18 +178,24 @@ impl Pattern {
             &Pattern::BindPattern {
                 ref var,
                 ref subpat,
+                pos,
             } => Pattern::BindPattern {
                 var: var.clone(),
                 subpat: Box::new(subpat.subst_macro_args(macro_args)),
+                pos,
             },
-            &Pattern::And { ref subpats } => {
+            &Pattern::And { ref subpats, pos } => {
                 let subpats = subpats
                     .iter()
                     .map(|subpat| subpat.subst_macro_args(macro_args))
                     .collect::<Vec<_>>();
-                Pattern::And { subpats }
+                Pattern::And { subpats, pos }
             }
-            &Pattern::Term { ref sym, ref args } => {
+            &Pattern::Term {
+                ref sym,
+                ref args,
+                pos,
+            } => {
                 let args = args
                     .iter()
                     .map(|arg| arg.subst_macro_args(macro_args))
@@ -179,11 +203,26 @@ impl Pattern {
                 Pattern::Term {
                     sym: sym.clone(),
                     args,
+                    pos,
                 }
             }
 
-            &Pattern::Var { .. } | &Pattern::Wildcard | &Pattern::ConstInt { .. } => self.clone(),
-            &Pattern::MacroArg { index } => macro_args[index].clone(),
+            &Pattern::Var { .. } | &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } => {
+                self.clone()
+            }
+            &Pattern::MacroArg { index, .. } => macro_args[index].clone(),
+        }
+    }
+
+    pub fn pos(&self) -> Pos {
+        match self {
+            &Pattern::ConstInt { pos, .. }
+            | &Pattern::And { pos, .. }
+            | &Pattern::Term { pos, .. }
+            | &Pattern::BindPattern { pos, .. }
+            | &Pattern::Var { pos, .. }
+            | &Pattern::Wildcard { pos, .. }
+            | &Pattern::MacroArg { pos, .. } => pos,
         }
     }
 }
@@ -231,13 +270,32 @@ impl TermArgPattern {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Expr {
     /// A term: `(sym args...)`.
-    Term { sym: Ident, args: Vec<Expr> },
+    Term {
+        sym: Ident,
+        args: Vec<Expr>,
+        pos: Pos,
+    },
     /// A variable use.
-    Var { name: Ident },
+    Var { name: Ident, pos: Pos },
     /// A constant integer.
-    ConstInt { val: i64 },
+    ConstInt { val: i64, pos: Pos },
     /// The `(let ((var ty val)*) body)` form.
-    Let { defs: Vec<LetDef>, body: Box<Expr> },
+    Let {
+        defs: Vec<LetDef>,
+        body: Box<Expr>,
+        pos: Pos,
+    },
+}
+
+impl Expr {
+    pub fn pos(&self) -> Pos {
+        match self {
+            &Expr::Term { pos, .. }
+            | &Expr::Var { pos, .. }
+            | &Expr::ConstInt { pos, .. }
+            | &Expr::Let { pos, .. } => pos,
+        }
+    }
 }
 
 /// One variable locally bound in a `(let ...)` expression.
@@ -246,6 +304,7 @@ pub struct LetDef {
     pub var: Ident,
     pub ty: Ident,
     pub val: Box<Expr>,
+    pub pos: Pos,
 }
 
 /// An external binding: an extractor or constructor function attached

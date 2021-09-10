@@ -23,7 +23,7 @@ impl fmt::Display for Error {
                 ref filename,
                 pos,
             } => {
-                write!(f, "{}:{}: {}", filename, pos.line, msg)
+                write!(f, "{}:{}:{}: error: {}", filename, pos.line, pos.col, msg)
             }
             &Error::SystemError { ref msg } => {
                 write!(f, "{}", msg)
