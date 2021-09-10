@@ -495,3 +495,22 @@ impl<'a> Iterator for InstOffsetIter<'a> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cursor::{Cursor, FuncCursor};
+    use crate::ir::InstBuilder;
+
+    #[test]
+    fn new_function() {
+        let mut func = Function::new();
+        let block = func.dfg.make_block();
+        let mut pos = FuncCursor::new(&mut func);
+        pos.insert_block(block);
+        pos.ins().return_(&[]);
+
+        assert!(func.is_leaf());
+        assert_eq!(func.is_block_basic(block), Ok(()));
+    }
+}
