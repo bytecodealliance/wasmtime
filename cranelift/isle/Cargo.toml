@@ -7,6 +7,5 @@ license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
 log = "0.4"
-env_logger = "0.8"
-thiserror = "1.0"
+env_logger = { version = "0.8", default-features = false }
 clap = "2.33"

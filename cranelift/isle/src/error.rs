@@ -1,50 +1,50 @@
 //! Error types.
 
 use crate::lexer::Pos;
-use thiserror::Error;
+use std::fmt;
 
-#[derive(Debug, Error)]
+#[derive(Clone, Debug)]
 pub enum Error {
-    #[error("Parse error")]
-    ParseError(#[from] ParseError),
-    #[error("Semantic error")]
-    SemaError(#[from] SemaError),
-    #[error("IO error")]
-    IoError(#[from] std::io::Error),
-    #[error("Formatting error")]
-    FmtError(#[from] std::fmt::Error),
+    CompileError {
+        msg: String,
+        filename: String,
+        pos: Pos,
+    },
+    SystemError {
+        msg: String,
+    },
 }
 
-#[derive(Clone, Debug, Error)]
-pub struct ParseError {
-    pub msg: String,
-    pub filename: String,
-    pub pos: Pos,
-}
-
-#[derive(Clone, Debug, Error)]
-pub struct SemaError {
-    pub msg: String,
-    pub filename: String,
-    pub pos: Pos,
-}
-
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}: {}",
-            self.filename, self.pos.line, self.pos.col, self.msg
-        )
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &Error::CompileError {
+                ref msg,
+                ref filename,
+                pos,
+            } => {
+                write!(f, "{}:{}: {}", filename, pos.line, msg)
+            }
+            &Error::SystemError { ref msg } => {
+                write!(f, "{}", msg)
+            }
+        }
     }
 }
 
-impl std::fmt::Display for SemaError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{}:{}: {}",
-            self.filename, self.pos.line, self.pos.col, self.msg
-        )
+impl std::error::Error for Error {}
+
+impl std::convert::From<std::fmt::Error> for Error {
+    fn from(e: std::fmt::Error) -> Error {
+        Error::SystemError {
+            msg: format!("{}", e),
+        }
+    }
+}
+impl std::convert::From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Error {
+        Error::SystemError {
+            msg: format!("{}", e),
+        }
     }
 }

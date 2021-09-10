@@ -9,15 +9,15 @@ pub struct Parser<'a> {
     lexer: Lexer<'a>,
 }
 
-pub type ParseResult<T> = std::result::Result<T, ParseError>;
+pub type ParseResult<T> = std::result::Result<T, Error>;
 
 impl<'a> Parser<'a> {
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
         Parser { lexer }
     }
 
-    pub fn error(&self, pos: Pos, msg: String) -> ParseError {
-        ParseError {
+    pub fn error(&self, pos: Pos, msg: String) -> Error {
+        Error::CompileError {
             filename: self.lexer.filenames[pos.file].clone(),
             pos,
             msg,
