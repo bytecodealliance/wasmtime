@@ -1529,20 +1529,41 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let mut r_arg2 = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
-            // Make sure that both args are in virtual regs, since in effect
-            // we have to do a parallel copy to get them safely to the AtomicRMW input
-            // regs, and that's not guaranteed safe if either is in a real reg.
-            r_addr = ctx.ensure_in_vreg(r_addr, I64);
-            r_arg2 = ctx.ensure_in_vreg(r_arg2, I64);
-            // Move the args to the preordained AtomicRMW input regs
-            ctx.emit(Inst::gen_move(Writable::from_reg(xreg(25)), r_addr, I64));
-            ctx.emit(Inst::gen_move(Writable::from_reg(xreg(26)), r_arg2, I64));
-            // Now the AtomicRMW insn itself
+
             let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
-            ctx.emit(Inst::AtomicRMW { ty: ty_access, op });
-            // And finally, copy the preordained AtomicRMW output reg to its destination.
-            ctx.emit(Inst::gen_move(r_dst, xreg(27), I64));
-            // Also, x24 and x28 are trashed.  `fn aarch64_get_regs` must mention that.
+            let lse_op = match op {
+                AtomicRmwOp::Add => Some(AtomicRMWOp::Add),
+                AtomicRmwOp::And => Some(AtomicRMWOp::Clr),
+                AtomicRmwOp::Xor => Some(AtomicRMWOp::Eor),
+                AtomicRmwOp::Or => Some(AtomicRMWOp::Set),
+                AtomicRmwOp::Smax => Some(AtomicRMWOp::Smax),
+                AtomicRmwOp::Umax => Some(AtomicRMWOp::Umax),
+                AtomicRmwOp::Smin => Some(AtomicRMWOp::Smin),
+                AtomicRmwOp::Umin => Some(AtomicRMWOp::Umin),
+                _ => None
+            };
+            if isa_flags.use_lse() && lse_op.is_some() {
+                ctx.emit(Inst::AtomicRMW {
+                    op: lse_op.unwrap(),
+                    rs: r_arg2,
+                    rt: r_dst,
+                    rn: r_addr,
+                    ty: ty_access,
+                });
+            } else {
+                // Make sure that both args are in virtual regs, since in effect
+                // we have to do a parallel copy to get them safely to the AtomicRMW input
+                // regs, and that's not guaranteed safe if either is in a real reg.
+                r_addr = ctx.ensure_in_vreg(r_addr, I64);
+                r_arg2 = ctx.ensure_in_vreg(r_arg2, I64);
+                // Move the args to the preordained AtomicRMW input regs
+                ctx.emit(Inst::gen_move(Writable::from_reg(xreg(25)), r_addr, I64));
+                ctx.emit(Inst::gen_move(Writable::from_reg(xreg(26)), r_arg2, I64));
+                ctx.emit(Inst::AtomicRMWLoop { ty: ty_access, op });
+                // And finally, copy the preordained AtomicRMW output reg to its destination.
+                ctx.emit(Inst::gen_move(r_dst, xreg(27), I64));
+                // Also, x24 and x28 are trashed.  `fn aarch64_get_regs` must mention that.
+            }
         }
 
         Opcode::AtomicCas => {

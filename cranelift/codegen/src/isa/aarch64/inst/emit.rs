@@ -504,6 +504,33 @@ fn enc_dmb_ish() -> u32 {
     0xD5033BBF
 }
 
+fn enc_ldal(ty: Type, op: AtomicRMWOp, rs: Reg, rt: Writable<Reg>, rn: Reg) -> u32 {
+    assert!(machreg_to_gpr(rt.to_reg()) != 31);
+    let sz = match ty {
+        I64 => 0b11,
+        I32 => 0b10,
+        I16 => 0b01,
+        I8 => 0b00,
+        _ => unreachable!(),
+    };
+    let op = match op {
+        AtomicRMWOp::Add => 0b000,
+        AtomicRMWOp::Clr => 0b001,
+        AtomicRMWOp::Eor => 0b010,
+        AtomicRMWOp::Set => 0b011,
+        AtomicRMWOp::Smax => 0b100,
+        AtomicRMWOp::Smin => 0b101,
+        AtomicRMWOp::Umax => 0b110,
+        AtomicRMWOp::Umin => 0b111,
+    };
+    0b00_111_000_111_00000_0_000_00_00000_00000
+        | (sz << 30)
+        | (machreg_to_gpr(rs) << 16)
+        | (op << 12)
+        | (machreg_to_gpr(rn) << 5)
+        | machreg_to_gpr(rt.to_reg())
+}
+
 fn enc_ldar(ty: Type, rt: Writable<Reg>, rn: Reg) -> u32 {
     let sz = match ty {
         I64 => 0b11,
@@ -1318,7 +1345,10 @@ impl MachInstEmit for Inst {
             } => {
                 sink.put4(enc_ccmp_imm(size, rn, imm, nzcv, cond));
             }
-            &Inst::AtomicRMW { ty, op } => {
+            &Inst::AtomicRMW { ty, op, rs, rt, rn } => {
+                sink.put4(enc_ldal(ty, op, rs, rt, rn));
+            }
+            &Inst::AtomicRMWLoop { ty, op } => {
                 /* Emit this:
                      again:
                       ldaxr{,b,h}  x/w27, [x25]
@@ -1340,7 +1370,7 @@ impl MachInstEmit for Inst {
                    so that we simply write in the destination, the "2nd arg for op".
                 */
                 // TODO: We should not hardcode registers here, a better idea would be to
-                // pass some scratch registers in the AtomicRMW pseudo-instruction, and use those
+                // pass some scratch registers in the AtomicRMWLoop pseudo-instruction, and use those
                 let xzr = zero_reg();
                 let x24 = xreg(24);
                 let x25 = xreg(25);
