@@ -340,6 +340,19 @@ impl Type {
             Err(()) => panic!("unable to determine architecture pointer width"),
         }
     }
+
+    /// Coerces boolean types (scalar and vectors) into their integer counterparts.
+    /// B1 is converted into I8.
+    pub fn coerce_bools_to_ints(self) -> Self {
+        let is_scalar_bool = self.is_bool();
+        let is_vector_bool = self.is_vector() && self.lane_type().is_bool();
+
+        if is_scalar_bool || is_vector_bool {
+            self.as_int()
+        } else {
+            self
+        }
+    }
 }
 
 impl Display for Type {

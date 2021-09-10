@@ -297,15 +297,7 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
         .enumerate()
         .map(|(i, param)| {
             // Calculate the type to load from memory, using integers for booleans (no encodings).
-            let is_scalar_bool = param.value_type.is_bool();
-            let is_vector_bool =
-                param.value_type.is_vector() && param.value_type.lane_type().is_bool();
-
-            let ty = if is_scalar_bool || is_vector_bool {
-                param.value_type.as_int()
-            } else {
-                param.value_type
-            };
+            let ty = param.value_type.coerce_bools_to_ints();
 
             // Load the value.
             let loaded = builder.ins().load(
@@ -314,6 +306,11 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
                 values_vec_ptr_val,
                 (i * UnboxedValues::SLOT_SIZE) as i32,
             );
+
+            let is_scalar_bool = param.value_type.is_bool();
+            let is_vector_bool =
+                param.value_type.is_vector() && param.value_type.lane_type().is_bool();
+
             // For booleans, we want to type-convert the loaded integer into a boolean and ensure
             // that we are using the architecture's canonical boolean representation (presumably
             // comparison will emit this).
