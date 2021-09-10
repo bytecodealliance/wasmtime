@@ -685,8 +685,8 @@ where
             } else {
                 let lanes = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
                     .into_iter()
-                    .map(|lane| lane.count_ones().unwrap())
-                    .collect::<SimdVec<V>>();
+                    .map(|lane| lane.count_ones())
+                    .collect::<ValueResult<SimdVec<V>>>()?;
                 vectorizelanes(&lanes, ctrl_ty)?
             };
             assign(count)
