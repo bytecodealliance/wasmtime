@@ -99,6 +99,8 @@ pub enum Pattern {
     Wildcard,
     /// N sub-patterns that must all match.
     And { subpats: Vec<Pattern> },
+    /// Internal use only: macro argument in a template.
+    MacroArg { index: usize },
 }
 
 impl Pattern {
@@ -107,6 +109,81 @@ impl Pattern {
             &Pattern::BindPattern { ref subpat, .. } => subpat.root_term(),
             &Pattern::Term { ref sym, .. } => Some(sym),
             _ => None,
+        }
+    }
+
+    pub fn make_macro_template(&self, macro_args: &[Ident]) -> Pattern {
+        log::trace!("repplace_macro_args: {:?} with {:?}", self, macro_args);
+        match self {
+            &Pattern::BindPattern {
+                ref var,
+                ref subpat,
+            } if matches!(&**subpat, &Pattern::Wildcard) => {
+                if let Some(i) = macro_args.iter().position(|arg| arg == var) {
+                    Pattern::MacroArg { index: i }
+                } else {
+                    self.clone()
+                }
+            }
+            &Pattern::BindPattern {
+                ref var,
+                ref subpat,
+            } => Pattern::BindPattern {
+                var: var.clone(),
+                subpat: Box::new(subpat.make_macro_template(macro_args)),
+            },
+            &Pattern::And { ref subpats } => {
+                let subpats = subpats
+                    .iter()
+                    .map(|subpat| subpat.make_macro_template(macro_args))
+                    .collect::<Vec<_>>();
+                Pattern::And { subpats }
+            }
+            &Pattern::Term { ref sym, ref args } => {
+                let args = args
+                    .iter()
+                    .map(|arg| arg.make_macro_template(macro_args))
+                    .collect::<Vec<_>>();
+                Pattern::Term {
+                    sym: sym.clone(),
+                    args,
+                }
+            }
+
+            &Pattern::Var { .. } | &Pattern::Wildcard | &Pattern::ConstInt { .. } => self.clone(),
+            &Pattern::MacroArg { .. } => unreachable!(),
+        }
+    }
+
+    pub fn subst_macro_args(&self, macro_args: &[Pattern]) -> Pattern {
+        match self {
+            &Pattern::BindPattern {
+                ref var,
+                ref subpat,
+            } => Pattern::BindPattern {
+                var: var.clone(),
+                subpat: Box::new(subpat.subst_macro_args(macro_args)),
+            },
+            &Pattern::And { ref subpats } => {
+                let subpats = subpats
+                    .iter()
+                    .map(|subpat| subpat.subst_macro_args(macro_args))
+                    .collect::<Vec<_>>();
+                Pattern::And { subpats }
+            }
+            &Pattern::Term { ref sym, ref args } => {
+                let args = args
+                    .iter()
+                    .map(|arg| arg.subst_macro_args(macro_args))
+                    .collect::<Vec<_>>();
+                Pattern::Term {
+                    sym: sym.clone(),
+                    args,
+                }
+            }
+
+            &Pattern::Var { .. } | &Pattern::Wildcard | &Pattern::ConstInt { .. } => self.clone(),
+            &Pattern::MacroArg { index } => macro_args[index].clone(),
         }
     }
 }
@@ -123,6 +200,27 @@ pub enum TermArgPattern {
     /// we can pass an arg *into* an extractor rather than getting the
     /// arg *out of* it.
     Expr(Expr),
+}
+
+impl TermArgPattern {
+    fn make_macro_template(&self, args: &[Ident]) -> TermArgPattern {
+        log::trace!("repplace_macro_args: {:?} with {:?}", self, args);
+        match self {
+            &TermArgPattern::Pattern(ref pat) => {
+                TermArgPattern::Pattern(pat.make_macro_template(args))
+            }
+            &TermArgPattern::Expr(_) => self.clone(),
+        }
+    }
+
+    fn subst_macro_args(&self, args: &[Pattern]) -> TermArgPattern {
+        match self {
+            &TermArgPattern::Pattern(ref pat) => {
+                TermArgPattern::Pattern(pat.subst_macro_args(args))
+            }
+            &TermArgPattern::Expr(_) => self.clone(),
+        }
+    }
 }
 
 /// An expression: the right-hand side of a rule.

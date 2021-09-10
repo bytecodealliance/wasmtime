@@ -110,10 +110,7 @@ pub enum TermKind {
     /// A term that defines an "extractor macro" in the LHS of a
     /// pattern. Its arguments take patterns and are simply
     /// substituted with the given patterns when used.
-    InternalExtractor {
-        args: Vec<ast::Ident>,
-        template: ast::Pattern,
-    },
+    InternalExtractor { template: ast::Pattern },
     /// A term defined solely by an external extractor function.
     ExternalExtractor {
         /// Extractor func.
@@ -605,12 +602,11 @@ impl TermEnv {
                         )
                     })?;
                     let termdata = &mut self.terms[term.index()];
+                    let template = ext.template.make_macro_template(&ext.args[..]);
+                    log::trace!("extractor def: {:?} becomes template {:?}", def, template);
                     match &termdata.kind {
                         &TermKind::Declared => {
-                            termdata.kind = TermKind::InternalExtractor {
-                                args: ext.args.clone(),
-                                template: ext.template.clone(),
-                            };
+                            termdata.kind = TermKind::InternalExtractor { template };
                         }
                         _ => {
                             return Err(tyenv.error(
@@ -644,7 +640,6 @@ impl TermEnv {
                         &rule.pattern,
                         None,
                         &mut bindings,
-                        None,
                     )?;
                     let rhs =
                         self.translate_expr(tyenv, rule.pos, &rule.expr, ty, &mut bindings)?;
@@ -750,7 +745,6 @@ impl TermEnv {
         pat: &ast::Pattern,
         expected_ty: Option<TypeId>,
         bindings: &mut Bindings,
-        macro_args: Option<&HashMap<ast::Ident, ast::Pattern>>,
     ) -> SemaResult<(Pattern, TypeId)> {
         log::trace!("translate_pattern: {:?}", pat);
         log::trace!("translate_pattern: bindings = {:?}", bindings);
@@ -772,14 +766,8 @@ impl TermEnv {
                 let mut expected_ty = expected_ty;
                 let mut children = vec![];
                 for subpat in subpats {
-                    let (subpat, ty) = self.translate_pattern(
-                        tyenv,
-                        pos,
-                        &*subpat,
-                        expected_ty,
-                        bindings,
-                        macro_args,
-                    )?;
+                    let (subpat, ty) =
+                        self.translate_pattern(tyenv, pos, &*subpat, expected_ty, bindings)?;
                     expected_ty = expected_ty.or(Some(ty));
                     children.push(subpat);
                 }
@@ -793,29 +781,9 @@ impl TermEnv {
                 ref var,
                 ref subpat,
             } => {
-                // Handle macro-arg substitution.
-                if macro_args.is_some() && &**subpat == &ast::Pattern::Wildcard {
-                    if let Some(macro_ast) = macro_args.as_ref().unwrap().get(var) {
-                        return self.translate_pattern(
-                            tyenv,
-                            pos,
-                            macro_ast,
-                            expected_ty,
-                            bindings,
-                            macro_args,
-                        );
-                    }
-                }
-
                 // Do the subpattern first so we can resolve the type for sure.
-                let (subpat, ty) = self.translate_pattern(
-                    tyenv,
-                    pos,
-                    &*subpat,
-                    expected_ty,
-                    bindings,
-                    macro_args,
-                )?;
+                let (subpat, ty) =
+                    self.translate_pattern(tyenv, pos, &*subpat, expected_ty, bindings)?;
 
                 let name = tyenv.intern_mut(var);
                 if bindings.vars.iter().any(|bv| bv.name == name) {
@@ -826,6 +794,7 @@ impl TermEnv {
                 }
                 let id = VarId(bindings.next_var);
                 bindings.next_var += 1;
+                log::trace!("binding var {:?}", var.0);
                 bindings.vars.push(BoundVar { name, id, ty });
 
                 Ok((Pattern::BindPattern(ty, id, Box::new(subpat)), ty))
@@ -916,33 +885,24 @@ impl TermEnv {
                             }
                         }
                     }
-                    &TermKind::InternalExtractor {
-                        args: ref template_args,
-                        ref template,
-                    } => {
+                    &TermKind::InternalExtractor { ref template } => {
                         // Expand the extractor macro! We create a map
                         // from macro args to AST pattern trees and
                         // then evaluate the template with these
                         // substitutions.
-                        let mut arg_map = HashMap::new();
-                        for (template_arg, sub_ast) in template_args.iter().zip(args.iter()) {
-                            let sub_ast = match sub_ast {
+                        let mut macro_args: Vec<ast::Pattern> = vec![];
+                        for template_arg in args {
+                            let sub_ast = match template_arg {
                                 &ast::TermArgPattern::Pattern(ref pat) => pat.clone(),
                                 &ast::TermArgPattern::Expr(_) => {
                                     return Err(tyenv.error(pos, "Cannot expand an extractor macro with an expression in a macro argument".to_string()));
                                 }
                             };
-                            arg_map.insert(template_arg.clone(), sub_ast.clone());
+                            macro_args.push(sub_ast.clone());
                         }
-                        log::trace!("internal extractor map = {:?}", arg_map);
-                        return self.translate_pattern(
-                            tyenv,
-                            pos,
-                            template,
-                            expected_ty,
-                            bindings,
-                            Some(&arg_map),
-                        );
+                        log::trace!("internal extractor macro args = {:?}", args);
+                        let pat = template.subst_macro_args(&macro_args[..]);
+                        return self.translate_pattern(tyenv, pos, &pat, expected_ty, bindings);
                     }
                     &TermKind::ExternalConstructor { .. } | &TermKind::InternalConstructor => {
                         // OK.
@@ -957,19 +917,14 @@ impl TermEnv {
                 let mut subpats = vec![];
                 for (i, arg) in args.iter().enumerate() {
                     let arg_ty = self.terms[tid.index()].arg_tys[i];
-                    let (subpat, _) = self.translate_pattern_term_arg(
-                        tyenv,
-                        pos,
-                        arg,
-                        Some(arg_ty),
-                        bindings,
-                        macro_args,
-                    )?;
+                    let (subpat, _) =
+                        self.translate_pattern_term_arg(tyenv, pos, arg, Some(arg_ty), bindings)?;
                     subpats.push(subpat);
                 }
 
                 Ok((Pattern::Term(ty, *tid, subpats), ty))
             }
+            &ast::Pattern::MacroArg { .. } => unreachable!(),
         }
     }
 
@@ -980,12 +935,11 @@ impl TermEnv {
         pat: &ast::TermArgPattern,
         expected_ty: Option<TypeId>,
         bindings: &mut Bindings,
-        macro_args: Option<&HashMap<ast::Ident, ast::Pattern>>,
     ) -> SemaResult<(TermArgPattern, TypeId)> {
         match pat {
             &ast::TermArgPattern::Pattern(ref pat) => {
                 let (subpat, ty) =
-                    self.translate_pattern(tyenv, pos, pat, expected_ty, bindings, macro_args)?;
+                    self.translate_pattern(tyenv, pos, pat, expected_ty, bindings)?;
                 Ok((TermArgPattern::Pattern(subpat), ty))
             }
             &ast::TermArgPattern::Expr(ref expr) => {
@@ -1010,6 +964,7 @@ impl TermEnv {
         ty: TypeId,
         bindings: &mut Bindings,
     ) -> SemaResult<Expr> {
+        log::trace!("translate_expr: {:?}", expr);
         match expr {
             &ast::Expr::Term { ref sym, ref args } => {
                 // Look up the term.
