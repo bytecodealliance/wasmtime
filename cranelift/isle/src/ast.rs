@@ -120,7 +120,7 @@ impl Pattern {
     }
 
     pub fn make_macro_template(&self, macro_args: &[Ident]) -> Pattern {
-        log::trace!("repplace_macro_args: {:?} with {:?}", self, macro_args);
+        log::trace!("make_macro_template: {:?} with {:?}", self, macro_args);
         match self {
             &Pattern::BindPattern {
                 ref var,
@@ -128,7 +128,7 @@ impl Pattern {
                 pos,
                 ..
             } if matches!(&**subpat, &Pattern::Wildcard { .. }) => {
-                if let Some(i) = macro_args.iter().position(|arg| arg == var) {
+                if let Some(i) = macro_args.iter().position(|arg| arg.0 == var.0) {
                     Pattern::MacroArg { index: i, pos }
                 } else {
                     self.clone()
@@ -174,6 +174,7 @@ impl Pattern {
     }
 
     pub fn subst_macro_args(&self, macro_args: &[Pattern]) -> Pattern {
+        log::trace!("subst_macro_args: {:?} with {:?}", self, macro_args);
         match self {
             &Pattern::BindPattern {
                 ref var,
