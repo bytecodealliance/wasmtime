@@ -234,7 +234,7 @@ jobs:
             qemu: qemu-aarch64 -L /usr/aarch64-linux-gnu
             qemu_target: aarch64-linux-user
             # FIXME(#3183) shouldn't be necessary to specify this
-            qemu_flags: -cpu cortex-a72
+            qemu_flags: -cpu max,pauth=off
     steps:
     - uses: actions/checkout@v2
       with:
