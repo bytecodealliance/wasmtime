@@ -208,6 +208,11 @@ impl Type {
         }
     }
 
+    /// Is this a vector boolean type?
+    pub fn is_bool_vector(self) -> bool {
+        self.is_vector() && self.lane_type().is_bool()
+    }
+
     /// Is this a scalar integer type?
     pub fn is_int(self) -> bool {
         match self {

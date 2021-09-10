@@ -307,16 +307,12 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
                 (i * UnboxedValues::SLOT_SIZE) as i32,
             );
 
-            let is_scalar_bool = param.value_type.is_bool();
-            let is_vector_bool =
-                param.value_type.is_vector() && param.value_type.lane_type().is_bool();
-
             // For booleans, we want to type-convert the loaded integer into a boolean and ensure
             // that we are using the architecture's canonical boolean representation (presumably
             // comparison will emit this).
-            if is_scalar_bool {
+            if param.value_type.is_bool() {
                 builder.ins().icmp_imm(IntCC::NotEqual, loaded, 0)
-            } else if is_vector_bool {
+            } else if param.value_type.is_bool_vector() {
                 let zero_constant = builder.func.dfg.constants.insert(vec![0; 16].into());
                 let zero_vec = builder.ins().vconst(ty, zero_constant);
                 builder.ins().icmp(IntCC::NotEqual, loaded, zero_vec)
