@@ -824,8 +824,24 @@ where
         )?),
         Opcode::SwidenLow => unimplemented!("SwidenLow"),
         Opcode::SwidenHigh => unimplemented!("SwidenHigh"),
-        Opcode::UwidenLow => unimplemented!("UwidenLow"),
-        Opcode::UwidenHigh => unimplemented!("UwidenHigh"),
+        Opcode::UwidenLow => {
+            let new_type = ctrl_ty.merge_lanes().unwrap();
+            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
+                .into_iter()
+                .take(new_type.lane_count() as usize)
+                .map(|lane| lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type())))
+                .collect::<ValueResult<Vec<_>>>()?;
+            assign(vectorizelanes(&new_vec, new_type)?)
+        }
+        Opcode::UwidenHigh => {
+            let new_type = ctrl_ty.merge_lanes().unwrap();
+            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
+                .into_iter()
+                .skip(new_type.lane_count() as usize)
+                .map(|lane| lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type())))
+                .collect::<ValueResult<Vec<_>>>()?;
+            assign(vectorizelanes(&new_vec, new_type)?)
+        }
         Opcode::FcvtToUint => unimplemented!("FcvtToUint"),
         Opcode::FcvtToUintSat => unimplemented!("FcvtToUintSat"),
         Opcode::FcvtToSint => unimplemented!("FcvtToSint"),
