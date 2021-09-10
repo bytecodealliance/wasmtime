@@ -1,3 +1,0 @@
-[submodule "wasmtime"]
-	path = wasmtime
-	url = https://github.com/cfallin/wasmtime
