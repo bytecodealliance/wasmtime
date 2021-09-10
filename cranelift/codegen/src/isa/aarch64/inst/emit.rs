@@ -2338,7 +2338,11 @@ impl MachInstEmit for Inst {
                     VecALUOp::Orr => (0b000_01110_10_1, 0b000111),
                     VecALUOp::Eor => (0b001_01110_00_1, 0b000111),
                     VecALUOp::Bsl => (0b001_01110_01_1, 0b000111),
-                    VecALUOp::Umaxp => (0b001_01110_00_1 | enc_size << 1, 0b101001),
+                    VecALUOp::Umaxp => {
+                        debug_assert_ne!(size, VectorSize::Size64x2);
+
+                        (0b001_01110_00_1 | enc_size << 1, 0b101001)
+                    }
                     VecALUOp::Add => (0b000_01110_00_1 | enc_size << 1, 0b100001),
                     VecALUOp::Sub => (0b001_01110_00_1 | enc_size << 1, 0b100001),
                     VecALUOp::Mul => {

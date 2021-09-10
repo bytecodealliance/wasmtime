@@ -3,8 +3,6 @@ target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 set enable_simd
 target x86_64 machinst
-set enable_simd
-target x86_64 legacy skylake
 
 function %bnot() -> b32 {
 block0:
@@ -26,13 +24,77 @@ block0:
 }
 ; run
 
-function %vany_true_i16x8() -> b1 {
+function %vany_true_i8x16() -> b1, b1 {
 block0:
-    v0 = vconst.i16x8 [1 0 0 0 0 0 0 0]
+    v0 = vconst.i8x16 [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
     v1 = vany_true v0
-    return v1
+
+    v2 = vconst.i8x16 [0 0 0 1 0 0 0 0 0 0 42 0 0 0 0 0]
+    v3 = vany_true v2
+
+    return v1, v3
 }
-; run
+; run: %vany_true_i8x16() == [false, true]
+
+function %vany_true_i16x8() -> b1, b1 {
+block0:
+    v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+    v1 = vany_true v0
+
+    v2 = vconst.i16x8 [0 0 42 0 0 0 0 0]
+    v3 = vany_true v2
+
+    return v1, v3
+}
+; run: %vany_true_i16x8() == [false, true]
+
+function %vany_true_i32x4() -> b1, b1 {
+block0:
+    v0 = vconst.i32x4 [0 0 0 0]
+    v1 = vany_true v0
+
+    v2 = vconst.i32x4 [0 42 0 0]
+    v3 = vany_true v2
+
+    return v1, v3
+}
+; run: %vany_true_i32x4() == [false, true]
+
+function %vany_true_i64x2() -> b1, b1 {
+block0:
+    v0 = vconst.i64x2 [0 0]
+    v1 = vany_true v0
+
+    v2 = vconst.i64x2 [0 1]
+    v3 = vany_true v2
+
+    return v1, v3
+}
+; run: %vany_true_i64x2() == [false, true]
+
+function %vany_true_f32x4() -> b1, b1 {
+block0:
+    v0 = vconst.f32x4 [0.0 0.0 0.0 0.0]
+    v1 = vany_true v0
+
+    v2 = vconst.f32x4 [0.0 0x4.2 0.0 0.0]
+    v3 = vany_true v2
+
+    return v1, v3
+}
+; run: %vany_true_f32x4() == [false, true]
+
+function %vany_true_f64x2() -> b1, b1 {
+block0:
+    v0 = vconst.f64x2 [0.0 0.0]
+    v1 = vany_true v0
+
+    v2 = vconst.f64x2 [0.0 0x1.0]
+    v3 = vany_true v2
+
+    return v1, v3
+}
+; run: %vany_true_f64x2() == [false, true]
 
 function %vany_true_b32x4() -> b1 {
 block0:
