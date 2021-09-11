@@ -1,4 +1,3 @@
-use libc;
 use more_asserts::assert_gt;
 use std::{env, process};
 use wasi_tests::open_scratch_directory;

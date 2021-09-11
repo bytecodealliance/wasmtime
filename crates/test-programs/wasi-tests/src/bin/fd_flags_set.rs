@@ -1,5 +1,4 @@
 use std::{env, process};
-use wasi;
 use wasi_tests::open_scratch_directory;
 
 unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {

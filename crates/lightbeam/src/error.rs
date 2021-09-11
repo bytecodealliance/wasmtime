@@ -1,4 +1,3 @@
-use capstone;
 use thiserror::Error;
 use wasmparser::BinaryReaderError;
 
