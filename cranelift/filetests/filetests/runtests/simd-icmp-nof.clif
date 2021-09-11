@@ -1,0 +1,45 @@
+test interpret
+
+function %simd_icmp_nof_i8(i8x16, i8x16) -> b8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp nof v0, v1
+    return v2
+}
+; run: %simd_icmp_nof_i8([0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0], [0 1 0 0xFF 0 0 0 0 0 0 0 0 0 0 0 0]) == [true true true true true true true true true true true true true true true true]
+; run: %simd_icmp_nof_i8([0x80 0x7F 0x7F 0xFF 0 0 0 0 0 0 0 0 0 0 0 0], [0x80 0x01 0x7F 0x01 0 0 0 0 0 0 0 0 0 0 0 0]) == [true true true true true true true true true true true true true true true true]
+; run: %simd_icmp_nof_i8([0x80 0x7F 0x80 0x7F 0 0 0 0 0 0 0 0 0 0 0 0], [0x01 0x80 0x7F 0xFF 0 0 0 0 0 0 0 0 0 0 0 0]) == [false false false false true true true true true true true true true true true true]
+; run: %simd_icmp_nof_i8([0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F 0x7F], [0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF 0xFF]) == [false false false false false false false false false false false false false false false false]
+
+
+function %simd_icmp_nof_i16(i16x8, i16x8) -> b16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = icmp nof v0, v1
+    return v2
+}
+; run: %simd_icmp_nof_i1([0 0 1 0 0 0 0 0], [0 1 0 0xFFFF 0 0 0 0]) == [true true true true true true true true]
+; run: %simd_icmp_nof_i1([0x8000 0x7FFF 0x7FFF 0xFFFF 0 0 0 0], [0x8000 0x0001 0x7FFF 0x0001 0 0 0 0]) == [true true true true true true true true]
+; run: %simd_icmp_nof_i1([0x8000 0x7FFF 0x8000 0x7FFF 0 0 0 0], [0x0001 0x8000 0x7FFF 0xFFFF 0 0 0 0]) == [false false false false true true true true]
+; run: %simd_icmp_nof_i1([0x7FFF 0x7FFF 0x7FFF 0x7FFF 0x7FFF 0x7FFF 0x7FFF 0x7FFF], [0xFFFF 0xFFFF 0xFFFF 0xFFFF 0xFFFF 0xFFFF 0xFFFF 0xFFFF]) == [false false false false false false false false]
+
+
+function %simd_icmp_nof_i32(i32x4, i32x4) -> b32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp nof v0, v1
+    return v2
+}
+; run: %simd_icmp_nof_i3([0 0 1 0], [0 1 0 0xFFFFFFFF]) == [true true true true]
+; run: %simd_icmp_nof_i3([0x80000000 0x7FFFFFFF 0x7FFFFFFF 0xFFFFFFFF], [0x80000000 0x00000001 0x7FFFFFFF 0x00000001]) == [true true true true]
+; run: %simd_icmp_nof_i3([0x80000000 0x7FFFFFFF 0x80000000 0x7FFFFFFF], [0x00000001 0x80000000 0x7FFFFFFF 0xFFFFFFFF]) == [false false false false]
+; run: %simd_icmp_nof_i3([0x7FFFFFFF 0x7FFFFFFF 0x7FFFFFFF 0x7FFFFFFF], [0xFFFFFFFF 0xFFFFFFFF 0xFFFFFFFF 0xFFFFFFFF]) == [false false false false]
+
+function %simd_icmp_nof_i64(i64x2, i64x2) -> b64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = icmp nof v0, v1
+    return v2
+}
+; run: %simd_icmp_nof_i6([0 0], [0 1]) == [true true]
+; run: %simd_icmp_nof_i6([1 0], [0 0xFFFFFFFF_FFFFFFFF]) == [true true]
+; run: %simd_icmp_nof_i6([0x80000000_00000000 0x7FFFFFFF_FFFFFFFF], [0x80000000_00000000 0x00000000_00000001]) == [true true]
+; run: %simd_icmp_nof_i6([0x7FFFFFFF_FFFFFFFF 0xFFFFFFFF_FFFFFFFF], [0x7FFFFFFF_FFFFFFFF 0x00000000_00000001]) == [true true]
+; run: %simd_icmp_nof_i6([0x80000000_00000000 0x7FFFFFFF_FFFFFFFF], [0x01 0x80000000_00000000]) == [false false]
+; run: %simd_icmp_nof_i6([0x80000000_00000000 0x7FFFFFFF_FFFFFFFF], [0x7FFFFFFF_FFFFFFFF 0xFFFFFFFF_FFFFFFFF]) == [false false]

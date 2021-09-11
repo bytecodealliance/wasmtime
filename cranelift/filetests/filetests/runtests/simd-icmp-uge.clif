@@ -1,0 +1,33 @@
+test interpret
+
+function %simd_icmp_uge_i8(i8x16, i8x16) -> b8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp uge v0, v1
+    return v2
+}
+; run: %simd_icmp_uge_i8([0 1 -1 0 -5 1 0 0 0 0 0 0 0 0 0 0], [0 0 -1 1 -1 -1 0 0 0 0 0 0 0 0 0 0]) == [true true true false false false true true true true true true true true true true]
+
+function %simd_icmp_uge_i16(i16x8, i16x8) -> b16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = icmp uge v0, v1
+    return v2
+}
+; run: %simd_icmp_uge_i1([0 1 -1 0 -5 1 0 0], [0 0 -1 1 -1 -1 0 0]) == [true true true false false false true true]
+
+function %simd_icmp_uge_i32(i32x4, i32x4) -> b32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp uge v0, v1
+    return v2
+}
+; run: %simd_icmp_uge_i3([0 1 -1 0], [0 0 -1 1]) == [true true true false]
+; run: %simd_icmp_uge_i3([-5 1 0 0], [-1 -1 0 0]) == [false false true true]
+
+function %simd_icmp_uge_i64(i64x2, i64x2) -> b64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = icmp uge v0, v1
+    return v2
+}
+; run: %simd_icmp_uge_i6([0 1], [0 0]) == [true true]
+; run: %simd_icmp_uge_i6([-1 0], [-1 1]) == [true false]
+; run: %simd_icmp_uge_i6([-5 1], [-1 -1]) == [false false]
+; run: %simd_icmp_uge_i6([0 0], [0 0]) == [true true]

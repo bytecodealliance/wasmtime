@@ -1,0 +1,30 @@
+test interpret
+
+function %simd_icmp_eq_i8(i8x16, i8x16) -> b8x16 {
+block0(v0: i8x16, v1: i8x16):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i8([1 0 -1 1 1 1 1 1 1 1 1 1 1 1 1 1], [1 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0]) == [true true true false false false false false false false false false false false false false]
+
+function %simd_icmp_eq_i16(i16x8, i16x8) -> b16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i16([1 0 -1 1 1 1 1 1], [1 0 -1 0 0 0 0 0]) == [true true true false false false false false]
+
+function %simd_icmp_eq_i32(i32x4, i32x4) -> b32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i32([1 0 -1 1], [1 0 -1 0]) == [true true true false]
+
+function %simd_icmp_eq_i64(i64x2, i64x2) -> b64x2 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = icmp eq v0, v1
+    return v2
+}
+; run: %simd_icmp_eq_i64([10 0], [1 0]) == [false true]
+; run: %simd_icmp_eq_i64([-1 1], [-1 0]) == [true false]

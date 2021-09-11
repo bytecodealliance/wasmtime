@@ -133,11 +133,11 @@ impl Type {
     /// Scalar types follow this same rule, but `b1` is converted into `i8`
     pub fn as_int(self) -> Self {
         self.replace_lanes(match self.lane_type() {
-            B1 | B8 => I8,
-            B16 => I16,
-            B32 => I32,
-            B64 => I64,
-            B128 => I128,
+            I8 | B1 | B8 => I8,
+            I16 | B16 => I16,
+            I32 | B32 => I32,
+            I64 | B64 => I64,
+            I128 | B128 => I128,
             _ => unimplemented!(),
         })
     }
