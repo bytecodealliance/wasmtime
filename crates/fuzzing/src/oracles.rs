@@ -21,9 +21,9 @@ use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "s390x")))]
 pub use v8::*;
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_arch = "s390x")))]
 mod v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
