@@ -82,12 +82,12 @@ impl DataValue {
         match self {
             DataValue::B(true) => dst[..16].copy_from_slice(&[u8::MAX; 16][..]),
             DataValue::B(false) => dst[..16].copy_from_slice(&[0; 16][..]),
-            DataValue::I8(i) => dst[..1].copy_from_slice(&i.to_le_bytes()[..]),
-            DataValue::I16(i) => dst[..2].copy_from_slice(&i.to_le_bytes()[..]),
-            DataValue::I32(i) => dst[..4].copy_from_slice(&i.to_le_bytes()[..]),
-            DataValue::I64(i) => dst[..8].copy_from_slice(&i.to_le_bytes()[..]),
-            DataValue::F32(f) => dst[..4].copy_from_slice(&f.bits().to_le_bytes()[..]),
-            DataValue::F64(f) => dst[..8].copy_from_slice(&f.bits().to_le_bytes()[..]),
+            DataValue::I8(i) => dst[..1].copy_from_slice(&i.to_ne_bytes()[..]),
+            DataValue::I16(i) => dst[..2].copy_from_slice(&i.to_ne_bytes()[..]),
+            DataValue::I32(i) => dst[..4].copy_from_slice(&i.to_ne_bytes()[..]),
+            DataValue::I64(i) => dst[..8].copy_from_slice(&i.to_ne_bytes()[..]),
+            DataValue::F32(f) => dst[..4].copy_from_slice(&f.bits().to_ne_bytes()[..]),
+            DataValue::F64(f) => dst[..8].copy_from_slice(&f.bits().to_ne_bytes()[..]),
             DataValue::V128(v) => dst[..16].copy_from_slice(&v[..]),
             _ => unimplemented!(),
         };
@@ -100,14 +100,14 @@ impl DataValue {
     /// Panics if the slice does not have enough space to accommodate the [DataValue]
     pub fn read_from_slice(src: &[u8], ty: Type) -> Self {
         match ty {
-            types::I8 => DataValue::I8(i8::from_le_bytes(src[..1].try_into().unwrap())),
-            types::I16 => DataValue::I16(i16::from_le_bytes(src[..2].try_into().unwrap())),
-            types::I32 => DataValue::I32(i32::from_le_bytes(src[..4].try_into().unwrap())),
-            types::I64 => DataValue::I64(i64::from_le_bytes(src[..8].try_into().unwrap())),
-            types::F32 => DataValue::F32(Ieee32::with_bits(u32::from_le_bytes(
+            types::I8 => DataValue::I8(i8::from_ne_bytes(src[..1].try_into().unwrap())),
+            types::I16 => DataValue::I16(i16::from_ne_bytes(src[..2].try_into().unwrap())),
+            types::I32 => DataValue::I32(i32::from_ne_bytes(src[..4].try_into().unwrap())),
+            types::I64 => DataValue::I64(i64::from_ne_bytes(src[..8].try_into().unwrap())),
+            types::F32 => DataValue::F32(Ieee32::with_bits(u32::from_ne_bytes(
                 src[..4].try_into().unwrap(),
             ))),
-            types::F64 => DataValue::F64(Ieee64::with_bits(u64::from_le_bytes(
+            types::F64 => DataValue::F64(Ieee64::with_bits(u64::from_ne_bytes(
                 src[..8].try_into().unwrap(),
             ))),
             _ if ty.is_bool() => {
