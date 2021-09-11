@@ -1,6 +1,6 @@
 use cap_std::time::Duration;
 use io_lifetimes::{AsFd, BorrowedFd};
-use rsix::io::{PollFd, PollFdVec, PollFlags};
+use rsix::io::{PollFd, PollFlags};
 use std::convert::TryInto;
 use wasi_common::{
     file::WasiFile,
@@ -15,7 +15,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     if poll.is_empty() {
         return Ok(());
     }
-    let mut pollfds = PollFdVec::new();
+    let mut pollfds = Vec::new();
     for s in poll.rw_subscriptions() {
         match s {
             Subscription::Read(f) => {
@@ -49,7 +49,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
             poll_fds = tracing::field::debug(&pollfds),
             "poll"
         );
-        match pollfds.poll(poll_timeout) {
+        match rsix::io::poll(&mut pollfds, poll_timeout) {
             Ok(ready) => break ready,
             Err(rsix::io::Error::INTR) => continue,
             Err(err) => return Err(err.into()),
