@@ -13,9 +13,6 @@ use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
     ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
 };
-use cranelift_native;
-#[cfg(not(windows))]
-use libc;
 use log::info;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
@@ -25,8 +22,6 @@ use std::ptr;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicPtr, Ordering};
 use target_lexicon::PointerWidth;
-#[cfg(windows)]
-use winapi;
 
 const EXECUTABLE_DATA_ALIGNMENT: u64 = 0x10;
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
