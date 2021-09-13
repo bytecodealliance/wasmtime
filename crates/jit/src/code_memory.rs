@@ -88,6 +88,7 @@ impl CodeMemory {
             mmap: &self.mmap,
             text: &[],
         };
+        let mmap_ptr = self.mmap.as_ptr() as u64;
 
         // Sanity-check that all sections are aligned correctly.
         for section in ret.obj.sections() {
@@ -98,7 +99,7 @@ impl CodeMemory {
             if section.align() == 0 || data.len() == 0 {
                 continue;
             }
-            if data.as_ptr() as u64 % section.align() != 0 {
+            if (data.as_ptr() as u64 - mmap_ptr) % section.align() != 0 {
                 bail!(
                     "section `{}` isn't aligned to {:#x}",
                     section.name().unwrap_or("ERROR"),
