@@ -95,7 +95,7 @@ impl Compiler for Lightbeam {
         _ty: &WasmFuncType,
         _host_fn: usize,
         _obj: &mut Object,
-    ) -> Result<(Trampoline, Trampoline)> {
+    ) -> Result<(Trampoline, Trampoline, Trampoline)> {
         unimplemented!()
     }
 
