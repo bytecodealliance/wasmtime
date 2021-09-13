@@ -402,7 +402,7 @@ impl Func {
     /// }
     ///
     /// // (func (param i64 f64 v128) (result f32 i32))
-    /// extern "C" fn f3(
+    /// extern "C" fn f4(
     ///     userdata: usize,
     ///     caller: &mut Caller<'_, ()>,
     ///     wasm_param1: i64,
