@@ -76,6 +76,16 @@ where
                     .as_slice();
                 DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
             }
+            InstructionData::Shuffle { mask, .. } => {
+                let mask = state
+                    .get_current_function()
+                    .dfg
+                    .immediates
+                    .get(mask)
+                    .unwrap()
+                    .as_slice();
+                DataValue::V128(mask.try_into().expect("a 16-byte vector mask"))
+            }
             _ => inst.imm_value().unwrap(),
         })
     };
@@ -794,7 +804,20 @@ where
             arg(0)?,
             ValueConversionKind::RoundNearestEven(ctrl_ty),
         )?),
-        Opcode::Shuffle => unimplemented!("Shuffle"),
+        Opcode::Shuffle => {
+            let mask = imm().into_array()?;
+            let a = Value::into_array(&arg(0)?)?;
+            let b = Value::into_array(&arg(1)?)?;
+            let mut new = [0u8; 16];
+            for i in 0..mask.len() {
+                if (mask[i] as usize) < a.len() {
+                    new[i] = a[mask[i] as usize];
+                } else if (mask[i] as usize - a.len()) < b.len() {
+                    new[i] = b[mask[i] as usize - a.len()];
+                } // else leave as 0.
+            }
+            assign(Value::vector(new, ctrl_ty)?)
+        }
         Opcode::Swizzle => {
             let x = Value::into_array(&arg(0)?)?;
             let s = Value::into_array(&arg(1)?)?;
