@@ -4124,6 +4124,17 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::VecMisc {
+            op: VecMisc2::Fabs,
+            rd: writable_vreg(3),
+            rn: vreg(22),
+            size: VectorSize::Size64x2,
+        },
+        "C3FAE04E",
+        "fabs v3.2d, v22.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
             op: VecMisc2::Fneg,
             rd: writable_vreg(31),
             rn: vreg(0),
@@ -4131,6 +4142,28 @@ fn test_aarch64_binemit() {
         },
         "1FF8A06E",
         "fneg v31.4s, v0.4s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fneg,
+            rd: writable_vreg(11),
+            rn: vreg(6),
+            size: VectorSize::Size64x2,
+        },
+        "CBF8E06E",
+        "fneg v11.2d, v6.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fsqrt,
+            rd: writable_vreg(18),
+            rn: vreg(25),
+            size: VectorSize::Size32x2,
+        },
+        "32FBA12E",
+        "fsqrt v18.2s, v25.2s",
     ));
 
     insns.push((
@@ -4164,6 +4197,28 @@ fn test_aarch64_binemit() {
         },
         "C4BAA14E",
         "fcvtzs v4.4s, v22.4s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcvtzs,
+            rd: writable_vreg(0),
+            rn: vreg(31),
+            size: VectorSize::Size64x2,
+        },
+        "E0BBE14E",
+        "fcvtzs v0.2d, v31.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcvtzu,
+            rd: writable_vreg(4),
+            rn: vreg(26),
+            size: VectorSize::Size32x2,
+        },
+        "44BBA12E",
+        "fcvtzu v4.2s, v26.2s",
     ));
 
     insns.push((
@@ -4202,6 +4257,17 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::VecMisc {
             op: VecMisc2::Frintn,
+            rd: writable_vreg(20),
+            rn: vreg(7),
+            size: VectorSize::Size32x2,
+        },
+        "F488210E",
+        "frintn v20.2s, v7.2s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintn,
             rd: writable_vreg(11),
             rn: vreg(18),
             size: VectorSize::Size32x4,
@@ -4219,6 +4285,17 @@ fn test_aarch64_binemit() {
         },
         "2C8A614E",
         "frintn v12.2d, v17.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintz,
+            rd: writable_vreg(1),
+            rn: vreg(30),
+            size: VectorSize::Size32x2,
+        },
+        "C19BA10E",
+        "frintz v1.2s, v30.2s",
     ));
 
     insns.push((
@@ -4246,6 +4323,17 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::VecMisc {
             op: VecMisc2::Frintm,
+            rd: writable_vreg(15),
+            rn: vreg(7),
+            size: VectorSize::Size32x2,
+        },
+        "EF98210E",
+        "frintm v15.2s, v7.2s",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintm,
             rd: writable_vreg(11),
             rn: vreg(18),
             size: VectorSize::Size32x4,
@@ -4263,6 +4351,17 @@ fn test_aarch64_binemit() {
         },
         "2C9A614E",
         "frintm v12.2d, v17.2d",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Frintp,
+            rd: writable_vreg(3),
+            rn: vreg(4),
+            size: VectorSize::Size32x2,
+        },
+        "8388A10E",
+        "frintp v3.2s, v4.2s",
     ));
 
     insns.push((

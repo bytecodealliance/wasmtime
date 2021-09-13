@@ -846,6 +846,7 @@ pub enum Inst {
     },
 
     /// Zero-extend a SIMD & FP scalar to the full width of a vector register.
+    /// 16-bit scalars require half-precision floating-point support (FEAT_FP16).
     FpuExtend {
         rd: Writable<Reg>,
         rn: Reg,
