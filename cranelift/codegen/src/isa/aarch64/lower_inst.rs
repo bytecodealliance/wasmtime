@@ -48,7 +48,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 I32 => (((value as i64) << 32) >> 32) as u64,
                 I64 | R64 => value,
                 ty if ty.is_bool() => value,
-                ty => unreachable!("Unknown type for const: {}", ty),
+                ty => {
+                    return Err(CodegenError::Unsupported(format!(
+                        "{}: Unsupported type: {:?}",
+                        op, ty
+                    )))
+                }
             };
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             lower_constant_u64(ctx, rd, value);
@@ -202,7 +207,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
         Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat => {
             let ty = ty.unwrap();
-            assert!(ty.is_vector());
+
+            if !ty.is_vector() || ty_bits(ty) > 128 {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, ty
+                )));
+            }
+
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
@@ -393,12 +405,24 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     });
                 }
                 _ => {
-                    panic!("Unsupported argument type for umulhi/smulhi: {}", input_ty);
+                    return Err(CodegenError::Unsupported(format!(
+                        "{}: Unsupported type: {:?}",
+                        op, input_ty
+                    )));
                 }
             }
         }
 
         Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem => {
+            let ty = ty.unwrap();
+
+            if ty.is_vector() || ty_bits(ty) > 64 {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, ty
+                )));
+            }
+
             let is_signed = match op {
                 Opcode::Udiv | Opcode::Urem => false,
                 Opcode::Sdiv | Opcode::Srem => true,
@@ -480,7 +504,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     });
 
                     // Check for signed overflow. The only case is min_value / -1.
-                    let ty = ty.unwrap();
                     // The following checks must be done in 32-bit or 64-bit, depending
                     // on the input type. Even though the initial div instruction is
                     // always done in 64-bit currently.
@@ -521,6 +544,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Uextend | Opcode::Sextend => {
+            let output_ty = ty.unwrap();
+
+            if output_ty.is_vector() {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, output_ty
+                )));
+            }
+
             if op == Opcode::Uextend {
                 let inputs = ctx.get_input_as_source_or_const(inputs[0].insn, inputs[0].input);
                 if let Some((atomic_load, 0)) = inputs.inst {
@@ -534,7 +566,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                 }
             }
-            let output_ty = ty.unwrap();
             let input_ty = ctx.input_ty(insn, 0);
             let from_bits = ty_bits(input_ty) as u8;
             let to_bits = ty_bits(output_ty) as u8;
@@ -835,6 +866,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
             let ty_bits_size = ty_bits(ty) as u8;
 
+            if ty.is_vector() {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, ty
+                )));
+            }
+
             // TODO: We can do much better codegen if we have a constant amt
             if ty == I128 {
                 let dst = get_output_reg(ctx, outputs[0]);
@@ -1043,7 +1081,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let op_ty = match ty {
                 I8 | I16 | I32 => I32,
                 I64 | I128 => I64,
-                _ => panic!("Unsupported type for Bitrev/Clz/Cls"),
+                _ => {
+                    return Err(CodegenError::Unsupported(format!(
+                        "{}: Unsupported type: {:?}",
+                        op, ty
+                    )))
+                }
             };
             let bitop = match op {
                 Opcode::Clz | Opcode::Cls | Opcode::Bitrev => BitOp::from((op, op_ty)),
@@ -1170,7 +1213,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         I16 => Some(16),
                         I32 => None,
                         I64 => None,
-                        _ => panic!("Unsupported type for Bitrev"),
+                        _ => unreachable!(),
                     };
                     if let Some(s) = right_shift {
                         ctx.emit(Inst::AluRRImmShift {
@@ -1371,7 +1414,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             // which is correct in a little endian environment.
                             (64, _, true) => Inst::FpuLoad64 { rd, mem, flags },
                             (128, _, true) => Inst::FpuLoad128 { rd, mem, flags },
-                            _ => panic!("Unsupported size in load"),
+                            _ => {
+                                return Err(CodegenError::Unsupported(format!(
+                                    "Unsupported type in load: {:?}",
+                                    elem_ty
+                                )))
+                            }
                         });
 
                         let vec_extend = match op {
@@ -1399,8 +1447,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                                 high_half: false,
                             });
                         }
+
+                        Ok(())
                     },
-                );
+                )?;
             }
         }
 
@@ -1446,7 +1496,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (64, false) => Inst::Store64 { rd, mem, flags },
                     (64, true) => Inst::FpuStore64 { rd, mem, flags },
                     (128, _) => Inst::FpuStore128 { rd, mem, flags },
-                    _ => panic!("Unsupported size in store"),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "Unsupported type in store: {:?}",
+                            elem_ty
+                        )))
+                    }
                 });
             }
         }
@@ -1631,7 +1686,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         rm: rhs.regs()[1],
                     });
                 }
-                (_, _) => ctx.emit(Inst::CSel { cond, rd, rn, rm }),
+                (false, bits) if bits <= 64 => ctx.emit(Inst::CSel { cond, rd, rn, rm }),
+                _ => {
+                    return Err(CodegenError::Unsupported(format!(
+                        "Select: Unsupported type: {:?}",
+                        ty
+                    )));
+                }
             }
         }
 
@@ -1653,8 +1714,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::FpuCSel32 { cond, rd, rn, rm });
             } else if is_float && bits == 64 {
                 ctx.emit(Inst::FpuCSel64 { cond, rd, rn, rm });
-            } else {
+            } else if !is_float && bits <= 64 {
                 ctx.emit(Inst::CSel { cond, rd, rn, rm });
+            } else {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, ty
+                )));
             }
         }
 
@@ -1774,23 +1840,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let from_bits = ty_bits(from_ty);
             let to_bits = ty_bits(to_ty);
 
-            assert!(
-                from_bits <= 64 && to_bits <= 64,
-                "Vector Bextend not supported yet"
-            );
+            if from_ty.is_vector() || from_bits > 64 || to_bits > 64 {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, from_ty
+                )));
+            }
+
             assert!(from_bits <= to_bits);
 
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+
             if from_bits == to_bits {
-                // Nothing.
+                ctx.emit(Inst::gen_move(rd, rn, to_ty));
             } else {
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let to_bits = if to_bits == 64 {
-                    64
-                } else {
-                    assert!(to_bits <= 32);
-                    32
-                };
+                let to_bits = if to_bits > 32 { 64 } else { 32 };
                 let from_bits = from_bits as u8;
                 ctx.emit(Inst::Extend {
                     rd,
@@ -1930,7 +1995,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     64 => {
                         ctx.emit(Inst::FpuCmp64 { rn, rm });
                     }
-                    _ => panic!("Bad float size"),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "Fcmp: Unsupported type: {:?}",
+                            ty
+                        )))
+                    }
                 }
                 materialize_bool_result(ctx, insn, rd, cond);
             } else {
@@ -2212,8 +2282,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                             ctx.emit(addr_inst);
                         }
                         ctx.emit(Inst::VecLoadReplicate { rd, rn: addr, size });
+
+                        Ok(())
                     },
-                );
+                )?;
             } else {
                 let input_ty = ctx.input_ty(insn, 0);
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -2247,8 +2319,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::VallTrue if ty_bits(ctx.input_ty(insn, 0).lane_type()) == 64 => {
-            debug_assert!(ctx.input_ty(insn, 0).is_vector());
+        Opcode::VallTrue if ctx.input_ty(insn, 0).lane_bits() == 64 => {
+            let input_ty = ctx.input_ty(insn, 0);
+
+            if input_ty.lane_count() != 2 {
+                return Err(CodegenError::Unsupported(format!(
+                    "VallTrue: unsupported type {:?}",
+                    input_ty
+                )));
+            }
 
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -2554,7 +2633,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         ),
                     });
                 }
-                _ => panic!("arm64 isel: VhighBits unhandled, ty = {:?}", ty),
+                _ => {
+                    return Err(CodegenError::Unsupported(format!(
+                        "VhighBits: Unsupported type: {:?}",
+                        ty
+                    )))
+                }
             }
         }
 
@@ -2601,11 +2685,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Isplit => {
-            assert_eq!(
-                ctx.input_ty(insn, 0),
-                I128,
-                "Isplit only implemented for i128's"
-            );
+            let input_ty = ctx.input_ty(insn, 0);
+
+            if input_ty != I128 {
+                return Err(CodegenError::Unsupported(format!(
+                    "Isplit: Unsupported type: {:?}",
+                    input_ty
+                )));
+            }
+
             assert_eq!(ctx.output_ty(insn, 0), I64);
             assert_eq!(ctx.output_ty(insn, 1), I64);
 
@@ -2618,11 +2706,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Iconcat => {
-            assert_eq!(
-                ctx.output_ty(insn, 0),
-                I128,
-                "Iconcat only implemented for i128's"
-            );
+            let ty = ty.unwrap();
+
+            if ty != I128 {
+                return Err(CodegenError::Unsupported(format!(
+                    "Iconcat: Unsupported type: {:?}",
+                    ty
+                )));
+            }
+
             assert_eq!(ctx.input_ty(insn, 0), I64);
             assert_eq!(ctx.input_ty(insn, 1), I64);
 
@@ -2635,6 +2727,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {
+            let ty = ty.unwrap();
+
+            if !ty.is_vector() {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, ty
+                )));
+            }
+
             let alu_op = match op {
                 Opcode::Umin => VecALUOp::Umin,
                 Opcode::Imin => VecALUOp::Smin,
@@ -2645,7 +2746,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ty = ty.unwrap();
             ctx.emit(Inst::VecRRR {
                 alu_op,
                 rd,
@@ -2768,7 +2868,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (Opcode::Fmin, 64) => FPUOp2::Min64,
                     (Opcode::Fmax, 32) => FPUOp2::Max32,
                     (Opcode::Fmax, 64) => FPUOp2::Max64,
-                    _ => panic!("Unknown op/bits combination"),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "{}: Unsupported type: {:?}",
+                            op, ty
+                        )))
+                    }
                 };
                 ctx.emit(Inst::FpuRRR { fpu_op, rd, rn, rm });
             } else {
@@ -2825,7 +2930,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     size: VectorSize::Size8x16,
                 });
             } else {
-                panic!("Opcode::FminPseudo | Opcode::FmaxPseudo: unhandled type");
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, ty
+                )));
             }
         }
 
@@ -2842,11 +2950,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (Opcode::Fneg, 64) => FPUOp1::Neg64,
                     (Opcode::Fabs, 32) => FPUOp1::Abs32,
                     (Opcode::Fabs, 64) => FPUOp1::Abs64,
-                    (Opcode::Fpromote, 32) => panic!("Cannot promote to 32 bits"),
                     (Opcode::Fpromote, 64) => FPUOp1::Cvt32To64,
                     (Opcode::Fdemote, 32) => FPUOp1::Cvt64To32,
-                    (Opcode::Fdemote, 64) => panic!("Cannot demote to 64 bits"),
-                    _ => panic!("Unknown op/bits combination"),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "{}: Unsupported type: {:?}",
+                            op, ty
+                        )))
+                    }
                 };
                 ctx.emit(Inst::FpuRR { fpu_op, rd, rn });
             } else {
@@ -2854,7 +2965,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     Opcode::Fabs => VecMisc2::Fabs,
                     Opcode::Fneg => VecMisc2::Fneg,
                     Opcode::Sqrt => VecMisc2::Fsqrt,
-                    _ => unimplemented!(),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "{}: Unsupported type: {:?}",
+                            op, ty
+                        )))
+                    }
                 };
 
                 ctx.emit(Inst::VecMisc {
@@ -2879,7 +2995,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (Opcode::Trunc, 64) => FpuRoundMode::Zero64,
                     (Opcode::Nearest, 32) => FpuRoundMode::Nearest32,
                     (Opcode::Nearest, 64) => FpuRoundMode::Nearest64,
-                    _ => panic!("Unknown op/bits combination (scalar)"),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "{}: Unsupported type: {:?}",
+                            op, ty
+                        )))
+                    }
                 };
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -2894,7 +3015,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (Opcode::Trunc, F64X2) => (VecMisc2::Frintz, VectorSize::Size64x2),
                     (Opcode::Nearest, F32X4) => (VecMisc2::Frintn, VectorSize::Size32x4),
                     (Opcode::Nearest, F64X2) => (VecMisc2::Frintn, VectorSize::Size64x2),
-                    _ => panic!("Unknown op/ty combination (vector){:?}", ty),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "{}: Unsupported type: {:?}",
+                            op, ty
+                        )))
+                    }
                 };
                 let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
                 let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -2903,11 +3029,17 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Fma => {
-            let bits = ty_bits(ctx.output_ty(insn, 0));
+            let ty = ty.unwrap();
+            let bits = ty_bits(ty);
             let fpu_op = match bits {
                 32 => FPUOp3::MAdd32,
                 64 => FPUOp3::MAdd64,
-                _ => panic!("Unknown op size"),
+                _ => {
+                    return Err(CodegenError::Unsupported(format!(
+                        "Fma: Unsupported type: {:?}",
+                        ty
+                    )))
+                }
             };
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
@@ -2934,8 +3066,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             //  sli vd, vtmp, #63 / #31
 
             let ty = ctx.output_ty(insn, 0);
+
+            if ty != F32 && ty != F64 {
+                return Err(CodegenError::Unsupported(format!(
+                    "Fcopysign: Unsupported type: {:?}",
+                    ty
+                )));
+            }
+
             let bits = ty_bits(ty) as u8;
-            assert!(bits == 32 || bits == 64);
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -2962,8 +3101,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtToUint | Opcode::FcvtToSint => {
-            let in_bits = ty_bits(ctx.input_ty(insn, 0));
-            let out_bits = ty_bits(ctx.output_ty(insn, 0));
+            let input_ty = ctx.input_ty(insn, 0);
+            let in_bits = ty_bits(input_ty);
+            let output_ty = ty.unwrap();
+            let out_bits = ty_bits(output_ty);
             let signed = op == Opcode::FcvtToSint;
             let op = match (signed, in_bits, out_bits) {
                 (false, 32, 8) | (false, 32, 16) | (false, 32, 32) => FpuToIntOp::F32ToU32,
@@ -2974,7 +3115,12 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 (true, 64, 8) | (true, 64, 16) | (true, 64, 32) => FpuToIntOp::F64ToI32,
                 (false, 64, 64) => FpuToIntOp::F64ToU64,
                 (true, 64, 64) => FpuToIntOp::F64ToI64,
-                _ => panic!("Unknown input/output-bits combination"),
+                _ => {
+                    return Err(CodegenError::Unsupported(format!(
+                        "{}: Unsupported types: {:?} -> {:?}",
+                        op, input_ty, output_ty
+                    )))
+                }
             };
 
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -3032,7 +3178,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (false, 16) => (-1., FloatCC::GreaterThan, u16::max_value() as f32 + 1.),
                     (false, 32) => (-1., FloatCC::GreaterThan, u32::max_value() as f32 + 1.),
                     (false, 64) => (-1., FloatCC::GreaterThan, u64::max_value() as f32 + 1.),
-                    _ => panic!("Unknown input/output-bits combination"),
+                    _ => unreachable!(),
                 };
 
                 // >= low_bound
@@ -3085,7 +3231,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (false, 16) => (-1., FloatCC::GreaterThan, u16::max_value() as f64 + 1.),
                     (false, 32) => (-1., FloatCC::GreaterThan, u32::max_value() as f64 + 1.),
                     (false, 64) => (-1., FloatCC::GreaterThan, u64::max_value() as f64 + 1.),
-                    _ => panic!("Unknown input/output-bits combination"),
+                    _ => unreachable!(),
                 };
 
                 // >= low_bound
@@ -3137,7 +3283,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     size: VectorSize::from_ty(ty),
                 });
             } else {
-                let in_bits = ty_bits(ctx.input_ty(insn, 0));
+                let input_ty = ctx.input_ty(insn, 0);
+                let in_bits = ty_bits(input_ty);
                 let out_bits = ty_bits(ty);
                 let op = match (signed, in_bits, out_bits) {
                     (false, 8, 32) | (false, 16, 32) | (false, 32, 32) => IntToFpuOp::U32ToF32,
@@ -3148,14 +3295,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     (true, 64, 32) => IntToFpuOp::I64ToF32,
                     (false, 64, 64) => IntToFpuOp::U64ToF64,
                     (true, 64, 64) => IntToFpuOp::I64ToF64,
-                    _ => panic!("Unknown input/output-bits combination"),
+                    _ => {
+                        return Err(CodegenError::Unsupported(format!(
+                            "{}: Unsupported types: {:?} -> {:?}",
+                            op, input_ty, ty
+                        )))
+                    }
                 };
                 let narrow_mode = match (signed, in_bits) {
                     (false, 8) | (false, 16) | (false, 32) => NarrowValueMode::ZeroExtend32,
                     (true, 8) | (true, 16) | (true, 32) => NarrowValueMode::SignExtend32,
                     (false, 64) => NarrowValueMode::ZeroExtend64,
                     (true, 64) => NarrowValueMode::SignExtend64,
-                    _ => panic!("Unknown input size"),
+                    _ => unreachable!(),
                 };
                 let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
                 ctx.emit(Inst::IntToFpu { op, rd, rn });
@@ -3194,7 +3346,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // FCSEL Vtmp2, Vtmp1, Vtmp2, NE  // on NaN, select 0
                 // convert Rout, Vtmp2
 
-                assert!(in_bits == 32 || in_bits == 64);
+                assert!(in_ty.is_float() && (in_bits == 32 || in_bits == 64));
                 assert!(out_bits == 32 || out_bits == 64);
 
                 let min: f64 = match (out_bits, out_signed) {
@@ -3414,20 +3566,20 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 .map_or(true, |insn| {
                     const_param_to_u128(ctx, insn).expect("Invalid immediate bytes") != 0
                 });
-            let op = match (op, ty.unwrap().lane_type()) {
-                (Opcode::Snarrow, I8) => VecRRNarrowOp::Sqxtn16,
-                (Opcode::Snarrow, I16) => VecRRNarrowOp::Sqxtn32,
-                (Opcode::Snarrow, I32) => VecRRNarrowOp::Sqxtn64,
-                (Opcode::Unarrow, I8) => VecRRNarrowOp::Sqxtun16,
-                (Opcode::Unarrow, I16) => VecRRNarrowOp::Sqxtun32,
-                (Opcode::Unarrow, I32) => VecRRNarrowOp::Sqxtun64,
-                (Opcode::Uunarrow, I8) => VecRRNarrowOp::Uqxtn16,
-                (Opcode::Uunarrow, I16) => VecRRNarrowOp::Uqxtn32,
-                (Opcode::Uunarrow, I32) => VecRRNarrowOp::Uqxtn64,
-                (_, lane_type) => {
+            let op = match (op, ty.unwrap()) {
+                (Opcode::Snarrow, I8X16) => VecRRNarrowOp::Sqxtn16,
+                (Opcode::Snarrow, I16X8) => VecRRNarrowOp::Sqxtn32,
+                (Opcode::Snarrow, I32X4) => VecRRNarrowOp::Sqxtn64,
+                (Opcode::Unarrow, I8X16) => VecRRNarrowOp::Sqxtun16,
+                (Opcode::Unarrow, I16X8) => VecRRNarrowOp::Sqxtun32,
+                (Opcode::Unarrow, I32X4) => VecRRNarrowOp::Sqxtun64,
+                (Opcode::Uunarrow, I8X16) => VecRRNarrowOp::Uqxtn16,
+                (Opcode::Uunarrow, I16X8) => VecRRNarrowOp::Uqxtn32,
+                (Opcode::Uunarrow, I32X4) => VecRRNarrowOp::Uqxtn64,
+                (_, ty) => {
                     return Err(CodegenError::Unsupported(format!(
-                        "Unsupported SIMD vector lane type: {:?}",
-                        lane_type
+                        "{}: Unsupported type: {:?}",
+                        op, ty
                     )))
                 }
             };
@@ -3454,26 +3606,25 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
-            let lane_type = ty.unwrap().lane_type();
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let (t, high_half) = match (lane_type, op) {
-                (I16, Opcode::SwidenLow) => (VecExtendOp::Sxtl8, false),
-                (I16, Opcode::SwidenHigh) => (VecExtendOp::Sxtl8, true),
-                (I16, Opcode::UwidenLow) => (VecExtendOp::Uxtl8, false),
-                (I16, Opcode::UwidenHigh) => (VecExtendOp::Uxtl8, true),
-                (I32, Opcode::SwidenLow) => (VecExtendOp::Sxtl16, false),
-                (I32, Opcode::SwidenHigh) => (VecExtendOp::Sxtl16, true),
-                (I32, Opcode::UwidenLow) => (VecExtendOp::Uxtl16, false),
-                (I32, Opcode::UwidenHigh) => (VecExtendOp::Uxtl16, true),
-                (I64, Opcode::SwidenLow) => (VecExtendOp::Sxtl32, false),
-                (I64, Opcode::SwidenHigh) => (VecExtendOp::Sxtl32, true),
-                (I64, Opcode::UwidenLow) => (VecExtendOp::Uxtl32, false),
-                (I64, Opcode::UwidenHigh) => (VecExtendOp::Uxtl32, true),
-                _ => {
+            let (t, high_half) = match (ty.unwrap(), op) {
+                (I16X8, Opcode::SwidenLow) => (VecExtendOp::Sxtl8, false),
+                (I16X8, Opcode::SwidenHigh) => (VecExtendOp::Sxtl8, true),
+                (I16X8, Opcode::UwidenLow) => (VecExtendOp::Uxtl8, false),
+                (I16X8, Opcode::UwidenHigh) => (VecExtendOp::Uxtl8, true),
+                (I32X4, Opcode::SwidenLow) => (VecExtendOp::Sxtl16, false),
+                (I32X4, Opcode::SwidenHigh) => (VecExtendOp::Sxtl16, true),
+                (I32X4, Opcode::UwidenLow) => (VecExtendOp::Uxtl16, false),
+                (I32X4, Opcode::UwidenHigh) => (VecExtendOp::Uxtl16, true),
+                (I64X2, Opcode::SwidenLow) => (VecExtendOp::Sxtl32, false),
+                (I64X2, Opcode::SwidenHigh) => (VecExtendOp::Sxtl32, true),
+                (I64X2, Opcode::UwidenLow) => (VecExtendOp::Uxtl32, false),
+                (I64X2, Opcode::UwidenHigh) => (VecExtendOp::Uxtl32, true),
+                (ty, _) => {
                     return Err(CodegenError::Unsupported(format!(
-                        "Unsupported SIMD vector lane type: {:?}",
-                        lane_type
+                        "{}: Unsupported type: {:?}",
+                        op, ty
                     )));
                 }
             };
@@ -3497,10 +3648,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::gen_move(dst, x0, I64));
             }
             _ => {
-                todo!(
+                return Err(CodegenError::Unsupported(format!(
                     "Unimplemented TLS model in AArch64 backend: {:?}",
                     flags.tls_model()
-                );
+                )));
             }
         },
 
@@ -3509,7 +3660,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             if !ty.is_vector() || (ty.lane_type() != I16 && ty.lane_type() != I32) {
                 return Err(CodegenError::Unsupported(format!(
-                    "Unsupported type: {:?}",
+                    "SqmulRoundSat: Unsupported type: {:?}",
                     ty
                 )));
             }
@@ -3583,7 +3734,10 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::ConstAddr | Opcode::Vconcat | Opcode::Vsplit => {
-            unimplemented!("lowering {}", op)
+            return Err(CodegenError::Unsupported(format!(
+                "Unimplemented lowering: {}",
+                op
+            )));
         }
     }
 
