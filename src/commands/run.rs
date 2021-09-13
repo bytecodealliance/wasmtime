@@ -2,11 +2,13 @@
 
 use crate::{CommonOptions, WasiModules};
 use anyhow::{anyhow, bail, Context as _, Result};
+use std::fs::File;
+use std::io::Read;
 use std::thread;
 use std::time::Duration;
 use std::{
     ffi::{OsStr, OsString},
-    path::{Component, PathBuf},
+    path::{Component, Path, PathBuf},
     process,
 };
 use structopt::{clap::AppSettings, StructOpt};
@@ -79,6 +81,15 @@ pub struct RunCommand {
     /// Allow unknown exports when running commands.
     #[structopt(long = "allow-unknown-exports")]
     allow_unknown_exports: bool,
+
+    /// Allow executing precompiled WebAssembly modules as `*.cwasm` files.
+    ///
+    /// Note that this option is not safe to pass if the module being passed in
+    /// is arbitrary user input. Only `wasmtime`-precompiled modules generated
+    /// via the `wasmtime compile` command or equivalent should be passed as an
+    /// argument with this option specified.
+    #[structopt(long = "allow-precompiled")]
+    allow_precompiled: bool,
 
     /// Grant access to the given host directory
     #[structopt(long = "dir", number_of_values = 1, value_name = "DIRECTORY")]
@@ -159,7 +170,7 @@ impl RunCommand {
         // Load the preload wasm modules.
         for (name, path) in self.preloads.iter() {
             // Read the wasm module binary either as `*.wat` or a raw binary
-            let module = Module::from_file(&engine, path)?;
+            let module = self.load_module(&engine, path)?;
 
             // Add the module's functions to the linker.
             linker.module(&mut store, name, &module).context(format!(
@@ -266,7 +277,7 @@ impl RunCommand {
 
         // Read the wasm module binary either as `*.wat` or a raw binary.
         // Use "" as a default module name.
-        let module = Module::from_file(linker.engine(), &self.module)?;
+        let module = self.load_module(linker.engine(), &self.module)?;
         linker
             .module(&mut *store, "", &module)
             .context(format!("failed to instantiate {:?}", self.module))?;
@@ -359,6 +370,30 @@ impl RunCommand {
         }
 
         Ok(())
+    }
+
+    fn load_module(&self, engine: &Engine, path: &Path) -> Result<Module> {
+        // Peek at the first few bytes of the file to figure out if this is
+        // something we can pass off to `deserialize_file` which is fastest if
+        // we don't actually read the whole file into memory. Note that this
+        // behavior is disabled by default, though, because it's not safe to
+        // pass arbitrary user input to this command with `--allow-precompiled`
+        let mut file =
+            File::open(path).with_context(|| format!("failed to open: {}", path.display()))?;
+        let mut magic = [0; 4];
+        if let Ok(()) = file.read_exact(&mut magic) {
+            if &magic == b"\x7fELF" {
+                if self.allow_precompiled {
+                    return unsafe { Module::deserialize_file(engine, path) };
+                }
+                bail!(
+                    "cannot load precompiled module `{}` unless --allow-precompiled is passed",
+                    path.display()
+                )
+            }
+        }
+
+        Module::from_file(engine, path)
     }
 }
 

@@ -381,3 +381,18 @@ fn exit_with_saved_fprs() -> Result<()> {
     assert!(output.stdout.is_empty());
     Ok(())
 }
+
+#[test]
+fn run_cwasm() -> Result<()> {
+    let cwasm = NamedTempFile::new()?;
+    let stdout = run_wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/simple.wat",
+        "-o",
+        cwasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
+    let stdout = run_wasmtime(&["run", "--allow-precompiled", cwasm.path().to_str().unwrap()])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
