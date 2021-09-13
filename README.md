@@ -92,7 +92,7 @@ You can use Wasmtime from a variety of different languages through embeddings of
 the implementation:
 
 * **[Rust]** - the [`wasmtime` crate]
-* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers]
+* **[C]** - the [`wasm.h`, `wasi.h`, and `wasmtime.h` headers][c-headers] or use [`wasmtime` Conan package]
 * **[C++]** - the [`wasmtime-cpp` repository][wasmtime-cpp]
 * **[Python]** - the [`wasmtime` PyPI package]
 * **[.NET]** - the [`Wasmtime` NuGet package]
@@ -109,6 +109,7 @@ the implementation:
 [Go]: https://bytecodealliance.github.io/wasmtime/lang-go.html
 [`wasmtime-go` repository]: https://pkg.go.dev/github.com/bytecodealliance/wasmtime-go
 [wasmtime-cpp]: https://github.com/bytecodealliance/wasmtime-cpp
+[`wasmtime` Conan package]: https://conan.io/center/wasmtime
 
 ## Documentation
 
