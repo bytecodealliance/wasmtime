@@ -14,6 +14,29 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Even
     Ok(out)
 }
 
+/// Repeatedly call `poll_oneoff` until all the subcriptions in `in` have
+/// seen their events occur.
+unsafe fn poll_oneoff_with_retry(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Error> {
+    let mut subscriptions = r#in.to_vec();
+    let mut events = Vec::new();
+    while !subscriptions.is_empty() {
+        let mut out: Vec<wasi::Event> = Vec::new();
+        out.resize_with(subscriptions.len(), || {
+            MaybeUninit::<wasi::Event>::zeroed().assume_init()
+        });
+        let size = wasi::poll_oneoff(subscriptions.as_ptr(), out.as_mut_ptr(), subscriptions.len())?;
+        out.truncate(size);
+
+        // Append the events from this `poll` to the result.
+        events.extend_from_slice(&out);
+
+        // Assuming userdata fields are unique, filter out any subscriptions
+        // whose event has occurred.
+        subscriptions.retain(|sub| !out.iter().any(|event| event.userdata == sub.userdata));
+    }
+    Ok(events)
+}
+
 unsafe fn test_empty_poll() {
     let r#in = [];
     let mut out: Vec<wasi::Event> = Vec::new();
@@ -124,7 +147,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
             },
         },
     ];
-    let out = poll_oneoff_impl(&r#in).unwrap();
+    let out = poll_oneoff_with_retry(&r#in).unwrap();
     assert_eq!(out.len(), 2, "should return 2 events, got: {:?}", out);
     assert_eq!(
         out[0].userdata, 1,
