@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Output};
-use tempfile::NamedTempFile;
+use tempfile::{NamedTempFile, TempDir};
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
 fn run_wasmtime_for_output(args: &[&str]) -> Result<Output> {
@@ -384,15 +384,16 @@ fn exit_with_saved_fprs() -> Result<()> {
 
 #[test]
 fn run_cwasm() -> Result<()> {
-    let cwasm = NamedTempFile::new()?;
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("foo.cwasm");
     let stdout = run_wasmtime(&[
         "compile",
         "tests/all/cli_tests/simple.wat",
         "-o",
-        cwasm.path().to_str().unwrap(),
+        cwasm.to_str().unwrap(),
     ])?;
     assert_eq!(stdout, "");
-    let stdout = run_wasmtime(&["run", "--allow-precompiled", cwasm.path().to_str().unwrap()])?;
+    let stdout = run_wasmtime(&["run", "--allow-precompiled", cwasm.to_str().unwrap()])?;
     assert_eq!(stdout, "");
     Ok(())
 }
