@@ -1,0 +1,23 @@
+test interpret
+; aarch64 yields cls_i8(1) == 30, which is incorrect
+
+function %cls_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = cls v0
+    return v1
+}
+; run: %cls_i8(1) == 6
+; run: %cls_i8(0x40) == 0
+; run: %cls_i8(-1) == 7
+; run: %cls_i8(0) == 7
+
+function %cls_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = cls v0
+    return v1
+}
+; run: %cls_i16(1) == 14
+; run: %cls_i16(0x4000) == 0
+; run: %cls_i16(-1) == 15
+; run: %cls_i16(0) == 15
+

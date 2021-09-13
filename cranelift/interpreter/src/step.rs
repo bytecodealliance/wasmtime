@@ -668,11 +668,29 @@ where
         Opcode::IshlImm => binary(Value::shl, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::UshrImm => binary(Value::ushr, arg(0)?, imm_as_ctrl_ty()?)?,
         Opcode::SshrImm => binary(Value::ishr, arg(0)?, imm_as_ctrl_ty()?)?,
-        Opcode::Bitrev => unimplemented!("Bitrev"),
-        Opcode::Clz => unimplemented!("Clz"),
-        Opcode::Cls => unimplemented!("Cls"),
-        Opcode::Ctz => unimplemented!("Ctz"),
-        Opcode::Popcnt => unimplemented!("Popcnt"),
+        Opcode::Bitrev => assign(Value::reverse_bits(arg(0)?)?),
+        Opcode::Clz => assign(arg(0)?.leading_zeros()?),
+        Opcode::Cls => {
+            let count = if Value::lt(&arg(0)?, &Value::int(0, ctrl_ty)?)? {
+                arg(0)?.leading_ones()?
+            } else {
+                arg(0)?.leading_zeros()?
+            };
+            assign(Value::sub(count, Value::int(1, ctrl_ty)?)?)
+        }
+        Opcode::Ctz => assign(arg(0)?.trailing_zeros()?),
+        Opcode::Popcnt => {
+            let count = if arg(0)?.ty().is_int() {
+                arg(0)?.count_ones()?
+            } else {
+                let lanes = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
+                    .into_iter()
+                    .map(|lane| lane.count_ones())
+                    .collect::<ValueResult<SimdVec<V>>>()?;
+                vectorizelanes(&lanes, ctrl_ty)?
+            };
+            assign(count)
+        }
         Opcode::Fcmp => assign(Value::bool(
             fcmp(inst.fp_cond_code().unwrap(), &arg(0)?, &arg(1)?)?,
             ctrl_ty.as_bool(),

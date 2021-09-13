@@ -1,0 +1,40 @@
+test interpret
+test run
+target aarch64
+target x86_64
+
+function %bitrev_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = bitrev v0
+    return v1
+}
+; run: %bitrev_i8(1) == -128
+; run: %bitrev_i8(64) == 2
+; run: %bitrev_i8(-1) == -1
+
+function %bitrev_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = bitrev v0
+    return v1
+}
+; run: %bitrev_i16(1) == -32768
+; run: %bitrev_i16(16384) == 2
+; run: %bitrev_i16(-1) == -1
+
+function %bitrev_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bitrev v0
+    return v1
+}
+; run: %bitrev_i32(1) == -2147483648
+; run: %bitrev_i32(1073741824) == 2
+; run: %bitrev_i32(-1) == -1
+
+function %bitrev_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bitrev v0
+    return v1
+}
+; run: %bitrev_i64(1) == -9223372036854775808
+; run: %bitrev_i64(4611686018427387904) == 2
+; run: %bitrev_i64(-1) == -1
