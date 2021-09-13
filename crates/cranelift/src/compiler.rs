@@ -530,6 +530,7 @@ impl Compiler {
     fn host_to_c_trampoline(&self, ty: &WasmFuncType) -> Result<CompiledFunction, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
+        let mut uses_reference_types = false;
 
         // This is the signature of the C stub that this trampoline calls.
         // Effectively this is the definition of how wasmtime translates a wasm
@@ -551,7 +552,10 @@ impl Compiler {
                     value_type(isa, *ty)
                 }
                 WasmType::V128 => pointer_type,
-                WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => unimplemented!(),
+                WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => {
+                    uses_reference_types = true;
+                    continue;
+                }
             };
             c_sig.params.push(ir::AbiParam::new(ty));
         }
@@ -588,48 +592,56 @@ impl Compiler {
         builder.switch_to_block(block0);
         builder.seal_block(block0);
 
-        // Build the arguments to the C function that we're going to call. The
-        // first two arguments are simply forwarding our own first two
-        // arguments. Next comes all the wasm parameters which are passed
-        // by-value. Finally all returns get a return pointer which points back
-        // into our `values_vec` parameter.
-        let mut args = Vec::new();
-        args.push(builder.func.dfg.block_params(block0)[0]);
-        args.push(builder.func.dfg.block_params(block0)[1]);
-        let values_vec_ptr_val = builder.func.dfg.block_params(block0)[2];
-        for (i, ty) in ty.params.iter().enumerate() {
-            let offset = (i * value_size) as i32;
-            let arg = match ty {
-                WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 => {
-                    builder.ins().load(
-                        value_type(isa, *ty),
-                        MemFlags::trusted(),
-                        values_vec_ptr_val,
-                        offset,
-                    )
-                }
-                WasmType::V128 => builder
+        if uses_reference_types {
+            // If this signature uses reference types then we can't generate a
+            // valid trampoline at this time. This won't ever actually be used
+            // in `wasmtime` so we just finish up the function to trap and leave
+            // it alone.
+            builder.ins().trap(ir::TrapCode::UnreachableCodeReached);
+        } else {
+            // Build the arguments to the C function that we're going to call. The
+            // first two arguments are simply forwarding our own first two
+            // arguments. Next comes all the wasm parameters which are passed
+            // by-value. Finally all returns get a return pointer which points back
+            // into our `values_vec` parameter.
+            let mut args = Vec::new();
+            args.push(builder.func.dfg.block_params(block0)[0]);
+            args.push(builder.func.dfg.block_params(block0)[1]);
+            let values_vec_ptr_val = builder.func.dfg.block_params(block0)[2];
+            for (i, ty) in ty.params.iter().enumerate() {
+                let offset = (i * value_size) as i32;
+                let arg = match ty {
+                    WasmType::I32 | WasmType::I64 | WasmType::F32 | WasmType::F64 => {
+                        builder.ins().load(
+                            value_type(isa, *ty),
+                            MemFlags::trusted(),
+                            values_vec_ptr_val,
+                            offset,
+                        )
+                    }
+                    WasmType::V128 => builder
+                        .ins()
+                        .iadd_imm(values_vec_ptr_val, i64::from(offset)),
+                    WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => unimplemented!(),
+                };
+                args.push(arg);
+            }
+            for (i, _ty) in ty.returns.iter().enumerate() {
+                let addr = builder
                     .ins()
-                    .iadd_imm(values_vec_ptr_val, i64::from(offset)),
-                WasmType::FuncRef | WasmType::ExternRef | WasmType::ExnRef => unimplemented!(),
-            };
-            args.push(arg);
-        }
-        for (i, _ty) in ty.returns.iter().enumerate() {
-            let addr = builder
-                .ins()
-                .iadd_imm(values_vec_ptr_val, (i * value_size) as i64);
-            args.push(addr);
-        }
+                    .iadd_imm(values_vec_ptr_val, (i * value_size) as i64);
+                args.push(addr);
+            }
 
-        // With all the arguments we call the indirect function passed as a
-        // parameter to our function, then we're good to go and we simply return
-        // that function's value.
-        let new_sig = builder.import_signature(c_sig);
-        let callee_value = builder.func.dfg.block_params(block0)[3];
-        let call = builder.ins().call_indirect(new_sig, callee_value, &args);
-        let trap = builder.inst_results(call)[0];
-        builder.ins().return_(&[trap]);
+            // With all the arguments we call the indirect function passed as a
+            // parameter to our function, then we're good to go and we simply return
+            // that function's value.
+            let new_sig = builder.import_signature(c_sig);
+            let callee_value = builder.func.dfg.block_params(block0)[3];
+            let call = builder.ins().call_indirect(new_sig, callee_value, &args);
+            let trap = builder.inst_results(call)[0];
+            builder.ins().return_(&[trap]);
+        }
         builder.finalize();
 
         let func = self.finish_trampoline(context, isa)?;

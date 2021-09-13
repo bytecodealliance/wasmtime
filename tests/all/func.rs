@@ -1016,6 +1016,7 @@ fn cabi_trap() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))] // v128 not really supported well
 fn cabi_type_mappings() -> anyhow::Result<()> {
     unsafe {
         let mut store = Store::<()>::default();
