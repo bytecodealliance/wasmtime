@@ -332,8 +332,11 @@ fn make_trampoline(signature: &ir::Signature, isa: &dyn TargetIsa) -> Function {
     let results = builder.func.dfg.inst_results(call).to_vec();
     for ((i, value), param) in results.iter().enumerate().zip(&signature.returns) {
         // Before storing return values, we convert booleans to their integer representation.
-        let value = if param.value_type.lane_type().is_bool() {
-            let ty = param.value_type.lane_type().as_int();
+        let value = if param.value_type.is_bool_vector() {
+            let ty = param.value_type.as_int();
+            builder.ins().raw_bitcast(ty, *value)
+        } else if param.value_type.is_bool() {
+            let ty = param.value_type.as_int();
             builder.ins().bint(ty, *value)
         } else {
             *value
