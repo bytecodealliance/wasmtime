@@ -1,5 +1,8 @@
 use crate::r#ref::{ref_to_val, WasmRefInner};
-use crate::{from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t, WASM_I32};
+use crate::{
+    from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_valkind_t, CStoreContextMut,
+    WASM_I32,
+};
 use std::ffi::c_void;
 use std::mem::{self, ManuallyDrop, MaybeUninit};
 use std::ptr;
@@ -288,3 +291,22 @@ pub extern "C" fn wasmtime_externref_clone(externref: ManuallyDrop<ExternRef>) -
 
 #[no_mangle]
 pub extern "C" fn wasmtime_externref_delete(_val: Option<ExternRef>) {}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_externref_to_raw(
+    cx: CStoreContextMut<'_>,
+    val: Option<ManuallyDrop<ExternRef>>,
+) -> usize {
+    match val {
+        Some(ptr) => ptr.to_raw(cx),
+        None => 0,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_externref_from_raw(
+    _cx: CStoreContextMut<'_>,
+    val: usize,
+) -> Option<ExternRef> {
+    ExternRef::from_raw(val)
+}

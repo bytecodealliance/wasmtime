@@ -102,6 +102,8 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define(
  * Note that this function does not create a #wasmtime_func_t. This creates a
  * store-independent function within the linker, allowing this function
  * definition to be used with multiple stores.
+ *
+ * For more information about host callbacks see #wasmtime_func_new.
  */
 WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func(
     wasmtime_linker_t *linker,
@@ -111,6 +113,27 @@ WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func(
     size_t name_len,
     const wasm_functype_t *ty,
     wasmtime_func_callback_t cb,
+    void *data,
+    void (*finalizer)(void*)
+);
+
+/**
+ * \brief Defines a new function in this linker.
+ *
+ * This is the same as #wasmtime_linker_define_func except that it's the analog
+ * of #wasmtime_func_new_unchecked instead of #wasmtime_func_new. Be sure to
+ * consult the documentation of #wasmtime_linker_define_func for argument
+ * information as well as #wasmtime_func_new_unchecked for why this is an
+ * unsafe API.
+ */
+WASM_API_EXTERN wasmtime_error_t* wasmtime_linker_define_func_unchecked(
+    wasmtime_linker_t *linker,
+    const char *module,
+    size_t module_len,
+    const char *name,
+    size_t name_len,
+    const wasm_functype_t *ty,
+    wasmtime_func_unchecked_callback_t cb,
     void *data,
     void (*finalizer)(void*)
 );

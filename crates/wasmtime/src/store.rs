@@ -76,7 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::{module::ModuleRegistry, Engine, Module, Trap, Val};
+use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
@@ -276,7 +276,7 @@ pub struct StoreOpaque {
     hostcall_val_storage: Vec<Val>,
     /// Same as `hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
-    wasm_u128_storage: Vec<u128>,
+    wasm_val_raw_storage: Vec<ValRaw>,
 }
 
 #[cfg(feature = "async")]
@@ -433,7 +433,7 @@ impl<T> Store<T> {
                 store_data: StoreData::new(),
                 default_callee,
                 hostcall_val_storage: Vec::new(),
-                wasm_u128_storage: Vec::new(),
+                wasm_val_raw_storage: Vec::new(),
             },
             limiter: None,
             call_hook: None,
@@ -1182,16 +1182,16 @@ impl StoreOpaque {
     /// Same as `take_hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     #[inline]
-    pub fn take_wasm_u128_storage(&mut self) -> Vec<u128> {
-        mem::take(&mut self.wasm_u128_storage)
+    pub fn take_wasm_val_raw_storage(&mut self) -> Vec<ValRaw> {
+        mem::take(&mut self.wasm_val_raw_storage)
     }
 
     /// Same as `save_hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     #[inline]
-    pub fn save_wasm_u128_storage(&mut self, storage: Vec<u128>) {
-        if storage.capacity() > self.wasm_u128_storage.capacity() {
-            self.wasm_u128_storage = storage;
+    pub fn save_wasm_val_raw_storage(&mut self, storage: Vec<ValRaw>) {
+        if storage.capacity() > self.wasm_val_raw_storage.capacity() {
+            self.wasm_val_raw_storage = storage;
         }
     }
 }

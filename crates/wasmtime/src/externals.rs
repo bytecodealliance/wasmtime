@@ -1,6 +1,5 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::{generate_global_export, generate_table_export};
-use crate::values::{from_checked_anyfunc, into_checked_anyfunc};
 use crate::{
     AsContext, AsContextMut, ExternRef, ExternType, Func, GlobalType, Instance, Memory, Module,
     Mutability, TableType, Trap, Val, ValType,
@@ -307,7 +306,7 @@ impl Global {
                         .map(|inner| ExternRef { inner }),
                 ),
                 ValType::FuncRef => {
-                    from_checked_anyfunc(definition.as_anyfunc() as *mut _, store.0)
+                    Val::FuncRef(Func::from_raw(store, definition.as_anyfunc() as usize))
                 }
                 ValType::V128 => Val::V128(*definition.as_u128()),
             }
@@ -438,28 +437,8 @@ impl Table {
     }
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
-        if init.ty() != ty.element() {
-            bail!(
-                "table initialization value type {:?} does not have expected type {:?}",
-                init.ty(),
-                ty.element(),
-            );
-        }
         let wasmtime_export = generate_table_export(store, &ty)?;
-
-        let init: runtime::TableElement = match ty.element() {
-            ValType::FuncRef => into_checked_anyfunc(init, store)?.into(),
-            ValType::ExternRef => init
-                .externref()
-                .ok_or_else(|| {
-                    anyhow!("table initialization value does not have expected type `externref`")
-                })?
-                .map(|x| x.inner)
-                .into(),
-            ty => bail!("unsupported table element type: {:?}", ty),
-        };
-
-        // Initialize entries with the init value.
+        let init = init.into_table_element(store, ty.element())?;
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             (*table.wasmtime_table(store))
@@ -503,7 +482,10 @@ impl Table {
         let table = self.wasmtime_table(store);
         unsafe {
             match (*table).get(index)? {
-                runtime::TableElement::FuncRef(f) => Some(from_checked_anyfunc(f, store)),
+                runtime::TableElement::FuncRef(f) => {
+                    let func = Func::from_caller_checked_anyfunc(store, f);
+                    Some(Val::FuncRef(func))
+                }
                 runtime::TableElement::ExternRef(None) => Some(Val::ExternRef(None)),
                 runtime::TableElement::ExternRef(Some(x)) => {
                     Some(Val::ExternRef(Some(ExternRef { inner: x })))

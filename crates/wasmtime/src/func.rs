@@ -1,7 +1,7 @@
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::{
     AsContext, AsContextMut, CallHook, Engine, Extern, FuncType, Instance, InterruptHandle,
-    StoreContext, StoreContextMut, Trap, Val, ValType,
+    StoreContext, StoreContextMut, Trap, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Result};
 use std::error::Error;
@@ -306,18 +306,46 @@ impl Func {
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn new<T>(
-        mut store: impl AsContextMut<Data = T>,
+        store: impl AsContextMut<Data = T>,
         ty: FuncType,
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
-        let store = store.as_context_mut().0;
-
-        // part of this unsafety is about matching the `T` to a `Store<T>`,
-        // which is done through the `AsContextMut` bound above.
+        let ty_clone = ty.clone();
         unsafe {
-            let host = HostFunc::new(store.engine(), ty, func);
-            host.into_func(store)
+            Func::new_unchecked(store, ty, move |caller, values| {
+                Func::invoke(caller, &ty_clone, values, &func)
+            })
         }
+    }
+
+    /// Creates a new [`Func`] with the given arguments, although has fewer
+    /// runtime checks than [`Func::new`].
+    ///
+    /// This function takes a callback of a different signature than
+    /// [`Func::new`], instead receiving a raw pointer with a list of [`ValRaw`]
+    /// structures. These values have no type information associated with them
+    /// so it's up to the caller to provide a function that will correctly
+    /// interpret the list of values as those coming from the `ty` specified.
+    ///
+    /// If you're calling this from Rust it's recommended to either instead use
+    /// [`Func::new`] or [`Func::wrap`]. The [`Func::wrap`] API, in particular,
+    /// is both safer and faster than this API.
+    ///
+    /// # Unsafety
+    ///
+    /// This function is not safe because it's not known at compile time that
+    /// the `func` provided correctly interprets the argument types provided to
+    /// it, or that the results it produces will be of the correct type.
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub unsafe fn new_unchecked<T>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+    ) -> Self {
+        let store = store.as_context_mut().0;
+        let host = HostFunc::new_unchecked(store.engine(), ty, func);
+        host.into_func(store)
     }
 
     /// Creates a new host-defined WebAssembly function which, when called,
@@ -412,9 +440,9 @@ impl Func {
 
     pub(crate) unsafe fn from_caller_checked_anyfunc(
         store: &mut StoreOpaque,
-        anyfunc: *mut VMCallerCheckedAnyfunc,
-    ) -> Option<Self> {
-        let anyfunc = NonNull::new(anyfunc)?;
+        raw: *mut VMCallerCheckedAnyfunc,
+    ) -> Option<Func> {
+        let anyfunc = NonNull::new(raw)?;
         debug_assert!(anyfunc.as_ref().type_index != VMSharedSignatureIndex::default());
         let export = ExportFunction { anyfunc };
         Some(Func::from_wasmtime_function(export, store))
@@ -684,6 +712,84 @@ impl Func {
         self.call_impl(&mut store.as_context_mut(), params, results)
     }
 
+    /// Invokes this function in an "unchecked" fashion, reading parameters and
+    /// writing results to `params_and_returns`.
+    ///
+    /// This function is the same as [`Func::call`] except that the arguments
+    /// and results both use a different representation. If possible it's
+    /// recommended to use [`Func::call`] if safety isn't necessary or to use
+    /// [`Func::typed`] in conjunction with [`TypedFunc::call`] since that's
+    /// both safer and faster than this method of invoking a function.
+    ///
+    /// Note that if this function takes `externref` arguments then it will
+    /// **not** automatically GC unlike the [`Func::call`] and
+    /// [`TypedFunc::call`] functions. This means that if this function is
+    /// invoked many times with new `ExternRef` values and no other GC happens
+    /// via any other means then no values will get collected.
+    ///
+    /// # Unsafety
+    ///
+    /// This function is unsafe because the `params_and_returns` argument is not
+    /// validated at all. It must uphold invariants such as:
+    ///
+    /// * It's a valid pointer to an array
+    /// * It has enough space to store all parameters
+    /// * It has enough space to store all results (not at the same time as
+    ///   parameters)
+    /// * Parameters are initially written to the array and have the correct
+    ///   types and such.
+    /// * Reference types like `externref` and `funcref` are valid at the
+    ///   time of this call and for the `store` specified.
+    ///
+    /// These invariants are all upheld for you with [`Func::call`] and
+    /// [`TypedFunc::call`].
+    pub unsafe fn call_unchecked(
+        &self,
+        mut store: impl AsContextMut,
+        params_and_returns: *mut ValRaw,
+    ) -> Result<(), Trap> {
+        let mut store = store.as_context_mut();
+        let data = &store.0.store_data()[self.0];
+        let trampoline = data.trampoline();
+        let anyfunc = data.export().anyfunc;
+        invoke_wasm_and_catch_traps(&mut store, |callee| {
+            trampoline(
+                (*anyfunc.as_ptr()).vmctx,
+                callee,
+                (*anyfunc.as_ptr()).func_ptr.as_ptr(),
+                params_and_returns,
+            )
+        })
+    }
+
+    /// Converts the raw representation of a `funcref` into an `Option<Func>`
+    ///
+    /// This is intended to be used in conjunction with [`Func::new_unchecked`],
+    /// [`Func::call_unchecked`], and [`ValRaw`] with its `funcref` field.
+    ///
+    /// # Unsafety
+    ///
+    /// This function is not safe because `raw` is not validated at all. The
+    /// caller must guarantee that `raw` is owned by the `store` provided and is
+    /// valid within the `store`.
+    pub unsafe fn from_raw(mut store: impl AsContextMut, raw: usize) -> Option<Func> {
+        Func::from_caller_checked_anyfunc(store.as_context_mut().0, raw as *mut _)
+    }
+
+    /// Extracts the raw value of this `Func`, which is owned by `store`.
+    ///
+    /// This function returns a value that's suitable for writing into the
+    /// `funcref` field of the [`ValRaw`] structure.
+    ///
+    /// # Unsafety
+    ///
+    /// The returned value is only valid for as long as the store is alive and
+    /// this function is properly rooted within it. Additionally this function
+    /// should not be liberally used since it's a very low-level knob.
+    pub unsafe fn to_raw(&self, store: impl AsContext) -> usize {
+        self.caller_checked_anyfunc(store.as_context().0).as_ptr() as usize
+    }
+
     /// Invokes this function with the `params` given, returning the results
     /// asynchronously.
     ///
@@ -766,80 +872,46 @@ impl Func {
                 bail!("cross-`Store` values are not currently supported");
             }
         }
-        let externref_params = ty.as_wasm_func_type().externref_params_count();
 
-        let mut values_vec = write_params(store.0, externref_params, params, results)?;
+        let values_vec_size = params.len().max(ty.results().len());
 
-        // Call the trampoline.
+        // Whenever we pass `externref`s from host code to Wasm code, they
+        // go into the `VMExternRefActivationsTable`. But the table might be
+        // at capacity already, so check for that. If it is at capacity
+        // (unlikely) then do a GC to free up space. This is necessary
+        // because otherwise we would either keep filling up the bump chunk
+        // and making it larger and larger or we would always take the slow
+        // path when inserting references into the table.
+        if ty.as_wasm_func_type().externref_params_count()
+            > store
+                .0
+                .externref_activations_table()
+                .bump_capacity_remaining()
+        {
+            store.gc();
+        }
+
+        // Store the argument values into `values_vec`.
+        let mut values_vec = store.0.take_wasm_val_raw_storage();
+        debug_assert!(values_vec.is_empty());
+        values_vec.resize_with(values_vec_size, || ValRaw { i32: 0 });
+        for (arg, slot) in params.iter().cloned().zip(&mut values_vec) {
+            unsafe {
+                *slot = arg.to_raw(&mut *store);
+            }
+        }
+
         unsafe {
-            let data = &store.0.store_data()[self.0];
-            let trampoline = data.trampoline();
-            let anyfunc = data.export().anyfunc;
-            invoke_wasm_and_catch_traps(store, |callee| {
-                trampoline(
-                    (*anyfunc.as_ptr()).vmctx,
-                    callee,
-                    (*anyfunc.as_ptr()).func_ptr.as_ptr(),
-                    values_vec.as_mut_ptr(),
-                )
-            })?;
+            self.call_unchecked(&mut *store, values_vec.as_mut_ptr())?;
         }
 
-        read_results(store.0, self, values_vec, results);
-        return Ok(());
-
-        fn write_params(
-            store: &mut StoreOpaque,
-            externref_params: usize,
-            params: &[Val],
-            results: &mut [Val],
-        ) -> Result<Vec<u128>> {
-            let values_vec_size = params.len().max(results.len());
-
-            let mut values_vec = store.take_wasm_u128_storage();
-            debug_assert!(values_vec.is_empty());
-            values_vec.extend((0..values_vec_size).map(|_| 0));
-
-            // Whenever we pass `externref`s from host code to Wasm code, they
-            // go into the `VMExternRefActivationsTable`. But the table might be
-            // at capacity already, so check for that. If it is at capacity
-            // (unlikely) then do a GC to free up space. This is necessary
-            // because otherwise we would either keep filling up the bump chunk
-            // and making it larger and larger or we would always take the slow
-            // path when inserting references into the table.
-            if externref_params
-                > store
-                    .externref_activations_table()
-                    .bump_capacity_remaining()
-            {
-                store.gc();
-            }
-
-            // Store the argument values into `values_vec`.
-            for (arg, slot) in params.iter().zip(&mut values_vec) {
-                unsafe {
-                    arg.write_value_without_gc(store, slot);
-                }
-            }
-
-            Ok(values_vec)
+        for ((i, slot), val) in results.iter_mut().enumerate().zip(&values_vec) {
+            let ty = store[self.0].ty.results().nth(i).unwrap();
+            *slot = unsafe { Val::from_raw(&mut *store, *val, ty) };
         }
-
-        fn read_results(
-            store: &mut StoreOpaque,
-            func: &Func,
-            mut values_vec: Vec<u128>,
-            results: &mut [Val],
-        ) {
-            for (i, (ptr, dst)) in values_vec.iter().zip(results).enumerate() {
-                let ty = store[func.0].ty.results().nth(i).unwrap();
-                unsafe {
-                    *dst = Val::read_value_from(store, ptr, ty);
-                }
-            }
-            values_vec.truncate(0);
-            store.save_wasm_u128_storage(values_vec);
-        }
+        values_vec.truncate(0);
+        store.0.save_wasm_val_raw_storage(values_vec);
+        Ok(())
     }
 
     #[inline]
@@ -890,7 +962,7 @@ impl Func {
     fn invoke<T>(
         mut caller: Caller<'_, T>,
         ty: &FuncType,
-        values_vec: *mut u128,
+        values_vec: *mut ValRaw,
         func: &dyn Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap>,
     ) -> Result<(), Trap> {
         caller.store.0.call_hook(CallHook::CallingHost)?;
@@ -909,10 +981,7 @@ impl Func {
         let nparams = ty.params().len();
         val_vec.reserve(nparams + ty.results().len());
         for (i, ty) in ty.params().enumerate() {
-            unsafe {
-                let val = Val::read_value_from(caller.store.0, values_vec.add(i), ty);
-                val_vec.push(val);
-            }
+            val_vec.push(unsafe { Val::from_raw(&mut caller.store, *values_vec.add(i), ty) })
         }
 
         val_vec.extend((0..ty.results().len()).map(|_| Val::null()));
@@ -946,7 +1015,7 @@ impl Func {
                 ));
             }
             unsafe {
-                ret.write_value_without_gc(caller.store.0, values_vec.add(i));
+                *values_vec.add(i) = ret.to_raw(&mut caller.store);
             }
         }
 
@@ -1276,7 +1345,7 @@ pub unsafe trait WasmRet {
     fn func_type(params: impl Iterator<Item = ValType>) -> FuncType;
 
     #[doc(hidden)]
-    unsafe fn wrap_trampoline(ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi);
+    unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi);
 
     // Utilities used to convert an instance of this type to a `Result`
     // explicitly, used when wrapping async functions which always bottom-out
@@ -1313,7 +1382,7 @@ where
         FuncType::new(params, Some(<Self as WasmTy>::valtype()))
     }
 
-    unsafe fn wrap_trampoline(ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
+    unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
         *ptr.cast::<Self::Abi>() = f(());
     }
 
@@ -1353,7 +1422,7 @@ where
         T::func_type(params)
     }
 
-    unsafe fn wrap_trampoline(ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
+    unsafe fn wrap_trampoline(ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
         T::wrap_trampoline(ptr, f)
     }
 
@@ -1399,7 +1468,7 @@ macro_rules! impl_wasm_host_results {
             }
 
             #[allow(unused_assignments)]
-            unsafe fn wrap_trampoline(mut _ptr: *mut u128, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
+            unsafe fn wrap_trampoline(mut _ptr: *mut ValRaw, f: impl FnOnce(Self::Retptr) -> Self::Abi) {
                 let ($($t,)*) = <($($t::Abi,)*) as HostAbi>::call(f);
                 $(
                     *_ptr.cast() = $t;
@@ -1866,7 +1935,7 @@ macro_rules! impl_into_func {
                     callee_vmctx: *mut VMContext,
                     caller_vmctx: *mut VMContext,
                     ptr: *const VMFunctionBody,
-                    args: *mut u128,
+                    args: *mut ValRaw,
                 )
                 where
                     $($args: WasmTy,)*
@@ -1956,14 +2025,23 @@ impl HostFunc {
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Self {
         let ty_clone = ty.clone();
-
-        // Create a trampoline that converts raw u128 values to `Val`
-        let func = move |caller_vmctx, values_vec: *mut u128| unsafe {
-            Caller::with(caller_vmctx, |caller| {
-                Func::invoke(caller, &ty_clone, values_vec, &func)
+        unsafe {
+            HostFunc::new_unchecked(engine, ty, move |caller, values| {
+                Func::invoke(caller, &ty_clone, values, &func)
             })
-        };
+        }
+    }
 
+    /// Analog of [`Func::new_unchecked`]
+    #[cfg(compiler)]
+    pub unsafe fn new_unchecked<T>(
+        engine: &Engine,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+    ) -> Self {
+        let func = move |caller_vmctx, values: *mut ValRaw| unsafe {
+            Caller::<T>::with(caller_vmctx, |caller| func(caller, values))
+        };
         let (instance, trampoline) = crate::trampoline::create_function(&ty, func, engine)
             .expect("failed to create function");
         HostFunc::_new(engine, instance, trampoline)
