@@ -1,0 +1,84 @@
+test interpret
+
+function %bextend_b1_b8(b1) -> b8 {
+block0(v0: b1):
+  v1 = bextend.b8 v0
+  return v1
+}
+; run: %bextend_b1_b8(true) == true
+; run: %bextend_b1_b8(false) == false
+
+function %bextend_b1_b16(b1) -> b16 {
+block0(v0: b1):
+  v1 = bextend.b16 v0
+  return v1
+}
+; run: %bextend_b1_b16(true) == true
+; run: %bextend_b1_b16(false) == false
+
+function %bextend_b1_b32(b1) -> b32 {
+block0(v0: b1):
+  v1 = bextend.b32 v0
+  return v1
+}
+; run: %bextend_b1_b32(true) == true
+; run: %bextend_b1_b32(false) == false
+
+function %bextend_b1_b64(b1) -> b64 {
+block0(v0: b1):
+  v1 = bextend.b64 v0
+  return v1
+}
+; run: %bextend_b1_b64(true) == true
+; run: %bextend_b1_b64(false) == false
+
+
+function %bextend_b8_b16(b8) -> b16 {
+block0(v0: b8):
+  v1 = bextend.b16 v0
+  return v1
+}
+; run: %bextend_b8_b16(true) == true
+; run: %bextend_b8_b16(false) == false
+
+function %bextend_b8_b32(b8) -> b32 {
+block0(v0: b8):
+  v1 = bextend.b32 v0
+  return v1
+}
+; run: %bextend_b8_b32(true) == true
+; run: %bextend_b8_b32(false) == false
+
+function %bextend_b8_b64(b8) -> b64 {
+block0(v0: b8):
+  v1 = bextend.b64 v0
+  return v1
+}
+; run: %bextend_b8_b64(true) == true
+; run: %bextend_b8_b64(false) == false
+
+
+function %bextend_b16_b32(b16) -> b32 {
+block0(v0: b16):
+  v1 = bextend.b32 v0
+  return v1
+}
+; run: %bextend_b16_b32(true) == true
+; run: %bextend_b16_b32(false) == false
+
+function %bextend_b16_b64(b16) -> b64 {
+block0(v0: b16):
+  v1 = bextend.b64 v0
+  return v1
+}
+; run: %bextend_b16_b64(true) == true
+; run: %bextend_b16_b64(false) == false
+
+
+function %bextend_b32_b64(b32) -> b64 {
+block0(v0: b32):
+  v1 = bextend.b64 v0
+  return v1
+}
+; run: %bextend_b32_b64(true) == true
+; run: %bextend_b32_b64(false) == false
