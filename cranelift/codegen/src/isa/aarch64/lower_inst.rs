@@ -1540,7 +1540,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 AtomicRmwOp::Umax => Some(AtomicRMWOp::Umax),
                 AtomicRmwOp::Smin => Some(AtomicRMWOp::Smin),
                 AtomicRmwOp::Umin => Some(AtomicRMWOp::Umin),
-                _ => None
+                _ => None,
             };
             if isa_flags.use_lse() && lse_op.is_some() {
                 ctx.emit(Inst::AtomicRMW {

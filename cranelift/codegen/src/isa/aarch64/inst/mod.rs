@@ -794,8 +794,8 @@ pub enum Inst {
     },
 
     /// An atomic read-modify-write operation. These instructions require the
-    /// Large System Extension (LSE) ISA support. The instructions have acquire-release
-    /// semantics.
+    /// Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
+    /// acquire-release semantics.
     AtomicRMW {
         op: AtomicRMWOp,
         rs: Reg,
@@ -3656,9 +3656,7 @@ impl Inst {
                 let cond = cond.show_rru(mb_rru);
                 format!("ccmp {}, {}, {}, {}", rn, imm, nzcv, cond)
             }
-            &Inst::AtomicRMW {
-                rs, rt, rn, ty, op
-            } => {
+            &Inst::AtomicRMW { rs, rt, rn, ty, op } => {
                 let op = match op {
                     AtomicRMWOp::Add => "ldaddal",
                     AtomicRMWOp::Clr => "ldclral",
