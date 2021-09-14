@@ -12,6 +12,7 @@ use crate::vmcontext::{
     VMInterrupts, VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
 };
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
+use anyhow::Error;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::Layout;
@@ -63,6 +64,14 @@ pub trait ResourceLimiter {
     /// in `usize` or exceeds the memory's listed maximum size may not invoke
     /// this method.
     fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool;
+
+    /// Notifies the resource limiter that growing a linear memory, permitted by
+    /// the `memory_growing` method, has failed.
+    ///
+    /// Reasons for failure include: the growth exceeds the `maximum` passed to
+    /// `memory_growing`, or the operating system failed to allocate additional
+    /// memory. In that case, `error` might be downcastable to a `std::io::Error`.
+    fn memory_grow_failed(&mut self, _error: &Error) {}
 
     /// Notifies the resource limiter that an instance's table has been requested to grow.
     ///

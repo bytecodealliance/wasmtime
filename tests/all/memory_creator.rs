@@ -62,7 +62,7 @@ mod not_for_windows {
             Some(self.size - self.guard_size)
         }
 
-        fn grow_to(&mut self, new_size: usize) -> Option<()> {
+        fn grow_to(&mut self, new_size: usize) -> Result<(), anyhow::Error> {
             println!("grow to {:x}", new_size);
             let delta = new_size - self.used_wasm_bytes;
             unsafe {
@@ -73,7 +73,7 @@ mod not_for_windows {
 
             *self.glob_bytes_counter.lock().unwrap() += delta;
             self.used_wasm_bytes = new_size;
-            Some(())
+            Ok(())
         }
 
         fn as_ptr(&self) -> *mut u8 {

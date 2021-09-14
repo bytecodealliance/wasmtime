@@ -5,7 +5,7 @@
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
 use crate::ResourceLimiter;
-use anyhow::{bail, format_err, Result};
+use anyhow::{bail, format_err, Error, Result};
 use more_asserts::{assert_ge, assert_le};
 use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
@@ -50,9 +50,9 @@ pub trait RuntimeLinearMemory: Send + Sync {
 
     /// Grow memory to the specified amount of bytes.
     ///
-    /// Returns `None` if memory can't be grown by the specified amount
+    /// Returns an error if memory can't be grown by the specified amount
     /// of bytes.
-    fn grow_to(&mut self, size: usize) -> Option<()>;
+    fn grow_to(&mut self, size: usize) -> Result<()>;
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm
     /// code.
@@ -137,7 +137,7 @@ impl RuntimeLinearMemory for MmapMemory {
         self.maximum
     }
 
-    fn grow_to(&mut self, new_size: usize) -> Option<()> {
+    fn grow_to(&mut self, new_size: usize) -> Result<()> {
         if new_size > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
             // If the new size of this heap exceeds the current size of the
             // allocation we have, then this must be a dynamic heap. Use
@@ -145,14 +145,13 @@ impl RuntimeLinearMemory for MmapMemory {
             // and then copy over the memory from before.
             let request_bytes = self
                 .pre_guard_size
-                .checked_add(new_size)?
-                .checked_add(self.extra_to_reserve_on_growth)?
-                .checked_add(self.offset_guard_size)?;
+                .checked_add(new_size)
+                .and_then(|s| s.checked_add(self.extra_to_reserve_on_growth))
+                .and_then(|s| s.checked_add(self.offset_guard_size))
+                .ok_or_else(|| format_err!("overflow calculating size of memory allocation"))?;
 
-            let mut new_mmap = Mmap::accessible_reserved(0, request_bytes).ok()?;
-            new_mmap
-                .make_accessible(self.pre_guard_size, new_size)
-                .ok()?;
+            let mut new_mmap = Mmap::accessible_reserved(0, request_bytes)?;
+            new_mmap.make_accessible(self.pre_guard_size, new_size)?;
 
             new_mmap.as_mut_slice()[self.pre_guard_size..][..self.accessible]
                 .copy_from_slice(&self.mmap.as_slice()[self.pre_guard_size..][..self.accessible]);
@@ -166,17 +165,15 @@ impl RuntimeLinearMemory for MmapMemory {
             // initial allocation to grow into before the heap is moved in
             // memory.
             assert!(new_size > self.accessible);
-            self.mmap
-                .make_accessible(
-                    self.pre_guard_size + self.accessible,
-                    new_size - self.accessible,
-                )
-                .ok()?;
+            self.mmap.make_accessible(
+                self.pre_guard_size + self.accessible,
+                new_size - self.accessible,
+            )?;
         }
 
         self.accessible = new_size;
 
-        Some(())
+        Ok(())
     }
 
     fn vmmemory(&self) -> VMMemoryDefinition {
@@ -213,6 +210,25 @@ pub enum Memory {
     /// A "dynamic" memory whose data is managed at runtime and lifetime is tied
     /// to this instance.
     Dynamic(Box<dyn RuntimeLinearMemory>),
+}
+
+fn memory_growing(
+    limiter: &mut Option<&mut dyn ResourceLimiter>,
+    current: usize,
+    desired: usize,
+    maximum: Option<usize>,
+) -> bool {
+    match limiter {
+        Some(ref mut l) => l.memory_growing(current, desired, maximum),
+        None => true,
+    }
+}
+
+fn memory_grow_failed(limiter: &mut Option<&mut dyn ResourceLimiter>, error: &Error) {
+    match limiter {
+        Some(l) => l.memory_grow_failed(error),
+        None => {}
+    }
 }
 
 impl Memory {
@@ -260,7 +276,7 @@ impl Memory {
     /// bytes.
     fn limit_new(
         plan: &MemoryPlan,
-        limiter: Option<&mut dyn ResourceLimiter>,
+        mut limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Result<(usize, Option<usize>)> {
         // Sanity-check what should already be true from wasm module validation.
         let absolute_max = if plan.memory.memory64 {
@@ -322,13 +338,11 @@ impl Memory {
         // calculation overflowed. This means that the `minimum` we're informing
         // the limiter is lossy and may not be 100% accurate, but for now the
         // expected uses of `limiter` means that's ok.
-        if let Some(limiter) = limiter {
-            if !limiter.memory_growing(0, minimum.unwrap_or(absolute_max), maximum) {
-                bail!(
-                    "memory minimum size of {} pages exceeds memory limits",
-                    plan.memory.minimum
-                );
-            }
+        if !memory_growing(&mut limiter, 0, minimum.unwrap_or(absolute_max), maximum) {
+            bail!(
+                "memory minimum size of {} pages exceeds memory limits",
+                plan.memory.minimum
+            );
         }
 
         // At this point we need to actually handle overflows, so bail out with
@@ -389,26 +403,40 @@ impl Memory {
     pub unsafe fn grow(
         &mut self,
         delta_pages: u64,
-        limiter: Option<&mut dyn ResourceLimiter>,
+        mut limiter: Option<&mut dyn ResourceLimiter>,
     ) -> Option<usize> {
         let old_byte_size = self.byte_size();
+        // Wasm spec: when growing by 0 pages, always return the current size.
         if delta_pages == 0 {
             return Some(old_byte_size);
         }
 
+        // largest wasm-page-aligned region of memory it is possible to
+        // represent in a usize. This will be impossible for the system to
+        // actually allocate.
+        let absolute_max = 0usize.wrapping_sub(WASM_PAGE_SIZE);
+        // calculate byte size of the new allocation. Let it overflow up to
+        // usize::MAX, then clamp it down to absolute_max.
         let new_byte_size = usize::try_from(delta_pages)
-            .ok()?
-            .checked_mul(WASM_PAGE_SIZE)?
-            .checked_add(old_byte_size)?;
-        let maximum = self.maximum_byte_size();
+            .unwrap_or(usize::MAX)
+            .saturating_mul(WASM_PAGE_SIZE)
+            .saturating_add(old_byte_size);
+        let new_byte_size = if new_byte_size > absolute_max {
+            absolute_max
+        } else {
+            new_byte_size
+        };
 
+        let maximum = self.maximum_byte_size();
+        // Limiter gets first chance to reject memory_growing.
+        if !memory_growing(&mut limiter, old_byte_size, new_byte_size, maximum) {
+            return None;
+        }
+
+        // Never exceed maximum, even if limiter permitted it.
         if let Some(max) = maximum {
             if new_byte_size > max {
-                return None;
-            }
-        }
-        if let Some(limiter) = limiter {
-            if !limiter.memory_growing(old_byte_size, new_byte_size, maximum) {
+                memory_grow_failed(&mut limiter, &format_err!("Memory maximum size exceeded"));
                 return None;
             }
         }
@@ -428,19 +456,25 @@ impl Memory {
                 make_accessible,
                 ..
             } => {
+                // Never exceed static memory size
                 if new_byte_size > base.len() {
+                    memory_grow_failed(&mut limiter, &format_err!("static memory size exceeded"));
                     return None;
                 }
 
-                make_accessible(
+                // Operating system can fail to make memory accessible
+                let r = make_accessible(
                     base.as_mut_ptr().add(old_byte_size),
                     new_byte_size - old_byte_size,
-                )
-                .ok()?;
+                );
+                r.map_err(|e| memory_grow_failed(&mut limiter, &e)).ok()?;
 
                 *size = new_byte_size;
             }
-            Memory::Dynamic(mem) => mem.grow_to(new_byte_size)?,
+            Memory::Dynamic(mem) => {
+                let r = mem.grow_to(new_byte_size);
+                r.map_err(|e| memory_grow_failed(&mut limiter, &e)).ok()?;
+            }
         }
         Some(old_byte_size)
     }

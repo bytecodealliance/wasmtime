@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use wasmtime::*;
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
@@ -384,4 +384,162 @@ fn test_custom_limiter() -> Result<()> {
     drop(store);
 
     Ok(())
+}
+
+#[derive(Default)]
+struct MemoryGrowFailureDetector {
+    /// Arguments of most recent call to memory_growing
+    current: usize,
+    desired: usize,
+    /// Display impl of most recent call to memory_grow_failed
+    error: Option<String>,
+}
+
+impl ResourceLimiter for MemoryGrowFailureDetector {
+    fn memory_growing(&mut self, current: usize, desired: usize, _maximum: Option<usize>) -> bool {
+        self.current = current;
+        self.desired = desired;
+        true
+    }
+
+    fn memory_grow_failed(&mut self, err: &anyhow::Error) {
+        self.error = Some(err.to_string());
+    }
+
+    fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
+        true
+    }
+}
+
+#[test]
+fn custom_limiter_detect_grow_failure() -> Result<()> {
+    let mut config = Config::new();
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        module_limits: ModuleLimits {
+            memory_pages: 10,
+            ..Default::default()
+        },
+        instance_limits: InstanceLimits {
+            ..Default::default()
+        },
+    });
+    let engine = Engine::new(&config).unwrap();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#)?;
+
+    let context = MemoryGrowFailureDetector::default();
+
+    let mut store = Store::new(&engine, context);
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
+    let instance = linker.instantiate(&mut store, &module)?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+
+    // Grow the memory by 640 KiB (10 pages)
+    memory.grow(&mut store, 10)?;
+
+    assert!(store.data().error.is_none());
+    assert_eq!(store.data().current, 0);
+    assert_eq!(store.data().desired, 10 * 64 * 1024);
+
+    // Grow past the static limit set by ModuleLimits.
+    // The ResourcLimiter will permit this, but the grow will fail.
+    assert_eq!(
+        memory.grow(&mut store, 1).unwrap_err().to_string(),
+        "failed to grow memory by `1`"
+    );
+
+    assert_eq!(store.data().current, 10 * 64 * 1024);
+    assert_eq!(store.data().desired, 11 * 64 * 1024);
+    assert_eq!(
+        store.data().error.as_ref().unwrap(),
+        "Memory maximum size exceeded"
+    );
+
+    drop(store);
+
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn custom_limiter_detect_os_oom_failure() -> Result<()> {
+    let pid = unsafe { libc::fork() };
+    if pid == 0 {
+        // Child process
+        let r = std::panic::catch_unwind(|| {
+            // Ask Linux to limit this process to 128MiB of memory
+            let process_max_memory: usize = 128 * 1024 * 1024;
+            unsafe {
+                // limit process to 128MiB memory
+                let rlimit = libc::rlimit {
+                    rlim_cur: 0,
+                    rlim_max: process_max_memory as u64,
+                };
+                let res = libc::setrlimit(libc::RLIMIT_DATA, &rlimit);
+                assert_eq!(res, 0, "setrlimit failed: {}", res);
+            };
+
+            // Default behavior of on-demand memory allocation so that a
+            // memory grow will hit Linux for a larger mmap.
+            let engine = Engine::default();
+            let linker = Linker::new(&engine);
+            let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#).unwrap();
+
+            let context = MemoryGrowFailureDetector::default();
+
+            let mut store = Store::new(&engine, context);
+            store.limiter(|s| s as &mut dyn ResourceLimiter);
+            let instance = linker.instantiate(&mut store, &module).unwrap();
+            let memory = instance.get_memory(&mut store, "m").unwrap();
+
+            // Small (640KiB) grow should succeed
+            memory.grow(&mut store, 10).unwrap();
+            assert!(store.data().error.is_none());
+            assert_eq!(store.data().current, 0);
+            assert_eq!(store.data().desired, 10 * 64 * 1024);
+
+            // Try to grow past the process's memory limit.
+            // This should fail.
+            let pages_exceeding_limit = process_max_memory / (64 * 1024);
+            let err_msg = memory
+                .grow(&mut store, pages_exceeding_limit as u64)
+                .unwrap_err()
+                .to_string();
+            assert!(
+                err_msg.starts_with("failed to grow memory"),
+                "unexpected error: {}",
+                err_msg
+            );
+
+            assert_eq!(store.data().current, 10 * 64 * 1024);
+            assert_eq!(
+                store.data().desired,
+                (pages_exceeding_limit + 10) * 64 * 1024
+            );
+            // The memory_grow_failed hook should show Linux gave OOM:
+            let err_msg = store.data().error.as_ref().unwrap();
+            assert!(
+                err_msg.starts_with("System call failed: Cannot allocate memory"),
+                "unexpected error: {}",
+                err_msg
+            );
+        });
+        // on assertion failure, exit 1 so parent process can fail test.
+        std::process::exit(if r.is_err() { 1 } else { 0 });
+    } else {
+        // Parent process
+        let mut wstatus: libc::c_int = 0;
+        unsafe { libc::wait(&mut wstatus) };
+        if libc::WIFEXITED(wstatus) {
+            if libc::WEXITSTATUS(wstatus) == 0 {
+                Ok(())
+            } else {
+                bail!("child exited with failure");
+            }
+        } else {
+            bail!("child didnt exit??")
+        }
+    }
 }
