@@ -1,0 +1,53 @@
+test interpret
+test run
+target aarch64
+set enable_simd
+target x86_64
+
+function %vhighbits_i8x16(i8x16) -> i16 {
+block0(v0: i8x16):
+    v1 = vhigh_bits.i16 v0
+    return v1
+}
+; run: %vhighbits_i8x16([0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]) == 0
+; run: %vhighbits_i8x16([0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0]) == 0
+; run: %vhighbits_i8x16([1 2 3 4 5 6 7 8 9 1 2 3 4 5 6 7]) == 0
+; run: %vhighbits_i8x16([128 128 128 128 128 128 128 128 128 128 128 128 128 128 128 128]) == -1
+; run: %vhighbits_i8x16([128 128 128 128 128 128 128 128 128 128 128 128 128 128 128 8]) == 32767
+
+function %vhighbits_i16x8(i16x8) -> i8 {
+block0(v0: i16x8):
+    v1 = vhigh_bits.i8 v0
+    return v1
+}
+; run: %vhighbits_i16x8([0 0 0 0 0 0 0 0]) == 0
+; run: %vhighbits_i16x8([0 0 0 0 0 0 0 1]) == 0
+; run: %vhighbits_i16x8([1 2 3 4 5 6 7 8]) == 0
+; run: %vhighbits_i16x8([128 128 128 128 128 128 128 128]) == 0
+; run: %vhighbits_i16x8([32768 32768 32768 32768 32768 32768 32768 0]) == 127
+
+
+function %vhighbits_i32x4(i32x4) -> i8 {
+block0(v0: i32x4):
+    v1 = vhigh_bits.i8 v0
+    return v1
+}
+; run: %vhighbits_i32x4([0 0 0 0]) == 0
+; run: %vhighbits_i32x4([0 0 0 1]) == 0
+; run: %vhighbits_i32x4([1 2 3 4]) == 0
+; run: %vhighbits_i32x4([128 128 128 128]) == 0
+; run: %vhighbits_i32x4([2147483648 2147483648 2147483648 2147483648]) == 15
+; run: %vhighbits_i32x4([2147483648 0 2147483648 0]) == 5
+
+
+function %vhighbits_i64x2(i64x2) -> i8 {
+block0(v0: i64x2):
+    v1 = vhigh_bits.i8 v0
+    return v1
+}
+; run: %vhighbits_i64x2([0 0]) == 0
+; run: %vhighbits_i64x2([0 1]) == 0
+; run: %vhighbits_i64x2([1 2]) == 0
+; run: %vhighbits_i64x2([128 128]) == 0
+; run: %vhighbits_i64x2([18446744073709551615 18446744073709551615]) == 3
+; run: %vhighbits_i64x2([18446744073709551615 0]) == 1
