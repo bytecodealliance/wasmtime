@@ -1,0 +1,26 @@
+test interpret
+test run
+target aarch64
+set enable_simd
+target x86_64 machinst
+
+function %swidenlow_i8x16(i8x16) -> i16x8 {
+block0(v0: i8x16):
+    v1 = swiden_low v0
+    return v1
+}
+; run: %swidenlow_i8x16([1 -2 3 -4 5 -6 7 -8 9 -10 11 -12 13 -14 15 -16]) == [1 -2 3 -4 5 -6 7 -8]
+
+function %swidenlow_i16x8(i16x8) -> i32x4 {
+block0(v0: i16x8):
+    v1 = swiden_low v0
+    return v1
+}
+; run: %swidenlow_i16x8([1 -2 3 -4 5 -6 7 -8]) == [1 -2 3 -4]
+
+function %swidenlow_i32x4(i32x4) -> i64x2 {
+block0(v0: i32x4):
+    v1 = swiden_low v0
+    return v1
+}
+; run: %swidenlow_i32x4([1 -2 3 -4]) == [1 -2]
