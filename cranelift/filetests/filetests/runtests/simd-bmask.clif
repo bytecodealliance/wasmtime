@@ -1,0 +1,30 @@
+test interpret
+
+
+function %bmask_i8x16(b8x16) -> i8x16 {
+block0(v0: b8x16):
+    v1 = bmask.i8x16 v0
+    return v1
+}
+; run: %bmask_i8x16([true false true false true false true false true false true false true false true false]) == [-1 0 -1 0 -1 0 -1 0 -1 0 -1 0 -1 0 -1 0]
+
+function %bmask_i16x8(b16x8) -> i16x8 {
+block0(v0: b16x8):
+    v1 = bmask.i16x8 v0
+    return v1
+}
+; run: %bmask_i16x8([true false true false true false true false]) == [-1 0 -1 0 -1 0 -1 0]
+
+function %bmask_i32x4(b32x4) -> i32x4 {
+block0(v0: b32x4):
+    v1 = bmask.i32x4 v0
+    return v1
+}
+; run: %bmask_i32x4([true false true false]) == [-1 0 -1 0]
+
+function %bmask_i64x2(b64x2) -> i64x2 {
+block0(v0: b64x2):
+    v1 = bmask.i64x2 v0
+    return v1
+}
+; run: %bmask_i64x2([true false]) == [-1 0]

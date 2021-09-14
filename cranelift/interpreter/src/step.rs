@@ -767,7 +767,6 @@ where
         | Opcode::Breduce
         | Opcode::Bextend
         | Opcode::Bint
-        | Opcode::Bmask
         | Opcode::Ireduce => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::Exact(ctrl_ty),
@@ -802,6 +801,19 @@ where
                 .collect::<ValueResult<Vec<_>>>()?;
             assign(vectorizelanes(&new_vec, new_type)?)
         }
+        Opcode::Bmask => assign({
+            let bool = arg(0)?;
+            let bool_ty = ctrl_ty.as_bool_pedantic();
+            if ctrl_ty.is_vector() {
+                let lanes = extractlanes(&bool, bool_ty.lane_type())?
+                    .into_iter()
+                    .map(|lane| lane.convert(ValueConversionKind::Exact(ctrl_ty.lane_type())))
+                    .collect::<ValueResult<SimdVec<V>>>()?;
+                vectorizelanes(&lanes, ctrl_ty)?
+            } else {
+                bool.convert(ValueConversionKind::Exact(ctrl_ty))?
+            }
+        }),
         Opcode::Sextend => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::SignExtend(ctrl_ty),
