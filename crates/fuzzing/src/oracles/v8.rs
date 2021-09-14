@@ -267,7 +267,21 @@ fn assert_error_matches(wasmtime: &anyhow::Error, v8: &str) {
                     "data segment is out of bounds",
                 ])
             }
-            TrapCode::UnreachableCodeReached => return verify_v8(&["unreachable"]),
+            TrapCode::UnreachableCodeReached => {
+                return verify_v8(&[
+                    "unreachable",
+                    // All the wasms we test use wasm-smith's
+                    // `ensure_termination` option which will `unreachable` when
+                    // "fuel" runs out within the wasm module itself. This
+                    // sometimes manifests as a call stack size exceeded in v8,
+                    // however, since v8 sometimes has different limits on the
+                    // call-stack especially when it's run multiple times. To
+                    // get these error messages to line up allow v8 to say the
+                    // call stack size exceeded when wasmtime says we hit
+                    // unreachable.
+                    "Maximum call stack size exceeded",
+                ]);
+            }
             TrapCode::IntegerDivisionByZero => {
                 return verify_v8(&["divide by zero", "remainder by zero"])
             }
