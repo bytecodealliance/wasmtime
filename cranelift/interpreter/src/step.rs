@@ -840,40 +840,29 @@ where
             V::bool(true, types::B1)?,
             |acc, lane| acc.and(lane),
         )?),
-        Opcode::SwidenLow => {
+        Opcode::SwidenLow | Opcode::SwidenHigh | Opcode::UwidenLow | Opcode::UwidenHigh => {
             let new_type = ctrl_ty.merge_lanes().unwrap();
-            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
-                .into_iter()
-                .take(new_type.lane_count() as usize)
-                .map(|lane| lane.convert(ValueConversionKind::SignExtend(new_type.lane_type())))
-                .collect::<ValueResult<Vec<_>>>()?;
-            assign(vectorizelanes(&new_vec, new_type)?)
-        }
-        Opcode::SwidenHigh => {
-            let new_type = ctrl_ty.merge_lanes().unwrap();
-            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
-                .into_iter()
-                .skip(new_type.lane_count() as usize)
-                .map(|lane| lane.convert(ValueConversionKind::SignExtend(new_type.lane_type())))
-                .collect::<ValueResult<Vec<_>>>()?;
-            assign(vectorizelanes(&new_vec, new_type)?)
-        }
-        Opcode::UwidenLow => {
-            let new_type = ctrl_ty.merge_lanes().unwrap();
-            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
-                .into_iter()
-                .take(new_type.lane_count() as usize)
-                .map(|lane| lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type())))
-                .collect::<ValueResult<Vec<_>>>()?;
-            assign(vectorizelanes(&new_vec, new_type)?)
-        }
-        Opcode::UwidenHigh => {
-            let new_type = ctrl_ty.merge_lanes().unwrap();
-            let new_vec = extractlanes(&arg(0)?, ctrl_ty.lane_type())?
-                .into_iter()
-                .skip(new_type.lane_count() as usize)
-                .map(|lane| lane.convert(ValueConversionKind::ZeroExtend(new_type.lane_type())))
-                .collect::<ValueResult<Vec<_>>>()?;
+            let conv_type = match inst.opcode() {
+                Opcode::SwidenLow | Opcode::SwidenHigh => {
+                    ValueConversionKind::SignExtend(new_type.lane_type())
+                }
+                Opcode::UwidenLow | Opcode::UwidenHigh => {
+                    ValueConversionKind::ZeroExtend(new_type.lane_type())
+                }
+                _ => unreachable!(),
+            };
+            let vec_iter = extractlanes(&arg(0)?, ctrl_ty.lane_type())?.into_iter();
+            let new_vec = match inst.opcode() {
+                Opcode::SwidenLow | Opcode::UwidenLow => vec_iter
+                    .take(new_type.lane_count() as usize)
+                    .map(|lane| lane.convert(conv_type.clone()))
+                    .collect::<ValueResult<Vec<_>>>()?,
+                Opcode::SwidenHigh | Opcode::UwidenHigh => vec_iter
+                    .skip(new_type.lane_count() as usize)
+                    .map(|lane| lane.convert(conv_type.clone()))
+                    .collect::<ValueResult<Vec<_>>>()?,
+                _ => unreachable!(),
+            };
             assign(vectorizelanes(&new_vec, new_type)?)
         }
         Opcode::FcvtToUint => unimplemented!("FcvtToUint"),
