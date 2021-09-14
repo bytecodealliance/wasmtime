@@ -86,6 +86,7 @@ impl DataValue {
             DataValue::I16(i) => dst[..2].copy_from_slice(&i.to_ne_bytes()[..]),
             DataValue::I32(i) => dst[..4].copy_from_slice(&i.to_ne_bytes()[..]),
             DataValue::I64(i) => dst[..8].copy_from_slice(&i.to_ne_bytes()[..]),
+            DataValue::I128(i) => dst[..16].copy_from_slice(&i.to_ne_bytes()[..]),
             DataValue::F32(f) => dst[..4].copy_from_slice(&f.bits().to_ne_bytes()[..]),
             DataValue::F64(f) => dst[..8].copy_from_slice(&f.bits().to_ne_bytes()[..]),
             DataValue::V128(v) => dst[..16].copy_from_slice(&v[..]),
@@ -104,6 +105,7 @@ impl DataValue {
             types::I16 => DataValue::I16(i16::from_ne_bytes(src[..2].try_into().unwrap())),
             types::I32 => DataValue::I32(i32::from_ne_bytes(src[..4].try_into().unwrap())),
             types::I64 => DataValue::I64(i64::from_ne_bytes(src[..8].try_into().unwrap())),
+            types::I128 => DataValue::I128(i128::from_ne_bytes(src[..16].try_into().unwrap())),
             types::F32 => DataValue::F32(Ieee32::with_bits(u32::from_ne_bytes(
                 src[..4].try_into().unwrap(),
             ))),
