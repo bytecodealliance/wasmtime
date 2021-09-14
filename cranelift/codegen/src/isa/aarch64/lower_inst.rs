@@ -2926,42 +2926,62 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FminPseudo | Opcode::FmaxPseudo => {
-            let ty = ctx.input_ty(insn, 0);
-            if ty == F32X4 || ty == F64X2 {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let (ra, rb) = if op == Opcode::FminPseudo {
+                (rm, rn)
+            } else {
+                (rn, rm)
+            };
+            let ty = ty.unwrap();
+            let lane_type = ty.lane_type();
+
+            debug_assert!(lane_type == F32 || lane_type == F64);
+
+            if ty.is_vector() {
+                let size = VectorSize::from_ty(ty);
+
                 // pmin(a,b) => bitsel(b, a, cmpgt(a, b))
                 // pmax(a,b) => bitsel(b, a, cmpgt(b, a))
-                let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let r_a = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let r_b = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                // Since we're going to write the output register `r_dst` anyway, we might as
-                // well first use it to hold the comparison result.  This has the slightly unusual
+                // Since we're going to write the output register `rd` anyway, we might as well
+                // first use it to hold the comparison result.  This has the slightly unusual
                 // effect that we modify the output register in the first instruction (`fcmgt`)
                 // but read both the inputs again in the second instruction (`bsl`), which means
                 // that the output register can't be either of the input registers.  Regalloc
                 // should handle this correctly, nevertheless.
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Fcmgt,
-                    rd: r_dst,
-                    rn: if op == Opcode::FminPseudo { r_a } else { r_b },
-                    rm: if op == Opcode::FminPseudo { r_b } else { r_a },
-                    size: if ty == F32X4 {
-                        VectorSize::Size32x4
-                    } else {
-                        VectorSize::Size64x2
-                    },
+                    rd,
+                    rn: ra,
+                    rm: rb,
+                    size,
                 });
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Bsl,
-                    rd: r_dst,
-                    rn: r_b,
-                    rm: r_a,
-                    size: VectorSize::Size8x16,
+                    rd,
+                    rn,
+                    rm,
+                    size,
                 });
             } else {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, ty
-                )));
+                if lane_type == F32 {
+                    ctx.emit(Inst::FpuCmp32 { rn: ra, rm: rb });
+                    ctx.emit(Inst::FpuCSel32 {
+                        rd,
+                        rn,
+                        rm,
+                        cond: Cond::Gt,
+                    });
+                } else {
+                    ctx.emit(Inst::FpuCmp64 { rn: ra, rm: rb });
+                    ctx.emit(Inst::FpuCSel64 {
+                        rd,
+                        rn,
+                        rm,
+                        cond: Cond::Gt,
+                    });
+                }
             }
         }
 
