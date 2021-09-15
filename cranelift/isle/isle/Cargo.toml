@@ -1,0 +1,9 @@
+[package]
+name = "isle"
+version = "0.1.0"
+authors = ["Chris Fallin <chris@cfallin.org>"]
+edition = "2018"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[dependencies]
+log = "0.4"
