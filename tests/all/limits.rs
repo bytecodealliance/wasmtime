@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use wasmtime::*;
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
@@ -536,10 +536,10 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
             if libc::WEXITSTATUS(wstatus) == 0 {
                 Ok(())
             } else {
-                bail!("child exited with failure");
+                anyhow::bail!("child exited with failure");
             }
         } else {
-            bail!("child didnt exit??")
+            anyhow::bail!("child didnt exit??")
         }
     }
 }
