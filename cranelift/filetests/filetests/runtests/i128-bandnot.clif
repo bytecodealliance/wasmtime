@@ -1,0 +1,14 @@
+test run
+target aarch64
+
+function %band_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = band_not v0, v1
+    return v2
+}
+; run: %band_not_i128(0, 0) == 0
+; run: %band_not_i128(-1, 0) == -1
+; run: %band_not_i128(-1, -1) == 0
+; run: %band_not_i128(-1, 0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %band_not_i128(0xFEDCBA98_76543210_01234567_89ABCDEF, 0x01234567_89ABCDEF_FEDCBA98_76543210) == 0xFEDCBA98_76543210_01234567_89ABCDEF
+; run: %band_not_i128(0xFEEEFFFF_FEEEFFFF_F1FFFEFE_F1FFFEFE, 0x20240000_20240000_31001010_31001010) == 0xDECAFFFF_DECAFFFF_C0FFEEEE_C0FFEEEE
