@@ -72,6 +72,13 @@ impl<'a> Parser<'a> {
         })
     }
 
+    fn is_const(&self) -> bool {
+        self.is(|tok| match tok {
+            &Token::Symbol(ref tok_s) if tok_s.starts_with("$") => true,
+            _ => false,
+        })
+    }
+
     fn lparen(&mut self) -> ParseResult<()> {
         self.take(|tok| *tok == Token::LParen).map(|_| ())
     }
@@ -129,20 +136,20 @@ impl<'a> Parser<'a> {
 
     fn str_to_ident(&self, pos: Pos, s: &str) -> ParseResult<Ident> {
         let first = s.chars().next().unwrap();
-        if !first.is_alphabetic() && first != '_' {
+        if !first.is_alphabetic() && first != '_' && first != '$' {
             return Err(self.error(
                 pos,
-                format!("Identifier '{}' does not start with letter or _", s),
+                format!("Identifier '{}' does not start with letter or _ or $", s),
             ));
         }
         if s.chars()
             .skip(1)
-            .any(|c| !c.is_alphanumeric() && c != '_' && c != '.')
+            .any(|c| !c.is_alphanumeric() && c != '_' && c != '.' && c != '$')
         {
             return Err(self.error(
                 pos,
                 format!(
-                    "Identifier '{}' contains invalid character (not a-z, A-Z, 0-9, _, .)",
+                    "Identifier '{}' contains invalid character (not a-z, A-Z, 0-9, _, ., $)",
                     s
                 ),
             ));
@@ -154,6 +161,20 @@ impl<'a> Parser<'a> {
         let pos = self.pos();
         let s = self.symbol()?;
         self.str_to_ident(pos.unwrap(), &s)
+    }
+
+    fn parse_const(&mut self) -> ParseResult<Ident> {
+        let pos = self.pos();
+        let ident = self.parse_ident()?;
+        if ident.0.starts_with("$") {
+            let s = &ident.0[1..];
+            Ok(Ident(s.to_string(), ident.1))
+        } else {
+            Err(self.error(
+                pos.unwrap(),
+                "Not a constant identifier; must start with a '$'".to_string(),
+            ))
+        }
     }
 
     fn parse_type(&mut self) -> ParseResult<Type> {
@@ -303,6 +324,16 @@ impl<'a> Parser<'a> {
                 arg_polarity,
                 infallible,
             })
+        } else if self.is_sym_str("const") {
+            self.symbol()?;
+            let pos = self.pos();
+            let name = self.parse_const()?;
+            let ty = self.parse_ident()?;
+            Ok(Extern::Const {
+                name,
+                ty,
+                pos: pos.unwrap(),
+            })
         } else {
             Err(self.error(
                 pos.unwrap(),
@@ -355,6 +386,10 @@ impl<'a> Parser<'a> {
                 val: self.int()?,
                 pos,
             })
+        } else if self.is_const() {
+            let pos = pos.unwrap();
+            let val = self.parse_const()?;
+            Ok(Pattern::ConstPrim { val, pos })
         } else if self.is_sym_str("_") {
             let pos = pos.unwrap();
             self.symbol()?;
@@ -448,6 +483,10 @@ impl<'a> Parser<'a> {
             let pos = pos.unwrap();
             self.symbol()?;
             Ok(Expr::ConstInt { val: 0, pos })
+        } else if self.is_const() {
+            let pos = pos.unwrap();
+            let val = self.parse_const()?;
+            Ok(Expr::ConstPrim { val, pos })
         } else if self.is_sym() {
             let pos = pos.unwrap();
             let name = self.parse_ident()?;

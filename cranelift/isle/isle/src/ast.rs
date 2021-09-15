@@ -96,6 +96,8 @@ pub enum Pattern {
     Var { var: Ident, pos: Pos },
     /// An operator that matches a constant integer value.
     ConstInt { val: i64, pos: Pos },
+    /// An operator that matches an external constant value.
+    ConstPrim { val: Ident, pos: Pos },
     /// An application of a type variant or term.
     Term {
         sym: Ident,
@@ -166,9 +168,10 @@ impl Pattern {
                 }
             }
 
-            &Pattern::Var { .. } | &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } => {
-                self.clone()
-            }
+            &Pattern::Var { .. }
+            | &Pattern::Wildcard { .. }
+            | &Pattern::ConstInt { .. }
+            | &Pattern::ConstPrim { .. } => self.clone(),
             &Pattern::MacroArg { .. } => unreachable!(),
         }
     }
@@ -208,9 +211,10 @@ impl Pattern {
                 }
             }
 
-            &Pattern::Var { .. } | &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } => {
-                self.clone()
-            }
+            &Pattern::Var { .. }
+            | &Pattern::Wildcard { .. }
+            | &Pattern::ConstInt { .. }
+            | &Pattern::ConstPrim { .. } => self.clone(),
             &Pattern::MacroArg { index, .. } => macro_args[index].clone(),
         }
     }
@@ -218,6 +222,7 @@ impl Pattern {
     pub fn pos(&self) -> Pos {
         match self {
             &Pattern::ConstInt { pos, .. }
+            | &Pattern::ConstPrim { pos, .. }
             | &Pattern::And { pos, .. }
             | &Pattern::Term { pos, .. }
             | &Pattern::BindPattern { pos, .. }
@@ -280,6 +285,8 @@ pub enum Expr {
     Var { name: Ident, pos: Pos },
     /// A constant integer.
     ConstInt { val: i64, pos: Pos },
+    /// A constant of some other primitive type.
+    ConstPrim { val: Ident, pos: Pos },
     /// The `(let ((var ty val)*) body)` form.
     Let {
         defs: Vec<LetDef>,
@@ -294,6 +301,7 @@ impl Expr {
             &Expr::Term { pos, .. }
             | &Expr::Var { pos, .. }
             | &Expr::ConstInt { pos, .. }
+            | &Expr::ConstPrim { pos, .. }
             | &Expr::Let { pos, .. } => pos,
         }
     }
@@ -344,6 +352,8 @@ pub enum Extern {
         /// The position of this decl.
         pos: Pos,
     },
+    /// An external constant: `(const $IDENT type)` form.
+    Const { name: Ident, ty: Ident, pos: Pos },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

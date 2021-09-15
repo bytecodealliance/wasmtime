@@ -32,6 +32,9 @@ pub enum PatternInst {
         int_val: i64,
     },
 
+    /// Try matching the given value as the given constant. Produces no values.
+    MatchPrim { input: Value, ty: TypeId, val: Sym },
+
     /// Try matching the given value as the given variant, producing
     /// `|arg_tys|` values as output.
     MatchVariant {
@@ -69,6 +72,9 @@ pub enum ExprInst {
     /// Produce a constant integer.
     ConstInt { ty: TypeId, val: i64 },
 
+    /// Produce a constant extern value.
+    ConstPrim { ty: TypeId, val: Sym },
+
     /// Create a variant.
     CreateVariant {
         inputs: Vec<(Value, TypeId)>,
@@ -96,6 +102,7 @@ impl ExprInst {
     pub fn visit_values<F: FnMut(Value)>(&self, mut f: F) {
         match self {
             &ExprInst::ConstInt { .. } => {}
+            &ExprInst::ConstPrim { .. } => {}
             &ExprInst::Construct { ref inputs, .. }
             | &ExprInst::CreateVariant { ref inputs, .. } => {
                 for (input, _ty) in inputs {
@@ -143,21 +150,6 @@ impl ExprSequence {
             None
         }
     }
-
-    pub fn is_const_variant(&self) -> Option<(TypeId, VariantId)> {
-        if self.insts.len() == 2 && matches!(&self.insts[1], &ExprInst::Return { .. }) {
-            match &self.insts[0] {
-                &ExprInst::CreateVariant {
-                    ref inputs,
-                    ty,
-                    variant,
-                } if inputs.len() == 0 => Some((ty, variant)),
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -194,6 +186,10 @@ impl PatternSequence {
 
     fn add_match_int(&mut self, input: Value, ty: TypeId, int_val: i64) {
         self.add_inst(PatternInst::MatchInt { input, ty, int_val });
+    }
+
+    fn add_match_prim(&mut self, input: Value, ty: TypeId, val: Sym) {
+        self.add_inst(PatternInst::MatchPrim { input, ty, val });
     }
 
     fn add_match_variant(
@@ -290,8 +286,14 @@ impl PatternSequence {
                 // Assert that the value matches the constant integer.
                 let input_val = input
                     .to_value()
-                    .expect("Cannot match an =var pattern against root term");
+                    .expect("Cannot match an integer pattern against root term");
                 self.add_match_int(input_val, ty, value);
+            }
+            &Pattern::ConstPrim(ty, value) => {
+                let input_val = input
+                    .to_value()
+                    .expect("Cannot match a constant-primitive pattern against root term");
+                self.add_match_prim(input_val, ty, value);
             }
             &Pattern::Term(ty, term, ref args) => {
                 match input {
@@ -435,6 +437,12 @@ impl ExprSequence {
         Value::Expr { inst, output: 0 }
     }
 
+    fn add_const_prim(&mut self, ty: TypeId, val: Sym) -> Value {
+        let inst = InstId(self.insts.len());
+        self.add_inst(ExprInst::ConstPrim { ty, val });
+        Value::Expr { inst, output: 0 }
+    }
+
     fn add_create_variant(
         &mut self,
         inputs: &[(Value, TypeId)],
@@ -490,6 +498,7 @@ impl ExprSequence {
         log::trace!("gen_expr: expr {:?}", expr);
         match expr {
             &Expr::ConstInt(ty, val) => self.add_const_int(ty, val),
+            &Expr::ConstPrim(ty, val) => self.add_const_prim(ty, val),
             &Expr::Let(_ty, ref bindings, ref subexpr) => {
                 let mut vars = vars.clone();
                 for &(var, _var_ty, ref var_expr) in bindings {

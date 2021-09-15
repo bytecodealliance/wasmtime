@@ -35,6 +35,7 @@ pub struct TypeEnv {
     pub sym_map: HashMap<String, Sym>,
     pub types: Vec<Type>,
     pub type_map: HashMap<Sym, TypeId>,
+    pub const_types: HashMap<Sym, TypeId>,
     pub errors: Vec<Error>,
 }
 
@@ -238,6 +239,7 @@ pub enum Pattern {
     BindPattern(TypeId, VarId, Box<Pattern>),
     Var(TypeId, VarId),
     ConstInt(TypeId, i64),
+    ConstPrim(TypeId, Sym),
     Term(TypeId, TermId, Vec<TermArgPattern>),
     Wildcard(TypeId),
     And(TypeId, Vec<Pattern>),
@@ -254,6 +256,7 @@ pub enum Expr {
     Term(TypeId, TermId, Vec<Expr>),
     Var(TypeId, VarId),
     ConstInt(TypeId, i64),
+    ConstPrim(TypeId, Sym),
     Let(TypeId, Vec<(VarId, TypeId, Box<Expr>)>, Box<Expr>),
 }
 
@@ -263,6 +266,7 @@ impl Pattern {
             &Self::BindPattern(t, ..) => t,
             &Self::Var(t, ..) => t,
             &Self::ConstInt(t, ..) => t,
+            &Self::ConstPrim(t, ..) => t,
             &Self::Term(t, ..) => t,
             &Self::Wildcard(t, ..) => t,
             &Self::And(t, ..) => t,
@@ -284,6 +288,7 @@ impl Expr {
             &Self::Term(t, ..) => t,
             &Self::Var(t, ..) => t,
             &Self::ConstInt(t, ..) => t,
+            &Self::ConstPrim(t, ..) => t,
             &Self::Let(t, ..) => t,
         }
     }
@@ -297,6 +302,7 @@ impl TypeEnv {
             sym_map: HashMap::new(),
             types: vec![],
             type_map: HashMap::new(),
+            const_types: HashMap::new(),
             errors: vec![],
         };
 
@@ -335,6 +341,29 @@ impl TypeEnv {
                     };
                     tyenv.types.push(ty);
                     tid += 1;
+                }
+                _ => {}
+            }
+        }
+
+        // Now collect types for extern constants.
+        for def in &defs.defs {
+            match def {
+                &ast::Def::Extern(ast::Extern::Const {
+                    ref name,
+                    ref ty,
+                    pos,
+                }) => {
+                    let ty = tyenv.intern_mut(ty);
+                    let ty = match tyenv.type_map.get(&ty) {
+                        Some(ty) => *ty,
+                        None => {
+                            tyenv.report_error(pos, "Unknown type for constant".into());
+                            continue;
+                        }
+                    };
+                    let name = tyenv.intern_mut(name);
+                    tyenv.const_types.insert(name, ty);
                 }
                 _ => {}
             }
@@ -674,25 +703,20 @@ impl TermEnv {
                         vars: vec![],
                     };
 
-                    let (lhs, ty) = match self.translate_pattern(
-                        tyenv,
-                        &rule.pattern,
-                        None,
-                        &mut bindings,
-                    ) {
-                        Some(x) => x,
-                        None => {
-                            // Keep going to collect more errors.
-                            continue;
-                        }
-                    };
-                    let rhs =
-                        match self.translate_expr(tyenv, &rule.expr, ty, &mut bindings) {
+                    let (lhs, ty) =
+                        match self.translate_pattern(tyenv, &rule.pattern, None, &mut bindings) {
                             Some(x) => x,
                             None => {
+                                // Keep going to collect more errors.
                                 continue;
                             }
                         };
+                    let rhs = match self.translate_expr(tyenv, &rule.expr, ty, &mut bindings) {
+                        Some(x) => x,
+                        None => {
+                            continue;
+                        }
+                    };
 
                     let rid = RuleId(self.rules.len());
                     self.rules.push(Rule {
@@ -813,6 +837,20 @@ impl TermEnv {
                     }
                 };
                 Some((Pattern::ConstInt(ty, val), ty))
+            }
+            &ast::Pattern::ConstPrim { ref val, pos } => {
+                let val = tyenv.intern_mut(val);
+                let const_ty = match tyenv.const_types.get(&val) {
+                    Some(ty) => *ty,
+                    None => {
+                        tyenv.report_error(pos, "Unknown constant".into());
+                        return None;
+                    }
+                };
+                if expected_ty.is_some() && expected_ty != Some(const_ty) {
+                    tyenv.report_error(pos, "Type mismatch for constant".into());
+                }
+                Some((Pattern::ConstPrim(const_ty, val), const_ty))
             }
             &ast::Pattern::Wildcard { pos } => {
                 let ty = match expected_ty {
@@ -1045,8 +1083,7 @@ impl TermEnv {
     ) -> Option<(TermArgPattern, TypeId)> {
         match pat {
             &ast::TermArgPattern::Pattern(ref pat) => {
-                let (subpat, ty) =
-                    self.translate_pattern(tyenv, pat, expected_ty, bindings)?;
+                let (subpat, ty) = self.translate_pattern(tyenv, pat, expected_ty, bindings)?;
                 Some((TermArgPattern::Pattern(subpat), ty))
             }
             &ast::TermArgPattern::Expr(ref expr) => {
@@ -1152,6 +1189,29 @@ impl TermEnv {
                 Some(Expr::Var(bv.ty, bv.id))
             }
             &ast::Expr::ConstInt { val, .. } => Some(Expr::ConstInt(ty, val)),
+            &ast::Expr::ConstPrim { ref val, pos } => {
+                let val = tyenv.intern_mut(val);
+                let const_ty = match tyenv.const_types.get(&val) {
+                    Some(ty) => *ty,
+                    None => {
+                        tyenv.report_error(pos, "Unknown constant".into());
+                        return None;
+                    }
+                };
+                if const_ty != ty {
+                    tyenv.report_error(
+                        pos,
+                        format!(
+                            "Constant '{}' has wrong type: expected {}, but is actually {}",
+                            tyenv.syms[val.index()],
+                            tyenv.types[ty.index()].name(tyenv),
+                            tyenv.types[const_ty.index()].name(tyenv)
+                        ),
+                    );
+                    return None;
+                }
+                Some(Expr::ConstPrim(ty, val))
+            }
             &ast::Expr::Let {
                 ref defs,
                 ref body,
@@ -1191,15 +1251,13 @@ impl TermEnv {
                     };
 
                     // Evaluate the variable's value.
-                    let val = Box::new(
-                        match self.translate_expr(tyenv, &def.val, ty, bindings) {
-                            Some(e) => e,
-                            None => {
-                                // Keep going for more errors.
-                                continue;
-                            }
-                        },
-                    );
+                    let val = Box::new(match self.translate_expr(tyenv, &def.val, ty, bindings) {
+                        Some(e) => e,
+                        None => {
+                            // Keep going for more errors.
+                            continue;
+                        }
+                    });
 
                     // Bind the var with the given type.
                     let id = VarId(bindings.next_var);
@@ -1240,14 +1298,30 @@ mod test {
             .expect("should parse");
         let tyenv = TypeEnv::from_ast(&ast).expect("should not have type-definition errors");
 
-        let sym_a = tyenv.intern(&Ident("A".to_string())).unwrap();
-        let sym_b = tyenv.intern(&Ident("B".to_string())).unwrap();
-        let sym_c = tyenv.intern(&Ident("C".to_string())).unwrap();
-        let sym_a_b = tyenv.intern(&Ident("A.B".to_string())).unwrap();
-        let sym_a_c = tyenv.intern(&Ident("A.C".to_string())).unwrap();
-        let sym_u32 = tyenv.intern(&Ident("u32".to_string())).unwrap();
-        let sym_f1 = tyenv.intern(&Ident("f1".to_string())).unwrap();
-        let sym_f2 = tyenv.intern(&Ident("f2".to_string())).unwrap();
+        let sym_a = tyenv
+            .intern(&Ident("A".to_string(), Default::default()))
+            .unwrap();
+        let sym_b = tyenv
+            .intern(&Ident("B".to_string(), Default::default()))
+            .unwrap();
+        let sym_c = tyenv
+            .intern(&Ident("C".to_string(), Default::default()))
+            .unwrap();
+        let sym_a_b = tyenv
+            .intern(&Ident("A.B".to_string(), Default::default()))
+            .unwrap();
+        let sym_a_c = tyenv
+            .intern(&Ident("A.C".to_string(), Default::default()))
+            .unwrap();
+        let sym_u32 = tyenv
+            .intern(&Ident("u32".to_string(), Default::default()))
+            .unwrap();
+        let sym_f1 = tyenv
+            .intern(&Ident("f1".to_string(), Default::default()))
+            .unwrap();
+        let sym_f2 = tyenv
+            .intern(&Ident("f2".to_string(), Default::default()))
+            .unwrap();
 
         assert_eq!(tyenv.type_map.get(&sym_u32).unwrap(), &TypeId(0));
         assert_eq!(tyenv.type_map.get(&sym_a).unwrap(), &TypeId(1));

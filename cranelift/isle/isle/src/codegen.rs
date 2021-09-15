@@ -797,6 +797,23 @@ impl<'a> Codegen<'a> {
                     self.const_int(val, ty)
                 )?;
             }
+            &ExprInst::ConstPrim { ty, val } => {
+                let value = Value::Expr {
+                    inst: id,
+                    output: 0,
+                };
+                self.define_val(&value, ctx, /* is_ref = */ false, ty);
+                let name = self.value_name(&value);
+                let ty_name = self.type_name(ty, /* by_ref = */ false);
+                writeln!(
+                    code,
+                    "{}let {}: {} = {};",
+                    indent,
+                    name,
+                    ty_name,
+                    self.typeenv.syms[val.index()],
+                )?;
+            }
             &ExprInst::CreateVariant {
                 ref inputs,
                 ty,
@@ -953,6 +970,12 @@ impl<'a> Codegen<'a> {
             } => {
                 let input = self.value_by_val(input, ctx);
                 writeln!(code, "{}if {} == {} {{", indent, input, int_val)?;
+                Ok(false)
+            }
+            &PatternInst::MatchPrim { ref input, val, .. } => {
+                let input = self.value_by_val(input, ctx);
+                let sym = &self.typeenv.syms[val.index()];
+                writeln!(code, "{}if {} == {} {{", indent, input, sym)?;
                 Ok(false)
             }
             &PatternInst::MatchVariant {

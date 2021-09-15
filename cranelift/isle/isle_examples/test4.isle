@@ -7,6 +7,9 @@
 (extern extractor Ext1 ext1)
 (extern extractor Ext2 ext2)
 
+(extern const $A u32)
+(extern const $B u32)
+
 (decl C (bool) A)
 (extern constructor C c)
 
@@ -32,3 +35,8 @@
 (rule
   (Lower2 (Opcode.C))
   (MachInst.F))
+
+(decl F (Opcode) u32)
+(rule
+ (F _)
+ $B)
