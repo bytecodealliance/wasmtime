@@ -5,6 +5,7 @@ use crate::{signatures::SignatureCollection, Engine, Extern};
 use anyhow::{bail, Context, Result};
 use wasmtime_environ::{
     EntityType, Global, InstanceTypeIndex, Memory, ModuleTypeIndex, SignatureIndex, Table,
+    WasmFuncType, WasmType,
 };
 use wasmtime_jit::TypeTables;
 use wasmtime_runtime::VMSharedSignatureIndex;
@@ -22,11 +23,15 @@ impl MatchCx<'_> {
     }
 
     fn global_ty(&self, expected: &Global, actual: &Global) -> Result<()> {
-        if expected.wasm_ty == actual.wasm_ty && expected.mutability == actual.mutability {
-            Ok(())
-        } else {
-            bail!("global types incompatible")
-        }
+        match_ty(expected.wasm_ty, actual.wasm_ty, "global")?;
+        match_bool(
+            expected.mutability,
+            actual.mutability,
+            "global",
+            "mutable",
+            "immutable",
+        )?;
+        Ok(())
     }
 
     pub fn table(&self, expected: &Table, actual: &crate::Table) -> Result<()> {
@@ -34,20 +39,15 @@ impl MatchCx<'_> {
     }
 
     fn table_ty(&self, expected: &Table, actual: &Table) -> Result<()> {
-        if expected.wasm_ty == actual.wasm_ty
-            && expected.minimum <= actual.minimum
-            && match expected.maximum {
-                Some(expected) => match actual.maximum {
-                    Some(actual) => expected >= actual,
-                    None => false,
-                },
-                None => true,
-            }
-        {
-            Ok(())
-        } else {
-            bail!("table types incompatible")
-        }
+        match_ty(expected.wasm_ty, actual.wasm_ty, "table")?;
+        match_limits(
+            expected.minimum.into(),
+            expected.maximum.map(|i| i.into()),
+            actual.minimum.into(),
+            actual.maximum.map(|i| i.into()),
+            "table",
+        )?;
+        Ok(())
     }
 
     pub fn memory(&self, expected: &Memory, actual: &crate::Memory) -> Result<()> {
@@ -55,21 +55,28 @@ impl MatchCx<'_> {
     }
 
     fn memory_ty(&self, expected: &Memory, actual: &Memory) -> Result<()> {
-        if expected.shared == actual.shared
-            && expected.memory64 == actual.memory64
-            && expected.minimum <= actual.minimum
-            && match expected.maximum {
-                Some(expected) => match actual.maximum {
-                    Some(actual) => expected >= actual,
-                    None => false,
-                },
-                None => true,
-            }
-        {
-            Ok(())
-        } else {
-            bail!("memory types incompatible")
-        }
+        match_bool(
+            expected.shared,
+            actual.shared,
+            "memory",
+            "shared",
+            "non-shared",
+        )?;
+        match_bool(
+            expected.memory64,
+            actual.memory64,
+            "memory",
+            "64-bit",
+            "32-bit",
+        )?;
+        match_limits(
+            expected.minimum,
+            expected.maximum,
+            actual.minimum,
+            actual.maximum,
+            "memory",
+        )?;
+        Ok(())
     }
 
     pub fn func(&self, expected: SignatureIndex, actual: &crate::Func) -> Result<()> {
@@ -96,10 +103,39 @@ impl MatchCx<'_> {
             None => false,
         };
         if matches {
-            Ok(())
-        } else {
-            bail!("function types incompatible")
+            return Ok(());
         }
+        let msg = "function types incompatible";
+        let expected = &self.types.wasm_signatures[expected];
+        let actual = match self.engine.signatures().lookup_type(actual) {
+            Some(ty) => ty,
+            None => {
+                debug_assert!(false, "all signatures should be registered");
+                bail!("{}", msg);
+            }
+        };
+
+        let render = |ty: &WasmFuncType| {
+            let params = ty
+                .params
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let returns = ty
+                .returns
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("`({}) -> ({})`", params, returns)
+        };
+        bail!(
+            "{}: expected func of type {}, found func of type {}",
+            msg,
+            render(expected),
+            render(&actual)
+        )
     }
 
     pub fn instance(&self, expected: InstanceTypeIndex, actual: &crate::Instance) -> Result<()> {
@@ -360,6 +396,69 @@ impl MatchCx<'_> {
             },
         }
     }
+}
+
+fn match_ty(expected: WasmType, actual: WasmType, desc: &str) -> Result<()> {
+    if expected == actual {
+        return Ok(());
+    }
+    bail!(
+        "{} types incompatible: expected {0} of type `{}`, found {0} of type `{}`",
+        desc,
+        expected,
+        actual,
+    )
+}
+
+fn match_bool(
+    expected: bool,
+    actual: bool,
+    desc: &str,
+    if_true: &str,
+    if_false: &str,
+) -> Result<()> {
+    if expected == actual {
+        return Ok(());
+    }
+    bail!(
+        "{} types incompatible: expected {} {0}, found {} {0}",
+        desc,
+        if expected { if_true } else { if_false },
+        if actual { if_true } else { if_false },
+    )
+}
+
+fn match_limits(
+    expected_min: u64,
+    expected_max: Option<u64>,
+    actual_min: u64,
+    actual_max: Option<u64>,
+    desc: &str,
+) -> Result<()> {
+    if expected_min <= actual_min
+        && match expected_max {
+            Some(expected) => match actual_max {
+                Some(actual) => expected >= actual,
+                None => false,
+            },
+            None => true,
+        }
+    {
+        return Ok(());
+    }
+    let limits = |min: u64, max: Option<u64>| {
+        format!(
+            "min: {}, max: {}",
+            min,
+            max.map(|s| s.to_string()).unwrap_or(String::from("none"))
+        )
+    };
+    bail!(
+        "{} types incompatible: expected {0} limits ({}) doesn't match provided {0} limits ({})",
+        desc,
+        limits(expected_min, expected_max),
+        limits(actual_min, actual_max)
+    )
 }
 
 fn entity_desc(ty: &EntityType) -> &'static str {

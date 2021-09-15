@@ -7,6 +7,7 @@ use cranelift_entity::entity_impl;
 
 use serde::{Deserialize, Serialize};
 use std::convert::{TryFrom, TryInto};
+use std::fmt;
 
 mod error;
 pub use error::*;
@@ -64,6 +65,21 @@ impl From<WasmType> for wasmparser::Type {
             WasmType::FuncRef => wasmparser::Type::FuncRef,
             WasmType::ExternRef => wasmparser::Type::ExternRef,
             WasmType::ExnRef => wasmparser::Type::ExnRef,
+        }
+    }
+}
+
+impl fmt::Display for WasmType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WasmType::I32 => write!(f, "i32"),
+            WasmType::I64 => write!(f, "i64"),
+            WasmType::F32 => write!(f, "f32"),
+            WasmType::F64 => write!(f, "f64"),
+            WasmType::V128 => write!(f, "v128"),
+            WasmType::ExternRef => write!(f, "externref"),
+            WasmType::FuncRef => write!(f, "funcref"),
+            WasmType::ExnRef => write!(f, "exnref"),
         }
     }
 }
