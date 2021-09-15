@@ -13,6 +13,7 @@ edition = "2018"
 [dependencies]
 wasmtime-environ = { path = "../environ", version = "0.30.0" }
 wasmtime-runtime = { path = "../runtime", version = "0.30.0" }
+region = "2.2.0"
 thiserror = "1.0.4"
 target-lexicon = { version = "0.12.0", default-features = false }
 wasmparser = "0.80"
