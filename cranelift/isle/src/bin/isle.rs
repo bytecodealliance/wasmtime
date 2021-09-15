@@ -1,15 +1,6 @@
-#![allow(dead_code)]
-
 use clap::{App, Arg};
 
-mod ast;
-mod codegen;
-mod compile;
-mod error;
-mod ir;
-mod lexer;
-mod parser;
-mod sema;
+use isle::{error, lexer, parser, compile};
 
 fn main() -> Result<(), error::Error> {
     let _ = env_logger::try_init();
@@ -73,3 +64,4 @@ fn main() -> Result<(), error::Error> {
 
     Ok(())
 }
+

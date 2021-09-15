@@ -12,12 +12,6 @@ pub struct Lexer<'a> {
     lookahead: Option<(Pos, Token)>,
 }
 
-#[derive(Clone, Debug)]
-enum LexerInput<'a> {
-    String { s: &'a str, filename: &'a str },
-    File { content: String, filename: String },
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash, PartialOrd, Ord)]
 pub struct Pos {
     pub file: usize,

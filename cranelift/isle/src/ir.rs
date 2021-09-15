@@ -477,10 +477,6 @@ impl ExprSequence {
         });
     }
 
-    fn add_multi_return(&mut self, index: usize, ty: TypeId, value: Value) {
-        self.add_inst(ExprInst::Return { index, ty, value });
-    }
-
     /// Creates a sequence of ExprInsts to generate the given
     /// expression value. Returns the value ID as well as the root
     /// term ID, if any.
