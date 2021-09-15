@@ -462,9 +462,15 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     Ok(())
 }
 
+// This test only works on Linux. It may be portable to MacOS as well,
+// but the original author did not have a machine available to test it.
 #[cfg(target_os = "linux")]
 #[test]
 fn custom_limiter_detect_os_oom_failure() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        return Ok(());
+    }
+
     let pid = unsafe { libc::fork() };
     if pid == 0 {
         // Child process
