@@ -218,7 +218,7 @@ jobs:
     name: Test
     runs-on: ${{ matrix.os }}
     env:
-      QEMU_BUILD_VERSION: 6.0.0
+      QEMU_BUILD_VERSION: 6.1.0
     strategy:
       matrix:
         include:
