@@ -1621,6 +1621,13 @@ impl<T> Caller<'_, T> {
         self.store.add_fuel(fuel)
     }
 
+    /// Synthetically consumes fuel from the store.
+    ///
+    /// For more information see [`Store::consume_fuel`](crate::Store::consume_fuel)
+    pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
+        self.store.consume_fuel(fuel)
+    }
+
     /// Configures this `Store` to trap whenever fuel runs out.
     ///
     /// For more information see

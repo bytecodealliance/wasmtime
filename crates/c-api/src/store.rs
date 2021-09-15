@@ -145,6 +145,17 @@ pub extern "C" fn wasmtime_context_fuel_consumed(store: CStoreContext<'_>, fuel:
     }
 }
 
+#[no_mangle]
+pub extern "C" fn wasmtime_context_consume_fuel(
+    mut store: CStoreContextMut<'_>,
+    fuel: u64,
+    remaining_fuel: &mut u64,
+) -> Option<Box<wasmtime_error_t>> {
+    crate::handle_result(store.consume_fuel(fuel), |remaining| {
+        *remaining_fuel = remaining;
+    })
+}
+
 #[repr(C)]
 pub struct wasmtime_interrupt_handle_t {
     handle: InterruptHandle,
