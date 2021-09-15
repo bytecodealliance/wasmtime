@@ -413,6 +413,9 @@ impl ResourceLimiter for MemoryGrowFailureDetector {
 
 #[test]
 fn custom_limiter_detect_grow_failure() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        return Ok(());
+    }
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: PoolingAllocationStrategy::NextAvailable,
