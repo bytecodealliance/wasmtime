@@ -614,6 +614,29 @@ impl<T> Store<T> {
         self.inner.add_fuel(fuel)
     }
 
+    /// Synthetically consumes fuel from this [`Store`].
+    ///
+    /// For this method to work fuel consumption must be enabled via
+    /// [`Config::consume_fuel`](crate::Config::consume_fuel).
+    ///
+    /// WebAssembly execution will automatically consume fuel but if so desired
+    /// the embedder can also consume fuel manually to account for relative
+    /// costs of host functions, for example.
+    ///
+    /// This function will attempt to consume `fuel` units of fuel from within
+    /// this store. If the remaining amount of fuel allows this then `Ok(N)` is
+    /// returned where `N` is the amount of remaining fuel. Otherwise an error
+    /// is returned and no fuel is consumed.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an either either if fuel consumption via
+    /// [`Config`](crate::Config) is disabled or if `fuel` exceeds the amount
+    /// of remaining fuel within this store.
+    pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
+        self.inner.consume_fuel(fuel)
+    }
+
     /// Configures a [`Store`] to generate a [`Trap`] whenever it runs out of
     /// fuel.
     ///
@@ -746,6 +769,13 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// For more information see [`Store::add_fuel`]
     pub fn add_fuel(&mut self, fuel: u64) -> Result<()> {
         self.0.add_fuel(fuel)
+    }
+
+    /// Synthetically consume fuel from this store.
+    ///
+    /// For more information see [`Store::consume_fuel`]
+    pub fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
+        self.0.consume_fuel(fuel)
     }
 
     /// Configures this `Store` to trap whenever fuel runs out.
@@ -1026,6 +1056,20 @@ impl StoreOpaque {
         }
 
         Ok(())
+    }
+
+    fn consume_fuel(&mut self, fuel: u64) -> Result<u64> {
+        let consumed_ptr = unsafe { &mut *self.interrupts.fuel_consumed.get() };
+        match i64::try_from(fuel)
+            .ok()
+            .and_then(|fuel| consumed_ptr.checked_add(fuel))
+        {
+            Some(consumed) if consumed < 0 => {
+                *consumed_ptr = consumed;
+                Ok(u64::try_from(-consumed).unwrap())
+            }
+            _ => bail!("not enough fuel remaining in store"),
+        }
     }
 
     #[inline]

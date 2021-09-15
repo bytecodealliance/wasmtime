@@ -140,6 +140,20 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_context_add_fuel(wasmtime_context_t *
 WASM_API_EXTERN bool wasmtime_context_fuel_consumed(const wasmtime_context_t *context, uint64_t *fuel);
 
 /**
+ * \brief Attempt to manually consume fuel from the store.
+ *
+ * If fuel consumption is not enabled via #wasmtime_config_consume_fuel_set then
+ * this function will return an error. Otherwise this will attempt to consume
+ * the specified amount of `fuel` from the store. If successful the remaining
+ * amount of fuel is stored into `remaining`. If `fuel` couldn't be consumed
+ * then an error is returned.
+ *
+ * Also note that fuel, if enabled, must be originally configured via
+ * #wasmtime_context_add_fuel.
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_context_consume_fuel(wasmtime_context_t *context, uint64_t fuel, uint64_t *remaining);
+
+/**
  * \brief Configres WASI state within the specified store.
  *
  * This function is required if #wasmtime_linker_define_wasi is called. This

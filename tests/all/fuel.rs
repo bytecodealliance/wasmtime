@@ -122,3 +122,70 @@ fn iloop() {
         );
     }
 }
+
+#[test]
+fn manual_fuel() {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config).unwrap();
+    let mut store = Store::new(&engine, ());
+    store.add_fuel(10_000).unwrap();
+    assert_eq!(store.fuel_consumed(), Some(0));
+    assert_eq!(store.consume_fuel(1).unwrap(), 9_999);
+    assert_eq!(store.fuel_consumed(), Some(1));
+    assert!(store.consume_fuel(10_000).is_err());
+    assert_eq!(store.consume_fuel(999).unwrap(), 9_000);
+    assert!(store.consume_fuel(10_000).is_err());
+    assert_eq!(store.consume_fuel(8998).unwrap(), 2);
+    assert!(store.consume_fuel(2).is_err());
+    assert_eq!(store.consume_fuel(1).unwrap(), 1);
+    assert!(store.consume_fuel(1).is_err());
+    assert_eq!(store.consume_fuel(0).unwrap(), 1);
+}
+
+#[test]
+fn host_function_consumes_all() {
+    const FUEL: u64 = 10_000;
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (import "" "" (func))
+                (func (export "")
+                    call 0
+                    call $other)
+                (func $other))
+        "#,
+    )
+    .unwrap();
+    let mut store = Store::new(&engine, ());
+    store.add_fuel(FUEL).unwrap();
+    let func = Func::wrap(&mut store, |mut caller: Caller<'_, ()>| {
+        let consumed = caller.fuel_consumed().unwrap();
+        assert_eq!(caller.consume_fuel((FUEL - consumed) - 1).unwrap(), 1);
+    });
+
+    let instance = Instance::new(&mut store, &module, &[func.into()]).unwrap();
+    let export = instance
+        .get_typed_func::<(), (), _>(&mut store, "")
+        .unwrap();
+    let trap = export.call(&mut store, ()).err().unwrap().to_string();
+    assert!(trap.contains("all fuel consumed"), "bad error: {}", trap);
+}
+
+#[test]
+fn manual_edge_cases() {
+    let mut config = Config::new();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config).unwrap();
+    let mut store = Store::new(&engine, ());
+    store.add_fuel(u64::MAX).unwrap();
+    assert_eq!(store.fuel_consumed(), Some(0));
+    assert!(store.consume_fuel(u64::MAX).is_err());
+    assert!(store.consume_fuel(i64::MAX as u64).is_err());
+    assert!(store.consume_fuel(i64::MAX as u64 + 1).is_err());
+    assert_eq!(store.consume_fuel(i64::MAX as u64 - 1).unwrap(), 1);
+}
