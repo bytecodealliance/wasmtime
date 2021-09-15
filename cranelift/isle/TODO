@@ -15,3 +15,7 @@
 
 - Build inlining and simplification: inline invocations of internal
   constructors, and eliminate ctor-etor or makevariant-matchvariant pairs.
+
+- Ideas from discussion with fitzgen
+  - Turn arg-polarity and exprs on extractors into purer "InstFormat"
+  - Extern types as associated types on Context trait
