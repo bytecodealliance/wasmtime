@@ -20,7 +20,6 @@ typedef jmp_buf platform_jmp_buf;
 #define platform_setjmp(buf) sigsetjmp(buf, 0)
 #define platform_longjmp(buf, arg) siglongjmp(buf, arg)
 typedef sigjmp_buf platform_jmp_buf;
-#endif
 
 #else
 
