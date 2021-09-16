@@ -25,7 +25,7 @@ tracing = "0.1.19"
 cap-std = "0.19.1"
 cap-rand = "0.19.1"
 bitflags = "1.2"
-io-lifetimes = { version = "0.3.0", default-features = false }
+io-lifetimes = { version = "0.3.1", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 rsix = "0.23.0"
