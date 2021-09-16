@@ -13,6 +13,11 @@ typedef jmp_buf platform_jmp_buf;
 // and restoring most of the registers. See the [GCC docs] and [clang docs]
 // for more information.
 //
+// Per the caveat in the GCC docs, this assumes that the host compiler (which
+// may be compiling for a generic architecture family) knows about all the
+// register state that Cranelift (which may be specializing for the hardware at
+// runtime) is assuming is callee-saved.
+//
 // [GCC docs]: https://gcc.gnu.org/onlinedocs/gcc/Nonlocal-Gotos.html
 // [clang docs]: https://llvm.org/docs/ExceptionHandling.html#llvm-eh-sjlj-setjmp
 #define platform_setjmp(buf) __builtin_setjmp(buf)
