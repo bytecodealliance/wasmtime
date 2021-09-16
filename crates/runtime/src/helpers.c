@@ -17,7 +17,7 @@ typedef jmp_buf platform_jmp_buf;
 // [clang docs]: https://llvm.org/docs/ExceptionHandling.html#llvm-eh-sjlj-setjmp
 #define platform_setjmp(buf) __builtin_setjmp(buf)
 #define platform_longjmp(buf, arg) __builtin_longjmp(buf, arg)
-typedef void *platform_jmp_buf[5];
+typedef void *platform_jmp_buf[5]; // this is the documented size; see the docs links for details.
 #endif
 
 int wasmtime_setjmp(
