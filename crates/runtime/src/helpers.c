@@ -2,18 +2,22 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-// Note that `sigsetjmp` and `siglongjmp` are used here where possible to
-// explicitly pass a 0 argument to `sigsetjmp` that we don't need to preserve
-// the process signal mask. This should make this call a bit faster b/c it
-// doesn't need to touch the kernel signal handling routines.
 #ifdef CFG_TARGET_OS_windows
 #define platform_setjmp(buf) setjmp(buf)
 #define platform_longjmp(buf, arg) longjmp(buf, arg)
-#define platform_jmp_buf jmp_buf
+typedef jmp_buf platform_jmp_buf;
 #else
-#define platform_setjmp(buf) sigsetjmp(buf, 0)
-#define platform_longjmp(buf, arg) siglongjmp(buf, arg)
-#define platform_jmp_buf sigjmp_buf
+// GCC and Clang both provide `__builtin_setjmp`/`__builtin_longjmp`, which
+// differ from plain `setjmp` and `longjmp` in that they're implemented by
+// the compiler inline rather than in libc, and the compiler can avoid saving
+// and restoring most of the registers. See the [GCC docs] and [clang docs]
+// for more information.
+//
+// [GCC docs]: https://gcc.gnu.org/onlinedocs/gcc/Nonlocal-Gotos.html
+// [clang docs]: https://llvm.org/docs/ExceptionHandling.html#llvm-eh-sjlj-setjmp
+#define platform_setjmp(buf) __builtin_setjmp(buf)
+#define platform_longjmp(buf, arg) __builtin_longjmp(buf, arg)
+typedef void *platform_jmp_buf[5];
 #endif
 
 int wasmtime_setjmp(
