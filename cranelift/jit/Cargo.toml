@@ -17,7 +17,6 @@ cranelift-entity = { path = "../entity", version = "0.77.0" }
 anyhow = "1.0"
 region = "2.2.0"
 libc = { version = "0.2.42" }
-rsix = "0.23.0"
 target-lexicon = "0.12"
 memmap2 = { version = "0.2.1", optional = true }
 log = { version = "0.4.6", default-features = false }

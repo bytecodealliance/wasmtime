@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
     if len == 0 {

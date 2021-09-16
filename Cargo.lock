@@ -688,7 +688,6 @@ dependencies = [
  "log",
  "memmap2",
  "region",
- "rsix",
  "target-lexicon",
  "winapi",
 ]
