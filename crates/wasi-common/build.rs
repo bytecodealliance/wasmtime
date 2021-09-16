@@ -7,4 +7,6 @@ fn main() {
     println!("cargo:wasi={}", wasi.display());
     // and available to our own crate as WASI_ROOT:
     println!("cargo:rustc-env=WASI_ROOT={}", wasi.display());
+    // and this build.rs script doesn't depend on any files.
+    println!("cargo:rerun-if-changed=build.rs");
 }
