@@ -51,8 +51,7 @@ fn decommit(addr: *mut u8, len: usize) -> Result<()> {
         // and the user fault handler will receive the event.
         // If the pages are not monitored by uffd, the kernel will zero the page on next access,
         // as if it were mmap'd for the first time.
-        madvise(addr as _, len, Advice::LinuxDontNeed)
-            .context("madvise failed to decommit")?;
+        madvise(addr as _, len, Advice::LinuxDontNeed).context("madvise failed to decommit")?;
     }
 
     Ok(())
