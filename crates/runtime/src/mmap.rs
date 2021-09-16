@@ -83,6 +83,7 @@ impl Mmap {
 
         #[cfg(windows)]
         {
+            use std::io;
             use std::fs::OpenOptions;
             use std::os::windows::prelude::*;
             use winapi::um::handleapi::*;
@@ -216,6 +217,7 @@ impl Mmap {
     #[cfg(target_os = "windows")]
     pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
         use anyhow::bail;
+        use std::io;
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, MEM_RESERVE, PAGE_NOACCESS, PAGE_READWRITE};
 
@@ -295,6 +297,8 @@ impl Mmap {
     /// `self`'s reserved memory.
     #[cfg(target_os = "windows")]
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
+        use std::io;
+        use anyhow::bail;
         use winapi::ctypes::c_void;
         use winapi::um::memoryapi::VirtualAlloc;
         use winapi::um::winnt::{MEM_COMMIT, PAGE_READWRITE};
