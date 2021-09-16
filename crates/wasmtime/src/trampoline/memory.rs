@@ -36,7 +36,7 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         self.mem.maximum_byte_size()
     }
 
-    fn grow_to(&mut self, new_size: usize) -> Option<()> {
+    fn grow_to(&mut self, new_size: usize) -> Result<()> {
         self.mem.grow_to(new_size)
     }
 
