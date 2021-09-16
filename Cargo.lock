@@ -1648,9 +1648,9 @@ dependencies = [
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.0.23"
+version = "0.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5802c30e8a573a9af97d504e9e66a076e0b881112222a67a8e037a79658447d6"
+checksum = "13d803e4a041d0deed25db109ac7ba704d1edd62588b623feb8beed5da78e579"
 
 [[package]]
 name = "lock_api"
@@ -2603,9 +2603,9 @@ dependencies = [
 
 [[package]]
 name = "rsix"
-version = "0.23.0"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f3fe18b90743bd6a374dae6b5f124e48aff86e14fd6bb086dc0c431c2b8ed61"
+checksum = "bcb64fd899aa29c8f920e52732489630b55dba438039eee73ee068e995f64ef2"
 dependencies = [
  "bitflags",
  "cc",

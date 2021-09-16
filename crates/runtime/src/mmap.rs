@@ -381,6 +381,7 @@ impl Mmap {
         // we don't want our modifications to go back to the original file.
         #[cfg(windows)]
         {
+            use std::io;
             use winapi::um::memoryapi::*;
             use winapi::um::winnt::*;
 
