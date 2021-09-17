@@ -3,13 +3,9 @@ mod not_for_windows {
     use wasmtime::*;
     use wasmtime_environ::{WASM32_MAX_PAGES, WASM_PAGE_SIZE};
 
-    use libc::MAP_FAILED;
-    use libc::{mmap, mprotect, munmap};
-    use libc::{sysconf, _SC_PAGESIZE};
-    use libc::{MAP_ANON, MAP_PRIVATE, PROT_NONE, PROT_READ, PROT_WRITE};
+    use rsix::io::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
     use std::convert::TryFrom;
-    use std::io::Error;
     use std::ptr::null_mut;
     use std::sync::{Arc, Mutex};
 
@@ -23,16 +19,16 @@ mod not_for_windows {
 
     impl CustomMemory {
         unsafe fn new(minimum: usize, maximum: usize, glob_counter: Arc<Mutex<usize>>) -> Self {
-            let page_size = sysconf(_SC_PAGESIZE) as usize;
+            let page_size = rsix::process::page_size();
             let guard_size = page_size;
             let size = maximum + guard_size;
             assert_eq!(size % page_size, 0); // we rely on WASM_PAGE_SIZE being multiple of host page size
 
-            let mem = mmap(null_mut(), size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
-            assert_ne!(mem, MAP_FAILED, "mmap failed: {}", Error::last_os_error());
+            let mem = mmap_anonymous(null_mut(), size, ProtFlags::NONE, MapFlags::PRIVATE)
+                .expect("mmap failed");
 
-            let r = mprotect(mem, minimum, PROT_READ | PROT_WRITE);
-            assert_eq!(r, 0, "mprotect failed: {}", Error::last_os_error());
+            mprotect(mem, minimum, MprotectFlags::READ | MprotectFlags::WRITE)
+                .expect("mprotect failed");
             *glob_counter.lock().unwrap() += minimum;
 
             Self {
@@ -48,8 +44,7 @@ mod not_for_windows {
     impl Drop for CustomMemory {
         fn drop(&mut self) {
             *self.glob_bytes_counter.lock().unwrap() -= self.used_wasm_bytes;
-            let r = unsafe { munmap(self.mem as *mut _, self.size) };
-            assert_eq!(r, 0, "munmap failed: {}", Error::last_os_error());
+            unsafe { munmap(self.mem as *mut _, self.size).expect("munmap failed") };
         }
     }
 
@@ -67,8 +62,8 @@ mod not_for_windows {
             let delta = new_size - self.used_wasm_bytes;
             unsafe {
                 let start = (self.mem as *mut u8).add(self.used_wasm_bytes) as _;
-                let r = mprotect(start, delta, PROT_READ | PROT_WRITE);
-                assert_eq!(r, 0, "mprotect failed: {}", Error::last_os_error());
+                mprotect(start, delta, MprotectFlags::READ | MprotectFlags::WRITE)
+                    .expect("mprotect failed");
             }
 
             *self.glob_bytes_counter.lock().unwrap() += delta;

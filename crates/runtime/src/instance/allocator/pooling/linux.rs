@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
     if len == 0 {
@@ -12,12 +12,8 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
         }
 
         // On Linux, this is enough to cause the kernel to initialize the pages to 0 on next access
-        if libc::madvise(addr as _, len, libc::MADV_DONTNEED) != 0 {
-            bail!(
-                "madvise failed to decommit: {}",
-                std::io::Error::last_os_error()
-            );
-        }
+        rsix::io::madvise(addr as _, len, rsix::io::Advice::LinuxDontNeed)
+            .context("madvise failed to decommit: {}")?;
     }
 
     Ok(())

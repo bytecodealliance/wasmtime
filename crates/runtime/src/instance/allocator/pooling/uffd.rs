@@ -33,6 +33,7 @@
 use super::{InstancePool, MemoryPool};
 use crate::instance::Instance;
 use anyhow::{bail, Context, Result};
+use rsix::io::{madvise, Advice};
 use std::thread;
 use userfaultfd::{Event, FeatureFlags, IoctlFlags, Uffd, UffdBuilder};
 use wasmtime_environ::{DefinedMemoryIndex, EntityRef, MemoryInitialization};
@@ -50,12 +51,7 @@ fn decommit(addr: *mut u8, len: usize) -> Result<()> {
         // and the user fault handler will receive the event.
         // If the pages are not monitored by uffd, the kernel will zero the page on next access,
         // as if it were mmap'd for the first time.
-        if libc::madvise(addr as _, len, libc::MADV_DONTNEED) != 0 {
-            bail!(
-                "madvise failed to decommit: {}",
-                std::io::Error::last_os_error()
-            );
-        }
+        madvise(addr as _, len, Advice::LinuxDontNeed).context("madvise failed to decommit")?;
     }
 
     Ok(())

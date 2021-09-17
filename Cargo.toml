@@ -44,6 +44,9 @@ humantime = "2.0.0"
 wasmparser = "0.80.0"
 lazy_static = "1.4.0"
 
+[target.'cfg(unix)'.dependencies]
+rsix = "0.23.0"
+
 [dev-dependencies]
 env_logger = "0.8.1"
 filecheck = "0.5.0"

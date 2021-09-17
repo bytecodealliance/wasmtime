@@ -256,19 +256,15 @@ impl WorkerThread {
 
         const NICE_DELTA_FOR_BACKGROUND_TASKS: i32 = 3;
 
-        errno::set_errno(errno::Errno(0));
-        let current_nice = unsafe { libc::nice(NICE_DELTA_FOR_BACKGROUND_TASKS) };
-        let errno_val = errno::errno().0;
-
-        if errno_val != 0 {
-            warn!(
-                "Failed to lower worker thread priority. It might affect application performance. \
-                 errno: {}",
-                errno_val
-            );
-        } else {
-            debug!("New nice value of worker thread: {}", current_nice);
-        }
+        match rsix::process::nice(NICE_DELTA_FOR_BACKGROUND_TASKS) {
+            Ok(current_nice) => {
+                debug!("New nice value of worker thread: {}", current_nice);
+            }
+            Err(err) => {
+                warn!(
+                    "Failed to lower worker thread priority ({:?}). It might affect application performance.", err);
+            }
+        };
     }
 
     /// Increases the usage counter and recompresses the file

@@ -25,15 +25,17 @@ gimli = { version = "0.25.0", default-features = false, features = ["std", "read
 object = { version = "0.26.0", default-features = false, features = ["std", "read_core", "elf"] }
 serde = { version = "1.0.94", features = ["derive"] }
 addr2line = { version = "0.16.0", default-features = false }
-libc = { version = "0.2.60", default-features = false, optional = true }
 ittapi-rs = { version = "0.1.5", optional = true  }
 bincode = "1.2.1"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+rsix = { version = "0.23.0", optional = true }
+
 [features]
-jitdump = ['libc']
+jitdump = ['rsix']
 vtune = ['ittapi-rs']
 
 [badges]

@@ -1,4 +1,4 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
     if len == 0 {
@@ -9,25 +9,18 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
     // mapping for the pages in the given range.
     // The new mapping will be to the CoW zero page, so this effectively
     // zeroes the pages.
-    if unsafe {
-        libc::mmap(
+    unsafe {
+        rsix::io::mmap_anonymous(
             addr as _,
             len,
             if protect {
-                libc::PROT_NONE
+                rsix::io::ProtFlags::NONE
             } else {
-                libc::PROT_READ | libc::PROT_WRITE
+                rsix::io::ProtFlags::READ | rsix::io::ProtFlags::WRITE
             },
-            libc::MAP_PRIVATE | libc::MAP_ANON | libc::MAP_FIXED,
-            -1,
-            0,
-        ) as *mut u8
-    } != addr
-    {
-        bail!(
-            "mmap failed to remap pages: {}",
-            std::io::Error::last_os_error()
-        );
+            rsix::io::MapFlags::PRIVATE | rsix::io::MapFlags::FIXED,
+        )
+        .context("mmap failed to remap pages: {}")?;
     }
 
     Ok(())
