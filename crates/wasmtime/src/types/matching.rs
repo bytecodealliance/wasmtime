@@ -117,13 +117,13 @@ impl MatchCx<'_> {
 
         let render = |ty: &WasmFuncType| {
             let params = ty
-                .params
+                .params()
                 .iter()
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>()
                 .join(", ");
             let returns = ty
-                .returns
+                .returns()
                 .iter()
                 .map(|s| s.to_string())
                 .collect::<Vec<_>>()

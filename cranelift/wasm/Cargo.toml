@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-wasm"
-version = "0.76.0"
+version = "0.77.0"
 authors = ["The Cranelift Project Developers"]
 description = "Translator from WebAssembly to Cranelift IR"
 documentation = "https://docs.rs/cranelift-wasm"
@@ -13,10 +13,10 @@ edition = "2018"
 
 [dependencies]
 wasmparser = { version = "0.80", default-features = false }
-cranelift-codegen = { path = "../codegen", version = "0.76.0", default-features = false }
-cranelift-entity = { path = "../entity", version = "0.76.0" }
-cranelift-frontend = { path = "../frontend", version = "0.76.0", default-features = false }
-wasmtime-types = { path = "../../crates/types", version = "0.29.0" }
+cranelift-codegen = { path = "../codegen", version = "0.77.0", default-features = false }
+cranelift-entity = { path = "../entity", version = "0.77.0" }
+cranelift-frontend = { path = "../frontend", version = "0.77.0", default-features = false }
+wasmtime-types = { path = "../../crates/types", version = "0.30.0" }
 hashbrown = { version = "0.9.1", optional = true }
 itertools = "0.10.0"
 log = { version = "0.4.6", default-features = false }
@@ -27,7 +27,7 @@ smallvec = "1.6.1"
 wat = "1.0.37"
 target-lexicon = "0.12"
 # Enable the riscv feature for cranelift-codegen, as some tests require it
-cranelift-codegen = { path = "../codegen", version = "0.76.0", default-features = false, features = ["riscv"] }
+cranelift-codegen = { path = "../codegen", version = "0.77.0", default-features = false, features = ["riscv"] }
 
 [features]
 default = ["std"]

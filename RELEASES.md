@@ -4,6 +4,71 @@
 
 ## Unreleased
 
+## 0.30.0
+
+Released 2021-09-17.
+
+### Security Fixes
+
+* [CVE-2021-39216](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-v4cp-h94r-m7xf):
+  Fixed a use after free passing `externref`s to Wasm in Wasmtime.
+
+* [CVE-2021-39218](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-4873-36h9-wv49):
+  Fixed an out-of-bounds read/write and invalid free with `externref`s and GC
+  safepoints in Wasmtime.
+
+* [CVE-2021-39219](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-q879-9g95-56mx):
+  Fixed a bug where using two different `Engine`s with the same `Linker`-define
+  functions caused unsafety without `unsafe` blocks.
+
+### Added
+
+* Added experimental support for the in-progress 64-bit memories Wasm proposal.
+
+* Added support to build Wasmtime without the compiler. This lets you run
+  pre-compiled Wasm modules, without the ability (or potential attack surface)
+  of compiling new Wasm modules. The compilation functionality is gated by the
+  on-by-default `cranelift` cargo feature.
+
+* Added support for NaN canonicalization with SIMD vectors.
+
+* Added support for differential fuzzing against V8's Wasm engine.
+
+* Added support for fuzzing against the Wasm spec interpreter.
+
+* Enabled SIMD fuzzing on oss-fuzz.
+
+### Changed
+
+* A variety of performance improvements to loading pre-compiled modules.
+
+* A variety of performance improvements to function calls, both through Rust and
+  the C API.
+
+* Leaf functions that do not use the stack no longer bump the frame pointer on
+  aarch64 and s390x.
+
+* Many updates and expanded instruction support to the in-progress CLIF
+  interpreter.
+
+* Expanded fuzzing of reference types and GC.
+
+### Fixed
+
+* A number of fixes to both aarch64 and x86_64 support for the Wasm SIMD
+  proposal and the underlying CLIF vector instructions.
+
+* Fixed a potential infinite loop in the SSA computation for
+  `cranelift-frontend`. This was not reachable from `cranelift-wasm` or
+  Wasmtime, but might have affected general Cranelift users.
+
+### Removed
+
+* The `wasmtime wasm2obj` subcommand has been removed. Generating raw object
+  files for linking natively is no longer supported. Use the `wasmtime compile`
+  subcommand to pre-compile a Wasm module and `wasmtime run` to run pre-compiled
+  Wasm modules.
+
 ## 0.29.0
 
 Released 2021-08-02.

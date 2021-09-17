@@ -426,6 +426,7 @@ fn global_init_no_leak() -> anyhow::Result<()> {
 }
 
 #[test]
+#[cfg(not(feature = "old-x86-backend"))]
 fn no_gc_middle_of_args() -> anyhow::Result<()> {
     let (mut store, module) = ref_types_module(
         r#"
