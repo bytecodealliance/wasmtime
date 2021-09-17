@@ -983,7 +983,7 @@ pub enum CraneliftTrap {
 }
 
 /// Compare two values using the given integer condition `code`.
-fn icmp<V>(_ty: types::Type, code: IntCC, left: &V, right: &V) -> ValueResult<V>
+fn icmp<V>(ctrl_ty: types::Type, code: IntCC, left: &V, right: &V) -> ValueResult<V>
 where
     V: Value,
 {
@@ -1019,9 +1019,9 @@ where
         )?)
     };
 
-    let dst_ty = _ty.as_bool();
-    Ok(if _ty.is_vector() {
-        let lane_type = _ty.lane_type();
+    let dst_ty = ctrl_ty.as_bool();
+    Ok(if ctrl_ty.is_vector() {
+        let lane_type = ctrl_ty.lane_type();
         let left = extractlanes(left, lane_type)?;
         let right = extractlanes(right, lane_type)?;
 
