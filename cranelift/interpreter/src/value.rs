@@ -271,7 +271,18 @@ impl Value for DataValue {
                 // TODO a lot to do here: from bmask to ireduce to raw_bitcast...
                 (DataValue::I64(n), types::I32) => DataValue::I32(i32::try_from(n)?),
                 (DataValue::I64(n), types::I64) => DataValue::I64(n),
+                (DataValue::I64(n), types::I128) => DataValue::I128(n as i128),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
+                (DataValue::B(b), t) if t.is_int() => {
+                    let val = if b {
+                        // Bools are represented in memory as all 1's
+                        (1i128 << t.bits()) - 1
+                    } else {
+                        0
+                    };
+                    DataValue::int(val, t)?
+                }
+                (dv, t) if t.is_int() && dv.ty() == t => dv,
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::Truncate(ty) => {
@@ -333,6 +344,7 @@ impl Value for DataValue {
                 DataValue::I16(n) => DataValue::U16(n as u16),
                 DataValue::I32(n) => DataValue::U32(n as u32),
                 DataValue::I64(n) => DataValue::U64(n as u64),
+                DataValue::I128(n) => DataValue::U128(n as u128),
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::ToSigned => match self {
@@ -340,6 +352,7 @@ impl Value for DataValue {
                 DataValue::U16(n) => DataValue::I16(n as i16),
                 DataValue::U32(n) => DataValue::I32(n as i32),
                 DataValue::U64(n) => DataValue::I64(n as i64),
+                DataValue::U128(n) => DataValue::I128(n as i128),
                 _ => unimplemented!("conversion: {} -> {:?}", self.ty(), kind),
             },
             ValueConversionKind::RoundNearestEven(ty) => match (self.ty(), ty) {
@@ -364,11 +377,11 @@ impl Value for DataValue {
     }
 
     fn eq(&self, other: &Self) -> ValueResult<bool> {
-        comparison_match!(PartialEq::eq[&self, &other]; [I8, I16, I32, I64, U8, U16, U32, U64, F32, F64])
+        comparison_match!(PartialEq::eq[&self, &other]; [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64])
     }
 
     fn gt(&self, other: &Self) -> ValueResult<bool> {
-        comparison_match!(PartialOrd::gt[&self, &other]; [I8, I16, I32, I64, U8, U16, U32, U64, F32, F64])
+        comparison_match!(PartialOrd::gt[&self, &other]; [I8, I16, I32, I64, I128, U8, U16, U32, U64, U128, F32, F64])
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {
@@ -381,6 +394,7 @@ impl Value for DataValue {
             (DataValue::I16(a), DataValue::I16(b)) => a.checked_sub(*b).is_none(),
             (DataValue::I32(a), DataValue::I32(b)) => a.checked_sub(*b).is_none(),
             (DataValue::I64(a), DataValue::I64(b)) => a.checked_sub(*b).is_none(),
+            (DataValue::I128(a), DataValue::I128(b)) => a.checked_sub(*b).is_none(),
             _ => unimplemented!(),
         })
     }

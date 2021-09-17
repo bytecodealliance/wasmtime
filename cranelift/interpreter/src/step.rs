@@ -232,7 +232,9 @@ where
                 .convert(ValueConversionKind::ToBoolean)?
                 .into_bool()?,
         )?,
-        Opcode::BrIcmp => branch_when(icmp(inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?)?,
+        Opcode::BrIcmp => {
+            branch_when(icmp(ctrl_ty, inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?.into_bool()?)?
+        }
         Opcode::Brif => branch_when(state.has_iflag(inst.cond_code().unwrap()))?,
         Opcode::Brff => branch_when(state.has_fflag(inst.fp_cond_code().unwrap()))?,
         Opcode::BrTable => {
@@ -461,13 +463,17 @@ where
         Opcode::Regspill => unimplemented!("Regspill"),
         Opcode::Regfill => unimplemented!("Regfill"),
         Opcode::Safepoint => unimplemented!("Safepoint"),
-        Opcode::Icmp => assign(Value::bool(
-            icmp(inst.cond_code().unwrap(), &arg(0)?, &arg(1)?)?,
-            ctrl_ty.as_bool(),
+        Opcode::Icmp => assign(icmp(
+            ctrl_ty,
+            inst.cond_code().unwrap(),
+            &arg(0)?,
+            &arg(1)?,
         )?),
-        Opcode::IcmpImm => assign(Value::bool(
-            icmp(inst.cond_code().unwrap(), &arg(0)?, &imm_as_ctrl_ty()?)?,
-            ctrl_ty.as_bool(),
+        Opcode::IcmpImm => assign(icmp(
+            ctrl_ty,
+            inst.cond_code().unwrap(),
+            &arg(0)?,
+            &imm_as_ctrl_ty()?,
         )?),
         Opcode::Ifcmp | Opcode::IfcmpImm => {
             let arg0 = arg(0)?;
@@ -489,7 +495,7 @@ where
                 IntCC::UnsignedGreaterThan,
                 IntCC::UnsignedLessThanOrEqual,
             ] {
-                if icmp(*f, &arg0, &arg1)? {
+                if icmp(ctrl_ty, *f, &arg0, &arg1)?.into_bool()? {
                     state.set_iflag(*f);
                 }
             }
@@ -1010,35 +1016,57 @@ pub enum CraneliftTrap {
 }
 
 /// Compare two values using the given integer condition `code`.
-fn icmp<V>(code: IntCC, left: &V, right: &V) -> ValueResult<bool>
+fn icmp<V>(ctrl_ty: types::Type, code: IntCC, left: &V, right: &V) -> ValueResult<V>
 where
     V: Value,
 {
-    Ok(match code {
-        IntCC::Equal => Value::eq(left, right)?,
-        IntCC::NotEqual => !Value::eq(left, right)?,
-        IntCC::SignedGreaterThan => Value::gt(left, right)?,
-        IntCC::SignedGreaterThanOrEqual => Value::ge(left, right)?,
-        IntCC::SignedLessThan => Value::lt(left, right)?,
-        IntCC::SignedLessThanOrEqual => Value::le(left, right)?,
-        IntCC::UnsignedGreaterThan => Value::gt(
-            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
-            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
-        )?,
-        IntCC::UnsignedGreaterThanOrEqual => Value::ge(
-            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
-            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
-        )?,
-        IntCC::UnsignedLessThan => Value::lt(
-            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
-            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
-        )?,
-        IntCC::UnsignedLessThanOrEqual => Value::le(
-            &left.clone().convert(ValueConversionKind::ToUnsigned)?,
-            &right.clone().convert(ValueConversionKind::ToUnsigned)?,
-        )?,
-        IntCC::Overflow => Value::overflow(left, right)?,
-        IntCC::NotOverflow => !Value::overflow(left, right)?,
+    let cmp = |bool_ty: types::Type, code: IntCC, left: &V, right: &V| -> ValueResult<V> {
+        Ok(Value::bool(
+            match code {
+                IntCC::Equal => Value::eq(left, right)?,
+                IntCC::NotEqual => !Value::eq(left, right)?,
+                IntCC::SignedGreaterThan => Value::gt(left, right)?,
+                IntCC::SignedGreaterThanOrEqual => Value::ge(left, right)?,
+                IntCC::SignedLessThan => Value::lt(left, right)?,
+                IntCC::SignedLessThanOrEqual => Value::le(left, right)?,
+                IntCC::UnsignedGreaterThan => Value::gt(
+                    &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+                    &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+                )?,
+                IntCC::UnsignedGreaterThanOrEqual => Value::ge(
+                    &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+                    &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+                )?,
+                IntCC::UnsignedLessThan => Value::lt(
+                    &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+                    &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+                )?,
+                IntCC::UnsignedLessThanOrEqual => Value::le(
+                    &left.clone().convert(ValueConversionKind::ToUnsigned)?,
+                    &right.clone().convert(ValueConversionKind::ToUnsigned)?,
+                )?,
+                IntCC::Overflow => Value::overflow(left, right)?,
+                IntCC::NotOverflow => !Value::overflow(left, right)?,
+            },
+            bool_ty,
+        )?)
+    };
+
+    let dst_ty = ctrl_ty.as_bool();
+    Ok(if ctrl_ty.is_vector() {
+        let lane_type = ctrl_ty.lane_type();
+        let left = extractlanes(left, lane_type)?;
+        let right = extractlanes(right, lane_type)?;
+
+        let res = left
+            .into_iter()
+            .zip(right.into_iter())
+            .map(|(l, r)| cmp(dst_ty.lane_type(), code, &l, &r))
+            .collect::<ValueResult<SimdVec<V>>>()?;
+
+        vectorizelanes(&res, dst_ty)?
+    } else {
+        cmp(dst_ty, code, left, right)?
     })
 }
 
@@ -1114,18 +1142,23 @@ fn vectorizelanes<V>(x: &[V], vector_type: types::Type) -> ValueResult<V>
 where
     V: Value,
 {
-    let iterations = match vector_type.lane_type() {
-        types::I8 => 1,
-        types::I16 => 2,
-        types::I32 => 4,
-        types::I64 => 8,
+    let lane_type = vector_type.lane_type();
+    let iterations = match lane_type {
+        types::I8 | types::B1 | types::B8 => 1,
+        types::I16 | types::B16 => 2,
+        types::I32 | types::B32 => 4,
+        types::I64 | types::B64 => 8,
         _ => unimplemented!("Only 128-bit vectors are currently supported."),
     };
     let mut result: [u8; 16] = [0; 16];
     for (i, val) in x.iter().enumerate() {
-        let val = val.clone().into_int()?;
+        let lane_val: i128 = val
+            .clone()
+            .convert(ValueConversionKind::Exact(lane_type.as_int()))?
+            .into_int()?;
+
         for j in 0..iterations {
-            result[(i * iterations) + j] = (val >> (8 * j)) as u8;
+            result[(i * iterations) + j] = (lane_val >> (8 * j)) as u8;
         }
     }
     Value::vector(result, vector_type)

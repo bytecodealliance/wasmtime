@@ -1,3 +1,4 @@
+test interpret
 test run
 target aarch64
 target x86_64 machinst
@@ -186,7 +187,7 @@ block0(v0: i64,v1: i64,v2: i64,v3: i64):
 
 
 ; Icmp Imm Tests
-function %test_icmp_imm_eq_i128() -> b1 {
+function %icmp_imm_eq_i128() -> b1 {
 block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
@@ -195,9 +196,9 @@ block0:
     return v10
 }
 
-; run
+; run: %icmp_imm_eq_i128() == true
 
-function %test_icmp_imm_ne_i128() -> b1 {
+function %icmp_imm_ne_i128() -> b1 {
 block0:
     v11 = iconst.i64 0x0
     v12 = iconst.i64 0x0
@@ -206,4 +207,4 @@ block0:
     return v10
 }
 
-; run
+; run: %icmp_imm_ne_i128() == true

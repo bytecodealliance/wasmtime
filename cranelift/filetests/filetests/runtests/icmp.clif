@@ -1,3 +1,4 @@
+test interpret
 test run
 target aarch64
 target s390x
@@ -13,5 +14,5 @@ block0(v0: i8):
     v2 = icmp sge v0, v1
     return v2
 }
-; run: %test(49) == true
-; run: %test(-65) == false
+; run: %overflow_rhs_con(49) == true
+; run: %overflow_rhs_con(-65) == false
