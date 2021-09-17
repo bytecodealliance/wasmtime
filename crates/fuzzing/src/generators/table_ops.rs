@@ -266,7 +266,7 @@ mod tests {
 
         let expected = r#"
 (module
-  (type (;0;) (func))
+  (type (;0;) (func (result externref externref externref)))
   (type (;1;) (func (param externref externref externref externref externref)))
   (type (;2;) (func (param externref externref externref)))
   (type (;3;) (func (result externref externref externref)))
@@ -274,11 +274,12 @@ mod tests {
   (import "" "take_refs" (func (;1;) (type 2)))
   (import "" "make_refs" (func (;2;) (type 3)))
   (func (;3;) (type 1) (param externref externref externref externref externref)
-    (local externref i32)
-    i32.const 100
-    local.set 6
+    (local externref)
     loop  ;; label = @1
       call 0
+      drop
+      drop
+      drop
       i32.const 0
       table.get 0
       drop
@@ -319,11 +320,7 @@ mod tests {
       call 1
       call 2
       call 1
-      local.get 6
-      i32.const -1
-      i32.add
-      local.tee 6
-      br_if 0 (;@1;)
+      br 0 (;@1;)
     end)
   (table (;0;) 20 externref)
   (export "run" (func 3)))
