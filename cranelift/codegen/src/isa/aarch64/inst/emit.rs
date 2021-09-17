@@ -1674,15 +1674,27 @@ impl MachInstEmit for Inst {
                     VecMisc2::Neg => (0b1, 0b01011, enc_size),
                     VecMisc2::Abs => (0b0, 0b01011, enc_size),
                     VecMisc2::Fabs => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
                         (0b0, 0b01111, enc_size)
                     }
                     VecMisc2::Fneg => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
                         (0b1, 0b01111, enc_size)
                     }
                     VecMisc2::Fsqrt => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
                         (0b1, 0b11111, enc_size)
                     }
                     VecMisc2::Rev64 => {
@@ -1690,11 +1702,19 @@ impl MachInstEmit for Inst {
                         (0b0, 0b00000, enc_size)
                     }
                     VecMisc2::Fcvtzs => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
                         (0b0, 0b11011, enc_size)
                     }
                     VecMisc2::Fcvtzu => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
                         (0b1, 0b11011, enc_size)
                     }
                     VecMisc2::Scvtf => {
@@ -1706,20 +1726,36 @@ impl MachInstEmit for Inst {
                         (0b1, 0b11101, enc_size & 0b1)
                     }
                     VecMisc2::Frintn => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
                         (0b0, 0b11000, enc_size & 0b01)
                     }
                     VecMisc2::Frintz => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
-                        (0b0, 0b11001, enc_size | 0b10)
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
+                        (0b0, 0b11001, enc_size)
                     }
                     VecMisc2::Frintm => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
                         (0b0, 0b11001, enc_size & 0b01)
                     }
                     VecMisc2::Frintp => {
-                        debug_assert!(size == VectorSize::Size32x4 || size == VectorSize::Size64x2);
-                        (0b0, 0b11000, enc_size | 0b10)
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
+                        (0b0, 0b11000, enc_size)
                     }
                     VecMisc2::Cnt => {
                         debug_assert!(size == VectorSize::Size8x8 || size == VectorSize::Size8x16);
@@ -2281,11 +2317,31 @@ impl MachInstEmit for Inst {
                     }
                     VecALUOp::Sshl => (0b000_01110_00_1 | enc_size << 1, 0b010001),
                     VecALUOp::Ushl => (0b001_01110_00_1 | enc_size << 1, 0b010001),
-                    VecALUOp::Umin => (0b001_01110_00_1 | enc_size << 1, 0b011011),
-                    VecALUOp::Smin => (0b000_01110_00_1 | enc_size << 1, 0b011011),
-                    VecALUOp::Umax => (0b001_01110_00_1 | enc_size << 1, 0b011001),
-                    VecALUOp::Smax => (0b000_01110_00_1 | enc_size << 1, 0b011001),
-                    VecALUOp::Urhadd => (0b001_01110_00_1 | enc_size << 1, 0b000101),
+                    VecALUOp::Umin => {
+                        debug_assert_ne!(size, VectorSize::Size64x2);
+
+                        (0b001_01110_00_1 | enc_size << 1, 0b011011)
+                    }
+                    VecALUOp::Smin => {
+                        debug_assert_ne!(size, VectorSize::Size64x2);
+
+                        (0b000_01110_00_1 | enc_size << 1, 0b011011)
+                    }
+                    VecALUOp::Umax => {
+                        debug_assert_ne!(size, VectorSize::Size64x2);
+
+                        (0b001_01110_00_1 | enc_size << 1, 0b011001)
+                    }
+                    VecALUOp::Smax => {
+                        debug_assert_ne!(size, VectorSize::Size64x2);
+
+                        (0b000_01110_00_1 | enc_size << 1, 0b011001)
+                    }
+                    VecALUOp::Urhadd => {
+                        debug_assert_ne!(size, VectorSize::Size64x2);
+
+                        (0b001_01110_00_1 | enc_size << 1, 0b000101)
+                    }
                     VecALUOp::Fadd => (0b000_01110_00_1, 0b110101),
                     VecALUOp::Fsub => (0b000_01110_10_1, 0b110101),
                     VecALUOp::Fdiv => (0b001_01110_00_1, 0b111111),

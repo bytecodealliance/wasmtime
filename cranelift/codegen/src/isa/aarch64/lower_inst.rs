@@ -2387,6 +2387,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     size,
                 });
             } else {
+                if size == VectorSize::Size32x2 {
+                    return Err(CodegenError::Unsupported(format!(
+                        "VallTrue: Unsupported type: {:?}",
+                        src_ty
+                    )));
+                }
+
                 ctx.emit(Inst::VecLanes {
                     op: VecLanesOp::Uminv,
                     rd: tmp,
@@ -2729,7 +2736,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Imax | Opcode::Umax | Opcode::Umin | Opcode::Imin => {
             let ty = ty.unwrap();
 
-            if !ty.is_vector() {
+            if !ty.is_vector() || ty.lane_bits() == 64 {
                 return Err(CodegenError::Unsupported(format!(
                     "{}: Unsupported type: {:?}",
                     op, ty
@@ -3264,11 +3271,19 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtFromUint | Opcode::FcvtFromSint => {
+            let input_ty = ctx.input_ty(insn, 0);
             let ty = ty.unwrap();
             let signed = op == Opcode::FcvtFromSint;
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             if ty.is_vector() {
+                if input_ty.lane_bits() != ty.lane_bits() {
+                    return Err(CodegenError::Unsupported(format!(
+                        "{}: Unsupported types: {:?} -> {:?}",
+                        op, input_ty, ty
+                    )));
+                }
+
                 let op = if signed {
                     VecMisc2::Scvtf
                 } else {
@@ -3283,7 +3298,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     size: VectorSize::from_ty(ty),
                 });
             } else {
-                let input_ty = ctx.input_ty(insn, 0);
                 let in_bits = ty_bits(input_ty);
                 let out_bits = ty_bits(ty);
                 let op = match (signed, in_bits, out_bits) {
@@ -3315,12 +3329,20 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FcvtToUintSat | Opcode::FcvtToSintSat => {
+            let in_ty = ctx.input_ty(insn, 0);
             let ty = ty.unwrap();
             let out_signed = op == Opcode::FcvtToSintSat;
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
             if ty.is_vector() {
+                if in_ty.lane_bits() != ty.lane_bits() {
+                    return Err(CodegenError::Unsupported(format!(
+                        "{}: Unsupported types: {:?} -> {:?}",
+                        op, in_ty, ty
+                    )));
+                }
+
                 let op = if out_signed {
                     VecMisc2::Fcvtzs
                 } else {
@@ -3334,7 +3356,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     size: VectorSize::from_ty(ty),
                 });
             } else {
-                let in_ty = ctx.input_ty(insn, 0);
                 let in_bits = ty_bits(in_ty);
                 let out_bits = ty_bits(ty);
                 // FIMM Vtmp1, u32::MAX or u64::MAX or i32::MAX or i64::MAX
@@ -3548,10 +3569,18 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             });
         }
         Opcode::AvgRound => {
+            let ty = ty.unwrap();
+
+            if ty.lane_bits() == 64 {
+                return Err(CodegenError::Unsupported(format!(
+                    "AvgRound: Unsupported type: {:?}",
+                    ty
+                )));
+            }
+
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
             let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-            let ty = ty.unwrap();
             ctx.emit(Inst::VecRRR {
                 alu_op: VecALUOp::Urhadd,
                 rd,
