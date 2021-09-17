@@ -161,9 +161,9 @@ impl<T> Linker<T> {
     /// Creates a new [`Linker`].
     ///
     /// The linker will define functions within the context of the `engine`
-    /// provided and can only instantiate modules for a [`Store`] that is also
-    /// defined within the same [`Engine`]. Usage of stores with different
-    /// [`Engine`]s may cause a panic when used with this [`Linker`].
+    /// provided and can only instantiate modules for a [`Store`][crate::Store]
+    /// that is also defined within the same [`Engine`]. Usage of stores with
+    /// different [`Engine`]s may cause a panic when used with this [`Linker`].
     pub fn new(engine: &Engine) -> Linker<T> {
         Linker {
             engine: engine.clone(),
@@ -429,9 +429,9 @@ impl<T> Linker<T> {
     /// name in the instance itself.
     ///
     /// Note that when this API is used the [`Linker`] is no longer compatible
-    /// with multi-[`Store` ] instantiation because the items defined within
-    /// this store will belong to the `store` provided, and only the `store`
-    /// provided.
+    /// with multi-[`Store`][crate::Store] instantiation because the items
+    /// defined within this store will belong to the `store` provided, and only
+    /// the `store` provided.
     ///
     /// # Errors
     ///
