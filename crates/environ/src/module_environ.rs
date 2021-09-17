@@ -608,7 +608,7 @@ impl<'data> ModuleEnvironment<'data> {
                         .funcs
                         .push(FunctionMetadata {
                             locals: locals.into_boxed_slice(),
-                            params: sig.params.iter().cloned().map(|i| i.into()).collect(),
+                            params: sig.params().iter().cloned().map(|i| i.into()).collect(),
                         });
                 }
                 body.allow_memarg64(self.features.memory64);

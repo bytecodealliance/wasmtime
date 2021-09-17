@@ -230,21 +230,21 @@ impl FuncType {
         results: impl IntoIterator<Item = ValType>,
     ) -> FuncType {
         FuncType {
-            sig: WasmFuncType {
-                params: params.into_iter().map(|t| t.to_wasm_type()).collect(),
-                returns: results.into_iter().map(|t| t.to_wasm_type()).collect(),
-            },
+            sig: WasmFuncType::new(
+                params.into_iter().map(|t| t.to_wasm_type()).collect(),
+                results.into_iter().map(|t| t.to_wasm_type()).collect(),
+            ),
         }
     }
 
     /// Returns the list of parameter types for this function.
     pub fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
-        self.sig.params.iter().map(ValType::from_wasm_type)
+        self.sig.params().iter().map(ValType::from_wasm_type)
     }
 
     /// Returns the list of result types for this function.
     pub fn results(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
-        self.sig.returns.iter().map(ValType::from_wasm_type)
+        self.sig.returns().iter().map(ValType::from_wasm_type)
     }
 
     pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {

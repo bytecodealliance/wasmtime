@@ -465,7 +465,7 @@ impl Compiler {
 
         // Compute the size of the values vector. The vmctx and caller vmctx are passed separately.
         let value_size = mem::size_of::<u128>();
-        let values_vec_len = (value_size * cmp::max(ty.params.len(), ty.returns.len())) as u32;
+        let values_vec_len = (value_size * cmp::max(ty.params().len(), ty.returns().len())) as u32;
 
         let mut context = Context::new();
         context.func =
@@ -486,7 +486,7 @@ impl Compiler {
 
         let values_vec_ptr_val = builder.ins().stack_addr(pointer_type, ss, 0);
         let mflags = MemFlags::trusted();
-        for i in 0..ty.params.len() {
+        for i in 0..ty.params().len() {
             let val = builder.func.dfg.block_params(block0)[i + 2];
             builder
                 .ins()
@@ -508,7 +508,7 @@ impl Compiler {
 
         let mflags = MemFlags::trusted();
         let mut results = Vec::new();
-        for (i, r) in ty.returns.iter().enumerate() {
+        for (i, r) in ty.returns().iter().enumerate() {
             let load = builder.ins().load(
                 value_type(isa, *r),
                 mflags,

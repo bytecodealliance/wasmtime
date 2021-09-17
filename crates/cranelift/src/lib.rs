@@ -220,8 +220,8 @@ fn wasmtime_call_conv(isa: &dyn TargetIsa) -> CallConv {
 /// above.
 fn push_types(isa: &dyn TargetIsa, sig: &mut ir::Signature, wasm: &WasmFuncType) {
     let cvt = |ty: &WasmType| ir::AbiParam::new(value_type(isa, *ty));
-    sig.params.extend(wasm.params.iter().map(&cvt));
-    sig.returns.extend(wasm.returns.iter().map(&cvt));
+    sig.params.extend(wasm.params().iter().map(&cvt));
+    sig.returns.extend(wasm.returns().iter().map(&cvt));
 }
 
 /// Returns the corresponding cranelift type for the provided wasm type.

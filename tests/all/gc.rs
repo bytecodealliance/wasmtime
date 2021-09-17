@@ -424,3 +424,56 @@ fn global_init_no_leak() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn no_gc_middle_of_args() -> anyhow::Result<()> {
+    let (mut store, module) = ref_types_module(
+        r#"
+            (module
+                (import "" "return_some" (func $return (result externref externref externref)))
+                (import "" "take_some" (func $take (param externref externref externref)))
+                (func (export "run")
+                    (local i32)
+                    i32.const 1000
+                    local.set 0
+                    loop
+                        call $return
+                        call $take
+                        local.get 0
+                        i32.const -1
+                        i32.add
+                        local.tee 0
+                        br_if 0
+                    end
+                )
+            )
+        "#,
+    )?;
+
+    let mut linker = Linker::new(store.engine());
+    linker.func_wrap("", "return_some", || {
+        (
+            Some(ExternRef::new("a".to_string())),
+            Some(ExternRef::new("b".to_string())),
+            Some(ExternRef::new("c".to_string())),
+        )
+    })?;
+    linker.func_wrap(
+        "",
+        "take_some",
+        |a: Option<ExternRef>, b: Option<ExternRef>, c: Option<ExternRef>| {
+            let a = a.unwrap();
+            let b = b.unwrap();
+            let c = c.unwrap();
+            assert_eq!(a.data().downcast_ref::<String>().unwrap(), "a");
+            assert_eq!(b.data().downcast_ref::<String>().unwrap(), "b");
+            assert_eq!(c.data().downcast_ref::<String>().unwrap(), "c");
+        },
+    )?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+    let func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+    func.call(&mut store, ())?;
+
+    Ok(())
+}
