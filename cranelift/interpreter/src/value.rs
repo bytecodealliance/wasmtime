@@ -308,6 +308,7 @@ impl Value for DataValue {
                 (DataValue::I16(n), types::I32) => DataValue::I32(n as i32),
                 (DataValue::I16(n), types::I64) => DataValue::I64(n as i64),
                 (DataValue::I32(n), types::I64) => DataValue::I64(n as i64),
+                (DataValue::I64(n), types::I128) => DataValue::I128(n as i128),
                 (dv, _) => unimplemented!("conversion: {} -> {:?}", dv.ty(), kind),
             },
             ValueConversionKind::ZeroExtend(ty) => match (self, ty) {

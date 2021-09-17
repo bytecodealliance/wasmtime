@@ -553,15 +553,20 @@ where
         Opcode::Ineg => binary(Value::sub, Value::int(0, ctrl_ty)?, arg(0)?)?,
         Opcode::Iabs => unimplemented!("Iabs"),
         Opcode::Imul => binary(Value::mul, arg(0)?, arg(1)?)?,
-        Opcode::Umulhi => {
+        Opcode::Umulhi | Opcode::Smulhi => {
+            let double_length = match ctrl_ty.lane_bits() {
+                8 => types::I16,
+                16 => types::I32,
+                32 => types::I64,
+                64 => types::I128,
+                _ => unimplemented!("Unsupported integer length {}", ctrl_ty.bits()),
+            };
+            let conv_type = if inst.opcode() == Opcode::Umulhi {
+                ValueConversionKind::ZeroExtend(double_length)
+            } else {
+                ValueConversionKind::SignExtend(double_length)
+            };
             if ctrl_ty.is_vector() {
-                let double_length = match ctrl_ty.lane_bits() {
-                    8 => types::I16,
-                    16 => types::I32,
-                    32 => types::I64,
-                    64 => types::I128,
-                    _ => unimplemented!("Unsupported integer length {}", ctrl_ty.bits()),
-                };
                 let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
                 let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
 
@@ -569,8 +574,8 @@ where
                     .into_iter()
                     .zip(arg1)
                     .map(|(x, y)| {
-                        let x = x.convert(ValueConversionKind::ZeroExtend(double_length))?;
-                        let y = y.convert(ValueConversionKind::ZeroExtend(double_length))?;
+                        let x = x.convert(conv_type.clone())?;
+                        let y = y.convert(conv_type.clone())?;
 
                         Ok(Value::mul(x, y)?
                             .convert(ValueConversionKind::ExtractUpper(ctrl_ty.lane_type()))?)
@@ -579,30 +584,12 @@ where
 
                 assign(vectorizelanes(&res, ctrl_ty)?)
             } else {
-                let double_length = match ctrl_ty.bits() {
-                    8 => types::I16,
-                    16 => types::I32,
-                    32 => types::I64,
-                    64 => types::I128,
-                    _ => unimplemented!("Unsupported integer length {}", ctrl_ty.bits()),
-                };
-                let x: V = Value::int(
-                    arg(0)?
-                        .convert(ValueConversionKind::ToUnsigned)?
-                        .into_int()?,
-                    double_length,
-                )?;
-                let y: V = Value::int(
-                    arg(1)?
-                        .convert(ValueConversionKind::ToUnsigned)?
-                        .into_int()?,
-                    double_length,
-                )?;
+                let x: V = arg(0)?.convert(conv_type.clone())?;
+                let y: V = arg(1)?.convert(conv_type.clone())?;
                 let z = Value::mul(x, y)?.convert(ValueConversionKind::ExtractUpper(ctrl_ty))?;
                 assign(z)
             }
         }
-        Opcode::Smulhi => unimplemented!("Smulhi"),
         Opcode::Udiv => binary_unsigned_can_trap(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Sdiv => binary_can_trap(Value::div, arg(0)?, arg(1)?)?,
         Opcode::Urem => binary_unsigned_can_trap(Value::rem, arg(0)?, arg(1)?)?,
