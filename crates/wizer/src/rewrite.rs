@@ -97,7 +97,7 @@ impl Wizer {
                         .zip(snapshot.memory_mins.iter().copied())
                     {
                         let mut mem = translate::memory_type(mem);
-                        mem.limits.min = new_min;
+                        mem.minimum = new_min;
                         memories.memory(mem);
                     }
                     encoder.section(&memories);
@@ -1043,9 +1043,9 @@ fn rewrite_state_module(
             .enumerate()
         {
             let mut mem = translate::memory_type(mem);
-            assert!(new_min >= mem.limits.min);
-            assert!(new_min <= mem.limits.max.unwrap_or(u32::MAX));
-            mem.limits.min = new_min;
+            assert!(new_min >= mem.minimum);
+            assert!(new_min <= mem.maximum.unwrap_or(u64::MAX));
+            mem.minimum = new_min;
             memories.memory(mem);
 
             let name = format!("__wizer_memory_{}", i);

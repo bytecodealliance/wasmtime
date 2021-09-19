@@ -3,7 +3,8 @@
 pub(crate) fn table_type(table_ty: wasmparser::TableType) -> wasm_encoder::TableType {
     wasm_encoder::TableType {
         element_type: val_type(table_ty.element_type),
-        limits: limits(table_ty.limits),
+        minimum: table_ty.limits.initial,
+        maximum: table_ty.limits.maximum,
     }
 }
 
@@ -34,16 +35,11 @@ pub(crate) fn memory_type(ty: wasmparser::MemoryType) -> wasm_encoder::MemoryTyp
             shared: false,
             limits: lims,
         } => wasm_encoder::MemoryType {
-            limits: limits(lims),
+            minimum: lims.initial as u64,
+            maximum: lims.maximum.map(|val| val as u64),
+            memory64: false,
         },
         _ => unreachable!("handled in validation"),
-    }
-}
-
-pub(crate) fn limits(limits: wasmparser::ResizableLimits) -> wasm_encoder::Limits {
-    wasm_encoder::Limits {
-        min: limits.initial,
-        max: limits.maximum,
     }
 }
 
