@@ -18,6 +18,7 @@ use regalloc::Writable;
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::cmp;
 use core::convert::TryFrom;
 
 use super::lower::*;
@@ -1840,16 +1841,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(rd, rn, ty));
         }
 
-        Opcode::Breduce | Opcode::Ireduce => {
-            // Smaller integers/booleans are stored with high-order bits
-            // undefined, so we can simply do a copy.
-            let rn = put_input_in_regs(ctx, inputs[0]).regs()[0];
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ctx.input_ty(insn, 0);
-            ctx.emit(Inst::gen_move(rd, rn, ty));
-        }
-
-        Opcode::Bextend | Opcode::Bmask => {
+        Opcode::Ireduce | Opcode::Breduce | Opcode::Bextend | Opcode::Bmask => {
             // Bextend and Bmask both simply sign-extend. This works for:
             // - Bextend, because booleans are stored as 0 / -1, so we
             //   sign-extend the -1 to a -1 in the wider width.
@@ -1858,33 +1850,36 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             let from_ty = ctx.input_ty(insn, 0);
             let to_ty = ctx.output_ty(insn, 0);
-            let from_bits = ty_bits(from_ty);
-            let to_bits = ty_bits(to_ty);
+            let from_bits = ty_bits(from_ty) as u8;
+            let to_bits = ty_bits(to_ty) as u8;
 
-            if from_ty.is_vector() || from_bits > 64 || to_bits > 64 {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, from_ty
-                )));
+            let src = put_input_in_regs(ctx, inputs[0]);
+            let dst = get_output_reg(ctx, outputs[0]);
+
+            if to_bits > from_bits {
+                // If the dst type is larger than src, we need to sign extend `src`.
+                // In case of a b128 type, we only extend the bottom register, later we
+                // copy the bottom register into the top, since for b128 the top register
+                // is always equal to the bottom one.
+                ctx.emit(Inst::Extend {
+                    rd: dst.regs()[0],
+                    rn: src.regs()[0],
+                    signed: true,
+                    from_bits: cmp::min(from_bits, 64),
+                    to_bits: cmp::min(to_bits, 64),
+                });
+            } else {
+                // Smaller integers/booleans are stored with high-order bits undefined, so we can
+                // simply do a copy.
+                ctx.emit(Inst::gen_move(dst.regs()[0], src.regs()[0], to_ty));
             }
 
-            assert!(from_bits <= to_bits);
-
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-
-            if from_bits == to_bits {
-                ctx.emit(Inst::gen_move(rd, rn, to_ty));
-            } else {
-                let to_bits = if to_bits > 32 { 64 } else { 32 };
-                let from_bits = from_bits as u8;
-                ctx.emit(Inst::Extend {
-                    rd,
-                    rn,
-                    signed: true,
-                    from_bits,
-                    to_bits,
-                });
+            if to_ty == B128 || to_ty == I128 {
+                // Duplicate the bottom register to the top, for B128 they are always equal.
+                // If we get a I128 here, it means that we are lowering a `bmask`, in which
+                // case we also need to duplicate the bottom register.
+                assert!(op == Opcode::Bextend || op == Opcode::Bmask);
+                ctx.emit(Inst::gen_move(dst.regs()[1], dst.regs()[0].to_reg(), to_ty));
             }
         }
 
