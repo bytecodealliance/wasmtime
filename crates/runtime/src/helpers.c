@@ -68,7 +68,14 @@ void wasmtime_longjmp(void *JmpBuf) {
 // Note the `weak` linkage here, though, which is intended to let other code
 // override this symbol if it's defined elsewhere, since this definition doesn't
 // matter.
-#ifndef CFG_TARGET_OS_windows
+
+
+
+
+#ifdef CFG_TARGET_OS_windows
+  // export required for external access.
+__declspec(dllexport)
+#else
 __attribute__((weak, noinline))
 #endif
 void __jit_debug_register_code() {
@@ -87,10 +94,15 @@ struct JITDescriptor {
 // Note the `weak` linkage here which is the same purpose as above. We want to
 // let other runtimes be able to override this since our own definition isn't
 // important.
-#ifndef CFG_TARGET_OS_windows
+#ifdef CFG_TARGET_OS_windows
+  // export required for external access.
+__declspec(dllexport) 
+#else
 __attribute__((weak))
 #endif
 struct JITDescriptor __jit_debug_descriptor = {1, 0, NULL, NULL};
+
+
 
 struct JITDescriptor* wasmtime_jit_debug_descriptor() {
   return &__jit_debug_descriptor;
