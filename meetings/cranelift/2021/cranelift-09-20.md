@@ -172,7 +172,7 @@
   layout depending on what the producer is doing. No concept of struct in
   cranelift, but we do have producers that compile structs. Pointer-width fields
   have different sizes.
-- acrichto - wasmtime has platform independent things
+- acrichto - wasmtime has platform dependent things for VMContext yeah
 - afonso - control type for stack\_addr and such is pointer type
 - cfallin - if you use 32-bit on 64-bit should be compiled correctly? Would be
   nice to be independent but there's lots of details
