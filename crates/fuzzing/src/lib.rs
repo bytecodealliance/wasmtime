@@ -40,7 +40,6 @@ pub fn fuzz_default_config(strategy: wasmtime::Strategy) -> anyhow::Result<wasmt
         .wasm_reference_types(true)
         .wasm_module_linking(true)
         .wasm_multi_memory(true)
-        .wasm_simd(true)
         .wasm_memory64(true)
         .strategy(strategy)?;
     Ok(config)
