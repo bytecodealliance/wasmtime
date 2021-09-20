@@ -236,6 +236,12 @@ jobs:
             qemu_target: aarch64-linux-user
             # FIXME(#3183) shouldn't be necessary to specify this
             qemu_flags: -cpu max,pauth=off
+          - os: ubuntu-latest
+            target: s390x-unknown-linux-gnu
+            gcc_package: gcc-s390x-linux-gnu
+            gcc: s390x-linux-gnu-gcc
+            qemu: qemu-s390x -L /usr/s390x-linux-gnu
+            qemu_target: s390x-linux-user
     steps:
     - uses: actions/checkout@v2
       with:
@@ -326,9 +332,9 @@ jobs:
     # Build and test lightbeam. Note that
     # Lightbeam tests fail right now, but we don't want to block on that.
     - run: cargo build --package lightbeam
-      if: matrix.target != 'aarch64-unknown-linux-gnu'
+      if: matrix.target != 'aarch64-unknown-linux-gnu' && matrix.target != 's390x-unknown-linux-gnu'
     - run: cargo test --package lightbeam
-      if: matrix.target != 'aarch64-unknown-linux-gnu'
+      if: matrix.target != 'aarch64-unknown-linux-gnu' && matrix.target != 's390x-unknown-linux-gnu'
       continue-on-error: true
       env:
         RUST_BACKTRACE: 1
