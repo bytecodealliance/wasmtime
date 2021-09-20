@@ -80,23 +80,24 @@ impl Type {
     }
 
     /// Get the (minimum, maximum) values represented by each lane in the type.
-    pub fn bounds(self, signed: bool) -> (i128, i128) {
+    /// Note that these are returned as unsigned 'bit patterns'.
+    pub fn bounds(self, signed: bool) -> (u128, u128) {
         if signed {
             match self.lane_type() {
-                I8 => (i8::MIN as i128, i8::MAX as i128),
-                I16 => (i16::MIN as i128, i16::MAX as i128),
-                I32 => (i32::MIN as i128, i32::MAX as i128),
-                I64 => (i64::MIN as i128, i64::MAX as i128),
-                I128 => (i128::MIN, i128::MAX),
+                I8 => (i8::MIN as u128, i8::MAX as u128),
+                I16 => (i16::MIN as u128, i16::MAX as u128),
+                I32 => (i32::MIN as u128, i32::MAX as u128),
+                I64 => (i64::MIN as u128, i64::MAX as u128),
+                I128 => (i128::MIN as u128, i128::MAX as u128),
                 _ => unimplemented!(),
             }
         } else {
             match self.lane_type() {
-                I8 => (u8::MIN as i128, u8::MAX as i128),
-                I16 => (u16::MIN as i128, u16::MAX as i128),
-                I32 => (u32::MIN as i128, u32::MAX as i128),
-                I64 => (u64::MIN as i128, u64::MAX as i128),
-                I128 => (u128::MIN as i128, u128::MAX as i128),
+                I8 => (u8::MIN as u128, u8::MAX as u128),
+                I16 => (u16::MIN as u128, u16::MAX as u128),
+                I32 => (u32::MIN as u128, u32::MAX as u128),
+                I64 => (u64::MIN as u128, u64::MAX as u128),
+                I128 => (u128::MIN, u128::MAX),
                 _ => unimplemented!(),
             }
         }
