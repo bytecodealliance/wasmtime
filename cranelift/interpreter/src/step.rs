@@ -850,14 +850,19 @@ where
             let new_type = ctrl_ty.merge_lanes().unwrap();
             let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
             let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
-            let mut new_vec = SimdVec::new();
-            for (x, y) in arg0.chunks(2).into_iter().zip(arg1.chunks(2).into_iter()) {
-                let mut z = 0i128;
-                for (lhs, rhs) in x.into_iter().zip(y.into_iter()) {
-                    z += lhs.clone().into_int()? * rhs.clone().into_int()?;
-                }
-                new_vec.push(Value::int(z, new_type.lane_type())?);
-            }
+            let new_vec = arg0
+                .chunks(2)
+                .into_iter()
+                .zip(arg1.chunks(2))
+                .into_iter()
+                .map(|(x, y)| {
+                    let mut z = 0i128;
+                    for (lhs, rhs) in x.into_iter().zip(y.into_iter()) {
+                        z += lhs.clone().into_int()? * rhs.clone().into_int()?;
+                    }
+                    Value::int(z, new_type.lane_type())
+                })
+                .collect::<ValueResult<Vec<_>>>()?;
             assign(vectorizelanes(&new_vec, new_type)?)
         }
         Opcode::SqmulRoundSat => unimplemented!("SqmulRoundSat"),
