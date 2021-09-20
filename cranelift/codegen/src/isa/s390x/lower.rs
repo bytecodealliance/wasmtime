@@ -61,6 +61,16 @@ fn input_matches_const<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput) -> 
     input.constant
 }
 
+/// Lower an instruction input to a 64-bit signed constant, if possible.
+fn input_matches_sconst<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput) -> Option<i64> {
+    if let Some(imm) = input_matches_const(ctx, input) {
+        let ty = ctx.input_ty(input.insn, input.input);
+        Some(sign_extend_to_u64(imm, ty_bits(ty) as u8) as i64)
+    } else {
+        None
+    }
+}
+
 /// Return false if instruction input cannot have the value Imm, true otherwise.
 fn input_maybe_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput, imm: u64) -> bool {
     if let Some(c) = input_matches_const(ctx, input) {
@@ -79,8 +89,8 @@ fn input_maybe_imm<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput, imm: u6
 
 /// Lower an instruction input to a 16-bit signed constant, if possible.
 fn input_matches_simm16<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput) -> Option<i16> {
-    if let Some(imm_value) = input_matches_const(ctx, input) {
-        if let Ok(imm) = i16::try_from(imm_value as i64) {
+    if let Some(imm_value) = input_matches_sconst(ctx, input) {
+        if let Ok(imm) = i16::try_from(imm_value) {
             return Some(imm);
         }
     }
@@ -89,8 +99,8 @@ fn input_matches_simm16<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput) ->
 
 /// Lower an instruction input to a 32-bit signed constant, if possible.
 fn input_matches_simm32<C: LowerCtx<I = Inst>>(ctx: &mut C, input: InsnInput) -> Option<i32> {
-    if let Some(imm_value) = input_matches_const(ctx, input) {
-        if let Ok(imm) = i32::try_from(imm_value as i64) {
+    if let Some(imm_value) = input_matches_sconst(ctx, input) {
+        if let Ok(imm) = i32::try_from(imm_value) {
             return Some(imm);
         }
     }
@@ -112,8 +122,8 @@ fn negated_input_matches_simm16<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
 ) -> Option<i16> {
-    if let Some(imm_value) = input_matches_const(ctx, input) {
-        if let Ok(imm) = i16::try_from(-(imm_value as i64)) {
+    if let Some(imm_value) = input_matches_sconst(ctx, input) {
+        if let Ok(imm) = i16::try_from(-imm_value) {
             return Some(imm);
         }
     }
@@ -125,8 +135,8 @@ fn negated_input_matches_simm32<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
 ) -> Option<i32> {
-    if let Some(imm_value) = input_matches_const(ctx, input) {
-        if let Ok(imm) = i32::try_from(-(imm_value as i64)) {
+    if let Some(imm_value) = input_matches_sconst(ctx, input) {
+        if let Ok(imm) = i32::try_from(-imm_value) {
             return Some(imm);
         }
     }

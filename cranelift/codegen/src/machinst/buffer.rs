@@ -597,7 +597,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.island_worst_case_size += kind.veneer_size();
             self.island_worst_case_size &= !(I::LabelUse::ALIGN - 1);
         }
-        let deadline = offset + kind.max_pos_range();
+        let deadline = offset.saturating_add(kind.max_pos_range());
         if deadline < self.island_deadline {
             self.island_deadline = deadline;
         }

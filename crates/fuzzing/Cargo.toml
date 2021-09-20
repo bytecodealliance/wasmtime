@@ -25,8 +25,8 @@ wasmi = "0.7.0"
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
 # binary for MinGW which is built on our CI. It does have one for Windows-msvc,
 # though, so we could use that if we wanted. For now though just simplify a bit
-# and don't depend on this on Windows.
-[target.'cfg(not(windows))'.dependencies]
+# and don't depend on this on Windows.  The same applies on s390x.
+[target.'cfg(not(any(windows, target_arch = "s390x")))'.dependencies]
 rusty_v8 = "0.27"
 
 [dev-dependencies]

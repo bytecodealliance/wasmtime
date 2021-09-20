@@ -3607,6 +3607,9 @@ pub enum LabelUse {
     /// 32-bit PC relative constant offset (from address of constant itself),
     /// signed. Used in jump tables.
     PCRel32,
+    /// 32-bit PC relative constant offset (from address of call instruction),
+    /// signed. Offset is imm << 1.  Used for call relocations.
+    PCRel32Dbl,
 }
 
 impl MachInstLabelUse for LabelUse {
@@ -3617,10 +3620,13 @@ impl MachInstLabelUse for LabelUse {
     fn max_pos_range(self) -> CodeOffset {
         match self {
             // 16-bit signed immediate, left-shifted by 1.
-            LabelUse::BranchRI => (1 << 20) - 1,
-            // This can address any valid CodeOffset.
-            LabelUse::BranchRIL => 0x7fff_ffff,
+            LabelUse::BranchRI => ((1 << 15) - 1) << 1,
+            // 32-bit signed immediate, left-shifted by 1.
+            LabelUse::BranchRIL => 0xffff_fffe,
+            // 32-bit signed immediate.
             LabelUse::PCRel32 => 0x7fff_ffff,
+            // 32-bit signed immediate, left-shifted by 1, offset by 2.
+            LabelUse::PCRel32Dbl => 0xffff_fffc,
         }
     }
 
@@ -3628,10 +3634,15 @@ impl MachInstLabelUse for LabelUse {
     fn max_neg_range(self) -> CodeOffset {
         match self {
             // 16-bit signed immediate, left-shifted by 1.
-            LabelUse::BranchRI => 1 << 20,
-            // This can address any valid CodeOffset.
-            LabelUse::BranchRIL => 0x8000_0000,
+            LabelUse::BranchRI => (1 << 15) << 1,
+            // 32-bit signed immediate, left-shifted by 1.
+            // NOTE: This should be 4GB, but CodeOffset is only u32.
+            LabelUse::BranchRIL => 0xffff_ffff,
+            // 32-bit signed immediate.
             LabelUse::PCRel32 => 0x8000_0000,
+            // 32-bit signed immediate, left-shifted by 1, offset by 2.
+            // NOTE: This should be 4GB + 2, but CodeOffset is only u32.
+            LabelUse::PCRel32Dbl => 0xffff_ffff,
         }
     }
 
@@ -3641,6 +3652,7 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::BranchRI => 4,
             LabelUse::BranchRIL => 6,
             LabelUse::PCRel32 => 4,
+            LabelUse::PCRel32Dbl => 4,
         }
     }
 
@@ -3662,6 +3674,11 @@ impl MachInstLabelUse for LabelUse {
             LabelUse::PCRel32 => {
                 let insn_word = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
                 let insn_word = insn_word.wrapping_add(pc_rel as u32);
+                buffer[0..4].clone_from_slice(&u32::to_be_bytes(insn_word));
+            }
+            LabelUse::PCRel32Dbl => {
+                let insn_word = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+                let insn_word = insn_word.wrapping_add((pc_rel_shifted + 1) as u32);
                 buffer[0..4].clone_from_slice(&u32::to_be_bytes(insn_word));
             }
         }
@@ -3687,7 +3704,10 @@ impl MachInstLabelUse for LabelUse {
         unreachable!();
     }
 
-    fn from_reloc(_reloc: Reloc, _addend: Addend) -> Option<Self> {
-        None
+    fn from_reloc(reloc: Reloc, addend: Addend) -> Option<Self> {
+        match (reloc, addend) {
+            (Reloc::S390xPCRel32Dbl, 2) => Some(LabelUse::PCRel32Dbl),
+            _ => None,
+        }
     }
 }
