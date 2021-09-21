@@ -900,7 +900,26 @@ where
         Opcode::AtomicLoad => unimplemented!("AtomicLoad"),
         Opcode::AtomicStore => unimplemented!("AtomicStore"),
         Opcode::Fence => unimplemented!("Fence"),
-        Opcode::WideningPairwiseDotProductS => unimplemented!("WideningPairwiseDotProductS"),
+        Opcode::WideningPairwiseDotProductS => {
+            let ctrl_ty = types::I16X8;
+            let new_type = ctrl_ty.merge_lanes().unwrap();
+            let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+            let arg1 = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
+            let new_vec = arg0
+                .chunks(2)
+                .into_iter()
+                .zip(arg1.chunks(2))
+                .into_iter()
+                .map(|(x, y)| {
+                    let mut z = 0i128;
+                    for (lhs, rhs) in x.into_iter().zip(y.into_iter()) {
+                        z += lhs.clone().into_int()? * rhs.clone().into_int()?;
+                    }
+                    Value::int(z, new_type.lane_type())
+                })
+                .collect::<ValueResult<Vec<_>>>()?;
+            assign(vectorizelanes(&new_vec, new_type)?)
+        }
         Opcode::SqmulRoundSat => unimplemented!("SqmulRoundSat"),
         Opcode::IaddPairwise => assign(binary_pairwise(arg(0)?, arg(1)?, ctrl_ty, Value::add)?),
 
