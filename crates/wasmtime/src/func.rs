@@ -766,8 +766,9 @@ impl Func {
                 bail!("cross-`Store` values are not currently supported");
             }
         }
+        let externref_params = ty.as_wasm_func_type().externref_params_count();
 
-        let mut values_vec = write_params(store.0, params, results)?;
+        let mut values_vec = write_params(store.0, externref_params, params, results)?;
 
         // Call the trampoline.
         unsafe {
@@ -789,6 +790,7 @@ impl Func {
 
         fn write_params(
             store: &mut StoreOpaque,
+            externref_params: usize,
             params: &[Val],
             results: &mut [Val],
         ) -> Result<Vec<u128>> {
@@ -805,7 +807,7 @@ impl Func {
             // because otherwise we would either keep filling up the bump chunk
             // and making it larger and larger or we would always take the slow
             // path when inserting references into the table.
-            if ty.as_wasm_func_type().externref_params_count()
+            if externref_params
                 > store
                     .externref_activations_table()
                     .bump_capacity_remaining()
