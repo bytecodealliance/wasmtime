@@ -4047,7 +4047,7 @@ pub(crate) fn define(
         Combine `x` and `y` into a vector with twice the lanes but half the integer width while
         saturating overflowing values to the unsigned maximum and minimum.
 
-        Note that all input lanes are considered unsigned.
+        Note that all input lanes are considered unsigned: any negative values will be interpreted as unsigned, overflowing and being replaced with the unsigned maximum.
 
         The lanes will be concatenated after narrowing. For example, when `x` and `y` are `i32x4`
         and `x = [x3, x2, x1, x0]` and `y = [y3, y2, y1, y0]`, then after narrowing the value
