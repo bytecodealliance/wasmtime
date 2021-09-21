@@ -1,4 +1,5 @@
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
 target x86_64 machinst
 target x86_64 legacy
@@ -46,3 +47,17 @@ block0:
     return v7
 }
 ; run
+
+
+function %bitrev_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bitrev v0
+    return v1
+}
+; run: %bitrev_i128(0) == 0
+; run: %bitrev_i128(-1) == -1
+; run: %bitrev_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %bitrev_i128(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 0xFFFFFFFF_FFFFFFFF_00000000_00000000
+; run: %bitrev_i128(0x80000000_00000000_00000000_00000000) == 1
+; run: %bitrev_i128(0xFEDCBA98_76543210_01234567_89ABCDEF) == 0xF7B3D591_E6A2C480_084C2A6E_195D3B7F
+; run: %bitrev_i128(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 0xFFFF537B_7777FF03_7777FF03_FFFF537B

@@ -1,13 +1,13 @@
 test interpret
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 target x86_64 machinst
 
-function %i128_const_0() -> i64, i64 {
+function %i128_const_0() -> i128 {
 block0:
     v1 = iconst.i128 0
-    v2, v3 = isplit v1
-    return v2, v3
+    return v1
 }
-; run: %i128_const_0() == [0, 0]
+; run: %i128_const_0() == 0

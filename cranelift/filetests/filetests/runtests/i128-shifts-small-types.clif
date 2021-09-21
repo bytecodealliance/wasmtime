@@ -3,88 +3,82 @@ target aarch64
 
 ; TODO: Merge this with the main i128-shifts file when x86_64 passes these.
 
-function %ishl_i16_i128(i16, i64, i64) -> i16 {
-block0(v0: i16, v1: i64, v2: i64):
-    v3 = iconcat v1, v2
-    v4 = ishl.i16 v0, v3
-    return v4
+function %ishl_i16_i128(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+    v2 = ishl.i16 v0, v1
+    return v2
 }
-; run: %ishl_i16_i128(0x0000, 0, 0) == 0x0000
-; run: %ishl_i16_i128(0x0000, 1, 0) == 0x0000
-; run: %ishl_i16_i128(0x000f, 0, 4) == 0x000f
-; run: %ishl_i16_i128(0x000f, 4, 0) == 0x00f0
-; run: %ishl_i16_i128(0x0004, 16, 0) == 0x0004
-; run: %ishl_i16_i128(0x0004, 17, 0) == 0x0008
-; run: %ishl_i16_i128(0x0004, 18, 1) == 0x0010
+; run: %ishl_i16_i128(0x0000, 0) == 0x0000
+; run: %ishl_i16_i128(0x0000, 1) == 0x0000
+; run: %ishl_i16_i128(0x000f, 4) == 0x00f0
+; run: %ishl_i16_i128(0x0004, 16) == 0x0004
+; run: %ishl_i16_i128(0x0004, 17) == 0x0008
+; run: %ishl_i16_i128(0x000f, 0x00000000_00000004_00000000_00000000) == 0x000f
+; run: %ishl_i16_i128(0x0004, 0x00000000_00000001_00000000_00000012) == 0x0010
 
-function %ishl_i8_i128(i8, i64, i64) -> i8 {
-block0(v0: i8, v1: i64, v2: i64):
-    v3 = iconcat v1, v2
-    v4 = ishl.i8 v0, v3
-    return v4
+function %ishl_i8_i128(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+    v2 = ishl.i8 v0, v1
+    return v2
 }
-; run: %ishl_i8_i128(0x00, 0, 0) == 0x00
-; run: %ishl_i8_i128(0x00, 1, 0) == 0x00
-; run: %ishl_i8_i128(0x0f, 0, 4) == 0x0f
-; run: %ishl_i8_i128(0x0f, 4, 0) == 0xf0
-; run: %ishl_i8_i128(0x04, 8, 0) == 0x04
-; run: %ishl_i8_i128(0x04, 9, 0) == 0x08
-; run: %ishl_i8_i128(0x04, 10, 1) == 0x10
+; run: %ishl_i8_i128(0x00, 0) == 0x00
+; run: %ishl_i8_i128(0x00, 1) == 0x00
+; run: %ishl_i8_i128(0x0f, 4) == 0xf0
+; run: %ishl_i8_i128(0x04, 8) == 0x04
+; run: %ishl_i8_i128(0x04, 9) == 0x08
+; run: %ishl_i8_i128(0x0f, 0x00000000_00000004_00000000_00000000) == 0x0f
+; run: %ishl_i8_i128(0x04, 0x00000000_00000001_00000000_0000000A) == 0x10
 
 
-function %ushr_i16_i128(i16, i64, i64) -> i16 {
-block0(v0: i16, v1: i64, v2: i64):
-    v3 = iconcat v1, v2
-    v4 = ushr.i16 v0, v3
-    return v4
+function %ushr_i16_i128(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+    v2 = ushr.i16 v0, v1
+    return v2
 }
-; run: %ushr_i16_i128(0x1000, 0, 0) == 0x1000
-; run: %ushr_i16_i128(0x1000, 1, 0) == 0x0800
-; run: %ushr_i16_i128(0xf000, 0, 4) == 0xf000
-; run: %ushr_i16_i128(0xf000, 4, 0) == 0x0f00
-; run: %ushr_i16_i128(0x4000, 16, 0) == 0x4000
-; run: %ushr_i16_i128(0x4000, 17, 0) == 0x2000
-; run: %ushr_i16_i128(0x4000, 18, 1) == 0x1000
+; run: %ushr_i16_i128(0x1000, 0) == 0x1000
+; run: %ushr_i16_i128(0x1000, 1) == 0x0800
+; run: %ushr_i16_i128(0xf000, 4) == 0x0f00
+; run: %ushr_i16_i128(0x4000, 16) == 0x4000
+; run: %ushr_i16_i128(0x4000, 17) == 0x2000
+; run: %ushr_i16_i128(0xf000, 0x00000000_00000004_00000000_00000000) == 0xf000
+; run: %ushr_i16_i128(0x4000, 0x00000000_00000001_00000000_00000012) == 0x1000
 
-function %ushr_i8_i128(i8, i64, i64) -> i8 {
-block0(v0: i8, v1: i64, v2: i64):
-    v3 = iconcat v1, v2
-    v4 = ushr.i8 v0, v3
-    return v4
+function %ushr_i8_i128(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+    v2 = ushr.i8 v0, v1
+    return v2
 }
-; run: %ushr_i8_i128(0x10, 0, 0) == 0x10
-; run: %ushr_i8_i128(0x10, 1, 0) == 0x08
-; run: %ushr_i8_i128(0xf0, 0, 4) == 0xf0
-; run: %ushr_i8_i128(0xf0, 4, 0) == 0x0f
-; run: %ushr_i8_i128(0x40, 8, 0) == 0x40
-; run: %ushr_i8_i128(0x40, 9, 0) == 0x20
-; run: %ushr_i8_i128(0x40, 10, 1) == 0x10
+; run: %ushr_i8_i128(0x10, 0) == 0x10
+; run: %ushr_i8_i128(0x10, 1) == 0x08
+; run: %ushr_i8_i128(0xf0, 4) == 0x0f
+; run: %ushr_i8_i128(0x40, 8) == 0x40
+; run: %ushr_i8_i128(0x40, 9) == 0x20
+; run: %ushr_i8_i128(0xf0, 0x00000000_00000004_00000000_00000000) == 0xf0
+; run: %ushr_i8_i128(0x40, 0x00000000_00000001_00000000_0000000A) == 0x10
 
 
-function %sshr_i16_i128(i16, i64, i64) -> i16 {
-block0(v0: i16, v1: i64, v2: i64):
-    v3 = iconcat v1, v2
-    v4 = sshr.i16 v0, v3
-    return v4
+function %sshr_i16_i128(i16, i128) -> i16 {
+block0(v0: i16, v1: i128):
+    v2 = sshr.i16 v0, v1
+    return v2
 }
-; run: %sshr_i16_i128(0x8000, 0, 0) == 0x8000
-; run: %sshr_i16_i128(0x8000, 1, 0) == 0xC000
-; run: %sshr_i16_i128(0xf000, 0, 4) == 0xf000
-; run: %sshr_i16_i128(0xf000, 4, 0) == 0xff00
-; run: %sshr_i16_i128(0x4000, 16, 0) == 0x4000
-; run: %sshr_i16_i128(0x4000, 17, 0) == 0x2000
-; run: %sshr_i16_i128(0x4000, 18, 1) == 0x1000
+; run: %sshr_i16_i128(0x8000, 0) == 0x8000
+; run: %sshr_i16_i128(0x8000, 1) == 0xC000
+; run: %sshr_i16_i128(0xf000, 4) == 0xff00
+; run: %sshr_i16_i128(0x4000, 16) == 0x4000
+; run: %sshr_i16_i128(0x4000, 17) == 0x2000
+; run: %sshr_i16_i128(0xf000, 0x00000000_00000004_00000000_00000000) == 0xf000
+; run: %sshr_i16_i128(0x4000, 0x00000000_00000001_00000000_00000012) == 0x1000
 
-function %sshr_i8_i128(i8, i64, i64) -> i8 {
-block0(v0: i8, v1: i64, v2: i64):
-    v3 = iconcat v1, v2
-    v4 = sshr.i8 v0, v3
-    return v4
+function %sshr_i8_i128(i8, i128) -> i8 {
+block0(v0: i8, v1: i128):
+    v2 = sshr.i8 v0, v1
+    return v2
 }
-; run: %sshr_i8_i128(0x80, 0, 0) == 0x80
-; run: %sshr_i8_i128(0x80, 1, 0) == 0xC0
-; run: %sshr_i8_i128(0xf0, 0, 4) == 0xf0
-; run: %sshr_i8_i128(0xf0, 4, 0) == 0xff
-; run: %sshr_i8_i128(0x40, 8, 0) == 0x40
-; run: %sshr_i8_i128(0x40, 9, 0) == 0x20
-; run: %sshr_i8_i128(0x40, 10, 1) == 0x10
+; run: %sshr_i8_i128(0x80, 0) == 0x80
+; run: %sshr_i8_i128(0x80, 1) == 0xC0
+; run: %sshr_i8_i128(0xf0, 4) == 0xff
+; run: %sshr_i8_i128(0x40, 8) == 0x40
+; run: %sshr_i8_i128(0x40, 9) == 0x20
+; run: %sshr_i8_i128(0xf0, 0x00000000_00000004_00000000_00000000) == 0xf0
+; run: %sshr_i8_i128(0x40, 0x00000000_00000001_00000000_0000000A) == 0x10

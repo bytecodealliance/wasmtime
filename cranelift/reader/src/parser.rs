@@ -31,6 +31,51 @@ use std::str::FromStr;
 use std::{u16, u32};
 use target_lexicon::Triple;
 
+macro_rules! match_imm {
+    ($signed:ty, $unsigned:ty, $parser:expr, $err_msg:expr) => {{
+        if let Some(Token::Integer(text)) = $parser.token() {
+            $parser.consume();
+            let negative = text.starts_with('-');
+            let positive = text.starts_with('+');
+            let text = if negative || positive {
+                // Strip sign prefix.
+                &text[1..]
+            } else {
+                text
+            };
+
+            // Parse the text value; the lexer gives us raw text that looks like an integer.
+            let value = if text.starts_with("0x") {
+                // Skip underscores.
+                let text = text.replace("_", "");
+                // Parse it in hexadecimal form.
+                <$unsigned>::from_str_radix(&text[2..], 16).map_err(|_| {
+                    $parser.error("unable to parse value as a hexadecimal immediate")
+                })?
+            } else {
+                // Parse it as a signed type to check for overflow and other issues.
+                text.parse()
+                    .map_err(|_| $parser.error("expected decimal immediate"))?
+            };
+
+            // Apply sign if necessary.
+            let signed = if negative {
+                let value = value.wrapping_neg() as $signed;
+                if value > 0 {
+                    return Err($parser.error("negative number too small"));
+                }
+                value
+            } else {
+                value as $signed
+            };
+
+            Ok(signed)
+        } else {
+            err!($parser.loc, $err_msg)
+        }
+    }};
+}
+
 /// After some quick benchmarks a program should never have more than 100,000 blocks.
 const MAX_BLOCKS_IN_A_FUNCTION: u32 = 100_000;
 
@@ -793,132 +838,23 @@ impl<'a> Parser<'a> {
 
     // Match and consume an i8 immediate.
     fn match_imm8(&mut self, err_msg: &str) -> ParseResult<i8> {
-        if let Some(Token::Integer(text)) = self.token() {
-            self.consume();
-            let negative = text.starts_with('-');
-            let positive = text.starts_with('+');
-            let text = if negative || positive {
-                // Strip sign prefix.
-                &text[1..]
-            } else {
-                text
-            };
-
-            // Parse the text value; the lexer gives us raw text that looks like an integer.
-            let value = if text.starts_with("0x") {
-                // Skip underscores.
-                let text = text.replace("_", "");
-                // Parse it as a i8 in hexadecimal form.
-                u8::from_str_radix(&text[2..], 16)
-                    .map_err(|_| self.error("unable to parse i8 as a hexadecimal immediate"))?
-            } else {
-                // Parse it as a i8 to check for overflow and other issues.
-                text.parse()
-                    .map_err(|_| self.error("expected i8 decimal immediate"))?
-            };
-
-            // Apply sign if necessary.
-            let signed = if negative {
-                let value = value.wrapping_neg() as i8;
-                if value > 0 {
-                    return Err(self.error("negative number too small"));
-                }
-                value
-            } else {
-                value as i8
-            };
-
-            Ok(signed)
-        } else {
-            err!(self.loc, err_msg)
-        }
+        match_imm!(i8, u8, self, err_msg)
     }
 
     // Match and consume a signed 16-bit immediate.
     fn match_imm16(&mut self, err_msg: &str) -> ParseResult<i16> {
-        if let Some(Token::Integer(text)) = self.token() {
-            self.consume();
-            let negative = text.starts_with('-');
-            let positive = text.starts_with('+');
-            let text = if negative || positive {
-                // Strip sign prefix.
-                &text[1..]
-            } else {
-                text
-            };
-
-            // Parse the text value; the lexer gives us raw text that looks like an integer.
-            let value = if text.starts_with("0x") {
-                // Skip underscores.
-                let text = text.replace("_", "");
-                // Parse it as a i16 in hexadecimal form.
-                u16::from_str_radix(&text[2..], 16)
-                    .map_err(|_| self.error("unable to parse i16 as a hexadecimal immediate"))?
-            } else {
-                // Parse it as a i16 to check for overflow and other issues.
-                text.parse()
-                    .map_err(|_| self.error("expected i16 decimal immediate"))?
-            };
-
-            // Apply sign if necessary.
-            let signed = if negative {
-                let value = value.wrapping_neg() as i16;
-                if value > 0 {
-                    return Err(self.error("negative number too small"));
-                }
-                value
-            } else {
-                value as i16
-            };
-
-            Ok(signed)
-        } else {
-            err!(self.loc, err_msg)
-        }
+        match_imm!(i16, u16, self, err_msg)
     }
 
     // Match and consume an i32 immediate.
     // This is used for stack argument byte offsets.
     fn match_imm32(&mut self, err_msg: &str) -> ParseResult<i32> {
-        if let Some(Token::Integer(text)) = self.token() {
-            self.consume();
-            let negative = text.starts_with('-');
-            let positive = text.starts_with('+');
-            let text = if negative || positive {
-                // Strip sign prefix.
-                &text[1..]
-            } else {
-                text
-            };
+        match_imm!(i32, u32, self, err_msg)
+    }
 
-            // Parse the text value; the lexer gives us raw text that looks like an integer.
-            let value = if text.starts_with("0x") {
-                // Skip underscores.
-                let text = text.replace("_", "");
-                // Parse it as a i32 in hexadecimal form.
-                u32::from_str_radix(&text[2..], 16)
-                    .map_err(|_| self.error("unable to parse i32 as a hexadecimal immediate"))?
-            } else {
-                // Parse it as a i32 to check for overflow and other issues.
-                text.parse()
-                    .map_err(|_| self.error("expected i32 decimal immediate"))?
-            };
-
-            // Apply sign if necessary.
-            let signed = if negative {
-                let value = value.wrapping_neg() as i32;
-                if value > 0 {
-                    return Err(self.error("negative number too small"));
-                }
-                value
-            } else {
-                value as i32
-            };
-
-            Ok(signed)
-        } else {
-            err!(self.loc, err_msg)
-        }
+    // Match and consume an i128 immediate.
+    fn match_imm128(&mut self, err_msg: &str) -> ParseResult<i128> {
+        match_imm!(i128, u128, self, err_msg)
     }
 
     // Match and consume an optional offset32 immediate.
@@ -2805,6 +2741,7 @@ impl<'a> Parser<'a> {
             I16 => DataValue::from(self.match_imm16("expected an i16")?),
             I32 => DataValue::from(self.match_imm32("expected an i32")?),
             I64 => DataValue::from(Into::<i64>::into(self.match_imm64("expected an i64")?)),
+            I128 => DataValue::from(self.match_imm128("expected an i128")?),
             F32 => DataValue::from(self.match_ieee32("expected an f32")?),
             F64 => DataValue::from(self.match_ieee64("expected an f64")?),
             _ if ty.is_vector() => {
@@ -4126,6 +4063,11 @@ mod tests {
         assert_eq!(parse("16", I16).to_string(), "16");
         assert_eq!(parse("32", I32).to_string(), "32");
         assert_eq!(parse("64", I64).to_string(), "64");
+        assert_eq!(
+            parse("0x01234567_01234567_01234567_01234567", I128).to_string(),
+            "1512366032949150931280199141537564007"
+        );
+        assert_eq!(parse("1234567", I128).to_string(), "1234567");
         assert_eq!(parse("0x32.32", F32).to_string(), "0x1.919000p5");
         assert_eq!(parse("0x64.64", F64).to_string(), "0x1.9190000000000p6");
         assert_eq!(parse("true", B1).to_string(), "true");

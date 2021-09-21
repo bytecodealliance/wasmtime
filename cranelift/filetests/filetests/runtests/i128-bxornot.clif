@@ -1,0 +1,14 @@
+test run
+target aarch64
+
+function %bxor_not_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bxor_not v0, v1
+    return v2
+}
+; run: %bxor_not_i128(0, 0) == -1
+; run: %bxor_not_i128(-1, 0) == 0
+; run: %bxor_not_i128(-1, -1) == -1
+; run: %bxor_not_i128(-1, 0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0xFFFFFFFF_FFFFFFFF_00000000_00000000
+; run: %bxor_not_i128(0xFEDCBA98_76543210_01234567_89ABCDEF, 0x01234567_89ABCDEF_FEDCBA98_76543210) == 0
+; run: %bxor_not_i128(0x9440A07D_9440A07D_8FA50A64_8FA50A64, 0xB575A07D_B575A07D_B0A51B75_B0A51B75) == 0xDECAFFFF_DECAFFFF_C0FFEEEE_C0FFEEEE
