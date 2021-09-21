@@ -11,7 +11,7 @@ use std::vec::Vec;
 use crate::RelocRecord;
 
 /// This specifies how data is to be initialized.
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Init {
     /// This indicates that no initialization has been specified yet.
     Uninitialized,
@@ -39,6 +39,7 @@ impl Init {
 }
 
 /// A description of a data object.
+#[derive(Clone)]
 pub struct DataDescription {
     /// How the data should be initialized.
     pub init: Init,
