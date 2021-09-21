@@ -1,4 +1,4 @@
-use wasmtime::{Config, Engine, Linker, Module, Store};
+use wasmtime::{Config, Engine, Linker, Module, Store, Val};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
@@ -42,14 +42,14 @@ async fn test_sync_host_func() {
         .await
         .unwrap();
 
-    let results = shim_inst
+    let mut results = [Val::I32(0)];
+    shim_inst
         .get_func(&mut store, "int_float_args_shim")
         .unwrap()
-        .call_async(&mut store, &[0i32.into(), 123.45f32.into()])
+        .call_async(&mut store, &[0i32.into(), 123.45f32.into()], &mut results)
         .await
         .unwrap();
 
-    assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
         results[0].unwrap_i32(),
         types::Errno::Ok as i32,
@@ -72,14 +72,18 @@ async fn test_async_host_func() {
     let input: i32 = 123;
     let result_location: i32 = 0;
 
-    let results = shim_inst
+    let mut results = [Val::I32(0)];
+    shim_inst
         .get_func(&mut store, "double_int_return_float_shim")
         .unwrap()
-        .call_async(&mut store, &[input.into(), result_location.into()])
+        .call_async(
+            &mut store,
+            &[input.into(), result_location.into()],
+            &mut results,
+        )
         .await
         .unwrap();
 
-    assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
         results[0].unwrap_i32(),
         types::Errno::Ok as i32,

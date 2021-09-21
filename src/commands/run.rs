@@ -343,7 +343,8 @@ impl RunCommand {
 
         // Invoke the function and then afterwards print all the results that came
         // out, if there are any.
-        let results = func.call(store, &values).with_context(|| {
+        let mut results = vec![Val::null(); ty.results().len()];
+        func.call(store, &values, &mut results).with_context(|| {
             if let Some(name) = name {
                 format!("failed to invoke `{}`", name)
             } else {
@@ -357,7 +358,7 @@ impl RunCommand {
             );
         }
 
-        for result in results.into_vec() {
+        for result in results {
             match result {
                 Val::I32(i) => println!("{}", i),
                 Val::I64(i) => println!("{}", i),

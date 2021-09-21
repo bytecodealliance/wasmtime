@@ -645,20 +645,13 @@ impl<T> Linker<T> {
                                 // `unwrap()` everything here because we know the instance contains a
                                 // function export with the given name and signature because we're
                                 // iterating over the module it was instantiated from.
-                                let command_results = instance
+                                instance
                                     .get_export(&mut caller, &export_name)
                                     .unwrap()
                                     .into_func()
                                     .unwrap()
-                                    .call(&mut caller, params)
+                                    .call(&mut caller, params, results)
                                     .map_err(|error| error.downcast::<Trap>().unwrap())?;
-
-                                // Copy the return values into the output slice.
-                                for (result, command_result) in
-                                    results.iter_mut().zip(command_results.into_vec())
-                                {
-                                    *result = command_result;
-                                }
 
                                 Ok(())
                             },
@@ -718,20 +711,14 @@ impl<T> Linker<T> {
                                 let (instance_pre, export_name) = &*upvars;
                                 let instance = instance_pre.instantiate_async(&mut caller).await?;
 
-                                let command_results = instance
+                                instance
                                     .get_export(&mut caller, &export_name)
                                     .unwrap()
                                     .into_func()
                                     .unwrap()
-                                    .call_async(&mut caller, params)
+                                    .call_async(&mut caller, params, results)
                                     .await
                                     .map_err(|error| error.downcast::<Trap>().unwrap())?;
-
-                                for (result, command_result) in
-                                    results.iter_mut().zip(command_results.into_vec())
-                                {
-                                    *result = command_result;
-                                }
                                 Ok(())
                             })
                         },

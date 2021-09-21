@@ -4,7 +4,6 @@ use crate::{
     StoreContext, StoreContextMut, Trap, Val, ValType,
 };
 use anyhow::{bail, Context as _, Result};
-use std::cmp::max;
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
@@ -90,13 +89,13 @@ use wasmtime_runtime::{
 ///
 /// // Work with `foo` as a `Func` at this point, such as calling it
 /// // dynamically...
-/// match foo.call(&mut store, &[]) {
-///     Ok(result) => { /* ... */ }
+/// match foo.call(&mut store, &[], &mut []) {
+///     Ok(()) => { /* ... */ }
 ///     Err(trap) => {
 ///         panic!("execution of `foo` resulted in a wasm trap: {}", trap);
 ///     }
 /// }
-/// foo.call(&mut store, &[])?;
+/// foo.call(&mut store, &[], &mut [])?;
 ///
 /// // ... or we can make a static assertion about its signature and call it.
 /// // Our first call here can fail if the signatures don't match, and then the
@@ -184,9 +183,14 @@ use wasmtime_runtime::{
 #[repr(transparent)] // here for the C API
 pub struct Func(Stored<FuncData>);
 
+pub(crate) struct FuncData {
+    kind: FuncKind,
+    ty: FuncType,
+}
+
 /// The three ways that a function can be created and referenced from within a
 /// store.
-pub(crate) enum FuncData {
+enum FuncKind {
     /// A function already owned by the store via some other means. This is
     /// used, for example, when creating a `Func` from an instance's exported
     /// function. The instance's `InstanceHandle` is already owned by the store
@@ -647,42 +651,37 @@ impl Func {
     ///
     /// Panics if `store` does not own this function.
     pub fn ty(&self, store: impl AsContext) -> FuncType {
-        // Signatures should always be registered in the engine's registry of
-        // shared signatures, so we should be able to unwrap safely here.
-        let store = store.as_context();
-        let sig_index = unsafe { store[self.0].export().anyfunc.as_ref().type_index };
-        FuncType::from_wasm_func_type(
-            store
-                .engine()
-                .signatures()
-                .lookup_type(sig_index)
-                .expect("signature should be registered"),
-        )
+        store.as_context()[self.0].ty.clone()
     }
 
     pub(crate) fn sig_index(&self, data: &StoreData) -> VMSharedSignatureIndex {
         unsafe { data[self.0].export().anyfunc.as_ref().type_index }
     }
 
-    /// Invokes this function with the `params` given, returning the results and
-    /// any trap, if one occurs.
+    /// Invokes this function with the `params` given and writes returned values
+    /// to `results`.
     ///
     /// The `params` here must match the type signature of this `Func`, or a
     /// trap will occur. If a trap occurs while executing this function, then a
-    /// trap will also be returned.
+    /// trap will also be returned. Additionally `results` must have the same
+    /// length as the number of results for this function.
     ///
     /// # Panics
     ///
     /// This function will panic if called on a function belonging to an async
     /// store. Asynchronous stores must always use `call_async`.
     /// initiates a panic. Also panics if `store` does not own this function.
-    pub fn call(&self, mut store: impl AsContextMut, params: &[Val]) -> Result<Box<[Val]>> {
+    pub fn call(
+        &self,
+        mut store: impl AsContextMut,
+        params: &[Val],
+        results: &mut [Val],
+    ) -> Result<()> {
         assert!(
             !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config",
         );
-        let my_ty = self.ty(&store);
-        self.call_impl(&mut store.as_context_mut(), my_ty, params)
+        self.call_impl(&mut store.as_context_mut(), params, results)
     }
 
     /// Invokes this function with the `params` given, returning the results
@@ -713,7 +712,8 @@ impl Func {
         &self,
         mut store: impl AsContextMut<Data = T>,
         params: &[Val],
-    ) -> Result<Box<[Val]>>
+        results: &mut [Val],
+    ) -> Result<()>
     where
         T: Send,
     {
@@ -722,9 +722,8 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config",
         );
-        let my_ty = self.ty(&store);
         let result = store
-            .on_fiber(|store| self.call_impl(store, my_ty, params))
+            .on_fiber(|store| self.call_impl(store, params, results))
             .await??;
         Ok(result)
     }
@@ -732,10 +731,43 @@ impl Func {
     fn call_impl<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
-        my_ty: FuncType,
         params: &[Val],
-    ) -> Result<Box<[Val]>> {
-        let mut values_vec = write_params(store.0, &my_ty, params)?;
+        results: &mut [Val],
+    ) -> Result<()> {
+        // We need to perform a dynamic check that the arguments given to us
+        // match the signature of this function and are appropriate to pass to
+        // this function. This involves checking to make sure we have the right
+        // number and types of arguments as well as making sure everything is
+        // from the same `Store`.
+        let ty = &store[self.0].ty;
+        if ty.params().len() != params.len() {
+            bail!(
+                "expected {} arguments, got {}",
+                ty.params().len(),
+                params.len()
+            );
+        }
+        if ty.results().len() != results.len() {
+            bail!(
+                "expected {} results, got {}",
+                ty.results().len(),
+                results.len()
+            );
+        }
+        for (ty, arg) in ty.params().zip(params) {
+            if arg.ty() != ty {
+                bail!(
+                    "argument type mismatch: found {} but expected {}",
+                    arg.ty(),
+                    ty
+                );
+            }
+            if !arg.comes_from_same_store(store.0) {
+                bail!("cross-`Store` values are not currently supported");
+            }
+        }
+
+        let mut values_vec = write_params(store.0, params, results)?;
 
         // Call the trampoline.
         unsafe {
@@ -752,27 +784,19 @@ impl Func {
             })?;
         }
 
-        return Ok(read_results(store.0, &my_ty, &values_vec));
+        read_results(store.0, self, values_vec, results);
+        return Ok(());
 
         fn write_params(
             store: &mut StoreOpaque,
-            ty: &FuncType,
             params: &[Val],
+            results: &mut [Val],
         ) -> Result<Vec<u128>> {
-            // We need to perform a dynamic check that the arguments given to us
-            // match the signature of this function and are appropriate to pass to
-            // this function. This involves checking to make sure we have the right
-            // number and types of arguments as well as making sure everything is
-            // from the same `Store`.
-            if ty.params().len() != params.len() {
-                bail!(
-                    "expected {} arguments, got {}",
-                    ty.params().len(),
-                    params.len()
-                );
-            }
+            let values_vec_size = params.len().max(results.len());
 
-            let mut values_vec = vec![0; max(params.len(), ty.results().len())];
+            let mut values_vec = store.take_wasm_u128_storage();
+            debug_assert!(values_vec.is_empty());
+            values_vec.extend((0..values_vec_size).map(|_| 0));
 
             // Whenever we pass `externref`s from host code to Wasm code, they
             // go into the `VMExternRefActivationsTable`. But the table might be
@@ -790,18 +814,7 @@ impl Func {
             }
 
             // Store the argument values into `values_vec`.
-            let param_tys = ty.params();
-            for ((arg, slot), ty) in params.iter().cloned().zip(&mut values_vec).zip(param_tys) {
-                if arg.ty() != ty {
-                    bail!(
-                        "argument type mismatch: found {} but expected {}",
-                        arg.ty(),
-                        ty
-                    );
-                }
-                if !arg.comes_from_same_store(store) {
-                    bail!("cross-`Store` values are not currently supported");
-                }
+            for (arg, slot) in params.iter().zip(&mut values_vec) {
                 unsafe {
                     arg.write_value_without_gc(store, slot);
                 }
@@ -810,15 +823,20 @@ impl Func {
             Ok(values_vec)
         }
 
-        fn read_results(store: &mut StoreOpaque, ty: &FuncType, values_vec: &[u128]) -> Box<[Val]> {
-            let mut results = Vec::with_capacity(ty.results().len());
-            for (index, ty) in ty.results().enumerate() {
+        fn read_results(
+            store: &mut StoreOpaque,
+            func: &Func,
+            mut values_vec: Vec<u128>,
+            results: &mut [Val],
+        ) {
+            for (i, (ptr, dst)) in values_vec.iter().zip(results).enumerate() {
+                let ty = store[func.0].ty.results().nth(i).unwrap();
                 unsafe {
-                    let ptr = &values_vec[index];
-                    results.push(Val::read_value_from(store, ptr, ty));
+                    *dst = Val::read_value_from(store, ptr, ty);
                 }
             }
-            results.into()
+            values_vec.truncate(0);
+            store.save_wasm_u128_storage(values_vec);
         }
     }
 
@@ -836,8 +854,21 @@ impl Func {
     ) -> Self {
         let anyfunc = export.anyfunc.as_ref();
         let trampoline = store.lookup_trampoline(&*anyfunc);
-        let data = FuncData::StoreOwned { trampoline, export };
-        Func(store.store_data_mut().insert(data))
+        Func::from_func_kind(FuncKind::StoreOwned { trampoline, export }, store)
+    }
+
+    fn from_func_kind(kind: FuncKind, store: &mut StoreOpaque) -> Self {
+        // Signatures should always be registered in the engine's registry of
+        // shared signatures, so we should be able to unwrap safely here.
+        let ty = unsafe { kind.export().anyfunc.as_ref().type_index };
+        let ty = FuncType::from_wasm_func_type(
+            store
+                .engine()
+                .signatures()
+                .lookup_type(ty)
+                .expect("signature should be registered"),
+        );
+        Func(store.store_data_mut().insert(FuncData { kind, ty }))
     }
 
     pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> VMFunctionImport {
@@ -1972,13 +2003,13 @@ impl HostFunc {
     pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
         self.register_trampoline(store);
         let me = self.clone();
-        Func(store.store_data_mut().insert(FuncData::SharedHost(me)))
+        Func::from_func_kind(FuncKind::SharedHost(me), store)
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
     unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
         self.register_trampoline(store);
-        Func(store.store_data_mut().insert(FuncData::Host(self)))
+        Func::from_func_kind(FuncKind::Host(self), store)
     }
 
     unsafe fn register_trampoline(&self, store: &mut StoreOpaque) {
@@ -2014,20 +2045,28 @@ impl Drop for HostFunc {
 }
 
 impl FuncData {
+    #[inline]
     fn trampoline(&self) -> VMTrampoline {
-        match self {
-            FuncData::StoreOwned { trampoline, .. } => *trampoline,
-            FuncData::SharedHost(host) => host.trampoline,
-            FuncData::Host(host) => host.trampoline,
+        match &self.kind {
+            FuncKind::StoreOwned { trampoline, .. } => *trampoline,
+            FuncKind::SharedHost(host) => host.trampoline,
+            FuncKind::Host(host) => host.trampoline,
         }
     }
 
     #[inline]
     fn export(&self) -> &ExportFunction {
+        self.kind.export()
+    }
+}
+
+impl FuncKind {
+    #[inline]
+    fn export(&self) -> &ExportFunction {
         match self {
-            FuncData::StoreOwned { export, .. } => export,
-            FuncData::SharedHost(host) => &host.export,
-            FuncData::Host(host) => &host.export,
+            FuncKind::StoreOwned { export, .. } => export,
+            FuncKind::SharedHost(host) => &host.export,
+            FuncKind::Host(host) => &host.export,
         }
     }
 }

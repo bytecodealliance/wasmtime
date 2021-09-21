@@ -31,6 +31,7 @@ fn call_wrapped_func() -> Result<(), Error> {
     f.call(
         &mut store,
         &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
+        &mut [],
     )?;
 
     // One switch from vm to host to call f, another in return from f.
@@ -85,6 +86,7 @@ async fn call_wrapped_async_func() -> Result<(), Error> {
     f.call_async(
         &mut store,
         &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
+        &mut [],
     )
     .await?;
 
@@ -154,7 +156,7 @@ fn call_linked_func() -> Result<(), Error> {
         .into_func()
         .expect("export is func");
 
-    export.call(&mut store, &[])?;
+    export.call(&mut store, &[], &mut [])?;
 
     // One switch from vm to host to call f, another in return from f.
     assert_eq!(store.data().calls_into_host, 1);
@@ -225,7 +227,7 @@ async fn call_linked_func_async() -> Result<(), Error> {
         .into_func()
         .expect("export is func");
 
-    export.call_async(&mut store, &[]).await?;
+    export.call_async(&mut store, &[], &mut []).await?;
 
     // One switch from vm to host to call f, another in return from f.
     assert_eq!(store.data().calls_into_host, 1);
@@ -333,7 +335,7 @@ fn recursion() -> Result<(), Error> {
     // Recursion depth:
     let n: usize = 10;
 
-    export.call(&mut store, &[Val::I32(n as i32)])?;
+    export.call(&mut store, &[Val::I32(n as i32)], &mut [])?;
 
     // Recurse down to 0: n+1 calls
     assert_eq!(store.data().calls_into_host, n + 1);
@@ -423,6 +425,7 @@ fn trapping() -> Result<(), Error> {
         let r = export.call(
             &mut store,
             &[Val::I32(action), Val::I32(if recur { 1 } else { 0 })],
+            &mut [],
         );
         (store.into_data(), r.err())
     };

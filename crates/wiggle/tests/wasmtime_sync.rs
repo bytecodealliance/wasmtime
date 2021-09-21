@@ -1,4 +1,4 @@
-use wasmtime::{Engine, Linker, Module, Store};
+use wasmtime::{Engine, Linker, Module, Store, Val};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
@@ -55,13 +55,13 @@ fn test_sync_host_func() {
     let shim_mod = shim_module(&engine);
     let shim_inst = linker.instantiate(&mut store, &shim_mod).unwrap();
 
-    let results = shim_inst
+    let mut results = [Val::I32(0)];
+    shim_inst
         .get_func(&mut store, "int_float_args_shim")
         .unwrap()
-        .call(&mut store, &[0i32.into(), 123.45f32.into()])
+        .call(&mut store, &[0i32.into(), 123.45f32.into()], &mut results)
         .unwrap();
 
-    assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
         results[0].unwrap_i32(),
         types::Errno::Ok as i32,
@@ -82,13 +82,17 @@ fn test_async_host_func() {
     let input: i32 = 123;
     let result_location: i32 = 0;
 
-    let results = shim_inst
+    let mut results = [Val::I32(0)];
+    shim_inst
         .get_func(&mut store, "double_int_return_float_shim")
         .unwrap()
-        .call(&mut store, &[input.into(), result_location.into()])
+        .call(
+            &mut store,
+            &[input.into(), result_location.into()],
+            &mut results,
+        )
         .unwrap();
 
-    assert_eq!(results.len(), 1, "one return value");
     assert_eq!(
         results[0].unwrap_i32(),
         types::Errno::Ok as i32,
@@ -121,7 +125,11 @@ fn test_async_host_func_pending() {
     let trap = shim_inst
         .get_func(&mut store, "double_int_return_float_shim")
         .unwrap()
-        .call(&mut store, &[input.into(), result_location.into()])
+        .call(
+            &mut store,
+            &[input.into(), result_location.into()],
+            &mut [Val::I32(0)],
+        )
         .unwrap_err();
     assert!(
         format!("{}", trap).contains("Cannot wait on pending future"),

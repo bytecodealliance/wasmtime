@@ -3,7 +3,6 @@ use crate::{
     wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t, wasmtime_error_t,
     wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, CStoreContext, CStoreContextMut,
 };
-use anyhow::anyhow;
 use std::ffi::c_void;
 use std::mem::{self, MaybeUninit};
 use std::panic::{self, AssertUnwindSafe};
@@ -109,6 +108,22 @@ pub unsafe extern "C" fn wasm_func_new_with_env(
     })
 }
 
+/// Places the `args` into `dst` and additionally reserves space in `dst` for `results_size`
+/// returns. The params/results slices are then returned separately.
+fn translate_args<'a>(
+    dst: &'a mut Vec<Val>,
+    args: impl ExactSizeIterator<Item = Val>,
+    results_size: usize,
+) -> (&'a [Val], &'a mut [Val]) {
+    debug_assert!(dst.is_empty());
+    let num_args = args.len();
+    dst.reserve(args.len() + results_size);
+    dst.extend(args);
+    dst.extend((0..results_size).map(|_| Val::null()));
+    let (a, b) = dst.split_at_mut(num_args);
+    (a, b)
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn wasm_func_call(
     func: &mut wasm_func_t,
@@ -118,23 +133,20 @@ pub unsafe extern "C" fn wasm_func_call(
     let f = func.func();
     let results = (*results).as_uninit_slice();
     let args = (*args).as_slice();
-    if results.len() != f.ty(func.ext.store.context()).results().len() {
-        return Box::into_raw(Box::new(wasm_trap_t::new(
-            anyhow!("wrong number of results provided").into(),
-        )));
-    }
-    let params = args.iter().map(|i| i.val()).collect::<Vec<_>>();
+    let mut dst = Vec::new();
+    let (wt_params, wt_results) =
+        translate_args(&mut dst, args.iter().map(|i| i.val()), results.len());
 
     // We're calling arbitrary code here most of the time, and we in general
     // want to try to insulate callers against bugs in wasmtime/wasi/etc if we
     // can. As a result we catch panics here and transform them to traps to
     // allow the caller to have any insulation possible against Rust panics.
     let result = panic::catch_unwind(AssertUnwindSafe(|| {
-        f.call(func.ext.store.context_mut(), &params)
+        f.call(func.ext.store.context_mut(), wt_params, wt_results)
     }));
     match result {
-        Ok(Ok(out)) => {
-            for (slot, val) in results.iter_mut().zip(out.into_vec().into_iter()) {
+        Ok(Ok(())) => {
+            for (slot, val) in results.iter_mut().zip(wt_results.iter().cloned()) {
                 crate::initialize(slot, wasm_val_t::from_val(val));
             }
             ptr::null_mut()
@@ -261,7 +273,7 @@ pub(crate) unsafe fn c_callback_to_rust_fn(
 
 #[no_mangle]
 pub unsafe extern "C" fn wasmtime_func_call(
-    store: CStoreContextMut<'_>,
+    mut store: CStoreContextMut<'_>,
     func: &Func,
     args: *const wasmtime_val_t,
     nargs: usize,
@@ -269,27 +281,31 @@ pub unsafe extern "C" fn wasmtime_func_call(
     nresults: usize,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    if nresults != func.ty(&store).results().len() {
-        return Some(Box::new(wasmtime_error_t::from(anyhow!(
-            "wrong number of results provided"
-        ))));
-    }
-    let params = crate::slice_from_raw_parts(args, nargs)
-        .iter()
-        .map(|i| i.to_val())
-        .collect::<Vec<_>>();
+    let mut store = store.as_context_mut();
+    let mut params = mem::take(&mut store.data_mut().wasm_val_storage);
+    let (wt_params, wt_results) = translate_args(
+        &mut params,
+        crate::slice_from_raw_parts(args, nargs)
+            .iter()
+            .map(|i| i.to_val()),
+        nresults,
+    );
 
     // We're calling arbitrary code here most of the time, and we in general
     // want to try to insulate callers against bugs in wasmtime/wasi/etc if we
     // can. As a result we catch panics here and transform them to traps to
     // allow the caller to have any insulation possible against Rust panics.
-    let result = panic::catch_unwind(AssertUnwindSafe(|| func.call(store, &params)));
+    let result = panic::catch_unwind(AssertUnwindSafe(|| {
+        func.call(&mut store, wt_params, wt_results)
+    }));
     match result {
-        Ok(Ok(out)) => {
+        Ok(Ok(())) => {
             let results = crate::slice_from_raw_parts_mut(results, nresults);
-            for (slot, val) in results.iter_mut().zip(out.into_vec().into_iter()) {
-                crate::initialize(slot, wasmtime_val_t::from_val(val));
+            for (slot, val) in results.iter_mut().zip(wt_results.iter()) {
+                crate::initialize(slot, wasmtime_val_t::from_val(val.clone()));
             }
+            params.truncate(0);
+            store.data_mut().wasm_val_storage = params;
             None
         }
         Ok(Err(trap)) => match trap.downcast::<Trap>() {

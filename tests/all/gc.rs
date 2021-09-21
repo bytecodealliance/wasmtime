@@ -47,7 +47,7 @@ fn smoke_test_gc() -> anyhow::Result<()> {
     let r = ExternRef::new(SetFlagOnDrop(inner_dropped.clone()));
     {
         let args = [Val::I32(5), Val::ExternRef(Some(r.clone()))];
-        func.call(&mut store, &args)?;
+        func.call(&mut store, &args, &mut [Val::I32(0)])?;
     }
 
     // Still held alive by the `VMExternRefActivationsTable` (potentially in
@@ -88,7 +88,7 @@ fn wasm_dropping_refs() -> anyhow::Result<()> {
     for _ in 0..4096 {
         let r = ExternRef::new(CountDrops(num_refs_dropped.clone()));
         let args = [Val::ExternRef(Some(r))];
-        drop_ref.call(&mut store, &args)?;
+        drop_ref.call(&mut store, &args, &mut [])?;
     }
 
     assert!(num_refs_dropped.load(SeqCst) > 0);
@@ -163,7 +163,7 @@ fn many_live_refs() -> anyhow::Result<()> {
     let instance = Instance::new(&mut store, &module, &[make_ref.into(), observe_ref.into()])?;
     let many_live_refs = instance.get_func(&mut store, "many_live_refs").unwrap();
 
-    many_live_refs.call(&mut store, &[])?;
+    many_live_refs.call(&mut store, &[], &mut [])?;
 
     store.gc();
     assert_eq!(live_refs.load(SeqCst), 0);
@@ -214,7 +214,7 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
 
     {
         let args = vec![Val::ExternRef(Some(foo))];
-        table_set.call(&mut store, &args)?;
+        table_set.call(&mut store, &args, &mut [])?;
     }
     store.gc();
     assert!(!foo_is_dropped.load(SeqCst));
@@ -222,13 +222,13 @@ fn drop_externref_via_table_set() -> anyhow::Result<()> {
 
     {
         let args = vec![Val::ExternRef(Some(bar))];
-        table_set.call(&mut store, &args)?;
+        table_set.call(&mut store, &args, &mut [])?;
     }
     store.gc();
     assert!(foo_is_dropped.load(SeqCst));
     assert!(!bar_is_dropped.load(SeqCst));
 
-    table_set.call(&mut store, &[Val::ExternRef(None)])?;
+    table_set.call(&mut store, &[Val::ExternRef(None)], &mut [])?;
     assert!(foo_is_dropped.load(SeqCst));
     assert!(bar_is_dropped.load(SeqCst));
 

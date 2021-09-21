@@ -285,7 +285,7 @@ fn funcs_live_on_to_fight_another_day() -> Result<()> {
         assert_eq!(flag.load(SeqCst), 0);
         let mut store = Store::new(&engine, ());
         let func = linker.get(&mut store, "", Some("")).unwrap();
-        func.into_func().unwrap().call(&mut store, &[])?;
+        func.into_func().unwrap().call(&mut store, &[], &mut [])?;
         assert_eq!(flag.load(SeqCst), 0);
         Ok(())
     };

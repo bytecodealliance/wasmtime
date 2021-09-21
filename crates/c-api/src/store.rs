@@ -2,7 +2,9 @@ use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::sync::Arc;
-use wasmtime::{AsContext, AsContextMut, InterruptHandle, Store, StoreContext, StoreContextMut};
+use wasmtime::{
+    AsContext, AsContextMut, InterruptHandle, Store, StoreContext, StoreContextMut, Val,
+};
 
 /// This representation of a `Store` is used to implement the `wasm.h` API.
 ///
@@ -71,6 +73,10 @@ pub struct StoreData {
     /// Temporary storage for usage during a wasm->host call to store values
     /// in a slice we pass to the C API.
     pub hostcall_val_storage: Vec<wasmtime_val_t>,
+
+    /// Temporary storage for usage during host->wasm calls, same as above but
+    /// for a different direction.
+    pub wasm_val_storage: Vec<Val>,
 }
 
 #[no_mangle]
@@ -90,6 +96,7 @@ pub extern "C" fn wasmtime_store_new(
                 #[cfg(feature = "wasi")]
                 wasi: None,
                 hostcall_val_storage: Vec::new(),
+                wasm_val_storage: Vec::new(),
             },
         ),
     })
