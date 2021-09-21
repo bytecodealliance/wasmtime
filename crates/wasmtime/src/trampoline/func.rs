@@ -86,6 +86,7 @@ where
     // also take care of unwind table registration.
     let mut code_memory = CodeMemory::new(obj);
     let code = code_memory.publish()?;
+    engine.config().profiler.trampoline_load(&code.obj);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.

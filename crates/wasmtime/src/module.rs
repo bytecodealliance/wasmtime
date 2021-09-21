@@ -500,7 +500,9 @@ impl Module {
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
             &types.wasm_signatures,
-            modules.iter().flat_map(|m| m.trampolines()),
+            modules
+                .iter()
+                .flat_map(|m| m.trampolines().map(|(idx, f, _)| (idx, f))),
         ));
 
         let module = modules.remove(main_module);

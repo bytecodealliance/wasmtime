@@ -21,6 +21,7 @@ use std::ptr;
 use std::sync::Mutex;
 use std::{borrow, mem, process};
 use target_lexicon::Architecture;
+use wasmtime_environ::EntityRef;
 
 use object::elf;
 
@@ -202,6 +203,9 @@ impl ProfilingAgent for JitDumpAgent {
     fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
         self.state.lock().unwrap().module_load(module, dbg_image);
     }
+    fn trampoline_load(&self, file: &object::File<'_>) {
+        self.state.lock().unwrap().trampoline_load(file)
+    }
 }
 
 impl State {
@@ -280,7 +284,7 @@ impl State {
     }
 
     /// Sent when a method is compiled and loaded into memory by the VM.
-    pub fn module_load(&mut self, module: &CompiledModule, dbg_image: Option<&[u8]>) -> () {
+    pub fn module_load(&mut self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
         let pid = process::id();
         let tid = pid; // ThreadId does appear to track underlying thread. Using PID.
 
@@ -299,6 +303,52 @@ impl State {
                 self.dump_code_load_record(&name, addr, len, timestamp, pid, tid);
             }
         }
+        for (idx, func, len) in module.trampolines() {
+            let (addr, len) = (func as usize as *const u8, len);
+            let timestamp = self.get_time_stamp();
+            let name = format!("wasm::trampoline[{}]", idx.index());
+            self.dump_code_load_record(&name, addr, len, timestamp, pid, tid);
+        }
+    }
+
+    fn trampoline_load(&mut self, image: &object::File<'_>) {
+        use object::{ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
+        let pid = process::id();
+        let tid = pid;
+
+        let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
+            Some(section) => match section.data() {
+                Ok(data) => data.as_ptr() as usize,
+                Err(_) => return,
+            },
+            None => return,
+        };
+
+        for sym in image.symbols() {
+            if !sym.is_definition() {
+                continue;
+            }
+            if sym.kind() != SymbolKind::Text {
+                continue;
+            }
+            let address = sym.address();
+            let size = sym.size();
+            if address == 0 || size == 0 {
+                continue;
+            }
+            if let Ok(name) = sym.name() {
+                let addr = text_base + address as usize;
+                let timestamp = self.get_time_stamp();
+                self.dump_code_load_record(
+                    &name,
+                    addr as *const u8,
+                    size as usize,
+                    timestamp,
+                    pid,
+                    tid,
+                );
+            }
+        }
     }
 
     fn dump_code_load_record(
@@ -309,7 +359,7 @@ impl State {
         timestamp: u64,
         pid: u32,
         tid: u32,
-    ) -> () {
+    ) {
         let name_len = method_name.len() + 1;
         let size_limit = mem::size_of::<CodeLoadRecord>();
 

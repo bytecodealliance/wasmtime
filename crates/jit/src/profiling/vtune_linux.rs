@@ -112,6 +112,9 @@ impl ProfilingAgent for VTuneAgent {
     fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
         self.state.lock().unwrap().module_load(module, dbg_image);
     }
+    fn trampoline_load(&self, _file: &object::File<'_>) {
+        // TODO: needs an implementation
+    }
 }
 
 impl State {

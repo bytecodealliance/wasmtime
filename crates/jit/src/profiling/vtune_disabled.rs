@@ -20,4 +20,5 @@ impl VTuneAgent {
 
 impl ProfilingAgent for VTuneAgent {
     fn module_load(&self, _module: &crate::CompiledModule, _dbg_image: Option<&[u8]>) {}
+    fn trampoline_load(&self, _file: &object::File<'_>) {}
 }
