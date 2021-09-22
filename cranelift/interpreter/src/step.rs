@@ -980,7 +980,34 @@ where
                 .collect::<ValueResult<Vec<_>>>()?;
             assign(vectorizelanes(&new_vec, new_type)?)
         }
-        Opcode::SqmulRoundSat => unimplemented!("SqmulRoundSat"),
+        Opcode::SqmulRoundSat => {
+            let lane_type = ctrl_ty.lane_type();
+            let double_width = ctrl_ty.double_width().unwrap().lane_type();
+            let arg0 = extractlanes(&arg(0)?, lane_type)?;
+            let arg1 = extractlanes(&arg(1)?, lane_type)?;
+            let (min, max) = lane_type.bounds(true);
+            let min: V = Value::int(min as i128, double_width)?;
+            let max: V = Value::int(max as i128, double_width)?;
+            let new_vec = arg0
+                .into_iter()
+                .zip(arg1.into_iter())
+                .map(|(x, y)| {
+                    let x = x.into_int()?;
+                    let y = y.into_int()?;
+                    // temporarily double width of the value to avoid overflow.
+                    let z: V = Value::int(
+                        (x * y + (1 << (lane_type.bits() - 2))) >> (lane_type.bits() - 1),
+                        double_width,
+                    )?;
+                    // check bounds, saturate, and truncate to correct width.
+                    let z = Value::min(z, max.clone())?;
+                    let z = Value::max(z, min.clone())?;
+                    let z = z.convert(ValueConversionKind::Truncate(lane_type))?;
+                    Ok(z)
+                })
+                .collect::<ValueResult<SimdVec<_>>>()?;
+            assign(vectorizelanes(&new_vec, ctrl_ty)?)
+        }
         Opcode::IaddPairwise => assign(binary_pairwise(arg(0)?, arg(1)?, ctrl_ty, Value::add)?),
 
         // TODO: these instructions should be removed once the new backend makes these obsolete

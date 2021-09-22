@@ -1,0 +1,13 @@
+test interpret
+test run
+target aarch64
+set enable_simd
+target x86_64 machinst
+
+function %sqmulrs_i16x8(i16x8, i16x8) -> i16x8 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = sqmul_round_sat v0, v1
+    return v2
+}
+; run: %sqmulrs_i16x8([1 2 3 4 5 6 7 8], [1 10 100 1000 10000 15000 20000 25000]) == [0 0 0 0 2 3 4 6]
+; run: %sqmulrs_i16x8([32767 32767 -32768 -32768 -32768 -32768 0 0], [32767 32767 -32768 -32768 32767 32767 0 0]) == [32766 32766 32767 32767 -32767 -32767 0 0]
