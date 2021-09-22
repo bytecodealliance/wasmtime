@@ -1,0 +1,114 @@
+test compile
+target aarch64 has_lse
+
+function %atomic_rmw_add_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 add v0, v1
+    return
+}
+; check: ldaddal x1, x0, [x0]
+
+function %atomic_rmw_add_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 add v0, v1
+    return
+}
+; check: ldaddal w1, w0, [x0]
+
+function %atomic_rmw_and_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 and v0, v1
+    return
+}
+; check: ldclral x1, x0, [x0]
+
+function %atomic_rmw_and_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 and v0, v1
+    return
+}
+; check: ldclral w1, w0, [x0]
+
+function %atomic_rmw_or_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 or v0, v1
+    return
+}
+; check: ldsetal x1, x0, [x0]
+
+function %atomic_rmw_or_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 or v0, v1
+    return
+}
+; check: ldsetal w1, w0, [x0]
+
+function %atomic_rmw_xor_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 xor v0, v1
+    return
+}
+; check: ldeoral x1, x0, [x0]
+
+function %atomic_rmw_xor_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 xor v0, v1
+    return
+}
+; check: ldeoral w1, w0, [x0]
+
+function %atomic_rmw_smax_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 smax v0, v1
+    return
+}
+; check: ldsmaxal x1, x0, [x0]
+
+function %atomic_rmw_smax_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 smax v0, v1
+    return
+}
+; check: ldsmaxal w1, w0, [x0]
+
+function %atomic_rmw_umax_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 umax v0, v1
+    return
+}
+; check: ldumaxal x1, x0, [x0]
+
+function %atomic_rmw_umax_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 umax v0, v1
+    return
+}
+; check: ldumaxal w1, w0, [x0]
+
+function %atomic_rmw_smin_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 smin v0, v1
+    return
+}
+; check: ldsminal x1, x0, [x0]
+
+function %atomic_rmw_smin_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 smin v0, v1
+    return
+}
+; check: ldsminal w1, w0, [x0]
+
+function %atomic_rmw_umin_i64(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = atomic_rmw.i64 umin v0, v1
+    return
+}
+; check: lduminal x1, x0, [x0]
+
+function %atomic_rmw_umin_i32(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = atomic_rmw.i32 umin v0, v1
+    return
+}
+; check: lduminal w1, w0, [x0]

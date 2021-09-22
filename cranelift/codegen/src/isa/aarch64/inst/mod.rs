@@ -451,6 +451,19 @@ pub enum VecShiftImmOp {
     Sshr,
 }
 
+/// Atomic read-modify-write operations with acquire-release semantics
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum AtomicRMWOp {
+    Add,
+    Clr,
+    Eor,
+    Set,
+    Smax,
+    Smin,
+    Umax,
+    Umin,
+}
+
 /// An operation on the bits of a register. This can be paired with several instruction formats
 /// below (see `Inst`) in any combination.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -775,9 +788,20 @@ pub enum Inst {
     /// x27   (wr) old value
     /// x24   (wr) scratch reg; value afterwards has no meaning
     /// x28   (wr) scratch reg; value afterwards has no meaning
-    AtomicRMW {
+    AtomicRMWLoop {
         ty: Type, // I8, I16, I32 or I64
         op: inst_common::AtomicRmwOp,
+    },
+
+    /// An atomic read-modify-write operation. These instructions require the
+    /// Large System Extension (LSE) ISA support (FEAT_LSE). The instructions have
+    /// acquire-release semantics.
+    AtomicRMW {
+        op: AtomicRMWOp,
+        rs: Reg,
+        rt: Writable<Reg>,
+        rn: Reg,
+        ty: Type,
     },
 
     /// An atomic compare-and-swap operation. This instruction is sequentially consistent.
@@ -788,10 +812,10 @@ pub enum Inst {
         ty: Type,
     },
 
-    /// Similar to AtomicRMW, a compare-and-swap operation implemented using a load-linked
+    /// Similar to AtomicRMWLoop, a compare-and-swap operation implemented using a load-linked
     /// store-conditional loop.
     /// This instruction is sequentially consistent.
-    /// Note that the operand conventions, although very similar to AtomicRMW, are different:
+    /// Note that the operand conventions, although very similar to AtomicRMWLoop, are different:
     ///
     /// x25   (rd) address
     /// x26   (rd) expected value
@@ -1920,12 +1944,17 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::CCmpImm { rn, .. } => {
             collector.add_use(rn);
         }
-        &Inst::AtomicRMW { .. } => {
+        &Inst::AtomicRMWLoop { .. } => {
             collector.add_use(xreg(25));
             collector.add_use(xreg(26));
             collector.add_def(writable_xreg(24));
             collector.add_def(writable_xreg(27));
             collector.add_def(writable_xreg(28));
+        }
+        &Inst::AtomicRMW { rs, rt, rn, .. } => {
+            collector.add_use(rs);
+            collector.add_def(rt);
+            collector.add_use(rn);
         }
         &Inst::AtomicCAS { rs, rt, rn, .. } => {
             collector.add_mod(rs);
@@ -2562,8 +2591,18 @@ fn aarch64_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         &mut Inst::CCmpImm { ref mut rn, .. } => {
             map_use(mapper, rn);
         }
-        &mut Inst::AtomicRMW { .. } => {
+        &mut Inst::AtomicRMWLoop { .. } => {
             // There are no vregs to map in this insn.
+        }
+        &mut Inst::AtomicRMW {
+            ref mut rs,
+            ref mut rt,
+            ref mut rn,
+            ..
+        } => {
+            map_use(mapper, rs);
+            map_def(mapper, rt);
+            map_use(mapper, rn);
         }
         &mut Inst::AtomicCAS {
             ref mut rs,
@@ -3618,7 +3657,31 @@ impl Inst {
                 let cond = cond.show_rru(mb_rru);
                 format!("ccmp {}, {}, {}, {}", rn, imm, nzcv, cond)
             }
-            &Inst::AtomicRMW { ty, op, .. } => {
+            &Inst::AtomicRMW { rs, rt, rn, ty, op } => {
+                let op = match op {
+                    AtomicRMWOp::Add => "ldaddal",
+                    AtomicRMWOp::Clr => "ldclral",
+                    AtomicRMWOp::Eor => "ldeoral",
+                    AtomicRMWOp::Set => "ldsetal",
+                    AtomicRMWOp::Smax => "ldsmaxal",
+                    AtomicRMWOp::Umax => "ldumaxal",
+                    AtomicRMWOp::Smin => "ldsminal",
+                    AtomicRMWOp::Umin => "lduminal",
+                };
+
+                let size = OperandSize::from_ty(ty);
+                let rs = show_ireg_sized(rs, mb_rru, size);
+                let rt = show_ireg_sized(rt.to_reg(), mb_rru, size);
+                let rn = rn.show_rru(mb_rru);
+
+                let ty_suffix = match ty {
+                    I8 => "b",
+                    I16 => "h",
+                    _ => "",
+                };
+                format!("{}{} {}, {}, [{}]", op, ty_suffix, rs, rt, rn)
+            }
+            &Inst::AtomicRMWLoop { ty, op, .. } => {
                 format!(
                     "atomically {{ {}_bits_at_[x25]) {:?}= x26 ; x27 = old_value_at_[x25]; x24,x28 = trash }}",
                     ty.bits(), op)
