@@ -873,10 +873,37 @@ where
             let lanes = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
             assign(lanes[idx].clone())
         }
-        Opcode::VhighBits => unimplemented!("VhighBits"),
+        Opcode::VhighBits => {
+            // `ctrl_ty` controls the return type for this, so the input type
+            // must be retrieved via `inst_context`.
+            let lane_type = inst_context
+                .type_of(inst_context.args()[0])
+                .unwrap()
+                .lane_type();
+            let a = extractlanes(&arg(0)?, lane_type)?;
+            let mut result: i128 = 0;
+            for (i, val) in a.into_iter().enumerate() {
+                let val = val.reverse_bits()?.into_int()?; // MSB -> LSB
+                result |= (val & 1) << i;
+            }
+            assign(Value::int(result, ctrl_ty)?)
+        }
         Opcode::Vsplit => unimplemented!("Vsplit"),
         Opcode::Vconcat => unimplemented!("Vconcat"),
-        Opcode::Vselect => unimplemented!("Vselect"),
+        Opcode::Vselect => {
+            let c = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
+            let x = extractlanes(&arg(1)?, ctrl_ty.lane_type())?;
+            let y = extractlanes(&arg(2)?, ctrl_ty.lane_type())?;
+            let mut new_vec = SimdVec::new();
+            for (c, (x, y)) in c.into_iter().zip(x.into_iter().zip(y.into_iter())) {
+                if Value::eq(&c, &Value::int(0, ctrl_ty.lane_type())?)? {
+                    new_vec.push(y);
+                } else {
+                    new_vec.push(x);
+                }
+            }
+            assign(vectorizelanes(&new_vec, ctrl_ty)?)
+        }
         Opcode::VanyTrue => assign(fold_vector(
             arg(0)?,
             ctrl_ty,

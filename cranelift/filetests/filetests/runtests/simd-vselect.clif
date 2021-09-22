@@ -1,10 +1,9 @@
+test interpret
 test run
 ; target s390x TODO: Not yet implemented on s390x
 target aarch64
 set enable_simd
 target x86_64 machinst
-set enable_simd
-target x86_64 legacy haswell
 
 function %vselect_i8x16() -> i8x16 {
 block0:
@@ -45,3 +44,31 @@ block0:
     return v4
 }
 ; run: %vselect_i64x2() == [200 101]
+
+function %vselect_p_i8x16(b8x16, i8x16, i8x16) -> i8x16 {
+block0(v0: b8x16, v1: i8x16, v2: i8x16):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; run: %vselect_p_i8x16([true false true true true false false false true false true true true false false false], [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16], [17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32]) == [1 18 3 4 5 22 23 24 9 26 11 12 13 30 31 32]
+
+function %vselect_p_i16x8(b16x8, i16x8, i16x8) -> i16x8 {
+block0(v0: b16x8, v1: i16x8, v2: i16x8):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; run: %vselect_p_i16x8([true false true true true false false false], [1 2 3 4 5 6 7 8], [17 18 19 20 21 22 23 24]) == [1 18 3 4 5 22 23 24]
+
+function %vselect_p_i32x4(b32x4, i32x4, i32x4) -> i32x4 {
+block0(v0: b32x4, v1: i32x4, v2: i32x4):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; run: %vselect_p_i32x4([true false true true], [1 2 3 4], [100000 200000 300000 400000]) == [1 200000 3 4]
+
+function %vselect_p_i64x2(b64x2, i64x2, i64x2) -> i64x2 {
+block0(v0: b64x2, v1: i64x2, v2: i64x2):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; run: %vselect_p_i64x2([true false], [1 2], [100000000000 200000000000]) == [1 200000000000]
