@@ -1,0 +1,85 @@
+test interpret
+
+function %breduce_b8_b1(b8) -> b1 {
+block0(v0: b8):
+  v1 = breduce.b1 v0
+  return v1
+}
+; run: %breduce_b8_b1(true) == true
+; run: %breduce_b8_b1(false) == false
+
+
+function %breduce_b16_b1(b16) -> b1 {
+block0(v0: b16):
+  v1 = breduce.b1 v0
+  return v1
+}
+; run: %breduce_b16_b1(true) == true
+; run: %breduce_b16_b1(false) == false
+
+function %breduce_b16_b8(b16) -> b8 {
+block0(v0: b16):
+  v1 = breduce.b8 v0
+  return v1
+}
+; run: %breduce_b16_b8(true) == true
+; run: %breduce_b16_b8(false) == false
+
+
+function %breduce_b32_b1(b32) -> b1 {
+block0(v0: b32):
+  v1 = breduce.b1 v0
+  return v1
+}
+; run: %breduce_b32_b1(true) == true
+; run: %breduce_b32_b1(false) == false
+
+function %breduce_b32_b8(b32) -> b8 {
+block0(v0: b32):
+  v1 = breduce.b8 v0
+  return v1
+}
+; run: %breduce_b32_b8(true) == true
+; run: %breduce_b32_b8(false) == false
+
+function %breduce_b32_b16(b32) -> b16 {
+block0(v0: b32):
+  v1 = breduce.b16 v0
+  return v1
+}
+; run: %breduce_b32_b16(true) == true
+; run: %breduce_b32_b16(false) == false
+
+
+
+function %breduce_b64_b1(b64) -> b1 {
+block0(v0: b64):
+  v1 = breduce.b1 v0
+  return v1
+}
+; run: %breduce_b64_b1(true) == true
+; run: %breduce_b64_b1(false) == false
+
+function %breduce_b64_b8(b64) -> b8 {
+block0(v0: b64):
+  v1 = breduce.b8 v0
+  return v1
+}
+; run: %breduce_b64_b8(true) == true
+; run: %breduce_b64_b8(false) == false
+
+function %breduce_b64_b16(b64) -> b16 {
+block0(v0: b64):
+  v1 = breduce.b16 v0
+  return v1
+}
+; run: %breduce_b64_b16(true) == true
+; run: %breduce_b64_b16(false) == false
+
+function %breduce_b64_b32(b64) -> b32 {
+block0(v0: b64):
+  v1 = breduce.b32 v0
+  return v1
+}
+; run: %breduce_b64_b32(true) == true
+; run: %breduce_b64_b32(false) == false

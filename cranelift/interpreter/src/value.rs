@@ -277,11 +277,11 @@ impl Value for DataValue {
                 (DataValue::I64(n), types::I128) => DataValue::I128(n as i128),
                 (DataValue::B(b), t) if t.is_bool() => DataValue::B(b),
                 (DataValue::B(b), t) if t.is_int() => {
-                    let val = if b {
-                        // Bools are represented in memory as all 1's
-                        (1i128 << t.bits()) - 1
-                    } else {
-                        0
+                    // Bools are represented in memory as all 1's
+                    let val = match (b, t) {
+                        (true, types::I128) => -1,
+                        (true, t) => (1i128 << t.bits()) - 1,
+                        _ => 0,
                     };
                     DataValue::int(val, t)?
                 }
