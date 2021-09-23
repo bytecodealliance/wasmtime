@@ -1,4 +1,6 @@
 test interpret
+test run
+target aarch64
 
 function %bmask_b128_i128(b128) -> i128 {
 block0(v0: b128):

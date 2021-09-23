@@ -1,4 +1,6 @@
 test interpret
+test run
+target aarch64
 
 function %bextend_b1_b8(b1) -> b8 {
 block0(v0: b1):

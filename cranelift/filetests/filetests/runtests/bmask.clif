@@ -1,4 +1,6 @@
 test interpret
+test run
+target aarch64
 
 function %bmask_b64_i64(b64) -> i64 {
 block0(v0: b64):

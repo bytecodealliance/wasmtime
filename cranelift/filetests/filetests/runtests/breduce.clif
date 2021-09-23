@@ -1,4 +1,6 @@
 test interpret
+test run
+target aarch64
 
 function %breduce_b8_b1(b8) -> b1 {
 block0(v0: b8):

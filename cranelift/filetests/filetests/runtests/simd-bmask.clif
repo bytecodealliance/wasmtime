@@ -1,5 +1,6 @@
 test interpret
-
+test run
+target aarch64
 
 function %bmask_i8x16(b8x16) -> i8x16 {
 block0(v0: b8x16):
