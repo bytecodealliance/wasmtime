@@ -287,7 +287,18 @@ fn assert_error_matches(wasmtime: &anyhow::Error, v8: &str) {
             TrapCode::IntegerDivisionByZero => {
                 return verify_v8(&["divide by zero", "remainder by zero"])
             }
-            TrapCode::StackOverflow => return verify_v8(&["call stack size exceeded"]),
+            TrapCode::StackOverflow => {
+                return verify_v8(&[
+                    "call stack size exceeded",
+                    // Similar to the above comment in `UnreachableCodeReached`
+                    // if wasmtime hits a stack overflow but v8 ran all the way
+                    // to when the `unreachable` instruction was hit then that's
+                    // ok. This just means that wasmtime either has less optimal
+                    // codegen or different limits on the stack than v8 does,
+                    // which isn't an issue per-se.
+                    "unreachable",
+                ]);
+            }
             TrapCode::IndirectCallToNull => return verify_v8(&["null function"]),
             TrapCode::TableOutOfBounds => {
                 return verify_v8(&[
