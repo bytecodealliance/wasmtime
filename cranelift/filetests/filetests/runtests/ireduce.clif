@@ -1,3 +1,4 @@
+test interpret
 test run
 target aarch64
 target x86_64 machinst
@@ -53,6 +54,6 @@ block0(v0: i64):
   v1 = ireduce.i32 v0
   return v1
 }
-; run: %ireduce_i64_i16(0xFFFFFFFF_00000000) == 0x00000000
-; run: %ireduce_i64_i16(0x00000000_42424242) == 0x42424242
-; run: %ireduce_i64_i16(0xFFFFFFFF_FFFFFFFF) == 0xFFFFFFFF
+; run: %ireduce_i64_i32(0xFFFFFFFF_00000000) == 0x00000000
+; run: %ireduce_i64_i32(0x00000000_42424242) == 0x42424242
+; run: %ireduce_i64_i32(0xFFFFFFFF_FFFFFFFF) == 0xFFFFFFFF
