@@ -428,6 +428,14 @@ impl JITModule {
         self.memory.readonly.set_readonly();
         self.memory.code.set_readable_and_executable();
 
+        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+        {
+            let cmd: libc::c_int = 32; // MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE
+
+            // Ensure that no processor has fetched a stale instruction stream.
+            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
+        }
+
         for update in self.pending_got_updates.drain(..) {
             unsafe { update.entry.as_ref() }.store(update.ptr as *mut _, Ordering::SeqCst);
         }
@@ -487,6 +495,15 @@ impl JITModule {
             module.libcall_got_entries.insert(libcall, got_entry);
             let plt_entry = module.new_plt_entry(got_entry);
             module.libcall_plt_entries.insert(libcall, plt_entry);
+        }
+
+        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+        {
+            let cmd: libc::c_int = 64; // MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
+
+            // This is a requirement of the membarrier() call executed by
+            // the finalize_definitions() method.
+            unsafe { libc::syscall(libc::SYS_membarrier, cmd) };
         }
 
         module
