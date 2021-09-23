@@ -789,10 +789,13 @@ where
         | Opcode::ScalarToVector
         | Opcode::Breduce
         | Opcode::Bextend
-        | Opcode::Bint
-        | Opcode::Ireduce => assign(Value::convert(
+        | Opcode::Bint => assign(Value::convert(
             arg(0)?,
             ValueConversionKind::Exact(ctrl_ty),
+        )?),
+        Opcode::Ireduce => assign(Value::convert(
+            arg(0)?,
+            ValueConversionKind::Truncate(ctrl_ty),
         )?),
         Opcode::Snarrow | Opcode::Unarrow | Opcode::Uunarrow => {
             let arg0 = extractlanes(&arg(0)?, ctrl_ty.lane_type())?;
