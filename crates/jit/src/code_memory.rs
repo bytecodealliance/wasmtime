@@ -54,6 +54,15 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Self {
+        #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+        {
+            // This is a requirement of the `membarrier` call executed by the `publish` method.
+            rsix::process::membarrier(
+                rsix::process::MembarrierCommand::RegisterPrivateExpeditedSyncCore,
+            )
+            .unwrap();
+        }
+
         Self {
             mmap: ManuallyDrop::new(mmap),
             unwind_registration: ManuallyDrop::new(None),
@@ -158,6 +167,15 @@ impl CodeMemory {
             self.mmap
                 .make_executable(text_range.clone())
                 .expect("unable to make memory executable");
+
+            #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+            {
+                // Ensure that no processor has fetched a stale instruction stream.
+                rsix::process::membarrier(
+                    rsix::process::MembarrierCommand::PrivateExpeditedSyncCore,
+                )
+                .unwrap();
+            }
 
             // With all our memory set up use the platform-specific
             // `UnwindRegistration` implementation to inform the general
