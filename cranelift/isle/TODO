@@ -18,4 +18,3 @@
 
 - Ideas from discussion with fitzgen
   - Turn arg-polarity and exprs on extractors into purer "InstFormat"
-  - Extern types as associated types on Context trait
