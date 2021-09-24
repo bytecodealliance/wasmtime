@@ -3,7 +3,7 @@ use crate::instance::{InstanceData, InstancePre};
 use crate::store::StoreOpaque;
 use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
-    IntoFunc, Module, StoreContextMut, Trap, Val,
+    IntoFunc, Module, StoreContextMut, Trap, Val, ValRaw,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use log::warn;
@@ -310,6 +310,24 @@ impl<T> Linker<T> {
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
         let func = HostFunc::new(&self.engine, ty, func);
+        let key = self.import_key(module, Some(name));
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        Ok(self)
+    }
+
+    /// Creates a [`Func::new_unchecked`]-style function named in this linker.
+    ///
+    /// For more information see [`Linker::func_wrap`].
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub unsafe fn func_new_unchecked(
+        &mut self,
+        module: &str,
+        name: &str,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+    ) -> Result<&mut Self> {
+        let func = HostFunc::new_unchecked(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)

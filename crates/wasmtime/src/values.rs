@@ -1,9 +1,11 @@
 use crate::r#ref::ExternRef;
 use crate::store::StoreOpaque;
-use crate::{Func, ValType};
+use crate::{AsContextMut, Func, ValType};
 use anyhow::{bail, Result};
 use std::ptr;
-use wasmtime_runtime::{self as runtime, VMExternRef};
+use wasmtime_runtime::TableElement;
+
+pub use wasmtime_runtime::ValRaw;
 
 /// Possible runtime values that a WebAssembly module can either consume or
 /// produce.
@@ -93,55 +95,52 @@ impl Val {
         }
     }
 
-    pub(crate) unsafe fn write_value_without_gc(&self, store: &mut StoreOpaque, p: *mut u128) {
-        match *self {
-            Val::I32(i) => ptr::write(p as *mut i32, i),
-            Val::I64(i) => ptr::write(p as *mut i64, i),
-            Val::F32(u) => ptr::write(p as *mut u32, u),
-            Val::F64(u) => ptr::write(p as *mut u64, u),
-            Val::V128(b) => ptr::write(p as *mut u128, b),
-            Val::ExternRef(None) => ptr::write(p, 0),
-            Val::ExternRef(Some(ref x)) => {
-                let externref_ptr = x.inner.as_raw();
-                store.insert_vmexternref_without_gc(x.clone().inner);
-                ptr::write(p as *mut *mut u8, externref_ptr)
+    /// Convenience method to convert this [`Val`] into a [`ValRaw`].
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe for the reasons that [`ExternRef::to_raw`] and
+    /// [`Func::to_raw`] are unsafe.
+    pub unsafe fn to_raw(&self, store: impl AsContextMut) -> ValRaw {
+        match self {
+            Val::I32(i) => ValRaw { i32: *i },
+            Val::I64(i) => ValRaw { i64: *i },
+            Val::F32(u) => ValRaw { f32: *u },
+            Val::F64(u) => ValRaw { f64: *u },
+            Val::V128(b) => ValRaw { v128: *b },
+            Val::ExternRef(e) => {
+                let externref = match e {
+                    Some(e) => e.to_raw(store),
+                    None => 0,
+                };
+                ValRaw { externref }
             }
-            Val::FuncRef(f) => ptr::write(
-                p as *mut *mut runtime::VMCallerCheckedAnyfunc,
-                if let Some(f) = f {
-                    f.caller_checked_anyfunc(store).as_ptr()
-                } else {
-                    ptr::null_mut()
-                },
-            ),
+            Val::FuncRef(f) => {
+                let funcref = match f {
+                    Some(f) => f.to_raw(store),
+                    None => 0,
+                };
+                ValRaw { funcref }
+            }
         }
     }
 
-    pub(crate) unsafe fn read_value_from(
-        store: &mut StoreOpaque,
-        p: *const u128,
-        ty: ValType,
-    ) -> Val {
+    /// Convenience method to convert a [`ValRaw`] into a [`Val`].
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe for the reasons that [`ExternRef::from_raw`] and
+    /// [`Func::from_raw`] are unsafe. Additionaly there's no guarantee
+    /// otherwise that `raw` should have the type `ty` specified.
+    pub unsafe fn from_raw(store: impl AsContextMut, raw: ValRaw, ty: ValType) -> Val {
         match ty {
-            ValType::I32 => Val::I32(ptr::read(p as *const i32)),
-            ValType::I64 => Val::I64(ptr::read(p as *const i64)),
-            ValType::F32 => Val::F32(ptr::read(p as *const u32)),
-            ValType::F64 => Val::F64(ptr::read(p as *const u64)),
-            ValType::V128 => Val::V128(ptr::read(p as *const u128)),
-            ValType::ExternRef => {
-                let raw = ptr::read(p as *const *mut u8);
-                if raw.is_null() {
-                    Val::ExternRef(None)
-                } else {
-                    Val::ExternRef(Some(ExternRef {
-                        inner: VMExternRef::clone_from_raw(raw),
-                    }))
-                }
-            }
-            ValType::FuncRef => {
-                let func = ptr::read(p as *const *mut runtime::VMCallerCheckedAnyfunc);
-                from_checked_anyfunc(func, store)
-            }
+            ValType::I32 => Val::I32(raw.i32),
+            ValType::I64 => Val::I64(raw.i64),
+            ValType::F32 => Val::F32(raw.f32),
+            ValType::F64 => Val::F64(raw.f64),
+            ValType::V128 => Val::V128(raw.v128),
+            ValType::ExternRef => Val::ExternRef(ExternRef::from_raw(raw.externref)),
+            ValType::FuncRef => Val::FuncRef(Func::from_raw(store, raw.funcref)),
         }
     }
 
@@ -189,25 +188,21 @@ impl Val {
         self,
         store: &mut StoreOpaque,
         ty: ValType,
-    ) -> Result<runtime::TableElement> {
+    ) -> Result<TableElement> {
         match (self, ty) {
             (Val::FuncRef(Some(f)), ValType::FuncRef) => {
                 if !f.comes_from_same_store(store) {
                     bail!("cross-`Store` values are not supported in tables");
                 }
-                Ok(runtime::TableElement::FuncRef(
+                Ok(TableElement::FuncRef(
                     f.caller_checked_anyfunc(store).as_ptr(),
                 ))
             }
-            (Val::FuncRef(None), ValType::FuncRef) => {
-                Ok(runtime::TableElement::FuncRef(ptr::null_mut()))
-            }
+            (Val::FuncRef(None), ValType::FuncRef) => Ok(TableElement::FuncRef(ptr::null_mut())),
             (Val::ExternRef(Some(x)), ValType::ExternRef) => {
-                Ok(runtime::TableElement::ExternRef(Some(x.inner)))
+                Ok(TableElement::ExternRef(Some(x.inner)))
             }
-            (Val::ExternRef(None), ValType::ExternRef) => {
-                Ok(runtime::TableElement::ExternRef(None))
-            }
+            (Val::ExternRef(None), ValType::ExternRef) => Ok(TableElement::ExternRef(None)),
             _ => bail!("value does not match table element type"),
         }
     }
@@ -292,25 +287,4 @@ impl From<u128> for Val {
     fn from(val: u128) -> Val {
         Val::V128(val)
     }
-}
-
-pub(crate) fn into_checked_anyfunc(
-    val: Val,
-    store: &mut StoreOpaque,
-) -> Result<*mut wasmtime_runtime::VMCallerCheckedAnyfunc> {
-    if !val.comes_from_same_store(store) {
-        bail!("cross-`Store` values are not supported");
-    }
-    Ok(match val {
-        Val::FuncRef(None) => ptr::null_mut(),
-        Val::FuncRef(Some(f)) => f.caller_checked_anyfunc(store).as_ptr(),
-        _ => bail!("val is not funcref"),
-    })
-}
-
-pub(crate) unsafe fn from_checked_anyfunc(
-    anyfunc: *mut wasmtime_runtime::VMCallerCheckedAnyfunc,
-    store: &mut StoreOpaque,
-) -> Val {
-    Val::FuncRef(Func::from_caller_checked_anyfunc(store, anyfunc))
 }

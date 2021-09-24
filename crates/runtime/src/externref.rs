@@ -344,6 +344,7 @@ impl VMExternRef {
     ///  Nor does this method increment the reference count. You must ensure
     ///  that `self` (or some other clone of `self`) stays alive until
     ///  `clone_from_raw` is called.
+    #[inline]
     pub fn as_raw(&self) -> *mut u8 {
         let ptr = self.0.cast::<u8>().as_ptr();
         ptr

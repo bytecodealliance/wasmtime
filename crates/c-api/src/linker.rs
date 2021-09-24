@@ -1,7 +1,6 @@
-use crate::func::c_callback_to_rust_fn;
 use crate::{
     bad_utf8, handle_result, wasm_engine_t, wasm_functype_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_func_callback_t, wasmtime_module_t, CStoreContextMut,
+    wasmtime_extern_t, wasmtime_module_t, CStoreContextMut,
 };
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
@@ -64,15 +63,37 @@ pub unsafe extern "C" fn wasmtime_linker_define_func(
     name: *const u8,
     name_len: usize,
     ty: &wasm_functype_t,
-    callback: wasmtime_func_callback_t,
+    callback: crate::wasmtime_func_callback_t,
     data: *mut c_void,
     finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
 ) -> Option<Box<wasmtime_error_t>> {
     let ty = ty.ty().ty.clone();
     let module = to_str!(module, module_len);
     let name = to_str!(name, name_len);
-    let cb = c_callback_to_rust_fn(callback, data, finalizer);
+    let cb = crate::func::c_callback_to_rust_fn(callback, data, finalizer);
     handle_result(linker.linker.func_new(module, name, ty, cb), |_linker| ())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wasmtime_linker_define_func_unchecked(
+    linker: &mut wasmtime_linker_t,
+    module: *const u8,
+    module_len: usize,
+    name: *const u8,
+    name_len: usize,
+    ty: &wasm_functype_t,
+    callback: crate::wasmtime_func_unchecked_callback_t,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut std::ffi::c_void)>,
+) -> Option<Box<wasmtime_error_t>> {
+    let ty = ty.ty().ty.clone();
+    let module = to_str!(module, module_len);
+    let name = to_str!(name, name_len);
+    let cb = crate::func::c_unchecked_callback_to_rust_fn(callback, data, finalizer);
+    handle_result(
+        linker.linker.func_new_unchecked(module, name, ty, cb),
+        |_linker| (),
+    )
 }
 
 #[cfg(feature = "wasi")]

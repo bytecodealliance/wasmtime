@@ -790,10 +790,28 @@ impl VMContext {
     }
 }
 
+/// A "raw" and unsafe representation of a WebAssembly value.
+///
+/// This is provided for use with the `Func::new_unchecked` and
+/// `Func::call_unchecked` APIs. In general it's unlikely you should be using
+/// this from Rust, rather using APIs like `Func::wrap` and `TypedFunc::call`.
+#[allow(missing_docs)]
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union ValRaw {
+    pub i32: i32,
+    pub i64: i64,
+    pub f32: u32,
+    pub f64: u64,
+    pub v128: u128,
+    pub funcref: usize,
+    pub externref: usize,
+}
+
 /// Trampoline function pointer type.
 pub type VMTrampoline = unsafe extern "C" fn(
     *mut VMContext,        // callee vmctx
     *mut VMContext,        // caller vmctx
     *const VMFunctionBody, // function we're actually calling
-    *mut u128,             // space for arguments and return values
+    *mut ValRaw,           // space for arguments and return values
 );

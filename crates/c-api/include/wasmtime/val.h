@@ -63,6 +63,29 @@ WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_clone(wasmtime_externre
  */
 WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_externref_t *ref);
 
+/**
+ * \brief Converts a raw `externref` value coming from #wasmtime_val_raw_t into
+ * a #wasmtime_externref_t.
+ *
+ * Note that the returned #wasmtime_externref_t is an owned value that must be
+ * deleted via #wasmtime_externref_delete by the caller if it is non-null.
+ */
+WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_context_t *context, size_t raw);
+
+/**
+ * \brief Converts a #wasmtime_externref_t to a raw value suitable for storing
+ * into a #wasmtime_val_raw_t.
+ *
+ * Note that the returned underlying value is not tracked by Wasmtime's garbage
+ * collector until it enters WebAssembly. This means that a GC may release the
+ * context's reference to the raw value, making the raw value invalid within the
+ * context of the store. Do not perform a GC between calling this function and
+ * passing it to WebAssembly.
+ */
+WASM_API_EXTERN size_t wasmtime_externref_to_raw(
+    wasmtime_context_t *context,
+    const wasmtime_externref_t *ref);
+
 /// \brief Discriminant stored in #wasmtime_val::kind
 typedef uint8_t wasmtime_valkind_t;
 /// \brief Value of #wasmtime_valkind_t meaning that #wasmtime_val_t is an i32
@@ -116,6 +139,43 @@ typedef union wasmtime_valunion {
   /// Field used if #wasmtime_val_t::kind is #WASMTIME_V128
   wasmtime_v128 v128;
 } wasmtime_valunion_t;
+
+/**
+ * \typedef wasmtime_val_raw_t
+ * \brief Convenience alias for #wasmtime_val_raw
+ *
+ * \union wasmtime_val_raw
+ * \brief Container for possible wasm values.
+ *
+ * This type is used on conjunction with #wasmtime_func_new_unchecked as well
+ * as #wasmtime_func_call_unchecked. Instances of this type do not have type
+ * information associated with them, it's up to the embedder to figure out
+ * how to interpret the bits contained within, often using some other channel
+ * to determine the type.
+ */
+typedef union wasmtime_val_raw {
+  /// Field for when this val is a WebAssembly `i32` value.
+  int32_t i32;
+  /// Field for when this val is a WebAssembly `i64` value.
+  int64_t i64;
+  /// Field for when this val is a WebAssembly `f32` value.
+  float32_t f32;
+  /// Field for when this val is a WebAssembly `f64` value.
+  float64_t f64;
+  /// Field for when this val is a WebAssembly `v128` value.
+  wasmtime_v128 v128;
+  /// Field for when this val is a WebAssembly `funcref` value.
+  ///
+  /// If this is set to 0 then it's a null funcref, otherwise this must be
+  /// passed to `wasmtime_func_from_raw` to determine the `wasmtime_func_t`.
+  size_t funcref;
+  /// Field for when this val is a WebAssembly `externref` value.
+  ///
+  /// If this is set to 0 then it's a null externref, otherwise this must be
+  /// passed to `wasmtime_externref_from_raw` to determine the
+  /// `wasmtime_externref_t`.
+  size_t externref;
+} wasmtime_val_raw_t;
 
 /**
  * \typedef wasmtime_val_t
