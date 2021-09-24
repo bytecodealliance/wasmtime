@@ -2397,7 +2397,15 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // cmp xm, #0
             // cset xm, ne
 
-            let size = VectorSize::from_ty(ctx.input_ty(insn, 0));
+            let s = VectorSize::from_ty(src_ty);
+            let size = if s == VectorSize::Size64x2 {
+                // `vall_true` with 64-bit elements is handled elsewhere.
+                debug_assert_ne!(op, Opcode::VallTrue);
+
+                VectorSize::Size32x4
+            } else {
+                s
+            };
 
             if op == Opcode::VanyTrue {
                 ctx.emit(Inst::VecRRR {

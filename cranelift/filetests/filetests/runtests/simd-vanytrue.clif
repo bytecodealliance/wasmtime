@@ -1,7 +1,7 @@
 test interpret
 test run
+target aarch64
 target x86_64 machinst
-; TODO: The AArch64 backend is producing an illegal instruction for b64x2. See: #3304
 
 function %vany_true_b8x16(b8x16) -> b1 {
 block0(v0: b8x16):
