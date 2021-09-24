@@ -66,6 +66,9 @@ WASM_API_EXTERN void wasmtime_externref_delete(wasmtime_externref_t *ref);
 /**
  * \brief Converts a raw `externref` value coming from #wasmtime_val_raw_t into
  * a #wasmtime_externref_t.
+ *
+ * Note that the returned #wasmtime_externref_t is an owned value that must be
+ * deleted via #wasmtime_externref_delete by the caller if it is non-null.
  */
 WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_context_t *context, size_t raw);
 
@@ -73,12 +76,15 @@ WASM_API_EXTERN wasmtime_externref_t *wasmtime_externref_from_raw(wasmtime_conte
  * \brief Converts a #wasmtime_externref_t to a raw value suitable for storing
  * into a #wasmtime_val_raw_t.
  *
- * Note that after this function is called callers must not execute GC within
- * the store or the raw value returned here will become invalid.
+ * Note that the returned underlying value is not tracked by Wasmtime's garbage
+ * collector until it enters WebAssembly. This means that a GC may release the
+ * context's reference to the raw value, making the raw value invalid within the
+ * context of the store. Do not perform a GC between calling this function and
+ * passing it to WebAssembly.
  */
 WASM_API_EXTERN size_t wasmtime_externref_to_raw(
     wasmtime_context_t *context,
-    wasmtime_externref_t *ref);
+    const wasmtime_externref_t *ref);
 
 /// \brief Discriminant stored in #wasmtime_val::kind
 typedef uint8_t wasmtime_valkind_t;
