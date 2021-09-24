@@ -1853,6 +1853,13 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let from_bits = ty_bits(from_ty) as u8;
             let to_bits = ty_bits(to_ty) as u8;
 
+            if from_ty.is_vector() && (from_bits != 128 || from_bits != to_bits) {
+                return Err(CodegenError::Unsupported(format!(
+                    "{}: Unsupported type: {:?}",
+                    op, from_ty
+                )));
+            }
+
             let src = put_input_in_regs(ctx, inputs[0]);
             let dst = get_output_reg(ctx, outputs[0]);
 
