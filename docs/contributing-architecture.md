@@ -120,7 +120,7 @@ their implications in Wasmtime:
 * `wasmtime::Module` - this is the representation of a compiled WebAssembly
   module. At this time Wasmtime always assumes that a wasm module is always
   compiled to native JIT code. `Module` holds the results of said compilation,
-  and currently the Cranelift can be used for compiling. It is a goal of
+  and currently Cranelift can be used for compiling. It is a goal of
   Wasmtime to support other modes of representing modules but those are not
   implemented today just yet, only Cranelift is implemented and supported.
 

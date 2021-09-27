@@ -30,7 +30,7 @@ enum wasmtime_strategy_enum { // Strategy
   /// to Cranelift.
   WASMTIME_STRATEGY_AUTO,
 
-  /// Indicates that Cranelift will unconditionally use Cranelift to compile
+  /// Indicates that Wasmtime will unconditionally use Cranelift to compile
   /// WebAssembly code.
   WASMTIME_STRATEGY_CRANELIFT,
 };
