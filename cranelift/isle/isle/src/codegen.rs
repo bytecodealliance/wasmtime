@@ -423,14 +423,12 @@ impl TrieNode {
 /// the calling term).
 #[derive(Debug)]
 struct TermFunctionBuilder {
-    root_term: TermId,
     trie: TrieNode,
 }
 
 impl TermFunctionBuilder {
-    fn new(root_term: TermId) -> Self {
+    fn new() -> Self {
         TermFunctionBuilder {
-            root_term,
             trie: TrieNode::Empty,
         }
     }
@@ -479,7 +477,7 @@ impl<'a> TermFunctionsBuilder<'a> {
             );
             self.builders_by_term
                 .entry(root_term)
-                .or_insert_with(|| TermFunctionBuilder::new(root_term))
+                .or_insert_with(|| TermFunctionBuilder::new())
                 .add_rule(prio, pattern.clone(), expr.clone());
         }
     }
