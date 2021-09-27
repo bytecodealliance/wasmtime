@@ -75,7 +75,6 @@ members = [
   "cranelift",
   "crates/bench-api",
   "crates/c-api",
-  "crates/lightbeam/wasmtime",
   "crates/misc/run-examples",
   "examples/fib-debug/wasm",
   "examples/wasi/wasm",
@@ -83,13 +82,12 @@ members = [
   "fuzz",
 ]
 exclude = [
-  'crates/wasi-common/WASI/tools/witx-cli', 
+  'crates/wasi-common/WASI/tools/witx-cli',
   'docs/rust_wasi_markdown_parser'
   ]
 
 [features]
 default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation", "wasi-nn"]
-lightbeam = ["wasmtime/lightbeam"]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]

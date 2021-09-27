@@ -45,12 +45,10 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle-generate",
     "wiggle-macro",
     // wasmtime
-    "lightbeam",
     "wasmtime-fiber",
     "wasmtime-environ",
     "wasmtime-runtime",
     "wasmtime-cranelift",
-    "wasmtime-lightbeam",
     "wasmtime-jit",
     "wasmtime-cache",
     "wasmtime",
@@ -325,8 +323,7 @@ fn verify(crates: &[Crate]) {
             .arg("--manifest-path")
             .arg(&krate.manifest)
             .env("CARGO_TARGET_DIR", "./target");
-        if krate.name.contains("lightbeam")
-            || krate.name == "witx"
+        if krate.name == "witx"
             || krate.name.contains("wasi-nn")
             || krate.name.contains("peepmatic")
         {

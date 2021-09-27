@@ -70,8 +70,8 @@ Hello, world!
   quickly generate high-quality machine code at runtime.
 
 * **Configurable**. Whether you need to precompile your wasm ahead of time,
-  generate code blazingly fast with Lightbeam, or interpret it at runtime,
-  Wasmtime has you covered for all your wasm-executing needs.
+  or interpret it at runtime, Wasmtime has you covered for all your
+  wasm-executing needs.
 
 * **WASI**. Wasmtime supports a rich set of APIs for interacting with the host
   environment through the [WASI standard](https://wasi.dev).

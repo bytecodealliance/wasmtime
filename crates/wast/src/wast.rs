@@ -202,10 +202,6 @@ impl<T> WastContext<T> {
         {
             return Ok(());
         }
-        if cfg!(feature = "lightbeam") {
-            println!("TODO: Check the assert_trap message: {}", expected);
-            return Ok(());
-        }
         bail!("expected '{}', got '{}'", expected, actual)
     }
 

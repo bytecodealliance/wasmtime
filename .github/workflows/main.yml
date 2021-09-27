@@ -131,7 +131,6 @@ jobs:
     # Check some feature combinations of the `wasmtime` crate
     - run: cargo check -p wasmtime --no-default-features
     - run: cargo check -p wasmtime --no-default-features --features wat
-    - run: cargo check -p wasmtime --no-default-features --features lightbeam
     - run: cargo check -p wasmtime --no-default-features --features jitdump
     - run: cargo check -p wasmtime --no-default-features --features vtune
     - run: cargo check -p wasmtime --no-default-features --features cache
@@ -307,7 +306,7 @@ jobs:
         RUST_BACKTRACE: 1
       if: matrix.target == ''
 
-    # Build and test all features except for lightbeam
+    # Build and test all features
     - run: ./ci/run-tests.sh --locked
       env:
         RUST_BACKTRACE: 1
@@ -326,16 +325,6 @@ jobs:
         cargo test --features uffd -p wasmtime-cli pooling_allocator
         cargo test --features uffd -p wasmtime-cli wast::Cranelift
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-      env:
-        RUST_BACKTRACE: 1
-
-    # Build and test lightbeam. Note that
-    # Lightbeam tests fail right now, but we don't want to block on that.
-    - run: cargo build --package lightbeam
-      if: matrix.target != 'aarch64-unknown-linux-gnu' && matrix.target != 's390x-unknown-linux-gnu'
-    - run: cargo test --package lightbeam
-      if: matrix.target != 'aarch64-unknown-linux-gnu' && matrix.target != 's390x-unknown-linux-gnu'
-      continue-on-error: true
       env:
         RUST_BACKTRACE: 1
 
