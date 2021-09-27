@@ -234,10 +234,7 @@ enum TrieNode {
 
 impl TrieNode {
     fn is_empty(&self) -> bool {
-        match self {
-            &TrieNode::Empty => true,
-            _ => false,
-        }
+        matches!(self, &TrieNode::Empty)
     }
 
     fn insert(
