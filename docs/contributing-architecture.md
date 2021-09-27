@@ -120,11 +120,9 @@ their implications in Wasmtime:
 * `wasmtime::Module` - this is the representation of a compiled WebAssembly
   module. At this time Wasmtime always assumes that a wasm module is always
   compiled to native JIT code. `Module` holds the results of said compilation,
-  and currently the Cranelift and Lightbeam modes can be used for compiling. It
-  is a goal of Wasmtime to support other modes of representing modules but those
-  are not implemented today just yet. Additionally the Lightbeam compiler has
-  not received maintenance in a long time, so effectively everyone uses
-  Cranelift.
+  and currently Cranelift can be used for compiling. It is a goal of
+  Wasmtime to support other modes of representing modules but those are not
+  implemented today just yet, only Cranelift is implemented and supported.
 
 * `wasmtime_environ::Module` - this is a descriptor of a wasm module's type and
   structure without holding any actual JIT code. An instance of this type is

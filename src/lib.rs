@@ -99,16 +99,7 @@ use anyhow::{bail, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
-use wasmtime::{Config, ProfilingStrategy, Strategy};
-
-fn pick_compilation_strategy(cranelift: bool, lightbeam: bool) -> Result<Strategy> {
-    Ok(match (lightbeam, cranelift) {
-        (true, false) => Strategy::Lightbeam,
-        (false, true) => Strategy::Cranelift,
-        (false, false) => Strategy::Auto,
-        (true, true) => bail!("Can't enable --cranelift and --lightbeam at the same time"),
-    })
-}
+use wasmtime::{Config, ProfilingStrategy};
 
 fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
     Ok(match (jitdump, vtune) {
@@ -154,10 +145,6 @@ struct CommonOptions {
     /// Use specified configuration file
     #[structopt(long, parse(from_os_str), value_name = "CONFIG_PATH")]
     config: Option<PathBuf>,
-
-    /// Use Cranelift for all compilation
-    #[structopt(long, conflicts_with = "lightbeam")]
-    cranelift: bool,
 
     /// Disable logging.
     #[structopt(long, conflicts_with = "log_to_files")]
@@ -214,10 +201,6 @@ struct CommonOptions {
     /// Enables or disables WASI modules
     #[structopt(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
     wasi_modules: Option<WasiModules>,
-
-    /// Use Lightbeam for all compilation
-    #[structopt(long, conflicts_with = "cranelift")]
-    lightbeam: bool,
 
     /// Generate jitdump file (supported on --features=profiling build)
     #[structopt(long, conflicts_with = "vtune")]
@@ -294,10 +277,8 @@ impl CommonOptions {
     fn config(&self, target: Option<&str>) -> Result<Config> {
         let mut config = Config::new();
 
-        // Set the compiler and target before setting any cranelift options,
-        // since the strategy determines which compiler is in use and the target
-        // will reset any target-specific options.
-        config.strategy(pick_compilation_strategy(self.cranelift, self.lightbeam)?)?;
+        // Set the target before setting any cranelift options, since the
+        // target will reset any target-specific options.
         if let Some(target) = target {
             config.target(target)?;
         }

@@ -1333,12 +1333,6 @@ impl Config {
 fn compiler_builder(strategy: Strategy) -> Result<Box<dyn CompilerBuilder>> {
     match strategy {
         Strategy::Auto | Strategy::Cranelift => Ok(wasmtime_cranelift::builder()),
-        #[cfg(feature = "lightbeam")]
-        Strategy::Lightbeam => unimplemented!(),
-        #[cfg(not(feature = "lightbeam"))]
-        Strategy::Lightbeam => {
-            anyhow::bail!("lightbeam compilation strategy wasn't enabled at compile time");
-        }
     }
 }
 
@@ -1430,20 +1424,13 @@ pub enum Strategy {
     /// `wasmtime` crate itself should make the decision about what the best
     /// code generator for a wasm module is.
     ///
-    /// Currently this always defaults to Cranelift, but the default value will
+    /// Currently this always defaults to Cranelift, but the default value may
     /// change over time.
     Auto,
 
     /// Currently the default backend, Cranelift aims to be a reasonably fast
     /// code generator which generates high quality machine code.
     Cranelift,
-
-    /// A single-pass code generator that is faster than Cranelift but doesn't
-    /// produce as high-quality code.
-    ///
-    /// To successfully pass this argument to [`Config::strategy`] the
-    /// `lightbeam` feature of this crate must be enabled.
-    Lightbeam,
 }
 
 /// Possible optimization levels for the Cranelift codegen backend.

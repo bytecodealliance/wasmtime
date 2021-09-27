@@ -59,9 +59,6 @@ default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelif
 # precompiled WebAssembly modules.
 cranelift = ["wasmtime-cranelift"]
 
-# Deprecated, does not actually do anything any more.
-lightbeam = []
-
 # Enables support for the `perf` jitdump profiler
 jitdump = ["wasmtime-jit/jitdump"]
 

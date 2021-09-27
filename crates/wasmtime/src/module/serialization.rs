@@ -805,26 +805,6 @@ mod test {
         Ok(())
     }
 
-    #[cfg(feature = "lightbeam")]
-    #[test]
-    fn test_compilation_strategy_mismatch() -> Result<()> {
-        let engine = Engine::default();
-        let module = Module::new(&engine, "(module)")?;
-
-        let mut serialized = SerializedModule::new(&module);
-        serialized.metadata.strategy = CompilationStrategy::Lightbeam;
-
-        match serialized.into_module(&engine) {
-            Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(
-                e.to_string(),
-                "Module was compiled with strategy 'Cranelift'",
-            ),
-        }
-
-        Ok(())
-    }
-
     #[test]
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();

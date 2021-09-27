@@ -253,7 +253,7 @@ pub fn differential_execution(
     let configs: Vec<_> = match configs.iter().map(|c| c.to_wasmtime_config()).collect() {
         Ok(cs) => cs,
         // If the config is trying to use something that was turned off at
-        // compile time, eg lightbeam, just continue to the next fuzz input.
+        // compile time just continue to the next fuzz input.
         Err(_) => return,
     };
 
