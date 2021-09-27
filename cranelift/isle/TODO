@@ -18,3 +18,5 @@
 
 - Ideas from discussion with fitzgen
   - Turn arg-polarity and exprs on extractors into purer "InstFormat"
+  - Emit two contexts: an immutable context for inputs and a mutable context for
+    outputs
