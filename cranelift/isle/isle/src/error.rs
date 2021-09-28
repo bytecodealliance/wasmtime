@@ -10,8 +10,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(thiserror::Error, Diagnostic, Clone, Debug)]
 pub enum Error {
     /// An I/O error.
-    #[error(transparent)]
-    IoError(Arc<std::io::Error>),
+    #[error("{context}")]
+    IoError {
+        /// The underlying I/O error.
+        #[source]
+        error: Arc<std::io::Error>,
+        /// The context explaining what caused the I/O error.
+        context: String,
+    },
 
     /// The input ISLE source has a parse error.
     #[error("parse error: {msg}")]
@@ -53,9 +59,13 @@ pub enum Error {
     Errors(#[related] Vec<Error>),
 }
 
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Error::IoError(Arc::new(e))
+impl Error {
+    /// Create a `isle::Error` from the given I/O error and context.
+    pub fn from_io(error: std::io::Error, context: impl Into<String>) -> Self {
+        Error::IoError {
+            error: Arc::new(error),
+            context: context.into(),
+        }
     }
 }
 

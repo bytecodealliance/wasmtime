@@ -1,6 +1,23 @@
-use clap::{App, Arg};
 use isle::{compile, lexer, parser};
-use miette::{IntoDiagnostic, Result};
+use miette::{Context, IntoDiagnostic, Result};
+use std::{
+    fs,
+    io::{self, Write},
+    path::PathBuf,
+};
+use structopt::StructOpt;
+
+#[derive(StructOpt)]
+struct Opts {
+    /// The output file to write the generated Rust code to. `stdout` is used if
+    /// this is not given.
+    #[structopt(short, long, parse(from_os_str))]
+    output: Option<PathBuf>,
+
+    /// The input ISLE DSL source files.
+    #[structopt(parse(from_os_str))]
+    inputs: Vec<PathBuf>,
+}
 
 fn main() -> Result<()> {
     let _ = env_logger::try_init();
@@ -15,46 +32,33 @@ fn main() -> Result<()> {
         )
     }));
 
-    let matches = App::new("isle")
-        .version(env!("CARGO_PKG_VERSION"))
-        .author("Chris Fallin <chris@cfallin.org>")
-        .about("Instruction selection logic engine (ISLE) code generator")
-        .arg(
-            Arg::with_name("input")
-                .short("i")
-                .long("input")
-                .value_name("FILE.isle")
-                .takes_value(true)
-                .multiple(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("output")
-                .short("o")
-                .long("output")
-                .value_name("FILE.rs")
-                .takes_value(true)
-                .required(true),
-        )
-        .get_matches();
+    let opts = Opts::from_args();
 
-    let input_files = matches
-        .values_of("input")
-        .unwrap()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>();
-    let output_file = matches.value_of("output").unwrap();
-
-    let lexer = lexer::Lexer::from_files(input_files)?;
+    let lexer = lexer::Lexer::from_files(opts.inputs)?;
     let mut parser = parser::Parser::new(lexer);
     let defs = parser.parse_defs()?;
     let code = compile::compile(&defs)?;
 
-    {
-        use std::io::Write;
-        let mut f = std::fs::File::create(output_file).into_diagnostic()?;
-        writeln!(&mut f, "{}", code).into_diagnostic()?;
-    }
+    let stdout = io::stdout();
+    let (mut output, output_name): (Box<dyn Write>, _) = match &opts.output {
+        Some(f) => {
+            let output = Box::new(
+                fs::File::create(f)
+                    .into_diagnostic()
+                    .with_context(|| format!("failed to create '{}'", f.display()))?,
+            );
+            (output, f.display().to_string())
+        }
+        None => {
+            let output = Box::new(stdout.lock());
+            (output, "<stdout>".to_string())
+        }
+    };
+
+    output
+        .write_all(code.as_bytes())
+        .into_diagnostic()
+        .with_context(|| format!("failed to write to '{}'", output_name))?;
 
     Ok(())
 }

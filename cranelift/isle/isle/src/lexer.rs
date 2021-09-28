@@ -1,7 +1,8 @@
 //! Lexer for the ISLE language.
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 use std::borrow::Cow;
+use std::path::Path;
 use std::sync::Arc;
 
 /// The lexer.
@@ -90,35 +91,36 @@ impl<'a> Lexer<'a> {
     }
 
     /// Create a new lexer from the given files.
-    pub fn from_files<S>(filenames: impl IntoIterator<Item = S>) -> Result<Lexer<'a>>
+    pub fn from_files<P>(file_paths: impl IntoIterator<Item = P>) -> Result<Lexer<'a>>
     where
-        S: AsRef<str>,
+        P: AsRef<Path>,
     {
-        let filenames: Vec<Arc<str>> = filenames.into_iter().map(|f| f.as_ref().into()).collect();
-        assert!(!filenames.is_empty());
+        let mut filenames = Vec::<Arc<str>>::new();
+        let mut file_texts = Vec::<Arc<str>>::new();
 
-        let file_contents: Vec<Arc<str>> = filenames
-            .iter()
-            .map(|f| {
-                use std::io::Read;
-                let mut f = std::fs::File::open(&**f)?;
-                let mut s = String::new();
-                f.read_to_string(&mut s)?;
-                Ok(s.into())
-            })
-            .collect::<Result<_>>()?;
+        for f in file_paths {
+            let f = f.as_ref();
+
+            filenames.push(f.display().to_string().into());
+
+            let s = std::fs::read_to_string(f)
+                .map_err(|e| Error::from_io(e, format!("failed to read file: {}", f.display())))?;
+            file_texts.push(s.into());
+        }
+
+        assert!(!filenames.is_empty());
 
         let mut file_starts = vec![];
         let mut buf = String::new();
-        for file in &file_contents {
+        for text in &file_texts {
             file_starts.push(buf.len());
-            buf += &file;
+            buf += &text;
             buf += "\n";
         }
 
         let mut l = Lexer {
             filenames,
-            file_texts: file_contents,
+            file_texts,
             buf: Cow::Owned(buf.into_bytes()),
             file_starts,
             pos: Pos {
