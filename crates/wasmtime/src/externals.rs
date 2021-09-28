@@ -551,7 +551,7 @@ impl Table {
         let init = init.into_table_element(store, ty)?;
         let table = self.wasmtime_table(store);
         unsafe {
-            match (*table).grow(delta, init, store.limiter()) {
+            match (*table).grow(delta, init, store) {
                 Some(size) => {
                     let vm = (*table).vmtable();
                     *store[self.0].definition = vm;

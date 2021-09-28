@@ -1,5 +1,5 @@
 use crate::imports::Imports;
-use crate::instance::{Instance, InstanceHandle, ResourceLimiter, RuntimeMemoryCreator};
+use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
@@ -58,13 +58,13 @@ pub struct InstanceAllocationRequest<'a> {
     /// are a bit of a lie. This is done purely so a store can learn about
     /// itself when it gets called as a host function, and additionally so this
     /// runtime can access internals as necessary (such as the
-    /// VMExternRefActivationsTable or the ResourceLimiter).
+    /// VMExternRefActivationsTable or the resource limiter methods).
     ///
     /// Note that this ends up being a self-pointer to the instance when stored.
     /// The reason is that the instance itself is then stored within the store.
     /// We use a number of `PhantomPinned` declarations to indicate this to the
     /// compiler. More info on this in `wasmtime/src/store.rs`
-    pub store: Option<*mut dyn Store>,
+    pub store: StorePtr,
 
     /// A list of all wasm data that can be referenced by the module that
     /// will be allocated. The `Module` given here has active/passive data
@@ -75,6 +75,37 @@ pub struct InstanceAllocationRequest<'a> {
     /// responsibility of the callee when allocating to ensure that this data
     /// outlives the instance.
     pub wasm_data: *const [u8],
+}
+
+/// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
+/// so that the function to create a &mut dyn Store is a method on a member of
+/// InstanceAllocationRequest, rather than on a &mut InstanceAllocationRequest
+/// itself, because several use-sites require a split mut borrow on the
+/// InstanceAllocationRequest.
+pub struct StorePtr(Option<*mut dyn Store>);
+impl StorePtr {
+    /// A pointer to no Store.
+    pub fn empty() -> Self {
+        Self(None)
+    }
+    /// A pointer to a Store.
+    pub fn new(ptr: *mut dyn Store) -> Self {
+        Self(Some(ptr))
+    }
+    /*
+    /// Update an empty StorePtr to point to a Store.
+    pub fn set(&mut self, ptr: *mut dyn Store) {
+        self.0 = Some(ptr)
+    }
+    */
+    /// Use the StorePtr as a mut ref to the Store.
+    // XXX should this be an unsafe fn? is it always safe at a use site?
+    pub(crate) fn get(&mut self) -> Option<&mut dyn Store> {
+        match self.0 {
+            Some(ptr) => Some(unsafe { &mut *ptr }),
+            None => None,
+        }
+    }
 }
 
 /// An link error while instantiating a module.
@@ -430,7 +461,7 @@ fn initialize_instance(
 }
 
 unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
-    if let Some(store) = req.store {
+    if let Some(store) = req.store.0 {
         *instance.interrupts() = (*store).vminterrupts();
         *instance.externref_activations_table() = (*store).externref_activations_table().0;
         instance.set_store(store);
@@ -581,17 +612,6 @@ pub struct OnDemandInstanceAllocator {
     stack_size: usize,
 }
 
-// rustc is quite strict with the lifetimes when dealing with mutable borrows,
-// so this is a little helper to get a shorter lifetime on `Option<&mut T>`
-fn borrow_limiter<'a>(
-    limiter: &'a mut Option<&mut dyn ResourceLimiter>,
-) -> Option<&'a mut dyn ResourceLimiter> {
-    match limiter {
-        Some(limiter) => Some(&mut **limiter),
-        None => None,
-    }
-}
-
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
     pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
@@ -605,15 +625,20 @@ impl OnDemandInstanceAllocator {
 
     fn create_tables(
         module: &Module,
-        mut limiter: Option<&mut dyn ResourceLimiter>,
+        store: &mut StorePtr,
     ) -> Result<PrimaryMap<DefinedTableIndex, Table>, InstantiationError> {
         let num_imports = module.num_imported_tables;
         let mut tables: PrimaryMap<DefinedTableIndex, _> =
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
             tables.push(
-                Table::new_dynamic(table, borrow_limiter(&mut limiter))
-                    .map_err(InstantiationError::Resource)?,
+                Table::new_dynamic(
+                    table,
+                    store
+                        .get()
+                        .expect("if module has table plans, store is not empty"),
+                )
+                .map_err(InstantiationError::Resource)?,
             );
         }
         Ok(tables)
@@ -622,7 +647,7 @@ impl OnDemandInstanceAllocator {
     fn create_memories(
         &self,
         module: &Module,
-        mut limiter: Option<&mut dyn ResourceLimiter>,
+        store: &mut StorePtr,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -633,8 +658,14 @@ impl OnDemandInstanceAllocator {
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
             memories.push(
-                Memory::new_dynamic(plan, creator, borrow_limiter(&mut limiter))
-                    .map_err(InstantiationError::Resource)?,
+                Memory::new_dynamic(
+                    plan,
+                    creator,
+                    store
+                        .get()
+                        .expect("if module has memory plans, store is not empty"),
+                )
+                .map_err(InstantiationError::Resource)?,
             );
         }
         Ok(memories)
@@ -656,9 +687,8 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let mut limiter = req.store.and_then(|s| (*s).limiter());
-        let memories = self.create_memories(&req.module, borrow_limiter(&mut limiter))?;
-        let tables = Self::create_tables(&req.module, borrow_limiter(&mut limiter))?;
+        let memories = self.create_memories(&req.module, &mut req.store)?;
+        let tables = Self::create_tables(&req.module, &mut req.store)?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 

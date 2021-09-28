@@ -93,8 +93,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
-    OnDemandInstanceAllocator, SignalHandler, VMCallerCheckedAnyfunc, VMContext, VMExternRef,
-    VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
+    OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedAnyfunc, VMContext,
+    VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
 };
 
 mod context;
@@ -197,10 +197,16 @@ pub struct StoreInner<T> {
     /// Generic metadata about the store that doesn't need access to `T`.
     inner: StoreOpaque,
 
-    limiter: Option<Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>>,
+    limiter: Option<ResourceLimiterInner<T>>,
     call_hook: Option<Box<dyn FnMut(&mut T, CallHook) -> Result<(), crate::Trap> + Send + Sync>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
+}
+
+enum ResourceLimiterInner<T> {
+    Sync(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiter) + Send + Sync>),
+    #[cfg(feature = "async")]
+    Async(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync) + Send + Sync>),
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
@@ -402,7 +408,7 @@ impl<T> Store<T> {
                     shared_signatures: None.into(),
                     imports: Default::default(),
                     module: Arc::new(wasmtime_environ::Module::default()),
-                    store: None,
+                    store: StorePtr::empty(),
                     wasm_data: &[],
                 })
                 .expect("failed to allocate default callee")
@@ -418,11 +424,11 @@ impl<T> Store<T> {
                 modules: ModuleRegistry::default(),
                 host_trampolines: HashMap::default(),
                 instance_count: 0,
-                instance_limit: wasmtime_runtime::DEFAULT_INSTANCE_LIMIT,
+                instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
                 memory_count: 0,
-                memory_limit: wasmtime_runtime::DEFAULT_MEMORY_LIMIT,
+                memory_limit: crate::DEFAULT_MEMORY_LIMIT,
                 table_count: 0,
-                table_limit: wasmtime_runtime::DEFAULT_TABLE_LIMIT,
+                table_limit: crate::DEFAULT_TABLE_LIMIT,
                 fuel_adj: 0,
                 #[cfg(feature = "async")]
                 async_state: AsyncState {
@@ -525,7 +531,36 @@ impl<T> Store<T> {
         innermost.memory_limit = memory_limit;
 
         // Save the limiter accessor function:
-        inner.limiter = Some(Box::new(limiter));
+        inner.limiter = Some(ResourceLimiterInner::Sync(Box::new(limiter)));
+    }
+
+    /// Configures the [`ResourceLimiterAsync`](crate::ResourceLimiterAsync) used to limit
+    /// resource creation within this [`Store`]. Must be used with an async `Store`!.
+    ///
+    /// Note that this limiter is only used to limit the creation/growth of
+    /// resources in the future, this does not retroactively attempt to apply
+    /// limits to the [`Store`].
+    pub fn limiter_async(
+        &mut self,
+        mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        debug_assert!(self.inner.async_support());
+        // Apply the limits on instances, tables, and memory given by the limiter:
+        let inner = &mut self.inner;
+        let (instance_limit, table_limit, memory_limit) = {
+            let l = limiter(&mut inner.data);
+            (l.instances(), l.tables(), l.memories())
+        };
+        let innermost = &mut inner.inner;
+        innermost.instance_limit = instance_limit;
+        innermost.table_limit = table_limit;
+        innermost.memory_limit = memory_limit;
+
+        // Save the limiter accessor function:
+        inner.limiter = Some(ResourceLimiterInner::Async(Box::new(limiter)));
     }
 
     /// Configure a function that runs on calls and returns between WebAssembly
@@ -870,11 +905,6 @@ impl<T> StoreInner<T> {
     #[inline]
     fn data_mut(&mut self) -> &mut T {
         &mut self.data
-    }
-
-    pub fn limiter(&mut self) -> Option<&mut dyn crate::limits::ResourceLimiter> {
-        let accessor = self.limiter.as_mut()?;
-        Some(accessor(&mut self.data))
     }
 
     pub fn call_hook(&mut self, s: CallHook) -> Result<(), Trap> {
@@ -1496,8 +1526,81 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         (&mut inner.externref_activations_table, &inner.modules)
     }
 
-    fn limiter(&mut self) -> Option<&mut dyn wasmtime_runtime::ResourceLimiter> {
-        <Self>::limiter(self)
+    fn limiter_memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> bool {
+        // Need to borrow async_cx before the mut borrow of the limiter.
+        // self.async_cx() panicks when used with a non-async store, so
+        // wrap this in an option.
+        #[cfg(feature = "async")]
+        let async_cx = if self.async_support() {
+            Some(self.async_cx())
+        } else {
+            None
+        };
+        match self.limiter {
+            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
+                limiter(&mut self.data).memory_growing(current, desired, maximum)
+            }
+            #[cfg(feature = "async")]
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
+                async_cx
+                    .expect("ResourceLimiterAsync requires async Store")
+                    .block_on(
+                        limiter(&mut self.data)
+                            .memory_growing(current, desired, maximum)
+                            .as_mut(),
+                    )
+                    .expect("FIXME idk how to deal with a trap here!")
+            },
+            None => true,
+        }
+    }
+
+    fn limiter_memory_grow_failed(&mut self, error: &anyhow::Error) {
+        match self.limiter {
+            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
+                limiter(&mut self.data).memory_grow_failed(error)
+            }
+            #[cfg(feature = "async")]
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
+                limiter(&mut self.data).memory_grow_failed(error)
+            }
+            None => {}
+        }
+    }
+
+    fn limiter_table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
+        // Need to borrow async_cx before the mut borrow of the limiter.
+        // self.async_cx() panicks when used with a non-async store, so
+        // wrap this in an option.
+        #[cfg(feature = "async")]
+        let async_cx = if self.async_support() {
+            Some(self.async_cx())
+        } else {
+            None
+        };
+
+        match self.limiter {
+            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
+                limiter(&mut self.data).table_growing(current, desired, maximum)
+            }
+            #[cfg(feature = "async")]
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
+                async_cx
+                    .expect("ResourceLimiterAsync requires async Store")
+                    .block_on(
+                        limiter(&mut self.data)
+                            .table_growing(current, desired, maximum)
+                            .as_mut(),
+                    )
+                    .expect("FIXME idk how to deal with a trap here!")
+            },
+            None => true,
+        }
     }
 
     fn out_of_gas(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {

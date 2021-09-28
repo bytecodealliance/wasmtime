@@ -3,7 +3,7 @@
 //! `Table` is to WebAssembly tables what `LinearMemory` is to WebAssembly linear memories.
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
-use crate::{ResourceLimiter, Trap, VMExternRef};
+use crate::{Store, Trap, VMExternRef};
 use anyhow::{bail, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
@@ -137,11 +137,8 @@ fn wasm_to_table_type(ty: WasmType) -> Result<TableElementType> {
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(
-        plan: &TablePlan,
-        limiter: Option<&mut dyn ResourceLimiter>,
-    ) -> Result<Self> {
-        Self::limit_new(plan, limiter)?;
+    pub fn new_dynamic(plan: &TablePlan, store: &mut dyn Store) -> Result<Self> {
+        Self::limit_new(plan, store)?;
         let elements = vec![0; plan.table.minimum as usize];
         let ty = wasm_to_table_type(plan.table.wasm_ty)?;
         let maximum = plan.table.maximum;
@@ -157,9 +154,9 @@ impl Table {
     pub fn new_static(
         plan: &TablePlan,
         data: &'static mut [usize],
-        limiter: Option<&mut dyn ResourceLimiter>,
+        store: &mut dyn Store,
     ) -> Result<Self> {
-        Self::limit_new(plan, limiter)?;
+        Self::limit_new(plan, store)?;
         let size = plan.table.minimum;
         let ty = wasm_to_table_type(plan.table.wasm_ty)?;
         let data = match plan.table.maximum {
@@ -170,14 +167,12 @@ impl Table {
         Ok(Table::Static { data, size, ty })
     }
 
-    fn limit_new(plan: &TablePlan, limiter: Option<&mut dyn ResourceLimiter>) -> Result<()> {
-        if let Some(limiter) = limiter {
-            if !limiter.table_growing(0, plan.table.minimum, plan.table.maximum) {
-                bail!(
-                    "table minimum size of {} elements exceeds table limits",
-                    plan.table.minimum
-                );
-            }
+    fn limit_new(plan: &TablePlan, store: &mut dyn Store) -> Result<()> {
+        if !store.limiter_table_growing(0, plan.table.minimum, plan.table.maximum) {
+            bail!(
+                "table minimum size of {} elements exceeds table limits",
+                plan.table.minimum
+            );
         }
         Ok(())
     }
@@ -292,15 +287,13 @@ impl Table {
         &mut self,
         delta: u32,
         init_value: TableElement,
-        limiter: Option<&mut dyn ResourceLimiter>,
+        store: &mut dyn Store,
     ) -> Option<u32> {
         let old_size = self.size();
         let new_size = old_size.checked_add(delta)?;
 
-        if let Some(limiter) = limiter {
-            if !limiter.table_growing(old_size, new_size, self.maximum()) {
-                return None;
-            }
+        if !store.limiter_table_growing(old_size, new_size, self.maximum()) {
+            return None;
         }
 
         if let Some(max) = self.maximum() {

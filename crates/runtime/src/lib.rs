@@ -42,8 +42,7 @@ pub use crate::imports::Imports;
 pub use crate::instance::{
     InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
     InstantiationError, LinkError, ModuleLimits, OnDemandInstanceAllocator,
-    PoolingAllocationStrategy, PoolingInstanceAllocator, ResourceLimiter, DEFAULT_INSTANCE_LIMIT,
-    DEFAULT_MEMORY_LIMIT, DEFAULT_TABLE_LIMIT,
+    PoolingAllocationStrategy, PoolingInstanceAllocator, StorePtr,
 };
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
@@ -91,8 +90,18 @@ pub unsafe trait Store {
         &mut self,
     ) -> (&mut VMExternRefActivationsTable, &dyn ModuleInfoLookup);
 
-    /// Returns a reference to the store's limiter for limiting resources, if any.
-    fn limiter(&mut self) -> Option<&mut dyn ResourceLimiter>;
+    /// Callback invoked to allow the store's resource limiter to reject a memory grow operation.
+    fn limiter_memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> bool;
+    /// Callback invoked to notify the store's resource limiter that a memory grow operation has
+    /// failed.
+    fn limiter_memory_grow_failed(&mut self, error: &anyhow::Error);
+    /// Callback invoked to allow the store's resource limiter to reject a table grow operation.
+    fn limiter_table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// Callback invoked whenever fuel runs out by a wasm instance. If an error
     /// is returned that's raised as a trap. Otherwise wasm execution will

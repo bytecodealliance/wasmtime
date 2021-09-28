@@ -300,7 +300,6 @@ impl ResourceLimiter for MemoryContext {
         self.wasm_memory_used = desired;
         true
     }
-
     fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
         true
     }
@@ -401,11 +400,9 @@ impl ResourceLimiter for MemoryGrowFailureDetector {
         self.desired = desired;
         true
     }
-
     fn memory_grow_failed(&mut self, err: &anyhow::Error) {
         self.error = Some(err.to_string());
     }
-
     fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
         true
     }

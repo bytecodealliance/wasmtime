@@ -15,7 +15,7 @@ use wasmtime_environ::{
 };
 use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, VMContext, VMFunctionBody,
+    Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
     VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
 };
 
@@ -734,7 +734,7 @@ impl<'a> Instantiator<'a> {
                         imports: self.cur.build(),
                         shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),
-                        store: Some(store.traitobj()),
+                        store: StorePtr::new(store.traitobj()),
                         wasm_data: compiled_module.wasm_data(),
                     })?;
 

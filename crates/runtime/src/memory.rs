@@ -4,8 +4,8 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
-use crate::ResourceLimiter;
-use anyhow::{bail, format_err, Error, Result};
+use crate::Store;
+use anyhow::{bail, format_err, Result};
 use more_asserts::{assert_ge, assert_le};
 use std::convert::TryFrom;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
@@ -212,33 +212,14 @@ pub enum Memory {
     Dynamic(Box<dyn RuntimeLinearMemory>),
 }
 
-fn memory_growing(
-    limiter: &mut Option<&mut dyn ResourceLimiter>,
-    current: usize,
-    desired: usize,
-    maximum: Option<usize>,
-) -> bool {
-    match limiter {
-        Some(ref mut l) => l.memory_growing(current, desired, maximum),
-        None => true,
-    }
-}
-
-fn memory_grow_failed(limiter: &mut Option<&mut dyn ResourceLimiter>, error: &Error) {
-    match limiter {
-        Some(l) => l.memory_grow_failed(error),
-        None => {}
-    }
-}
-
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
     pub fn new_dynamic(
         plan: &MemoryPlan,
         creator: &dyn RuntimeMemoryCreator,
-        limiter: Option<&mut dyn ResourceLimiter>,
+        store: &mut dyn Store,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, limiter)?;
+        let (minimum, maximum) = Self::limit_new(plan, store)?;
         Ok(Memory::Dynamic(creator.new_memory(plan, minimum, maximum)?))
     }
 
@@ -247,9 +228,9 @@ impl Memory {
         plan: &MemoryPlan,
         base: &'static mut [u8],
         make_accessible: fn(*mut u8, usize) -> Result<()>,
-        limiter: Option<&mut dyn ResourceLimiter>,
+        store: &mut dyn Store,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, limiter)?;
+        let (minimum, maximum) = Self::limit_new(plan, store)?;
 
         let base = match maximum {
             Some(max) if max < base.len() => &mut base[..max],
@@ -269,15 +250,11 @@ impl Memory {
         })
     }
 
-    /// Calls the `limiter`, if specified, to optionally prevent a memory from
-    /// being allocated.
+    /// Calls the `store`'s limiter to optionally prevent a memory from being allocated.
     ///
     /// Returns the minimum size and optional maximum size of the memory, in
     /// bytes.
-    fn limit_new(
-        plan: &MemoryPlan,
-        mut limiter: Option<&mut dyn ResourceLimiter>,
-    ) -> Result<(usize, Option<usize>)> {
+    fn limit_new(plan: &MemoryPlan, store: &mut dyn Store) -> Result<(usize, Option<usize>)> {
         // Sanity-check what should already be true from wasm module validation.
         let absolute_max = if plan.memory.memory64 {
             WASM64_MAX_PAGES
@@ -291,7 +268,7 @@ impl Memory {
         // allocate, which is our entire address space minus a wasm page. That
         // shouldn't ever actually work in terms of an allocation because
         // presumably the kernel wants *something* for itself, but this is used
-        // to pass to the `limiter` specified, if present, for a requested size
+        // to pass to the `store`'s limiter for a requested size
         // to approximate the scale of the request that the wasm module is
         // making. This is necessary because the limiter works on `usize` bytes
         // whereas we're working with possibly-overflowing `u64` calculations
@@ -302,7 +279,7 @@ impl Memory {
 
         // If the minimum memory size overflows the size of our own address
         // space, then we can't satisfy this request, but defer the error to
-        // later so the `limiter` can be informed that an effective oom is
+        // later so the `store` can be informed that an effective oom is
         // happening.
         let minimum = plan
             .memory
@@ -332,13 +309,13 @@ impl Memory {
             maximum = usize::try_from(1u64 << 32).ok();
         }
 
-        // Inform the limiter what's about to happen. This will let the limiter
+        // Inform the store's limiter what's about to happen. This will let the limiter
         // reject anything if necessary, and this also guarantees that we should
         // call the limiter for all requested memories, even if our `minimum`
         // calculation overflowed. This means that the `minimum` we're informing
         // the limiter is lossy and may not be 100% accurate, but for now the
-        // expected uses of `limiter` means that's ok.
-        if !memory_growing(&mut limiter, 0, minimum.unwrap_or(absolute_max), maximum) {
+        // expected uses of limiter means that's ok.
+        if !store.limiter_memory_growing(0, minimum.unwrap_or(absolute_max), maximum) {
             bail!(
                 "memory minimum size of {} pages exceeds memory limits",
                 plan.memory.minimum
@@ -400,11 +377,7 @@ impl Memory {
     ///
     /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
     /// this unsafety.
-    pub unsafe fn grow(
-        &mut self,
-        delta_pages: u64,
-        mut limiter: Option<&mut dyn ResourceLimiter>,
-    ) -> Option<usize> {
+    pub unsafe fn grow(&mut self, delta_pages: u64, store: &mut dyn Store) -> Option<usize> {
         let old_byte_size = self.byte_size();
         // Wasm spec: when growing by 0 pages, always return the current size.
         if delta_pages == 0 {
@@ -428,15 +401,15 @@ impl Memory {
         };
 
         let maximum = self.maximum_byte_size();
-        // Limiter gets first chance to reject memory_growing.
-        if !memory_growing(&mut limiter, old_byte_size, new_byte_size, maximum) {
+        // Store limiter gets first chance to reject memory_growing.
+        if !store.limiter_memory_growing(old_byte_size, new_byte_size, maximum) {
             return None;
         }
 
         // Never exceed maximum, even if limiter permitted it.
         if let Some(max) = maximum {
             if new_byte_size > max {
-                memory_grow_failed(&mut limiter, &format_err!("Memory maximum size exceeded"));
+                store.limiter_memory_grow_failed(&format_err!("Memory maximum size exceeded"));
                 return None;
             }
         }
@@ -458,7 +431,7 @@ impl Memory {
             } => {
                 // Never exceed static memory size
                 if new_byte_size > base.len() {
-                    memory_grow_failed(&mut limiter, &format_err!("static memory size exceeded"));
+                    store.limiter_memory_grow_failed(&format_err!("static memory size exceeded"));
                     return None;
                 }
 
@@ -467,13 +440,13 @@ impl Memory {
                     base.as_mut_ptr().add(old_byte_size),
                     new_byte_size - old_byte_size,
                 );
-                r.map_err(|e| memory_grow_failed(&mut limiter, &e)).ok()?;
+                r.map_err(|e| store.limiter_memory_grow_failed(&e)).ok()?;
 
                 *size = new_byte_size;
             }
             Memory::Dynamic(mem) => {
                 let r = mem.grow_to(new_byte_size);
-                r.map_err(|e| memory_grow_failed(&mut limiter, &e)).ok()?;
+                r.map_err(|e| store.limiter_memory_grow_failed(&e)).ok()?;
             }
         }
         Some(old_byte_size)

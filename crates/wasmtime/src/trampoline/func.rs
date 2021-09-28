@@ -9,7 +9,8 @@ use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureInd
 use wasmtime_jit::{CodeMemory, MmapVec};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    OnDemandInstanceAllocator, VMContext, VMFunctionBody, VMSharedSignatureIndex, VMTrampoline,
+    OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMSharedSignatureIndex,
+    VMTrampoline,
 };
 
 struct TrampolineState<F> {
@@ -131,7 +132,7 @@ pub unsafe fn create_raw_function(
             imports: Imports::default(),
             shared_signatures: sig.into(),
             host_state,
-            store: None,
+            store: StorePtr::empty(),
             wasm_data: &[],
         })?,
     )
