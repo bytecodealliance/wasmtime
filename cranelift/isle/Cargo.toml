@@ -1,2 +1,6 @@
 [workspace]
-members = [ "isle", "islec" ]
+members = [
+  "./fuzz",
+  "./isle",
+  "./islec",
+]
