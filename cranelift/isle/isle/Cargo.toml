@@ -7,3 +7,4 @@ license = "Apache-2.0 WITH LLVM-exception"
 
 [dependencies]
 log = "0.4"
+thiserror = "1.0.29"

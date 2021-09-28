@@ -1,12 +1,18 @@
 //! Error types.
 
+use std::sync::Arc;
+
 use crate::lexer::Pos;
-use std::fmt;
 
 /// Errors produced by ISLE.
-#[derive(Clone, Debug)]
+#[derive(thiserror::Error, Clone, Debug)]
 pub enum Error {
+    /// An I/O error.
+    #[error(transparent)]
+    IoError(Arc<std::io::Error>),
+
     /// The input ISLE source has an error.
+    #[error("{}:{}:{}: {}", .filename, .pos.line, .pos.col, .msg)]
     CompileError {
         /// The error message.
         msg: String,
@@ -15,43 +21,10 @@ pub enum Error {
         /// The position within the file that the error occurs at.
         pos: Pos,
     },
-    /// An error from elsewhere in the system.
-    SystemError {
-        /// The error message.
-        msg: String,
-    },
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Error::CompileError {
-                ref msg,
-                ref filename,
-                pos,
-            } => {
-                write!(f, "{}:{}:{}: error: {}", filename, pos.line, pos.col, msg)
-            }
-            &Error::SystemError { ref msg } => {
-                write!(f, "{}", msg)
-            }
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl std::convert::From<std::fmt::Error> for Error {
-    fn from(e: std::fmt::Error) -> Error {
-        Error::SystemError {
-            msg: format!("{}", e),
-        }
-    }
-}
-impl std::convert::From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Error {
-        Error::SystemError {
-            msg: format!("{}", e),
-        }
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IoError(Arc::new(e))
     }
 }
