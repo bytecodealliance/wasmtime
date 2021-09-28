@@ -51,8 +51,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn pos(&self) -> Option<Pos> {
-        self.lexer.peek().map(|(pos, _)| *pos)
+    fn pos(&self) -> Pos {
+        self.lexer
+            .peek()
+            .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
     }
 
     fn is_lparen(&self) -> bool {
@@ -137,7 +139,7 @@ impl<'a> Parser<'a> {
             "extractor" => Def::Extractor(self.parse_etor()?),
             "extern" => Def::Extern(self.parse_extern()?),
             s => {
-                return Err(self.error(pos.unwrap(), format!("Unexpected identifier: {}", s)));
+                return Err(self.error(pos, format!("Unexpected identifier: {}", s)));
             }
         };
         self.rparen()?;
@@ -170,7 +172,7 @@ impl<'a> Parser<'a> {
     fn parse_ident(&mut self) -> ParseResult<Ident> {
         let pos = self.pos();
         let s = self.symbol()?;
-        self.str_to_ident(pos.unwrap(), &s)
+        self.str_to_ident(pos, &s)
     }
 
     fn parse_const(&mut self) -> ParseResult<Ident> {
@@ -181,7 +183,7 @@ impl<'a> Parser<'a> {
             Ok(Ident(s.to_string(), ident.1))
         } else {
             Err(self.error(
-                pos.unwrap(),
+                pos,
                 "Not a constant identifier; must start with a '$'".to_string(),
             ))
         }
@@ -200,7 +202,7 @@ impl<'a> Parser<'a> {
             name,
             is_extern,
             ty,
-            pos: pos.unwrap(),
+            pos,
         })
     }
 
@@ -211,7 +213,6 @@ impl<'a> Parser<'a> {
             self.symbol()?;
             let primitive_ident = self.parse_ident()?;
             self.rparen()?;
-            let pos = pos.unwrap();
             Ok(TypeValue::Primitive(primitive_ident, pos))
         } else if self.is_sym_str("enum") {
             self.symbol()?;
@@ -221,16 +222,15 @@ impl<'a> Parser<'a> {
                 variants.push(variant);
             }
             self.rparen()?;
-            let pos = pos.unwrap();
             Ok(TypeValue::Enum(variants, pos))
         } else {
-            Err(self.error(pos.unwrap(), "Unknown type definition".to_string()))
+            Err(self.error(pos, "Unknown type definition".to_string()))
         }
     }
 
     fn parse_type_variant(&mut self) -> ParseResult<Variant> {
         if self.is_sym() {
-            let pos = self.pos().unwrap();
+            let pos = self.pos();
             let name = self.parse_ident()?;
             Ok(Variant {
                 name,
@@ -246,7 +246,6 @@ impl<'a> Parser<'a> {
                 fields.push(self.parse_type_field()?);
             }
             self.rparen()?;
-            let pos = pos.unwrap();
             Ok(Variant { name, fields, pos })
         }
     }
@@ -257,7 +256,6 @@ impl<'a> Parser<'a> {
         let name = self.parse_ident()?;
         let ty = self.parse_ident()?;
         self.rparen()?;
-        let pos = pos.unwrap();
         Ok(Field { name, ty, pos })
     }
 
@@ -278,7 +276,7 @@ impl<'a> Parser<'a> {
             term,
             arg_tys,
             ret_ty,
-            pos: pos.unwrap(),
+            pos,
         })
     }
 
@@ -288,11 +286,7 @@ impl<'a> Parser<'a> {
             self.symbol()?;
             let term = self.parse_ident()?;
             let func = self.parse_ident()?;
-            Ok(Extern::Constructor {
-                term,
-                func,
-                pos: pos.unwrap(),
-            })
+            Ok(Extern::Constructor { term, func, pos })
         } else if self.is_sym_str("extractor") {
             self.symbol()?;
 
@@ -317,9 +311,7 @@ impl<'a> Parser<'a> {
                         self.symbol()?;
                         pol.push(ArgPolarity::Output);
                     } else {
-                        return Err(
-                            self.error(pos.unwrap(), "Invalid argument polarity".to_string())
-                        );
+                        return Err(self.error(pos, "Invalid argument polarity".to_string()));
                     }
                 }
                 self.rparen()?;
@@ -330,7 +322,7 @@ impl<'a> Parser<'a> {
             Ok(Extern::Extractor {
                 term,
                 func,
-                pos: pos.unwrap(),
+                pos,
                 arg_polarity,
                 infallible,
             })
@@ -339,14 +331,10 @@ impl<'a> Parser<'a> {
             let pos = self.pos();
             let name = self.parse_const()?;
             let ty = self.parse_ident()?;
-            Ok(Extern::Const {
-                name,
-                ty,
-                pos: pos.unwrap(),
-            })
+            Ok(Extern::Const { name, ty, pos })
         } else {
             Err(self.error(
-                pos.unwrap(),
+                pos,
                 "Invalid extern: must be (extern constructor ...) or (extern extractor ...)"
                     .to_string(),
             ))
@@ -367,7 +355,7 @@ impl<'a> Parser<'a> {
             term,
             args,
             template,
-            pos: pos.unwrap(),
+            pos,
         })
     }
 
@@ -383,7 +371,7 @@ impl<'a> Parser<'a> {
         Ok(Rule {
             pattern,
             expr,
-            pos: pos.unwrap(),
+            pos,
             prio,
         })
     }
@@ -391,21 +379,17 @@ impl<'a> Parser<'a> {
     fn parse_pattern(&mut self) -> ParseResult<Pattern> {
         let pos = self.pos();
         if self.is_int() {
-            let pos = pos.unwrap();
             Ok(Pattern::ConstInt {
                 val: self.int()?,
                 pos,
             })
         } else if self.is_const() {
-            let pos = pos.unwrap();
             let val = self.parse_const()?;
             Ok(Pattern::ConstPrim { val, pos })
         } else if self.is_sym_str("_") {
-            let pos = pos.unwrap();
             self.symbol()?;
             Ok(Pattern::Wildcard { pos })
         } else if self.is_sym() {
-            let pos = pos.unwrap();
             let s = self.symbol()?;
             if s.starts_with("=") {
                 let s = &s[1..];
@@ -426,7 +410,6 @@ impl<'a> Parser<'a> {
                 }
             }
         } else if self.is_lparen() {
-            let pos = pos.unwrap();
             self.lparen()?;
             if self.is_sym_str("and") {
                 self.symbol()?;
@@ -446,7 +429,7 @@ impl<'a> Parser<'a> {
                 Ok(Pattern::Term { sym, args, pos })
             }
         } else {
-            Err(self.error(pos.unwrap(), "Unexpected pattern".into()))
+            Err(self.error(pos, "Unexpected pattern".into()))
         }
     }
 
@@ -462,7 +445,6 @@ impl<'a> Parser<'a> {
     fn parse_expr(&mut self) -> ParseResult<Expr> {
         let pos = self.pos();
         if self.is_lparen() {
-            let pos = pos.unwrap();
             self.lparen()?;
             if self.is_sym_str("let") {
                 self.symbol()?;
@@ -486,34 +468,28 @@ impl<'a> Parser<'a> {
                 Ok(Expr::Term { sym, args, pos })
             }
         } else if self.is_sym_str("#t") {
-            let pos = pos.unwrap();
             self.symbol()?;
             Ok(Expr::ConstInt { val: 1, pos })
         } else if self.is_sym_str("#f") {
-            let pos = pos.unwrap();
             self.symbol()?;
             Ok(Expr::ConstInt { val: 0, pos })
         } else if self.is_const() {
-            let pos = pos.unwrap();
             let val = self.parse_const()?;
             Ok(Expr::ConstPrim { val, pos })
         } else if self.is_sym() {
-            let pos = pos.unwrap();
             let name = self.parse_ident()?;
             Ok(Expr::Var { name, pos })
         } else if self.is_int() {
-            let pos = pos.unwrap();
             let val = self.int()?;
             Ok(Expr::ConstInt { val, pos })
         } else {
-            Err(self.error(pos.unwrap(), "Invalid expression".into()))
+            Err(self.error(pos, "Invalid expression".into()))
         }
     }
 
     fn parse_letdef(&mut self) -> ParseResult<LetDef> {
         let pos = self.pos();
         self.lparen()?;
-        let pos = pos.unwrap();
         let var = self.parse_ident()?;
         let ty = self.parse_ident()?;
         let val = Box::new(self.parse_expr()?);
