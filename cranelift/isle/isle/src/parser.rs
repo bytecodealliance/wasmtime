@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
             if !f(peek) {
                 return Err(self.error(pos, format!("Unexpected token {:?}", peek)));
             }
-            Ok(self.lexer.next().unwrap().1)
+            Ok(self.lexer.next()?.unwrap().1)
         } else {
             Err(self.error(self.lexer.pos(), "Unexpected EOF".to_string()))
         }

@@ -1,6 +1,6 @@
 //! Lexer for the ISLE language.
 
-use crate::error::{Error, Result};
+use crate::error::{Error, Result, Source};
 use std::borrow::Cow;
 use std::path::Path;
 use std::sync::Arc;
@@ -72,7 +72,7 @@ pub enum Token {
 
 impl<'a> Lexer<'a> {
     /// Create a new lexer for the given source contents and filename.
-    pub fn from_str(s: &'a str, filename: &'a str) -> Lexer<'a> {
+    pub fn from_str(s: &'a str, filename: &'a str) -> Result<Lexer<'a>> {
         let mut l = Lexer {
             filenames: vec![filename.into()],
             file_texts: vec![s.into()],
@@ -86,8 +86,8 @@ impl<'a> Lexer<'a> {
             },
             lookahead: None,
         };
-        l.reload();
-        l
+        l.reload()?;
+        Ok(l)
     }
 
     /// Create a new lexer from the given files.
@@ -131,7 +131,7 @@ impl<'a> Lexer<'a> {
             },
             lookahead: None,
         };
-        l.reload();
+        l.reload()?;
         Ok(l)
     }
 
@@ -162,7 +162,18 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn next_token(&mut self) -> Option<(Pos, Token)> {
+    fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
+        Error::ParseError {
+            msg: msg.into(),
+            src: Source::new(
+                self.filenames[pos.file].clone(),
+                self.file_texts[pos.file].clone(),
+            ),
+            span: miette::SourceSpan::from((pos.offset, 1)),
+        }
+    }
+
+    fn next_token(&mut self) -> Result<Option<(Pos, Token)>> {
         fn is_sym_first_char(c: u8) -> bool {
             match c {
                 b'-' | b'0'..=b'9' | b'(' | b')' | b';' => false,
@@ -194,26 +205,26 @@ impl<'a> Lexer<'a> {
         }
 
         if self.pos.offset == self.buf.len() {
-            return None;
+            return Ok(None);
         }
 
         let char_pos = self.pos;
         match self.buf[self.pos.offset] {
             b'(' => {
                 self.advance_pos();
-                Some((char_pos, Token::LParen))
+                Ok(Some((char_pos, Token::LParen)))
             }
             b')' => {
                 self.advance_pos();
-                Some((char_pos, Token::RParen))
+                Ok(Some((char_pos, Token::RParen)))
             }
             b'@' => {
                 self.advance_pos();
-                Some((char_pos, Token::At))
+                Ok(Some((char_pos, Token::At)))
             }
             b'<' => {
                 self.advance_pos();
-                Some((char_pos, Token::Lt))
+                Ok(Some((char_pos, Token::Lt)))
             }
             c if is_sym_first_char(c) => {
                 let start = self.pos.offset;
@@ -226,7 +237,7 @@ impl<'a> Lexer<'a> {
                 let end = self.pos.offset;
                 let s = std::str::from_utf8(&self.buf[start..end])
                     .expect("Only ASCII characters, should be UTF-8");
-                Some((start_pos, Token::Symbol(s.to_string())))
+                Ok(Some((start_pos, Token::Symbol(s.to_string()))))
             }
             c if (c >= b'0' && c <= b'9') || c == b'-' => {
                 let start_pos = self.pos;
@@ -236,11 +247,16 @@ impl<'a> Lexer<'a> {
                 } else {
                     false
                 };
-                let mut num = 0;
+                let mut num = 0_i64;
                 while self.pos.offset < self.buf.len()
                     && (self.buf[self.pos.offset] >= b'0' && self.buf[self.pos.offset] <= b'9')
                 {
-                    num = (num * 10) + (self.buf[self.pos.offset] - b'0') as i64;
+                    let base = num
+                        .checked_mul(10)
+                        .ok_or_else(|| self.error(start_pos, "integer literal too large"))?;
+                    num = base
+                        .checked_add((self.buf[self.pos.offset] - b'0') as i64)
+                        .ok_or_else(|| self.error(start_pos, "integer literal too large"))?;
                     self.advance_pos();
                 }
 
@@ -249,16 +265,24 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Int(num)
                 };
-                Some((start_pos, tok))
+                Ok(Some((start_pos, tok)))
             }
             c => panic!("Unexpected character '{}' at offset {}", c, self.pos.offset),
         }
     }
 
-    fn reload(&mut self) {
+    /// Get the next token from this lexer's token stream, if any.
+    pub fn next(&mut self) -> Result<Option<(Pos, Token)>> {
+        let tok = self.lookahead.take();
+        self.reload()?;
+        Ok(tok)
+    }
+
+    fn reload(&mut self) -> Result<()> {
         if self.lookahead.is_none() && self.pos.offset < self.buf.len() {
-            self.lookahead = self.next_token();
+            self.lookahead = self.next_token()?;
         }
+        Ok(())
     }
 
     /// Peek ahead at the next token.
@@ -269,16 +293,6 @@ impl<'a> Lexer<'a> {
     /// Are we at the end of the source input?
     pub fn eof(&self) -> bool {
         self.lookahead.is_none()
-    }
-}
-
-impl<'a> std::iter::Iterator for Lexer<'a> {
-    type Item = (Pos, Token);
-
-    fn next(&mut self) -> Option<(Pos, Token)> {
-        let tok = self.lookahead.take();
-        self.reload();
-        tok
     }
 }
 
