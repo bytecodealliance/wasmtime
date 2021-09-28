@@ -1,3 +1,7 @@
+//! Abstract syntax tree (AST) created from parsed ISLE.
+
+#![allow(missing_docs)]
+
 use crate::lexer::Pos;
 
 /// The parsed form of an ISLE file.
@@ -356,12 +360,13 @@ pub enum Extern {
     Const { name: Ident, ty: Ident, pos: Pos },
 }
 
+/// Whether an argument is an input or an output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArgPolarity {
-    /// An arg that must be given an Expr in the pattern and passes
-    /// data *to* the extractor op.
+    /// An arg that must be given an Expr in the pattern and passes data *to*
+    /// the extractor op.
     Input,
-    /// An arg that must be given a regular pattern (not Expr) and
-    /// receives data *from* the extractor op.
+    /// An arg that must be given a regular pattern (not Expr) and receives data
+    /// *from* the extractor op.
     Output,
 }

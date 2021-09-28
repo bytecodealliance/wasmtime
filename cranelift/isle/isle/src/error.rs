@@ -3,14 +3,21 @@
 use crate::lexer::Pos;
 use std::fmt;
 
+/// Errors produced by ISLE.
 #[derive(Clone, Debug)]
 pub enum Error {
+    /// The input ISLE source has an error.
     CompileError {
+        /// The error message.
         msg: String,
+        /// The ISLE source filename where the error occurs.
         filename: String,
+        /// The position within the file that the error occurs at.
         pos: Pos,
     },
+    /// An error from elsewhere in the system.
     SystemError {
+        /// The error message.
         msg: String,
     },
 }

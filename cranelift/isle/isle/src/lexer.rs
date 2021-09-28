@@ -3,8 +3,14 @@
 use crate::error::Error;
 use std::borrow::Cow;
 
+/// The lexer.
+///
+/// Breaks source text up into a sequence of tokens (with source positions).
 #[derive(Clone, Debug)]
 pub struct Lexer<'a> {
+    /// Arena of filenames from the input source.
+    ///
+    /// Indexed via `Pos::file`.
     pub filenames: Vec<String>,
     file_starts: Vec<usize>,
     buf: Cow<'a, [u8]>,
@@ -12,34 +18,52 @@ pub struct Lexer<'a> {
     lookahead: Option<(Pos, Token)>,
 }
 
+/// A source position.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash, PartialOrd, Ord)]
 pub struct Pos {
+    /// This source position's file.
+    ///
+    /// Indexes into `Lexer::filenames` early in the compiler pipeline, and
+    /// later into `TypeEnv::filenames` once we get into semantic analysis.
     pub file: usize,
+    /// This source position's byte offset in the file.
     pub offset: usize,
+    /// This source position's line number in the file.
     pub line: usize,
+    /// This source position's column number in the file.
     pub col: usize,
 }
 
 impl Pos {
+    /// Print this source position as `file.isle:12:34`.
     pub fn pretty_print(&self, filenames: &[String]) -> String {
         format!("{}:{}:{}", filenames[self.file], self.line, self.col)
     }
+    /// Print this source position as `file.isle line 12`.
     pub fn pretty_print_line(&self, filenames: &[String]) -> String {
         format!("{} line {}", filenames[self.file], self.line)
     }
 }
 
+/// A token of ISLE source.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token {
+    /// Left paren.
     LParen,
+    /// Right paren.
     RParen,
+    /// A symbol, e.g. `Foo`.
     Symbol(String),
+    /// An integer.
     Int(i64),
+    /// `@`
     At,
+    /// `<`
     Lt,
 }
 
 impl<'a> Lexer<'a> {
+    /// Create a new lexer for the given source contents and filename.
     pub fn from_str(s: &'a str, filename: &'a str) -> Lexer<'a> {
         let mut l = Lexer {
             filenames: vec![filename.to_string()],
@@ -57,6 +81,7 @@ impl<'a> Lexer<'a> {
         l
     }
 
+    /// Create a new lexer from the given files.
     pub fn from_files(filenames: Vec<String>) -> Result<Lexer<'a>, Error> {
         assert!(!filenames.is_empty());
         let file_contents: Vec<String> = filenames
@@ -94,10 +119,12 @@ impl<'a> Lexer<'a> {
         Ok(l)
     }
 
+    /// Get the lexer's current file offset.
     pub fn offset(&self) -> usize {
         self.pos.offset
     }
 
+    /// Get the lexer's current source position.
     pub fn pos(&self) -> Pos {
         self.pos
     }
@@ -218,10 +245,12 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Peek ahead at the next token.
     pub fn peek(&self) -> Option<&(Pos, Token)> {
         self.lookahead.as_ref()
     }
 
+    /// Are we at the end of the source input?
     pub fn eof(&self) -> bool {
         self.lookahead.is_none()
     }
@@ -238,6 +267,7 @@ impl<'a> std::iter::Iterator for Lexer<'a> {
 }
 
 impl Token {
+    /// Is this an `Int` token?
     pub fn is_int(&self) -> bool {
         match self {
             Token::Int(_) => true,
@@ -245,6 +275,7 @@ impl Token {
         }
     }
 
+    /// Is this a `Sym` token?
     pub fn is_sym(&self) -> bool {
         match self {
             Token::Symbol(_) => true,

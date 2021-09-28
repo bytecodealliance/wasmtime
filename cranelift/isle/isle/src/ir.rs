@@ -1,18 +1,31 @@
 //! Lowered matching IR.
 
-use crate::declare_id;
 use crate::lexer::Pos;
 use crate::sema::*;
 use std::collections::HashMap;
 
-declare_id!(InstId);
+declare_id!(
+    /// The id of an instruction in a `PatternSequence`.
+    InstId
+);
 
+/// A value produced by a LHS or RHS instruction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Value {
     /// A value produced by an instruction in the Pattern (LHS).
-    Pattern { inst: InstId, output: usize },
+    Pattern {
+        /// The instruction that produces this value.
+        inst: InstId,
+        /// This value is the `output`th value produced by this pattern.
+        output: usize,
+    },
     /// A value produced by an instruction in the Expr (RHS).
-    Expr { inst: InstId, output: usize },
+    Expr {
+        /// The instruction that produces this value.
+        inst: InstId,
+        /// This value is the `output`th value produced by this expression.
+        output: usize,
+    },
 }
 
 /// A single Pattern instruction.
@@ -20,48 +33,81 @@ pub enum Value {
 pub enum PatternInst {
     /// Get the Nth input argument, which corresponds to the Nth field
     /// of the root term.
-    Arg { index: usize, ty: TypeId },
+    Arg {
+        /// The index of the argument to get.
+        index: usize,
+        /// The type of the argument.
+        ty: TypeId,
+    },
 
     /// Match a value as equal to another value. Produces no values.
-    MatchEqual { a: Value, b: Value, ty: TypeId },
+    MatchEqual {
+        /// The first value.
+        a: Value,
+        /// The second value.
+        b: Value,
+        /// The type of the values.
+        ty: TypeId,
+    },
 
     /// Try matching the given value as the given integer. Produces no values.
     MatchInt {
+        /// The value to match on.
         input: Value,
+        /// The value's type.
         ty: TypeId,
+        /// The integer to match against the value.
         int_val: i64,
     },
 
     /// Try matching the given value as the given constant. Produces no values.
-    MatchPrim { input: Value, ty: TypeId, val: Sym },
-
-    /// Try matching the given value as the given variant, producing
-    /// `|arg_tys|` values as output.
-    MatchVariant {
+    MatchPrim {
+        /// The value to match on.
         input: Value,
+        /// The type of the value.
+        ty: TypeId,
+        /// The primitive to match against the value.
+        val: Sym,
+    },
+
+    /// Try matching the given value as the given variant, producing `|arg_tys|`
+    /// values as output.
+    MatchVariant {
+        /// The value to match on.
+        input: Value,
+        /// The type of the value.
         input_ty: TypeId,
+        /// The types of values produced upon a successful match.
         arg_tys: Vec<TypeId>,
+        /// The value type's variant that we are matching against.
         variant: VariantId,
     },
 
-    /// Invoke an extractor, taking the given values as input (the
-    /// first is the value to extract, the other are the
-    /// `Input`-polarity extractor args) and producing an output valu
-    /// efor each `Output`-polarity extractor arg.
+    /// Invoke an extractor, taking the given values as input (the first is the
+    /// value to extract, the other are the `Input`-polarity extractor args) and
+    /// producing an output value for each `Output`-polarity extractor arg.
     Extract {
+        /// The value to extract, followed by polarity extractor args.
         inputs: Vec<Value>,
+        /// The types of the inputs.
         input_tys: Vec<TypeId>,
+        /// The types of the output values produced upon a successful match.
         output_tys: Vec<TypeId>,
+        /// This extractor's term.
         term: TermId,
+        /// Whether this extraction is infallible or not.
         infallible: bool,
     },
 
-    /// Evaluate an expression and provide the given value as the
-    /// result of this match instruction. The expression has access to
-    /// the pattern-values up to this point in the sequence.
+    /// Evaluate an expression and provide the given value as the result of this
+    /// match instruction. The expression has access to the pattern-values up to
+    /// this point in the sequence.
     Expr {
+        /// The expression to evaluate.
         seq: ExprSequence,
+        /// The value produced by the expression.
         output: Value,
+        /// The type of the output value.
         output_ty: TypeId,
     },
 }
@@ -70,35 +116,58 @@ pub enum PatternInst {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ExprInst {
     /// Produce a constant integer.
-    ConstInt { ty: TypeId, val: i64 },
+    ConstInt {
+        /// This integer type.
+        ty: TypeId,
+        /// The integer value. Must fit within the type.
+        val: i64,
+    },
 
     /// Produce a constant extern value.
-    ConstPrim { ty: TypeId, val: Sym },
+    ConstPrim {
+        /// The primitive type.
+        ty: TypeId,
+        /// The primitive value.
+        val: Sym,
+    },
 
     /// Create a variant.
     CreateVariant {
+        /// The input arguments that will make up this variant's fields.
+        ///
+        /// These must be in the same order as the variant's fields.
         inputs: Vec<(Value, TypeId)>,
+        /// The enum type.
         ty: TypeId,
+        /// The variant within the enum that we are contructing.
         variant: VariantId,
     },
 
     /// Invoke a constructor.
     Construct {
+        /// The arguments to the constructor.
         inputs: Vec<(Value, TypeId)>,
+        /// The type of the constructor.
         ty: TypeId,
+        /// The constructor term.
         term: TermId,
+        /// Whether this constructor is infallible or not.
         infallible: bool,
     },
 
     /// Set the Nth return value. Produces no values.
     Return {
+        /// The index of the return value to set.
         index: usize,
+        /// The type of the return value.
         ty: TypeId,
+        /// The value to set as the `index`th return value.
         value: Value,
     },
 }
 
 impl ExprInst {
+    /// Invoke `f` for each value in this expression.
     pub fn visit_values<F: FnMut(Value)>(&self, mut f: F) {
         match self {
             &ExprInst::ConstInt { .. } => {}
@@ -117,29 +186,34 @@ impl ExprInst {
 }
 
 /// A linear sequence of instructions that match on and destructure an
-/// argument. A pattern is fallible (may not match). If it does not
-/// fail, its result consists of the values produced by the
-/// `PatternInst`s, which may be used by a subsequent `Expr`.
+/// argument. A pattern is fallible (may not match). If it does not fail, its
+/// result consists of the values produced by the `PatternInst`s, which may be
+/// used by a subsequent `Expr`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 pub struct PatternSequence {
-    /// Instruction sequence for pattern. InstId indexes into this
-    /// sequence for `Value::Pattern` values.
+    /// Instruction sequence for pattern.
+    ///
+    /// `InstId` indexes into this sequence for `Value::Pattern` values.
     pub insts: Vec<PatternInst>,
 }
 
-/// A linear sequence of instructions that produce a new value from
-/// the right-hand side of a rule, given bindings that come from a
-/// `Pattern` derived from the left-hand side.
+/// A linear sequence of instructions that produce a new value from the
+/// right-hand side of a rule, given bindings that come from a `Pattern` derived
+/// from the left-hand side.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub struct ExprSequence {
-    /// Instruction sequence for expression. InstId indexes into this
-    /// sequence for `Value::Expr` values.
+    /// Instruction sequence for expression.
+    ///
+    /// `InstId` indexes into this sequence for `Value::Expr` values.
     pub insts: Vec<ExprInst>,
     /// Position at which the rule producing this sequence was located.
     pub pos: Pos,
 }
 
 impl ExprSequence {
+    /// Is this expression sequence producing a constant integer?
+    ///
+    /// If so, return the integer type and the constant.
     pub fn is_const_int(&self) -> Option<(TypeId, i64)> {
         if self.insts.len() == 2 && matches!(&self.insts[1], &ExprInst::Return { .. }) {
             match &self.insts[0] {
@@ -499,13 +573,17 @@ impl ExprSequence {
         match expr {
             &Expr::ConstInt(ty, val) => self.add_const_int(ty, val),
             &Expr::ConstPrim(ty, val) => self.add_const_prim(ty, val),
-            &Expr::Let(_ty, ref bindings, ref subexpr) => {
+            &Expr::Let {
+                ty: _ty,
+                ref bindings,
+                ref body,
+            } => {
                 let mut vars = vars.clone();
                 for &(var, _var_ty, ref var_expr) in bindings {
                     let var_value = self.gen_expr(typeenv, termenv, &*var_expr, &vars);
                     vars.insert(var, var_value);
                 }
-                self.gen_expr(typeenv, termenv, &*subexpr, &vars)
+                self.gen_expr(typeenv, termenv, body, &vars)
             }
             &Expr::Var(_ty, var_id) => vars.get(&var_id).cloned().unwrap(),
             &Expr::Term(ty, term, ref arg_exprs) => {
@@ -535,7 +613,7 @@ impl ExprSequence {
                             /* infallible = */ true,
                         )
                     }
-                    _ => panic!("Should have been caught by typechecking"),
+                    otherwise => panic!("Should have been caught by typechecking: {:?}", otherwise),
                 }
             }
         }

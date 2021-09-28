@@ -1,121 +1,226 @@
 //! Semantic analysis.
+//!
+//! This module primarily contains the type environment and term environment.
+//!
+//! The type environment is constructed by analyzing an input AST. The type
+//! environment records the types used in the input source and the types of our
+//! various rules and symbols. ISLE's type system is intentionally easy to
+//! check, only requires a single pass over the AST, and doesn't require any
+//! unification or anything like that.
+//!
+//! The term environment is constructed from both the AST and type
+//! envionment. It is sort of a typed and reorganized AST that more directly
+//! reflects ISLE semantics than the input ISLE source code (where as the AST is
+//! the opposite).
 
 use crate::ast;
 use crate::error::*;
 use crate::lexer::Pos;
 use std::collections::HashMap;
 
+/// Either `Ok(T)` or a one or more `Error`s.
+///
+/// This allows us to return multiple type errors at the same time, for example.
 pub type SemaResult<T> = std::result::Result<T, Vec<Error>>;
 
-#[macro_export]
-macro_rules! declare_id {
-    ($name:ident) => {
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        pub struct $name(pub usize);
-        impl $name {
-            pub fn index(self) -> usize {
-                self.0
-            }
-        }
-    };
-}
+declare_id!(
+    /// The id of an interned symbol.
+    Sym
+);
+declare_id!(
+    /// The id of an interned type inside the `TypeEnv`.
+    TypeId
+);
+declare_id!(
+    /// The id of a variant inside an enum.
+    VariantId
+);
+declare_id!(
+    /// The id of a field inside a variant.
+    FieldId
+);
+declare_id!(
+    /// The id of an interned term inside the `TermEnv`.
+    TermId
+);
+declare_id!(
+    /// The id of an interned rule inside the `TermEnv`.
+    RuleId
+);
+declare_id!(
+    /// The id of a bound variable inside a `Bindings`.
+    VarId
+);
 
-declare_id!(Sym);
-declare_id!(TypeId);
-declare_id!(VariantId);
-declare_id!(FieldId);
-declare_id!(TermId);
-declare_id!(RuleId);
-declare_id!(VarId);
-
+/// The type environment.
+///
+/// Keeps track of which symbols and rules have which types.
 #[derive(Clone, Debug)]
 pub struct TypeEnv {
+    /// Arena of input ISLE source filenames.
+    ///
+    /// We refer to these indirectly through the `Pos::file` indices.
     pub filenames: Vec<String>,
+
+    /// Arena of interned symbol names.
+    ///
+    /// Referred to indirectly via `Sym` indices.
     pub syms: Vec<String>,
+
+    /// Map of already-interned symbol names to their `Sym` ids.
     pub sym_map: HashMap<String, Sym>,
+
+    /// Arena of type definitions.
+    ///
+    /// Referred to indirectly via `TypeId`s.
     pub types: Vec<Type>,
+
+    /// A map from a type name symbol to its `TypeId`.
     pub type_map: HashMap<Sym, TypeId>,
+
+    /// The types of constant symbols.
     pub const_types: HashMap<Sym, TypeId>,
+
+    /// Type errors that we've found so far during type checking.
     pub errors: Vec<Error>,
 }
 
+/// A type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
+    /// A primitive, `Copy` type.
+    ///
+    /// These are always defined externally, and we allow literals of these
+    /// types to pass through from ISLE source code to the emitted Rust code.
     Primitive(TypeId, Sym),
+
+    /// A sum type.
+    ///
+    /// Note that enums with only one variant are equivalent to a "struct".
     Enum {
+        /// The name of this enum.
         name: Sym,
+        /// This `enum`'s type id.
         id: TypeId,
+        /// Is this `enum` defined in external Rust code?
+        ///
+        /// If so, ISLE will not emit a definition for it. If not, then it will
+        /// emit a Rust definition for it.
         is_extern: bool,
+        /// The different variants for this enum.
         variants: Vec<Variant>,
+        /// The ISLE source position where this `enum` is defined.
         pos: Pos,
     },
 }
 
 impl Type {
+    /// Get the name of this `Type`.
     pub fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
         match self {
             Self::Primitive(_, name) | Self::Enum { name, .. } => &tyenv.syms[name.index()],
         }
     }
 
+    /// Is this a primitive type?
     pub fn is_prim(&self) -> bool {
-        match self {
-            &Type::Primitive(..) => true,
-            _ => false,
-        }
+        matches!(self, Type::Primitive(..))
     }
 }
 
+/// A variant of an enum.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Variant {
+    /// The name of this variant.
     pub name: Sym,
+
+    /// The full, prefixed-with-the-enum's-name name of this variant.
+    ///
+    /// E.g. if the enum is `Foo` and this variant is `Bar`, then the
+    /// `fullname` is `Foo.Bar`.
     pub fullname: Sym,
+
+    /// The id of this variant, i.e. the index of this variant within its
+    /// enum's `Type::Enum::variants`.
     pub id: VariantId,
+
+    /// The data fields of this enum variant.
     pub fields: Vec<Field>,
 }
 
+/// A field of a `Variant`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
+    /// The name of this field.
     pub name: Sym,
+    /// This field's id.
     pub id: FieldId,
+    /// The type of this field.
     pub ty: TypeId,
 }
 
+/// The term environment.
+///
+/// This is sort of a typed and reorganized AST that more directly reflects ISLE
+/// semantics than the input ISLE source code (where as the AST is the
+/// opposite).
 #[derive(Clone, Debug)]
 pub struct TermEnv {
+    /// Arena of interned terms defined in this ISLE program.
+    ///
+    /// This is indexed by `TermId`.
     pub terms: Vec<Term>,
+
+    /// A map from am interned `Term`'s name to its `TermId`.
     pub term_map: HashMap<Sym, TermId>,
+
+    /// Arena of interned rules defined in this ISLE program.
+    ///
+    /// This is indexed by `RuleId`.
     pub rules: Vec<Rule>,
 }
 
+/// A term.
+///
+/// Maps parameter types to result types if this is a constructor term, or
+/// result types to parameter types if this is an extractor term. Or both if
+/// this term can be either a constructor or an extractor.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Term {
+    /// This term's id.
     pub id: TermId,
+    /// The name of this term.
     pub name: Sym,
+    /// The parameter types to this term.
     pub arg_tys: Vec<TypeId>,
+    /// The result types of this term.
     pub ret_ty: TypeId,
+    /// The kind of this term.
     pub kind: TermKind,
 }
 
+/// The kind of a term.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermKind {
+    /// An enum variant constructor or extractor.
     EnumVariant {
-        /// Which variant of the enum: e.g. for enum type `A` if a
-        /// term is `(A.A1 ...)` then the variant ID corresponds to
-        /// `A1`.
+        /// Which variant of the enum: e.g. for enum type `A` if a term is
+        /// `(A.A1 ...)` then the variant ID corresponds to `A1`.
         variant: VariantId,
     },
-    /// A term with "internal" rules that work in the forward
-    /// direction. Becomes a compiled Rust function in the generated
-    /// code.
+    /// A term with "internal" rules that work in the forward direction. Becomes
+    /// a compiled Rust function in the generated code.
     InternalConstructor,
-    /// A term that defines an "extractor macro" in the LHS of a
-    /// pattern. Its arguments take patterns and are simply
-    /// substituted with the given patterns when used.
-    InternalExtractor { template: ast::Pattern },
+    /// A term that defines an "extractor macro" in the LHS of a pattern. Its
+    /// arguments take patterns and are simply substituted with the given
+    /// patterns when used.
+    InternalExtractor {
+        /// This extractor's pattern.
+        template: ast::Pattern,
+    },
     /// A term defined solely by an external extractor function.
     ExternalExtractor {
-        /// Extractor func.
+        /// The external name of the extractor function.
         name: Sym,
         /// Which arguments of the extractor are inputs and which are outputs?
         arg_polarity: Vec<ArgPolarity>,
@@ -124,7 +229,7 @@ pub enum TermKind {
     },
     /// A term defined solely by an external constructor function.
     ExternalConstructor {
-        /// Constructor func.
+        /// The external name of the constructor function.
         name: Sym,
     },
     /// Declared but no body or externs associated (yet).
@@ -133,27 +238,28 @@ pub enum TermKind {
 
 pub use crate::ast::ArgPolarity;
 
+/// An external function signature.
 #[derive(Clone, Debug)]
 pub struct ExternalSig {
+    /// The name of the external function.
     pub func_name: String,
+    /// The name of the external function, prefixed with the context trait.
     pub full_name: String,
-    pub arg_tys: Vec<TypeId>,
+    /// The types of this function signature's parameters.
+    pub param_tys: Vec<TypeId>,
+    /// The types of this function signature's results.
     pub ret_tys: Vec<TypeId>,
+    /// Whether this signature is infallible or not.
     pub infallible: bool,
 }
 
 impl Term {
+    /// Get this term's type.
     pub fn ty(&self) -> TypeId {
         self.ret_ty
     }
 
-    pub fn to_variant(&self) -> Option<VariantId> {
-        match &self.kind {
-            &TermKind::EnumVariant { variant } => Some(variant),
-            _ => None,
-        }
-    }
-
+    /// Is this term a constructor?
     pub fn is_constructor(&self) -> bool {
         match &self.kind {
             &TermKind::InternalConstructor { .. } | &TermKind::ExternalConstructor { .. } => true,
@@ -161,13 +267,7 @@ impl Term {
         }
     }
 
-    pub fn is_extractor(&self) -> bool {
-        match &self.kind {
-            &TermKind::InternalExtractor { .. } | &TermKind::ExternalExtractor { .. } => true,
-            _ => false,
-        }
-    }
-
+    /// Is this term external?
     pub fn is_external(&self) -> bool {
         match &self.kind {
             &TermKind::ExternalExtractor { .. } | &TermKind::ExternalConstructor { .. } => true,
@@ -175,12 +275,13 @@ impl Term {
         }
     }
 
+    /// Get this term's external function signature, if any.
     pub fn to_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
             &TermKind::ExternalConstructor { name } => Some(ExternalSig {
                 func_name: tyenv.syms[name.index()].clone(),
                 full_name: format!("C::{}", tyenv.syms[name.index()]),
-                arg_tys: self.arg_tys.clone(),
+                param_tys: self.arg_tys.clone(),
                 ret_tys: vec![self.ret_ty],
                 infallible: true,
             }),
@@ -205,7 +306,7 @@ impl Term {
                 Some(ExternalSig {
                     func_name: tyenv.syms[name.index()].clone(),
                     full_name: format!("C::{}", tyenv.syms[name.index()]),
-                    arg_tys,
+                    param_tys: arg_tys,
                     ret_tys,
                     infallible,
                 })
@@ -215,7 +316,7 @@ impl Term {
                 Some(ExternalSig {
                     func_name: name.clone(),
                     full_name: name,
-                    arg_tys: self.arg_tys.clone(),
+                    param_tys: self.arg_tys.clone(),
                     ret_tys: vec![self.ret_ty],
                     infallible: false,
                 })
@@ -225,42 +326,87 @@ impl Term {
     }
 }
 
+/// A term rewrite rule.
 #[derive(Clone, Debug)]
 pub struct Rule {
+    /// This rule's id.
     pub id: RuleId,
+    /// The left-hand side pattern that this rule matches.
     pub lhs: Pattern,
+    /// The right-hand side expression that this rule evaluates upon successful
+    /// match.
     pub rhs: Expr,
+    /// The priority of this rule, if any.
     pub prio: Option<i64>,
+    /// The source position where this rule is defined.
     pub pos: Pos,
 }
 
+/// A left-hand side pattern of some rule.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Pattern {
+    /// Bind a variable of the given type from the current value.
+    ///
+    /// Keep matching on the value with the subpattern.
     BindPattern(TypeId, VarId, Box<Pattern>),
+
+    /// Match the current value against an already bound variable with the given
+    /// type.
     Var(TypeId, VarId),
+
+    /// Match the current value against a constant integer of the given integer
+    /// type.
     ConstInt(TypeId, i64),
+
+    /// Match the current value against a constant primitive value of the given
+    /// primitive type.
     ConstPrim(TypeId, Sym),
+
+    /// Match the current value against the given extractor term with the given
+    /// arguments.
     Term(TypeId, TermId, Vec<TermArgPattern>),
+
+    /// Match anything of the given type successfully.
     Wildcard(TypeId),
+
+    /// Match all of the following patterns of the given type.
     And(TypeId, Vec<Pattern>),
 }
 
+/// Arguments to a term inside a pattern (i.e. an extractor).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TermArgPattern {
+    /// A pattern to match sub-values (i.e. the extractor's results) against.
     Pattern(Pattern),
+    /// An expression to generate a value that is passed into the extractor.
     Expr(Expr),
 }
 
+/// A right-hand side expression of some rule.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Expr {
+    /// Invoke this term constructor with the given arguments.
     Term(TypeId, TermId, Vec<Expr>),
+    /// Get the value of a variable that was bound in the left-hand side.
     Var(TypeId, VarId),
+    /// Get a constant integer.
     ConstInt(TypeId, i64),
+    /// Get a constant primitive.
     ConstPrim(TypeId, Sym),
-    Let(TypeId, Vec<(VarId, TypeId, Box<Expr>)>, Box<Expr>),
+    /// Evaluate the nested expressions and bind their results to the given
+    /// variables, then evaluate the body expression.
+    Let {
+        /// The type of the result of this let expression.
+        ty: TypeId,
+        /// The expressions that are evaluated and bound to the given variables.
+        bindings: Vec<(VarId, TypeId, Box<Expr>)>,
+        /// The body expression that is evaluated after the bindings.
+        body: Box<Expr>,
+    },
 }
 
 impl Pattern {
+    /// Get this pattern's type.
     pub fn ty(&self) -> TypeId {
         match self {
             &Self::BindPattern(t, ..) => t,
@@ -273,6 +419,7 @@ impl Pattern {
         }
     }
 
+    /// Get the root term of this pattern, if any.
     pub fn root_term(&self) -> Option<TermId> {
         match self {
             &Pattern::Term(_, term, _) => Some(term),
@@ -283,18 +430,20 @@ impl Pattern {
 }
 
 impl Expr {
+    /// Get this expression's type.
     pub fn ty(&self) -> TypeId {
         match self {
             &Self::Term(t, ..) => t,
             &Self::Var(t, ..) => t,
             &Self::ConstInt(t, ..) => t,
             &Self::ConstPrim(t, ..) => t,
-            &Self::Let(t, ..) => t,
+            &Self::Let { ty: t, .. } => t,
         }
     }
 }
 
 impl TypeEnv {
+    /// Construct the type environment from the AST.
     pub fn from_ast(defs: &ast::Defs) -> SemaResult<TypeEnv> {
         let mut tyenv = TypeEnv {
             filenames: defs.filenames.clone(),
@@ -467,7 +616,7 @@ impl TypeEnv {
         self.errors.push(err);
     }
 
-    pub fn intern_mut(&mut self, ident: &ast::Ident) -> Sym {
+    fn intern_mut(&mut self, ident: &ast::Ident) -> Sym {
         if let Some(s) = self.sym_map.get(&ident.0).cloned() {
             s
         } else {
@@ -478,7 +627,7 @@ impl TypeEnv {
         }
     }
 
-    pub fn intern(&self, ident: &ast::Ident) -> Option<Sym> {
+    fn intern(&self, ident: &ast::Ident) -> Option<Sym> {
         self.sym_map.get(&ident.0).cloned()
     }
 }
@@ -497,6 +646,7 @@ struct BoundVar {
 }
 
 impl TermEnv {
+    /// Construct the term environment from the AST and the type environment.
     pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> SemaResult<TermEnv> {
         let mut env = TermEnv {
             terms: vec![],
@@ -1274,7 +1424,11 @@ impl TermEnv {
                 // Pop the bindings.
                 bindings.vars.truncate(orig_binding_len);
 
-                Some(Expr::Let(body_ty, let_defs, body))
+                Some(Expr::Let {
+                    ty: body_ty,
+                    bindings: let_defs,
+                    body,
+                })
             }
         }
     }

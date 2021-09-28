@@ -4,19 +4,24 @@ use crate::ast::*;
 use crate::error::*;
 use crate::lexer::{Lexer, Pos, Token};
 
+/// The ISLE parser.
+///
+/// Takes in a lexer and creates an AST.
 #[derive(Clone, Debug)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
 }
 
+/// Either `Ok(T)` or an `Err(isle::Error)`.
 pub type ParseResult<T> = std::result::Result<T, Error>;
 
 impl<'a> Parser<'a> {
+    /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
         Parser { lexer }
     }
 
-    pub fn error(&self, pos: Pos, msg: String) -> Error {
+    fn error(&self, pos: Pos, msg: String) -> Error {
         Error::CompileError {
             filename: self.lexer.filenames[pos.file].clone(),
             pos,
@@ -106,6 +111,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse the top-level ISLE definitions and return their AST.
     pub fn parse_defs(&mut self) -> ParseResult<Defs> {
         let mut defs = vec![];
         while !self.lexer.eof() {

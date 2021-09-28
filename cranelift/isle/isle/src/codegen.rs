@@ -6,6 +6,11 @@ use crate::sema::{RuleId, TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
+/// Emit Rust source code for the given type and term environments.
+pub fn codegen(typeenv: &TypeEnv, termenv: &TermEnv) -> String {
+    Codegen::compile(typeenv, termenv).generate_rust()
+}
+
 /// One "input symbol" for the decision tree that handles matching on
 /// a term. Each symbol represents one step: we either run a match op,
 /// or we finish the match.
@@ -493,7 +498,7 @@ impl<'a> TermFunctionsBuilder<'a> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Codegen<'a> {
+struct Codegen<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
     functions_by_term: HashMap<TermId, TrieNode>,
@@ -506,7 +511,7 @@ struct BodyContext {
 }
 
 impl<'a> Codegen<'a> {
-    pub fn compile(typeenv: &'a TypeEnv, termenv: &'a TermEnv) -> Codegen<'a> {
+    fn compile(typeenv: &'a TypeEnv, termenv: &'a TermEnv) -> Codegen<'a> {
         let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
         builder.build();
         log::trace!("builder: {:?}", builder);
@@ -518,7 +523,7 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    pub fn generate_rust(&self) -> String {
+    fn generate_rust(&self) -> String {
         let mut code = String::new();
 
         self.generate_header(&mut code);
@@ -561,7 +566,7 @@ impl<'a> Codegen<'a> {
             "{}fn {}(&mut self, {}) -> {}({},){};",
             indent,
             sig.func_name,
-            sig.arg_tys
+            sig.param_tys
                 .iter()
                 .enumerate()
                 .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
@@ -728,7 +733,7 @@ impl<'a> Codegen<'a> {
             let sig = termdata.to_sig(self.typeenv).unwrap();
 
             let args = sig
-                .arg_tys
+                .param_tys
                 .iter()
                 .enumerate()
                 .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, true)))
@@ -874,7 +879,7 @@ impl<'a> Codegen<'a> {
                 let outputname = self.value_name(&output);
                 let termdata = &self.termenv.terms[term.index()];
                 let sig = termdata.to_sig(self.typeenv).unwrap();
-                assert_eq!(input_exprs.len(), sig.arg_tys.len());
+                assert_eq!(input_exprs.len(), sig.param_tys.len());
                 let fallible_try = if infallible { "" } else { "?" };
                 writeln!(
                     code,
