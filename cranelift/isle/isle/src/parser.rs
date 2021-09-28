@@ -12,9 +12,6 @@ pub struct Parser<'a> {
     lexer: Lexer<'a>,
 }
 
-/// Either `Ok(T)` or an `Err(isle::Error)`.
-pub type ParseResult<T> = std::result::Result<T, Error>;
-
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
@@ -32,7 +29,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn take<F: Fn(&Token) -> bool>(&mut self, f: F) -> ParseResult<Token> {
+    fn take<F: Fn(&Token) -> bool>(&mut self, f: F) -> Result<Token> {
         if let Some(&(pos, ref peek)) = self.lexer.peek() {
             if !f(peek) {
                 return Err(self.error(pos, format!("Unexpected token {:?}", peek)));
@@ -89,27 +86,27 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn lparen(&mut self) -> ParseResult<()> {
+    fn lparen(&mut self) -> Result<()> {
         self.take(|tok| *tok == Token::LParen).map(|_| ())
     }
-    fn rparen(&mut self) -> ParseResult<()> {
+    fn rparen(&mut self) -> Result<()> {
         self.take(|tok| *tok == Token::RParen).map(|_| ())
     }
-    fn at(&mut self) -> ParseResult<()> {
+    fn at(&mut self) -> Result<()> {
         self.take(|tok| *tok == Token::At).map(|_| ())
     }
-    fn lt(&mut self) -> ParseResult<()> {
+    fn lt(&mut self) -> Result<()> {
         self.take(|tok| *tok == Token::Lt).map(|_| ())
     }
 
-    fn symbol(&mut self) -> ParseResult<String> {
+    fn symbol(&mut self) -> Result<String> {
         match self.take(|tok| tok.is_sym())? {
             Token::Symbol(s) => Ok(s),
             _ => unreachable!(),
         }
     }
 
-    fn int(&mut self) -> ParseResult<i64> {
+    fn int(&mut self) -> Result<i64> {
         match self.take(|tok| tok.is_int())? {
             Token::Int(i) => Ok(i),
             _ => unreachable!(),
@@ -117,7 +114,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse the top-level ISLE definitions and return their AST.
-    pub fn parse_defs(&mut self) -> ParseResult<Defs> {
+    pub fn parse_defs(&mut self) -> Result<Defs> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
@@ -129,7 +126,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_def(&mut self) -> ParseResult<Def> {
+    fn parse_def(&mut self) -> Result<Def> {
         self.lparen()?;
         let pos = self.pos();
         let def = match &self.symbol()?[..] {
@@ -146,8 +143,11 @@ impl<'a> Parser<'a> {
         Ok(def)
     }
 
-    fn str_to_ident(&self, pos: Pos, s: &str) -> ParseResult<Ident> {
-        let first = s.chars().next().unwrap();
+    fn str_to_ident(&self, pos: Pos, s: &str) -> Result<Ident> {
+        let first = s
+            .chars()
+            .next()
+            .ok_or_else(|| self.error(pos, "empty symbol".into()))?;
         if !first.is_alphabetic() && first != '_' && first != '$' {
             return Err(self.error(
                 pos,
@@ -169,13 +169,13 @@ impl<'a> Parser<'a> {
         Ok(Ident(s.to_string(), pos))
     }
 
-    fn parse_ident(&mut self) -> ParseResult<Ident> {
+    fn parse_ident(&mut self) -> Result<Ident> {
         let pos = self.pos();
         let s = self.symbol()?;
         self.str_to_ident(pos, &s)
     }
 
-    fn parse_const(&mut self) -> ParseResult<Ident> {
+    fn parse_const(&mut self) -> Result<Ident> {
         let pos = self.pos();
         let ident = self.parse_ident()?;
         if ident.0.starts_with("$") {
@@ -189,7 +189,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_type(&mut self) -> ParseResult<Type> {
+    fn parse_type(&mut self) -> Result<Type> {
         let pos = self.pos();
         let name = self.parse_ident()?;
         let mut is_extern = false;
@@ -206,7 +206,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_typevalue(&mut self) -> ParseResult<TypeValue> {
+    fn parse_typevalue(&mut self) -> Result<TypeValue> {
         let pos = self.pos();
         self.lparen()?;
         if self.is_sym_str("primitive") {
@@ -228,7 +228,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_type_variant(&mut self) -> ParseResult<Variant> {
+    fn parse_type_variant(&mut self) -> Result<Variant> {
         if self.is_sym() {
             let pos = self.pos();
             let name = self.parse_ident()?;
@@ -250,7 +250,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_type_field(&mut self) -> ParseResult<Field> {
+    fn parse_type_field(&mut self) -> Result<Field> {
         let pos = self.pos();
         self.lparen()?;
         let name = self.parse_ident()?;
@@ -259,7 +259,7 @@ impl<'a> Parser<'a> {
         Ok(Field { name, ty, pos })
     }
 
-    fn parse_decl(&mut self) -> ParseResult<Decl> {
+    fn parse_decl(&mut self) -> Result<Decl> {
         let pos = self.pos();
         let term = self.parse_ident()?;
 
@@ -280,7 +280,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_extern(&mut self) -> ParseResult<Extern> {
+    fn parse_extern(&mut self) -> Result<Extern> {
         let pos = self.pos();
         if self.is_sym_str("constructor") {
             self.symbol()?;
@@ -341,7 +341,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_etor(&mut self) -> ParseResult<Extractor> {
+    fn parse_etor(&mut self) -> Result<Extractor> {
         let pos = self.pos();
         self.lparen()?;
         let term = self.parse_ident()?;
@@ -359,7 +359,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_rule(&mut self) -> ParseResult<Rule> {
+    fn parse_rule(&mut self) -> Result<Rule> {
         let pos = self.pos();
         let prio = if self.is_int() {
             Some(self.int()?)
@@ -376,7 +376,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_pattern(&mut self) -> ParseResult<Pattern> {
+    fn parse_pattern(&mut self) -> Result<Pattern> {
         let pos = self.pos();
         if self.is_int() {
             Ok(Pattern::ConstInt {
@@ -433,7 +433,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_pattern_term_arg(&mut self) -> ParseResult<TermArgPattern> {
+    fn parse_pattern_term_arg(&mut self) -> Result<TermArgPattern> {
         if self.is_lt() {
             self.lt()?;
             Ok(TermArgPattern::Expr(self.parse_expr()?))
@@ -442,7 +442,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expr(&mut self) -> ParseResult<Expr> {
+    fn parse_expr(&mut self) -> Result<Expr> {
         let pos = self.pos();
         if self.is_lparen() {
             self.lparen()?;
@@ -487,7 +487,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_letdef(&mut self) -> ParseResult<LetDef> {
+    fn parse_letdef(&mut self) -> Result<LetDef> {
         let pos = self.pos();
         self.lparen()?;
         let var = self.parse_ident()?;

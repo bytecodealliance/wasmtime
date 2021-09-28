@@ -237,6 +237,7 @@ impl<'a> Lexer<'a> {
                 let end = self.pos.offset;
                 let s = std::str::from_utf8(&self.buf[start..end])
                     .expect("Only ASCII characters, should be UTF-8");
+                debug_assert!(!s.is_empty());
                 Ok(Some((start_pos, Token::Symbol(s.to_string()))))
             }
             c if (c >= b'0' && c <= b'9') || c == b'-' => {
