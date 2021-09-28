@@ -1251,7 +1251,7 @@ impl TermEnv {
                     };
 
                     // Evaluate the variable's value.
-                    let val = Box::new(match self.translate_expr(tyenv, &def.val, ty, bindings) {
+                    let val = Box::new(match self.translate_expr(tyenv, &def.val, tid, bindings) {
                         Some(e) => e,
                         None => {
                             // Keep going for more errors.
