@@ -1,7 +1,8 @@
 //! Lexer for the ISLE language.
 
-use crate::error::Error;
+use crate::error::Result;
 use std::borrow::Cow;
+use std::sync::Arc;
 
 /// The lexer.
 ///
@@ -11,7 +12,13 @@ pub struct Lexer<'a> {
     /// Arena of filenames from the input source.
     ///
     /// Indexed via `Pos::file`.
-    pub filenames: Vec<String>,
+    pub filenames: Vec<Arc<str>>,
+
+    /// Arena of file source texts.
+    ///
+    /// Indexed via `Pos::file`.
+    pub file_texts: Vec<Arc<str>>,
+
     file_starts: Vec<usize>,
     buf: Cow<'a, [u8]>,
     pos: Pos,
@@ -36,11 +43,11 @@ pub struct Pos {
 
 impl Pos {
     /// Print this source position as `file.isle:12:34`.
-    pub fn pretty_print(&self, filenames: &[String]) -> String {
+    pub fn pretty_print(&self, filenames: &[Arc<str>]) -> String {
         format!("{}:{}:{}", filenames[self.file], self.line, self.col)
     }
     /// Print this source position as `file.isle line 12`.
-    pub fn pretty_print_line(&self, filenames: &[String]) -> String {
+    pub fn pretty_print_line(&self, filenames: &[Arc<str>]) -> String {
         format!("{} line {}", filenames[self.file], self.line)
     }
 }
@@ -66,7 +73,8 @@ impl<'a> Lexer<'a> {
     /// Create a new lexer for the given source contents and filename.
     pub fn from_str(s: &'a str, filename: &'a str) -> Lexer<'a> {
         let mut l = Lexer {
-            filenames: vec![filename.to_string()],
+            filenames: vec![filename.into()],
+            file_texts: vec![s.into()],
             file_starts: vec![0],
             buf: Cow::Borrowed(s.as_bytes()),
             pos: Pos {
@@ -82,22 +90,27 @@ impl<'a> Lexer<'a> {
     }
 
     /// Create a new lexer from the given files.
-    pub fn from_files(filenames: Vec<String>) -> Result<Lexer<'a>, Error> {
+    pub fn from_files<S>(filenames: impl IntoIterator<Item = S>) -> Result<Lexer<'a>>
+    where
+        S: AsRef<str>,
+    {
+        let filenames: Vec<Arc<str>> = filenames.into_iter().map(|f| f.as_ref().into()).collect();
         assert!(!filenames.is_empty());
-        let file_contents: Vec<String> = filenames
+
+        let file_contents: Vec<Arc<str>> = filenames
             .iter()
             .map(|f| {
                 use std::io::Read;
-                let mut f = std::fs::File::open(f)?;
+                let mut f = std::fs::File::open(&**f)?;
                 let mut s = String::new();
                 f.read_to_string(&mut s)?;
-                Ok(s)
+                Ok(s.into())
             })
-            .collect::<Result<Vec<String>, Error>>()?;
+            .collect::<Result<_>>()?;
 
         let mut file_starts = vec![];
         let mut buf = String::new();
-        for file in file_contents {
+        for file in &file_contents {
             file_starts.push(buf.len());
             buf += &file;
             buf += "\n";
@@ -105,6 +118,7 @@ impl<'a> Lexer<'a> {
 
         let mut l = Lexer {
             filenames,
+            file_texts: file_contents,
             buf: Cow::Owned(buf.into_bytes()),
             file_starts,
             pos: Pos {

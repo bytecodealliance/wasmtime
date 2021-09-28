@@ -10,3 +10,4 @@ log = "0.4"
 isle = { version = "*", path = "../isle/" }
 env_logger = { version = "0.8", default-features = false }
 clap = "2.33"
+miette = { version = "3.0.0", features = ["fancy"] }

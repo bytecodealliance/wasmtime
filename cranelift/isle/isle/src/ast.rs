@@ -3,12 +3,14 @@
 #![allow(missing_docs)]
 
 use crate::lexer::Pos;
+use std::sync::Arc;
 
 /// The parsed form of an ISLE file.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Defs {
     pub defs: Vec<Def>,
-    pub filenames: Vec<String>,
+    pub filenames: Vec<Arc<str>>,
+    pub file_texts: Vec<Arc<str>>,
 }
 
 /// One toplevel form in an ISLE file.

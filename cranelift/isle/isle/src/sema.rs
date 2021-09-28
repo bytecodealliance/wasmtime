@@ -17,11 +17,7 @@ use crate::ast;
 use crate::error::*;
 use crate::lexer::Pos;
 use std::collections::HashMap;
-
-/// Either `Ok(T)` or a one or more `Error`s.
-///
-/// This allows us to return multiple type errors at the same time, for example.
-pub type SemaResult<T> = std::result::Result<T, Vec<Error>>;
+use std::sync::Arc;
 
 declare_id!(
     /// The id of an interned symbol.
@@ -60,7 +56,12 @@ pub struct TypeEnv {
     /// Arena of input ISLE source filenames.
     ///
     /// We refer to these indirectly through the `Pos::file` indices.
-    pub filenames: Vec<String>,
+    pub filenames: Vec<Arc<str>>,
+
+    /// Arena of input ISLE source contents.
+    ///
+    /// We refer to these indirectly through the `Pos::file` indices.
+    pub file_texts: Vec<Arc<str>>,
 
     /// Arena of interned symbol names.
     ///
@@ -444,9 +445,10 @@ impl Expr {
 
 impl TypeEnv {
     /// Construct the type environment from the AST.
-    pub fn from_ast(defs: &ast::Defs) -> SemaResult<TypeEnv> {
+    pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv> {
         let mut tyenv = TypeEnv {
             filenames: defs.filenames.clone(),
+            file_texts: defs.file_texts.clone(),
             syms: vec![],
             sym_map: HashMap::new(),
             types: vec![],
@@ -523,11 +525,11 @@ impl TypeEnv {
         Ok(tyenv)
     }
 
-    fn return_errors(&mut self) -> SemaResult<()> {
-        if self.errors.len() > 0 {
-            Err(std::mem::take(&mut self.errors))
-        } else {
-            Ok(())
+    fn return_errors(&mut self) -> Result<()> {
+        match self.errors.len() {
+            0 => Ok(()),
+            1 => Err(self.errors.pop().unwrap()),
+            _ => Err(Error::Errors(std::mem::take(&mut self.errors))),
         }
     }
 
@@ -604,10 +606,13 @@ impl TypeEnv {
     }
 
     fn error(&self, pos: Pos, msg: String) -> Error {
-        Error::CompileError {
-            filename: self.filenames[pos.file].clone(),
-            pos,
+        Error::TypeError {
             msg,
+            src: Source::new(
+                self.filenames[pos.file].clone(),
+                self.file_texts[pos.file].clone(),
+            ),
+            span: miette::SourceSpan::from((pos.offset, 1)),
         }
     }
 
@@ -647,7 +652,7 @@ struct BoundVar {
 
 impl TermEnv {
     /// Construct the term environment from the AST and the type environment.
-    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> SemaResult<TermEnv> {
+    pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv> {
         let mut env = TermEnv {
             terms: vec![],
             term_map: HashMap::new(),
@@ -689,7 +694,7 @@ impl TermEnv {
                                 ()
                             })
                         })
-                        .collect::<Result<Vec<TypeId>, ()>>();
+                        .collect::<std::result::Result<Vec<_>, _>>();
                     let arg_tys = match arg_tys {
                         Ok(a) => a,
                         Err(_) => {

@@ -22,10 +22,13 @@ impl<'a> Parser<'a> {
     }
 
     fn error(&self, pos: Pos, msg: String) -> Error {
-        Error::CompileError {
-            filename: self.lexer.filenames[pos.file].clone(),
-            pos,
+        Error::ParseError {
             msg,
+            src: Source::new(
+                self.lexer.filenames[pos.file].clone(),
+                self.lexer.file_texts[pos.file].clone(),
+            ),
+            span: miette::SourceSpan::from((pos.offset, 1)),
         }
     }
 
@@ -120,6 +123,7 @@ impl<'a> Parser<'a> {
         Ok(Defs {
             defs,
             filenames: self.lexer.filenames.clone(),
+            file_texts: self.lexer.file_texts.clone(),
         })
     }
 

@@ -1,9 +1,19 @@
 use clap::{App, Arg};
+use isle::{compile, lexer, parser};
+use miette::{IntoDiagnostic, Result};
 
-use isle::{error, lexer, parser, compile};
-
-fn main() -> Result<(), error::Error> {
+fn main() -> Result<()> {
     let _ = env_logger::try_init();
+
+    let _ = miette::set_hook(Box::new(|_| {
+        Box::new(
+            miette::MietteHandlerOpts::new()
+                // `miette` mistakenly uses braille-optimized output for emacs's
+                // `M-x shell`.
+                .force_graphical(true)
+                .build(),
+        )
+    }));
 
     let matches = App::new("isle")
         .version(env!("CARGO_PKG_VERSION"))
@@ -37,31 +47,14 @@ fn main() -> Result<(), error::Error> {
 
     let lexer = lexer::Lexer::from_files(input_files)?;
     let mut parser = parser::Parser::new(lexer);
-    let defs = match parser.parse_defs() {
-        Ok(defs) => defs,
-        Err(error) => {
-            eprintln!("{}", error);
-            eprintln!("Failed to parse input.");
-            std::process::exit(1);
-        }
-    };
-    let code = match compile::compile(&defs) {
-        Ok(code) => code,
-        Err(errors) => {
-            for error in errors {
-                eprintln!("{}", error);
-            }
-            eprintln!("Failed to compile.");
-            std::process::exit(1);
-        }
-    };
+    let defs = parser.parse_defs()?;
+    let code = compile::compile(&defs)?;
 
     {
         use std::io::Write;
-        let mut f = std::fs::File::create(output_file)?;
-        writeln!(&mut f, "{}", code)?;
+        let mut f = std::fs::File::create(output_file).into_diagnostic()?;
+        writeln!(&mut f, "{}", code).into_diagnostic()?;
     }
 
     Ok(())
 }
-
