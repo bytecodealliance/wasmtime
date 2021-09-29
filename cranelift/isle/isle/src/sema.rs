@@ -622,7 +622,7 @@ impl TypeEnv {
     }
 
     fn intern_mut(&mut self, ident: &ast::Ident) -> Sym {
-        if let Some(s) = self.sym_map.get(&ident.0).cloned() {
+        if let Some(s) = self.sym_map.get(&ident.0).copied() {
             s
         } else {
             let s = Sym(self.syms.len());
