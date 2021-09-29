@@ -22,9 +22,6 @@ use std::rc::Rc;
 pub(crate) struct Definitions {
     pub settings: SettingGroup,
     pub all_instructions: AllInstructions,
-    pub imm: Immediates,
-    pub formats: Formats,
-    pub entities: EntityRefs,
 }
 
 pub(crate) fn define() -> Definitions {
@@ -38,9 +35,6 @@ pub(crate) fn define() -> Definitions {
     Definitions {
         settings: settings::define(),
         all_instructions,
-        imm: immediates,
-        formats,
-        entities,
     }
 }
 
