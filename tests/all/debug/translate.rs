@@ -108,4 +108,3 @@ check:        DW_AT_decl_line	(10)
     "##,
     )
 }
-
