@@ -1,6 +1,15 @@
+use crate::cdsl::isa::TargetIsa;
 use crate::cdsl::settings::{PredicateNode, SettingGroup, SettingGroupBuilder};
 
-pub(crate) fn define(shared: &SettingGroup) -> SettingGroup {
+use crate::shared::Definitions as SharedDefinitions;
+
+pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
+    let settings = define_settings(&shared_defs.settings);
+
+    TargetIsa::new("x86", settings)
+}
+
+pub(crate) fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("x86");
 
     // CPUID.01H:ECX

@@ -70,7 +70,7 @@ pub fn generate(
                     continue;
                 }
 
-                let settings = crate::isa::x86::settings::define(&shared_defs.settings);
+                let settings = crate::isa::x86::define_settings(&shared_defs.settings);
                 gen_settings::generate(
                     &settings,
                     gen_settings::ParentGroup::Shared,
