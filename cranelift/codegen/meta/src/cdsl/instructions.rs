@@ -720,13 +720,6 @@ mod test {
     }
 
     #[test]
-    fn ensure_bound_instructions_can_bind_immediates() {
-        let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
-        let bound_inst = inst.bind(Immediate::IntCC(IntCC::Equal));
-        assert!(bound_inst.verify_bindings().is_ok());
-    }
-
-    #[test]
     #[should_panic]
     fn ensure_instructions_fail_to_bind() {
         let inst = build_fake_instruction(vec![], vec![]);
@@ -741,15 +734,5 @@ mod test {
         let in1 = OperandKindFields::TypeVar(TypeVar::new("a", "...", type1));
         let inst = build_fake_instruction(vec![in1], vec![]);
         inst.bind(LaneType::Int(I32)).bind(LaneType::Int(I64));
-    }
-
-    #[test]
-    #[should_panic]
-    fn ensure_instructions_fail_to_bind_too_many_immediates() {
-        let inst = build_fake_instruction(vec![OperandKindFields::ImmValue], vec![]);
-        inst.bind(BindParameter::Immediate(Immediate::IntCC(IntCC::Equal)))
-            .bind(BindParameter::Immediate(Immediate::IntCC(IntCC::Equal)));
-        // Trying to bind too many immediates to an instruction should fail; note that the immediate
-        // values are nonsensical but irrelevant to the purpose of this test.
     }
 }
