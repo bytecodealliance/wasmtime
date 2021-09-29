@@ -1159,7 +1159,7 @@ impl<'a> Parser<'a> {
                         Ok(triple) => triple,
                         Err(err) => return err!(loc, err),
                     };
-                    let mut isa_builder = match isa::lookup_variant(triple) {
+                    let mut isa_builder = match isa::lookup(triple) {
                         Err(isa::LookupError::SupportDisabled) => {
                             continue;
                         }

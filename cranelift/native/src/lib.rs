@@ -41,7 +41,7 @@ pub fn builder() -> Result<isa::Builder, &'static str> {
 /// useful when more than oen backend exists for a given target
 /// (e.g., on x86-64).
 pub fn builder_with_options(infer_native_flags: bool) -> Result<isa::Builder, &'static str> {
-    let mut isa_builder = isa::lookup_variant(Triple::host()).map_err(|err| match err {
+    let mut isa_builder = isa::lookup(Triple::host()).map_err(|err| match err {
         isa::LookupError::SupportDisabled => "support for architecture disabled at compile time",
         isa::LookupError::Unsupported => "unsupported architecture",
     })?;

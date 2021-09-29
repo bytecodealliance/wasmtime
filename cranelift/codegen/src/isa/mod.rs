@@ -111,9 +111,9 @@ macro_rules! isa_builder {
     }};
 }
 
-/// Look for an ISA for the given `triple`, selecting the backend variant given
-/// by `variant` if available.
-pub fn lookup_variant(triple: Triple) -> Result<Builder, LookupError> {
+/// Look for an ISA for the given `triple`.
+/// Return a builder that can create a corresponding `TargetIsa`.
+pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
     match triple.architecture {
         Architecture::X86_64 => {
             isa_builder!(x64, (feature = "x86"), triple)
@@ -123,12 +123,6 @@ pub fn lookup_variant(triple: Triple) -> Result<Builder, LookupError> {
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
         _ => Err(LookupError::Unsupported),
     }
-}
-
-/// Look for an ISA for the given `triple`.
-/// Return a builder that can create a corresponding `TargetIsa`.
-pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
-    lookup_variant(triple)
 }
 
 /// Look for a supported ISA with the given `name`.
