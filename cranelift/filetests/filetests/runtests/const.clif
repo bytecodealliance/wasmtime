@@ -2,8 +2,7 @@ test run
 target aarch64
 target arm
 target s390x
-target x86_64 machinst
-target x86_64 legacy
+target x86_64
 
 function %i8_iconst_0() -> i8 {
 block0:

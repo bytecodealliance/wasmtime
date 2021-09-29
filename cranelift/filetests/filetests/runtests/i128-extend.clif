@@ -1,8 +1,7 @@
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
-target x86_64 machinst
-target x86_64 legacy
+target x86_64
 
 function %i128_uextend_i64(i64) -> i128 {
 block0(v0: i64):
@@ -22,3 +21,62 @@ block0(v0: i64):
 ; run: %i128_sextend_i64(-1) == -1
 ; run: %i128_sextend_i64(0x7fff_ffff_ffff_ffff) == 0x00000000_00000000_7fffffffffffffff
 ; run: %i128_sextend_i64(0xffff_ffff_eeee_0000) == 0xffffffff_ffffffff_ffffffff_eeee0000
+
+function %i128_uextend_i32(i32) -> i128 {
+block0(v0: i32):
+    v1 = uextend.i128 v0
+    return v1
+}
+; run: %i128_uextend_i32(0) == 0
+; run: %i128_uextend_i32(-1) == 0x00000000_00000000_00000000_ffffffff
+; run: %i128_uextend_i32(0xffff_eeee) == 0x00000000_00000000_00000000_ffffeeee
+
+function %i128_sextend_i32(i32) -> i128 {
+block0(v0: i32):
+    v1 = sextend.i128 v0
+    return v1
+}
+; run: %i128_sextend_i32(0) == 0
+; run: %i128_sextend_i32(-1) == -1
+; run: %i128_sextend_i32(0x7fff_ffff) == 0x00000000_00000000_00000000_7fffffff
+; run: %i128_sextend_i32(0xffff_eeee) == 0xffffffff_ffffffff_ffffffff_ffff_eeee
+
+
+function %i128_uextend_i16(i16) -> i128 {
+block0(v0: i16):
+    v1 = uextend.i128 v0
+    return v1
+}
+; run: %i128_uextend_i16(0) == 0
+; run: %i128_uextend_i16(-1) == 0x00000000_00000000_00000000_0000ffff
+; run: %i128_uextend_i16(0xffee) == 0x00000000_00000000_00000000_0000ffee
+
+function %i128_sextend_i16(i16) -> i128 {
+block0(v0: i16):
+    v1 = sextend.i128 v0
+    return v1
+}
+; run: %i128_sextend_i16(0) == 0
+; run: %i128_sextend_i16(-1) == -1
+; run: %i128_sextend_i16(0x7fff) == 0x00000000_00000000_00000000_00007fff
+; run: %i128_sextend_i16(0xffee) == 0xffffffff_ffffffff_ffffffff_ffffffee
+
+
+function %i128_uextend_i8(i8) -> i128 {
+block0(v0: i8):
+    v1 = uextend.i128 v0
+    return v1
+}
+; run: %i128_uextend_i8(0) == 0
+; run: %i128_uextend_i8(-1) == 0x00000000_00000000_00000000_000000ff
+; run: %i128_uextend_i8(0xfe) == 0x00000000_00000000_00000000_000000fe
+
+function %i128_sextend_i8(i8) -> i128 {
+block0(v0: i8):
+    v1 = sextend.i128 v0
+    return v1
+}
+; run: %i128_sextend_i8(0) == 0
+; run: %i128_sextend_i8(-1) == -1
+; run: %i128_sextend_i8(0x7f) == 0x00000000_00000000_00000000_0000007f
+; run: %i128_sextend_i8(0xfe) == 0xffffffff_ffffffff_ffffffff_fffffffe

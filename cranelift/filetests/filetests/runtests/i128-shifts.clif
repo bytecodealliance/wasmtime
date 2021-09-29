@@ -1,7 +1,7 @@
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
-target x86_64 machinst
+target x86_64
 
 
 function %ishl_i128_i128(i128, i8) -> i128 {

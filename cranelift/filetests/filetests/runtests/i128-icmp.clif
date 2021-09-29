@@ -2,7 +2,7 @@ test interpret
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
-target x86_64 machinst
+target x86_64
 
 function %icmp_eq_i128(i128, i128) -> b1 {
 block0(v0: i128, v1: i128):

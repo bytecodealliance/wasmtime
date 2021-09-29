@@ -2,11 +2,7 @@ test run
 ; target s390x TODO: Not yet implemented on s390x
 target aarch64
 set enable_simd
-target x86_64 machinst
-set enable_simd
-target x86_64 legacy
-set enable_simd
-target x86_64 legacy skylake
+target x86_64
 
 
 function %vconst_zeroes() -> b1 {

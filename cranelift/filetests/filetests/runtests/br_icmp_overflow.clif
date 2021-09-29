@@ -1,7 +1,7 @@
 test interpret
 test run
 target aarch64
-target x86_64 machinst
+target x86_64
 
 ; TODO: Merge this with the main br_icmp file when s390x supports overflows.
 ; See: https://github.com/bytecodealliance/wasmtime/issues/3060

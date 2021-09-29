@@ -1,7 +1,7 @@
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
-target x86_64 machinst
+target x86_64
 
 function %ireduce_128_64(i128) -> i64 {
 block0(v0: i128):

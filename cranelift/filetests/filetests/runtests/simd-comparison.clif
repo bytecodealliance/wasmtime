@@ -2,9 +2,7 @@ test run
 target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 set enable_simd
-target x86_64 machinst
-set enable_simd
-target x86_64 legacy
+target x86_64
 
 function %icmp_eq_i8x16() -> b8 {
 block0:
