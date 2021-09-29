@@ -4,11 +4,17 @@ use crate::ast::*;
 use crate::error::*;
 use crate::lexer::{Lexer, Pos, Token};
 
+/// Parse the top-level ISLE definitions and return their AST.
+pub fn parse(lexer: Lexer) -> Result<Defs> {
+    let parser = Parser::new(lexer);
+    parser.parse_defs()
+}
+
 /// The ISLE parser.
 ///
 /// Takes in a lexer and creates an AST.
 #[derive(Clone, Debug)]
-pub struct Parser<'a> {
+struct Parser<'a> {
     lexer: Lexer<'a>,
 }
 
@@ -113,16 +119,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parse the top-level ISLE definitions and return their AST.
-    pub fn parse_defs(&mut self) -> Result<Defs> {
+    fn parse_defs(mut self) -> Result<Defs> {
         let mut defs = vec![];
         while !self.lexer.eof() {
             defs.push(self.parse_def()?);
         }
         Ok(Defs {
             defs,
-            filenames: self.lexer.filenames.clone(),
-            file_texts: self.lexer.file_texts.clone(),
+            filenames: self.lexer.filenames,
+            file_texts: self.lexer.file_texts,
         })
     }
 

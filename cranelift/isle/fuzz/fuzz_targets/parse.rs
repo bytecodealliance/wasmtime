@@ -9,9 +9,7 @@ fuzz_target!(|s: &str| {
     log::debug!("lexer = {:?}", lexer);
 
     if let Ok(lexer) = lexer {
-        let mut parser = isle::parser::Parser::new(lexer);
-
-        let defs = parser.parse_defs();
+        let defs = isle::parser::parse(lexer);
         log::debug!("defs = {:?}", defs);
     }
 });

@@ -35,8 +35,7 @@ fn main() -> Result<()> {
     let opts = Opts::from_args();
 
     let lexer = lexer::Lexer::from_files(opts.inputs)?;
-    let mut parser = parser::Parser::new(lexer);
-    let defs = parser.parse_defs()?;
+    let defs = parser::parse(lexer)?;
     let code = compile::compile(&defs)?;
 
     let stdout = io::stdout();
