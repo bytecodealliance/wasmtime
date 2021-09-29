@@ -21,11 +21,7 @@ pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
 }
 
 /// Generates all the Rust source files used in Cranelift from the meta-language.
-pub fn generate(
-    old_backend_isas: &[isa::Isa],
-    new_backend_isas: &[isa::Isa],
-    out_dir: &str,
-) -> Result<(), error::Error> {
+pub fn generate(isas: &[isa::Isa], out_dir: &str) -> Result<(), error::Error> {
     // Create all the definitions:
     // - common definitions.
     let mut shared_defs = shared::define();
@@ -39,7 +35,7 @@ pub fn generate(
     gen_types::generate("types.rs", &out_dir)?;
 
     // - per ISA definitions.
-    let target_isas = isa::define(old_backend_isas, &mut shared_defs);
+    let target_isas = isa::define(isas, &mut shared_defs);
 
     // At this point, all definitions are done.
     let all_formats = shared_defs.verify_instruction_formats();
@@ -60,32 +56,6 @@ pub fn generate(
             &format!("settings-{}.rs", isa.name),
             &out_dir,
         )?;
-    }
-
-    for isa in new_backend_isas {
-        match isa {
-            isa::Isa::X86 => {
-                // If the old backend ISAs contained x86, this file has already been generated.
-                if old_backend_isas.iter().any(|isa| *isa == isa::Isa::X86) {
-                    continue;
-                }
-
-                let settings = crate::isa::x86::define_settings(&shared_defs.settings);
-                gen_settings::generate(
-                    &settings,
-                    gen_settings::ParentGroup::Shared,
-                    "settings-x86.rs",
-                    &out_dir,
-                )?;
-            }
-            isa::Isa::Arm64 => {
-                // aarch64 doesn't have platform-specific settings.
-            }
-            isa::Isa::S390x => {
-                // s390x doesn't have platform-specific settings.
-            }
-            isa::Isa::Arm32 => todo!(),
-        }
     }
 
     Ok(())

@@ -9,7 +9,7 @@ pub(crate) fn define(shared_defs: &mut SharedDefinitions) -> TargetIsa {
     TargetIsa::new("x86", settings)
 }
 
-pub(crate) fn define_settings(shared: &SettingGroup) -> SettingGroup {
+fn define_settings(shared: &SettingGroup) -> SettingGroup {
     let mut settings = SettingGroupBuilder::new("x86");
 
     // CPUID.01H:ECX
