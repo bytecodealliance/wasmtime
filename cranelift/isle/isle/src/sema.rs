@@ -269,6 +269,10 @@ impl Term {
         }
     }
 
+    fn is_declared(&self) -> bool {
+        matches!(self.kind, TermKind::Declared)
+    }
+
     /// Is this term external?
     pub fn is_external(&self) -> bool {
         match &self.kind {
@@ -680,6 +684,7 @@ impl TermEnv {
         env.collect_extractor_templates(tyenv, defs);
         tyenv.return_errors()?;
         env.collect_rules(tyenv, defs);
+        env.check_for_undefined_decls(tyenv, defs);
         tyenv.return_errors()?;
 
         Ok(env)
@@ -1008,6 +1013,24 @@ impl TermEnv {
                     }
                 }
                 _ => {}
+            }
+        }
+    }
+
+    fn check_for_undefined_decls(&self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
+        for def in &defs.defs {
+            if let ast::Def::Decl(decl) = def {
+                let sym = tyenv.intern_mut(&decl.term);
+                let term = self.term_map[&sym];
+                if self.terms[term.index()].is_declared() {
+                    tyenv.report_error(
+                        decl.pos,
+                        format!(
+                            "no rules, extractor, or external definition for declaration '{}'",
+                            decl.term.0
+                        ),
+                    );
+                }
             }
         }
     }
