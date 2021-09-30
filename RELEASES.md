@@ -36,6 +36,11 @@
 
 [RFC 14]: https://github.com/bytecodealliance/rfcs/pull/14
 
+* Cranelift's old x86 backend has been removed, as per [RFC 12].
+  [#3309](https://github.com/bytecodealliance/wasmtime/pull/3009)
+  
+[RFC 12]: https://github.com/bytecodealliance/rfcs/pull/12
+
 ## 0.30.0
 
 Released 2021-09-17.
