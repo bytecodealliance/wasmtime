@@ -7,9 +7,6 @@ block0(v0: i32):
     jump block1(v0)
 
 block1(v1: i32):
-    regmove.i32 v0, %x10 -> %x20
-; check: block1(v1: i32):
-; check: regmove.i32 v0, %x10 -> %x20
     v2 = iconst.i32 1
     brz v1, block3(v1)
     jump block2

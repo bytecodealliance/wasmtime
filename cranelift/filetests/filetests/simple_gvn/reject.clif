@@ -1,15 +1,5 @@
 test simple-gvn
 
-function %other_side_effects(i32) -> i32 {
-block0(v0: i32):
-   regmove v0, %10 -> %20
-   regmove v0, %10 -> %20
-   regmove v0, %20 -> %10
-; check: regmove v0, %10 -> %20
-; check: regmove v0, %10 -> %20
-    return v0
-}
-
 function %differing_typevars() -> i64 {
 block0:
     v0 = iconst.i32 7
