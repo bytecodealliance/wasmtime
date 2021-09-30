@@ -1,17 +1,13 @@
 use cranelift_entity::{entity_impl, PrimaryMap};
 
 use std::fmt;
-use std::fmt::{Display, Error, Formatter};
 use std::rc::Rc;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
-use crate::cdsl::types::{LaneType, ReferenceType, ValueType};
 use crate::cdsl::typevar::TypeVar;
-
-use crate::shared::types::{Bool, Float, Int, Reference};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct OpcodeNumber(u32);
@@ -33,14 +29,6 @@ impl<'all_inst> InstructionGroupBuilder<'all_inst> {
         let inst = builder.build(opcode_number);
         self.all_instructions.push(inst);
     }
-}
-
-/// Instructions can have parameters bound to them to specialize them for more specific encodings
-/// (e.g. the encoding for adding two float types may be different than that of adding two
-/// integer types)
-pub(crate) trait Bindable {
-    /// Bind a parameter to an instruction
-    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction;
 }
 
 #[derive(Debug)]
@@ -118,12 +106,6 @@ impl InstructionContent {
 }
 
 pub(crate) type Instruction = Rc<InstructionContent>;
-
-impl Bindable for Instruction {
-    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
-        BoundInstruction::new(self).bind(parameter)
-    }
-}
 
 impl fmt::Display for InstructionContent {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -336,127 +318,6 @@ impl InstructionBuilder {
     }
 }
 
-/// An parameter used for binding instructions to specific types or values
-pub(crate) enum BindParameter {
-    Lane(LaneType),
-    Reference(ReferenceType),
-}
-
-impl From<Int> for BindParameter {
-    fn from(ty: Int) -> Self {
-        BindParameter::Lane(ty.into())
-    }
-}
-
-impl From<Bool> for BindParameter {
-    fn from(ty: Bool) -> Self {
-        BindParameter::Lane(ty.into())
-    }
-}
-
-impl From<Float> for BindParameter {
-    fn from(ty: Float) -> Self {
-        BindParameter::Lane(ty.into())
-    }
-}
-
-impl From<LaneType> for BindParameter {
-    fn from(ty: LaneType) -> Self {
-        BindParameter::Lane(ty)
-    }
-}
-
-impl From<Reference> for BindParameter {
-    fn from(ty: Reference) -> Self {
-        BindParameter::Reference(ty.into())
-    }
-}
-
-#[derive(Clone)]
-pub(crate) enum Immediate {}
-
-impl Display for Immediate {
-    fn fmt(&self, _f: &mut Formatter) -> Result<(), Error> {
-        match self {
-            _ => panic!(),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct BoundInstruction {
-    pub inst: Instruction,
-    pub value_types: Vec<ValueType>,
-    pub immediate_values: Vec<Immediate>,
-}
-
-impl BoundInstruction {
-    /// Construct a new bound instruction (with nothing bound yet) from an instruction
-    fn new(inst: &Instruction) -> Self {
-        BoundInstruction {
-            inst: inst.clone(),
-            value_types: vec![],
-            immediate_values: vec![],
-        }
-    }
-
-    /// Verify that the bindings for a BoundInstruction are correct.
-    fn verify_bindings(&self) -> Result<(), String> {
-        // Verify that binding types to the instruction does not violate the polymorphic rules.
-        if !self.value_types.is_empty() {
-            match &self.inst.polymorphic_info {
-                Some(poly) => {
-                    if self.value_types.len() > 1 + poly.other_typevars.len() {
-                        return Err(format!(
-                            "trying to bind too many types for {}",
-                            self.inst.name
-                        ));
-                    }
-                }
-                None => {
-                    return Err(format!(
-                        "trying to bind a type for {} which is not a polymorphic instruction",
-                        self.inst.name
-                    ));
-                }
-            }
-        }
-
-        // Verify that only the right number of immediates are bound.
-        let immediate_count = self
-            .inst
-            .operands_in
-            .iter()
-            .filter(|o| o.is_immediate_or_entityref())
-            .count();
-        if self.immediate_values.len() > immediate_count {
-            return Err(format!(
-                "trying to bind too many immediates ({}) to instruction {} which only expects {} \
-                 immediates",
-                self.immediate_values.len(),
-                self.inst.name,
-                immediate_count
-            ));
-        }
-
-        Ok(())
-    }
-}
-
-impl Bindable for BoundInstruction {
-    fn bind(&self, parameter: impl Into<BindParameter>) -> BoundInstruction {
-        let mut modified = self.clone();
-        match parameter.into() {
-            BindParameter::Lane(lane_type) => modified.value_types.push(lane_type.into()),
-            BindParameter::Reference(reference_type) => {
-                modified.value_types.push(reference_type.into());
-            }
-        }
-        modified.verify_bindings().unwrap();
-        modified
-    }
-}
-
 /// Checks that the input operands actually match the given format.
 fn verify_format(inst_name: &str, operands_in: &[Operand], format: &InstructionFormat) {
     // A format is defined by:
@@ -660,79 +521,4 @@ fn is_ctrl_typevar_candidate(
     }
 
     Ok(other_typevars)
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::cdsl::formats::InstructionFormatBuilder;
-    use crate::cdsl::operands::{OperandKind, OperandKindFields};
-    use crate::cdsl::typevar::TypeSetBuilder;
-    use crate::shared::types::Int::{I32, I64};
-
-    fn field_to_operand(index: usize, field: OperandKindFields) -> Operand {
-        // Pretend the index string is &'static.
-        let name = Box::leak(index.to_string().into_boxed_str());
-        // Format's name / rust_type don't matter here.
-        let kind = OperandKind::new(name, name, field);
-        let operand = Operand::new(name, kind);
-        operand
-    }
-
-    fn field_to_operands(types: Vec<OperandKindFields>) -> Vec<Operand> {
-        types
-            .iter()
-            .enumerate()
-            .map(|(i, f)| field_to_operand(i, f.clone()))
-            .collect()
-    }
-
-    fn build_fake_instruction(
-        inputs: Vec<OperandKindFields>,
-        outputs: Vec<OperandKindFields>,
-    ) -> Instruction {
-        // Setup a format from the input operands.
-        let mut format = InstructionFormatBuilder::new("fake");
-        for (i, f) in inputs.iter().enumerate() {
-            match f {
-                OperandKindFields::TypeVar(_) => format = format.value(),
-                OperandKindFields::ImmValue => {
-                    format = format.imm(&field_to_operand(i, f.clone()).kind)
-                }
-                _ => {}
-            };
-        }
-        let format = format.build();
-
-        // Create the fake instruction.
-        InstructionBuilder::new("fake", "A fake instruction for testing.", &format)
-            .operands_in(field_to_operands(inputs).iter().collect())
-            .operands_out(field_to_operands(outputs).iter().collect())
-            .build(OpcodeNumber(42))
-    }
-
-    #[test]
-    fn ensure_bound_instructions_can_bind_lane_types() {
-        let type1 = TypeSetBuilder::new().ints(8..64).build();
-        let in1 = OperandKindFields::TypeVar(TypeVar::new("a", "...", type1));
-        let inst = build_fake_instruction(vec![in1], vec![]);
-        inst.bind(LaneType::Int(I32));
-    }
-
-    #[test]
-    #[should_panic]
-    fn ensure_instructions_fail_to_bind() {
-        let inst = build_fake_instruction(vec![], vec![]);
-        inst.bind(BindParameter::Lane(LaneType::Int(I32)));
-        // Trying to bind to an instruction with no inputs should fail.
-    }
-
-    #[test]
-    #[should_panic]
-    fn ensure_bound_instructions_fail_to_bind_too_many_types() {
-        let type1 = TypeSetBuilder::new().ints(8..64).build();
-        let in1 = OperandKindFields::TypeVar(TypeVar::new("a", "...", type1));
-        let inst = build_fake_instruction(vec![in1], vec![]);
-        inst.bind(LaneType::Int(I32)).bind(LaneType::Int(I64));
-    }
 }
