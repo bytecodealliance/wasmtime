@@ -1034,6 +1034,16 @@ impl TermEnv {
                         return None;
                     }
                 };
+                if !tyenv.types[ty.index()].is_prim() {
+                    tyenv.report_error(
+                        pos,
+                        format!(
+                            "expected non-primitive type {}, but found integer literal '{}'",
+                            tyenv.types[ty.index()].name(tyenv),
+                            val,
+                        ),
+                    );
+                }
                 Some((Pattern::ConstInt(ty, val), ty))
             }
             &ast::Pattern::ConstPrim { ref val, pos } => {
