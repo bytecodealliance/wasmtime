@@ -1376,7 +1376,19 @@ impl TermEnv {
 
                 Some(Expr::Var(bv.ty, bv.id))
             }
-            &ast::Expr::ConstInt { val, .. } => Some(Expr::ConstInt(ty, val)),
+            &ast::Expr::ConstInt { val, pos } => {
+                if !tyenv.types[ty.index()].is_prim() {
+                    tyenv.report_error(
+                        pos,
+                        format!(
+                            "expected non-primitive type {}, but found integer literal '{}'",
+                            tyenv.types[ty.index()].name(tyenv),
+                            val,
+                        ),
+                    );
+                }
+                Some(Expr::ConstInt(ty, val))
+            }
             &ast::Expr::ConstPrim { ref val, pos } => {
                 let val = tyenv.intern_mut(val);
                 let const_ty = match tyenv.const_types.get(&val) {
