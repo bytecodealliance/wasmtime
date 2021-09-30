@@ -1,8 +1,7 @@
 test run
 set enable_llvm_abi_extensions=true
 target aarch64
-target x86_64 machinst
-target x86_64 legacy
+target x86_64
 
 function %reverse_bits_zero() -> b1 {
 block0:

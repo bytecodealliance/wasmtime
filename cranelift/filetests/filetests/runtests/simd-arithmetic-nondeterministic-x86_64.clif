@@ -3,7 +3,7 @@
 ; simd-arithmetic-nondeterministic*.clif as well.
 test run
 set enable_simd
-target x86_64 machinst skylake
+target x86_64 skylake
 
 function %fmax_f64x2(f64x2, f64x2) -> f64x2 {
 block0(v0: f64x2, v1: f64x2):

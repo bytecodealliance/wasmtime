@@ -1,7 +1,7 @@
 test interpret
 test run
 target aarch64
-target x86_64 machinst
+target x86_64
 target s390x
 
 

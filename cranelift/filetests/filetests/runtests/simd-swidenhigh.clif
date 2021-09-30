@@ -2,7 +2,7 @@ test interpret
 test run
 target aarch64
 set enable_simd
-target x86_64 machinst
+target x86_64
 
 function %swidenhigh_i8x16(i8x16) -> i16x8 {
 block0(v0: i8x16):

@@ -137,44 +137,6 @@ check: exited with status
 #[ignore]
 #[cfg(all(
     any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64",
-    // Ignore test on new backend. The value this is looking for is
-    // not available at the point that the breakpoint is set when
-    // compiled by the new backend.
-    feature = "old-x86-backend",
-))]
-pub fn test_debug_dwarf_ptr() -> Result<()> {
-    let output = lldb_with_script(
-        &[
-            "-g",
-            "--opt-level",
-            "0",
-            "tests/all/debug/testsuite/reverse-str.wasm",
-        ],
-        r#"b reverse-str.c:9
-r
-p __vmctx->set(),&*s
-c"#,
-    )?;
-
-    check_lldb_output(
-        &output,
-        r#"
-check: Breakpoint 1: no locations (pending)
-check: stop reason = breakpoint 1.1
-check: frame #0
-sameln: reverse(s=(__ptr =
-check: "Hello, world."
-check: resuming
-"#,
-    )?;
-    Ok(())
-}
-
-#[test]
-#[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
     target_pointer_width = "64"
 ))]
 pub fn test_debug_dwarf_ref() -> Result<()> {

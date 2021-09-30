@@ -3,7 +3,7 @@ test run
 set enable_llvm_abi_extensions=true
 target aarch64
 ; target s390x TODO: Not yet implemented on s390x
-target x86_64 machinst
+target x86_64
 
 function %i128_const_0() -> i128 {
 block0:

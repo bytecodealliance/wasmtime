@@ -1,6 +1,6 @@
 test run
 set enable_llvm_abi_extensions=true
-target x86_64 machinst
+target x86_64
 target aarch64
 
 function %i128_stack_store_load(i128) -> b1 {

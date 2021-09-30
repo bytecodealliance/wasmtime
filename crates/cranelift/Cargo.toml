@@ -27,4 +27,3 @@ thiserror = "1.0.4"
 
 [features]
 all-arch = ["cranelift-codegen/all-arch"]
-old-x86-backend = ["cranelift-codegen/old-x86-backend"]

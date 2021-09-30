@@ -1,7 +1,7 @@
 test run
 target aarch64
 target aarch64 has_lse
-target x86_64 machinst
+target x86_64
 target s390x
 
 ; We can't test that these instructions are right regarding atomicity, but we can

@@ -182,11 +182,6 @@ fn write_testsuite_tests(
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     match strategy {
         "Cranelift" => match (testsuite, testname) {
-            // Skip all reference types tests on the old backend. The modern
-            // implementation of reference types uses atomic instructions
-            // for reference counts on `externref`, but the old backend does not
-            // implement atomic instructions.
-            ("reference_types", _) if cfg!(feature = "old-x86-backend") => return true,
             // No simd support yet for s390x.
             ("simd", _) if platform_is_s390x() => return true,
             // No memory64 support yet for s390x.

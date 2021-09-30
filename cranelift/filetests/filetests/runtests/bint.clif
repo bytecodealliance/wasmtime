@@ -1,6 +1,6 @@
 test run
 target aarch64
-target x86_64 machinst
+target x86_64
 
 function %bint_b8_i16_true() -> i16 {
 block0:

@@ -71,9 +71,6 @@ parallel-compilation = ["rayon"]
 # Enables support for automatic cache configuration to be enabled in `Config`.
 cache = ["wasmtime-cache"]
 
-# Use Cranelift's old x86 backend.
-old-x86-backend = ["wasmtime-cranelift/old-x86-backend"]
-
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.
 async = ["wasmtime-fiber", "wasmtime-runtime/async"]

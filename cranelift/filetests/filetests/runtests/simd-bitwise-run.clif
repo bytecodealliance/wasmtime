@@ -1,7 +1,7 @@
 test run
 set enable_simd
 target aarch64
-target x86_64 legacy skylake
+target x86_64 skylake
 
 ; TODO: once available, replace all lane extraction with `icmp + all_ones`
 
