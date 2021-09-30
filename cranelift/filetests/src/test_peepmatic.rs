@@ -37,7 +37,7 @@ impl SubTest for TestPreopt {
         comp_ctx.compute_cfg();
         comp_ctx
             .preopt(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, Into::into(e)))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
         let text = &comp_ctx.func.display(isa).to_string();
         log::debug!("After peepmatic-based simple_preopt:\n{}", text);
 

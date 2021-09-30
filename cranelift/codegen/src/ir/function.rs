@@ -295,7 +295,7 @@ impl Function {
                         }
                         _ => panic!(
                             "Unexpected instruction {} having default destination",
-                            self.dfg.display_inst(inst, None)
+                            self.dfg.display_inst(inst)
                         ),
                     }
                 }
@@ -393,18 +393,18 @@ pub struct DisplayFunction<'a>(&'a Function, DisplayFunctionAnnotations<'a>);
 
 impl<'a> fmt::Display for DisplayFunction<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write_function(fmt, self.0, &self.1)
+        write_function(fmt, self.0)
     }
 }
 
 impl fmt::Display for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write_function(fmt, self, &DisplayFunctionAnnotations::default())
+        write_function(fmt, self)
     }
 }
 
 impl fmt::Debug for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write_function(fmt, self, &DisplayFunctionAnnotations::default())
+        write_function(fmt, self)
     }
 }

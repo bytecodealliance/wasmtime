@@ -36,7 +36,7 @@ impl SubTest for TestSimpleGVN {
         comp_ctx.flowgraph();
         comp_ctx
             .simple_gvn(context.flags_or_isa())
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, Into::into(e)))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
 
         let text = comp_ctx.func.display(context.isa).to_string();
         run_filecheck(&text, context)

@@ -51,11 +51,11 @@ impl<'a> CFGPrinter<'a> {
 
         for block in &self.func.layout {
             write!(w, "    {} [shape=record, label=\"{{", block)?;
-            crate::write::write_block_header(w, self.func, None, block, 4)?;
+            crate::write::write_block_header(w, self.func, block, 4)?;
             // Add all outgoing branch instructions to the label.
             for inst in self.func.layout.block_likely_branches(block) {
                 write!(w, " | <{}>", inst)?;
-                PlainWriter.write_instruction(w, self.func, &aliases, None, inst, 0)?;
+                PlainWriter.write_instruction(w, self.func, &aliases, inst, 0)?;
             }
             writeln!(w, "}}\"]")?
         }

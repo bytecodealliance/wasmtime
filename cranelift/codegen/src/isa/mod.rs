@@ -233,10 +233,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
-    /// Get a data structure describing the registers in this ISA.
-    // TODO remove
-    fn register_info(&self) -> RegInfo;
-
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
     fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {

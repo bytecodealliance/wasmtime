@@ -1,7 +1,7 @@
 //! Adapter for a `MachBackend` to implement the `TargetIsa` trait.
 
 use crate::ir;
-use crate::isa::{RegInfo, TargetIsa};
+use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::settings::{self, Flags};
 
@@ -53,14 +53,6 @@ impl TargetIsa for TargetIsaAdapter {
 
     fn isa_flags(&self) -> Vec<settings::Value> {
         self.backend.isa_flags()
-    }
-
-    fn register_info(&self) -> RegInfo {
-        // Called from function's Display impl, so we need a stub here.
-        RegInfo {
-            banks: &[],
-            classes: &[],
-        }
     }
 
     fn get_mach_backend(&self) -> Option<&dyn MachBackend> {

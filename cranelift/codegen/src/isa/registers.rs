@@ -301,10 +301,7 @@ impl RegInfo {
 
     /// Try to parse a regunit name. The name is not expected to begin with `%`.
     pub fn parse_regunit(&self, name: &str) -> Option<RegUnit> {
-        self.banks
-            .iter()
-            .filter_map(|b| b.parse_regunit(name))
-            .next()
+        self.banks.iter().find_map(|b| b.parse_regunit(name))
     }
 
     /// Make a temporary object that can display a register unit.

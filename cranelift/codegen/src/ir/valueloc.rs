@@ -4,7 +4,7 @@
 //! assignment is represented by a `ValueLoc` object.
 
 use crate::ir::StackSlot;
-use crate::isa::{RegInfo, RegUnit};
+use crate::isa::RegUnit;
 use core::fmt;
 
 #[cfg(feature = "enable-serde")]
@@ -55,8 +55,8 @@ impl ValueLoc {
 
     /// Return an object that can display this value location, using the register info from the
     /// target ISA.
-    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayValueLoc<'a> {
-        DisplayValueLoc(self, regs.into())
+    pub fn display(self) -> DisplayValueLoc {
+        DisplayValueLoc(self)
     }
 }
 
@@ -64,16 +64,13 @@ impl ValueLoc {
 /// Without the register info, register units are simply show as numbers.
 ///
 /// The `DisplayValueLoc` type can display the contained `ValueLoc`.
-pub struct DisplayValueLoc<'a>(ValueLoc, Option<&'a RegInfo>);
+pub struct DisplayValueLoc(ValueLoc);
 
-impl<'a> fmt::Display for DisplayValueLoc<'a> {
+impl fmt::Display for DisplayValueLoc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
             ValueLoc::Unassigned => write!(f, "-"),
-            ValueLoc::Reg(ru) => match self.1 {
-                Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
-                None => write!(f, "%{}", ru),
-            },
+            ValueLoc::Reg(ru) => write!(f, "%{}", ru),
             ValueLoc::Stack(ss) => write!(f, "{}", ss),
         }
     }
@@ -141,8 +138,8 @@ impl ArgumentLoc {
 
     /// Return an object that can display this argument location, using the register info from the
     /// target ISA.
-    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(self, regs: R) -> DisplayArgumentLoc<'a> {
-        DisplayArgumentLoc(self, regs.into())
+    pub fn display(self) -> DisplayArgumentLoc {
+        DisplayArgumentLoc(self)
     }
 }
 
@@ -150,16 +147,13 @@ impl ArgumentLoc {
 /// Without the register info, register units are simply show as numbers.
 ///
 /// The `DisplayArgumentLoc` type can display the contained `ArgumentLoc`.
-pub struct DisplayArgumentLoc<'a>(ArgumentLoc, Option<&'a RegInfo>);
+pub struct DisplayArgumentLoc(ArgumentLoc);
 
-impl<'a> fmt::Display for DisplayArgumentLoc<'a> {
+impl fmt::Display for DisplayArgumentLoc {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.0 {
             ArgumentLoc::Unassigned => write!(f, "-"),
-            ArgumentLoc::Reg(ru) => match self.1 {
-                Some(regs) => write!(f, "{}", regs.display_regunit(ru)),
-                None => write!(f, "%{}", ru),
-            },
+            ArgumentLoc::Reg(ru) => write!(f, "%{}", ru),
             ArgumentLoc::Stack(offset) => write!(f, "{}", offset),
         }
     }

@@ -38,7 +38,7 @@ impl SubTest for TestSimplePreopt {
         comp_ctx.compute_cfg();
         comp_ctx
             .preopt(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
         let text = &comp_ctx.func.display(isa).to_string();
         log::debug!("After simple_preopt:\n{}", text);
 

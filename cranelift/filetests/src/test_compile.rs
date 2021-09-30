@@ -43,7 +43,7 @@ impl SubTest for TestCompile {
 
         let CodeInfo { total_size, .. } = comp_ctx
             .compile(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
         info!(
             "Generated {} bytes of code:\n{}",

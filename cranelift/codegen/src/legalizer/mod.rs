@@ -40,7 +40,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 } => (arg, imm),
                 _ => panic!(
                     concat!("Expected ", stringify!($from), ": {}"),
-                    $pos.func.dfg.display_inst($inst, None)
+                    $pos.func.dfg.display_inst($inst)
                 ),
             };
             let ty = $pos.func.dfg.value_type(arg);
@@ -57,7 +57,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 } => (arg, imm),
                 _ => panic!(
                     concat!("Expected ", stringify!($from), ": {}"),
-                    $pos.func.dfg.display_inst($inst, None)
+                    $pos.func.dfg.display_inst($inst)
                 ),
             };
             let imm = $pos.ins().iconst($ty, imm);
@@ -106,10 +106,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                             arg,
                             imm,
                         } => (arg, imm),
-                        _ => panic!(
-                            "Expected irsub_imm: {}",
-                            pos.func.dfg.display_inst(inst, None)
-                        ),
+                        _ => panic!("Expected irsub_imm: {}", pos.func.dfg.display_inst(inst)),
                     };
                     let ty = pos.func.dfg.value_type(arg);
                     let imm = pos.ins().iconst(ty, imm);
@@ -131,10 +128,7 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                             arg,
                             imm,
                         } => (cond, arg, imm),
-                        _ => panic!(
-                            "Expected ircmp_imm: {}",
-                            pos.func.dfg.display_inst(inst, None)
-                        ),
+                        _ => panic!("Expected ircmp_imm: {}", pos.func.dfg.display_inst(inst)),
                     };
                     let ty = pos.func.dfg.value_type(x);
                     let y = pos.ins().iconst(ty, y);
@@ -170,11 +164,11 @@ fn expand_cond_trap(
             trapz = match opcode {
                 ir::Opcode::Trapz => true,
                 ir::Opcode::Trapnz | ir::Opcode::ResumableTrapnz => false,
-                _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
+                _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst)),
             };
             (arg, code, opcode)
         }
-        _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst)),
     };
 
     // Split the block after `inst`:
@@ -250,7 +244,7 @@ fn expand_br_icmp(
             destination,
             args.as_slice(&func.dfg.value_lists)[2..].to_vec(),
         ),
-        _ => panic!("Expected br_icmp {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Expected br_icmp {}", func.dfg.display_inst(inst)),
     };
 
     let old_block = func.layout.pp_block(inst);
@@ -284,10 +278,7 @@ fn expand_stack_load(
             stack_slot,
             offset,
         } => (stack_slot, offset),
-        _ => panic!(
-            "Expected stack_load: {}",
-            pos.func.dfg.display_inst(inst, None)
-        ),
+        _ => panic!("Expected stack_load: {}", pos.func.dfg.display_inst(inst)),
     };
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
@@ -316,10 +307,7 @@ fn expand_stack_store(
             stack_slot,
             offset,
         } => (arg, stack_slot, offset),
-        _ => panic!(
-            "Expected stack_store: {}",
-            pos.func.dfg.display_inst(inst, None)
-        ),
+        _ => panic!("Expected stack_store: {}", pos.func.dfg.display_inst(inst)),
     };
 
     let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);

@@ -136,9 +136,8 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
 
 fn pretty_anyhow_error(
     func: &cranelift_codegen::ir::Function,
-    isa: Option<&dyn cranelift_codegen::isa::TargetIsa>,
     err: cranelift_codegen::CodegenError,
 ) -> anyhow::Error {
-    let s = cranelift_codegen::print_errors::pretty_error(func, isa, err);
+    let s = cranelift_codegen::print_errors::pretty_error(func, err);
     anyhow::anyhow!("{}", s)
 }

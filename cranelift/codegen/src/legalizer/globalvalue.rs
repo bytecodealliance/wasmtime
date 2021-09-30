@@ -24,7 +24,7 @@ pub fn expand_global_value(
             debug_assert_eq!(opcode, ir::Opcode::GlobalValue);
             global_value
         }
-        _ => panic!("Wanted global_value: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Wanted global_value: {}", func.dfg.display_inst(inst)),
     };
 
     match func.global_values[gv] {

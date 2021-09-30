@@ -6,7 +6,7 @@
 //! This module declares the data types used to represent external functions and call signatures.
 
 use crate::ir::{ArgumentLoc, ExternalName, SigRef, Type};
-use crate::isa::{CallConv, RegInfo, RegUnit};
+use crate::isa::{CallConv, RegUnit};
 use crate::machinst::RelocDistance;
 use alloc::vec::Vec;
 use core::fmt;
@@ -51,8 +51,8 @@ impl Signature {
     }
 
     /// Return an object that can display `self` with correct register names.
-    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplaySignature<'a> {
-        DisplaySignature(self, regs.into())
+    pub fn display(&self) -> DisplaySignature<'_> {
+        DisplaySignature(self)
     }
 
     /// Find the index of a presumed unique special-purpose parameter.
@@ -109,15 +109,15 @@ impl Signature {
 }
 
 /// Wrapper type capable of displaying a `Signature` with correct register names.
-pub struct DisplaySignature<'a>(&'a Signature, Option<&'a RegInfo>);
+pub struct DisplaySignature<'a>(&'a Signature);
 
-fn write_list(f: &mut fmt::Formatter, args: &[AbiParam], regs: Option<&RegInfo>) -> fmt::Result {
+fn write_list(f: &mut fmt::Formatter, args: &[AbiParam]) -> fmt::Result {
     match args.split_first() {
         None => {}
         Some((first, rest)) => {
-            write!(f, "{}", first.display(regs))?;
+            write!(f, "{}", first.display())?;
             for arg in rest {
-                write!(f, ", {}", arg.display(regs))?;
+                write!(f, ", {}", arg.display())?;
             }
         }
     }
@@ -127,11 +127,11 @@ fn write_list(f: &mut fmt::Formatter, args: &[AbiParam], regs: Option<&RegInfo>)
 impl<'a> fmt::Display for DisplaySignature<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(")?;
-        write_list(f, &self.0.params, self.1)?;
+        write_list(f, &self.0.params)?;
         write!(f, ")")?;
         if !self.0.returns.is_empty() {
             write!(f, " -> ")?;
-            write_list(f, &self.0.returns, self.1)?;
+            write_list(f, &self.0.returns)?;
         }
         write!(f, " {}", self.0.call_conv)
     }
@@ -139,7 +139,7 @@ impl<'a> fmt::Display for DisplaySignature<'a> {
 
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.display(None).fmt(f)
+        self.display().fmt(f)
     }
 }
 
@@ -217,13 +217,13 @@ impl AbiParam {
     }
 
     /// Return an object that can display `self` with correct register names.
-    pub fn display<'a, R: Into<Option<&'a RegInfo>>>(&'a self, regs: R) -> DisplayAbiParam<'a> {
-        DisplayAbiParam(self, regs.into())
+    pub fn display<'a>(&'a self) -> DisplayAbiParam<'a> {
+        DisplayAbiParam(self)
     }
 }
 
 /// Wrapper type capable of displaying a `AbiParam` with correct register names.
-pub struct DisplayAbiParam<'a>(&'a AbiParam, Option<&'a RegInfo>);
+pub struct DisplayAbiParam<'a>(&'a AbiParam);
 
 impl<'a> fmt::Display for DisplayAbiParam<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -241,7 +241,7 @@ impl<'a> fmt::Display for DisplayAbiParam<'a> {
         }
 
         if self.0.location.is_assigned() {
-            write!(f, " [{}]", self.0.location.display(self.1))?;
+            write!(f, " [{}]", self.0.location.display())?;
         }
 
         Ok(())
@@ -250,7 +250,7 @@ impl<'a> fmt::Display for DisplayAbiParam<'a> {
 
 impl fmt::Display for AbiParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.display(None).fmt(f)
+        self.display().fmt(f)
     }
 }
 

@@ -263,15 +263,12 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         let mut stack_maps = PrintStackMaps::new(options.print);
         if options.check_translation {
             if let Err(errors) = context.verify(fisa) {
-                anyhow::bail!(
-                    "{}",
-                    pretty_verifier_error(&context.func, fisa.isa, None, errors)
-                );
+                anyhow::bail!("{}", pretty_verifier_error(&context.func, None, errors));
             }
         } else {
             let code_info = context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
-                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, fisa.isa, err)))?;
+                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
 
             if options.print_size {
                 println!(

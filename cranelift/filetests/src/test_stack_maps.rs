@@ -26,15 +26,15 @@ impl SubTest for TestStackMaps {
 
         comp_ctx
             .compile(context.isa.expect("`test stack_maps` requires an isa"))
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
         let mut sink = TestStackMapsSink::default();
         // TODO remove entirely? seems a bit meaningless now
         binemit::emit_function(
             &comp_ctx.func,
-            |func, inst, sink, isa| {
+            |func, inst, sink, _isa| {
                 if func.dfg[inst].opcode() == Opcode::Safepoint {
-                    writeln!(&mut sink.text, "{}", func.dfg.display_inst(inst, isa)).unwrap();
+                    writeln!(&mut sink.text, "{}", func.dfg.display_inst(inst)).unwrap();
                 }
             },
             &mut sink,

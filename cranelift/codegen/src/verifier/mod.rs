@@ -319,7 +319,7 @@ impl<'a> Verifier<'a> {
     /// Determine a contextual error string for an instruction.
     #[inline]
     fn context(&self, inst: Inst) -> String {
-        self.func.dfg.display_inst(inst, self.isa).to_string()
+        self.func.dfg.display_inst(inst).to_string()
     }
 
     // Check for:
@@ -1427,7 +1427,7 @@ impl<'a> Verifier<'a> {
                 self.context(inst),
                 format!(
                     "mismatched argument count for `{}`: got {}, expected {}",
-                    self.func.dfg.display_inst(inst, None),
+                    self.func.dfg.display_inst(inst),
                     variable_args.len(),
                     i,
                 ),
@@ -1491,14 +1491,13 @@ impl<'a> Verifier<'a> {
                         ));
                     }
                 } else {
-                    let reginfo = self.isa.map(|i| i.register_info());
                     return errors.fatal((
                         inst,
                         self.context(inst),
                         format!(
                             "Outgoing stack argument {} in wrong location: {}",
                             arg,
-                            arg_loc.display(reginfo.as_ref())
+                            arg_loc.display()
                         ),
                     ));
                 }
@@ -1903,7 +1902,7 @@ impl<'a> Verifier<'a> {
         if !errors.is_empty() {
             log::warn!(
                 "Found verifier errors in function:\n{}",
-                pretty_verifier_error(self.func, None, None, errors.clone())
+                pretty_verifier_error(self.func, None, errors.clone())
             );
         }
 
