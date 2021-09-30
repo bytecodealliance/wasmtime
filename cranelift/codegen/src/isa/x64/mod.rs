@@ -15,7 +15,6 @@ use crate::machinst::{
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
-use core::hash::{Hash, Hasher};
 
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::Triple;
@@ -93,11 +92,6 @@ impl MachBackend for X64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.x64_flags.iter().collect()
-    }
-
-    fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
-        self.flags.hash(&mut hasher);
-        self.x64_flags.hash(&mut hasher);
     }
 
     fn name(&self) -> &'static str {

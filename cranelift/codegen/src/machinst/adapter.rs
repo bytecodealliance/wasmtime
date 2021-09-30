@@ -56,10 +56,6 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.isa_flags()
     }
 
-    fn hash_all_flags(&self, hasher: &mut dyn Hasher) {
-        self.backend.hash_all_flags(hasher);
-    }
-
     fn register_info(&self) -> RegInfo {
         // Called from function's Display impl, so we need a stub here.
         RegInfo {

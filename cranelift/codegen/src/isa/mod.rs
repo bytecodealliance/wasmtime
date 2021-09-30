@@ -60,7 +60,6 @@ use alloc::{boxed::Box, vec::Vec};
 use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
-use core::hash::Hasher;
 use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -234,10 +233,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
-
-    /// Hashes all flags, both ISA-independent and ISA-specific, into the
-    /// specified hasher.
-    fn hash_all_flags(&self, hasher: &mut dyn Hasher);
 
     /// Get the default calling convention of this target.
     fn default_call_conv(&self) -> CallConv {
