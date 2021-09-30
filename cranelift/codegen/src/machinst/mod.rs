@@ -401,10 +401,6 @@ pub trait MachBackend {
     /// Condition that will be true when an IaddIfcout overflows.
     fn unsigned_add_overflow_condition(&self) -> IntCC;
 
-    /// Machine-specific condcode info needed by TargetIsa.
-    /// Condition that will be true when an IsubIfcout overflows.
-    fn unsigned_sub_overflow_condition(&self) -> IntCC;
-
     /// Produces unwind info based on backend results.
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(

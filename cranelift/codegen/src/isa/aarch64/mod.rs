@@ -120,13 +120,6 @@ impl MachBackend for AArch64Backend {
         IntCC::UnsignedGreaterThanOrEqual
     }
 
-    fn unsigned_sub_overflow_condition(&self) -> IntCC {
-        // unsigned `<`; this corresponds to the carry flag cleared on aarch64, which happens on
-        // underflow of a subtract (aarch64 follows a carry-cleared-on-borrow convention, the
-        // opposite of x86).
-        IntCC::UnsignedLessThan
-    }
-
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,

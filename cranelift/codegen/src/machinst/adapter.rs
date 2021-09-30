@@ -8,7 +8,6 @@ use crate::settings::{self, Flags};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 
-use core::any::Any;
 use std::fmt;
 use target_lexicon::Triple;
 
@@ -72,10 +71,6 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.unsigned_add_overflow_condition()
     }
 
-    fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC {
-        self.backend.unsigned_sub_overflow_condition()
-    }
-
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.backend.create_systemv_cie()
@@ -84,9 +79,5 @@ impl TargetIsa for TargetIsaAdapter {
     #[cfg(feature = "unwind")]
     fn map_regalloc_reg_to_dwarf(&self, r: Reg) -> Result<u16, RegisterMappingError> {
         self.backend.map_reg_to_dwarf(r)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
     }
 }

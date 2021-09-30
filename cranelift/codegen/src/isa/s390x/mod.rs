@@ -126,10 +126,6 @@ impl MachBackend for S390xBackend {
         IntCC::UnsignedGreaterThan
     }
 
-    fn unsigned_sub_overflow_condition(&self) -> IntCC {
-        unimplemented!()
-    }
-
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,

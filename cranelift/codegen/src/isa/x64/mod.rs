@@ -112,12 +112,6 @@ impl MachBackend for X64Backend {
         IntCC::UnsignedLessThan
     }
 
-    fn unsigned_sub_overflow_condition(&self) -> IntCC {
-        // unsigned `<`; this corresponds to the carry flag set on x86, which
-        // indicates a sub has underflowed (carry is borrow for subtract).
-        IntCC::UnsignedLessThan
-    }
-
     #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,

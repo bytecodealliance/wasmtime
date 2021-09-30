@@ -57,7 +57,6 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use alloc::{boxed::Box, vec::Vec};
-use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
@@ -290,24 +289,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         }
     }
 
-    /// Does the CPU implement scalar comparisons using a CPU flags register?
-    fn uses_cpu_flags(&self) -> bool {
-        false
-    }
-
-    /// Does the CPU implement multi-register addressing?
-    fn uses_complex_addresses(&self) -> bool {
-        false
-    }
-
     /// Get a data structure describing the registers in this ISA.
+    // TODO remove
     fn register_info(&self) -> RegInfo;
-
-    #[cfg(feature = "unwind")]
-    /// Map a Cranelift register to its corresponding DWARF register.
-    fn map_dwarf_register(&self, _: RegUnit) -> Result<u16, RegisterMappingError> {
-        Err(RegisterMappingError::UnsupportedArchitecture)
-    }
 
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
@@ -317,9 +301,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// IntCC condition for Unsigned Addition Overflow (Carry).
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
-
-    /// IntCC condition for Unsigned Subtraction Overflow (Borrow/Carry).
-    fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC;
 
     /// Returns the flavor of unwind information emitted for this target.
     fn unwind_info_kind(&self) -> UnwindInfoKind {
@@ -358,10 +339,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
         None
     }
-
-    /// Return an [Any] reference for downcasting to the ISA-specific implementation of this trait
-    /// with `isa.as_any().downcast_ref::<isa::foo::Isa>()`.
-    fn as_any(&self) -> &dyn Any;
 }
 
 impl Debug for &dyn TargetIsa {
