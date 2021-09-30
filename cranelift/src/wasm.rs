@@ -309,8 +309,11 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             let value_ranges = if options.value_ranges {
                 Some(
                     context
-                        .build_value_labels_ranges(isa)
-                        .expect("value location ranges"),
+                        .mach_compile_result
+                        .as_ref()
+                        .unwrap()
+                        .value_labels_ranges
+                        .clone(),
                 )
             } else {
                 None

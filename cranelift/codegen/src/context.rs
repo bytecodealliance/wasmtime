@@ -9,24 +9,17 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use crate::binemit::{
-    relax_branches, shrink_instructions, CodeInfo, MemoryCodeSink, RelocSink, StackMapSink,
-    TrapSink,
-};
+use crate::binemit::{CodeInfo, MemoryCodeSink, RelocSink, StackMapSink, TrapSink};
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
-use crate::legalize_function;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
 use crate::machinst::{MachCompileResult, MachStackMap};
 use crate::nan_canonicalization::do_nan_canonicalization;
-use crate::postopt::do_postopt;
-use crate::redundant_reload_remover::RedundantReloadRemover;
-use crate::regalloc;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::CodegenResult;
 use crate::settings::{FlagsOrIsa, OptLevel};
@@ -34,8 +27,7 @@ use crate::simple_gvn::do_simple_gvn;
 use crate::simple_preopt::do_preopt;
 use crate::timing;
 use crate::unreachable_code::eliminate_unreachable_code;
-use crate::value_label::{build_value_labels_ranges, ComparableSourceLoc, ValueLabelsRanges};
-use crate::verifier::{verify_context, verify_locations, VerifierErrors, VerifierResult};
+use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -54,14 +46,8 @@ pub struct Context {
     /// Dominator tree for `func`.
     pub domtree: DominatorTree,
 
-    /// Register allocation context.
-    pub regalloc: regalloc::Context,
-
     /// Loop analysis of `func`.
     pub loop_analysis: LoopAnalysis,
-
-    /// Redundant-reload remover context.
-    pub redundant_reload_remover: RedundantReloadRemover,
 
     /// Result of MachBackend compilation, if computed.
     pub mach_compile_result: Option<MachCompileResult>,
@@ -88,9 +74,7 @@ impl Context {
             func,
             cfg: ControlFlowGraph::new(),
             domtree: DominatorTree::new(),
-            regalloc: regalloc::Context::new(),
             loop_analysis: LoopAnalysis::new(),
-            redundant_reload_remover: RedundantReloadRemover::new(),
             mach_compile_result: None,
             want_disasm: false,
         }
@@ -101,9 +85,7 @@ impl Context {
         self.func.clear();
         self.cfg.clear();
         self.domtree.clear();
-        self.regalloc.clear();
         self.loop_analysis.clear();
-        self.redundant_reload_remover.clear();
         self.mach_compile_result = None;
         self.want_disasm = false;
     }
@@ -137,13 +119,7 @@ impl Context {
         let old_len = mem.len();
         mem.resize(old_len + info.total_size as usize, 0);
         let new_info = unsafe {
-            self.emit_to_memory(
-                isa,
-                mem.as_mut_ptr().add(old_len),
-                relocs,
-                traps,
-                stack_maps,
-            )
+            self.emit_to_memory(mem.as_mut_ptr().add(old_len), relocs, traps, stack_maps)
         };
         debug_assert!(new_info == info);
         Ok(info)
@@ -177,7 +153,6 @@ impl Context {
 
         self.legalize(isa)?;
         if opt_level != OptLevel::None {
-            self.postopt(isa)?;
             self.compute_domtree();
             self.compute_loop_analysis();
             self.licm(isa)?;
@@ -192,25 +167,12 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
-        if let Some(backend) = isa.get_mach_backend() {
-            let result = backend.compile_function(&self.func, self.want_disasm)?;
-            let info = result.code_info();
-            self.mach_compile_result = Some(result);
-            Ok(info)
-        } else {
-            self.regalloc(isa)?;
-            self.prologue_epilogue(isa)?;
-            if opt_level == OptLevel::Speed || opt_level == OptLevel::SpeedAndSize {
-                self.redundant_reload_remover(isa)?;
-            }
-            if opt_level == OptLevel::SpeedAndSize {
-                self.shrink_instructions(isa)?;
-            }
-            let result = self.relax_branches(isa);
-
-            log::trace!("Compiled:\n{}", self.func.display(isa));
-            result
-        }
+        // FIXME: make this non optional
+        let backend = isa.get_mach_backend().expect("only mach backends nowadays");
+        let result = backend.compile_function(&self.func, self.want_disasm)?;
+        let info = result.code_info();
+        self.mach_compile_result = Some(result);
+        Ok(info)
     }
 
     /// Emit machine code directly into raw memory.
@@ -228,7 +190,6 @@ impl Context {
     /// Returns information about the emitted code and data.
     pub unsafe fn emit_to_memory(
         &self,
-        isa: &dyn TargetIsa,
         mem: *mut u8,
         relocs: &mut dyn RelocSink,
         traps: &mut dyn TrapSink,
@@ -236,25 +197,24 @@ impl Context {
     ) -> CodeInfo {
         let _tt = timing::binemit();
         let mut sink = MemoryCodeSink::new(mem, relocs, traps, stack_maps);
-        if let Some(ref result) = &self.mach_compile_result {
-            result.buffer.emit(&mut sink);
-            let info = sink.info;
-            // New backends do not emit StackMaps through the `CodeSink` because its interface
-            // requires `Value`s; instead, the `StackMap` objects are directly accessible via
-            // `result.buffer.stack_maps()`.
-            for &MachStackMap {
-                offset_end,
-                ref stack_map,
-                ..
-            } in result.buffer.stack_maps()
-            {
-                stack_maps.add_stack_map(offset_end, stack_map.clone());
-            }
-            info
-        } else {
-            isa.emit_function_to_memory(&self.func, &mut sink);
-            sink.info
+        let result = self
+            .mach_compile_result
+            .as_ref()
+            .expect("only using mach backend now");
+        result.buffer.emit(&mut sink);
+        let info = sink.info;
+        // New backends do not emit StackMaps through the `CodeSink` because its interface
+        // requires `Value`s; instead, the `StackMap` objects are directly accessible via
+        // `result.buffer.stack_maps()`.
+        for &MachStackMap {
+            offset_end,
+            ref stack_map,
+            ..
+        } in result.buffer.stack_maps()
+        {
+            stack_maps.add_stack_map(offset_end, stack_map.clone());
         }
+        info
     }
 
     /// If available, return information about the code layout in the
@@ -314,26 +274,6 @@ impl Context {
         Ok(())
     }
 
-    /// Run the locations verifier on the function.
-    pub fn verify_locations(&self, isa: &dyn TargetIsa) -> VerifierResult<()> {
-        let mut errors = VerifierErrors::default();
-        let _ = verify_locations(isa, &self.func, &self.cfg, None, &mut errors);
-
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
-    }
-
-    /// Run the locations verifier only if the `enable_verifier` setting is true.
-    pub fn verify_locations_if(&self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        if isa.flags().enable_verifier() {
-            self.verify_locations(isa)?;
-        }
-        Ok(())
-    }
-
     /// Perform dead-code elimination on the function.
     pub fn dce<'a, FOI: Into<FlagsOrIsa<'a>>>(&mut self, fisa: FOI) -> CodegenResult<()> {
         do_dce(&mut self.func, &mut self.domtree);
@@ -370,22 +310,10 @@ impl Context {
         // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
         self.domtree.clear();
         self.loop_analysis.clear();
-        if isa.get_mach_backend().is_some() {
-            // Run some specific legalizations only.
-            simple_legalize(&mut self.func, &mut self.cfg, isa);
-            self.verify_if(isa)
-        } else {
-            legalize_function(&mut self.func, &mut self.cfg, isa);
-            log::trace!("Legalized:\n{}", self.func.display(isa));
-            self.verify_if(isa)
-        }
-    }
 
-    /// Perform post-legalization rewrites on the function.
-    pub fn postopt(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        do_postopt(&mut self.func, isa);
-        self.verify_if(isa)?;
-        Ok(())
+        // Run some specific legalizations only.
+        simple_legalize(&mut self.func, &mut self.cfg, isa);
+        self.verify_if(isa)
     }
 
     /// Compute the control flow graph.
@@ -435,58 +363,6 @@ impl Context {
     {
         eliminate_unreachable_code(&mut self.func, &mut self.cfg, &self.domtree);
         self.verify_if(fisa)
-    }
-
-    /// Run the register allocator.
-    pub fn regalloc(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        self.regalloc
-            .run(isa, &mut self.func, &mut self.cfg, &mut self.domtree)
-    }
-
-    /// Insert prologue and epilogues after computing the stack frame layout.
-    pub fn prologue_epilogue(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        isa.prologue_epilogue(&mut self.func)?;
-        self.verify_if(isa)?;
-        self.verify_locations_if(isa)?;
-        Ok(())
-    }
-
-    /// Do redundant-reload removal after allocation of both registers and stack slots.
-    pub fn redundant_reload_remover(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        self.redundant_reload_remover
-            .run(isa, &mut self.func, &self.cfg);
-        self.verify_if(isa)?;
-        Ok(())
-    }
-
-    /// Run the instruction shrinking pass.
-    pub fn shrink_instructions(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
-        shrink_instructions(&mut self.func, isa);
-        self.verify_if(isa)?;
-        self.verify_locations_if(isa)?;
-        Ok(())
-    }
-
-    /// Run the branch relaxation pass and return information about the function's code and
-    /// read-only data.
-    pub fn relax_branches(&mut self, isa: &dyn TargetIsa) -> CodegenResult<CodeInfo> {
-        let info = relax_branches(&mut self.func, &mut self.cfg, &mut self.domtree, isa)?;
-        self.verify_if(isa)?;
-        self.verify_locations_if(isa)?;
-        Ok(info)
-    }
-
-    /// Builds ranges and location for specified value labels.
-    pub fn build_value_labels_ranges(
-        &self,
-        isa: &dyn TargetIsa,
-    ) -> CodegenResult<ValueLabelsRanges> {
-        Ok(build_value_labels_ranges::<ComparableSourceLoc>(
-            &self.func,
-            &self.regalloc,
-            self.mach_compile_result.as_ref(),
-            isa,
-        ))
     }
 
     /// Harvest candidate left-hand sides for superoptimization with Souper.

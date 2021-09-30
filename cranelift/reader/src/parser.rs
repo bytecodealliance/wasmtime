@@ -22,7 +22,7 @@ use cranelift_codegen::ir::{
     HeapStyle, JumpTable, JumpTableData, MemFlags, Opcode, SigRef, Signature, StackSlot,
     StackSlotData, StackSlotKind, Table, TableData, Type, Value, ValueLoc,
 };
-use cranelift_codegen::isa::{self, CallConv, Encoding, RegUnit, TargetIsa};
+use cranelift_codegen::isa::{self, CallConv, RegUnit, TargetIsa};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_codegen::{settings, settings::Configurable, timing};
 use smallvec::SmallVec;
@@ -250,20 +250,6 @@ impl<'a> Context<'a> {
             map: SourceMap::new(),
             unique_isa,
             aliases: Vec::new(),
-        }
-    }
-
-    // Get the index of a recipe name if it exists.
-    fn find_recipe_index(&self, recipe_name: &str) -> Option<u16> {
-        if let Some(unique_isa) = self.unique_isa {
-            unique_isa
-                .encoding_info()
-                .names
-                .iter()
-                .position(|&name| name == recipe_name)
-                .map(|idx| idx as u16)
-        } else {
-            None
         }
     }
 
@@ -957,21 +943,6 @@ impl<'a> Parser<'a> {
         if let Some(Token::Identifier(text)) = self.token() {
             self.consume();
             Ok(text)
-        } else {
-            err!(self.loc, err_msg)
-        }
-    }
-
-    // Match and consume a HexSequence that fits into a u16.
-    // This is used for instruction encodings.
-    fn match_hex16(&mut self, err_msg: &str) -> ParseResult<u16> {
-        if let Some(Token::HexSequence(bits_str)) = self.token() {
-            self.consume();
-            // The only error we anticipate from this parse is overflow, the lexer should
-            // already have ensured that the string doesn't contain invalid characters, and
-            // isn't empty or negative.
-            u16::from_str_radix(bits_str, 16)
-                .map_err(|_| self.error("the hex sequence given overflows the u16 type"))
         } else {
             err!(self.loc, err_msg)
         }
@@ -2010,7 +1981,7 @@ impl<'a> Parser<'a> {
             _ => false,
         } {
             let srcloc = self.optional_srcloc()?;
-            let (encoding, result_locations) = self.parse_instruction_encoding(ctx)?;
+            let result_locations = self.parse_instruction_encoding(ctx)?;
 
             // We need to parse instruction results here because they are shared
             // between the parsing of value aliases and the parsing of instructions.
@@ -2031,24 +2002,10 @@ impl<'a> Parser<'a> {
                 }
                 Some(Token::Equal) => {
                     self.consume();
-                    self.parse_instruction(
-                        &results,
-                        srcloc,
-                        encoding,
-                        result_locations,
-                        ctx,
-                        block,
-                    )?;
+                    self.parse_instruction(&results, srcloc, result_locations, ctx, block)?;
                 }
                 _ if !results.is_empty() => return err!(self.loc, "expected -> or ="),
-                _ => self.parse_instruction(
-                    &results,
-                    srcloc,
-                    encoding,
-                    result_locations,
-                    ctx,
-                    block,
-                )?,
+                _ => self.parse_instruction(&results, srcloc, result_locations, ctx, block)?,
             }
         }
 
@@ -2146,41 +2103,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_instruction_encoding(
-        &mut self,
-        ctx: &Context,
-    ) -> ParseResult<(Option<Encoding>, Option<Vec<ValueLoc>>)> {
-        let (mut encoding, mut result_locations) = (None, None);
+    fn parse_instruction_encoding(&mut self, ctx: &Context) -> ParseResult<Option<Vec<ValueLoc>>> {
+        let mut result_locations = None;
 
         // encoding ::= "[" encoding_literal result_locations "]"
         if self.optional(Token::LBracket) {
-            // encoding_literal ::= "-" | Identifier HexSequence
-            if !self.optional(Token::Minus) {
-                let recipe = self.match_any_identifier("expected instruction encoding or '-'")?;
-                let bits = self.match_hex16("expected a hex sequence")?;
-
-                if let Some(recipe_index) = ctx.find_recipe_index(recipe) {
-                    encoding = Some(Encoding::new(recipe_index, bits));
-                } else if ctx.unique_isa.is_some() {
-                    return err!(self.loc, "invalid instruction recipe");
-                } else {
-                    // We allow encodings to be specified when there's no unique ISA purely
-                    // for convenience, eg when copy-pasting code for a test.
-                }
-            }
-
             // result_locations ::= ("," ( "-" | names ) )?
             // names ::= Name { "," Name }
-            if self.optional(Token::Comma) {
-                let mut results = Vec::new();
+            let mut results = Vec::new();
 
+            results.push(self.parse_value_location(ctx)?);
+            while self.optional(Token::Comma) {
                 results.push(self.parse_value_location(ctx)?);
-                while self.optional(Token::Comma) {
-                    results.push(self.parse_value_location(ctx)?);
-                }
-
-                result_locations = Some(results);
             }
+
+            result_locations = Some(results);
 
             self.match_token(
                 Token::RBracket,
@@ -2188,7 +2125,7 @@ impl<'a> Parser<'a> {
             )?;
         }
 
-        Ok((encoding, result_locations))
+        Ok(result_locations)
     }
 
     // Parse instruction results and return them.
@@ -2265,7 +2202,6 @@ impl<'a> Parser<'a> {
         &mut self,
         results: &[Value],
         srcloc: ir::SourceLoc,
-        encoding: Option<Encoding>,
         result_locations: Option<Vec<ValueLoc>>,
         ctx: &mut Context,
         block: Block,
@@ -2319,10 +2255,6 @@ impl<'a> Parser<'a> {
 
         if !srcloc.is_default() {
             ctx.function.srclocs[inst] = srcloc;
-        }
-
-        if let Some(encoding) = encoding {
-            ctx.function.encodings[inst] = encoding;
         }
 
         if results.len() != num_results {

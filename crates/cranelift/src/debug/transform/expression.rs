@@ -1,7 +1,7 @@
 use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
 use anyhow::{Context, Error, Result};
-use cranelift_codegen::ir::{LabelValueLoc, StackSlots, ValueLabel, ValueLoc};
+use cranelift_codegen::ir::{LabelValueLoc, StackSlots, ValueLabel};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::ValueLabelsRanges;
 use cranelift_wasm::get_vmctx_value_label;
@@ -129,40 +129,12 @@ impl CompiledExpression {
     }
 }
 
-const X86_64_STACK_OFFSET: i64 = 16;
-
 fn translate_loc(
     loc: LabelValueLoc,
-    frame_info: Option<&FunctionFrameInfo>,
     isa: &dyn TargetIsa,
     add_stack_value: bool,
 ) -> Result<Option<Vec<u8>>> {
     Ok(match loc {
-        LabelValueLoc::ValueLoc(ValueLoc::Reg(reg)) => {
-            let machine_reg = isa.map_dwarf_register(reg)?;
-            let mut writer = ExpressionWriter::new();
-            if add_stack_value {
-                writer.write_op_reg(machine_reg)?;
-            } else {
-                writer.write_op_breg(machine_reg)?;
-                writer.write_sleb128(0)?;
-            }
-            Some(writer.into_vec())
-        }
-        LabelValueLoc::ValueLoc(ValueLoc::Stack(ss)) => {
-            if let Some(frame_info) = frame_info {
-                if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
-                    let mut writer = ExpressionWriter::new();
-                    writer.write_op_breg(X86_64::RBP.0)?;
-                    writer.write_sleb128(ss_offset as i64 + X86_64_STACK_OFFSET)?;
-                    if !add_stack_value {
-                        writer.write_op(gimli::constants::DW_OP_deref)?;
-                    }
-                    return Ok(Some(writer.into_vec()));
-                }
-            }
-            None
-        }
         LabelValueLoc::Reg(r) => {
             let machine_reg = isa.map_regalloc_reg_to_dwarf(r)?;
             let mut writer = ExpressionWriter::new();
@@ -183,8 +155,6 @@ fn translate_loc(
             }
             return Ok(Some(writer.into_vec()));
         }
-
-        _ => None,
     })
 }
 
@@ -197,35 +167,6 @@ fn append_memory_deref(
     let mut writer = ExpressionWriter::new();
     // FIXME for imported memory
     match vmctx_loc {
-        LabelValueLoc::ValueLoc(ValueLoc::Reg(vmctx_reg)) => {
-            let reg = isa.map_dwarf_register(vmctx_reg)? as u8;
-            writer.write_u8(gimli::constants::DW_OP_breg0.0 + reg)?;
-            let memory_offset = match frame_info.vmctx_memory_offset() {
-                Some(offset) => offset,
-                None => {
-                    return Ok(false);
-                }
-            };
-            writer.write_sleb128(memory_offset)?;
-        }
-        LabelValueLoc::ValueLoc(ValueLoc::Stack(ss)) => {
-            if let Some(ss_offset) = frame_info.stack_slots[ss].offset {
-                writer.write_op_breg(X86_64::RBP.0)?;
-                writer.write_sleb128(ss_offset as i64 + X86_64_STACK_OFFSET)?;
-                writer.write_op(gimli::constants::DW_OP_deref)?;
-                writer.write_op(gimli::constants::DW_OP_consts)?;
-                let memory_offset = match frame_info.vmctx_memory_offset() {
-                    Some(offset) => offset,
-                    None => {
-                        return Ok(false);
-                    }
-                };
-                writer.write_sleb128(memory_offset)?;
-                writer.write_op(gimli::constants::DW_OP_plus)?;
-            } else {
-                return Ok(false);
-            }
-        }
         LabelValueLoc::Reg(r) => {
             let reg = isa.map_regalloc_reg_to_dwarf(r)?;
             writer.write_op_breg(reg)?;
@@ -250,9 +191,6 @@ fn append_memory_deref(
             };
             writer.write_sleb128(memory_offset)?;
             writer.write_op(gimli::constants::DW_OP_plus)?;
-        }
-        _ => {
-            return Ok(false);
         }
     }
     writer.write_op(gimli::constants::DW_OP_deref)?;
@@ -416,9 +354,7 @@ impl CompiledExpression {
                                 CompiledExpressionPart::Local { label, trailing } => {
                                     let loc =
                                         *label_location.get(&label).context("label_location")?;
-                                    if let Some(expr) =
-                                        translate_loc(loc, frame_info, isa, *trailing)?
-                                    {
+                                    if let Some(expr) = translate_loc(loc, isa, *trailing)? {
                                         code_buf.extend_from_slice(&expr)
                                     } else {
                                         return Ok(None);
@@ -1221,7 +1157,7 @@ mod tests {
     }
 
     fn create_mock_value_ranges() -> (ValueLabelsRanges, (ValueLabel, ValueLabel, ValueLabel)) {
-        use cranelift_codegen::ir::{LabelValueLoc, ValueLoc};
+        use cranelift_codegen::ir::LabelValueLoc;
         use cranelift_codegen::ValueLocRange;
         use cranelift_entity::EntityRef;
         use std::collections::HashMap;
@@ -1232,7 +1168,7 @@ mod tests {
         value_ranges.insert(
             value_0,
             vec![ValueLocRange {
-                loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
+                loc: LabelValueLoc::SPOffset(0),
                 start: 0,
                 end: 25,
             }],
@@ -1240,7 +1176,7 @@ mod tests {
         value_ranges.insert(
             value_1,
             vec![ValueLocRange {
-                loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
+                loc: LabelValueLoc::SPOffset(0),
                 start: 5,
                 end: 30,
             }],
@@ -1249,12 +1185,12 @@ mod tests {
             value_2,
             vec![
                 ValueLocRange {
-                    loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
+                    loc: LabelValueLoc::SPOffset(0),
                     start: 0,
                     end: 10,
                 },
                 ValueLocRange {
-                    loc: LabelValueLoc::ValueLoc(ValueLoc::Unassigned),
+                    loc: LabelValueLoc::SPOffset(0),
                     start: 20,
                     end: 30,
                 },

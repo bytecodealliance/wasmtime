@@ -27,9 +27,6 @@ impl SubTest for TestSafepoint {
             .legalize(isa)
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
         comp_ctx.compute_domtree();
-        comp_ctx
-            .regalloc(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
 
         let text = comp_ctx.func.display(context.isa).to_string();
         run_filecheck(&text, context)

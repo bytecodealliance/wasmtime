@@ -63,16 +63,12 @@ pub use cranelift_codegen_shared::condcodes;
 
 use crate::binemit;
 use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
-use crate::isa;
 
 /// Map of value locations.
 pub type ValueLocations = SecondaryMap<Value, ValueLoc>;
 
 /// Map of jump tables.
 pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
-
-/// Map of instruction encodings.
-pub type InstEncodings = SecondaryMap<Inst, isa::Encoding>;
 
 /// Code offsets for blocks.
 pub type BlockOffsets = SecondaryMap<Block, binemit::CodeOffset>;

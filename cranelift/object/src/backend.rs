@@ -324,7 +324,6 @@ impl Module for ObjectModule {
 
         unsafe {
             ctx.emit_to_memory(
-                &*self.isa,
                 code.as_mut_ptr(),
                 &mut reloc_sink,
                 trap_sink,

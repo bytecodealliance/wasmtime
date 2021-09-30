@@ -6,13 +6,10 @@
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
 use crate::ir::{
-    Block, DataFlowGraph, DisplayFunctionAnnotations, Function, Inst, SigRef, Type, Value,
-    ValueDef, ValueLoc,
+    Block, DataFlowGraph, DisplayFunctionAnnotations, Function, Inst, SigRef, Type, Value, ValueDef,
 };
 use crate::isa::{RegInfo, TargetIsa};
 use crate::packed_option::ReservedValue;
-use crate::value_label::{LabelValueLoc, ValueLabelsRanges};
-use crate::HashSet;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::{self, Write};
@@ -278,49 +275,6 @@ pub fn write_block_header(
     writeln!(w, "):")
 }
 
-fn write_valueloc(w: &mut dyn Write, loc: LabelValueLoc, regs: &RegInfo) -> fmt::Result {
-    match loc {
-        LabelValueLoc::ValueLoc(ValueLoc::Reg(r)) => write!(w, "{}", regs.display_regunit(r)),
-        LabelValueLoc::ValueLoc(ValueLoc::Stack(ss)) => write!(w, "{}", ss),
-        LabelValueLoc::ValueLoc(ValueLoc::Unassigned) => write!(w, "?"),
-        LabelValueLoc::Reg(r) => write!(w, "{:?}", r),
-        LabelValueLoc::SPOffset(off) => write!(w, "[sp+{}]", off),
-    }
-}
-
-fn write_value_range_markers(
-    w: &mut dyn Write,
-    val_ranges: &ValueLabelsRanges,
-    regs: &RegInfo,
-    offset: u32,
-    indent: usize,
-) -> fmt::Result {
-    let mut result = String::new();
-    let mut shown = HashSet::new();
-    for (val, rng) in val_ranges {
-        for i in (0..rng.len()).rev() {
-            if rng[i].start == offset {
-                write!(&mut result, " {}@", val)?;
-                write_valueloc(&mut result, rng[i].loc, regs)?;
-                shown.insert(val);
-                break;
-            }
-        }
-    }
-    for (val, rng) in val_ranges {
-        for i in (0..rng.len()).rev() {
-            if rng[i].end == offset && !shown.contains(val) {
-                write!(&mut result, " {}\u{2620}", val)?;
-                break;
-            }
-        }
-    }
-    if !result.is_empty() {
-        writeln!(w, ";{1:0$}; {2}", indent + 24, "", result)?;
-    }
-    Ok(())
-}
-
 fn decorate_block<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut dyn Write,
@@ -329,33 +283,13 @@ fn decorate_block<FW: FuncWriter>(
     annotations: &DisplayFunctionAnnotations,
     block: Block,
 ) -> fmt::Result {
-    // Indent all instructions if any encodings are present.
-    let indent = if func.encodings.is_empty() && func.srclocs.is_empty() {
-        4
-    } else {
-        36
-    };
+    // Indent all instructions if any srclocs are present.
+    let indent = if func.srclocs.is_empty() { 4 } else { 36 };
     let isa = annotations.isa;
 
     func_w.write_block_header(w, func, isa, block, indent)?;
     for a in func.dfg.block_params(block).iter().cloned() {
         write_value_aliases(w, aliases, a, indent)?;
-    }
-
-    if let Some(isa) = isa {
-        if !func.offsets.is_empty() {
-            let encinfo = isa.encoding_info();
-            let regs = &isa.register_info();
-            for (offset, inst, size) in func.inst_offsets(block, &encinfo) {
-                func_w.write_instruction(w, func, aliases, Some(isa), inst, indent)?;
-                if size > 0 {
-                    if let Some(val_ranges) = annotations.value_ranges {
-                        write_value_range_markers(w, val_ranges, regs, offset + size, indent)?;
-                    }
-                }
-            }
-            return Ok(());
-        }
     }
 
     for inst in func.layout.block_insts(block) {
@@ -436,23 +370,6 @@ fn write_instruction(
     let srcloc = func.srclocs[inst];
     if !srcloc.is_default() {
         write!(s, "{} ", srcloc)?;
-    }
-
-    // Write out encoding info.
-    if let Some(enc) = func.encodings.get(inst).cloned() {
-        if let Some(isa) = isa {
-            write!(s, "[{}", isa.encoding_info().display(enc))?;
-            // Write value locations, if we have them.
-            if !func.locations.is_empty() {
-                let regs = isa.register_info();
-                for &r in func.dfg.inst_results(inst) {
-                    write!(s, ",{}", func.locations[r].display(&regs))?
-                }
-            }
-            write!(s, "] ")?;
-        } else {
-            write!(s, "[{}] ", enc)?;
-        }
     }
 
     // Write out prefix and indent the instruction.

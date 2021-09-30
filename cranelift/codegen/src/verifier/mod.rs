@@ -78,16 +78,13 @@ use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cmp::Ordering;
-use core::fmt::{self, Display, Formatter, Write};
+use core::fmt::{self, Display, Formatter};
 
 pub use self::cssa::verify_cssa;
-pub use self::liveness::verify_liveness;
-pub use self::locations::verify_locations;
 
 mod cssa;
 mod flags;
-mod liveness;
-mod locations;
+mod virtregs;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -1763,145 +1760,6 @@ impl<'a> Verifier<'a> {
         errors.as_result()
     }
 
-    /// If the verifier has been set up with an ISA, make sure that the recorded encoding for the
-    /// instruction (if any) matches how the ISA would encode it.
-    fn verify_encoding(&self, inst: Inst, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
-        // When the encodings table is empty, we don't require any instructions to be encoded.
-        //
-        // Once some instructions are encoded, we require all side-effecting instructions to have a
-        // legal encoding.
-        if self.func.encodings.is_empty() {
-            return Ok(());
-        }
-
-        let isa = match self.isa {
-            Some(isa) => isa,
-            None => return Ok(()),
-        };
-
-        let encoding = self.func.encodings[inst];
-        if encoding.is_legal() {
-            if self.func.dfg[inst].opcode().is_ghost() {
-                return errors.nonfatal((
-                    inst,
-                    self.context(inst),
-                    format!(
-                        "Ghost instruction has an encoding: {}",
-                        isa.encoding_info().display(encoding),
-                    ),
-                ));
-            }
-
-            let mut encodings = isa
-                .legal_encodings(
-                    &self.func,
-                    &self.func.dfg[inst],
-                    self.func.dfg.ctrl_typevar(inst),
-                )
-                .peekable();
-
-            if encodings.peek().is_none() {
-                return errors.nonfatal((
-                    inst,
-                    self.context(inst),
-                    format!(
-                        "Instruction failed to re-encode {}",
-                        isa.encoding_info().display(encoding),
-                    ),
-                ));
-            }
-
-            let has_valid_encoding = encodings.any(|possible_enc| encoding == possible_enc);
-
-            if !has_valid_encoding {
-                let mut possible_encodings = String::new();
-                let mut multiple_encodings = false;
-
-                for enc in isa.legal_encodings(
-                    &self.func,
-                    &self.func.dfg[inst],
-                    self.func.dfg.ctrl_typevar(inst),
-                ) {
-                    if !possible_encodings.is_empty() {
-                        possible_encodings.push_str(", ");
-                        multiple_encodings = true;
-                    }
-                    possible_encodings
-                        .write_fmt(format_args!("{}", isa.encoding_info().display(enc)))
-                        .unwrap();
-                }
-
-                return errors.nonfatal((
-                    inst,
-                    self.context(inst),
-                    format!(
-                        "encoding {} should be {}{}",
-                        isa.encoding_info().display(encoding),
-                        if multiple_encodings { "one of: " } else { "" },
-                        possible_encodings,
-                    ),
-                ));
-            }
-            return Ok(());
-        }
-
-        // Instruction is not encoded, so it is a ghost instruction.
-        // Instructions with side effects are not allowed to be ghost instructions.
-        let opcode = self.func.dfg[inst].opcode();
-
-        // The `fallthrough`, `fallthrough_return`, and `safepoint` instructions are not required
-        // to have an encoding.
-        if opcode == Opcode::Fallthrough
-            || opcode == Opcode::FallthroughReturn
-            || opcode == Opcode::Safepoint
-        {
-            return Ok(());
-        }
-
-        // Check if this opcode must be encoded.
-        let mut needs_enc = None;
-        if opcode.is_branch() {
-            needs_enc = Some("Branch");
-        } else if opcode.is_call() {
-            needs_enc = Some("Call");
-        } else if opcode.is_return() {
-            needs_enc = Some("Return");
-        } else if opcode.can_store() {
-            needs_enc = Some("Store");
-        } else if opcode.can_trap() {
-            needs_enc = Some("Trapping instruction");
-        } else if opcode.other_side_effects() {
-            needs_enc = Some("Instruction with side effects");
-        }
-
-        if let Some(text) = needs_enc {
-            // This instruction needs an encoding, so generate an error.
-            // Provide the ISA default encoding as a hint.
-            match self.func.encode(inst, isa) {
-                Ok(enc) => {
-                    return errors.nonfatal((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "{} must have an encoding (e.g., {})))",
-                            text,
-                            isa.encoding_info().display(enc),
-                        ),
-                    ));
-                }
-                Err(_) => {
-                    return errors.nonfatal((
-                        inst,
-                        self.context(inst),
-                        format!("{} must have an encoding", text),
-                    ))
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     fn immediate_constraints(
         &self,
         inst: Inst,
@@ -2034,14 +1892,13 @@ impl<'a> Verifier<'a> {
                 self.instruction_integrity(inst, errors)?;
                 self.verify_safepoint_unused(inst, errors)?;
                 self.typecheck(inst, errors)?;
-                self.verify_encoding(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
             }
 
             self.encodable_as_bb(block, errors)?;
         }
 
-        verify_flags(self.func, &self.expected_cfg, self.isa, errors)?;
+        verify_flags(self.func, &self.expected_cfg, errors)?;
 
         if !errors.is_empty() {
             log::warn!(

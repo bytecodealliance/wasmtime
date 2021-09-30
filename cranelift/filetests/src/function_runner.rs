@@ -248,7 +248,7 @@ fn compile(function: Function, isa: &dyn TargetIsa) -> Result<Mmap, CompilationE
     let mut code_page = MmapMut::map_anon(code_info.total_size as usize)?;
 
     unsafe {
-        context.emit_to_memory(isa, code_page.as_mut_ptr(), relocs, traps, stack_maps);
+        context.emit_to_memory(code_page.as_mut_ptr(), relocs, traps, stack_maps);
     };
 
     let code_page = code_page.make_exec()?;

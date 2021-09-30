@@ -634,7 +634,7 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
         &mut self.func.dfg
     }
 
-    fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::DataFlowGraph {
+    fn insert_built_inst(self, inst: ir::Inst) -> &'c mut ir::DataFlowGraph {
         // TODO: Remove this assertion once #796 is fixed.
         #[cfg(debug_assertions)]
         {
@@ -759,11 +759,7 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
         &mut self.func.dfg
     }
 
-    fn insert_built_inst(
-        self,
-        inst: ir::Inst,
-        ctrl_typevar: ir::Type,
-    ) -> &'c mut ir::DataFlowGraph {
+    fn insert_built_inst(self, inst: ir::Inst) -> &'c mut ir::DataFlowGraph {
         // TODO: Remove this assertion once #796 is fixed.
         #[cfg(debug_assertions)]
         {
@@ -787,27 +783,13 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
                 };
             };
         }
+
         // Insert the instruction and remember the reference.
         self.insert_inst(inst);
         self.built_inst = Some(inst);
 
         if !self.srcloc.is_default() {
             self.func.srclocs[inst] = self.srcloc;
-        }
-
-        // Skip the encoding update if we're using a new (MachInst) backend; encodings come later,
-        // during lowering.
-        if self.isa.get_mach_backend().is_none() {
-            // Assign an encoding.
-            // XXX Is there a way to describe this error to the user?
-            #[cfg_attr(feature = "cargo-clippy", allow(clippy::match_wild_err_arm))]
-            match self
-                .isa
-                .encode(&self.func, &self.func.dfg[inst], ctrl_typevar)
-            {
-                Ok(e) => self.func.encodings[inst] = e,
-                Err(_) => panic!("can't encode {}", self.display_inst(inst)),
-            }
         }
 
         &mut self.func.dfg

@@ -38,10 +38,8 @@ impl SubTest for TestCompile {
         let isa = context.isa.expect("compile needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
-        if isa.get_mach_backend().is_some() {
-            // With `MachBackend`s, we need to explicitly request dissassembly results.
-            comp_ctx.set_disasm(true);
-        }
+        // With `MachBackend`s, we need to explicitly request dissassembly results.
+        comp_ctx.set_disasm(true);
 
         let CodeInfo { total_size, .. } = comp_ctx
             .compile(isa)
@@ -53,33 +51,14 @@ impl SubTest for TestCompile {
             comp_ctx.func.display(isa)
         );
 
-        if !isa.get_mach_backend().is_some() {
-            // Verify that the returned code size matches the emitted bytes.
-            let mut sink = SizeSink { offset: 0 };
-            binemit::emit_function(
-                &comp_ctx.func,
-                |func, inst, div, sink, isa| isa.emit_inst(func, inst, div, sink),
-                &mut sink,
-                isa,
-            );
-
-            if sink.offset != total_size {
-                anyhow::bail!("Expected code size {}, got {}", total_size, sink.offset);
-            }
-
-            // Run final code through filecheck.
-            let text = comp_ctx.func.display(Some(isa)).to_string();
-            run_filecheck(&text, context)
-        } else {
-            let disasm = comp_ctx
-                .mach_compile_result
-                .as_ref()
-                .unwrap()
-                .disasm
-                .as_ref()
-                .unwrap();
-            run_filecheck(&disasm, context)
-        }
+        let disasm = comp_ctx
+            .mach_compile_result
+            .as_ref()
+            .unwrap()
+            .disasm
+            .as_ref()
+            .unwrap();
+        run_filecheck(&disasm, context)
     }
 }
 

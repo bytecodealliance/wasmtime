@@ -4,7 +4,6 @@ use crate::entity::{EntitySet, SecondaryMap};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir;
 use crate::ir::instructions::BranchInfo;
-use crate::isa;
 use crate::packed_option::PackedOption;
 use crate::timing;
 use crate::verifier::{VerifierErrors, VerifierStepResult};
@@ -24,19 +23,12 @@ use crate::verifier::{VerifierErrors, VerifierStepResult};
 pub fn verify_flags(
     func: &ir::Function,
     cfg: &ControlFlowGraph,
-    isa: Option<&dyn isa::TargetIsa>,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
     let _tt = timing::verify_flags();
-    let encinfo = if isa.is_none() || isa.unwrap().get_mach_backend().is_some() {
-        None
-    } else {
-        Some(isa.unwrap().encoding_info())
-    };
     let mut verifier = FlagsVerifier {
         func,
         cfg,
-        encinfo,
         livein: SecondaryMap::new(),
     };
     verifier.check(errors)
@@ -45,7 +37,6 @@ pub fn verify_flags(
 struct FlagsVerifier<'a> {
     func: &'a ir::Function,
     cfg: &'a ControlFlowGraph,
-    encinfo: Option<isa::EncInfo>,
 
     /// The single live-in flags value (if any) for each block.
     livein: SecondaryMap<ir::Block, PackedOption<ir::Value>>,
@@ -110,21 +101,6 @@ impl<'a> FlagsVerifier<'a> {
                             .report((inst, format!("{} clobbers live CPU flags in {}", res, live)));
                         return Err(());
                     }
-                }
-
-                // Does the instruction have an encoding that clobbers the CPU flags?
-                if self
-                    .encinfo
-                    .as_ref()
-                    .and_then(|ei| ei.operand_constraints(self.func.encodings[inst]))
-                    .map_or(false, |c| c.clobbers_flags)
-                    && live_val.is_some()
-                {
-                    errors.report((
-                        inst,
-                        format!("encoding clobbers live CPU flags in {}", live),
-                    ));
-                    return Err(());
                 }
             }
 
