@@ -64,9 +64,6 @@ pub(crate) struct Immediates {
     /// Flags for memory operations like `load` and `store`.
     pub memflags: OperandKind,
 
-    /// A register unit in the current target ISA.
-    pub regunit: OperandKind,
-
     /// A trap code indicating the reason for trapping.
     ///
     /// The Rust enum type also has a `User(u16)` variant for user-provided trap codes.
@@ -149,8 +146,6 @@ impl Immediates {
             },
 
             memflags: new_imm("flags", "ir::MemFlags").with_doc("Memory operation flags"),
-            regunit: new_imm("regunit", "isa::RegUnit")
-                .with_doc("A register unit in the target ISA"),
             trapcode: {
                 let mut trapcode_values = HashMap::new();
                 trapcode_values.insert("stk_ovf", "StackOverflow");

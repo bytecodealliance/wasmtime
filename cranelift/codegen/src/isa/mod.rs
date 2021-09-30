@@ -44,8 +44,7 @@
 //! concurrent function compilations.
 
 pub use crate::isa::call_conv::CallConv;
-pub use crate::isa::constraints::{BranchRange, ConstraintKind, OperandConstraint};
-pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
+pub use crate::isa::constraints::BranchRange;
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
 use crate::flowgraph;
@@ -79,7 +78,6 @@ pub mod unwind;
 
 mod call_conv;
 mod constraints;
-pub mod registers;
 mod stack;
 
 #[cfg(test)]

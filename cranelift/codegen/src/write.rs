@@ -201,13 +201,7 @@ fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
 // Basic blocks
 
 fn write_arg(w: &mut dyn Write, func: &Function, arg: Value) -> fmt::Result {
-    write!(w, "{}: {}", arg, func.dfg.value_type(arg))?;
-    let loc = func.locations[arg];
-    if loc.is_assigned() {
-        write!(w, " [{}]", loc.display())?
-    }
-
-    Ok(())
+    write!(w, "{}: {}", arg, func.dfg.value_type(arg))
 }
 
 /// Write out the basic block header, outdented:
@@ -539,21 +533,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 DisplayValuesWithDelimiter(&args[1..], '+'),
                 offset
             )
-        }
-        RegMove { arg, src, dst, .. } => {
-            write!(w, " {}, %{} -> %{}", arg, src, dst)
-        }
-        CopySpecial { src, dst, .. } => {
-            write!(w, " %{} -> %{}", src, dst)
-        }
-        CopyToSsa { src, .. } => {
-            write!(w, " %{}", src)
-        }
-        RegSpill { arg, src, dst, .. } => {
-            write!(w, " {}, %{} -> {}", arg, src, dst)
-        }
-        RegFill { arg, src, dst, .. } => {
-            write!(w, " {}, {} -> %{}", arg, src, dst)
         }
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),

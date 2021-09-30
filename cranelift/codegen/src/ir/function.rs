@@ -10,7 +10,7 @@ use crate::ir::{
     HeapData, Inst, InstructionData, JumpTable, JumpTableData, Opcode, SigRef, StackSlot,
     StackSlotData, Table, TableData,
 };
-use crate::ir::{BlockOffsets, SourceLocs, StackSlots, ValueLocations};
+use crate::ir::{BlockOffsets, SourceLocs, StackSlots};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use crate::ir::{JumpTableOffsets, JumpTables};
 use crate::isa::CallConv;
@@ -104,9 +104,6 @@ pub struct Function {
     /// Layout of blocks and instructions in the function body.
     pub layout: Layout,
 
-    /// Location assigned to every value.
-    pub locations: ValueLocations,
-
     /// Code offsets of the block headers.
     ///
     /// This information is only transiently available after the `binemit::relax_branches` function
@@ -156,7 +153,6 @@ impl Function {
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
-            locations: SecondaryMap::new(),
             offsets: SecondaryMap::new(),
             jt_offsets: SecondaryMap::new(),
             srclocs: SecondaryMap::new(),
@@ -176,7 +172,6 @@ impl Function {
         self.jump_tables.clear();
         self.dfg.clear();
         self.layout.clear();
-        self.locations.clear();
         self.offsets.clear();
         self.jt_offsets.clear();
         self.srclocs.clear();

@@ -6865,16 +6865,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Spill
         | Opcode::Fill
         | Opcode::FillNop
-        | Opcode::Regmove
-        | Opcode::CopySpecial
-        | Opcode::CopyToSsa
         | Opcode::CopyNop
         | Opcode::AdjustSpDown
         | Opcode::AdjustSpUpImm
         | Opcode::AdjustSpDownImm
         | Opcode::IfcmpSp
-        | Opcode::Regspill
-        | Opcode::Regfill
         | Opcode::Copy
         | Opcode::DummySargT => {
             panic!("Unused opcode should not be encountered.");

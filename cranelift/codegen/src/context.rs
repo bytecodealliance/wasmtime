@@ -196,7 +196,7 @@ impl Context {
         stack_maps: &mut dyn StackMapSink,
     ) -> CodeInfo {
         let _tt = timing::binemit();
-        let mut sink = MemoryCodeSink::new(mem, relocs, traps, stack_maps);
+        let mut sink = MemoryCodeSink::new(mem, relocs, traps);
         let result = self
             .mach_compile_result
             .as_ref()

@@ -5,8 +5,8 @@
 //!
 //! This module declares the data types used to represent external functions and call signatures.
 
-use crate::ir::{ArgumentLoc, ExternalName, SigRef, Type};
-use crate::isa::{CallConv, RegUnit};
+use crate::ir::{ExternalName, SigRef, Type};
+use crate::isa::CallConv;
 use crate::machinst::RelocDistance;
 use alloc::vec::Vec;
 use core::fmt;
@@ -157,9 +157,6 @@ pub struct AbiParam {
     /// Method for extending argument to a full register.
     pub extension: ArgumentExtension,
 
-    /// ABI-specific location of this argument, or `Unassigned` for arguments that have not yet
-    /// been legalized.
-    pub location: ArgumentLoc,
     /// Was the argument converted to pointer during legalization?
     pub legalized_to_pointer: bool,
 }
@@ -171,7 +168,6 @@ impl AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose: ArgumentPurpose::Normal,
-            location: Default::default(),
             legalized_to_pointer: false,
         }
     }
@@ -182,18 +178,6 @@ impl AbiParam {
             value_type: vt,
             extension: ArgumentExtension::None,
             purpose,
-            location: Default::default(),
-            legalized_to_pointer: false,
-        }
-    }
-
-    /// Create a parameter for a special-purpose register.
-    pub fn special_reg(vt: Type, purpose: ArgumentPurpose, regunit: RegUnit) -> Self {
-        Self {
-            value_type: vt,
-            extension: ArgumentExtension::None,
-            purpose,
-            location: ArgumentLoc::Reg(regunit),
             legalized_to_pointer: false,
         }
     }
@@ -239,11 +223,6 @@ impl<'a> fmt::Display for DisplayAbiParam<'a> {
         if self.0.purpose != ArgumentPurpose::Normal {
             write!(f, " {}", self.0.purpose)?;
         }
-
-        if self.0.location.is_assigned() {
-            write!(f, " [{}]", self.0.location.display())?;
-        }
-
         Ok(())
     }
 }
@@ -518,16 +497,6 @@ mod tests {
         assert_eq!(
             sig.to_string(),
             "(i32, i32x4) -> f32, b8 baldrdash_system_v"
-        );
-
-        // Order does not matter.
-        sig.params[0].location = ArgumentLoc::Stack(24);
-        sig.params[1].location = ArgumentLoc::Stack(8);
-
-        // Writing ABI-annotated signatures.
-        assert_eq!(
-            sig.to_string(),
-            "(i32 [24], i32x4 [8]) -> f32, b8 baldrdash_system_v"
         );
     }
 }

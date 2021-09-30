@@ -570,18 +570,6 @@ impl Mutator for RemoveUnusedEntities {
                                     .push(inst);
                             }
 
-                            InstructionData::RegSpill { dst, .. } => {
-                                stack_slot_usage_map
-                                    .entry(dst)
-                                    .or_insert_with(Vec::new)
-                                    .push(inst);
-                            }
-                            InstructionData::RegFill { src, .. } => {
-                                stack_slot_usage_map
-                                    .entry(src)
-                                    .or_insert_with(Vec::new)
-                                    .push(inst);
-                            }
                             _ => {}
                         }
                     }
@@ -598,12 +586,6 @@ impl Mutator for RemoveUnusedEntities {
                                 InstructionData::StackLoad { stack_slot, .. }
                                 | InstructionData::StackStore { stack_slot, .. } => {
                                     *stack_slot = new_stack_slot;
-                                }
-                                InstructionData::RegSpill { dst, .. } => {
-                                    *dst = new_stack_slot;
-                                }
-                                InstructionData::RegFill { src, .. } => {
-                                    *src = new_stack_slot;
                                 }
                                 _ => unreachable!(),
                             }

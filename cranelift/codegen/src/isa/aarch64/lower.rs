@@ -1407,7 +1407,7 @@ pub(crate) fn lower_i64x2_mul<C: LowerCtx<I = Inst>>(c: &mut C, insn: IRInst) {
     //   rd = |dg+ch|be+af||dg+ch|be+af|
     c.emit(Inst::VecRRR {
         alu_op: VecALUOp::Addp,
-        rd: rd,
+        rd,
         rn: rd.to_reg(),
         rm: rd.to_reg(),
         size: VectorSize::Size32x4,

@@ -661,16 +661,7 @@ fn lower_icmp_to_flags<C: LowerCtx<I = Inst>>(
         (false, true) => NarrowValueMode::SignExtend64,
         (false, false) => NarrowValueMode::ZeroExtend64,
     };
-    let inputs = [
-        InsnInput {
-            insn: insn,
-            input: 0,
-        },
-        InsnInput {
-            insn: insn,
-            input: 1,
-        },
-    ];
+    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
     let ty = ctx.input_ty(insn, 0);
     let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
     if is_signed {
@@ -759,16 +750,7 @@ fn lower_icmp_to_flags<C: LowerCtx<I = Inst>>(
 fn lower_fcmp_to_flags<C: LowerCtx<I = Inst>>(ctx: &mut C, insn: IRInst) {
     let ty = ctx.input_ty(insn, 0);
     let bits = ty_bits(ty);
-    let inputs = [
-        InsnInput {
-            insn: insn,
-            input: 0,
-        },
-        InsnInput {
-            insn: insn,
-            input: 1,
-        },
-    ];
+    let inputs = [InsnInput { insn, input: 0 }, InsnInput { insn, input: 1 }];
     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
     let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
     match bits {
@@ -2909,17 +2891,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Spill
         | Opcode::Fill
         | Opcode::FillNop
-        | Opcode::Regmove
-        | Opcode::CopySpecial
-        | Opcode::CopyToSsa
         | Opcode::CopyNop
         | Opcode::AdjustSpDown
         | Opcode::AdjustSpUpImm
         | Opcode::AdjustSpDownImm
         | Opcode::DummySargT
-        | Opcode::IfcmpSp
-        | Opcode::Regspill
-        | Opcode::Regfill => {
+        | Opcode::IfcmpSp => {
             panic!("Unused opcode should not be encountered.");
         }
 
@@ -3117,7 +3094,7 @@ fn lower_branch<C: LowerCtx<I = Inst>>(
                     info: Box::new(JTSequenceInfo {
                         default_target,
                         targets: jt_targets,
-                        targets_for_term: targets_for_term,
+                        targets_for_term,
                     }),
                 });
             }

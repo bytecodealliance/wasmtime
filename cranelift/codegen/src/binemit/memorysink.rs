@@ -15,9 +15,7 @@
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::binemit::stack_map::StackMap;
-use crate::ir::entities::Value;
-use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, Opcode, SourceLoc, TrapCode};
-use crate::isa::TargetIsa;
+use crate::ir::{ConstantOffset, ExternalName, JumpTable, Opcode, SourceLoc, TrapCode};
 use core::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
@@ -38,7 +36,6 @@ pub struct MemoryCodeSink<'a> {
     offset: isize,
     relocs: &'a mut dyn RelocSink,
     traps: &'a mut dyn TrapSink,
-    stack_maps: &'a mut dyn StackMapSink,
     /// Information about the generated code and read-only data.
     pub info: CodeInfo,
 }
@@ -54,7 +51,6 @@ impl<'a> MemoryCodeSink<'a> {
         data: *mut u8,
         relocs: &'a mut dyn RelocSink,
         traps: &'a mut dyn TrapSink,
-        stack_maps: &'a mut dyn StackMapSink,
     ) -> Self {
         Self {
             data,
@@ -67,7 +63,6 @@ impl<'a> MemoryCodeSink<'a> {
             },
             relocs,
             traps,
-            stack_maps,
         }
     }
 }
@@ -172,12 +167,6 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn end_codegen(&mut self) {
         self.info.rodata_size = self.offset() - (self.info.jumptables_size + self.info.code_size);
         self.info.total_size = self.offset();
-    }
-
-    fn add_stack_map(&mut self, val_list: &[Value], func: &Function, isa: &dyn TargetIsa) {
-        let ofs = self.offset();
-        let stack_map = StackMap::from_values(&val_list, func, isa);
-        self.stack_maps.add_stack_map(ofs, stack_map);
     }
 
     fn add_call_site(&mut self, opcode: Opcode, loc: SourceLoc) {
