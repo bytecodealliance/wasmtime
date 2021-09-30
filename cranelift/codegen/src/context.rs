@@ -167,6 +167,7 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
+        // FIXME: make this non optional
         let backend = isa.get_mach_backend().expect("only mach backends nowadays");
         let result = backend.compile_function(&self.func, self.want_disasm)?;
         let info = result.code_info();
