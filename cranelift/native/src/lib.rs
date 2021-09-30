@@ -126,7 +126,7 @@ pub fn builder_with_options(
     }
 
     // There is no is_s390x_feature_detected macro yet, so for now
-    // we use linux_hwcap from the rsix crate directly.
+    // we use getauxval from the libc crate directly.
     #[cfg(all(target_arch = "s390x", target_os = "linux"))]
     {
         use cranelift_codegen::settings::Configurable;
@@ -135,8 +135,8 @@ pub fn builder_with_options(
             return Ok(isa_builder);
         }
 
-        let v = rsix::process::linux_hwcap().0;
-        const HWCAP_S390X_VXRS_EXT2: usize = 32768;
+        let v = unsafe { libc::getauxval(libc::AT_HWCAP) };
+        const HWCAP_S390X_VXRS_EXT2: libc::c_ulong = 32768;
         if (v & HWCAP_S390X_VXRS_EXT2) != 0 {
             isa_builder.enable("has_vxrs_ext2").unwrap();
             // There is no separate HWCAP bit for mie2, so assume
