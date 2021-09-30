@@ -38,7 +38,7 @@ impl SubTest for TestPreopt {
         comp_ctx
             .preopt(isa)
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
-        let text = &comp_ctx.func.display(isa).to_string();
+        let text = &comp_ctx.func.display().to_string();
         log::debug!("After peepmatic-based simple_preopt:\n{}", text);
 
         // Only actually run the filecheck if peepmatic is enabled, because it

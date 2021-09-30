@@ -220,7 +220,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             {
                 println!("; Exported as \"{}\"", export_name);
             }
-            println!("{}", context.func.display(None));
+            println!("{}", context.func.display());
             vprintln!(options.verbose, "");
         }
         let _ = terminal.reset();
@@ -318,7 +318,6 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             println!(
                 "{}",
                 context.func.display_with(DisplayFunctionAnnotations {
-                    isa: fisa.isa,
                     value_ranges: value_ranges.as_ref(),
                 })
             );

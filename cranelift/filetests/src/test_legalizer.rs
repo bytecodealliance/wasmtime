@@ -41,7 +41,7 @@ impl SubTest for TestLegalizer {
             .legalize(isa)
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
-        let text = comp_ctx.func.display(Some(isa)).to_string();
+        let text = comp_ctx.func.display().to_string();
         run_filecheck(&text, context)
     }
 }

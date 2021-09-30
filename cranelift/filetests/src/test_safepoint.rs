@@ -28,7 +28,7 @@ impl SubTest for TestSafepoint {
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
         comp_ctx.compute_domtree();
 
-        let text = comp_ctx.func.display(context.isa).to_string();
+        let text = comp_ctx.func.display().to_string();
         run_filecheck(&text, context)
     }
 }

@@ -83,7 +83,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
 
             if options.print {
-                println!("{}", context.func.display(isa));
+                println!("{}", context.func.display());
             }
 
             if options.disasm {

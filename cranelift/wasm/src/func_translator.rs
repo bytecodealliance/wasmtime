@@ -329,7 +329,7 @@ mod tests {
         trans
             .translate_body(&mut validator, body, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
-        debug!("{}", ctx.func.display(None));
+        debug!("{}", ctx.func.display());
         ctx.verify(&flags).unwrap();
     }
 
@@ -368,7 +368,7 @@ mod tests {
         trans
             .translate_body(&mut validator, body, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
-        debug!("{}", ctx.func.display(None));
+        debug!("{}", ctx.func.display());
         ctx.verify(&flags).unwrap();
     }
 
@@ -411,7 +411,7 @@ mod tests {
         trans
             .translate_body(&mut validator, body, &mut ctx.func, &mut runtime.func_env())
             .unwrap();
-        debug!("{}", ctx.func.display(None));
+        debug!("{}", ctx.func.display());
         ctx.verify(&flags).unwrap();
     }
 

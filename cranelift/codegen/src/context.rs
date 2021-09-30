@@ -140,7 +140,7 @@ impl Context {
         log::debug!(
             "Compiling (opt level {:?}):\n{}",
             opt_level,
-            self.func.display(isa)
+            self.func.display()
         );
 
         self.compute_cfg();

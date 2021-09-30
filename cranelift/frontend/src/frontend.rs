@@ -11,7 +11,7 @@ use cranelift_codegen::ir::{
     InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot,
     StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
-use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
 
 /// Structure used for translating a series of functions into Cranelift IR.
@@ -585,8 +585,8 @@ impl<'a> FunctionBuilder<'a> {
     /// Useful for debug purposes. Use it with `None` for standard printing.
     // Clippy thinks the lifetime that follows is needless, but rustc needs it
     #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_lifetimes))]
-    pub fn display<'b, I: Into<Option<&'b dyn TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
-        self.func.display(isa)
+    pub fn display<'b>(&'b self) -> DisplayFunction {
+        self.func.display()
     }
 }
 
@@ -955,7 +955,7 @@ mod tests {
         let flags = settings::Flags::new(settings::builder());
         // println!("{}", func.display(None));
         if let Err(errors) = verify_function(&func, &flags) {
-            panic!("{}\n{}", func.display(None), errors)
+            panic!("{}\n{}", func.display(), errors)
         }
     }
 
@@ -1009,7 +1009,7 @@ mod tests {
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
     sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
@@ -1065,7 +1065,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
 block0:
     v4 = iconst.i64 0
@@ -1119,7 +1119,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
     sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
@@ -1164,7 +1164,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
 block0:
     v2 = iconst.i64 0
@@ -1204,7 +1204,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
     sig0 = (i64, i32, i64) system_v
     fn0 = %Memset sig0
@@ -1253,7 +1253,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i8x16, b8x16, f32x4 system_v {
     const0 = 0x00000000000000000000000000000000
 

@@ -48,7 +48,7 @@ impl SubTest for TestCompile {
         info!(
             "Generated {} bytes of code:\n{}",
             total_size,
-            comp_ctx.func.display(isa)
+            comp_ctx.func.display()
         );
 
         let disasm = comp_ctx

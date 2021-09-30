@@ -634,7 +634,7 @@ impl Module for JITModule {
         trap_sink: &mut dyn TrapSink,
         stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
-        info!("defining function {}: {}", id, ctx.func.display(self.isa()));
+        info!("defining function {}: {}", id, ctx.func.display());
         let CodeInfo {
             total_size: code_size,
             ..
