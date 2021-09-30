@@ -34,6 +34,26 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRRR {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(1),
+            rn: gpr(2),
+            rm: gpr(3),
+        },
+        "B9FA3012",
+        "alrk %r1, %r2, %r3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::AddLogical64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            rm: gpr(6),
+        },
+        "B9EA6045",
+        "algrk %r4, %r5, %r6",
+    ));
+    insns.push((
+        Inst::AluRRR {
             alu_op: ALUOp::Sub32,
             rd: writable_gpr(1),
             rn: gpr(2),
@@ -51,6 +71,26 @@ fn test_s390x_binemit() {
         },
         "B9E96045",
         "sgrk %r4, %r5, %r6",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::SubLogical32,
+            rd: writable_gpr(1),
+            rn: gpr(2),
+            rm: gpr(3),
+        },
+        "B9FB3012",
+        "slrk %r1, %r2, %r3",
+    ));
+    insns.push((
+        Inst::AluRRR {
+            alu_op: ALUOp::SubLogical64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            rm: gpr(6),
+        },
+        "B9EB6045",
+        "slgrk %r4, %r5, %r6",
     ));
     insns.push((
         Inst::AluRRR {
@@ -263,6 +303,33 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRR {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(1),
+            rm: gpr(2),
+        },
+        "1E12",
+        "alr %r1, %r2",
+    ));
+    insns.push((
+        Inst::AluRR {
+            alu_op: ALUOp::AddLogical64,
+            rd: writable_gpr(4),
+            rm: gpr(5),
+        },
+        "B90A0045",
+        "algr %r4, %r5",
+    ));
+    insns.push((
+        Inst::AluRR {
+            alu_op: ALUOp::AddLogical64Ext32,
+            rd: writable_gpr(4),
+            rm: gpr(5),
+        },
+        "B91A0045",
+        "algfr %r4, %r5",
+    ));
+    insns.push((
+        Inst::AluRR {
             alu_op: ALUOp::Sub32,
             rd: writable_gpr(1),
             rm: gpr(2),
@@ -287,6 +354,33 @@ fn test_s390x_binemit() {
         },
         "B9190045",
         "sgfr %r4, %r5",
+    ));
+    insns.push((
+        Inst::AluRR {
+            alu_op: ALUOp::SubLogical32,
+            rd: writable_gpr(1),
+            rm: gpr(2),
+        },
+        "1F12",
+        "slr %r1, %r2",
+    ));
+    insns.push((
+        Inst::AluRR {
+            alu_op: ALUOp::SubLogical64,
+            rd: writable_gpr(4),
+            rm: gpr(5),
+        },
+        "B90B0045",
+        "slgr %r4, %r5",
+    ));
+    insns.push((
+        Inst::AluRR {
+            alu_op: ALUOp::SubLogical64Ext32,
+            rd: writable_gpr(4),
+            rm: gpr(5),
+        },
+        "B91B0045",
+        "slgfr %r4, %r5",
     ));
     insns.push((
         Inst::AluRR {
@@ -470,6 +564,62 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRX {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "5E102000",
+        "al %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD20 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: SImm20::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E3102000005E",
+        "aly %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
+            alu_op: ALUOp::AddLogical64,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E3102000000A",
+        "alg %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
+            alu_op: ALUOp::AddLogical64Ext32,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E3102000001A",
+        "algf %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
             alu_op: ALUOp::Sub32,
             rd: writable_gpr(1),
             mem: MemArg::BXD12 {
@@ -565,6 +715,62 @@ fn test_s390x_binemit() {
         },
         "E31020000019",
         "sgf %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
+            alu_op: ALUOp::SubLogical32,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "5F102000",
+        "sl %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
+            alu_op: ALUOp::SubLogical32,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD20 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: SImm20::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E3102000005F",
+        "sly %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
+            alu_op: ALUOp::SubLogical64,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E3102000000B",
+        "slg %r1, 0(%r2)",
+    ));
+    insns.push((
+        Inst::AluRX {
+            alu_op: ALUOp::SubLogical64Ext32,
+            rd: writable_gpr(1),
+            mem: MemArg::BXD12 {
+                base: gpr(2),
+                index: zero_reg(),
+                disp: UImm12::zero(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "E3102000001B",
+        "slgf %r1, 0(%r2)",
     ));
     insns.push((
         Inst::AluRX {
@@ -939,7 +1145,7 @@ fn test_s390x_binemit() {
 
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Add32,
+            alu_op: ALUOp::AddLogical32,
             rd: writable_gpr(7),
             imm: 0,
         },
@@ -948,7 +1154,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Add32,
+            alu_op: ALUOp::AddLogical32,
             rd: writable_gpr(7),
             imm: 4294967295,
         },
@@ -957,7 +1163,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Sub32,
+            alu_op: ALUOp::SubLogical32,
             rd: writable_gpr(7),
             imm: 0,
         },
@@ -966,7 +1172,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Sub32,
+            alu_op: ALUOp::SubLogical32,
             rd: writable_gpr(7),
             imm: 4294967295,
         },
@@ -975,7 +1181,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::AddLogical64,
             rd: writable_gpr(7),
             imm: 0,
         },
@@ -984,7 +1190,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Add64,
+            alu_op: ALUOp::AddLogical64,
             rd: writable_gpr(7),
             imm: 4294967295,
         },
@@ -993,7 +1199,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Sub64,
+            alu_op: ALUOp::SubLogical64,
             rd: writable_gpr(7),
             imm: 0,
         },
@@ -1002,7 +1208,7 @@ fn test_s390x_binemit() {
     ));
     insns.push((
         Inst::AluRUImm32 {
-            alu_op: ALUOp::Sub64,
+            alu_op: ALUOp::SubLogical64,
             rd: writable_gpr(7),
             imm: 4294967295,
         },
@@ -2324,6 +2530,126 @@ fn test_s390x_binemit() {
         },
         "EB456FFF7FE8",
         "laag %r4, %r5, 524287(%r6)",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB45000080FA",
+        "laal %r4, %r5, -524288",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB450FFF7FFA",
+        "laal %r4, %r5, 524287",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB45600080FA",
+        "laal %r4, %r5, -524288(%r6)",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical32,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB456FFF7FFA",
+        "laal %r4, %r5, 524287(%r6)",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB45000080EA",
+        "laalg %r4, %r5, -524288",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: zero_reg(),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB450FFF7FEA",
+        "laalg %r4, %r5, 524287",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB45600080EA",
+        "laalg %r4, %r5, -524288(%r6)",
+    ));
+    insns.push((
+        Inst::AtomicRmw {
+            alu_op: ALUOp::AddLogical64,
+            rd: writable_gpr(4),
+            rn: gpr(5),
+            mem: MemArg::BXD20 {
+                base: gpr(6),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
+        },
+        "EB456FFF7FEA",
+        "laalg %r4, %r5, 524287(%r6)",
     ));
     insns.push((
         Inst::AtomicRmw {
