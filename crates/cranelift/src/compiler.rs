@@ -73,31 +73,19 @@ impl Compiler {
         let start_srcloc = FilePos::new(offset as u32);
         let end_srcloc = FilePos::new((offset + len) as u32);
 
-        let instructions = if let Some(ref mcr) = &context.mach_compile_result {
-            // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
-            // tuples.
-            collect_address_maps(
-                body_len,
-                mcr.buffer
-                    .get_srclocs_sorted()
-                    .into_iter()
-                    .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start))),
-            )
-        } else {
-            // Old-style backend: we need to traverse the instruction/encoding info in the function.
-            let func = &context.func;
-            let mut blocks = func.layout.blocks().collect::<Vec<_>>();
-            blocks.sort_by_key(|block| func.offsets[*block]); // Ensure inst offsets always increase
-
-            let encinfo = self.isa.encoding_info();
-            collect_address_maps(
-                body_len,
-                blocks
-                    .into_iter()
-                    .flat_map(|block| func.inst_offsets(block, &encinfo))
-                    .map(|(offset, inst, size)| (func.srclocs[inst], offset, size)),
-            )
-        };
+        // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
+        // tuples.
+        let instructions = collect_address_maps(
+            body_len,
+            context
+                .mach_compile_result
+                .as_ref()
+                .unwrap()
+                .buffer
+                .get_srclocs_sorted()
+                .into_iter()
+                .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start))),
+        );
 
         FunctionAddressMap {
             instructions: instructions.into(),
@@ -196,10 +184,14 @@ impl wasmtime_environ::Compiler for Compiler {
             self.get_function_address_map(&context, &input, code_buf.len() as u32);
 
         let ranges = if tunables.generate_native_debuginfo {
-            let ranges = context.build_value_labels_ranges(isa).map_err(|error| {
-                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-            })?;
-            Some(ranges)
+            Some(
+                context
+                    .mach_compile_result
+                    .as_ref()
+                    .unwrap()
+                    .value_labels_ranges
+                    .clone(),
+            )
         } else {
             None
         };

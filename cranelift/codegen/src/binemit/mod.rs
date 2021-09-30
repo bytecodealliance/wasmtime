@@ -4,23 +4,18 @@
 //! binary machine code.
 
 mod memorysink;
-mod relaxation;
-mod shrink;
 mod stack_map;
 
 pub use self::memorysink::{
     MemoryCodeSink, NullRelocSink, NullStackMapSink, NullTrapSink, RelocSink, StackMapSink,
     TrapSink,
 };
-pub use self::relaxation::relax_branches;
-pub use self::shrink::shrink_instructions;
 pub use self::stack_map::StackMap;
 use crate::ir::entities::Value;
 use crate::ir::{
     ConstantOffset, ExternalName, Function, Inst, JumpTable, Opcode, SourceLoc, TrapCode,
 };
 use crate::isa::TargetIsa;
-pub use crate::regalloc::RegDiversions;
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -183,16 +178,6 @@ pub trait CodeSink {
     }
 }
 
-/// Report a bad encoding error.
-#[cold]
-pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
-    panic!(
-        "Bad encoding {} for {}",
-        func.encodings[inst],
-        func.dfg.display_inst(inst, None)
-    );
-}
-
 /// Emit a function to `sink`, given an instruction emitter function.
 ///
 /// This function is called from the `TargetIsa::emit_function()` implementations with the
@@ -200,14 +185,12 @@ pub fn bad_encoding(func: &Function, inst: Inst) -> ! {
 pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS, isa: &dyn TargetIsa)
 where
     CS: CodeSink,
-    EI: Fn(&Function, Inst, &mut RegDiversions, &mut CS, &dyn TargetIsa),
+    EI: Fn(&Function, Inst, &mut CS, &dyn TargetIsa),
 {
-    let mut divert = RegDiversions::new();
     for block in func.layout.blocks() {
-        divert.at_block(&func.entry_diversions, block);
         debug_assert_eq!(func.offsets[block], sink.offset());
         for inst in func.layout.block_insts(block) {
-            emit_inst(func, inst, &mut divert, sink, isa);
+            emit_inst(func, inst, sink, isa);
         }
     }
 

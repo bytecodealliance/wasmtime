@@ -44,26 +44,19 @@
 //! concurrent function compilations.
 
 pub use crate::isa::call_conv::CallConv;
-pub use crate::isa::constraints::{
-    BranchRange, ConstraintKind, OperandConstraint, RecipeConstraints,
-};
-pub use crate::isa::enc_tables::Encodings;
-pub use crate::isa::encoding::{base_size, EncInfo, Encoding};
+pub use crate::isa::constraints::{BranchRange, ConstraintKind, OperandConstraint};
 pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
-use crate::binemit;
 use crate::flowgraph;
 use crate::ir;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::machinst::{MachBackend, UnwindInfoKind};
-use crate::regalloc;
 use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
-use crate::timing;
-use alloc::{borrow::Cow, boxed::Box, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
@@ -88,8 +81,6 @@ pub mod unwind;
 
 mod call_conv;
 mod constraints;
-mod enc_tables;
-mod encoding;
 pub mod registers;
 mod stack;
 
@@ -328,125 +319,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {
         Err(RegisterMappingError::UnsupportedArchitecture)
     }
-
-    /// Returns an iterator over legal encodings for the instruction.
-    fn legal_encodings<'a>(
-        &'a self,
-        func: &'a ir::Function,
-        inst: &'a ir::InstructionData,
-        ctrl_typevar: ir::Type,
-    ) -> Encodings<'a>;
-
-    /// Encode an instruction after determining it is legal.
-    ///
-    /// If `inst` can legally be encoded in this ISA, produce the corresponding `Encoding` object.
-    /// Otherwise, return `Legalize` action.
-    ///
-    /// This is also the main entry point for determining if an instruction is legal.
-    fn encode(
-        &self,
-        func: &ir::Function,
-        inst: &ir::InstructionData,
-        ctrl_typevar: ir::Type,
-    ) -> Result<Encoding, Legalize> {
-        let mut iter = self.legal_encodings(func, inst, ctrl_typevar);
-        iter.next().ok_or_else(|| iter.legalize())
-    }
-
-    /// Get a data structure describing the instruction encodings in this ISA.
-    fn encoding_info(&self) -> EncInfo;
-
-    /// Legalize a function signature.
-    ///
-    /// This is used to legalize both the signature of the function being compiled and any called
-    /// functions. The signature should be modified by adding `ArgumentLoc` annotations to all
-    /// arguments and return values.
-    ///
-    /// Arguments with types that are not supported by the ABI can be expanded into multiple
-    /// arguments:
-    ///
-    /// - Integer types that are too large to fit in a register can be broken into multiple
-    ///   arguments of a smaller integer type.
-    /// - Floating point types can be bit-cast to an integer type of the same size, and possible
-    ///   broken into smaller integer types.
-    /// - Vector types can be bit-cast and broken down into smaller vectors or scalars.
-    ///
-    /// The legalizer will adapt argument and return values as necessary at all ABI boundaries.
-    ///
-    /// When this function is called to legalize the signature of the function currently being
-    /// compiled, `current` is true. The legalized signature can then also contain special purpose
-    /// arguments and return values such as:
-    ///
-    /// - A `link` argument representing the link registers on RISC architectures that don't push
-    ///   the return address on the stack.
-    /// - A `link` return value which will receive the value that was passed to the `link`
-    ///   argument.
-    /// - An `sret` argument can be added if one wasn't present already. This is necessary if the
-    ///   signature returns more values than registers are available for returning values.
-    /// - An `sret` return value can be added if the ABI requires a function to return its `sret`
-    ///   argument in a register.
-    ///
-    /// Arguments and return values for the caller's frame pointer and other callee-saved registers
-    /// should not be added by this function. These arguments are not added until after register
-    /// allocation.
-    fn legalize_signature(&self, sig: &mut Cow<ir::Signature>, current: bool);
-
-    /// Get the register class that should be used to represent an ABI argument or return value of
-    /// type `ty`. This should be the top-level register class that contains the argument
-    /// registers.
-    ///
-    /// This function can assume that it will only be asked to provide register classes for types
-    /// that `legalize_signature()` produces in `ArgumentLoc::Reg` entries.
-    fn regclass_for_abi_type(&self, ty: ir::Type) -> RegClass;
-
-    /// Get the set of allocatable registers that can be used when compiling `func`.
-    ///
-    /// This set excludes reserved registers like the stack pointer and other special-purpose
-    /// registers.
-    fn allocatable_registers(&self, func: &ir::Function) -> regalloc::RegisterSet;
-
-    /// Compute the stack layout and insert prologue and epilogue code into `func`.
-    ///
-    /// Return an error if the stack frame is too large.
-    fn prologue_epilogue(&self, func: &mut ir::Function) -> CodegenResult<()> {
-        let _tt = timing::prologue_epilogue();
-        // This default implementation is unlikely to be good enough.
-        use crate::ir::stackslot::{StackOffset, StackSize};
-        use crate::stack_layout::layout_stack;
-
-        let word_size = StackSize::from(self.pointer_bytes());
-
-        // Account for the SpiderMonkey standard prologue pushes.
-        if func.signature.call_conv.extends_baldrdash() {
-            let bytes = StackSize::from(self.flags().baldrdash_prologue_words()) * word_size;
-            let mut ss = ir::StackSlotData::new(ir::StackSlotKind::IncomingArg, bytes);
-            ss.offset = Some(-(bytes as StackOffset));
-            func.stack_slots.push(ss);
-        }
-
-        let is_leaf = func.is_leaf();
-        layout_stack(&mut func.stack_slots, is_leaf, word_size)?;
-        Ok(())
-    }
-
-    /// Emit binary machine code for a single instruction into the `sink` trait object.
-    ///
-    /// Note that this will call `put*` methods on the `sink` trait object via its vtable which
-    /// is not the fastest way of emitting code.
-    ///
-    /// This function is under the "testing_hooks" feature, and is only suitable for use by
-    /// test harnesses. It increases code size, and is inefficient.
-    #[cfg(feature = "testing_hooks")]
-    fn emit_inst(
-        &self,
-        func: &ir::Function,
-        inst: ir::Inst,
-        divert: &mut regalloc::RegDiversions,
-        sink: &mut dyn binemit::CodeSink,
-    );
-
-    /// Emit a whole function into memory.
-    fn emit_function_to_memory(&self, func: &ir::Function, sink: &mut binemit::MemoryCodeSink);
 
     /// IntCC condition for Unsigned Addition Overflow (Carry).
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;

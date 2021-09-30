@@ -8,9 +8,8 @@
 //! are satisfied.
 
 use crate::binemit::CodeOffset;
-use crate::ir::{Function, Inst, ValueLoc};
+use crate::ir::ValueLoc;
 use crate::isa::{RegClass, RegUnit};
-use crate::regalloc::RegDiversions;
 
 /// Register constraint for a single value operand or instruction result.
 #[derive(PartialEq, Debug)]
@@ -85,69 +84,6 @@ pub enum ConstraintKind {
     /// The constraint's `regclass` field is the register class that would normally be used to load
     /// and store values of this type.
     Stack,
-}
-
-/// Value operand constraints for an encoding recipe.
-#[derive(PartialEq, Clone)]
-pub struct RecipeConstraints {
-    /// Constraints for the instruction's fixed value operands.
-    ///
-    /// If the instruction takes a variable number of operands, the register constraints for those
-    /// operands must be computed dynamically.
-    ///
-    /// - For branches and jumps, block arguments must match the expectations of the destination block.
-    /// - For calls and returns, the calling convention ABI specifies constraints.
-    pub ins: &'static [OperandConstraint],
-
-    /// Constraints for the instruction's fixed results.
-    ///
-    /// If the instruction produces a variable number of results, it's probably a call and the
-    /// constraints must be derived from the calling convention ABI.
-    pub outs: &'static [OperandConstraint],
-
-    /// Are any of the input constraints `FixedReg` or `FixedTied`?
-    pub fixed_ins: bool,
-
-    /// Are any of the output constraints `FixedReg` or `FixedTied`?
-    pub fixed_outs: bool,
-
-    /// Are any of the input/output constraints `Tied` (but not `FixedTied`)?
-    pub tied_ops: bool,
-
-    /// Does this instruction clobber the CPU flags?
-    ///
-    /// When true, SSA values of type `iflags` or `fflags` can not be live across the instruction.
-    pub clobbers_flags: bool,
-}
-
-impl RecipeConstraints {
-    /// Check that these constraints are satisfied by the operands on `inst`.
-    pub fn satisfied(&self, inst: Inst, divert: &RegDiversions, func: &Function) -> bool {
-        for (&arg, constraint) in func.dfg.inst_args(inst).iter().zip(self.ins) {
-            let loc = divert.get(arg, &func.locations);
-
-            if let ConstraintKind::Tied(out_index) = constraint.kind {
-                let out_val = func.dfg.inst_results(inst)[out_index as usize];
-                let out_loc = func.locations[out_val];
-                if loc != out_loc {
-                    return false;
-                }
-            }
-
-            if !constraint.satisfied(loc) {
-                return false;
-            }
-        }
-
-        for (&arg, constraint) in func.dfg.inst_results(inst).iter().zip(self.outs) {
-            let loc = divert.get(arg, &func.locations);
-            if !constraint.satisfied(loc) {
-                return false;
-            }
-        }
-
-        true
-    }
 }
 
 /// Constraints on the range of a branch instruction.

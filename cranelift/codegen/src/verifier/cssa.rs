@@ -4,10 +4,8 @@ use crate::dbg::DisplayList;
 use crate::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::{ExpandedProgramPoint, Function};
-use crate::regalloc::liveness::Liveness;
-use crate::regalloc::virtregs::VirtRegs;
 use crate::timing;
-use crate::verifier::{VerifierErrors, VerifierStepResult};
+use crate::verifier::{virtregs::VirtRegs, VerifierErrors, VerifierStepResult};
 
 /// Verify conventional SSA form for `func`.
 ///
@@ -27,7 +25,6 @@ pub fn verify_cssa(
     func: &Function,
     cfg: &ControlFlowGraph,
     domtree: &DominatorTree,
-    liveness: &Liveness,
     virtregs: &VirtRegs,
     errors: &mut VerifierErrors,
 ) -> VerifierStepResult<()> {
@@ -41,7 +38,6 @@ pub fn verify_cssa(
         cfg,
         domtree,
         virtregs,
-        liveness,
         preorder,
     };
     verifier.check_virtregs(errors)?;
@@ -54,7 +50,6 @@ struct CssaVerifier<'a> {
     cfg: &'a ControlFlowGraph,
     domtree: &'a DominatorTree,
     virtregs: &'a VirtRegs,
-    liveness: &'a Liveness,
     preorder: DominatorTreePreorder,
 }
 
@@ -70,9 +65,6 @@ impl<'a> CssaVerifier<'a> {
                 if !self.func.dfg.value_is_attached(val) {
                     return errors.fatal((val, format!("Detached value in {}", vreg)));
                 }
-                if self.liveness.get(val).is_none() {
-                    return errors.fatal((val, format!("Value in {} has no live range", vreg)));
-                };
 
                 // Check topological ordering with the previous values in the virtual register.
                 let def: ExpandedProgramPoint = self.func.dfg.value_def(val).into();
@@ -120,19 +112,7 @@ impl<'a> CssaVerifier<'a> {
                     if self.preorder.dominates(prev_block, def_block)
                         && self.domtree.dominates(prev_def, def, &self.func.layout)
                     {
-                        if self.liveness[prev_val].overlaps_def(def, def_block, &self.func.layout) {
-                            return errors.fatal((
-                                val,
-                                format!(
-                                    "Value def in {} = {} interferes with {}",
-                                    vreg,
-                                    DisplayList(values),
-                                    prev_val
-                                ),
-                            ));
-                        } else {
-                            break;
-                        }
+                        break;
                     }
                 }
             }

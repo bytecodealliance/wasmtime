@@ -657,7 +657,7 @@ impl Module for JITModule {
             .expect("TODO: handle OOM etc.");
 
         let mut reloc_sink = JITRelocSink::default();
-        unsafe { ctx.emit_to_memory(&*self.isa, ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
+        unsafe { ctx.emit_to_memory(ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob {
