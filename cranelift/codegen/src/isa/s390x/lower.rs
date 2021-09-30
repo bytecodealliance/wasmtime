@@ -973,17 +973,37 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
         Opcode::IaddIfcout => {
-            // This only supports the operands emitted by dynamic_addr.
             let ty = ty.unwrap();
             assert!(ty == types::I32 || ty == types::I64);
-            let alu_op = choose_32_64(ty, ALUOp::Add32, ALUOp::Add64);
+            // Emit an ADD LOGICAL instruction, which sets the condition code
+            // to indicate an (unsigned) carry bit.
+            let alu_op = choose_32_64(ty, ALUOp::AddLogical32, ALUOp::AddLogical64);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-            let imm = input_matches_uimm32(ctx, inputs[1]).unwrap();
-            ctx.emit(Inst::gen_move(rd, rn, ty));
-            // Note that this will emit AL(G)FI, which sets the condition
-            // code to indicate an (unsigned) carry bit.
-            ctx.emit(Inst::AluRUImm32 { alu_op, rd, imm });
+            if let Some(imm) = input_matches_uimm32(ctx, inputs[1]) {
+                ctx.emit(Inst::gen_move(rd, rn, ty));
+                ctx.emit(Inst::AluRUImm32 { alu_op, rd, imm });
+            } else if let Some(mem) = input_matches_mem(ctx, inputs[1]) {
+                ctx.emit(Inst::gen_move(rd, rn, ty));
+                ctx.emit(Inst::AluRX { alu_op, rd, mem });
+            } else if let Some(mem) = input_matches_uext32_mem(ctx, inputs[1]) {
+                ctx.emit(Inst::gen_move(rd, rn, ty));
+                ctx.emit(Inst::AluRX {
+                    alu_op: ALUOp::AddLogical64Ext32,
+                    rd,
+                    mem,
+                });
+            } else if let Some(rm) = input_matches_uext32_reg(ctx, inputs[1]) {
+                ctx.emit(Inst::gen_move(rd, rn, ty));
+                ctx.emit(Inst::AluRR {
+                    alu_op: ALUOp::AddLogical64Ext32,
+                    rd,
+                    rm,
+                });
+            } else {
+                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+                ctx.emit(Inst::AluRRR { alu_op, rd, rn, rm });
+            }
         }
 
         Opcode::UaddSat | Opcode::SaddSat => unimplemented!(),

@@ -956,24 +956,28 @@ impl MachInstEmit for Inst {
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
                 let (opcode, have_rr) = match alu_op {
-                    ALUOp::Add32 => (0xb9f8, true),     // ARK
-                    ALUOp::Add64 => (0xb9e8, true),     // AGRK
-                    ALUOp::Sub32 => (0xb9f9, true),     // SRK
-                    ALUOp::Sub64 => (0xb9e9, true),     // SGRK
-                    ALUOp::Mul32 => (0xb9fd, true),     // MSRKC
-                    ALUOp::Mul64 => (0xb9ed, true),     // MSGRKC
-                    ALUOp::And32 => (0xb9f4, true),     // NRK
-                    ALUOp::And64 => (0xb9e4, true),     // NGRK
-                    ALUOp::Orr32 => (0xb9f6, true),     // ORK
-                    ALUOp::Orr64 => (0xb9e6, true),     // OGRK
-                    ALUOp::Xor32 => (0xb9f7, true),     // XRK
-                    ALUOp::Xor64 => (0xb9e7, true),     // XGRK
-                    ALUOp::AndNot32 => (0xb974, false), // NNRK
-                    ALUOp::AndNot64 => (0xb964, false), // NNGRK
-                    ALUOp::OrrNot32 => (0xb976, false), // NORK
-                    ALUOp::OrrNot64 => (0xb966, false), // NOGRK
-                    ALUOp::XorNot32 => (0xb977, false), // NXRK
-                    ALUOp::XorNot64 => (0xb967, false), // NXGRK
+                    ALUOp::Add32 => (0xb9f8, true),        // ARK
+                    ALUOp::Add64 => (0xb9e8, true),        // AGRK
+                    ALUOp::AddLogical32 => (0xb9fa, true), // ALRK
+                    ALUOp::AddLogical64 => (0xb9ea, true), // ALGRK
+                    ALUOp::Sub32 => (0xb9f9, true),        // SRK
+                    ALUOp::Sub64 => (0xb9e9, true),        // SGRK
+                    ALUOp::SubLogical32 => (0xb9fb, true), // SLRK
+                    ALUOp::SubLogical64 => (0xb9eb, true), // SLGRK
+                    ALUOp::Mul32 => (0xb9fd, true),        // MSRKC
+                    ALUOp::Mul64 => (0xb9ed, true),        // MSGRKC
+                    ALUOp::And32 => (0xb9f4, true),        // NRK
+                    ALUOp::And64 => (0xb9e4, true),        // NGRK
+                    ALUOp::Orr32 => (0xb9f6, true),        // ORK
+                    ALUOp::Orr64 => (0xb9e6, true),        // OGRK
+                    ALUOp::Xor32 => (0xb9f7, true),        // XRK
+                    ALUOp::Xor64 => (0xb9e7, true),        // XGRK
+                    ALUOp::AndNot32 => (0xb974, false),    // NNRK
+                    ALUOp::AndNot64 => (0xb964, false),    // NNGRK
+                    ALUOp::OrrNot32 => (0xb976, false),    // NORK
+                    ALUOp::OrrNot64 => (0xb966, false),    // NOGRK
+                    ALUOp::XorNot32 => (0xb977, false),    // NXRK
+                    ALUOp::XorNot64 => (0xb967, false),    // NXGRK
                     _ => unreachable!(),
                 };
                 if have_rr && rd.to_reg() == rn {
@@ -1003,21 +1007,27 @@ impl MachInstEmit for Inst {
             }
             &Inst::AluRR { alu_op, rd, rm } => {
                 let (opcode, is_rre) = match alu_op {
-                    ALUOp::Add32 => (0x1a, false),       // AR
-                    ALUOp::Add64 => (0xb908, true),      // AGR
-                    ALUOp::Add64Ext32 => (0xb918, true), // AGFR
-                    ALUOp::Sub32 => (0x1b, false),       // SR
-                    ALUOp::Sub64 => (0xb909, true),      // SGR
-                    ALUOp::Sub64Ext32 => (0xb919, true), // SGFR
-                    ALUOp::Mul32 => (0xb252, true),      // MSR
-                    ALUOp::Mul64 => (0xb90c, true),      // MSGR
-                    ALUOp::Mul64Ext32 => (0xb91c, true), // MSGFR
-                    ALUOp::And32 => (0x14, false),       // NR
-                    ALUOp::And64 => (0xb980, true),      // NGR
-                    ALUOp::Orr32 => (0x16, false),       // OR
-                    ALUOp::Orr64 => (0xb981, true),      // OGR
-                    ALUOp::Xor32 => (0x17, false),       // XR
-                    ALUOp::Xor64 => (0xb982, true),      // XGR
+                    ALUOp::Add32 => (0x1a, false),              // AR
+                    ALUOp::Add64 => (0xb908, true),             // AGR
+                    ALUOp::Add64Ext32 => (0xb918, true),        // AGFR
+                    ALUOp::AddLogical32 => (0x1e, false),       // ALR
+                    ALUOp::AddLogical64 => (0xb90a, true),      // ALGR
+                    ALUOp::AddLogical64Ext32 => (0xb91a, true), // ALGFR
+                    ALUOp::Sub32 => (0x1b, false),              // SR
+                    ALUOp::Sub64 => (0xb909, true),             // SGR
+                    ALUOp::Sub64Ext32 => (0xb919, true),        // SGFR
+                    ALUOp::SubLogical32 => (0x1f, false),       // SLR
+                    ALUOp::SubLogical64 => (0xb90b, true),      // SLGR
+                    ALUOp::SubLogical64Ext32 => (0xb91b, true), // SLGFR
+                    ALUOp::Mul32 => (0xb252, true),             // MSR
+                    ALUOp::Mul64 => (0xb90c, true),             // MSGR
+                    ALUOp::Mul64Ext32 => (0xb91c, true),        // MSGFR
+                    ALUOp::And32 => (0x14, false),              // NR
+                    ALUOp::And64 => (0xb980, true),             // NGR
+                    ALUOp::Orr32 => (0x16, false),              // OR
+                    ALUOp::Orr64 => (0xb981, true),             // OGR
+                    ALUOp::Xor32 => (0x17, false),              // XR
+                    ALUOp::Xor64 => (0xb982, true),             // XGR
                     _ => unreachable!(),
                 };
                 if is_rre {
@@ -1032,27 +1042,33 @@ impl MachInstEmit for Inst {
                 ref mem,
             } => {
                 let (opcode_rx, opcode_rxy) = match alu_op {
-                    ALUOp::Add32 => (Some(0x5a), Some(0xe35a)),      // A(Y)
-                    ALUOp::Add32Ext16 => (Some(0x4a), Some(0xe34a)), // AH(Y)
-                    ALUOp::Add64 => (None, Some(0xe308)),            // AG
-                    ALUOp::Add64Ext16 => (None, Some(0xe338)),       // AGH
-                    ALUOp::Add64Ext32 => (None, Some(0xe318)),       // AGF
-                    ALUOp::Sub32 => (Some(0x5b), Some(0xe35b)),      // S(Y)
-                    ALUOp::Sub32Ext16 => (Some(0x4b), Some(0xe37b)), // SH(Y)
-                    ALUOp::Sub64 => (None, Some(0xe309)),            // SG
-                    ALUOp::Sub64Ext16 => (None, Some(0xe339)),       // SGH
-                    ALUOp::Sub64Ext32 => (None, Some(0xe319)),       // SGF
-                    ALUOp::Mul32 => (Some(0x71), Some(0xe351)),      // MS(Y)
-                    ALUOp::Mul32Ext16 => (Some(0x4c), Some(0xe37c)), // MH(Y)
-                    ALUOp::Mul64 => (None, Some(0xe30c)),            // MSG
-                    ALUOp::Mul64Ext16 => (None, Some(0xe33c)),       // MSH
-                    ALUOp::Mul64Ext32 => (None, Some(0xe31c)),       // MSGF
-                    ALUOp::And32 => (Some(0x54), Some(0xe354)),      // N(Y)
-                    ALUOp::And64 => (None, Some(0xe380)),            // NG
-                    ALUOp::Orr32 => (Some(0x56), Some(0xe356)),      // O(Y)
-                    ALUOp::Orr64 => (None, Some(0xe381)),            // OG
-                    ALUOp::Xor32 => (Some(0x57), Some(0xe357)),      // X(Y)
-                    ALUOp::Xor64 => (None, Some(0xe382)),            // XG
+                    ALUOp::Add32 => (Some(0x5a), Some(0xe35a)),        // A(Y)
+                    ALUOp::Add32Ext16 => (Some(0x4a), Some(0xe34a)),   // AH(Y)
+                    ALUOp::Add64 => (None, Some(0xe308)),              // AG
+                    ALUOp::Add64Ext16 => (None, Some(0xe338)),         // AGH
+                    ALUOp::Add64Ext32 => (None, Some(0xe318)),         // AGF
+                    ALUOp::AddLogical32 => (Some(0x5e), Some(0xe35e)), // AL(Y)
+                    ALUOp::AddLogical64 => (None, Some(0xe30a)),       // ALG
+                    ALUOp::AddLogical64Ext32 => (None, Some(0xe31a)),  // ALGF
+                    ALUOp::Sub32 => (Some(0x5b), Some(0xe35b)),        // S(Y)
+                    ALUOp::Sub32Ext16 => (Some(0x4b), Some(0xe37b)),   // SH(Y)
+                    ALUOp::Sub64 => (None, Some(0xe309)),              // SG
+                    ALUOp::Sub64Ext16 => (None, Some(0xe339)),         // SGH
+                    ALUOp::Sub64Ext32 => (None, Some(0xe319)),         // SGF
+                    ALUOp::SubLogical32 => (Some(0x5f), Some(0xe35f)), // SL(Y)
+                    ALUOp::SubLogical64 => (None, Some(0xe30b)),       // SLG
+                    ALUOp::SubLogical64Ext32 => (None, Some(0xe31b)),  // SLGF
+                    ALUOp::Mul32 => (Some(0x71), Some(0xe351)),        // MS(Y)
+                    ALUOp::Mul32Ext16 => (Some(0x4c), Some(0xe37c)),   // MH(Y)
+                    ALUOp::Mul64 => (None, Some(0xe30c)),              // MSG
+                    ALUOp::Mul64Ext16 => (None, Some(0xe33c)),         // MSH
+                    ALUOp::Mul64Ext32 => (None, Some(0xe31c)),         // MSGF
+                    ALUOp::And32 => (Some(0x54), Some(0xe354)),        // N(Y)
+                    ALUOp::And64 => (None, Some(0xe380)),              // NG
+                    ALUOp::Orr32 => (Some(0x56), Some(0xe356)),        // O(Y)
+                    ALUOp::Orr64 => (None, Some(0xe381)),              // OG
+                    ALUOp::Xor32 => (Some(0x57), Some(0xe357)),        // X(Y)
+                    ALUOp::Xor64 => (None, Some(0xe382)),              // XG
                     _ => unreachable!(),
                 };
                 let rd = rd.to_reg();
@@ -1082,10 +1098,10 @@ impl MachInstEmit for Inst {
             }
             &Inst::AluRUImm32 { alu_op, rd, imm } => {
                 let opcode = match alu_op {
-                    ALUOp::Add32 => 0xc2b, // ALFI
-                    ALUOp::Add64 => 0xc2a, // ALGFI
-                    ALUOp::Sub32 => 0xc25, // SLFI
-                    ALUOp::Sub64 => 0xc24, // SLGFI
+                    ALUOp::AddLogical32 => 0xc2b, // ALFI
+                    ALUOp::AddLogical64 => 0xc2a, // ALGFI
+                    ALUOp::SubLogical32 => 0xc25, // SLFI
+                    ALUOp::SubLogical64 => 0xc24, // SLGFI
                     _ => unreachable!(),
                 };
                 put(sink, &enc_ril_a(opcode, rd.to_reg(), imm));
@@ -1380,14 +1396,16 @@ impl MachInstEmit for Inst {
                 ref mem,
             } => {
                 let opcode = match alu_op {
-                    ALUOp::Add32 => 0xebf8, // LAA
-                    ALUOp::Add64 => 0xebe8, // LAAG
-                    ALUOp::And32 => 0xebf4, // LAN
-                    ALUOp::And64 => 0xebe4, // LANG
-                    ALUOp::Orr32 => 0xebf6, // LAO
-                    ALUOp::Orr64 => 0xebe6, // LAOG
-                    ALUOp::Xor32 => 0xebf7, // LAX
-                    ALUOp::Xor64 => 0xebe7, // LAXG
+                    ALUOp::Add32 => 0xebf8,        // LAA
+                    ALUOp::Add64 => 0xebe8,        // LAAG
+                    ALUOp::AddLogical32 => 0xebfa, // LAAL
+                    ALUOp::AddLogical64 => 0xebea, // LAALG
+                    ALUOp::And32 => 0xebf4,        // LAN
+                    ALUOp::And64 => 0xebe4,        // LANG
+                    ALUOp::Orr32 => 0xebf6,        // LAO
+                    ALUOp::Orr64 => 0xebe6,        // LAOG
+                    ALUOp::Xor32 => 0xebf7,        // LAX
+                    ALUOp::Xor64 => 0xebe7,        // LAXG
                     _ => unreachable!(),
                 };
 
