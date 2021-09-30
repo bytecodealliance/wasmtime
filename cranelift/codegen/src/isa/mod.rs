@@ -218,8 +218,9 @@ impl TargetFrontendConfig {
     }
 }
 
-/// Methods that are specialized to a target ISA. Implies a Display trait that shows the
-/// shared flags, as well as any isa-specific flags.
+/// Methods that are specialized to a target ISA.
+///
+/// Implies a Display trait that shows the shared flags, as well as any ISA-specific flags.
 pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;
@@ -269,6 +270,7 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     }
 }
 
+/// Methods implemented for free for target ISA!
 impl<'a> dyn TargetIsa + 'a {
     /// Get the default calling convention of this target.
     pub fn default_call_conv(&self) -> CallConv {
