@@ -28,6 +28,7 @@ mod without_library;
 #[cfg(not(feature = "has-libinterpret"))]
 pub use without_library::*;
 
+// FIXME(#3251) should re-enable once spec interpreter won't time out
 // If the user is fuzzing`, we expect the OCaml library to have been built.
-#[cfg(all(fuzzing, not(feature = "has-libinterpret")))]
-compile_error!("The OCaml library was not built.");
+// #[cfg(all(fuzzing, not(feature = "has-libinterpret")))]
+// compile_error!("The OCaml library was not built.");
