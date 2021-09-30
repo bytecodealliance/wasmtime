@@ -14,7 +14,7 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
             addr as _,
             len,
             if protect {
-                rsix::io::ProtFlags::NONE
+                rsix::io::ProtFlags::empty()
             } else {
                 rsix::io::ProtFlags::READ | rsix::io::ProtFlags::WRITE
             },

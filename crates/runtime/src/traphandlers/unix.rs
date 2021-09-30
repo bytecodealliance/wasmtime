@@ -297,7 +297,7 @@ pub fn lazy_per_thread_init() -> Result<(), Box<Trap>> {
         let ptr = rsix::io::mmap_anonymous(
             null_mut(),
             alloc_size,
-            rsix::io::ProtFlags::NONE,
+            rsix::io::ProtFlags::empty(),
             rsix::io::MapFlags::PRIVATE,
         )
         .map_err(|_| Box::new(Trap::oom()))?;
