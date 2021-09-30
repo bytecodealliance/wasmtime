@@ -17,6 +17,7 @@ use crate::ast;
 use crate::error::*;
 use crate::lexer::Pos;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 declare_id!(
@@ -443,6 +444,22 @@ impl Expr {
     }
 }
 
+/// Given an `Option<T>`, unwrap the inner `T` value, or `continue` if it is
+/// `None`.
+///
+/// Useful for when we encountered an error earlier in our analysis but kept
+/// going to find more errors, and now we've run into some missing data that
+/// would have been filled in if we didn't hit that original error, but we want
+/// to keep going to find more errors.
+macro_rules! unwrap_or_continue {
+    ($e:expr) => {
+        match $e {
+            Some(x) => x,
+            None => continue,
+        }
+    };
+}
+
 impl TypeEnv {
     /// Construct the type environment from the AST.
     pub fn from_ast(defs: &ast::Defs) -> Result<TypeEnv> {
@@ -484,12 +501,7 @@ impl TypeEnv {
         for def in &defs.defs {
             match def {
                 &ast::Def::Type(ref td) => {
-                    let ty = match tyenv.type_from_ast(TypeId(tid), td) {
-                        Some(ty) => ty,
-                        None => {
-                            continue;
-                        }
-                    };
+                    let ty = unwrap_or_continue!(tyenv.type_from_ast(TypeId(tid), td));
                     tyenv.types.push(ty);
                     tid += 1;
                 }
@@ -606,14 +618,16 @@ impl TypeEnv {
     }
 
     fn error(&self, pos: Pos, msg: String) -> Error {
-        Error::TypeError {
+        let e = Error::TypeError {
             msg,
             src: Source::new(
                 self.filenames[pos.file].clone(),
                 self.file_texts[pos.file].clone(),
             ),
             span: miette::SourceSpan::from((pos.offset, 1)),
-        }
+        };
+        log::trace!("{}", e);
+        e
     }
 
     fn report_error(&mut self, pos: Pos, msg: String) {
@@ -661,6 +675,7 @@ impl TermEnv {
 
         env.collect_term_sigs(tyenv, defs);
         env.collect_enum_variant_terms(tyenv);
+        tyenv.return_errors()?;
         env.collect_constructors(tyenv, defs);
         env.collect_extractor_templates(tyenv, defs);
         tyenv.return_errors()?;
@@ -769,6 +784,7 @@ impl TermEnv {
 
     fn collect_constructors(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
         for def in &defs.defs {
+            log::debug!("collect_constructors from def: {:?}", def);
             match def {
                 &ast::Def::Rule(ref rule) => {
                     let pos = rule.pos;
@@ -811,39 +827,68 @@ impl TermEnv {
     }
 
     fn collect_extractor_templates(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
+        let mut extractor_call_graph = HashMap::new();
+
         for def in &defs.defs {
-            match def {
-                &ast::Def::Extractor(ref ext) => {
-                    let sym = tyenv.intern_mut(&ext.term);
-                    let term = match self.term_map.get(&sym) {
-                        Some(x) => x,
-                        None => {
-                            tyenv.report_error(
-                                ext.pos,
-                                "Extractor macro body definition on a non-existent term"
-                                    .to_string(),
-                            );
-                            return;
-                        }
-                    };
-                    let termdata = &mut self.terms[term.index()];
-                    let template = ext.template.make_macro_template(&ext.args[..]);
-                    log::trace!("extractor def: {:?} becomes template {:?}", def, template);
-                    match &termdata.kind {
-                        &TermKind::Declared => {
-                            termdata.kind = TermKind::InternalExtractor { template };
-                        }
-                        _ => {
-                            tyenv.report_error(
-                                ext.pos,
-                                "Extractor macro body defined on term of incorrect kind"
-                                    .to_string(),
-                            );
-                            continue;
-                        }
+            if let &ast::Def::Extractor(ref ext) = def {
+                let sym = tyenv.intern_mut(&ext.term);
+                let term = match self.term_map.get(&sym) {
+                    Some(x) => x,
+                    None => {
+                        tyenv.report_error(
+                            ext.pos,
+                            "Extractor macro body definition on a non-existent term".to_string(),
+                        );
+                        return;
+                    }
+                };
+                let termdata = &mut self.terms[term.index()];
+                let template = ext.template.make_macro_template(&ext.args[..]);
+                log::trace!("extractor def: {:?} becomes template {:?}", def, template);
+
+                let mut callees = HashSet::new();
+                template.terms(&mut |t| {
+                    let t = tyenv.intern_mut(t);
+                    callees.insert(t);
+                });
+                extractor_call_graph.insert(sym, callees);
+
+                match &termdata.kind {
+                    &TermKind::Declared => {
+                        termdata.kind = TermKind::InternalExtractor { template };
+                    }
+                    _ => {
+                        tyenv.report_error(
+                            ext.pos,
+                            "Extractor macro body defined on term of incorrect kind".to_string(),
+                        );
+                        continue;
                     }
                 }
-                _ => {}
+            }
+        }
+
+        // Check for cycles in the extractor call graph.
+        let mut seen = HashSet::new();
+        let mut stack = vec![];
+        'outer: for root in extractor_call_graph.keys().copied() {
+            seen.clear();
+            stack.clear();
+            stack.push(root);
+
+            while let Some(caller) = stack.pop() {
+                let already_seen = seen.insert(caller);
+                if already_seen {
+                    let term = self.term_map[&caller];
+                    let pos = match &self.terms[term.index()].kind {
+                        TermKind::InternalExtractor { template } => template.pos(),
+                        _ => unreachable!(),
+                    };
+                    tyenv.report_error(pos, "extractor definition is recursive".into());
+                    continue 'outer;
+                } else {
+                    stack.extend(extractor_call_graph[&caller].iter().copied());
+                }
             }
         }
     }
@@ -858,20 +903,18 @@ impl TermEnv {
                         vars: vec![],
                     };
 
-                    let (lhs, ty) =
-                        match self.translate_pattern(tyenv, &rule.pattern, None, &mut bindings) {
-                            Some(x) => x,
-                            None => {
-                                // Keep going to collect more errors.
-                                continue;
-                            }
-                        };
-                    let rhs = match self.translate_expr(tyenv, &rule.expr, ty, &mut bindings) {
-                        Some(x) => x,
-                        None => {
-                            continue;
-                        }
-                    };
+                    let (lhs, ty) = unwrap_or_continue!(self.translate_pattern(
+                        tyenv,
+                        &rule.pattern,
+                        None,
+                        &mut bindings
+                    ));
+                    let rhs = unwrap_or_continue!(self.translate_expr(
+                        tyenv,
+                        &rule.expr,
+                        ty,
+                        &mut bindings
+                    ));
 
                     let rid = RuleId(self.rules.len());
                     self.rules.push(Rule {
@@ -1021,14 +1064,12 @@ impl TermEnv {
                 let mut expected_ty = expected_ty;
                 let mut children = vec![];
                 for subpat in subpats {
-                    let (subpat, ty) =
-                        match self.translate_pattern(tyenv, &*subpat, expected_ty, bindings) {
-                            Some(x) => x,
-                            None => {
-                                // Try to keep going for more errors.
-                                continue;
-                            }
-                        };
+                    let (subpat, ty) = unwrap_or_continue!(self.translate_pattern(
+                        tyenv,
+                        &*subpat,
+                        expected_ty,
+                        bindings
+                    ));
                     expected_ty = expected_ty.or(Some(ty));
                     children.push(subpat);
                 }
@@ -1188,7 +1229,7 @@ impl TermEnv {
                             macro_args.push(sub_ast.clone());
                         }
                         log::trace!("internal extractor macro args = {:?}", args);
-                        let pat = template.subst_macro_args(&macro_args[..]);
+                        let pat = template.subst_macro_args(&macro_args[..])?;
                         return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
                     }
                     &TermKind::ExternalConstructor { .. } | &TermKind::InternalConstructor => {
@@ -1205,20 +1246,15 @@ impl TermEnv {
                 // Resolve subpatterns.
                 let mut subpats = vec![];
                 for (i, arg) in args.iter().enumerate() {
-                    let arg_ty = self.terms[tid.index()].arg_tys[i];
-                    let (subpat, _) = match self.translate_pattern_term_arg(
+                    let term = unwrap_or_continue!(self.terms.get(tid.index()));
+                    let arg_ty = unwrap_or_continue!(term.arg_tys.get(i).copied());
+                    let (subpat, _) = unwrap_or_continue!(self.translate_pattern_term_arg(
                         tyenv,
                         pos,
                         arg,
                         Some(arg_ty),
                         bindings,
-                    ) {
-                        Some(x) => x,
-                        None => {
-                            // Try to keep going for more errors.
-                            continue;
-                        }
-                    };
+                    ));
                     subpats.push(subpat);
                 }
 
@@ -1305,13 +1341,10 @@ impl TermEnv {
                 // Resolve subexpressions.
                 let mut subexprs = vec![];
                 for (i, arg) in args.iter().enumerate() {
-                    let arg_ty = self.terms[tid.index()].arg_tys[i];
-                    let subexpr = match self.translate_expr(tyenv, arg, arg_ty, bindings) {
-                        Some(s) => s,
-                        None => {
-                            continue;
-                        }
-                    };
+                    let term = unwrap_or_continue!(self.terms.get(tid.index()));
+                    let arg_ty = unwrap_or_continue!(term.arg_tys.get(i).copied());
+                    let subexpr =
+                        unwrap_or_continue!(self.translate_expr(tyenv, arg, arg_ty, bindings));
                     subexprs.push(subexpr);
                 }
 
@@ -1406,13 +1439,9 @@ impl TermEnv {
                     };
 
                     // Evaluate the variable's value.
-                    let val = Box::new(match self.translate_expr(tyenv, &def.val, tid, bindings) {
-                        Some(e) => e,
-                        None => {
-                            // Keep going for more errors.
-                            continue;
-                        }
-                    });
+                    let val = Box::new(unwrap_or_continue!(
+                        self.translate_expr(tyenv, &def.val, tid, bindings)
+                    ));
 
                     // Bind the var with the given type.
                     let id = VarId(bindings.next_var);

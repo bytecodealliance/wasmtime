@@ -15,7 +15,7 @@ libfuzzer-sys = "0.4"
 log = "0.4.14"
 
 [[bin]]
-name = "parse"
-path = "fuzz_targets/parse.rs"
+name = "compile"
+path = "fuzz_targets/compile.rs"
 test = false
 doc = false

@@ -7,9 +7,26 @@ fuzz_target!(|s: &str| {
 
     let lexer = isle::lexer::Lexer::from_str(s, "fuzz-input.isle");
     log::debug!("lexer = {:?}", lexer);
+    let lexer = match lexer {
+        Ok(l) => l,
+        Err(_) => return,
+    };
 
-    if let Ok(lexer) = lexer {
-        let defs = isle::parser::parse(lexer);
-        log::debug!("defs = {:?}", defs);
-    }
+    let defs = isle::parser::parse(lexer);
+    log::debug!("defs = {:?}", defs);
+    let defs = match defs {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    let code = isle::compile::compile(&defs);
+    log::debug!("code = {:?}", code);
+    let code = match code {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    // TODO: check that the generated code is valid Rust. This will require
+    // stubbing out extern types, extractors, and constructors.
+    drop(code);
 });

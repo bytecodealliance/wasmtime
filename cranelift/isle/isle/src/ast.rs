@@ -127,6 +127,33 @@ impl Pattern {
         }
     }
 
+    /// Call `f` for each of the terms in this pattern.
+    pub fn terms(&self, f: &mut dyn FnMut(&Ident)) {
+        match self {
+            Pattern::Term { sym, args, .. } => {
+                f(sym);
+                for arg in args {
+                    if let TermArgPattern::Pattern(p) = arg {
+                        p.terms(f);
+                    }
+                }
+            }
+            Pattern::And { subpats, .. } => {
+                for p in subpats {
+                    p.terms(f);
+                }
+            }
+            Pattern::BindPattern { subpat, .. } => {
+                subpat.terms(f);
+            }
+            Pattern::Var { .. }
+            | Pattern::ConstInt { .. }
+            | Pattern::ConstPrim { .. }
+            | Pattern::Wildcard { .. }
+            | Pattern::MacroArg { .. } => {}
+        }
+    }
+
     pub fn make_macro_template(&self, macro_args: &[Ident]) -> Pattern {
         log::trace!("make_macro_template: {:?} with {:?}", self, macro_args);
         match self {
@@ -182,24 +209,24 @@ impl Pattern {
         }
     }
 
-    pub fn subst_macro_args(&self, macro_args: &[Pattern]) -> Pattern {
+    pub fn subst_macro_args(&self, macro_args: &[Pattern]) -> Option<Pattern> {
         log::trace!("subst_macro_args: {:?} with {:?}", self, macro_args);
         match self {
             &Pattern::BindPattern {
                 ref var,
                 ref subpat,
                 pos,
-            } => Pattern::BindPattern {
+            } => Some(Pattern::BindPattern {
                 var: var.clone(),
-                subpat: Box::new(subpat.subst_macro_args(macro_args)),
+                subpat: Box::new(subpat.subst_macro_args(macro_args)?),
                 pos,
-            },
+            }),
             &Pattern::And { ref subpats, pos } => {
                 let subpats = subpats
                     .iter()
                     .map(|subpat| subpat.subst_macro_args(macro_args))
-                    .collect::<Vec<_>>();
-                Pattern::And { subpats, pos }
+                    .collect::<Option<Vec<_>>>()?;
+                Some(Pattern::And { subpats, pos })
             }
             &Pattern::Term {
                 ref sym,
@@ -209,19 +236,19 @@ impl Pattern {
                 let args = args
                     .iter()
                     .map(|arg| arg.subst_macro_args(macro_args))
-                    .collect::<Vec<_>>();
-                Pattern::Term {
+                    .collect::<Option<Vec<_>>>()?;
+                Some(Pattern::Term {
                     sym: sym.clone(),
                     args,
                     pos,
-                }
+                })
             }
 
             &Pattern::Var { .. }
             | &Pattern::Wildcard { .. }
             | &Pattern::ConstInt { .. }
-            | &Pattern::ConstPrim { .. } => self.clone(),
-            &Pattern::MacroArg { index, .. } => macro_args[index].clone(),
+            | &Pattern::ConstPrim { .. } => Some(self.clone()),
+            &Pattern::MacroArg { index, .. } => macro_args.get(index).cloned(),
         }
     }
 
@@ -264,12 +291,12 @@ impl TermArgPattern {
         }
     }
 
-    fn subst_macro_args(&self, args: &[Pattern]) -> TermArgPattern {
+    fn subst_macro_args(&self, args: &[Pattern]) -> Option<TermArgPattern> {
         match self {
             &TermArgPattern::Pattern(ref pat) => {
-                TermArgPattern::Pattern(pat.subst_macro_args(args))
+                Some(TermArgPattern::Pattern(pat.subst_macro_args(args)?))
             }
-            &TermArgPattern::Expr(_) => self.clone(),
+            &TermArgPattern::Expr(_) => Some(self.clone()),
         }
     }
 }
