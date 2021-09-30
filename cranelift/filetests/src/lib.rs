@@ -51,7 +51,6 @@ mod test_run;
 mod test_safepoint;
 mod test_simple_gvn;
 mod test_simple_preopt;
-mod test_stack_maps;
 mod test_unwind;
 mod test_verifier;
 
@@ -127,7 +126,6 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
         "safepoint" => test_safepoint::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "simple_preopt" => test_simple_preopt::subtest(parsed),
-        "stack_maps" => test_stack_maps::subtest(parsed),
         "unwind" => test_unwind::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
         _ => anyhow::bail!("unknown test command '{}'", parsed.command),
