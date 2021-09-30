@@ -24,7 +24,7 @@ mod not_for_windows {
             let size = maximum + guard_size;
             assert_eq!(size % page_size, 0); // we rely on WASM_PAGE_SIZE being multiple of host page size
 
-            let mem = mmap_anonymous(null_mut(), size, ProtFlags::NONE, MapFlags::PRIVATE)
+            let mem = mmap_anonymous(null_mut(), size, ProtFlags::empty(), MapFlags::PRIVATE)
                 .expect("mmap failed");
 
             mprotect(mem, minimum, MprotectFlags::READ | MprotectFlags::WRITE)

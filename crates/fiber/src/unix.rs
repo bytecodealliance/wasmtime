@@ -60,7 +60,7 @@ impl FiberStack {
             let mmap = rsix::io::mmap_anonymous(
                 ptr::null_mut(),
                 mmap_len,
-                rsix::io::ProtFlags::NONE,
+                rsix::io::ProtFlags::empty(),
                 rsix::io::MapFlags::PRIVATE,
             )?;
 
