@@ -907,11 +907,11 @@ impl StackPool {
 pub struct PoolingInstanceAllocator {
     strategy: PoolingAllocationStrategy,
     module_limits: ModuleLimits,
-    instance_limits: InstanceLimits,
     // This is manually drop so that the pools unmap their memory before the page fault handler drops.
     instances: mem::ManuallyDrop<InstancePool>,
     #[cfg(all(feature = "async", unix))]
     stacks: StackPool,
+    #[cfg(all(feature = "async", windows))]
     stack_size: usize,
     #[cfg(all(feature = "uffd", target_os = "linux"))]
     _fault_handler: imp::PageFaultHandler,
@@ -935,13 +935,15 @@ impl PoolingInstanceAllocator {
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         let _fault_handler = imp::PageFaultHandler::new(&instances)?;
 
+        drop(stack_size); // suppress unused warnings w/o async feature
+
         Ok(Self {
             strategy,
             module_limits,
-            instance_limits,
             instances: mem::ManuallyDrop::new(instances),
             #[cfg(all(feature = "async", unix))]
             stacks: StackPool::new(&instance_limits, stack_size)?,
+            #[cfg(all(feature = "async", windows))]
             stack_size,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             _fault_handler,

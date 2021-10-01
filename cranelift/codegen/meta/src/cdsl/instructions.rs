@@ -35,7 +35,6 @@ impl<'all_inst> InstructionGroupBuilder<'all_inst> {
 pub(crate) struct PolymorphicInfo {
     pub use_typevar_operand: bool,
     pub ctrl_typevar: TypeVar,
-    pub other_typevars: Vec<TypeVar>,
 }
 
 #[derive(Debug)]
@@ -52,8 +51,6 @@ pub(crate) struct InstructionContent {
     pub operands_in: Vec<Operand>,
     /// Output operands. The output operands must be SSA values or `variable_args`.
     pub operands_out: Vec<Operand>,
-    /// Instruction-specific TypeConstraints.
-    pub constraints: Vec<Constraint>,
 
     /// Instruction format, automatically derived from the input operands.
     pub format: Rc<InstructionFormat>,
@@ -296,7 +293,6 @@ impl InstructionBuilder {
             doc: self.doc,
             operands_in,
             operands_out,
-            constraints: self.constraints.unwrap_or_else(Vec::new),
             format: self.format,
             polymorphic_info,
             value_opnums,
@@ -404,11 +400,10 @@ fn verify_polymorphic(
                 || tv.singleton_type().is_some()
             {
                 match is_ctrl_typevar_candidate(tv, &operands_in, &operands_out) {
-                    Ok(other_typevars) => {
+                    Ok(_other_typevars) => {
                         return Some(PolymorphicInfo {
                             use_typevar_operand: true,
                             ctrl_typevar: tv.clone(),
-                            other_typevars,
                         });
                     }
                     Err(error_message) => {
@@ -439,12 +434,11 @@ fn verify_polymorphic(
 
     // At this point, if the next unwrap() fails, it means the output type couldn't be used as a
     // controlling type variable either; panicking is the right behavior.
-    let other_typevars = is_ctrl_typevar_candidate(tv, &operands_in, &operands_out).unwrap();
+    is_ctrl_typevar_candidate(tv, &operands_in, &operands_out).unwrap();
 
     Some(PolymorphicInfo {
         use_typevar_operand: false,
         ctrl_typevar: tv.clone(),
-        other_typevars,
     })
 }
 

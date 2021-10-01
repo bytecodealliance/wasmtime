@@ -577,6 +577,7 @@ unsafe fn initialize_vmcontext_globals(instance: &Instance) {
 #[derive(Clone)]
 pub struct OnDemandInstanceAllocator {
     mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+    #[cfg(feature = "async")]
     stack_size: usize,
 }
 
@@ -594,8 +595,10 @@ fn borrow_limiter<'a>(
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
     pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
+        drop(stack_size); // suppress unused warnings w/o async feature
         Self {
             mem_creator,
+            #[cfg(feature = "async")]
             stack_size,
         }
     }
@@ -642,6 +645,7 @@ impl Default for OnDemandInstanceAllocator {
     fn default() -> Self {
         Self {
             mem_creator: None,
+            #[cfg(feature = "async")]
             stack_size: 0,
         }
     }
