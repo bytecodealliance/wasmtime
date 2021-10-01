@@ -12,6 +12,7 @@
     1. _Sumbit a PR to add your announcement here_
 1. Other agenda items
     1. Further discussion of [ISLE DSL](https://github.com/bytecodealliance/rfcs/pull/15)
+        - Quick ISLE tutorial ([slides](https://docs.google.com/presentation/d/e/2PACX-1vTL4YHdikG70GZuWvnUOqWdE31egZDBj-2-ajsNfoLkeUn8Bpvk_a5vEFOQqsolcUuR9pmYj2qPF-_J/pub)) 
 
 ## Notes
 
