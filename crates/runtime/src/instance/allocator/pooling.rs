@@ -911,6 +911,8 @@ pub struct PoolingInstanceAllocator {
     instances: mem::ManuallyDrop<InstancePool>,
     #[cfg(all(feature = "async", unix))]
     stacks: StackPool,
+    #[cfg(all(feature = "async", windows))]
+    stack_size: usize,
     #[cfg(all(feature = "uffd", target_os = "linux"))]
     _fault_handler: imp::PageFaultHandler,
 }
@@ -941,6 +943,8 @@ impl PoolingInstanceAllocator {
             instances: mem::ManuallyDrop::new(instances),
             #[cfg(all(feature = "async", unix))]
             stacks: StackPool::new(&instance_limits, stack_size)?,
+            #[cfg(all(feature = "async", windows))]
+            stack_size,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             _fault_handler,
         })
