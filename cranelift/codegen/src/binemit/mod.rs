@@ -12,9 +12,8 @@ pub use self::memorysink::{
 };
 pub use self::stack_map::StackMap;
 use crate::ir::{
-    ConstantOffset, ExternalName, Function, Inst, JumpTable, Opcode, SourceLoc, TrapCode,
+    ConstantOffset, ExternalName, JumpTable, Opcode, SourceLoc, TrapCode,
 };
-use crate::isa::TargetIsa;
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -172,43 +171,4 @@ pub trait CodeSink {
     fn add_call_site(&mut self, _: Opcode, _: SourceLoc) {
         // Default implementation doesn't need to do anything.
     }
-}
-
-/// Emit a function to `sink`, given an instruction emitter function.
-///
-/// This function is called from the `TargetIsa::emit_function()` implementations with the
-/// appropriate instruction emitter.
-pub fn emit_function<CS, EI>(func: &Function, emit_inst: EI, sink: &mut CS, isa: &dyn TargetIsa)
-where
-    CS: CodeSink,
-    EI: Fn(&Function, Inst, &mut CS, &dyn TargetIsa),
-{
-    for block in func.layout.blocks() {
-        debug_assert_eq!(func.offsets[block], sink.offset());
-        for inst in func.layout.block_insts(block) {
-            emit_inst(func, inst, sink, isa);
-        }
-    }
-
-    sink.begin_jumptables();
-
-    // Output jump tables.
-    for (jt, jt_data) in func.jump_tables.iter() {
-        let jt_offset = func.jt_offsets[jt];
-        for block in jt_data.iter() {
-            let rel_offset: i32 = func.offsets[*block] as i32 - jt_offset as i32;
-            sink.put4(rel_offset as u32)
-        }
-    }
-
-    sink.begin_rodata();
-
-    // Output constants.
-    for (_, constant_data) in func.dfg.constants.iter() {
-        for byte in constant_data.iter() {
-            sink.put1(*byte)
-        }
-    }
-
-    sink.end_codegen();
 }
