@@ -43,7 +43,7 @@
 * uweigand - not really a concern but need details like special cases and
   particular constants in particular ranges. Can always do whatever since it's
   custom Rust. Always cases to do something special.
-* cfalling - special cases are extractors and constructors -- becomes a trait
+* cfallin - special cases are extractors and constructors -- becomes a trait
   method and you can write whatever you want. In the extreme can do it all in
   Rust with one method, but everything beyond that is making use of
   functionality for pattern matching.
@@ -90,9 +90,9 @@
   have a macro system perhaps in the futures where one rule goes to N rules, but
   maybe too much complexity too. For now cases should be simple enough.
 * fitzgen - gcc/go have macro in their DSL to be polymorphic over bit-width.
-* cfallin - for that specific case we could
+* cfallin - for that specific case we could perhaps be polymorphic on types by binding the type with a pattern variable
 
-... alexcrichton had video issues and disconnected ...
+... more may be lost as alexcrichton had video issues and dropped ...
 
 * cfallin - if we have few weird special cases easier to consume than a more
   general form.
