@@ -3514,6 +3514,7 @@ dependencies = [
  "cranelift-native",
  "cranelift-wasm",
  "gimli",
+ "log",
  "more-asserts",
  "object",
  "target-lexicon",

@@ -12,6 +12,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0"
+log = "0.4"
 wasmtime-environ = { path = "../environ", version = "0.30.0" }
 cranelift-wasm = { path = "../../cranelift/wasm", version = "0.77.0" }
 cranelift-codegen = { path = "../../cranelift/codegen", version = "0.77.0" }
