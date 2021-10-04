@@ -347,7 +347,6 @@ impl Context {
     /// Perform LICM on the function.
     pub fn licm(&mut self, isa: &dyn TargetIsa) -> CodegenResult<()> {
         do_licm(
-            isa,
             &mut self.func,
             &mut self.cfg,
             &mut self.domtree,
