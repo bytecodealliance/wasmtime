@@ -45,7 +45,6 @@
 
 pub use crate::isa::call_conv::CallConv;
 pub use crate::isa::constraints::BranchRange;
-pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
 use crate::flowgraph;
 use crate::ir;
@@ -78,7 +77,6 @@ pub mod unwind;
 
 mod call_conv;
 mod constraints;
-mod stack;
 
 #[cfg(test)]
 mod test_utils;

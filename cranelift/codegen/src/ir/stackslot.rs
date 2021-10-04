@@ -162,23 +162,6 @@ impl fmt::Display for StackSlotData {
     }
 }
 
-/// Stack frame layout information.
-///
-/// This is computed by the `layout_stack()` method.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct StackLayoutInfo {
-    /// The total size of the stack frame.
-    ///
-    /// This is the distance from the stack pointer in the current function to the stack pointer in
-    /// the calling function, so it includes a pushed return address as well as space for outgoing
-    /// call arguments.
-    pub frame_size: StackSize,
-
-    /// The total size of the stack frame for inbound arguments pushed by the caller.
-    pub inbound_args_size: StackSize,
-}
-
 /// Stack frame manager.
 ///
 /// Keep track of all the stack slots used by a function.
@@ -193,9 +176,6 @@ pub struct StackSlots {
 
     /// All the emergency slots.
     emergency: Vec<StackSlot>,
-
-    /// Layout information computed from `layout_stack`.
-    pub layout_info: Option<StackLayoutInfo>,
 }
 
 /// Stack slot manager functions that behave mostly like an entity map.
@@ -210,7 +190,6 @@ impl StackSlots {
         self.slots.clear();
         self.outgoing.clear();
         self.emergency.clear();
-        self.layout_info = None;
     }
 
     /// Allocate a new stack slot.
