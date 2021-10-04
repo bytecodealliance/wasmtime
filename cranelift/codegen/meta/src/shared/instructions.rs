@@ -2205,10 +2205,9 @@ pub(crate) fn define(
         | of     | *        | Overflow              |
         | nof    | *        | No Overflow           |
 
-        \* The unsigned version of overflow conditions have ISA-specific
-        semantics and thus have been kept as methods on the TargetIsa trait as
-        [unsigned_add_overflow_condition][isa::TargetIsa::unsigned_add_overflow_condition] and
-        [unsigned_sub_overflow_condition][isa::TargetIsa::unsigned_sub_overflow_condition].
+        \* The unsigned version of overflow condition for add has ISA-specific semantics and thus
+        has been kept as a method on the TargetIsa trait as
+        [unsigned_add_overflow_condition][crate::isa::TargetIsa::unsigned_add_overflow_condition].
 
         When this instruction compares integer vectors, it returns a boolean
         vector of lane-wise comparisons.

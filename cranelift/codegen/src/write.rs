@@ -69,7 +69,7 @@ pub trait FuncWriter {
         // signatures.
         for (sig, sig_data) in &func.dfg.signatures {
             any = true;
-            self.write_entity_definition(w, func, sig.into(), &sig_data.display())?;
+            self.write_entity_definition(w, func, sig.into(), &sig_data)?;
         }
 
         for (fnref, ext_func) in &func.dfg.ext_funcs {
@@ -193,7 +193,7 @@ pub fn decorate_function<FW: FuncWriter>(
 // Function spec.
 
 fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
-    write!(w, "{}{}", func.name, func.signature.display())
+    write!(w, "{}{}", func.name, func.signature)
 }
 
 //----------------------------------------------------------------------

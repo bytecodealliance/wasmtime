@@ -50,11 +50,6 @@ impl Signature {
         self.call_conv = call_conv;
     }
 
-    /// Return an object that can display `self` with correct register names.
-    pub fn display(&self) -> DisplaySignature<'_> {
-        DisplaySignature(self)
-    }
-
     /// Find the index of a presumed unique special-purpose parameter.
     pub fn special_param_index(&self, purpose: ArgumentPurpose) -> Option<usize> {
         self.params.iter().rposition(|arg| arg.purpose == purpose)
@@ -108,38 +103,29 @@ impl Signature {
     }
 }
 
-/// Wrapper type capable of displaying a `Signature` with correct register names.
-pub struct DisplaySignature<'a>(&'a Signature);
-
 fn write_list(f: &mut fmt::Formatter, args: &[AbiParam]) -> fmt::Result {
     match args.split_first() {
         None => {}
         Some((first, rest)) => {
-            write!(f, "{}", first.display())?;
+            write!(f, "{}", first)?;
             for arg in rest {
-                write!(f, ", {}", arg.display())?;
+                write!(f, ", {}", arg)?;
             }
         }
     }
     Ok(())
 }
 
-impl<'a> fmt::Display for DisplaySignature<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(")?;
-        write_list(f, &self.0.params)?;
-        write!(f, ")")?;
-        if !self.0.returns.is_empty() {
-            write!(f, " -> ")?;
-            write_list(f, &self.0.returns)?;
-        }
-        write!(f, " {}", self.0.call_conv)
-    }
-}
-
 impl fmt::Display for Signature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.display().fmt(f)
+        write!(f, "(")?;
+        write_list(f, &self.params)?;
+        write!(f, ")")?;
+        if !self.returns.is_empty() {
+            write!(f, " -> ")?;
+            write_list(f, &self.returns)?;
+        }
+        write!(f, " {}", self.call_conv)
     }
 }
 
@@ -199,37 +185,23 @@ impl AbiParam {
             ..self
         }
     }
-
-    /// Return an object that can display `self` with correct register names.
-    pub fn display<'a>(&'a self) -> DisplayAbiParam<'a> {
-        DisplayAbiParam(self)
-    }
-}
-
-/// Wrapper type capable of displaying a `AbiParam` with correct register names.
-pub struct DisplayAbiParam<'a>(&'a AbiParam);
-
-impl<'a> fmt::Display for DisplayAbiParam<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0.value_type)?;
-        if self.0.legalized_to_pointer {
-            write!(f, " ptr")?;
-        }
-        match self.0.extension {
-            ArgumentExtension::None => {}
-            ArgumentExtension::Uext => write!(f, " uext")?,
-            ArgumentExtension::Sext => write!(f, " sext")?,
-        }
-        if self.0.purpose != ArgumentPurpose::Normal {
-            write!(f, " {}", self.0.purpose)?;
-        }
-        Ok(())
-    }
 }
 
 impl fmt::Display for AbiParam {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.display().fmt(f)
+        write!(f, "{}", self.value_type)?;
+        if self.legalized_to_pointer {
+            write!(f, " ptr")?;
+        }
+        match self.extension {
+            ArgumentExtension::None => {}
+            ArgumentExtension::Uext => write!(f, " uext")?,
+            ArgumentExtension::Sext => write!(f, " sext")?,
+        }
+        if self.purpose != ArgumentPurpose::Normal {
+            write!(f, " {}", self.purpose)?;
+        }
+        Ok(())
     }
 }
 

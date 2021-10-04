@@ -4,7 +4,6 @@ use crate::variable::Variable;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, DataFlowGraph, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase,
@@ -578,15 +577,6 @@ impl<'a> FunctionBuilder<'a> {
     /// last call to `switch_to_block`.
     pub fn is_filled(&self) -> bool {
         self.func_ctx.blocks[self.position.unwrap()].filled
-    }
-
-    /// Returns a displayable object for the function as it is.
-    ///
-    /// Useful for debug purposes. Use it with `None` for standard printing.
-    // Clippy thinks the lifetime that follows is needless, but rustc needs it
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_lifetimes))]
-    pub fn display<'b>(&'b self) -> DisplayFunction {
-        self.func.display()
     }
 }
 
