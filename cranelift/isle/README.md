@@ -434,7 +434,94 @@ that you would otherwise write by hand.
 
 ## Implementation
 
-TODO
+This is an overview of `islec`'s passes and data structures:
+
+```text
+    +------------------+
+    | ISLE Source Text |
+    +------------------+
+             |
+             | Lex
+             V
+         +--------+
+         | Tokens |
+         +--------+
+             |
+             | Parse
+             V
+   +----------------------+
+   | Abstract Syntax Tree |
+   +----------------------+
+             |
+             | Semantic Analysis
+             V
++----------------------------+
+| Term and Type Environments |
++----------------------------+
+             |
+             | Trie Construction
+             V
+       +-----------+
+       | Term Trie |
+       +-----------+
+             |
+             | Code Generation
+             V
+    +------------------+
+    | Rust Source Code |
+    +------------------+
+```
+
+### Lexing
+
+Lexing breaks up the input ISLE source text into a stream of tokens. Our lexer
+is pull-based, meaning that we don't eagerly construct the full stream of
+tokens. Instead, we wait until the next token is requested, at which point we
+lazily lex it.
+
+Relevant source files:
+
+* `isle/src/lexer.rs`
+
+### Parsing
+
+Parsing translates the stream of tokens into an abstract syntax tree (AST). Our
+parser is a simple, hand-written, recursive-descent parser.
+
+Relevant source files:
+
+* `isle/src/ast.rs`
+* `isle/src/parser.rs`
+
+### Semantic Analysis
+
+Semantic analysis performs type checking, figures out which rules apply to which
+terms, etc. It creates a type environment and a term environment that we can use
+to get information about our terms throughout the rest of the pipeline.
+
+Relevant source files:
+
+* `isle/src/sema.rs`
+
+### Trie Construction
+
+The trie construction phase linearizes each rule's LHS pattern and inserts them
+into a trie that maps LHS patterns to RHS expressions. This trie is the skeleton
+of the decision tree that will be emitted during code generation.
+
+Relevant source files:
+
+* `isle/src/ir.rs`
+* `isle/src/trie.rs`
+
+### Code Generation
+
+Code generation takes in the term trie and emits Rust source code that
+implements it.
+
+Relevant source files:
+
+* `isle/src/codegen.rs`
 
 ## Sketch of Instruction Selector
 
