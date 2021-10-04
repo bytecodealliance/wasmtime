@@ -225,7 +225,9 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
 pub fn compile(wasm: &[u8], strategy: Strategy) {
     crate::init_fuzzing();
 
-    let engine = Engine::new(&crate::fuzz_default_config(strategy).unwrap()).unwrap();
+    let mut config = crate::fuzz_default_config(strategy).unwrap();
+    config.wasm_module_linking(false);
+    let engine = Engine::new(&config).unwrap();
     log_wasm(wasm);
     let _ = Module::new(&engine, wasm);
 }
