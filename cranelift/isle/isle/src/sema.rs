@@ -1518,7 +1518,7 @@ mod test {
     use super::*;
     use crate::ast::Ident;
     use crate::lexer::Lexer;
-    use crate::parser::Parser;
+    use crate::parser::parse;
 
     #[test]
     fn build_type_env() {
@@ -1526,9 +1526,7 @@ mod test {
             (type u32 (primitive u32))
             (type A extern (enum (B (f1 u32) (f2 u32)) (C (f1 u32))))
         ";
-        let ast = Parser::new(Lexer::from_str(text, "file.isle"))
-            .parse_defs()
-            .expect("should parse");
+        let ast = parse(Lexer::from_str(text, "file.isle").unwrap()).expect("should parse");
         let tyenv = TypeEnv::from_ast(&ast).expect("should not have type-definition errors");
 
         let sym_a = tyenv

@@ -319,15 +319,22 @@ impl Token {
 mod test {
     use super::*;
 
+    fn lex(s: &str, file: &str) -> Vec<Token> {
+        let mut toks = vec![];
+        let mut lexer = Lexer::from_str(s, file).unwrap();
+        while let Some((_, tok)) = lexer.next().unwrap() {
+            toks.push(tok);
+        }
+        toks
+    }
+
     #[test]
     fn lexer_basic() {
         assert_eq!(
-            Lexer::from_str(
+            lex(
                 ";; comment\n; another\r\n   \t(one two three 23 -568  )\n",
-                "test"
-            )
-            .map(|(_, tok)| tok)
-            .collect::<Vec<_>>(),
+                "lexer_basic"
+            ),
             vec![
                 Token::LParen,
                 Token::Symbol("one".to_string()),
@@ -343,29 +350,20 @@ mod test {
     #[test]
     fn ends_with_sym() {
         assert_eq!(
-            Lexer::from_str("asdf", "test")
-                .map(|(_, tok)| tok)
-                .collect::<Vec<_>>(),
+            lex("asdf", "ends_with_sym"),
             vec![Token::Symbol("asdf".to_string()),]
         );
     }
 
     #[test]
     fn ends_with_num() {
-        assert_eq!(
-            Lexer::from_str("23", "test")
-                .map(|(_, tok)| tok)
-                .collect::<Vec<_>>(),
-            vec![Token::Int(23)],
-        );
+        assert_eq!(lex("23", "ends_with_num"), vec![Token::Int(23)],);
     }
 
     #[test]
     fn weird_syms() {
         assert_eq!(
-            Lexer::from_str("(+ [] => !! _test!;comment\n)", "test")
-                .map(|(_, tok)| tok)
-                .collect::<Vec<_>>(),
+            lex("(+ [] => !! _test!;comment\n)", "weird_syms"),
             vec![
                 Token::LParen,
                 Token::Symbol("+".to_string()),
