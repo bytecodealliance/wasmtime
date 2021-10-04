@@ -11,9 +11,7 @@ pub use self::memorysink::{
     TrapSink,
 };
 pub use self::stack_map::StackMap;
-use crate::ir::{
-    ConstantOffset, ExternalName, JumpTable, Opcode, SourceLoc, TrapCode,
-};
+use crate::ir::{ConstantOffset, ExternalName, Opcode, SourceLoc, TrapCode};
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -151,9 +149,6 @@ pub trait CodeSink {
 
     /// Add a relocation referencing a constant.
     fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset);
-
-    /// Add a relocation referencing a jump table.
-    fn reloc_jt(&mut self, _: Reloc, _: JumpTable);
 
     /// Add trap information for the current offset.
     fn trap(&mut self, _: TrapCode, _: SourceLoc);

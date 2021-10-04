@@ -37,12 +37,6 @@ impl binemit::RelocSink for PrintRelocs {
         }
     }
 
-    fn reloc_jt(&mut self, where_: binemit::CodeOffset, r: binemit::Reloc, jt: ir::JumpTable) {
-        if self.flag_print {
-            writeln!(&mut self.text, "reloc_jt: {} {} at {}", r, jt, where_).unwrap();
-        }
-    }
-
     fn reloc_constant(
         &mut self,
         code_offset: binemit::CodeOffset,

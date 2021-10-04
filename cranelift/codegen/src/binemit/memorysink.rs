@@ -15,7 +15,7 @@
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::binemit::stack_map::StackMap;
-use crate::ir::{ConstantOffset, ExternalName, JumpTable, Opcode, SourceLoc, TrapCode};
+use crate::ir::{ConstantOffset, ExternalName, Opcode, SourceLoc, TrapCode};
 use core::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
@@ -82,9 +82,6 @@ pub trait RelocSink {
     /// Add a relocation referencing a constant.
     fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset);
 
-    /// Add a relocation referencing a jump table.
-    fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable);
-
     /// Track a call site whose return address is the given CodeOffset, for the given opcode. Does
     /// nothing in general, only useful for certain embedders (SpiderMonkey).
     fn add_call_site(&mut self, _: Opcode, _: CodeOffset, _: SourceLoc) {}
@@ -146,11 +143,6 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_constant(ofs, rel, constant_offset);
     }
 
-    fn reloc_jt(&mut self, rel: Reloc, jt: JumpTable) {
-        let ofs = self.offset();
-        self.relocs.reloc_jt(ofs, rel, jt);
-    }
-
     fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
         let ofs = self.offset();
         self.traps.trap(ofs, srcloc, code);
@@ -195,7 +187,6 @@ impl RelocSink for NullRelocSink {
     ) {
     }
     fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset) {}
-    fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable) {}
 }
 
 /// A `TrapSink` implementation that does nothing, which is convenient when

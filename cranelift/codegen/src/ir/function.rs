@@ -5,14 +5,14 @@
 
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
+use crate::ir::JumpTables;
 use crate::ir::{
     instructions::BranchInfo, Block, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap,
     HeapData, Inst, InstructionData, JumpTable, JumpTableData, Opcode, SigRef, StackSlot,
     StackSlotData, Table, TableData,
 };
-use crate::ir::{SourceLocs, StackSlots};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use crate::ir::JumpTables;
+use crate::ir::{SourceLocs, StackSlots};
 use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;

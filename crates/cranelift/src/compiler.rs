@@ -197,7 +197,6 @@ impl wasmtime_environ::Compiler for Compiler {
         let length = u32::try_from(code_buf.len()).unwrap();
         Ok(Box::new(CompiledFunction {
             body: code_buf,
-            jt_offsets: context.func.jt_offsets,
             relocations: reloc_sink.func_relocs,
             value_labels_ranges: ranges.unwrap_or(Default::default()),
             stack_slots: context.func.stack_slots,
@@ -540,7 +539,6 @@ impl Compiler {
 
         Ok(CompiledFunction {
             body: code_buf,
-            jt_offsets: context.func.jt_offsets,
             unwind_info,
             relocations: reloc_sink.relocs,
             stack_slots: Default::default(),
@@ -654,15 +652,6 @@ impl binemit::RelocSink for RelocSink {
     ) {
         // Do nothing for now: cranelift emits constant data after the function code and also emits
         // function code with correct relative offsets to the constant data.
-    }
-
-    fn reloc_jt(&mut self, offset: binemit::CodeOffset, reloc: binemit::Reloc, jt: ir::JumpTable) {
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target: RelocationTarget::JumpTable(jt),
-            offset,
-            addend: 0,
-        });
     }
 }
 
@@ -782,13 +771,5 @@ impl binemit::RelocSink for TrampolineRelocSink {
         _constant_offset: ir::ConstantOffset,
     ) {
         panic!("trampoline compilation should not produce constant relocs");
-    }
-    fn reloc_jt(
-        &mut self,
-        _offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _jt: ir::JumpTable,
-    ) {
-        panic!("trampoline compilation should not produce jump table relocs");
     }
 }

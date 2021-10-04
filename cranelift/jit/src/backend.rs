@@ -894,18 +894,6 @@ impl RelocSink for JITRelocSink {
         });
     }
 
-    fn reloc_jt(&mut self, _offset: CodeOffset, reloc: Reloc, _jt: ir::JumpTable) {
-        match reloc {
-            Reloc::X86PCRelRodata4 => {
-                // Not necessary to record this unless we are going to split apart code and its
-                // jumptbl/rodata.
-            }
-            _ => {
-                panic!("Unhandled reloc");
-            }
-        }
-    }
-
     fn reloc_constant(&mut self, _offset: CodeOffset, reloc: Reloc, _constant: ir::ConstantOffset) {
         match reloc {
             Reloc::X86PCRelRodata4 => {
