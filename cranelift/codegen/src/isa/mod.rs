@@ -44,8 +44,6 @@
 //! concurrent function compilations.
 
 pub use crate::isa::call_conv::CallConv;
-pub use crate::isa::constraints::BranchRange;
-pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
 use crate::flowgraph;
 use crate::ir;
@@ -77,8 +75,6 @@ mod s390x;
 pub mod unwind;
 
 mod call_conv;
-mod constraints;
-mod stack;
 
 #[cfg(test)]
 mod test_utils;
