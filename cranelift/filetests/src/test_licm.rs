@@ -42,9 +42,9 @@ impl SubTest for TestLICM {
         comp_ctx.compute_loop_analysis();
         comp_ctx
             .licm(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, Into::into(e)))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, Into::into(e)))?;
 
-        let text = comp_ctx.func.display(context.isa).to_string();
+        let text = comp_ctx.func.display().to_string();
         run_filecheck(&text, context)
     }
 }

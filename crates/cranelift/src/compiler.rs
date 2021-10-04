@@ -172,13 +172,11 @@ impl wasmtime_environ::Compiler for Compiler {
                 &mut trap_sink,
                 &mut stack_map_sink,
             )
-            .map_err(|error| {
-                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-            })?;
+            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
 
-        let unwind_info = context.create_unwind_info(isa).map_err(|error| {
-            CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-        })?;
+        let unwind_info = context
+            .create_unwind_info(isa)
+            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
 
         let address_transform =
             self.get_function_address_map(&context, &input, code_buf.len() as u32);
@@ -534,13 +532,11 @@ impl Compiler {
                 &mut trap_sink,
                 &mut stack_map_sink,
             )
-            .map_err(|error| {
-                CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-            })?;
+            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
 
-        let unwind_info = context.create_unwind_info(isa).map_err(|error| {
-            CompileError::Codegen(pretty_error(&context.func, Some(isa), error))
-        })?;
+        let unwind_info = context
+            .create_unwind_info(isa)
+            .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
 
         Ok(CompiledFunction {
             body: code_buf,

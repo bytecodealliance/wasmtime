@@ -1954,65 +1954,6 @@ pub(crate) fn define(
         .operands_out(vec![sarg_t]),
     );
 
-    let src = &Operand::new("src", &imm.regunit);
-    let dst = &Operand::new("dst", &imm.regunit);
-
-    ig.push(
-        Inst::new(
-            "regmove",
-            r#"
-        Temporarily divert ``x`` from ``src`` to ``dst``.
-
-        This instruction moves the location of a value from one register to
-        another without creating a new SSA value. It is used by the register
-        allocator to temporarily rearrange register assignments in order to
-        satisfy instruction constraints.
-
-        The register diversions created by this instruction must be undone
-        before the value leaves the block. At the entry to a new block, all live
-        values must be in their originally assigned registers.
-        "#,
-            &formats.reg_move,
-        )
-        .operands_in(vec![x, src, dst])
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "copy_special",
-            r#"
-        Copies the contents of ''src'' register to ''dst'' register.
-
-        This instructions copies the contents of one register to another
-        register without involving any SSA values. This is used for copying
-        special registers, e.g. copying the stack register to the frame
-        register in a function prologue.
-        "#,
-            &formats.copy_special,
-        )
-        .operands_in(vec![src, dst])
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "copy_to_ssa",
-            r#"
-        Copies the contents of ''src'' register to ''a'' SSA name.
-
-        This instruction copies the contents of one register, regardless of its SSA name, to
-        another register, creating a new SSA name.  In that sense it is a one-sided version
-        of ''copy_special''.  This instruction is internal and should not be created by
-        Cranelift users.
-        "#,
-            &formats.copy_to_ssa,
-        )
-        .operands_in(vec![src])
-        .operands_out(vec![a])
-        .other_side_effects(true),
-    );
-
     ig.push(
         Inst::new(
             "copy_nop",
@@ -2096,44 +2037,6 @@ pub(crate) fn define(
         )
         .operands_in(vec![addr])
         .operands_out(vec![f]),
-    );
-
-    ig.push(
-        Inst::new(
-            "regspill",
-            r#"
-        Temporarily divert ``x`` from ``src`` to ``SS``.
-
-        This instruction moves the location of a value from a register to a
-        stack slot without creating a new SSA value. It is used by the register
-        allocator to temporarily rearrange register assignments in order to
-        satisfy instruction constraints.
-
-        See also `regmove`.
-        "#,
-            &formats.reg_spill,
-        )
-        .operands_in(vec![x, src, SS])
-        .other_side_effects(true),
-    );
-
-    ig.push(
-        Inst::new(
-            "regfill",
-            r#"
-        Temporarily divert ``x`` from ``SS`` to ``dst``.
-
-        This instruction moves the location of a value from a stack slot to a
-        register without creating a new SSA value. It is used by the register
-        allocator to temporarily rearrange register assignments in order to
-        satisfy instruction constraints.
-
-        See also `regmove`.
-        "#,
-            &formats.reg_fill,
-        )
-        .operands_in(vec![x, SS, dst])
-        .other_side_effects(true),
     );
 
     let N =
@@ -2302,10 +2205,9 @@ pub(crate) fn define(
         | of     | *        | Overflow              |
         | nof    | *        | No Overflow           |
 
-        \* The unsigned version of overflow conditions have ISA-specific
-        semantics and thus have been kept as methods on the TargetIsa trait as
-        [unsigned_add_overflow_condition][isa::TargetIsa::unsigned_add_overflow_condition] and
-        [unsigned_sub_overflow_condition][isa::TargetIsa::unsigned_sub_overflow_condition].
+        \* The unsigned version of overflow condition for add has ISA-specific semantics and thus
+        has been kept as a method on the TargetIsa trait as
+        [unsigned_add_overflow_condition][crate::isa::TargetIsa::unsigned_add_overflow_condition].
 
         When this instruction compares integer vectors, it returns a boolean
         vector of lane-wise comparisons.

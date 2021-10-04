@@ -44,8 +44,7 @@
 //! concurrent function compilations.
 
 pub use crate::isa::call_conv::CallConv;
-pub use crate::isa::constraints::{BranchRange, ConstraintKind, OperandConstraint};
-pub use crate::isa::registers::{regs_overlap, RegClass, RegClassIndex, RegInfo, RegUnit};
+pub use crate::isa::constraints::BranchRange;
 pub use crate::isa::stack::{StackBase, StackBaseMask, StackRef};
 
 use crate::flowgraph;
@@ -57,10 +56,8 @@ use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use alloc::{boxed::Box, vec::Vec};
-use core::any::Any;
 use core::fmt;
 use core::fmt::{Debug, Formatter};
-use core::hash::Hasher;
 use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -81,7 +78,6 @@ pub mod unwind;
 
 mod call_conv;
 mod constraints;
-pub mod registers;
 mod stack;
 
 #[cfg(test)]
@@ -220,8 +216,9 @@ impl TargetFrontendConfig {
     }
 }
 
-/// Methods that are specialized to a target ISA. Implies a Display trait that shows the
-/// shared flags, as well as any isa-specific flags.
+/// Methods that are specialized to a target ISA.
+///
+/// Implies a Display trait that shows the shared flags, as well as any ISA-specific flags.
 pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the name of this ISA.
     fn name(&self) -> &'static str;
@@ -235,85 +232,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
-    /// Hashes all flags, both ISA-independent and ISA-specific, into the
-    /// specified hasher.
-    fn hash_all_flags(&self, hasher: &mut dyn Hasher);
-
-    /// Get the default calling convention of this target.
-    fn default_call_conv(&self) -> CallConv {
-        CallConv::triple_default(self.triple())
-    }
-
-    /// Get the endianness of this ISA.
-    fn endianness(&self) -> ir::Endianness {
-        match self.triple().endianness().unwrap() {
-            target_lexicon::Endianness::Little => ir::Endianness::Little,
-            target_lexicon::Endianness::Big => ir::Endianness::Big,
-        }
-    }
-
-    /// Returns the code (text) section alignment for this ISA.
-    fn code_section_alignment(&self) -> u64 {
-        use target_lexicon::*;
-        match (self.triple().operating_system, self.triple().architecture) {
-            (
-                OperatingSystem::MacOSX { .. }
-                | OperatingSystem::Darwin
-                | OperatingSystem::Ios
-                | OperatingSystem::Tvos,
-                Architecture::Aarch64(..),
-            ) => 0x4000,
-            _ => 0x1000,
-        }
-    }
-
-    /// Get the pointer type of this ISA.
-    fn pointer_type(&self) -> ir::Type {
-        ir::Type::int(u16::from(self.pointer_bits())).unwrap()
-    }
-
-    /// Get the width of pointers on this ISA.
-    fn pointer_width(&self) -> PointerWidth {
-        self.triple().pointer_width().unwrap()
-    }
-
-    /// Get the width of pointers on this ISA, in units of bits.
-    fn pointer_bits(&self) -> u8 {
-        self.pointer_width().bits()
-    }
-
-    /// Get the width of pointers on this ISA, in units of bytes.
-    fn pointer_bytes(&self) -> u8 {
-        self.pointer_width().bytes()
-    }
-
-    /// Get the information needed by frontends producing Cranelift IR.
-    fn frontend_config(&self) -> TargetFrontendConfig {
-        TargetFrontendConfig {
-            default_call_conv: self.default_call_conv(),
-            pointer_width: self.pointer_width(),
-        }
-    }
-
-    /// Does the CPU implement scalar comparisons using a CPU flags register?
-    fn uses_cpu_flags(&self) -> bool {
-        false
-    }
-
-    /// Does the CPU implement multi-register addressing?
-    fn uses_complex_addresses(&self) -> bool {
-        false
-    }
-
-    /// Get a data structure describing the registers in this ISA.
-    fn register_info(&self) -> RegInfo;
-
-    #[cfg(feature = "unwind")]
-    /// Map a Cranelift register to its corresponding DWARF register.
-    fn map_dwarf_register(&self, _: RegUnit) -> Result<u16, RegisterMappingError> {
-        Err(RegisterMappingError::UnsupportedArchitecture)
-    }
-
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
     fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {
@@ -322,21 +240,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// IntCC condition for Unsigned Addition Overflow (Carry).
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
-
-    /// IntCC condition for Unsigned Subtraction Overflow (Borrow/Carry).
-    fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC;
-
-    /// Returns the flavor of unwind information emitted for this target.
-    fn unwind_info_kind(&self) -> UnwindInfoKind {
-        match self.triple().operating_system {
-            #[cfg(feature = "unwind")]
-            OperatingSystem::Windows => UnwindInfoKind::Windows,
-            #[cfg(feature = "unwind")]
-            _ => UnwindInfoKind::SystemV,
-            #[cfg(not(feature = "unwind"))]
-            _ => UnwindInfoKind::None,
-        }
-    }
 
     /// Creates unwind information for the function.
     ///
@@ -363,10 +266,77 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
         None
     }
+}
 
-    /// Return an [Any] reference for downcasting to the ISA-specific implementation of this trait
-    /// with `isa.as_any().downcast_ref::<isa::foo::Isa>()`.
-    fn as_any(&self) -> &dyn Any;
+/// Methods implemented for free for target ISA!
+impl<'a> dyn TargetIsa + 'a {
+    /// Get the default calling convention of this target.
+    pub fn default_call_conv(&self) -> CallConv {
+        CallConv::triple_default(self.triple())
+    }
+
+    /// Get the endianness of this ISA.
+    pub fn endianness(&self) -> ir::Endianness {
+        match self.triple().endianness().unwrap() {
+            target_lexicon::Endianness::Little => ir::Endianness::Little,
+            target_lexicon::Endianness::Big => ir::Endianness::Big,
+        }
+    }
+
+    /// Returns the code (text) section alignment for this ISA.
+    pub fn code_section_alignment(&self) -> u64 {
+        use target_lexicon::*;
+        match (self.triple().operating_system, self.triple().architecture) {
+            (
+                OperatingSystem::MacOSX { .. }
+                | OperatingSystem::Darwin
+                | OperatingSystem::Ios
+                | OperatingSystem::Tvos,
+                Architecture::Aarch64(..),
+            ) => 0x4000,
+            _ => 0x1000,
+        }
+    }
+
+    /// Get the pointer type of this ISA.
+    pub fn pointer_type(&self) -> ir::Type {
+        ir::Type::int(u16::from(self.pointer_bits())).unwrap()
+    }
+
+    /// Get the width of pointers on this ISA.
+    pub(crate) fn pointer_width(&self) -> PointerWidth {
+        self.triple().pointer_width().unwrap()
+    }
+
+    /// Get the width of pointers on this ISA, in units of bits.
+    pub fn pointer_bits(&self) -> u8 {
+        self.pointer_width().bits()
+    }
+
+    /// Get the width of pointers on this ISA, in units of bytes.
+    pub fn pointer_bytes(&self) -> u8 {
+        self.pointer_width().bytes()
+    }
+
+    /// Get the information needed by frontends producing Cranelift IR.
+    pub fn frontend_config(&self) -> TargetFrontendConfig {
+        TargetFrontendConfig {
+            default_call_conv: self.default_call_conv(),
+            pointer_width: self.pointer_width(),
+        }
+    }
+
+    /// Returns the flavor of unwind information emitted for this target.
+    pub(crate) fn unwind_info_kind(&self) -> UnwindInfoKind {
+        match self.triple().operating_system {
+            #[cfg(feature = "unwind")]
+            OperatingSystem::Windows => UnwindInfoKind::Windows,
+            #[cfg(feature = "unwind")]
+            _ => UnwindInfoKind::SystemV,
+            #[cfg(not(feature = "unwind"))]
+            _ => UnwindInfoKind::None,
+        }
+    }
 }
 
 impl Debug for &dyn TargetIsa {

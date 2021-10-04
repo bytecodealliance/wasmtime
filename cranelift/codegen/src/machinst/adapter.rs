@@ -1,14 +1,13 @@
 //! Adapter for a `MachBackend` to implement the `TargetIsa` trait.
 
 use crate::ir;
-use crate::isa::{RegInfo, TargetIsa};
+use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::settings::{self, Flags};
 
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 
-use core::any::Any;
 use std::fmt;
 use target_lexicon::Triple;
 
@@ -56,28 +55,12 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.isa_flags()
     }
 
-    fn hash_all_flags(&self, hasher: &mut dyn Hasher) {
-        self.backend.hash_all_flags(hasher);
-    }
-
-    fn register_info(&self) -> RegInfo {
-        // Called from function's Display impl, so we need a stub here.
-        RegInfo {
-            banks: &[],
-            classes: &[],
-        }
-    }
-
     fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
         Some(&*self.backend)
     }
 
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
         self.backend.unsigned_add_overflow_condition()
-    }
-
-    fn unsigned_sub_overflow_condition(&self) -> ir::condcodes::IntCC {
-        self.backend.unsigned_sub_overflow_condition()
     }
 
     #[cfg(feature = "unwind")]
@@ -88,9 +71,5 @@ impl TargetIsa for TargetIsaAdapter {
     #[cfg(feature = "unwind")]
     fn map_regalloc_reg_to_dwarf(&self, r: Reg) -> Result<u16, RegisterMappingError> {
         self.backend.map_reg_to_dwarf(r)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self as &dyn Any
     }
 }

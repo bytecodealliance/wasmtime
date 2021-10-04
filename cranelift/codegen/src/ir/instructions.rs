@@ -25,7 +25,6 @@ use crate::ir::{
     trapcode::TrapCode,
     types, Block, FuncRef, JumpTable, MemFlags, SigRef, StackSlot, Type, Value,
 };
-use crate::isa;
 
 /// Some instructions use an external list of argument values because there is not enough space in
 /// the 16-byte `InstructionData` struct. These value lists are stored in a memory pool in

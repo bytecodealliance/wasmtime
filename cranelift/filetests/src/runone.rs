@@ -179,9 +179,8 @@ fn run_one_test<'a>(
 
     // Should we run the verifier before this test?
     if !context.verified && test.needs_verifier() {
-        verify_function(&func, context.flags_or_isa()).map_err(|errors| {
-            anyhow::anyhow!("{}", pretty_verifier_error(&func, isa, None, errors))
-        })?;
+        verify_function(&func, context.flags_or_isa())
+            .map_err(|errors| anyhow::anyhow!("{}", pretty_verifier_error(&func, None, errors)))?;
         context.verified = true;
     }
 

@@ -69,7 +69,6 @@ use crate::value_label::ValueLabelsRanges;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::fmt::Debug;
-use core::hash::Hasher;
 use cranelift_entity::PrimaryMap;
 use regalloc::RegUsageCollector;
 use regalloc::{
@@ -389,9 +388,6 @@ pub trait MachBackend {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
-    /// Hashes all flags, both ISA-independent and ISA-dependent, into the specified hasher.
-    fn hash_all_flags(&self, hasher: &mut dyn Hasher);
-
     /// Return triple for this backend.
     fn triple(&self) -> Triple;
 
@@ -404,10 +400,6 @@ pub trait MachBackend {
     /// Machine-specific condcode info needed by TargetIsa.
     /// Condition that will be true when an IaddIfcout overflows.
     fn unsigned_add_overflow_condition(&self) -> IntCC;
-
-    /// Machine-specific condcode info needed by TargetIsa.
-    /// Condition that will be true when an IsubIfcout overflows.
-    fn unsigned_sub_overflow_condition(&self) -> IntCC;
 
     /// Produces unwind info based on backend results.
     #[cfg(feature = "unwind")]

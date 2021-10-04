@@ -10,10 +10,10 @@ use crate::ir::{
     HeapData, Inst, InstructionData, JumpTable, JumpTableData, Opcode, SigRef, StackSlot,
     StackSlotData, Table, TableData,
 };
-use crate::ir::{BlockOffsets, SourceLocs, StackSlots, ValueLocations};
+use crate::ir::{BlockOffsets, SourceLocs, StackSlots};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
 use crate::ir::{JumpTableOffsets, JumpTables};
-use crate::isa::{CallConv, TargetIsa};
+use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
 #[cfg(feature = "enable-serde")]
@@ -104,9 +104,6 @@ pub struct Function {
     /// Layout of blocks and instructions in the function body.
     pub layout: Layout,
 
-    /// Location assigned to every value.
-    pub locations: ValueLocations,
-
     /// Code offsets of the block headers.
     ///
     /// This information is only transiently available after the `binemit::relax_branches` function
@@ -156,7 +153,6 @@ impl Function {
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
-            locations: SecondaryMap::new(),
             offsets: SecondaryMap::new(),
             jt_offsets: SecondaryMap::new(),
             srclocs: SecondaryMap::new(),
@@ -176,7 +172,6 @@ impl Function {
         self.jump_tables.clear();
         self.dfg.clear();
         self.layout.clear();
-        self.locations.clear();
         self.offsets.clear();
         self.jt_offsets.clear();
         self.srclocs.clear();
@@ -227,11 +222,8 @@ impl Function {
     }
 
     /// Return an object that can display this function with correct ISA-specific annotations.
-    pub fn display<'a, I: Into<Option<&'a dyn TargetIsa>>>(
-        &'a self,
-        isa: I,
-    ) -> DisplayFunction<'a> {
-        DisplayFunction(self, isa.into().into())
+    pub fn display(&self) -> DisplayFunction<'_> {
+        DisplayFunction(self, Default::default())
     }
 
     /// Return an object that can display this function with correct ISA-specific annotations.
@@ -295,7 +287,7 @@ impl Function {
                         }
                         _ => panic!(
                             "Unexpected instruction {} having default destination",
-                            self.dfg.display_inst(inst, None)
+                            self.dfg.display_inst(inst)
                         ),
                     }
                 }
@@ -372,20 +364,8 @@ impl Function {
 /// Additional annotations for function display.
 #[derive(Default)]
 pub struct DisplayFunctionAnnotations<'a> {
-    /// Enable ISA annotations.
-    pub isa: Option<&'a dyn TargetIsa>,
-
     /// Enable value labels annotations.
     pub value_ranges: Option<&'a ValueLabelsRanges>,
-}
-
-impl<'a> From<Option<&'a dyn TargetIsa>> for DisplayFunctionAnnotations<'a> {
-    fn from(isa: Option<&'a dyn TargetIsa>) -> DisplayFunctionAnnotations {
-        DisplayFunctionAnnotations {
-            isa,
-            value_ranges: None,
-        }
-    }
 }
 
 /// Wrapper type capable of displaying a `Function` with correct ISA annotations.
@@ -393,18 +373,18 @@ pub struct DisplayFunction<'a>(&'a Function, DisplayFunctionAnnotations<'a>);
 
 impl<'a> fmt::Display for DisplayFunction<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write_function(fmt, self.0, &self.1)
+        write_function(fmt, self.0)
     }
 }
 
 impl fmt::Display for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write_function(fmt, self, &DisplayFunctionAnnotations::default())
+        write_function(fmt, self)
     }
 }
 
 impl fmt::Debug for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write_function(fmt, self, &DisplayFunctionAnnotations::default())
+        write_function(fmt, self)
     }
 }

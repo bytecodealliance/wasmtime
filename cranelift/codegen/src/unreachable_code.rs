@@ -31,7 +31,7 @@ pub fn eliminate_unreachable_code(
 
         // Remove all instructions from `block`.
         while let Some(inst) = pos.func.layout.first_inst(block) {
-            log::trace!(" - {}", pos.func.dfg.display_inst(inst, None));
+            log::trace!(" - {}", pos.func.dfg.display_inst(inst));
             pos.func.layout.remove_inst(inst);
         }
 

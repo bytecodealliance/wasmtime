@@ -4,7 +4,6 @@ use crate::entity::SecondaryMap;
 use crate::ir;
 use crate::ir::entities::{AnyEntity, Block, Inst, Value};
 use crate::ir::function::Function;
-use crate::isa::TargetIsa;
 use crate::result::CodegenError;
 use crate::verifier::{VerifierError, VerifierErrors};
 use crate::write::{decorate_function, FuncWriter, PlainWriter};
@@ -17,7 +16,6 @@ use core::fmt::Write;
 /// Pretty-print a verifier error.
 pub fn pretty_verifier_error<'a>(
     func: &ir::Function,
-    isa: Option<&dyn TargetIsa>,
     func_w: Option<Box<dyn FuncWriter + 'a>>,
     errors: VerifierErrors,
 ) -> String {
@@ -29,7 +27,6 @@ pub fn pretty_verifier_error<'a>(
         &mut PrettyVerifierError(func_w.unwrap_or_else(|| Box::new(PlainWriter)), &mut errors),
         &mut w,
         func,
-        &isa.into(),
     )
     .unwrap();
 
@@ -51,11 +48,10 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        isa: Option<&dyn TargetIsa>,
         block: Block,
         indent: usize,
     ) -> fmt::Result {
-        pretty_block_header_error(w, func, isa, block, indent, &mut *self.0, self.1)
+        pretty_block_header_error(w, func, block, indent, &mut *self.0, self.1)
     }
 
     fn write_instruction(
@@ -63,11 +59,10 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
         w: &mut dyn Write,
         func: &Function,
         aliases: &SecondaryMap<Value, Vec<Value>>,
-        isa: Option<&dyn TargetIsa>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        pretty_instruction_error(w, func, aliases, isa, inst, indent, &mut *self.0, self.1)
+        pretty_instruction_error(w, func, aliases, inst, indent, &mut *self.0, self.1)
     }
 
     fn write_entity_definition(
@@ -85,14 +80,13 @@ impl<'a> FuncWriter for PrettyVerifierError<'a> {
 fn pretty_block_header_error(
     w: &mut dyn Write,
     func: &Function,
-    isa: Option<&dyn TargetIsa>,
     cur_block: Block,
     indent: usize,
     func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_block_header(&mut s, func, isa, cur_block, indent)?;
+    func_w.write_block_header(&mut s, func, cur_block, indent)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
@@ -124,14 +118,13 @@ fn pretty_instruction_error(
     w: &mut dyn Write,
     func: &Function,
     aliases: &SecondaryMap<Value, Vec<Value>>,
-    isa: Option<&dyn TargetIsa>,
     cur_inst: Inst,
     indent: usize,
     func_w: &mut dyn FuncWriter,
     errors: &mut Vec<VerifierError>,
 ) -> fmt::Result {
     let mut s = String::new();
-    func_w.write_instruction(&mut s, func, aliases, isa, cur_inst, indent)?;
+    func_w.write_instruction(&mut s, func, aliases, cur_inst, indent)?;
     write!(w, "{}", s)?;
 
     // TODO: Use drain_filter here when it gets stabilized
@@ -218,9 +211,9 @@ fn print_error(w: &mut dyn Write, err: VerifierError) -> fmt::Result {
 }
 
 /// Pretty-print a Cranelift error.
-pub fn pretty_error(func: &ir::Function, isa: Option<&dyn TargetIsa>, err: CodegenError) -> String {
+pub fn pretty_error(func: &ir::Function, err: CodegenError) -> String {
     if let CodegenError::Verifier(e) = err {
-        pretty_verifier_error(func, isa, None, e)
+        pretty_verifier_error(func, None, e)
     } else {
         err.to_string()
     }

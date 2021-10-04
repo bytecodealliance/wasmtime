@@ -14,7 +14,6 @@ use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 
 use alloc::{boxed::Box, vec::Vec};
-use core::hash::{Hash, Hasher};
 
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::{Architecture, Triple};
@@ -114,11 +113,6 @@ impl MachBackend for S390xBackend {
         self.isa_flags.iter().collect()
     }
 
-    fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
-        self.flags.hash(&mut hasher);
-        self.isa_flags.hash(&mut hasher);
-    }
-
     fn reg_universe(&self) -> &RealRegUniverse {
         &self.reg_universe
     }
@@ -130,10 +124,6 @@ impl MachBackend for S390xBackend {
         // dummy value here, which gets remapped to the correct condition
         // code mask during lowering.
         IntCC::UnsignedGreaterThan
-    }
-
-    fn unsigned_sub_overflow_condition(&self) -> IntCC {
-        unimplemented!()
     }
 
     #[cfg(feature = "unwind")]

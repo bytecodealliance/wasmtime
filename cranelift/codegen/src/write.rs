@@ -5,10 +5,7 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::entities::AnyEntity;
-use crate::ir::{
-    Block, DataFlowGraph, DisplayFunctionAnnotations, Function, Inst, SigRef, Type, Value, ValueDef,
-};
-use crate::isa::{RegInfo, TargetIsa};
+use crate::ir::{Block, DataFlowGraph, Function, Inst, SigRef, Type, Value, ValueDef};
 use crate::packed_option::ReservedValue;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -21,7 +18,6 @@ pub trait FuncWriter {
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        isa: Option<&dyn TargetIsa>,
         block: Block,
         indent: usize,
     ) -> fmt::Result;
@@ -32,28 +28,17 @@ pub trait FuncWriter {
         w: &mut dyn Write,
         func: &Function,
         aliases: &SecondaryMap<Value, Vec<Value>>,
-        isa: Option<&dyn TargetIsa>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result;
 
     /// Write the preamble to `w`. By default, this uses `write_entity_definition`.
-    fn write_preamble(
-        &mut self,
-        w: &mut dyn Write,
-        func: &Function,
-        regs: Option<&RegInfo>,
-    ) -> Result<bool, fmt::Error> {
-        self.super_preamble(w, func, regs)
+    fn write_preamble(&mut self, w: &mut dyn Write, func: &Function) -> Result<bool, fmt::Error> {
+        self.super_preamble(w, func)
     }
 
     /// Default impl of `write_preamble`
-    fn super_preamble(
-        &mut self,
-        w: &mut dyn Write,
-        func: &Function,
-        regs: Option<&RegInfo>,
-    ) -> Result<bool, fmt::Error> {
+    fn super_preamble(&mut self, w: &mut dyn Write, func: &Function) -> Result<bool, fmt::Error> {
         let mut any = false;
 
         for (ss, slot) in func.stack_slots.iter() {
@@ -84,7 +69,7 @@ pub trait FuncWriter {
         // signatures.
         for (sig, sig_data) in &func.dfg.signatures {
             any = true;
-            self.write_entity_definition(w, func, sig.into(), &sig_data.display(regs))?;
+            self.write_entity_definition(w, func, sig.into(), &sig_data)?;
         }
 
         for (fnref, ext_func) in &func.dfg.ext_funcs {
@@ -145,33 +130,27 @@ impl FuncWriter for PlainWriter {
         w: &mut dyn Write,
         func: &Function,
         aliases: &SecondaryMap<Value, Vec<Value>>,
-        isa: Option<&dyn TargetIsa>,
         inst: Inst,
         indent: usize,
     ) -> fmt::Result {
-        write_instruction(w, func, aliases, isa, inst, indent)
+        write_instruction(w, func, aliases, inst, indent)
     }
 
     fn write_block_header(
         &mut self,
         w: &mut dyn Write,
         func: &Function,
-        isa: Option<&dyn TargetIsa>,
         block: Block,
         indent: usize,
     ) -> fmt::Result {
-        write_block_header(w, func, isa, block, indent)
+        write_block_header(w, func, block, indent)
     }
 }
 
 /// Write `func` to `w` as equivalent text.
 /// Use `isa` to emit ISA-dependent annotations.
-pub fn write_function(
-    w: &mut dyn Write,
-    func: &Function,
-    annotations: &DisplayFunctionAnnotations,
-) -> fmt::Result {
-    decorate_function(&mut PlainWriter, w, func, annotations)
+pub fn write_function(w: &mut dyn Write, func: &Function) -> fmt::Result {
+    decorate_function(&mut PlainWriter, w, func)
 }
 
 /// Create a reverse-alias map from a value to all aliases having that value as a direct target
@@ -193,21 +172,17 @@ pub fn decorate_function<FW: FuncWriter>(
     func_w: &mut FW,
     w: &mut dyn Write,
     func: &Function,
-    annotations: &DisplayFunctionAnnotations,
 ) -> fmt::Result {
-    let regs = annotations.isa.map(TargetIsa::register_info);
-    let regs = regs.as_ref();
-
     write!(w, "function ")?;
-    write_spec(w, func, regs)?;
+    write_spec(w, func)?;
     writeln!(w, " {{")?;
     let aliases = alias_map(func);
-    let mut any = func_w.write_preamble(w, func, regs)?;
+    let mut any = func_w.write_preamble(w, func)?;
     for block in &func.layout {
         if any {
             writeln!(w)?;
         }
-        decorate_block(func_w, w, func, &aliases, annotations, block)?;
+        decorate_block(func_w, w, func, &aliases, block)?;
         any = true;
     }
     writeln!(w, "}}")
@@ -217,27 +192,16 @@ pub fn decorate_function<FW: FuncWriter>(
 //
 // Function spec.
 
-fn write_spec(w: &mut dyn Write, func: &Function, regs: Option<&RegInfo>) -> fmt::Result {
-    write!(w, "{}{}", func.name, func.signature.display(regs))
+fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
+    write!(w, "{}{}", func.name, func.signature)
 }
 
 //----------------------------------------------------------------------
 //
 // Basic blocks
 
-fn write_arg(
-    w: &mut dyn Write,
-    func: &Function,
-    regs: Option<&RegInfo>,
-    arg: Value,
-) -> fmt::Result {
-    write!(w, "{}: {}", arg, func.dfg.value_type(arg))?;
-    let loc = func.locations[arg];
-    if loc.is_assigned() {
-        write!(w, " [{}]", loc.display(regs))?
-    }
-
-    Ok(())
+fn write_arg(w: &mut dyn Write, func: &Function, arg: Value) -> fmt::Result {
+    write!(w, "{}: {}", arg, func.dfg.value_type(arg))
 }
 
 /// Write out the basic block header, outdented:
@@ -249,28 +213,24 @@ fn write_arg(
 pub fn write_block_header(
     w: &mut dyn Write,
     func: &Function,
-    isa: Option<&dyn TargetIsa>,
     block: Block,
     indent: usize,
 ) -> fmt::Result {
     // The `indent` is the instruction indentation. block headers are 4 spaces out from that.
     write!(w, "{1:0$}{2}", indent - 4, "", block)?;
 
-    let regs = isa.map(TargetIsa::register_info);
-    let regs = regs.as_ref();
-
     let mut args = func.dfg.block_params(block).iter().cloned();
     match args.next() {
         None => return writeln!(w, ":"),
         Some(arg) => {
             write!(w, "(")?;
-            write_arg(w, func, regs, arg)?;
+            write_arg(w, func, arg)?;
         }
     }
     // Remaining arguments.
     for arg in args {
         write!(w, ", ")?;
-        write_arg(w, func, regs, arg)?;
+        write_arg(w, func, arg)?;
     }
     writeln!(w, "):")
 }
@@ -280,20 +240,18 @@ fn decorate_block<FW: FuncWriter>(
     w: &mut dyn Write,
     func: &Function,
     aliases: &SecondaryMap<Value, Vec<Value>>,
-    annotations: &DisplayFunctionAnnotations,
     block: Block,
 ) -> fmt::Result {
     // Indent all instructions if any srclocs are present.
     let indent = if func.srclocs.is_empty() { 4 } else { 36 };
-    let isa = annotations.isa;
 
-    func_w.write_block_header(w, func, isa, block, indent)?;
+    func_w.write_block_header(w, func, block, indent)?;
     for a in func.dfg.block_params(block).iter().cloned() {
         write_value_aliases(w, aliases, a, indent)?;
     }
 
     for inst in func.layout.block_insts(block) {
-        func_w.write_instruction(w, func, aliases, isa, inst, indent)?;
+        func_w.write_instruction(w, func, aliases, inst, indent)?;
     }
 
     Ok(())
@@ -359,7 +317,6 @@ fn write_instruction(
     w: &mut dyn Write,
     func: &Function,
     aliases: &SecondaryMap<Value, Vec<Value>>,
-    isa: Option<&dyn TargetIsa>,
     inst: Inst,
     indent: usize,
 ) -> fmt::Result {
@@ -397,7 +354,7 @@ fn write_instruction(
         None => write!(w, "{}", opcode)?,
     }
 
-    write_operands(w, &func.dfg, isa, inst)?;
+    write_operands(w, &func.dfg, inst)?;
     writeln!(w)?;
 
     // Value aliases come out on lines after the instruction defining the referent.
@@ -408,12 +365,7 @@ fn write_instruction(
 }
 
 /// Write the operands of `inst` to `w` with a prepended space.
-pub fn write_operands(
-    w: &mut dyn Write,
-    dfg: &DataFlowGraph,
-    isa: Option<&dyn TargetIsa>,
-    inst: Inst,
-) -> fmt::Result {
+pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
     let pool = &dfg.value_lists;
     use crate::ir::instructions::InstructionData::*;
     match dfg[inst] {
@@ -581,57 +533,6 @@ pub fn write_operands(
                 DisplayValuesWithDelimiter(&args[1..], '+'),
                 offset
             )
-        }
-        RegMove { arg, src, dst, .. } => {
-            if let Some(isa) = isa {
-                let regs = isa.register_info();
-                write!(
-                    w,
-                    " {}, {} -> {}",
-                    arg,
-                    regs.display_regunit(src),
-                    regs.display_regunit(dst)
-                )
-            } else {
-                write!(w, " {}, %{} -> %{}", arg, src, dst)
-            }
-        }
-        CopySpecial { src, dst, .. } => {
-            if let Some(isa) = isa {
-                let regs = isa.register_info();
-                write!(
-                    w,
-                    " {} -> {}",
-                    regs.display_regunit(src),
-                    regs.display_regunit(dst)
-                )
-            } else {
-                write!(w, " %{} -> %{}", src, dst)
-            }
-        }
-        CopyToSsa { src, .. } => {
-            if let Some(isa) = isa {
-                let regs = isa.register_info();
-                write!(w, " {}", regs.display_regunit(src))
-            } else {
-                write!(w, " %{}", src)
-            }
-        }
-        RegSpill { arg, src, dst, .. } => {
-            if let Some(isa) = isa {
-                let regs = isa.register_info();
-                write!(w, " {}, {} -> {}", arg, regs.display_regunit(src), dst)
-            } else {
-                write!(w, " {}, %{} -> {}", arg, src, dst)
-            }
-        }
-        RegFill { arg, src, dst, .. } => {
-            if let Some(isa) = isa {
-                let regs = isa.register_info();
-                write!(w, " {}, {} -> {}", arg, src, regs.display_regunit(dst))
-            } else {
-                write!(w, " {}, {} -> %{}", arg, src, dst)
-            }
         }
         Trap { code, .. } => write!(w, " {}", code),
         CondTrap { arg, code, .. } => write!(w, " {}, {}", arg, code),

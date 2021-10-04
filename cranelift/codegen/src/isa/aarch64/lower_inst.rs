@@ -482,9 +482,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 ctx.emit(Inst::AluRRRR {
                     alu_op: ALUOp3::MSub64,
-                    rd: rd,
+                    rd,
                     rn: rd.to_reg(),
-                    rm: rm,
+                    rm,
                     ra: rn,
                 });
             } else {
@@ -2165,16 +2165,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Spill
         | Opcode::Fill
         | Opcode::FillNop
-        | Opcode::Regmove
-        | Opcode::CopySpecial
-        | Opcode::CopyToSsa
         | Opcode::CopyNop
         | Opcode::AdjustSpDown
         | Opcode::AdjustSpUpImm
         | Opcode::AdjustSpDownImm
-        | Opcode::IfcmpSp
-        | Opcode::Regspill
-        | Opcode::Regfill => {
+        | Opcode::IfcmpSp => {
             panic!("Unused opcode should not be encountered.");
         }
 
@@ -2412,7 +2407,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     alu_op: VecALUOp::Umaxp,
                     rd: tmp,
                     rn: rm,
-                    rm: rm,
+                    rm,
                     size,
                 });
             } else {
@@ -2835,9 +2830,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Addp,
-                    rd: rd,
-                    rn: rn,
-                    rm: rm,
+                    rd,
+                    rn,
+                    rm,
                     size: VectorSize::from_ty(ty),
                 });
             }
@@ -3446,7 +3441,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::FpuRRR {
                     fpu_op: choose_32_64(in_ty, FPUOp2::Min32, FPUOp2::Min64),
                     rd: rtmp2,
-                    rn: rn,
+                    rn,
                     rm: rtmp1.to_reg(),
                 });
                 if in_bits == 32 {
@@ -3468,7 +3463,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                 }
                 if in_bits == 32 {
-                    ctx.emit(Inst::FpuCmp32 { rn: rn, rm: rn });
+                    ctx.emit(Inst::FpuCmp32 { rn, rm: rn });
                     ctx.emit(Inst::FpuCSel32 {
                         rd: rtmp2,
                         rn: rtmp1.to_reg(),
@@ -3476,7 +3471,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         cond: Cond::Ne,
                     });
                 } else {
-                    ctx.emit(Inst::FpuCmp64 { rn: rn, rm: rn });
+                    ctx.emit(Inst::FpuCmp64 { rn, rm: rn });
                     ctx.emit(Inst::FpuCSel64 {
                         rd: rtmp2,
                         rn: rtmp1.to_reg(),

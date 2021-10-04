@@ -22,7 +22,6 @@ pub mod stackslot;
 mod table;
 mod trapcode;
 pub mod types;
-mod valueloc;
 
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -57,15 +56,11 @@ pub use crate::ir::stackslot::{StackLayoutInfo, StackSlotData, StackSlotKind, St
 pub use crate::ir::table::TableData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
-pub use crate::ir::valueloc::{ArgumentLoc, ValueLoc};
 pub use crate::value_label::LabelValueLoc;
 pub use cranelift_codegen_shared::condcodes;
 
 use crate::binemit;
 use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
-
-/// Map of value locations.
-pub type ValueLocations = SecondaryMap<Value, ValueLoc>;
 
 /// Map of jump tables.
 pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;

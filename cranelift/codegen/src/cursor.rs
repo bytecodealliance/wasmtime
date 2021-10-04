@@ -720,7 +720,7 @@ impl<'f> EncCursor<'f> {
     ///
     /// This is a convenience wrapper for the DFG equivalent.
     pub fn display_inst(&self, inst: ir::Inst) -> ir::dfg::DisplayInst {
-        self.func.dfg.display_inst(inst, self.isa)
+        self.func.dfg.display_inst(inst)
     }
 }
 

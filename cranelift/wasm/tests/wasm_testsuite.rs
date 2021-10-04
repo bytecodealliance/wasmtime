@@ -98,7 +98,7 @@ fn handle_module(data: Vec<u8>, flags: &Flags, return_mode: ReturnMode) {
 
     for func in dummy_environ.info.function_bodies.values() {
         verifier::verify_function(func, flags)
-            .map_err(|errors| panic!("{}", pretty_verifier_error(func, None, None, errors)))
+            .map_err(|errors| panic!("{}", pretty_verifier_error(func, None, errors)))
             .unwrap();
     }
 }

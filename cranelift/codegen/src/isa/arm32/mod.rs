@@ -11,7 +11,6 @@ use crate::result::CodegenResult;
 use crate::settings;
 
 use alloc::{boxed::Box, vec::Vec};
-use core::hash::{Hash, Hasher};
 use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Architecture, ArmArchitecture, Triple};
 
@@ -101,10 +100,6 @@ impl MachBackend for Arm32Backend {
         Vec::new()
     }
 
-    fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
-        self.flags.hash(&mut hasher);
-    }
-
     fn reg_universe(&self) -> &RealRegUniverse {
         &self.reg_universe
     }
@@ -112,11 +107,6 @@ impl MachBackend for Arm32Backend {
     fn unsigned_add_overflow_condition(&self) -> IntCC {
         // Carry flag set.
         IntCC::UnsignedGreaterThanOrEqual
-    }
-
-    fn unsigned_sub_overflow_condition(&self) -> IntCC {
-        // Carry flag clear.
-        IntCC::UnsignedLessThan
     }
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {

@@ -18,8 +18,6 @@ pub(crate) struct Formats {
     pub(crate) call: Rc<InstructionFormat>,
     pub(crate) call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
-    pub(crate) copy_special: Rc<InstructionFormat>,
-    pub(crate) copy_to_ssa: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
     pub(crate) float_cond: Rc<InstructionFormat>,
     pub(crate) float_cond_trap: Rc<InstructionFormat>,
@@ -37,9 +35,6 @@ pub(crate) struct Formats {
     pub(crate) load_no_offset: Rc<InstructionFormat>,
     pub(crate) multiary: Rc<InstructionFormat>,
     pub(crate) nullary: Rc<InstructionFormat>,
-    pub(crate) reg_fill: Rc<InstructionFormat>,
-    pub(crate) reg_move: Rc<InstructionFormat>,
-    pub(crate) reg_spill: Rc<InstructionFormat>,
     pub(crate) shuffle: Rc<InstructionFormat>,
     pub(crate) stack_load: Rc<InstructionFormat>,
     pub(crate) stack_store: Rc<InstructionFormat>,
@@ -281,33 +276,6 @@ impl Formats {
                 .imm(&entities.table)
                 .value()
                 .imm(&imm.offset32)
-                .build(),
-
-            reg_move: Builder::new("RegMove")
-                .value()
-                .imm_with_name("src", &imm.regunit)
-                .imm_with_name("dst", &imm.regunit)
-                .build(),
-
-            copy_special: Builder::new("CopySpecial")
-                .imm_with_name("src", &imm.regunit)
-                .imm_with_name("dst", &imm.regunit)
-                .build(),
-
-            copy_to_ssa: Builder::new("CopyToSsa")
-                .imm_with_name("src", &imm.regunit)
-                .build(),
-
-            reg_spill: Builder::new("RegSpill")
-                .value()
-                .imm_with_name("src", &imm.regunit)
-                .imm_with_name("dst", &entities.stack_slot)
-                .build(),
-
-            reg_fill: Builder::new("RegFill")
-                .value()
-                .imm_with_name("src", &entities.stack_slot)
-                .imm_with_name("dst", &imm.regunit)
                 .build(),
 
             trap: Builder::new("Trap").imm(&imm.trapcode).build(),

@@ -65,9 +65,8 @@ use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentLoc, ArgumentPurpose, Block, Constant, FuncRef, Function, GlobalValue, Inst,
-    InstructionData, JumpTable, Opcode, SigRef, StackSlot, StackSlotKind, Type, Value, ValueDef,
-    ValueList, ValueLoc,
+    types, ArgumentPurpose, Block, Constant, FuncRef, Function, GlobalValue, Inst, InstructionData,
+    JumpTable, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
@@ -319,7 +318,7 @@ impl<'a> Verifier<'a> {
     /// Determine a contextual error string for an instruction.
     #[inline]
     fn context(&self, inst: Inst) -> String {
-        self.func.dfg.display_inst(inst, self.isa).to_string()
+        self.func.dfg.display_inst(inst).to_string()
     }
 
     // Check for:
@@ -700,12 +699,6 @@ impl<'a> Verifier<'a> {
             TableAddr { table, .. } => {
                 self.verify_table(inst, table, errors)?;
             }
-            RegSpill { dst, .. } => {
-                self.verify_stack_slot(inst, dst, errors)?;
-            }
-            RegFill { src, .. } => {
-                self.verify_stack_slot(inst, src, errors)?;
-            }
             LoadComplex { ref args, .. } => {
                 self.verify_value_list(inst, args, errors)?;
             }
@@ -775,9 +768,6 @@ impl<'a> Verifier<'a> {
             | IntSelect { .. }
             | Load { .. }
             | Store { .. }
-            | RegMove { .. }
-            | CopySpecial { .. }
-            | CopyToSsa { .. }
             | Trap { .. }
             | CondTrap { .. }
             | IntCondTrap { .. }
@@ -1377,7 +1367,6 @@ impl<'a> Verifier<'a> {
                     .iter()
                     .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types, errors)?;
-                self.check_outgoing_args(inst, sig_ref, errors)?;
             }
             CallInfo::Indirect(sig_ref, _) => {
                 let arg_types = self.func.dfg.signatures[sig_ref]
@@ -1385,7 +1374,6 @@ impl<'a> Verifier<'a> {
                     .iter()
                     .map(|a| a.value_type);
                 self.typecheck_variable_args_iterator(inst, arg_types, errors)?;
-                self.check_outgoing_args(inst, sig_ref, errors)?;
             }
             CallInfo::NotACall => {}
         }
@@ -1427,82 +1415,11 @@ impl<'a> Verifier<'a> {
                 self.context(inst),
                 format!(
                     "mismatched argument count for `{}`: got {}, expected {}",
-                    self.func.dfg.display_inst(inst, None),
+                    self.func.dfg.display_inst(inst),
                     variable_args.len(),
                     i,
                 ),
             ));
-        }
-        Ok(())
-    }
-
-    /// Check the locations assigned to outgoing call arguments.
-    ///
-    /// When a signature has been legalized, all values passed as outgoing arguments on the stack
-    /// must be assigned to a matching `OutgoingArg` stack slot.
-    fn check_outgoing_args(
-        &self,
-        inst: Inst,
-        sig_ref: SigRef,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
-        let sig = &self.func.dfg.signatures[sig_ref];
-
-        let args = self.func.dfg.inst_variable_args(inst);
-        let expected_args = &sig.params[..];
-
-        for (&arg, &abi) in args.iter().zip(expected_args) {
-            // Value types have already been checked by `typecheck_variable_args_iterator()`.
-            if let ArgumentLoc::Stack(offset) = abi.location {
-                let arg_loc = self.func.locations[arg];
-                if let ValueLoc::Stack(ss) = arg_loc {
-                    // Argument value is assigned to a stack slot as expected.
-                    self.verify_stack_slot(inst, ss, errors)?;
-                    let slot = &self.func.stack_slots[ss];
-                    if slot.kind != StackSlotKind::OutgoingArg {
-                        return errors.fatal((
-                            inst,
-                            self.context(inst),
-                            format!(
-                                "Outgoing stack argument {} in wrong stack slot: {} = {}",
-                                arg, ss, slot,
-                            ),
-                        ));
-                    }
-                    if slot.offset != Some(offset) {
-                        return errors.fatal((
-                            inst,
-                            self.context(inst),
-                            format!(
-                                "Outgoing stack argument {} should have offset {}: {} = {}",
-                                arg, offset, ss, slot,
-                            ),
-                        ));
-                    }
-                    if abi.purpose == ArgumentPurpose::StructArgument(slot.size) {
-                    } else if slot.size != abi.value_type.bytes() {
-                        return errors.fatal((
-                            inst,
-                            self.context(inst),
-                            format!(
-                                "Outgoing stack argument {} wrong size for {}: {} = {}",
-                                arg, abi.value_type, ss, slot,
-                            ),
-                        ));
-                    }
-                } else {
-                    let reginfo = self.isa.map(|i| i.register_info());
-                    return errors.fatal((
-                        inst,
-                        self.context(inst),
-                        format!(
-                            "Outgoing stack argument {} in wrong location: {}",
-                            arg,
-                            arg_loc.display(reginfo.as_ref())
-                        ),
-                    ));
-                }
-            }
         }
         Ok(())
     }
@@ -1666,22 +1583,6 @@ impl<'a> Verifier<'a> {
                     inst,
                     self.context(inst),
                     "copy_nop src and dst types must be the same",
-                ));
-            }
-            let src_loc = self.func.locations[arg];
-            let dst_loc = self.func.locations[dst_val];
-            let locs_ok = match (src_loc, dst_loc) {
-                (ValueLoc::Stack(src_slot), ValueLoc::Stack(dst_slot)) => src_slot == dst_slot,
-                _ => false,
-            };
-            if !locs_ok {
-                return errors.fatal((
-                    inst,
-                    self.context(inst),
-                    format!(
-                        "copy_nop must refer to identical stack slots, but found {:?} vs {:?}",
-                        src_loc, dst_loc,
-                    ),
                 ));
             }
         }
@@ -1903,7 +1804,7 @@ impl<'a> Verifier<'a> {
         if !errors.is_empty() {
             log::warn!(
                 "Found verifier errors in function:\n{}",
-                pretty_verifier_error(self.func, None, None, errors.clone())
+                pretty_verifier_error(self.func, None, errors.clone())
             );
         }
 

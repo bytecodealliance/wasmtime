@@ -6,7 +6,6 @@ use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen;
 use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::ir;
-use cranelift_codegen::isa;
 use cranelift_reader::TestCommand;
 use log::info;
 use std::borrow::Cow;
@@ -43,12 +42,12 @@ impl SubTest for TestCompile {
 
         let CodeInfo { total_size, .. } = comp_ctx
             .compile(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
         info!(
             "Generated {} bytes of code:\n{}",
             total_size,
-            comp_ctx.func.display(isa)
+            comp_ctx.func.display()
         );
 
         let disasm = comp_ctx
@@ -102,11 +101,4 @@ impl binemit::CodeSink for SizeSink {
     fn begin_jumptables(&mut self) {}
     fn begin_rodata(&mut self) {}
     fn end_codegen(&mut self) {}
-    fn add_stack_map(
-        &mut self,
-        _: &[ir::entities::Value],
-        _: &ir::Function,
-        _: &dyn isa::TargetIsa,
-    ) {
-    }
 }

@@ -4,14 +4,13 @@ use crate::variable::Variable;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
-use cranelift_codegen::ir::function::DisplayFunction;
 use cranelift_codegen::ir::{
     types, AbiParam, Block, DataFlowGraph, ExtFuncData, ExternalName, FuncRef, Function,
     GlobalValue, GlobalValueData, Heap, HeapData, Inst, InstBuilder, InstBuilderBase,
     InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, SigRef, Signature, StackSlot,
     StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments, ValueLabelStart,
 };
-use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
 
 /// Structure used for translating a series of functions into Cranelift IR.
@@ -481,7 +480,7 @@ impl<'a> FunctionBuilder<'a> {
             // Iterate manually to provide more helpful error messages.
             for block in self.func_ctx.blocks.keys() {
                 if let Err((inst, _msg)) = self.func.is_block_basic(block) {
-                    let inst_str = self.func.dfg.display_inst(inst, None);
+                    let inst_str = self.func.dfg.display_inst(inst);
                     panic!("{} failed basic block invariants on {}", block, inst_str);
                 }
             }
@@ -578,15 +577,6 @@ impl<'a> FunctionBuilder<'a> {
     /// last call to `switch_to_block`.
     pub fn is_filled(&self) -> bool {
         self.func_ctx.blocks[self.position.unwrap()].filled
-    }
-
-    /// Returns a displayable object for the function as it is.
-    ///
-    /// Useful for debug purposes. Use it with `None` for standard printing.
-    // Clippy thinks the lifetime that follows is needless, but rustc needs it
-    #[cfg_attr(feature = "cargo-clippy", allow(clippy::needless_lifetimes))]
-    pub fn display<'b, I: Into<Option<&'b dyn TargetIsa>>>(&'b self, isa: I) -> DisplayFunction {
-        self.func.display(isa)
     }
 }
 
@@ -955,7 +945,7 @@ mod tests {
         let flags = settings::Flags::new(settings::builder());
         // println!("{}", func.display(None));
         if let Err(errors) = verify_function(&func, &flags) {
-            panic!("{}\n{}", func.display(None), errors)
+            panic!("{}\n{}", func.display(), errors)
         }
     }
 
@@ -1009,7 +999,7 @@ mod tests {
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
     sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
@@ -1065,7 +1055,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
 block0:
     v4 = iconst.i64 0
@@ -1119,7 +1109,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
     sig0 = (i64, i64, i64) system_v
     fn0 = %Memcpy sig0
@@ -1164,7 +1154,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
 block0:
     v2 = iconst.i64 0
@@ -1204,7 +1194,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i32 system_v {
     sig0 = (i64, i32, i64) system_v
     fn0 = %Memset sig0
@@ -1253,7 +1243,7 @@ block0:
         }
 
         assert_eq!(
-            func.display(None).to_string(),
+            func.display().to_string(),
             "function %sample() -> i8x16, b8x16, f32x4 system_v {
     const0 = 0x00000000000000000000000000000000
 
