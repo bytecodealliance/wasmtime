@@ -79,10 +79,6 @@ pub struct Function {
     /// Signature of this function.
     pub signature: Signature,
 
-    /// The old signature of this function, before the most recent legalization,
-    /// if any.
-    pub old_signature: Option<Signature>,
-
     /// Stack slots allocated in this function.
     pub stack_slots: StackSlots,
 
@@ -145,7 +141,6 @@ impl Function {
             version_marker: VersionMarker,
             name,
             signature: sig,
-            old_signature: None,
             stack_slots: StackSlots::new(),
             global_values: PrimaryMap::new(),
             heaps: PrimaryMap::new(),
