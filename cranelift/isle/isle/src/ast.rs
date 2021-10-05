@@ -128,10 +128,10 @@ impl Pattern {
     }
 
     /// Call `f` for each of the terms in this pattern.
-    pub fn terms(&self, f: &mut dyn FnMut(&Ident)) {
+    pub fn terms(&self, f: &mut dyn FnMut(Pos, &Ident)) {
         match self {
-            Pattern::Term { sym, args, .. } => {
-                f(sym);
+            Pattern::Term { sym, args, pos } => {
+                f(*pos, sym);
                 for arg in args {
                     if let TermArgPattern::Pattern(p) = arg {
                         p.terms(f);

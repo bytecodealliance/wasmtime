@@ -847,17 +847,29 @@ impl TermEnv {
                         return;
                     }
                 };
-                let termdata = &mut self.terms[term.index()];
+
                 let template = ext.template.make_macro_template(&ext.args[..]);
                 log::trace!("extractor def: {:?} becomes template {:?}", def, template);
 
                 let mut callees = HashSet::new();
-                template.terms(&mut |t| {
+                template.terms(&mut |pos, t| {
                     let t = tyenv.intern_mut(t);
                     callees.insert(t);
+
+                    if !self.term_map.contains_key(&t) {
+                        tyenv.report_error(
+                            pos,
+                            format!(
+                                "`{}` extractor definition references unknown term `{}`",
+                                ext.term.0,
+                                tyenv.syms[t.index()]
+                            ),
+                        );
+                    }
                 });
                 extractor_call_graph.insert(sym, callees);
 
+                let termdata = &mut self.terms[term.index()];
                 match &termdata.kind {
                     &TermKind::Declared => {
                         termdata.kind = TermKind::InternalExtractor { template };
@@ -892,7 +904,15 @@ impl TermEnv {
                         }));
                     }
                 } else {
-                    let term = self.term_map[&caller];
+                    let term = match self.term_map.get(&caller) {
+                        Some(t) => t,
+                        None => {
+                            // Some other error must have already been recorded
+                            // if we don't have the caller's term data.
+                            assert!(!tyenv.errors.is_empty());
+                            continue 'outer;
+                        }
+                    };
                     let pos = match &self.terms[term.index()].kind {
                         TermKind::InternalExtractor { template } => template.pos(),
                         _ => unreachable!(),
