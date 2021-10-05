@@ -3,6 +3,7 @@ test run
 target aarch64
 set enable_simd
 target x86_64
+target s390x
 
 function %umulhi_i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
