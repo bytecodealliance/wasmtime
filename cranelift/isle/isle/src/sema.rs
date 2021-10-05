@@ -879,20 +879,36 @@ impl TermEnv {
         'outer: for root in extractor_call_graph.keys().copied() {
             seen.clear();
             stack.clear();
-            stack.push(root);
+            stack.push((root, vec![root]));
 
-            while let Some(caller) = stack.pop() {
-                let already_seen = seen.insert(caller);
-                if already_seen {
+            while let Some((caller, path)) = stack.pop() {
+                let is_new = seen.insert(caller);
+                if is_new {
+                    if let Some(callees) = extractor_call_graph.get(&caller) {
+                        stack.extend(callees.iter().map(|callee| {
+                            let mut path = path.clone();
+                            path.push(*callee);
+                            (*callee, path)
+                        }));
+                    }
+                } else {
                     let term = self.term_map[&caller];
                     let pos = match &self.terms[term.index()].kind {
                         TermKind::InternalExtractor { template } => template.pos(),
                         _ => unreachable!(),
                     };
-                    tyenv.report_error(pos, "extractor definition is recursive".into());
+
+                    let path: Vec<_> = path
+                        .iter()
+                        .map(|sym| tyenv.syms[sym.index()].as_str())
+                        .collect();
+                    let msg = format!(
+                        "`{}` extractor definition is recursive: {}",
+                        tyenv.syms[root.index()],
+                        path.join(" -> ")
+                    );
+                    tyenv.report_error(pos, msg);
                     continue 'outer;
-                } else {
-                    stack.extend(extractor_call_graph[&caller].iter().copied());
                 }
             }
         }
@@ -957,7 +973,7 @@ impl TermEnv {
                                 pos,
                                 format!(
                                     "Constructor defined on term of improper type '{}'",
-                                    term.0
+                                    term.0,
                                 ),
                             );
                         }
