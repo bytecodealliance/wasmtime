@@ -1,0 +1,49 @@
+# The purpose of this workflow is to watch for changes on the `main` branch of
+# this repository and look for the term
+# "automatically-tag-and-release-this-commit" within merged PRs/commits. Once
+# that term is found the current version of `Cargo.toml`, the `wasmtime-cli`
+# Cargo.toml, is created as a tag and the tag is pushed to the repo. Currently
+# the tag is created through the GitHub API with an access token to ensure that
+# CI is further triggered for the tag itself which performs the full release
+# process.
+
+name: "Push tagged release"
+on:
+  push:
+    branches: [main]
+
+jobs:
+  push_tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+      - name: Test if tag is needed
+        run: |
+          git log ${{ github.event.before }}...${{ github.event.after }} | tee main.log
+          version=$(grep 'version =' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"/\1/')
+          echo "version: $version"
+          echo "::set-output name=version::$version"
+          echo "::set-output name=sha::$(git rev-parse HEAD)"
+          if grep -q "automatically-tag-and-release-this-commit" main.log; then
+            echo push-tag
+            echo "::set-output name=push_tag::yes"
+          else
+            echo no-push-tag
+            echo "::set-output name=push_tag::no"
+          fi
+        id: tag
+      - name: Push the tag
+        run: |
+          git_refs_url=$(jq .repository.git_refs_url $GITHUB_EVENT_PATH | tr -d '"' | sed 's/{\/sha}//g')
+          curl -iX POST $git_refs_url \
+            -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -d @- << EOF
+          {
+            "ref": "refs/tags/v${{ steps.tag.outputs.version }}",
+            "sha": "${{ steps.tag.outputs.sha }}"
+          }
+          EOF
+        if: steps.tag.outputs.push_tag == 'yes'
