@@ -63,9 +63,21 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-crypto",
-    "wasmtime-rust-macro",
-    "wasmtime-rust",
     "wasmtime-wast",
+    "wasmtime-cli",
+];
+
+const PUBLIC_CRATES: &[&str] = &[
+    // just here to appease the script because these are submodules of this
+    // repository.
+    "wasi-crypto",
+    "witx",
+    // these are actually public crates which we cannot break the API of in
+    // patch releases.
+    "wasmtime",
+    "wasmtime-wasi",
+    "wasmtime-wasi-nn",
+    "wasmtime-wasi-crypto",
     "wasmtime-cli",
 ];
 
@@ -235,13 +247,30 @@ fn bump_version(krate: &Crate, crates: &[Crate]) {
                 continue;
             }
             if !line.contains(&other.version) {
-                if !line.contains("version =") {
+                if !line.contains("version =") || !krate.publish {
                     continue;
                 }
                 panic!(
                     "{:?} has a dep on {} but doesn't list version {}",
                     krate.manifest, other.name, other.version
                 );
+            }
+            if krate.publish {
+                if PUBLIC_CRATES.contains(&other.name.as_str()) {
+                    assert!(
+                        !line.contains("\"="),
+                        "{} should not have an exact version requirement on {}",
+                        krate.name,
+                        other.name
+                    );
+                } else {
+                    assert!(
+                        line.contains("\"="),
+                        "{} should have an exact version requirement on {}",
+                        krate.name,
+                        other.name
+                    );
+                }
             }
             rewritten = true;
             new_manifest.push_str(&line.replace(&other.version, &other.next_version));

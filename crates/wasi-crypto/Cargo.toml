@@ -15,7 +15,7 @@ edition = "2018"
 anyhow = "1.0"
 wasi-crypto = { path = "spec/implementations/hostcalls/rust", version = "0.1.5" }
 wasmtime = { path = "../wasmtime", version = "0.30.0", default-features = false }
-wiggle = { path = "../wiggle", version = "0.30.0" }
+wiggle = { path = "../wiggle", version = "=0.30.0" }
 
 [badges]
 maintenance = { status = "experimental" }

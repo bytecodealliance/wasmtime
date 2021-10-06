@@ -11,7 +11,7 @@ readme = "README.md"
 edition = "2018"
 
 [dependencies]
-cranelift-codegen = { path = "../codegen", version = "0.77.0", default-features = false }
+cranelift-codegen = { path = "../codegen", version = "=0.77.0", default-features = false }
 target-lexicon = "0.12"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]

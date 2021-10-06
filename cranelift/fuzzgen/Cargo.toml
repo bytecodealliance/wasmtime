@@ -11,8 +11,7 @@ publish = false
 
 
 [dependencies]
-cranelift = { path = "../umbrella", version = "0.77.0" }
-
+cranelift = { path = "../umbrella" }
 anyhow = "1.0.19"
 arbitrary = "1.0.0"
 rand = "0.8.0"

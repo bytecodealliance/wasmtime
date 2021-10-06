@@ -13,8 +13,8 @@ edition = "2018"
 # rustdoc-args = [ "--document-private-items" ]
 
 [dependencies]
-cranelift-codegen-shared = { path = "../shared", version = "0.77.0" }
-cranelift-entity = { path = "../../entity", version = "0.77.0" }
+cranelift-codegen-shared = { path = "../shared", version = "=0.77.0" }
+cranelift-entity = { path = "../../entity", version = "=0.77.0" }
 
 [badges]
 maintenance = { status = "experimental" }
