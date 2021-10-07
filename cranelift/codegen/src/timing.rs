@@ -55,7 +55,6 @@ define_passes! {
     flowgraph: "Control flow graph",
     domtree: "Dominator tree",
     loop_analysis: "Loop analysis",
-    postopt: "Post-legalization rewriting",
     preopt: "Pre-legalization rewriting",
     dce: "Dead code elimination",
     legalize: "Legalization",
