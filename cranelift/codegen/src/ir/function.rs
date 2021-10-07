@@ -5,20 +5,19 @@
 
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir;
+use crate::ir::JumpTables;
 use crate::ir::{
     instructions::BranchInfo, Block, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Heap,
     HeapData, Inst, InstructionData, JumpTable, JumpTableData, Opcode, SigRef, StackSlot,
     StackSlotData, Table, TableData,
 };
-use crate::ir::{BlockOffsets, SourceLocs, StackSlots};
 use crate::ir::{DataFlowGraph, ExternalName, Layout, Signature};
-use crate::ir::{JumpTableOffsets, JumpTables};
+use crate::ir::{SourceLocs, StackSlots};
 use crate::isa::CallConv;
 use crate::value_label::ValueLabelsRanges;
 use crate::write::write_function;
 #[cfg(feature = "enable-serde")]
 use alloc::string::String;
-use alloc::vec::Vec;
 use core::fmt;
 
 #[cfg(feature = "enable-serde")]
@@ -100,31 +99,11 @@ pub struct Function {
     /// Layout of blocks and instructions in the function body.
     pub layout: Layout,
 
-    /// Code offsets of the block headers.
-    ///
-    /// This information is only transiently available after the `binemit::relax_branches` function
-    /// computes it, and it can easily be recomputed by calling that function. It is not included
-    /// in the textual IR format.
-    pub offsets: BlockOffsets,
-
-    /// Code offsets of Jump Table headers.
-    pub jt_offsets: JumpTableOffsets,
-
     /// Source locations.
     ///
     /// Track the original source location for each instruction. The source locations are not
     /// interpreted by Cranelift, only preserved.
     pub srclocs: SourceLocs,
-
-    /// Instruction that marks the end (inclusive) of the function's prologue.
-    ///
-    /// This is used for some ABIs to generate unwind information.
-    pub prologue_end: Option<Inst>,
-
-    /// The instructions that mark the start (inclusive) of an epilogue in the function.
-    ///
-    /// This is used for some ABIs to generate unwind information.
-    pub epilogues_start: Vec<(Inst, Block)>,
 
     /// An optional global value which represents an expression evaluating to
     /// the stack limit for this function. This `GlobalValue` will be
@@ -148,11 +127,7 @@ impl Function {
             jump_tables: PrimaryMap::new(),
             dfg: DataFlowGraph::new(),
             layout: Layout::new(),
-            offsets: SecondaryMap::new(),
-            jt_offsets: SecondaryMap::new(),
             srclocs: SecondaryMap::new(),
-            prologue_end: None,
-            epilogues_start: Vec::new(),
             stack_limit: None,
         }
     }
@@ -167,11 +142,7 @@ impl Function {
         self.jump_tables.clear();
         self.dfg.clear();
         self.layout.clear();
-        self.offsets.clear();
-        self.jt_offsets.clear();
         self.srclocs.clear();
-        self.prologue_end = None;
-        self.epilogues_start.clear();
         self.stack_limit = None;
     }
 

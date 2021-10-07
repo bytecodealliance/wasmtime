@@ -305,7 +305,6 @@ impl<'a> ObjectBuilder<'a> {
                 // seem too common though so aren't necessarily that important
                 // to optimize.
                 RelocationTarget::LibCall(call) => (self.libcalls[&call], 0),
-                RelocationTarget::JumpTable(jt) => (symbol_id, func.jt_offsets[jt]),
             };
             let (kind, encoding, size) = match r.reloc {
                 Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),

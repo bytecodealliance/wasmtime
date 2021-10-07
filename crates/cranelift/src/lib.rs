@@ -114,9 +114,6 @@ pub struct CompiledFunction {
     /// The machine code for this function.
     body: Vec<u8>,
 
-    /// The jump tables offsets (in the body).
-    jt_offsets: ir::JumpTableOffsets,
-
     /// The unwind information.
     unwind_info: Option<UnwindInfo>,
 
@@ -181,8 +178,6 @@ enum RelocationTarget {
     UserFunc(FuncIndex),
     /// A compiler-generated libcall.
     LibCall(ir::LibCall),
-    /// Jump table index.
-    JumpTable(ir::JumpTable),
 }
 
 /// Creates a new cranelift `Signature` with no wasm params/results for the

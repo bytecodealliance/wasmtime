@@ -59,17 +59,10 @@ pub use crate::ir::types::Type;
 pub use crate::value_label::LabelValueLoc;
 pub use cranelift_codegen_shared::condcodes;
 
-use crate::binemit;
 use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 
 /// Map of jump tables.
 pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
-
-/// Code offsets for blocks.
-pub type BlockOffsets = SecondaryMap<Block, binemit::CodeOffset>;
-
-/// Code offsets for Jump Tables.
-pub type JumpTableOffsets = SecondaryMap<JumpTable, binemit::CodeOffset>;
 
 /// Source locations for instructions.
 pub type SourceLocs = SecondaryMap<Inst, SourceLoc>;

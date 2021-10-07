@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc};
-use crate::ir::{ConstantOffset, ExternalName, JumpTable, Opcode, SourceLoc, TrapCode};
+use crate::ir::{ConstantOffset, ExternalName, Opcode, SourceLoc, TrapCode};
 
 use alloc::vec::Vec;
 use std::string::String;
@@ -67,8 +67,6 @@ impl CodeSink for TestCodeSink {
     }
 
     fn reloc_constant(&mut self, _rel: Reloc, _constant_offset: ConstantOffset) {}
-
-    fn reloc_jt(&mut self, _rel: Reloc, _jt: JumpTable) {}
 
     fn trap(&mut self, _code: TrapCode, _srcloc: SourceLoc) {}
 
