@@ -12,6 +12,8 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::thread;
+use std::time::Duration;
 
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
@@ -102,9 +104,29 @@ fn main() {
         }
 
         "publish" => {
-            for krate in crates.iter() {
-                publish(&krate);
+            // We have so many crates to publish we're frequently either
+            // rate-limited or we run into issues where crates can't publish
+            // successfully because they're waiting on the index entries of
+            // previously-published crates to propagate. This means we try to
+            // publish in a loop and we remove crates once they're successfully
+            // published. Failed-to-publish crates get enqueued for another try
+            // later on.
+            for _ in 0..5 {
+                crates.retain(|krate| !publish(krate));
+
+                if crates.is_empty() {
+                    break;
+                }
+
+                println!(
+                    "{} crates failed to publish, waiting for a bit to retry",
+                    crates.len(),
+                );
+                thread::sleep(Duration::from_secs(20));
             }
+
+            assert!(crates.is_empty(), "failed to publish all crates");
+
             println!("");
             println!("===================================================================");
             println!("");
@@ -254,10 +276,28 @@ fn bump(version: &str) -> String {
     }
 }
 
-fn publish(krate: &Crate) {
+fn publish(krate: &Crate) -> bool {
     if !CRATES_TO_PUBLISH.iter().any(|s| *s == krate.name) {
-        return;
+        return true;
     }
+
+    // First make sure the crate isn't already published at this version. This
+    // script may be re-run and there's no need to re-attempt previous work.
+    let output = Command::new("curl")
+        .arg(&format!("https://crates.io/api/v1/crates/{}", krate.name))
+        .output()
+        .expect("failed to invoke `curl`");
+    if output.status.success()
+        && String::from_utf8_lossy(&output.stdout)
+            .contains(&format!("\"newest_version\":\"{}\"", krate.version))
+    {
+        println!(
+            "skip publish {} because {} is latest version",
+            krate.name, krate.version,
+        );
+        return true;
+    }
+
     let status = Command::new("cargo")
         .arg("publish")
         .current_dir(krate.manifest.parent().unwrap())
@@ -266,18 +306,47 @@ fn publish(krate: &Crate) {
         .expect("failed to run cargo");
     if !status.success() {
         println!("FAIL: failed to publish `{}`: {}", krate.name, status);
+        return false;
+    }
+
+    // After we've published then make sure that the `wasmtime-publish` group is
+    // added to this crate for future publications. If it's already present
+    // though we can skip the `cargo owner` modification.
+    let output = Command::new("curl")
+        .arg(&format!(
+            "https://crates.io/api/v1/crates/{}/owners",
+            krate.name
+        ))
+        .output()
+        .expect("failed to invoke `curl`");
+    if output.status.success()
+        && String::from_utf8_lossy(&output.stdout).contains("wasmtime-publish")
+    {
+        println!(
+            "wasmtime-publish already listed as an owner of {}",
+            krate.name
+        );
+        return true;
     }
 
     // Note that the status is ignored here. This fails most of the time because
     // the owner is already set and present, so we only want to add this to
     // crates which haven't previously been published.
-    Command::new("cargo")
+    let status = Command::new("cargo")
         .arg("owner")
         .arg("-a")
         .arg("github:bytecodealliance:wasmtime-publish")
         .arg(&krate.name)
         .status()
         .expect("failed to run cargo");
+    if !status.success() {
+        panic!(
+            "FAIL: failed to add wasmtime-publish as owner `{}`: {}",
+            krate.name, status
+        );
+    }
+
+    true
 }
 
 // Verify the current tree is publish-able to crates.io. The intention here is
