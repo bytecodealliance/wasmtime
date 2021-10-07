@@ -210,9 +210,31 @@ pub enum TermKind {
         /// `(A.A1 ...)` then the variant ID corresponds to `A1`.
         variant: VariantId,
     },
+    /// A term declared via a `(decl ...)` form.
+    Decl {
+        /// The kind of this term's constructor, if any.
+        constructor_kind: Option<ConstructorKind>,
+        /// The kind of this term's extractor, if any.
+        extractor_kind: Option<ExtractorKind>,
+    },
+}
+
+/// The kind of a constructor for a term.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConstructorKind {
     /// A term with "internal" rules that work in the forward direction. Becomes
     /// a compiled Rust function in the generated code.
     InternalConstructor,
+    /// A term defined solely by an external constructor function.
+    ExternalConstructor {
+        /// The external name of the constructor function.
+        name: Sym,
+    },
+}
+
+/// The kind of an extractor for a term.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExtractorKind {
     /// A term that defines an "extractor macro" in the LHS of a pattern. Its
     /// arguments take patterns and are simply substituted with the given
     /// patterns when used.
@@ -228,14 +250,9 @@ pub enum TermKind {
         arg_polarity: Vec<ArgPolarity>,
         /// Is the external extractor infallible?
         infallible: bool,
+        /// The position where this external extractor was declared.
+        pos: Pos,
     },
-    /// A term defined solely by an external constructor function.
-    ExternalConstructor {
-        /// The external name of the constructor function.
-        name: Sym,
-    },
-    /// Declared but no body or externs associated (yet).
-    Declared,
 }
 
 pub use crate::ast::ArgPolarity;
@@ -261,40 +278,69 @@ impl Term {
         self.ret_ty
     }
 
-    /// Is this term a constructor?
-    pub fn is_constructor(&self) -> bool {
-        match &self.kind {
-            &TermKind::InternalConstructor { .. } | &TermKind::ExternalConstructor { .. } => true,
-            _ => false,
-        }
+    /// Is this term an enum variant?
+    pub fn is_enum_variant(&self) -> bool {
+        matches!(self.kind, TermKind::EnumVariant { .. })
     }
 
-    fn is_declared(&self) -> bool {
-        matches!(self.kind, TermKind::Declared)
+    /// Does this term have a constructor?
+    pub fn has_constructor(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::EnumVariant { .. }
+                | TermKind::Decl {
+                    constructor_kind: Some(_),
+                    ..
+                }
+        )
     }
 
-    /// Is this term external?
-    pub fn is_external(&self) -> bool {
-        match &self.kind {
-            &TermKind::ExternalExtractor { .. } | &TermKind::ExternalConstructor { .. } => true,
-            _ => false,
-        }
+    /// Does this term have an extractor?
+    pub fn has_extractor(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::EnumVariant { .. }
+                | TermKind::Decl {
+                    extractor_kind: Some(_),
+                    ..
+                }
+        )
     }
 
-    /// Get this term's external function signature, if any.
-    pub fn to_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
+    /// Is this term's extractor external?
+    pub fn has_external_extractor(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::Decl {
+                extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
+                ..
+            }
+        )
+    }
+
+    /// Is this term's constructor external?
+    pub fn has_external_constructor(&self) -> bool {
+        matches!(
+            self.kind,
+            TermKind::Decl {
+                constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
+                ..
+            }
+        )
+    }
+
+    /// Get this term's extractor's external function signature, if any.
+    pub fn extractor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
         match &self.kind {
-            &TermKind::ExternalConstructor { name } => Some(ExternalSig {
-                func_name: tyenv.syms[name.index()].clone(),
-                full_name: format!("C::{}", tyenv.syms[name.index()]),
-                param_tys: self.arg_tys.clone(),
-                ret_tys: vec![self.ret_ty],
-                infallible: true,
-            }),
-            &TermKind::ExternalExtractor {
-                name,
-                ref arg_polarity,
-                infallible,
+            TermKind::Decl {
+                extractor_kind:
+                    Some(ExtractorKind::ExternalExtractor {
+                        name,
+                        ref arg_polarity,
+                        infallible,
+                        ..
+                    }),
+                ..
             } => {
                 let mut arg_tys = vec![];
                 let mut ret_tys = vec![];
@@ -314,10 +360,30 @@ impl Term {
                     full_name: format!("C::{}", tyenv.syms[name.index()]),
                     param_tys: arg_tys,
                     ret_tys,
-                    infallible,
+                    infallible: *infallible,
                 })
             }
-            &TermKind::InternalConstructor { .. } => {
+            _ => None,
+        }
+    }
+
+    /// Get this term's constructor's external function signature, if any.
+    pub fn constructor_sig(&self, tyenv: &TypeEnv) -> Option<ExternalSig> {
+        match &self.kind {
+            TermKind::Decl {
+                constructor_kind: Some(ConstructorKind::ExternalConstructor { name }),
+                ..
+            } => Some(ExternalSig {
+                func_name: tyenv.syms[name.index()].clone(),
+                full_name: format!("C::{}", tyenv.syms[name.index()]),
+                param_tys: self.arg_tys.clone(),
+                ret_tys: vec![self.ret_ty],
+                infallible: true,
+            }),
+            TermKind::Decl {
+                constructor_kind: Some(ConstructorKind::InternalConstructor { .. }),
+                ..
+            } => {
                 let name = format!("constructor_{}", tyenv.syms[self.name.index()]);
                 Some(ExternalSig {
                     func_name: name.clone(),
@@ -740,7 +806,10 @@ impl TermEnv {
                         name,
                         arg_tys,
                         ret_ty,
-                        kind: TermKind::Declared,
+                        kind: TermKind::Decl {
+                            constructor_kind: None,
+                            extractor_kind: None,
+                        },
                     });
                 }
                 _ => {}
@@ -813,15 +882,35 @@ impl TermEnv {
                         }
                     };
                     let termdata = &mut self.terms[term.index()];
-                    match &termdata.kind {
-                        &TermKind::Declared => {
-                            termdata.kind = TermKind::InternalConstructor;
+                    match &mut termdata.kind {
+                        TermKind::Decl {
+                            constructor_kind, ..
+                        } => {
+                            match constructor_kind {
+                                None => {
+                                    *constructor_kind = Some(ConstructorKind::InternalConstructor);
+                                }
+                                Some(ConstructorKind::InternalConstructor) => {
+                                    // OK, no error; multiple rules can apply to
+                                    // one internal constructor term.
+                                }
+                                Some(ConstructorKind::ExternalConstructor { .. }) => {
+                                    tyenv.report_error(
+                                        pos,
+                                        "Rule LHS root term is incorrect kind; cannot \
+                                         be external constructor"
+                                            .to_string(),
+                                    );
+                                    continue;
+                                }
+                            }
                         }
-                        &TermKind::InternalConstructor => {
-                            // OK, no error; multiple rules can apply to one internal constructor term.
-                        }
-                        _ => {
-                            tyenv.report_error(pos, "Rule LHS root term is incorrect kind; cannot be internal constructor".to_string());
+                        TermKind::EnumVariant { .. } => {
+                            tyenv.report_error(
+                                pos,
+                                "Rule LHS root term is incorrect kind; cannot be enum variant"
+                                    .to_string(),
+                            );
                             continue;
                         }
                     }
@@ -870,17 +959,36 @@ impl TermEnv {
                 extractor_call_graph.insert(sym, callees);
 
                 let termdata = &mut self.terms[term.index()];
-                match &termdata.kind {
-                    &TermKind::Declared => {
-                        termdata.kind = TermKind::InternalExtractor { template };
-                    }
-                    _ => {
+                match &mut termdata.kind {
+                    TermKind::EnumVariant { .. } => {
                         tyenv.report_error(
                             ext.pos,
-                            "Extractor macro body defined on term of incorrect kind".to_string(),
+                            "Extractor macro body defined on term of incorrect kind; cannot be an \
+                             enum variant"
+                                .into(),
                         );
                         continue;
                     }
+                    TermKind::Decl { extractor_kind, .. } => match extractor_kind {
+                        None => {
+                            *extractor_kind = Some(ExtractorKind::InternalExtractor { template });
+                        }
+                        Some(ext_kind) => {
+                            tyenv.report_error(
+                                ext.pos,
+                                "Duplicate extractor definition".to_string(),
+                            );
+                            let pos = match ext_kind {
+                                ExtractorKind::InternalExtractor { template } => template.pos(),
+                                ExtractorKind::ExternalExtractor { pos, .. } => *pos,
+                            };
+                            tyenv.report_error(
+                                pos,
+                                "Extractor was already defined here".to_string(),
+                            );
+                            continue;
+                        }
+                    },
                 }
             }
         }
@@ -914,8 +1022,16 @@ impl TermEnv {
                         }
                     };
                     let pos = match &self.terms[term.index()].kind {
-                        TermKind::InternalExtractor { template } => template.pos(),
-                        _ => unreachable!(),
+                        TermKind::Decl {
+                            extractor_kind: Some(ExtractorKind::InternalExtractor { template }),
+                            ..
+                        } => template.pos(),
+                        _ => {
+                            // Again, there must have already been errors
+                            // recorded.
+                            assert!(!tyenv.errors.is_empty());
+                            continue 'outer;
+                        }
                     };
 
                     let path: Vec<_> = path
@@ -944,11 +1060,37 @@ impl TermEnv {
                         vars: vec![],
                     };
 
+                    let rule_term = match rule.pattern.root_term() {
+                        Some(name) => {
+                            let sym = tyenv.intern_mut(name);
+                            match self.term_map.get(&sym) {
+                                Some(term) => *term,
+                                None => {
+                                    tyenv.report_error(
+                                        pos,
+                                        "Cannot define a rule for an unknown term".to_string(),
+                                    );
+                                    continue;
+                                }
+                            }
+                        }
+                        None => {
+                            tyenv.report_error(
+                                pos,
+                                "Rule does not have a term at the root of its left-hand side"
+                                    .to_string(),
+                            );
+                            continue;
+                        }
+                    };
+
                     let (lhs, ty) = unwrap_or_continue!(self.translate_pattern(
                         tyenv,
+                        rule_term,
                         &rule.pattern,
                         None,
-                        &mut bindings
+                        &mut bindings,
+                        /* is_root = */ true,
                     ));
                     let rhs = unwrap_or_continue!(self.translate_expr(
                         tyenv,
@@ -984,15 +1126,35 @@ impl TermEnv {
                         }
                     };
                     let termdata = &mut self.terms[term_id.index()];
-                    match &termdata.kind {
-                        &TermKind::Declared => {
-                            termdata.kind = TermKind::ExternalConstructor { name: func_sym };
-                        }
-                        _ => {
+                    match &mut termdata.kind {
+                        TermKind::Decl {
+                            constructor_kind, ..
+                        } => match constructor_kind {
+                            None => {
+                                *constructor_kind =
+                                    Some(ConstructorKind::ExternalConstructor { name: func_sym });
+                            }
+                            Some(ConstructorKind::InternalConstructor) => {
+                                tyenv.report_error(
+                                    pos,
+                                    format!(
+                                        "External constructor declared on term that already has rules: {}",
+                                        term.0,
+                                    ),
+                                );
+                            }
+                            Some(ConstructorKind::ExternalConstructor { .. }) => {
+                                tyenv.report_error(
+                                    pos,
+                                    "Duplicate external constructor definition".to_string(),
+                                );
+                            }
+                        },
+                        TermKind::EnumVariant { .. } => {
                             tyenv.report_error(
                                 pos,
                                 format!(
-                                    "Constructor defined on term of improper type '{}'",
+                                    "External constructor cannot be defined on enum variant: {}",
                                     term.0,
                                 ),
                             );
@@ -1031,18 +1193,45 @@ impl TermEnv {
                         vec![ArgPolarity::Output; termdata.arg_tys.len()]
                     };
 
-                    match &termdata.kind {
-                        &TermKind::Declared => {
-                            termdata.kind = TermKind::ExternalExtractor {
-                                name: func_sym,
-                                arg_polarity,
-                                infallible,
-                            };
-                        }
-                        _ => {
+                    match &mut termdata.kind {
+                        TermKind::Decl { extractor_kind, .. } => match extractor_kind {
+                            None => {
+                                *extractor_kind = Some(ExtractorKind::ExternalExtractor {
+                                    name: func_sym,
+                                    arg_polarity,
+                                    infallible,
+                                    pos,
+                                });
+                            }
+                            Some(ExtractorKind::ExternalExtractor { pos: pos2, .. }) => {
+                                tyenv.report_error(
+                                    pos,
+                                    "Duplicate external extractor definition".to_string(),
+                                );
+                                tyenv.report_error(
+                                    *pos2,
+                                    "External extractor already defined".to_string(),
+                                );
+                                continue;
+                            }
+                            Some(ExtractorKind::InternalExtractor { template }) => {
+                                tyenv.report_error(
+                                    pos,
+                                    "Cannot define external extractor for term that already has an \
+                                     internal extractor macro body defined"
+                                        .to_string(),
+                                );
+                                tyenv.report_error(
+                                    template.pos(),
+                                    "Internal extractor macro body already defined".to_string(),
+                                );
+                                continue;
+                            }
+                        },
+                        TermKind::EnumVariant { .. } => {
                             tyenv.report_error(
                                 pos,
-                                format!("Extractor defined on term of improper type '{}'", term.0),
+                                format!("Cannot define extractor for enum variant '{}'", term.0),
                             );
                             continue;
                         }
@@ -1058,7 +1247,8 @@ impl TermEnv {
             if let ast::Def::Decl(decl) = def {
                 let sym = tyenv.intern_mut(&decl.term);
                 let term = self.term_map[&sym];
-                if self.terms[term.index()].is_declared() {
+                let term = &self.terms[term.index()];
+                if !term.has_constructor() && !term.has_extractor() {
                     tyenv.report_error(
                         decl.pos,
                         format!(
@@ -1074,9 +1264,11 @@ impl TermEnv {
     fn translate_pattern(
         &self,
         tyenv: &mut TypeEnv,
+        rule_term: TermId,
         pat: &ast::Pattern,
         expected_ty: Option<TypeId>,
         bindings: &mut Bindings,
+        is_root: bool,
     ) -> Option<(Pattern, TypeId)> {
         log::trace!("translate_pattern: {:?}", pat);
         log::trace!("translate_pattern: bindings = {:?}", bindings);
@@ -1135,9 +1327,11 @@ impl TermEnv {
                 for subpat in subpats {
                     let (subpat, ty) = unwrap_or_continue!(self.translate_pattern(
                         tyenv,
+                        rule_term,
                         &*subpat,
                         expected_ty,
-                        bindings
+                        bindings,
+                        /* is_root = */ false,
                     ));
                     expected_ty = expected_ty.or(Some(ty));
                     children.push(subpat);
@@ -1155,8 +1349,14 @@ impl TermEnv {
                 pos,
             } => {
                 // Do the subpattern first so we can resolve the type for sure.
-                let (subpat, ty) =
-                    self.translate_pattern(tyenv, &*subpat, expected_ty, bindings)?;
+                let (subpat, ty) = self.translate_pattern(
+                    tyenv,
+                    rule_term,
+                    &*subpat,
+                    expected_ty,
+                    bindings,
+                    /* is_root = */ false,
+                )?;
 
                 let name = tyenv.intern_mut(var);
                 if bindings.vars.iter().any(|bv| bv.name == name) {
@@ -1254,15 +1454,43 @@ impl TermEnv {
                 let termdata = &self.terms[tid.index()];
 
                 match &termdata.kind {
-                    &TermKind::EnumVariant { .. } => {
+                    TermKind::Decl {
+                        constructor_kind: Some(ConstructorKind::InternalConstructor),
+                        ..
+                    } if is_root && *tid == rule_term => {
+                        // This is just the `(foo ...)` pseudo-pattern inside a
+                        // `(rule (foo ...) ...)` form. Just keep checking the
+                        // sub-patterns.
                         for arg in args {
-                            if let &ast::TermArgPattern::Expr(_) = arg {
-                                tyenv.report_error(pos, format!("Term in pattern '{}' cannot have an injected expr, because it is an enum variant", sym.0));
+                            if let ast::TermArgPattern::Expr(e) = arg {
+                                tyenv.report_error(
+                                    e.pos(),
+                                    "cannot use output-polarity expression with top-level rules"
+                                        .to_string(),
+                                );
                             }
                         }
                     }
-                    &TermKind::ExternalExtractor {
-                        ref arg_polarity, ..
+                    TermKind::EnumVariant { .. } => {
+                        for arg in args {
+                            if let &ast::TermArgPattern::Expr(_) = arg {
+                                tyenv.report_error(
+                                    pos,
+                                    format!(
+                                        "Term in pattern '{}' cannot have an injected expr, because \
+                                         it is an enum variant",
+                                        sym.0
+                                    )
+                                );
+                            }
+                        }
+                    }
+                    TermKind::Decl {
+                        extractor_kind:
+                            Some(ExtractorKind::ExternalExtractor {
+                                ref arg_polarity, ..
+                            }),
+                        ..
                     } => {
                         for (arg, pol) in args.iter().zip(arg_polarity.iter()) {
                             match (arg, pol) {
@@ -1276,12 +1504,20 @@ impl TermEnv {
                                 }
                                 (_, &ArgPolarity::Output) => {}
                                 (&ast::TermArgPattern::Pattern(ref p), &ArgPolarity::Input) => {
-                                    tyenv.report_error(p.pos(), "Non-expression used in pattern but expression required for input-polarity extractor arg".to_string());
+                                    tyenv.report_error(
+                                        p.pos(),
+                                        "Non-expression used in pattern but expression required for \
+                                         input-polarity extractor arg"
+                                            .to_string()
+                                    );
                                 }
                             }
                         }
                     }
-                    &TermKind::InternalExtractor { ref template } => {
+                    TermKind::Decl {
+                        extractor_kind: Some(ExtractorKind::InternalExtractor { ref template }),
+                        ..
+                    } => {
                         // Expand the extractor macro! We create a map
                         // from macro args to AST pattern trees and
                         // then evaluate the template with these
@@ -1291,7 +1527,12 @@ impl TermEnv {
                             let sub_ast = match template_arg {
                                 &ast::TermArgPattern::Pattern(ref pat) => pat.clone(),
                                 &ast::TermArgPattern::Expr(_) => {
-                                    tyenv.report_error(pos, "Cannot expand an extractor macro with an expression in a macro argument".to_string());
+                                    tyenv.report_error(
+                                        pos,
+                                        "Cannot expand an extractor macro with an expression in a \
+                                         macro argument"
+                                            .to_string(),
+                                    );
                                     return None;
                                 }
                             };
@@ -1299,15 +1540,26 @@ impl TermEnv {
                         }
                         log::trace!("internal extractor macro args = {:?}", args);
                         let pat = template.subst_macro_args(&macro_args[..])?;
-                        return self.translate_pattern(tyenv, &pat, expected_ty, bindings);
+                        return self.translate_pattern(
+                            tyenv,
+                            rule_term,
+                            &pat,
+                            expected_ty,
+                            bindings,
+                            /* is_root = */ false,
+                        );
                     }
-                    &TermKind::ExternalConstructor { .. } | &TermKind::InternalConstructor => {
-                        // OK.
-                    }
-                    &TermKind::Declared => {
+                    TermKind::Decl {
+                        extractor_kind: None,
+                        ..
+                    } => {
                         tyenv.report_error(
                             pos,
-                            format!("Declared but undefined term '{}' used", sym.0),
+                            format!(
+                                "Cannot use term '{}' that does not have a defined extractor in a \
+                                 left-hand side pattern",
+                                sym.0
+                            ),
                         );
                     }
                 }
@@ -1319,6 +1571,7 @@ impl TermEnv {
                     let arg_ty = unwrap_or_continue!(term.arg_tys.get(i).copied());
                     let (subpat, _) = unwrap_or_continue!(self.translate_pattern_term_arg(
                         tyenv,
+                        rule_term,
                         pos,
                         arg,
                         Some(arg_ty),
@@ -1336,6 +1589,7 @@ impl TermEnv {
     fn translate_pattern_term_arg(
         &self,
         tyenv: &mut TypeEnv,
+        rule_term: TermId,
         pos: Pos,
         pat: &ast::TermArgPattern,
         expected_ty: Option<TypeId>,
@@ -1343,7 +1597,14 @@ impl TermEnv {
     ) -> Option<(TermArgPattern, TypeId)> {
         match pat {
             &ast::TermArgPattern::Pattern(ref pat) => {
-                let (subpat, ty) = self.translate_pattern(tyenv, pat, expected_ty, bindings)?;
+                let (subpat, ty) = self.translate_pattern(
+                    tyenv,
+                    rule_term,
+                    pat,
+                    expected_ty,
+                    bindings,
+                    /* is_root = */ false,
+                )?;
                 Some((TermArgPattern::Pattern(subpat), ty))
             }
             &ast::TermArgPattern::Expr(ref expr) => {

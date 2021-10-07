@@ -117,8 +117,12 @@ impl<'a> Codegen<'a> {
         .unwrap();
         writeln!(code, "pub trait Context {{").unwrap();
         for term in &self.termenv.terms {
-            if term.is_external() {
-                let ext_sig = term.to_sig(self.typeenv).unwrap();
+            if term.has_external_extractor() {
+                let ext_sig = term.extractor_sig(self.typeenv).unwrap();
+                self.generate_trait_sig(code, "    ", &ext_sig);
+            }
+            if term.has_external_constructor() {
+                let ext_sig = term.constructor_sig(self.typeenv).unwrap();
                 self.generate_trait_sig(code, "    ", &ext_sig);
             }
         }
@@ -241,11 +245,11 @@ impl<'a> Codegen<'a> {
 
             // Skip terms that are enum variants or that have external
             // constructors/extractors.
-            if !termdata.is_constructor() || termdata.is_external() {
+            if !termdata.has_constructor() || termdata.has_external_constructor() {
                 continue;
             }
 
-            let sig = termdata.to_sig(self.typeenv).unwrap();
+            let sig = termdata.constructor_sig(self.typeenv).unwrap();
 
             let args = sig
                 .param_tys
@@ -393,7 +397,7 @@ impl<'a> Codegen<'a> {
                 };
                 let outputname = self.value_name(&output);
                 let termdata = &self.termenv.terms[term.index()];
-                let sig = termdata.to_sig(self.typeenv).unwrap();
+                let sig = termdata.constructor_sig(self.typeenv).unwrap();
                 assert_eq!(input_exprs.len(), sig.param_tys.len());
                 let fallible_try = if infallible { "" } else { "?" };
                 writeln!(
@@ -529,7 +533,7 @@ impl<'a> Codegen<'a> {
                 ..
             } => {
                 let termdata = &self.termenv.terms[term.index()];
-                let sig = termdata.to_sig(self.typeenv).unwrap();
+                let sig = termdata.extractor_sig(self.typeenv).unwrap();
 
                 let input_values = inputs
                     .iter()
@@ -671,7 +675,9 @@ impl<'a> Codegen<'a> {
                 // variants in order to create a `match` rather than a
                 // chain of if-lets.
                 let mut edges = edges.clone();
-                edges.sort_by(|e1, e2| (-e1.range.min, &e1.symbol).cmp(&(-e2.range.min, &e2.symbol)));
+                edges.sort_by(|e1, e2| {
+                    (-e1.range.min, &e1.symbol).cmp(&(-e2.range.min, &e2.symbol))
+                });
 
                 let mut i = 0;
                 while i < edges.len() {

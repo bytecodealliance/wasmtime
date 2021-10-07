@@ -400,12 +400,9 @@ impl PatternSequence {
                         let termdata = &termenv.terms[term.index()];
                         let arg_tys = &termdata.arg_tys[..];
                         match &termdata.kind {
-                            &TermKind::Declared => {
-                                panic!("Pattern invocation of undefined term body");
-                            }
-                            &TermKind::EnumVariant { variant } => {
+                            TermKind::EnumVariant { variant } => {
                                 let arg_values =
-                                    self.add_match_variant(input, ty, arg_tys, variant);
+                                    self.add_match_variant(input, ty, arg_tys, *variant);
                                 for (subpat, value) in args.iter().zip(arg_values.into_iter()) {
                                     let subpat = match subpat {
                                         &TermArgPattern::Pattern(ref pat) => pat,
@@ -420,16 +417,25 @@ impl PatternSequence {
                                     );
                                 }
                             }
-                            &TermKind::InternalConstructor
-                            | &TermKind::ExternalConstructor { .. } => {
-                                panic!("Should not invoke constructor in pattern");
+                            TermKind::Decl {
+                                extractor_kind: None,
+                                ..
+                            } => {
+                                panic!("Pattern invocation of undefined term body")
                             }
-                            &TermKind::InternalExtractor { .. } => {
-                                panic!("Should have been expanded away");
+                            TermKind::Decl {
+                                extractor_kind: Some(ExtractorKind::InternalExtractor { .. }),
+                                ..
+                            } => {
+                                panic!("Should have been expanded away")
                             }
-                            &TermKind::ExternalExtractor {
-                                ref arg_polarity,
-                                infallible,
+                            TermKind::Decl {
+                                extractor_kind:
+                                    Some(ExtractorKind::ExternalExtractor {
+                                        ref arg_polarity,
+                                        infallible,
+                                        ..
+                                    }),
                                 ..
                             } => {
                                 // Evaluate all `input` args.
@@ -469,8 +475,13 @@ impl PatternSequence {
                                 }
 
                                 // Invoke the extractor.
-                                let arg_values = self
-                                    .add_extract(inputs, input_tys, output_tys, term, infallible);
+                                let arg_values = self.add_extract(
+                                    inputs,
+                                    input_tys,
+                                    output_tys,
+                                    term,
+                                    *infallible,
+                                );
 
                                 for (pat, &val) in output_pats.iter().zip(arg_values.iter()) {
                                     self.gen_pattern(
@@ -594,10 +605,13 @@ impl ExprSequence {
                         .push((self.gen_expr(typeenv, termenv, &*arg_expr, &vars), arg_ty));
                 }
                 match &termdata.kind {
-                    &TermKind::EnumVariant { variant } => {
-                        self.add_create_variant(&arg_values_tys[..], ty, variant)
+                    TermKind::EnumVariant { variant } => {
+                        self.add_create_variant(&arg_values_tys[..], ty, *variant)
                     }
-                    &TermKind::InternalConstructor => {
+                    TermKind::Decl {
+                        constructor_kind: Some(ConstructorKind::InternalConstructor),
+                        ..
+                    } => {
                         self.add_construct(
                             &arg_values_tys[..],
                             ty,
@@ -605,7 +619,10 @@ impl ExprSequence {
                             /* infallible = */ false,
                         )
                     }
-                    &TermKind::ExternalConstructor { .. } => {
+                    TermKind::Decl {
+                        constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
+                        ..
+                    } => {
                         self.add_construct(
                             &arg_values_tys[..],
                             ty,
@@ -613,7 +630,10 @@ impl ExprSequence {
                             /* infallible = */ true,
                         )
                     }
-                    otherwise => panic!("Should have been caught by typechecking: {:?}", otherwise),
+                    TermKind::Decl {
+                        constructor_kind: None,
+                        ..
+                    } => panic!("Should have been caught by typechecking"),
                 }
             }
         }
