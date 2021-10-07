@@ -299,13 +299,6 @@ Test the preopt pass.
 The preopt pass is run on each function, and then results are run
 through filecheck.
 
-### `test postopt`
-
-Test the postopt pass.
-
-The postopt pass is run on each function, and then results are run
-through filecheck.
-
 ### `test compile`
 
 Test the whole code generation pipeline.
@@ -321,16 +314,16 @@ Cranelift IR right before binary machine code emission.
 Compile and execute a function.
 
 This test command allows several directives:
- - to print the result of running a function to stdout, add a `print` 
+ - to print the result of running a function to stdout, add a `print`
  directive and call the preceding function with arguments (see `%foo` in
- the example below); remember to enable `--nocapture` if running these 
+ the example below); remember to enable `--nocapture` if running these
  tests through Cargo
  - to check the result of a function, add a `run` directive and call the
  preceding function with a comparison (`==` or `!=`) (see `%bar` below)
  - for backwards compatibility, to check the result of a function with a
- `() -> b*` signature, only the `run` directive is required, with no 
- invocation or comparison (see `%baz` below);  a `true` value is 
- interpreted as a successful test execution, whereas a `false` value is 
+ `() -> b*` signature, only the `run` directive is required, with no
+ invocation or comparison (see `%baz` below);  a `true` value is
+ interpreted as a successful test execution, whereas a `false` value is
  interpreted as a failed test.
 
 Currently a `target` is required but is only used to indicate whether the host
@@ -417,19 +410,19 @@ See the diagram below, on how the `vmctx` struct ends up if with multiple heaps:
 
 ```
  ┌─────────────────────┐ vmctx+0
- │heap0: start address │ 
+ │heap0: start address │
  ├─────────────────────┤ vmctx+8
  │heap0: end address   │
  ├─────────────────────┤ vmctx+16
  │heap1: start address │
  ├─────────────────────┤ vmctx+24
- │heap1: end address   │ 
+ │heap1: end address   │
  ├─────────────────────┤ vmctx+32
  │etc...               │
  └─────────────────────┘
 ```
 
-With this setup, you can now use the global values to load heaps, and load / store to them. 
+With this setup, you can now use the global values to load heaps, and load / store to them.
 
 Example:
 
