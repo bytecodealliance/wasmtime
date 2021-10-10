@@ -17,8 +17,8 @@ WASI, this crate is currently separate from the [wasi-common] crate.
 [wasi-crypto]: https://github.com/WebAssembly/wasi-crypto
 [wasi-common]: ../../wasi-common
 [documentation]: ../spec/docs/wasi-crypto.md
-[interfaces reference]: ../spec/witx/wasi_ephemeral_crypto.md
-[interfaces reference (compact)]: ../spec/witx/wasi_ephemeral_crypto.txt
+[interfaces reference]: ../spec/witx/codegen/wasi_ephemeral_crypto.md
+[interfaces reference (compact)]: ../spec/witx/codegen/wasi_ephemeral_crypto.txt
 
 ## Wasmtime integration
 
