@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc};
-use crate::ir::{ConstantOffset, ExternalName, Opcode, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 
 use alloc::vec::Vec;
 use std::string::String;
