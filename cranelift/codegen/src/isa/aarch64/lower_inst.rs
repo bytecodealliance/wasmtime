@@ -3560,8 +3560,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
 
-        Opcode::DummySargT => unreachable!(),
-
         Opcode::Iabs => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
