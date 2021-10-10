@@ -219,10 +219,9 @@ impl ConstantPool {
     /// replacing any existing constant values. use `set` to tie a specific `const42` to its value;
     /// use `insert` to add a value and return the next available `const` entity.
     pub fn set(&mut self, constant_handle: Constant, constant_value: ConstantData) {
-        let replaced = self.handles_to_values.insert(
-            constant_handle,
-            constant_value.clone(),
-        );
+        let replaced = self
+            .handles_to_values
+            .insert(constant_handle, constant_value.clone());
         assert!(
             replaced.is_none(),
             "attempted to overwrite an existing constant {:?}: {:?} => {:?}",
