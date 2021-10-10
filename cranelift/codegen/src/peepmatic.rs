@@ -2,6 +2,7 @@
 
 use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::{
+    condcodes::IntCC,
     dfg::DataFlowGraph,
     entities::{Inst, Value},
     immediates::{Imm64, Uimm64},
@@ -9,7 +10,6 @@ use crate::ir::{
     types, InstBuilder,
 };
 use crate::isa::TargetIsa;
-use cranelift_codegen_shared::condcodes::IntCC;
 use peepmatic_runtime::{
     cc::ConditionCode,
     instruction_set::InstructionSet,
