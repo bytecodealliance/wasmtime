@@ -3,11 +3,9 @@
 //! The `StackSlotData` struct keeps track of a single stack slot in a function.
 //!
 
-use crate::entity::{Iter, IterMut, Keys, PrimaryMap};
+use crate::entity::PrimaryMap;
 use crate::ir::StackSlot;
 use core::fmt;
-use core::ops::{Index, IndexMut};
-use core::slice;
 use core::str::FromStr;
 
 #[cfg(feature = "enable-serde")]
@@ -84,87 +82,8 @@ impl fmt::Display for StackSlotData {
     }
 }
 
-/// Stack frame manager.
-///
-/// Keep track of all the stack slots used by a function.
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct StackSlots {
-    /// All allocated stack slots.
-    slots: PrimaryMap<StackSlot, StackSlotData>,
-}
-
-/// Stack slot manager functions that behave mostly like an entity map.
-impl StackSlots {
-    /// Create an empty stack slot manager.
-    pub fn new() -> Self {
-        StackSlots::default()
-    }
-
-    /// Clear out everything.
-    pub fn clear(&mut self) {
-        self.slots.clear();
-    }
-
-    /// Allocate a new stack slot.
-    ///
-    /// This function should be primarily used by the text format parser. There are more convenient
-    /// functions for creating specific kinds of stack slots below.
-    pub fn push(&mut self, data: StackSlotData) -> StackSlot {
-        self.slots.push(data)
-    }
-
-    /// Check if `ss` is a valid stack slot reference.
-    pub fn is_valid(&self, ss: StackSlot) -> bool {
-        self.slots.is_valid(ss)
-    }
-
-    /// Get an iterator over all the stack slot keys.
-    pub fn iter(&self) -> Iter<StackSlot, StackSlotData> {
-        self.slots.iter()
-    }
-
-    /// Get an iterator over all the stack slot keys, mutable edition.
-    pub fn iter_mut(&mut self) -> IterMut<StackSlot, StackSlotData> {
-        self.slots.iter_mut()
-    }
-
-    /// Get an iterator over all the stack slot records.
-    pub fn values(&self) -> slice::Iter<StackSlotData> {
-        self.slots.values()
-    }
-
-    /// Get an iterator over all the stack slot records, mutable edition.
-    pub fn values_mut(&mut self) -> slice::IterMut<StackSlotData> {
-        self.slots.values_mut()
-    }
-
-    /// Get an iterator over all the stack slot keys.
-    pub fn keys(&self) -> Keys<StackSlot> {
-        self.slots.keys()
-    }
-
-    /// Get a reference to the next stack slot that would be created by `push()`.
-    ///
-    /// This should just be used by the parser.
-    pub fn next_key(&self) -> StackSlot {
-        self.slots.next_key()
-    }
-}
-
-impl Index<StackSlot> for StackSlots {
-    type Output = StackSlotData;
-
-    fn index(&self, ss: StackSlot) -> &StackSlotData {
-        &self.slots[ss]
-    }
-}
-
-impl IndexMut<StackSlot> for StackSlots {
-    fn index_mut(&mut self, ss: StackSlot) -> &mut StackSlotData {
-        &mut self.slots[ss]
-    }
-}
+/// All allocated stack slots.
+pub type StackSlots = PrimaryMap<StackSlot, StackSlotData>;
 
 #[cfg(test)]
 mod tests {
