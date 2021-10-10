@@ -451,7 +451,6 @@ where
         Opcode::Spill => unimplemented!("Spill"),
         Opcode::Fill => unimplemented!("Fill"),
         Opcode::FillNop => assign(arg(0)?),
-        Opcode::DummySargT => unimplemented!("DummySargT"),
         Opcode::CopyNop => unimplemented!("CopyNop"),
         Opcode::AdjustSpDown => unimplemented!("AdjustSpDown"),
         Opcode::AdjustSpUpImm => unimplemented!("AdjustSpUpImm"),

@@ -6870,8 +6870,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::AdjustSpUpImm
         | Opcode::AdjustSpDownImm
         | Opcode::IfcmpSp
-        | Opcode::Copy
-        | Opcode::DummySargT => {
+        | Opcode::Copy => {
             panic!("Unused opcode should not be encountered.");
         }
 
