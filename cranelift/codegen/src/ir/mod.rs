@@ -2,6 +2,7 @@
 
 mod atomic_rmw_op;
 mod builder;
+pub mod condcodes;
 pub mod constant;
 pub mod dfg;
 pub mod entities;
@@ -57,7 +58,6 @@ pub use crate::ir::table::TableData;
 pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
 pub use crate::value_label::LabelValueLoc;
-pub use cranelift_codegen_shared::condcodes;
 
 use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 

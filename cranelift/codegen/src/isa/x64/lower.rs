@@ -2,8 +2,9 @@
 
 use crate::data_value::DataValue;
 use crate::ir::{
-    condcodes::FloatCC, condcodes::IntCC, types, AbiParam, ArgumentPurpose, ExternalName,
-    Inst as IRInst, InstructionData, LibCall, Opcode, Signature, Type,
+    condcodes::{CondCode, FloatCC, IntCC},
+    types, AbiParam, ArgumentPurpose, ExternalName, Inst as IRInst, InstructionData, LibCall,
+    Opcode, Signature, Type,
 };
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
@@ -15,7 +16,6 @@ use crate::result::CodegenResult;
 use crate::settings::{Flags, TlsModel};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use cranelift_codegen_shared::condcodes::CondCode;
 use log::trace;
 use regalloc::{Reg, RegClass, Writable};
 use smallvec::{smallvec, SmallVec};
