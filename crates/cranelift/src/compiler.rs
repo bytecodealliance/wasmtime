@@ -643,16 +643,6 @@ impl binemit::RelocSink for RelocSink {
             addend,
         });
     }
-
-    fn reloc_constant(
-        &mut self,
-        _code_offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _constant_offset: ir::ConstantOffset,
-    ) {
-        // Do nothing for now: cranelift emits constant data after the function code and also emits
-        // function code with correct relative offsets to the constant data.
-    }
 }
 
 impl RelocSink {
@@ -763,13 +753,5 @@ impl binemit::RelocSink for TrampolineRelocSink {
             offset,
             addend,
         });
-    }
-    fn reloc_constant(
-        &mut self,
-        _code_offset: binemit::CodeOffset,
-        _reloc: binemit::Reloc,
-        _constant_offset: ir::ConstantOffset,
-    ) {
-        panic!("trampoline compilation should not produce constant relocs");
     }
 }

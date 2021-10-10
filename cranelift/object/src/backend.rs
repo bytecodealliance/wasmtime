@@ -734,16 +734,4 @@ impl RelocSink for ObjectRelocSink {
             name: name.clone(),
         })
     }
-
-    fn reloc_constant(&mut self, _offset: CodeOffset, reloc: Reloc, _jt: ir::ConstantOffset) {
-        match reloc {
-            Reloc::X86PCRelRodata4 => {
-                // Not necessary to record this unless we are going to split apart code and its
-                // jumptbl/rodata.
-            }
-            _ => {
-                panic!("Unhandled reloc");
-            }
-        }
-    }
 }

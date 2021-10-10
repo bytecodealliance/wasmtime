@@ -66,8 +66,6 @@ impl CodeSink for TestCodeSink {
     ) {
     }
 
-    fn reloc_constant(&mut self, _rel: Reloc, _constant_offset: ConstantOffset) {}
-
     fn trap(&mut self, _code: TrapCode, _srcloc: SourceLoc) {}
 
     fn begin_jumptables(&mut self) {}

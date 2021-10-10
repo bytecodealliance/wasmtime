@@ -2067,7 +2067,6 @@ mod test {
             fn reloc_external(&mut self, _: SourceLoc, r: Reloc, _: &ExternalName, _: Addend) {
                 self.relocs.push((self.offset, r));
             }
-            fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset) {}
             fn trap(&mut self, t: TrapCode, _: SourceLoc) {
                 self.traps.push((self.offset, t));
             }

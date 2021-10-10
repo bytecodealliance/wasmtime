@@ -95,7 +95,6 @@ impl binemit::CodeSink for SizeSink {
         _addend: binemit::Addend,
     ) {
     }
-    fn reloc_constant(&mut self, _: binemit::Reloc, _: ir::ConstantOffset) {}
     fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
     fn begin_jumptables(&mut self) {}
     fn begin_rodata(&mut self) {}
