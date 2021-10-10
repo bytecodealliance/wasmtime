@@ -79,11 +79,7 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
 
-pub use self::cssa::verify_cssa;
-
-mod cssa;
 mod flags;
-mod virtregs;
 
 /// A verifier error.
 #[derive(Debug, PartialEq, Eq, Clone)]
