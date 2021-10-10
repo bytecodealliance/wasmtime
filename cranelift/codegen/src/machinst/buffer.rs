@@ -1641,7 +1641,6 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
 #[cfg(all(test, feature = "arm64"))]
 mod test {
     use super::*;
-    use crate::ir::ConstantOffset;
     use crate::isa::aarch64::inst::xreg;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::machinst::MachInstEmit;
@@ -2067,7 +2066,6 @@ mod test {
             fn reloc_external(&mut self, _: SourceLoc, r: Reloc, _: &ExternalName, _: Addend) {
                 self.relocs.push((self.offset, r));
             }
-            fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset) {}
             fn trap(&mut self, t: TrapCode, _: SourceLoc) {
                 self.traps.push((self.offset, t));
             }

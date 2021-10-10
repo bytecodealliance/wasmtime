@@ -167,38 +167,6 @@ impl FromStr for ConstantData {
     }
 }
 
-/// This type describes an offset in bytes within a constant pool.
-pub type ConstantOffset = u32;
-
-/// Inner type for storing data and offset together in the constant pool. The offset is optional
-/// because it must be set relative to the function code size (i.e. constants are emitted after the
-/// function body); because the function is not yet compiled when constants are inserted,
-/// [`set_offset`](crate::ir::ConstantPool::set_offset) must be called once a constant's offset
-/// from the beginning of the function is known (see
-/// `relaxation` in `relaxation.rs`).
-#[derive(Clone)]
-#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
-pub struct ConstantPoolEntry {
-    data: ConstantData,
-    offset: Option<ConstantOffset>,
-}
-
-impl ConstantPoolEntry {
-    fn new(data: ConstantData) -> Self {
-        Self { data, offset: None }
-    }
-
-    /// Return the size of the constant at this entry.
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    /// Assign a new offset to the constant at this entry.
-    pub fn set_offset(&mut self, offset: ConstantOffset) {
-        self.offset = Some(offset)
-    }
-}
-
 /// Maintains the mapping between a constant handle (i.e.  [`Constant`](crate::ir::Constant)) and
 /// its constant data (i.e.  [`ConstantData`](crate::ir::ConstantData)).
 #[derive(Clone)]
@@ -206,7 +174,7 @@ impl ConstantPoolEntry {
 pub struct ConstantPool {
     /// This mapping maintains the insertion order as long as Constants are created with
     /// sequentially increasing integers.
-    handles_to_values: BTreeMap<Constant, ConstantPoolEntry>,
+    handles_to_values: BTreeMap<Constant, ConstantData>,
 
     /// This mapping is unordered (no need for lexicographic ordering) but allows us to map
     /// constant data back to handles.
@@ -244,64 +212,34 @@ impl ConstantPool {
     /// Retrieve the constant data given a handle.
     pub fn get(&self, constant_handle: Constant) -> &ConstantData {
         assert!(self.handles_to_values.contains_key(&constant_handle));
-        &self.handles_to_values.get(&constant_handle).unwrap().data
+        self.handles_to_values.get(&constant_handle).unwrap()
     }
 
     /// Link a constant handle to its value. This does not de-duplicate data but does avoid
     /// replacing any existing constant values. use `set` to tie a specific `const42` to its value;
     /// use `insert` to add a value and return the next available `const` entity.
     pub fn set(&mut self, constant_handle: Constant, constant_value: ConstantData) {
-        let replaced = self.handles_to_values.insert(
-            constant_handle,
-            ConstantPoolEntry::new(constant_value.clone()),
-        );
+        let replaced = self
+            .handles_to_values
+            .insert(constant_handle, constant_value.clone());
         assert!(
             replaced.is_none(),
             "attempted to overwrite an existing constant {:?}: {:?} => {:?}",
             constant_handle,
             &constant_value,
-            replaced.unwrap().data
+            replaced.unwrap()
         );
         self.values_to_handles
             .insert(constant_value, constant_handle);
     }
 
-    /// Assign an offset to a given constant, where the offset is the number of bytes from the
-    /// beginning of the function to the beginning of the constant data inside the pool.
-    pub fn set_offset(&mut self, constant_handle: Constant, constant_offset: ConstantOffset) {
-        assert!(
-            self.handles_to_values.contains_key(&constant_handle),
-            "A constant handle must have already been inserted into the pool; perhaps a \
-             constant pool was created outside of the pool?"
-        );
-        self.handles_to_values
-            .entry(constant_handle)
-            .and_modify(|e| e.offset = Some(constant_offset));
-    }
-
-    /// Retrieve the offset of a given constant, where the offset is the number of bytes from the
-    /// beginning of the function to the beginning of the constant data inside the pool.
-    pub fn get_offset(&self, constant_handle: Constant) -> ConstantOffset {
-        self.handles_to_values
-            .get(&constant_handle)
-            .expect(
-                "A constant handle must have a corresponding constant value; was a constant \
-                 handle created outside of the pool?",
-            )
-            .offset
-            .expect(
-                "A constant offset has not yet been set; verify that `set_offset` has been \
-                 called before this point",
-            )
-    }
-
     /// Iterate over the constants in insertion order.
     pub fn iter(&self) -> impl Iterator<Item = (&Constant, &ConstantData)> {
-        self.handles_to_values.iter().map(|(h, e)| (h, &e.data))
+        self.handles_to_values.iter()
     }
 
     /// Iterate over mutable entries in the constant pool in insertion order.
-    pub fn entries_mut(&mut self) -> impl Iterator<Item = &mut ConstantPoolEntry> {
+    pub fn entries_mut(&mut self) -> impl Iterator<Item = &mut ConstantData> {
         self.handles_to_values.values_mut()
     }
 
@@ -396,22 +334,6 @@ mod tests {
         let sut = ConstantPool::new();
         let a = Constant::with_number(42).unwrap();
         sut.get(a); // panics, only use constants returned by ConstantPool
-    }
-
-    #[test]
-    fn get_offset() {
-        let mut sut = ConstantPool::new();
-        let a = sut.insert(vec![1].into());
-        sut.set_offset(a, 42);
-        assert_eq!(sut.get_offset(a), 42)
-    }
-
-    #[test]
-    #[should_panic]
-    fn get_nonexistent_offset() {
-        let mut sut = ConstantPool::new();
-        let a = sut.insert(vec![1].into());
-        sut.get_offset(a); // panics, set_offset should have been called
     }
 
     #[test]

@@ -11,7 +11,7 @@ pub use self::memorysink::{
     TrapSink,
 };
 pub use self::stack_map::StackMap;
-use crate::ir::{ConstantOffset, ExternalName, Opcode, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -35,8 +35,6 @@ pub enum Reloc {
     Abs8,
     /// x86 PC-relative 4-byte
     X86PCRel4,
-    /// x86 PC-relative 4-byte offset to trailing rodata
-    X86PCRelRodata4,
     /// x86 call to PC-relative 4-byte
     X86CallPCRel4,
     /// x86 call to PLT-relative 4-byte
@@ -78,7 +76,6 @@ impl fmt::Display for Reloc {
             Self::Abs8 => write!(f, "Abs8"),
             Self::S390xPCRel32Dbl => write!(f, "PCRel32Dbl"),
             Self::X86PCRel4 => write!(f, "PCRel4"),
-            Self::X86PCRelRodata4 => write!(f, "PCRelRodata4"),
             Self::X86CallPCRel4 => write!(f, "CallPCRel4"),
             Self::X86CallPLTRel4 => write!(f, "CallPLTRel4"),
             Self::X86GOTPCRel4 => write!(f, "GOTPCRel4"),
@@ -146,9 +143,6 @@ pub trait CodeSink {
 
     /// Add a relocation referencing an external symbol plus the addend at the current offset.
     fn reloc_external(&mut self, _: SourceLoc, _: Reloc, _: &ExternalName, _: Addend);
-
-    /// Add a relocation referencing a constant.
-    fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset);
 
     /// Add trap information for the current offset.
     fn trap(&mut self, _: TrapCode, _: SourceLoc);

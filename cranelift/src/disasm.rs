@@ -36,22 +36,6 @@ impl binemit::RelocSink for PrintRelocs {
             .unwrap();
         }
     }
-
-    fn reloc_constant(
-        &mut self,
-        code_offset: binemit::CodeOffset,
-        reloc: binemit::Reloc,
-        constant: ir::ConstantOffset,
-    ) {
-        if self.flag_print {
-            writeln!(
-                &mut self.text,
-                "reloc_constant: {} {} at {}",
-                reloc, constant, code_offset
-            )
-            .unwrap();
-        }
-    }
 }
 
 pub struct PrintTraps {
