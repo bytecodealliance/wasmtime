@@ -12,23 +12,16 @@ use crate::error;
 use crate::srcgen;
 
 /// Emit a constant definition of a single value type.
-fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut srcgen::Formatter) -> Result<(), error::Error> {
+fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut srcgen::Formatter) {
     let name = ty.to_string().to_uppercase();
-    let number = ty.number().ok_or_else(|| {
-        error::Error::with_msg(format!(
-            "Could not emit type `{}` which has no number.",
-            name
-        ))
-    })?;
+    let number = ty.number();
 
     fmt.doc_comment(&ty.doc());
     fmtln!(fmt, "pub const {}: Type = Type({:#x});\n", name, number);
-
-    Ok(())
 }
 
 /// Emit definition for all vector types with `bits` total size.
-fn emit_vectors(bits: u64, fmt: &mut srcgen::Formatter) -> Result<(), error::Error> {
+fn emit_vectors(bits: u64, fmt: &mut srcgen::Formatter) {
     let vec_size: u64 = bits / 8;
     for vec in cdsl_types::ValueType::all_lane_types()
         .map(|ty| (ty, cdsl_types::ValueType::from(ty).membytes()))
@@ -36,41 +29,37 @@ fn emit_vectors(bits: u64, fmt: &mut srcgen::Formatter) -> Result<(), error::Err
         .map(|(ty, lane_size)| (ty, vec_size / lane_size))
         .map(|(ty, lanes)| cdsl_types::VectorType::new(ty, lanes))
     {
-        emit_type(&cdsl_types::ValueType::from(vec), fmt)?;
+        emit_type(&cdsl_types::ValueType::from(vec), fmt);
     }
-
-    Ok(())
 }
 
 /// Emit types using the given formatter object.
-fn emit_types(fmt: &mut srcgen::Formatter) -> Result<(), error::Error> {
+fn emit_types(fmt: &mut srcgen::Formatter) {
     // Emit all of the special types, such as types for CPU flags.
     for spec in cdsl_types::ValueType::all_special_types().map(cdsl_types::ValueType::from) {
-        emit_type(&spec, fmt)?;
+        emit_type(&spec, fmt);
     }
 
     // Emit all of the lane types, such integers, floats, and booleans.
     for ty in cdsl_types::ValueType::all_lane_types().map(cdsl_types::ValueType::from) {
-        emit_type(&ty, fmt)?;
+        emit_type(&ty, fmt);
     }
 
     // Emit all reference types.
     for ty in cdsl_types::ValueType::all_reference_types().map(cdsl_types::ValueType::from) {
-        emit_type(&ty, fmt)?;
+        emit_type(&ty, fmt);
     }
 
     // Emit vector definitions for common SIMD sizes.
     for vec_size in &[64_u64, 128, 256, 512] {
-        emit_vectors(*vec_size, fmt)?;
+        emit_vectors(*vec_size, fmt);
     }
-
-    Ok(())
 }
 
 /// Generate the types file.
 pub(crate) fn generate(filename: &str, out_dir: &str) -> Result<(), error::Error> {
     let mut fmt = srcgen::Formatter::new();
-    emit_types(&mut fmt)?;
+    emit_types(&mut fmt);
     fmt.update_file(filename, out_dir)?;
     Ok(())
 }

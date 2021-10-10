@@ -71,12 +71,12 @@ impl ValueType {
     }
 
     /// Find the unique number associated with this type.
-    pub fn number(&self) -> Option<u8> {
+    pub fn number(&self) -> u8 {
         match *self {
-            ValueType::Lane(l) => Some(l.number()),
-            ValueType::Reference(r) => Some(r.number()),
-            ValueType::Special(s) => Some(s.number()),
-            ValueType::Vector(ref v) => Some(v.number()),
+            ValueType::Lane(l) => l.number(),
+            ValueType::Reference(r) => r.number(),
+            ValueType::Special(s) => s.number(),
+            ValueType::Vector(ref v) => v.number(),
         }
     }
 
