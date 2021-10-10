@@ -251,7 +251,7 @@ impl Context {
         self.map.def_ss(ss, loc)?;
         while self.function.stack_slots.next_key().index() <= ss.index() {
             self.function
-                .create_stack_slot(StackSlotData::new(StackSlotKind::SpillSlot, 0));
+                .create_stack_slot(StackSlotData::new(StackSlotKind::ExplicitSlot, 0));
         }
         self.function.stack_slots[ss] = data;
         Ok(())
@@ -1431,15 +1431,7 @@ impl<'a> Parser<'a> {
         if bytes > i64::from(u32::MAX) {
             return err!(self.loc, "stack slot too large");
         }
-        let mut data = StackSlotData::new(kind, bytes as u32);
-
-        // Take additional options.
-        while self.optional(Token::Comma) {
-            match self.match_any_identifier("expected stack slot flags")? {
-                "offset" => data.offset = Some(self.match_imm32("expected byte offset")?),
-                other => return err!(self.loc, "Unknown stack slot flag '{}'", other),
-            }
-        }
+        let data = StackSlotData::new(kind, bytes as u32);
 
         // Collect any trailing comments.
         self.token();
@@ -3122,8 +3114,8 @@ mod tests {
     fn stack_slot_decl() {
         let (func, _) = Parser::new(
             "function %foo() system_v {
-                                       ss3 = incoming_arg 13
-                                       ss1 = spill_slot 1
+                                       ss3 = explicit_slot 13
+                                       ss1 = explicit_slot 1
                                      }",
         )
         .parse_function()
@@ -3133,12 +3125,12 @@ mod tests {
         let _ss0 = iter.next().unwrap();
         let ss1 = iter.next().unwrap();
         assert_eq!(ss1.to_string(), "ss1");
-        assert_eq!(func.stack_slots[ss1].kind, StackSlotKind::SpillSlot);
+        assert_eq!(func.stack_slots[ss1].kind, StackSlotKind::ExplicitSlot);
         assert_eq!(func.stack_slots[ss1].size, 1);
         let _ss2 = iter.next().unwrap();
         let ss3 = iter.next().unwrap();
         assert_eq!(ss3.to_string(), "ss3");
-        assert_eq!(func.stack_slots[ss3].kind, StackSlotKind::IncomingArg);
+        assert_eq!(func.stack_slots[ss3].kind, StackSlotKind::ExplicitSlot);
         assert_eq!(func.stack_slots[ss3].size, 13);
         assert_eq!(iter.next(), None);
 
@@ -3146,8 +3138,8 @@ mod tests {
         assert_eq!(
             Parser::new(
                 "function %bar() system_v {
-                                    ss1  = spill_slot 13
-                                    ss1  = spill_slot 1
+                                    ss1  = explicit_slot 13
+                                    ss1  = explicit_slot 1
                                 }",
             )
             .parse_function()
@@ -3338,7 +3330,7 @@ mod tests {
         let (func, Details { comments, .. }) = Parser::new(
             "; before
                          function %comment() system_v { ; decl
-                            ss10  = outgoing_arg 13 ; stackslot.
+                            ss10  = explicit_slot 13 ; stackslot.
                             ; Still stackslot.
                             jt10 = jump_table [block0]
                             ; Jumptable
