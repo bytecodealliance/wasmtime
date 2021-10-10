@@ -99,7 +99,6 @@ mod licm;
 mod log;
 mod machinst;
 mod nan_canonicalization;
-mod predicates;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
