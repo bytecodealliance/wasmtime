@@ -338,22 +338,6 @@ mod tests {
     }
 
     #[test]
-    fn get_offset() {
-        let mut sut = ConstantPool::new();
-        let a = sut.insert(vec![1].into());
-        sut.set_offset(a, 42);
-        assert_eq!(sut.get_offset(a), 42)
-    }
-
-    #[test]
-    #[should_panic]
-    fn get_nonexistent_offset() {
-        let mut sut = ConstantPool::new();
-        let a = sut.insert(vec![1].into());
-        sut.get_offset(a); // panics, set_offset should have been called
-    }
-
-    #[test]
     fn display_constant_data() {
         assert_eq!(ConstantData::from([0].as_ref()).to_string(), "0x00");
         assert_eq!(ConstantData::from([42].as_ref()).to_string(), "0x2a");
