@@ -46,9 +46,6 @@ define_passes! {
     wasm_translate_function: "Translate WASM function",
 
     verifier: "Verify Cranelift IR",
-    verify_cssa: "Verify CSSA",
-    verify_liveness: "Verify live ranges",
-    verify_locations: "Verify value locations",
     verify_flags: "Verify CPU flags",
 
     compile: "Compilation passes",
