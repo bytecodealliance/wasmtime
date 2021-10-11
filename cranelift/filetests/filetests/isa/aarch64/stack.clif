@@ -296,22 +296,6 @@ block0(v0: i128):
 ; nextln: ldp fp, lr, [sp], #16
 
 
-function %i128_stack_store_slot_offset(i128) {
-ss0 = explicit_slot 16, offset 16
-
-block0(v0: i128):
-  stack_store.i128 v0, ss0
-  return
-}
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #16
-; nextln: mov x2, sp
-; nextln: stp x0, x1, [x2]
-; nextln: add sp, sp, #16
-; nextln: ldp fp, lr, [sp], #16
-
-
 function %i128_stack_store_inst_offset(i128) {
 ss0 = explicit_slot 16
 ss1 = explicit_slot 16
@@ -361,26 +345,6 @@ block0:
   return v0
 }
 ; TODO: Codegen improvement opportunities: This should be just a ldp x0, x1, [sp, #-16]
-; check: stp fp, lr, [sp, #-16]!
-; nextln: mov fp, sp
-; nextln: sub sp, sp, #16
-; nextln: mov x0, sp
-; nextln: ldp x1, x0, [x0]
-; nextln: mov x2, x0
-; nextln: mov x0, x1
-; nextln: mov x1, x2
-; nextln: add sp, sp, #16
-; nextln: ldp fp, lr, [sp], #16
-; nextln: ret
-
-
-function %i128_stack_load_slot_offset() -> i128 {
-ss0 = explicit_slot 16, offset 16
-
-block0:
-  v0 = stack_load.i128 ss0
-  return v0
-}
 ; check: stp fp, lr, [sp, #-16]!
 ; nextln: mov fp, sp
 ; nextln: sub sp, sp, #16
