@@ -173,7 +173,7 @@ impl<'a> Codegen<'a> {
 
     fn type_name(&self, typeid: TypeId, by_ref: bool) -> String {
         match &self.typeenv.types[typeid.index()] {
-            &Type::Primitive(_, sym) => self.typeenv.syms[sym.index()].clone(),
+            &Type::Primitive(_, sym, _) => self.typeenv.syms[sym.index()].clone(),
             &Type::Enum { name, .. } => {
                 let r = if by_ref { "&" } else { "" };
                 format!("{}{}", r, self.typeenv.syms[name.index()])
@@ -229,7 +229,7 @@ impl<'a> Codegen<'a> {
 
     fn const_int(&self, val: i64, ty: TypeId) -> String {
         let is_bool = match &self.typeenv.types[ty.index()] {
-            &Type::Primitive(_, name) => &self.typeenv.syms[name.index()] == "bool",
+            &Type::Primitive(_, name, _) => &self.typeenv.syms[name.index()] == "bool",
             _ => unreachable!(),
         };
         if is_bool {

@@ -94,7 +94,7 @@ pub enum Type {
     ///
     /// These are always defined externally, and we allow literals of these
     /// types to pass through from ISLE source code to the emitted Rust code.
-    Primitive(TypeId, Sym),
+    Primitive(TypeId, Sym, Pos),
 
     /// A sum type.
     ///
@@ -120,7 +120,14 @@ impl Type {
     /// Get the name of this `Type`.
     pub fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
         match self {
-            Self::Primitive(_, name) | Self::Enum { name, .. } => &tyenv.syms[name.index()],
+            Self::Primitive(_, name, _) | Self::Enum { name, .. } => &tyenv.syms[name.index()],
+        }
+    }
+
+    /// Get the position where this type was defined.
+    pub fn pos(&self) -> Pos {
+        match self {
+            Self::Primitive(_, _, pos) | Self::Enum { pos, .. } => *pos,
         }
     }
 
@@ -551,13 +558,20 @@ impl TypeEnv {
                 &ast::Def::Type(ref td) => {
                     let tid = TypeId(tyenv.type_map.len());
                     let name = tyenv.intern_mut(&td.name);
-                    if tyenv.type_map.contains_key(&name) {
+
+                    if let Some(existing) = tyenv.type_map.get(&name).copied() {
                         tyenv.report_error(
                             td.pos,
-                            format!("Type name defined more than once: '{}'", td.name.0),
+                            format!("Type with name '{}' defined more than once", td.name.0),
+                        );
+                        let pos = unwrap_or_continue!(tyenv.types.get(existing.index())).pos();
+                        tyenv.report_error(
+                            pos,
+                            format!("Type with name '{}' already defined here", td.name.0),
                         );
                         continue;
                     }
+
                     tyenv.type_map.insert(name, tid);
                 }
                 _ => {}
@@ -619,7 +633,7 @@ impl TypeEnv {
         let name = self.intern(&ty.name).unwrap();
         match &ty.ty {
             &ast::TypeValue::Primitive(ref id, ..) => {
-                Some(Type::Primitive(tid, self.intern_mut(id)))
+                Some(Type::Primitive(tid, self.intern_mut(id), ty.pos))
             }
             &ast::TypeValue::Enum(ref ty_variants, ..) => {
                 let mut variants = vec![];
