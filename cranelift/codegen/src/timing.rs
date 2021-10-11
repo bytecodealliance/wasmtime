@@ -133,7 +133,7 @@ mod details {
     impl PassTimes {
         /// Returns the total amount of time taken by all the passes measured.
         pub fn total(&self) -> Duration {
-            self.pass.iter().map(|p| p.total).sum()
+            self.pass.iter().map(|p| p.total - p.child).sum()
         }
     }
 
