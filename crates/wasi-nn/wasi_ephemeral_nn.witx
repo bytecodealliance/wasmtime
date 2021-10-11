@@ -1,0 +1,176 @@
+;; WASI Machine Learning API.
+;;
+;; This module draws inspiration from the inference side of [WebNN](https://webmachinelearning.github.io/webnn/#api).
+;; In other words, this API will allow a user to execute an inference using an execution graph (i.e. a model), but not
+;; train or design the graph. The graph is an opaque byte sequence to this API and must be interpreted by the underlying
+;; implementation of this API.
+;;
+;; This is a `witx` file. See [here](https://github.com/WebAssembly/WASI/tree/master/docs/witx.md)
+;; for an explanation of what that means.
+
+;;; The size of a graph buffer. This is equivalent to `$size` in `typenames.witx` but renamed since `typenames.witx` is
+;;; not included here but is included in the overall ephemeral phase.
+(typename $buffer_size u32)
+(typename $bytes_written s32)
+
+;;; Error codes returned by functions in this API. This is prefixed to avoid conflicts with the `$errno` in
+;;; `typenames.witx`.
+(typename $nn_errno
+  (enum (@witx tag u16)
+    ;;; No error occurred.
+    $success
+    ;;; Caller module passed an invalid argument.
+    $invalid_argument
+    ;;; Caller module is missing a memory export.
+    $missing_memory
+    ;;; Device or resource busy.
+    $busy
+  )
+)
+
+;;; The dimensions of a tensor.
+;;;
+;;; The array length matches the tensor rank and each element in the array
+;;; describes the size of each dimension.
+(typename $tensor_dimensions (list u32))
+
+;;; The type of the elements in a tensor.
+(typename $tensor_type
+  (enum (@witx tag u8)
+    $f16
+    $f32
+    $u8
+    $i32
+  )
+)
+
+;;; The tensor data
+;;;
+;;; Initially conceived as a sparse representation, each empty cell would be filled with zeroes and
+;;; the array length must match the product of all of the dimensions and the number of bytes in the type (e.g. a 2x2
+;;; tensor with 4-byte f32 elements would have a data array of length 16). Naturally, this representation requires
+;;; some knowledge of how to lay out data in memory--e.g. using row-major ordering--and could perhaps be improved
+;;; by future witx features (TODO).
+(typename $tensor_data (list u8))
+
+;;; A tensor.
+(typename $tensor
+  (record
+    ;;; Describe the size of the tensor (e.g. 2x2x2x2 -> [2, 2, 2, 2]). To represent a tensor containing a single value,
+    ;;; use `[1]` for the tensor dimensions.
+    (field $dimensions $tensor_dimensions)
+
+    ;; Describe the type of element in the tensor (e.g. f32).
+    (field $type $tensor_type)
+
+    ;;; Contains the tensor data.
+    (field $data $tensor_data)
+  )
+)
+
+;;; The graph initialization data. This consists of an array of buffers because implementing backends may encode their
+;;; graph IR in parts (e.g. OpenVINO stores its IR and weights separately).
+(typename $graph_builder (list u8))
+(typename $graph_builder_array (list $graph_builder))
+
+;;; An execution graph for performing inference (i.e. a model).
+(typename $graph (handle))
+
+;;; Describes the encoding of the graph. This allows the API to be implemented by various backends that encode (i.e.
+;;; serialize) their graph IR differently.
+(typename $graph_encoding
+  (enum (@witx tag u8)
+    ;;; TODO document buffer order
+    $openvino
+  )
+)
+
+;;; Define where the graph should be executed.
+(typename $execution_target
+  (enum (@witx tag u8)
+    $cpu
+    $gpu
+    $tpu
+  )
+)
+
+;;; A $graph_execution_context allows for attaching inputs prior to calling `compute` on a graph and retrieving outputs after
+;;; the computation has completed. TODO a handle may not be the right type but we want it to be opaque to users.
+(typename $graph_execution_context (handle))
+
+(module $wasi_ephemeral_nn
+  ;;; Linear memory to be accessed by WASI functions that need it.
+  (import "memory" (memory))
+
+  ;;; Load an opaque sequence of bytes to use for inference.
+  ;;;
+  ;;; This allows runtime implementations to support multiple graph encoding formats. For unsupported graph encodings,
+  ;;; return `errno::inval`.
+  (@interface func (export "load")
+    ;;; The bytes necessary to build the graph.
+    (param $builder $graph_builder_array)
+    ;;; The encoding of the graph.
+    (param $encoding $graph_encoding)
+    ;;; Where to execute the graph.
+    (param $target $execution_target)
+
+    (result $error (expected $graph (error $nn_errno)))
+  )
+
+  ;;; TODO Functions like `describe_graph_inputs` and `describe_graph_outputs` (returning
+  ;;; an array of `$tensor_description`s) might be useful for introspecting the graph but are not yet included here.
+
+  ;;; Create an execution instance of a loaded graph.
+  ;;; TODO this may need to accept flags that might affect the compilation or execution of the graph.
+  (@interface func (export "init_execution_context")
+    (param $graph $graph)
+    (result $error (expected $graph_execution_context (error $nn_errno)))
+  )
+
+  ;;; Define the inputs to use for inference.
+  ;;;
+  ;;; This should return an $nn_errno (TODO define) if the input tensor does not match the expected dimensions and type.
+  (@interface func (export "set_input")
+    (param $context $graph_execution_context)
+    ;;; The index of the input to change.
+    (param $index u32)
+    ;;; The tensor to set as the input.
+    (param $tensor $tensor)
+
+    (result $error (expected (error $nn_errno)))
+  )
+
+  ;;; Extract the outputs after inference.
+  ;;;
+  ;;; This should return an $nn_errno (TODO define) if the inference has not yet run.
+  (@interface func (export "get_output")
+    (param $context $graph_execution_context)
+    ;;; The index of the output to retrieve.
+    (param $index u32)
+    ;;; An out parameter to which to copy the tensor data. The caller is responsible for allocating enough memory for
+    ;;; the tensor data or an error will be returned. Currently there is no dynamic way to extract the additional
+    ;;; tensor metadata (i.e. dimension, element type) but this should be added at some point.
+    (param $out_buffer (@witx pointer u8))
+    (param $out_buffer_max_size $buffer_size)
+
+    ;;; The number of bytes of tensor data written to the `$out_buffer`.
+    (result $error (expected $buffer_size (error $nn_errno)))
+  )
+
+  ;;; Compute the inference on the given inputs (see `set_input`).
+  ;;;
+  ;;; This should return an $nn_errno (TODO define) if the inputs are not all defined.
+  (@interface func (export "compute")
+    (param $context $graph_execution_context)
+    (result $error (expected (error $nn_errno)))
+  )
+
+  (@interface func (export "convert_image")
+      (param $path (list u8))
+      (param $width u32)
+      (param $height u32)
+      (param $precision $tensor_type)
+      (param $out_buffer (list u8))
+      (result $error (expected $bytes_written(error $nn_errno)))
+   )
+)

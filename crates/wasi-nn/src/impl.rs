@@ -1,12 +1,15 @@
 //! Implements the wasi-nn API.
 use crate::ctx::WasiNnResult as Result;
 use crate::witx::types::{
-    ExecutionTarget, Graph, GraphBuilderArray, GraphEncoding, GraphExecutionContext, Tensor,
+    ExecutionTarget, Graph, GraphBuilderArray, GraphEncoding, GraphExecutionContext, Tensor, TensorType
 };
 use crate::witx::wasi_ephemeral_nn::WasiEphemeralNn;
 use crate::WasiNnCtx;
 use thiserror::Error;
 use wiggle::GuestPtr;
+
+#[cfg(feature = "i2t")]
+use image2tensor;
 
 #[derive(Debug, Error)]
 pub enum UsageError {
@@ -86,5 +89,30 @@ impl<'a> WasiEphemeralNn for WasiNnCtx {
         } else {
             Err(UsageError::InvalidGraphHandle.into())
         }
+    }
+
+    #[cfg(feature = "i2t")]
+    fn convert_image(
+        &mut self,
+        path: &GuestPtr<'_, [u8]>,
+        width: u32,
+        height: u32,
+        precision: TensorType,
+        out_buffer: &GuestPtr<'_, [u8]>
+    ) -> Result<i32> {
+        let i2t_prec = match precision {
+            precision if precision == TensorType::F16 => image2tensor::TensorType::F16,
+            precision if precision == TensorType::F32 => image2tensor::TensorType::F32,
+            precision if precision == TensorType::U8 => image2tensor::TensorType::U8,
+            precision if precision == TensorType::I32 => image2tensor::TensorType::I32,
+            _ => image2tensor::TensorType::F32
+        };
+
+        let path_slice = path.as_slice()?;
+        let path_std_str = String::from(std::str::from_utf8(path_slice.get(..).unwrap()).unwrap());
+        let mut out_buff_array = out_buffer.as_slice_mut()?;
+        let out_arr = out_buff_array.get_mut(..).unwrap();
+        let bytes_written: i32 = image2tensor::convert_image(path_std_str, width, height, i2t_prec, out_arr);
+        Ok(bytes_written)
     }
 }

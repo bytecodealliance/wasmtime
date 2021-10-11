@@ -28,7 +28,7 @@ than building from source, will drastically improve the build times. See the [op
 
 An end-to-end example demonstrating ML classification is included in [examples]:
  - `tests/wasi-nn-rust-bindings` contains ergonomic bindings for writing Rust code against the [wasi-nn] APIs
- - `tests/classification-example` contains a standalone Rust project that uses the [wasi-nn] APIs and is compiled to the 
+ - `tests/classification-example` contains a standalone Rust project that uses the [wasi-nn] APIs and is compiled to the
  `wasm32-wasi` target using the `wasi-nn-rust-bindings`
 
 Run the example from the Wasmtime project directory:
@@ -36,3 +36,11 @@ Run the example from the Wasmtime project directory:
 ```
 ci/run-wasi-nn-example.sh
 ```
+
+# Experimental Image2Tensor (i2t) feature
+This crate can be built with bindings for for the crate image2tensor (https://crates.io/crates/image2tensor).
+This allows WebAssembly applications to convert images into tensors, instead of requiring they be converted before runtime. There are two main reasons for including it inside Wasmtime, first it allows AssemblyScript to have access to the image2tensor functions, and second it performs about 50% faster than if the crate is built into a .wasm file and run from there.
+
+To include it, use `--features "wasmtime-wasi-nn/i2t"` when building wasmtim-cli.
+
+

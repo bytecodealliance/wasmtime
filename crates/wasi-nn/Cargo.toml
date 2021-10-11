@@ -11,6 +11,10 @@ repository = "https://github.com/bytecodealliance/wasmtime"
 readme = "README.md"
 edition = "2018"
 
+[features]
+default = []
+i2t = ["image2tensor"]
+
 [dependencies]
 # These dependencies are necessary for the witx-generation macros to work:
 anyhow = "1.0"
@@ -19,6 +23,7 @@ wasmtime = { path = "../wasmtime", version = "0.30.0", default-features = false 
 wasmtime-runtime = { path = "../runtime", version = "0.30.0" }
 wasmtime-wasi = { path = "../wasi", version = "0.30.0" }
 wiggle = { path = "../wiggle", version = "0.30.0" }
+image2tensor = { version = "0.1.1", optional = true }
 
 # These dependencies are necessary for the wasi-nn implementation:
 openvino = { version = "0.3.1", features = ["runtime-linking"] }
