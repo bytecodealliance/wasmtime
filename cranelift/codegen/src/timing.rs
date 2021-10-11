@@ -130,6 +130,13 @@ mod details {
         pass: [PassTime; NUM_PASSES],
     }
 
+    impl PassTimes {
+        /// Returns the total amount of time taken by all the passes measured.
+        pub fn total(&self) -> Duration {
+            self.pass.iter().map(|p| p.total - p.child).sum()
+        }
+    }
+
     impl Default for PassTimes {
         fn default() -> Self {
             Self {

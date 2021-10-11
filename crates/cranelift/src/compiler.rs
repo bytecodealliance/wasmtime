@@ -194,6 +194,10 @@ impl wasmtime_environ::Compiler for Compiler {
             None
         };
 
+        let timing = cranelift_codegen::timing::take_current();
+        log::debug!("{:?} translated in {:?}", func_index, timing.total());
+        log::trace!("{:?} timing info\n{}", func_index, timing);
+
         let length = u32::try_from(code_buf.len()).unwrap();
         Ok(Box::new(CompiledFunction {
             body: code_buf,
