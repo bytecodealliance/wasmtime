@@ -22,25 +22,6 @@ block0(v0: i128):
 ; run: %i128_stack_store_load(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
 
 
-function %i128_stack_store_load_offset(i128) -> b1 {
-    ss0 = explicit_slot 16, offset 16
-
-block0(v0: i128):
-    stack_store.i128 v0, ss0
-    v1 = stack_load.i128 ss0
-
-    v2 = icmp.i128 eq v0, v1
-    return v2
-}
-; run: %i128_stack_store_load_offset(0) == true
-; run: %i128_stack_store_load_offset(-1) == true
-; run: %i128_stack_store_load_offset(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == true
-; run: %i128_stack_store_load_offset(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == true
-; run: %i128_stack_store_load_offset(0xFEDCBA98_76543210_01234567_89ABCDEF) == true
-; run: %i128_stack_store_load_offset(0xA00A00A0_0A00A00A_06060606_06060606) == true
-; run: %i128_stack_store_load_offset(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == true
-
-
 function %i128_stack_store_load_inst_offset(i128) -> b1 {
     ss0 = explicit_slot 16
     ss1 = explicit_slot 16
