@@ -17,18 +17,6 @@ block0(v0: i64):
 ; run: %stack_simple(-1) == -1
 
 
-function %slot_offset(i64) -> i64 {
-    ss0 = explicit_slot 8, offset 8
-
-block0(v0: i64):
-    stack_store.i64 v0, ss0
-    v1 = stack_load.i64 ss0
-    return v1
-}
-; run: %slot_offset(0) == 0
-; run: %slot_offset(1) == 1
-; run: %slot_offset(-1) == -1
-
 function %stack_offset(i64) -> i64 {
     ss0 = explicit_slot 16
 
@@ -89,7 +77,7 @@ block0(v0: i8, v1: i64):
 
 
 function %multi_slot_offset_writes(i8, i64) -> i8, i64 {
-    ss0 = explicit_slot 8, offset 8
+    ss0 = explicit_slot 8
     ss1 = explicit_slot 8
 
 block0(v0: i8, v1: i64):
@@ -101,21 +89,6 @@ block0(v0: i8, v1: i64):
 }
 ; run: %multi_slot_offse(0, 1) == [0, 1]
 ; run: %multi_slot_offse(1, 2) == [1, 2]
-
-function %slot_offset_negative(i64, i64) -> i64, i64 {
-    ss0 = explicit_slot 8
-    ss1 = explicit_slot 8, offset -8
-
-block0(v0: i64, v1: i64):
-    stack_store.i64 v0, ss0
-    stack_store.i64 v1, ss1
-    v2 = stack_load.i64 ss0
-    v3 = stack_load.i64 ss1
-    return v2, v3
-}
-; run: %slot_offset_nega(0, 1) == [0, 1]
-; run: %slot_offset_nega(2, 3) == [2, 3]
-
 
 function %huge_slots(i64) -> i64 {
     ss0 = explicit_slot 1048576 ; 1MB Slot

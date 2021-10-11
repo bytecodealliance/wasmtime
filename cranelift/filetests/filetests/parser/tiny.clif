@@ -123,11 +123,8 @@ block0(v90: i32, v91: f32):
 
 ; Stack slot references
 function %stack() {
-    ss10 = spill_slot 8
+    ss10 = explicit_slot 8
     ss2 = explicit_slot 4
-    ss3 = incoming_arg 4, offset 8
-    ss4 = outgoing_arg 4
-    ss5 = emergency_slot 4
 
 block0:
     v1 = stack_load.i32 ss10
@@ -137,10 +134,7 @@ block0:
 }
 ; sameln: function %stack() fast {
 ; check:     ss2 = explicit_slot 4
-; check:     ss3 = incoming_arg 4, offset 8
-; check:     ss4 = outgoing_arg 4
-; check:     ss5 = emergency_slot 4
-; check:     ss10 = spill_slot 8
+; check:     ss10 = explicit_slot 8
 
 ; check: block0:
 ; nextln: v1 = stack_load.i32 ss10
