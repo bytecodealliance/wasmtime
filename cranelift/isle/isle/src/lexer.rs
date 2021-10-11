@@ -135,14 +135,14 @@ impl<'a> Lexer<'a> {
         Ok(l)
     }
 
-    /// Get the lexer's current file offset.
-    pub fn offset(&self) -> usize {
-        self.pos.offset
-    }
-
     /// Get the lexer's current source position.
     pub fn pos(&self) -> Pos {
-        self.pos
+        Pos {
+            file: self.pos.file,
+            offset: self.pos.offset - self.file_starts[self.pos.file],
+            line: self.pos.line,
+            col: self.pos.file,
+        }
     }
 
     fn advance_pos(&mut self) {
@@ -169,7 +169,7 @@ impl<'a> Lexer<'a> {
                 self.filenames[pos.file].clone(),
                 self.file_texts[pos.file].clone(),
             ),
-            span: miette::SourceSpan::from((pos.offset, 1)),
+            span: miette::SourceSpan::from((self.pos().offset, 1)),
         }
     }
 
@@ -208,7 +208,7 @@ impl<'a> Lexer<'a> {
             return Ok(None);
         }
 
-        let char_pos = self.pos;
+        let char_pos = self.pos();
         match self.buf[self.pos.offset] {
             b'(' => {
                 self.advance_pos();
@@ -228,7 +228,7 @@ impl<'a> Lexer<'a> {
             }
             c if is_sym_first_char(c) => {
                 let start = self.pos.offset;
-                let start_pos = self.pos;
+                let start_pos = self.pos();
                 while self.pos.offset < self.buf.len()
                     && is_sym_other_char(self.buf[self.pos.offset])
                 {
@@ -241,7 +241,7 @@ impl<'a> Lexer<'a> {
                 Ok(Some((start_pos, Token::Symbol(s.to_string()))))
             }
             c if (c >= b'0' && c <= b'9') || c == b'-' => {
-                let start_pos = self.pos;
+                let start_pos = self.pos();
                 let neg = if c == b'-' {
                     self.advance_pos();
                     true
