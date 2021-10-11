@@ -20,8 +20,12 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
     // Pass in a non-null funcref.
     {
-        let results = func.call(&mut store, &[Val::FuncRef(Some(func.clone()))])?;
-        assert_eq!(results.len(), 1);
+        let mut results = [Val::I32(0)];
+        func.call(
+            &mut store,
+            &[Val::FuncRef(Some(func.clone()))],
+            &mut results,
+        )?;
 
         // Can't compare `Func` for equality, so this is the best we can do here.
         let result_func = results[0].unwrap_funcref().unwrap();
@@ -30,9 +34,8 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
 
     // Pass in a null funcref.
     {
-        let results = func.call(&mut store, &[Val::FuncRef(None)])?;
-        assert_eq!(results.len(), 1);
-
+        let mut results = [Val::I32(0)];
+        func.call(&mut store, &[Val::FuncRef(None)], &mut results)?;
         let result_func = results[0].unwrap_funcref();
         assert!(result_func.is_none());
     }
@@ -42,9 +45,11 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
         let other_instance = Instance::new(&mut store, &module, &[])?;
         let other_instance_func = other_instance.get_func(&mut store, "func").unwrap();
 
-        let results = func.call(
+        let mut results = [Val::I32(0)];
+        func.call(
             &mut store,
             &[Val::FuncRef(Some(other_instance_func.clone()))],
+            &mut results,
         )?;
         assert_eq!(results.len(), 1);
 
@@ -61,7 +66,9 @@ fn pass_funcref_in_and_out_of_wasm() -> anyhow::Result<()> {
             .get_func(&mut other_store, "f")
             .unwrap();
 
-        assert!(func.call(&mut store, &[Val::FuncRef(Some(f))]).is_err());
+        assert!(func
+            .call(&mut store, &[Val::FuncRef(Some(f))], &mut [Val::I32(0)])
+            .is_err());
     }
 
     Ok(())
@@ -82,9 +89,8 @@ fn receive_null_funcref_from_wasm() -> anyhow::Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
     let get_null = instance.get_func(&mut store, "get-null").unwrap();
 
-    let results = get_null.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
-
+    let mut results = [Val::I32(0)];
+    get_null.call(&mut store, &[], &mut results)?;
     let result_func = results[0].unwrap_funcref();
     assert!(result_func.is_none());
 
@@ -101,7 +107,7 @@ fn wrong_store() -> anyhow::Result<()> {
         let set = SetOnDrop(dropped.clone());
         let f1 = Func::wrap(&mut store1, move || drop(&set));
         let f2 = Func::wrap(&mut store2, move || Some(f1.clone()));
-        assert!(f2.call(&mut store2, &[]).is_err());
+        assert!(f2.call(&mut store2, &[], &mut []).is_err());
     }
     assert!(dropped.load(SeqCst));
 
@@ -133,7 +139,7 @@ fn func_new_returns_wrong_store() -> anyhow::Result<()> {
                 Ok(())
             },
         );
-        assert!(f2.call(&mut store2, &[]).is_err());
+        assert!(f2.call(&mut store2, &[], &mut [Val::I32(0)]).is_err());
     }
     assert!(dropped.load(SeqCst));
 

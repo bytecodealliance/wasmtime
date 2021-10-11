@@ -46,19 +46,14 @@ define_passes! {
     wasm_translate_function: "Translate WASM function",
 
     verifier: "Verify Cranelift IR",
-    verify_cssa: "Verify CSSA",
-    verify_liveness: "Verify live ranges",
-    verify_locations: "Verify value locations",
     verify_flags: "Verify CPU flags",
 
     compile: "Compilation passes",
     flowgraph: "Control flow graph",
     domtree: "Dominator tree",
     loop_analysis: "Loop analysis",
-    postopt: "Post-legalization rewriting",
     preopt: "Pre-legalization rewriting",
     dce: "Dead code elimination",
-    legalize: "Legalization",
     gvn: "Global value numbering",
     licm: "Loop invariant code motion",
     unreachable_code: "Remove unreachable blocks",
@@ -70,15 +65,6 @@ define_passes! {
     vcode_emit_finish: "VCode emission finalization",
 
     regalloc: "Register allocation",
-    ra_liveness: "RA liveness analysis",
-    ra_cssa: "RA coalescing CSSA",
-    ra_spilling: "RA spilling",
-    ra_reload: "RA reloading",
-    ra_coloring: "RA coloring",
-
-    prologue_epilogue: "Prologue/epilogue insertion",
-    shrink_instructions: "Instruction encoding shrinking",
-    relax_branches: "Branch relaxation",
     binemit: "Binary machine code emission",
     layout_renumber: "Layout full renumbering",
 

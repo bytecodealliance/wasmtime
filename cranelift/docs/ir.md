@@ -884,10 +884,6 @@ are assigned to registers or stack slots.
 This approach permits SSA form to be preserved throughout the register
 allocation pass and beyond.
 
-Register values can be temporarily diverted to other registers by the
-`regmove` instruction, and to and from stack slots by `regspill`
-and `regfill`.
-
 ## Instruction groups
 
 All of the shared instructions are part of the `base` instruction

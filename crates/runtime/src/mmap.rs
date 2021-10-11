@@ -190,7 +190,7 @@ impl Mmap {
                 rsix::io::mmap_anonymous(
                     ptr::null_mut(),
                     mapping_size,
-                    rsix::io::ProtFlags::NONE,
+                    rsix::io::ProtFlags::empty(),
                     rsix::io::MapFlags::PRIVATE,
                 )
                 .context(format!("mmap failed to allocate {:#x} bytes", mapping_size))?

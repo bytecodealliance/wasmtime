@@ -1,43 +1,40 @@
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
-target x86_64 machinst
+target x86_64
 
-function %ireduce_128_64(i64, i64) -> i64 {
-block0(v0: i64, v1: i64):
-    v2 = iconcat v0, v1
-    v3 = ireduce.i64 v2
-    return v3
+function %ireduce_128_64(i128) -> i64 {
+block0(v0: i128):
+    v1 = ireduce.i64 v0
+    return v1
 }
-; run: %ireduce_128_64(0, 0) == 0
-; run: %ireduce_128_64(-1, -1) == -1
-; run: %ireduce_128_64(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == 0xC0FFEEEE_DECAFFFF
+; run: %ireduce_128_64(0) == 0
+; run: %ireduce_128_64(-1) == -1
+; run: %ireduce_128_64(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 0xC0FFEEEE_DECAFFFF
 
-function %ireduce_128_32(i64, i64) -> i32 {
-block0(v0: i64, v1: i64):
-    v2 = iconcat v0, v1
-    v3 = ireduce.i32 v2
-    return v3
+function %ireduce_128_32(i128) -> i32 {
+block0(v0: i128):
+    v1 = ireduce.i32 v0
+    return v1
 }
-; run: %ireduce_128_32(0, 0) == 0
-; run: %ireduce_128_32(-1, -1) == -1
-; run: %ireduce_128_32(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == 0xDECAFFFF
+; run: %ireduce_128_32(0) == 0
+; run: %ireduce_128_32(-1) == -1
+; run: %ireduce_128_32(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 0xDECAFFFF
 
-function %ireduce_128_16(i64, i64) -> i16 {
-block0(v0: i64, v1: i64):
-    v2 = iconcat v0, v1
-    v3 = ireduce.i16 v2
-    return v3
+function %ireduce_128_16(i128) -> i16 {
+block0(v0: i128):
+    v1 = ireduce.i16 v0
+    return v1
 }
-; run: %ireduce_128_16(0, 0) == 0
-; run: %ireduce_128_16(-1, -1) == -1
-; run: %ireduce_128_16(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == 0xFFFF
+; run: %ireduce_128_16(0) == 0
+; run: %ireduce_128_16(-1) == -1
+; run: %ireduce_128_16(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 0xFFFF
 
-function %ireduce_128_8(i64, i64) -> i8 {
-block0(v0: i64, v1: i64):
-    v2 = iconcat v0, v1
-    v3 = ireduce.i8 v2
-    return v3
+function %ireduce_128_8(i128) -> i8 {
+block0(v0: i128):
+    v1 = ireduce.i8 v0
+    return v1
 }
-; run: %ireduce_128_8(0, 0) == 0
-; run: %ireduce_128_8(-1, -1) == -1
-; run: %ireduce_128_8(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == 0xFF
+; run: %ireduce_128_8(0) == 0
+; run: %ireduce_128_8(-1) == -1
+; run: %ireduce_128_8(0xDECAFFFF_C0FFEEEE_C0FFEEEE_DECAFFFF) == 0xFF

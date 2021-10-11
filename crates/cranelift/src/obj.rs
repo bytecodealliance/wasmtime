@@ -305,21 +305,10 @@ impl<'a> ObjectBuilder<'a> {
                 // seem too common though so aren't necessarily that important
                 // to optimize.
                 RelocationTarget::LibCall(call) => (self.libcalls[&call], 0),
-                RelocationTarget::JumpTable(jt) => (symbol_id, func.jt_offsets[jt]),
             };
             let (kind, encoding, size) = match r.reloc {
                 Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
                 Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
-
-                // This is emitted by the old x86 backend and is only present
-                // for when the constant rodata is separated from the code
-                // itself. We don't do that, though, so we ignore these
-                // relocations since the offsets already listed here are already
-                // correct.
-                //
-                // FIXME(#3009): when the old backend is removed delete this
-                // case.
-                Reloc::X86PCRelRodata4 => continue,
 
                 other => unimplemented!("Unimplemented relocation {:?}", other),
             };

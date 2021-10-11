@@ -1,6 +1,6 @@
 //! A Loop Invariant Code Motion optimization pass
 
-use crate::cursor::{Cursor, EncCursor, FuncCursor};
+use crate::cursor::{Cursor, FuncCursor};
 use crate::dominator_tree::DominatorTree;
 use crate::entity::{EntityList, ListPool};
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
@@ -8,7 +8,6 @@ use crate::fx::FxHashSet;
 use crate::ir::{
     Block, DataFlowGraph, Function, Inst, InstBuilder, InstructionData, Layout, Opcode, Type, Value,
 };
-use crate::isa::TargetIsa;
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::timing;
 use alloc::vec::Vec;
@@ -17,7 +16,6 @@ use alloc::vec::Vec;
 /// loop-invariant instructions out of them.
 /// Changes the CFG and domtree in-place during the operation.
 pub fn do_licm(
-    isa: &dyn TargetIsa,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
     domtree: &mut DominatorTree,
@@ -40,7 +38,7 @@ pub fn do_licm(
             match has_pre_header(&func.layout, cfg, domtree, loop_analysis.loop_header(lp)) {
                 None => {
                     let pre_header =
-                        create_pre_header(isa, loop_analysis.loop_header(lp), func, cfg, domtree);
+                        create_pre_header(loop_analysis.loop_header(lp), func, cfg, domtree);
                     pos = FuncCursor::new(func).at_last_inst(pre_header);
                 }
                 // If there is a natural pre-header we insert new instructions just before the
@@ -64,7 +62,6 @@ pub fn do_licm(
 /// Insert a pre-header before the header, modifying the function layout and CFG to reflect it.
 /// A jump instruction to the header is placed at the end of the pre-header.
 fn create_pre_header(
-    isa: &dyn TargetIsa,
     header: Block,
     func: &mut Function,
     cfg: &mut ControlFlowGraph,
@@ -93,7 +90,7 @@ fn create_pre_header(
     }
 
     // Inserts the pre-header at the right place in the layout.
-    let mut pos = EncCursor::new(func, isa).at_top(header);
+    let mut pos = FuncCursor::new(func).at_top(header);
     pos.insert_block(pre_header);
     pos.next_inst();
     pos.ins().jump(header, pre_header_args_value.as_slice(pool));

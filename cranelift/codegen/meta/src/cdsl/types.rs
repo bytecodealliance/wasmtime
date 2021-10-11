@@ -71,12 +71,12 @@ impl ValueType {
     }
 
     /// Find the unique number associated with this type.
-    pub fn number(&self) -> Option<u8> {
+    pub fn number(&self) -> u8 {
         match *self {
-            ValueType::Lane(l) => Some(l.number()),
-            ValueType::Reference(r) => Some(r.number()),
-            ValueType::Special(s) => Some(s.number()),
-            ValueType::Vector(ref v) => Some(v.number()),
+            ValueType::Lane(l) => l.number(),
+            ValueType::Reference(r) => r.number(),
+            ValueType::Special(s) => s.number(),
+            ValueType::Vector(ref v) => v.number(),
         }
     }
 
@@ -237,20 +237,6 @@ impl LaneType {
             ValueType::Vector(VectorType::new(self, lanes.into()))
         }
     }
-
-    pub fn is_float(self) -> bool {
-        match self {
-            LaneType::Float(_) => true,
-            _ => false,
-        }
-    }
-
-    pub fn is_int(self) -> bool {
-        match self {
-            LaneType::Int(_) => true,
-            _ => false,
-        }
-    }
 }
 
 impl fmt::Display for LaneType {
@@ -407,8 +393,6 @@ impl fmt::Debug for VectorType {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum SpecialType {
     Flag(shared_types::Flag),
-    // FIXME remove once the old style backends are removed.
-    StructArgument,
 }
 
 impl SpecialType {
@@ -423,9 +407,6 @@ impl SpecialType {
                 "CPU flags representing the result of a floating point comparison. These
                 flags can be tested with a :type:`floatcc` condition code.",
             ),
-            SpecialType::StructArgument => {
-                String::from("After legalization sarg_t arguments will get this type.")
-            }
         }
     }
 
@@ -433,7 +414,6 @@ impl SpecialType {
     pub fn lane_bits(self) -> u64 {
         match self {
             SpecialType::Flag(_) => 0,
-            SpecialType::StructArgument => 0,
         }
     }
 
@@ -442,7 +422,6 @@ impl SpecialType {
         match self {
             SpecialType::Flag(shared_types::Flag::IFlags) => 1,
             SpecialType::Flag(shared_types::Flag::FFlags) => 2,
-            SpecialType::StructArgument => 3,
         }
     }
 }
@@ -452,7 +431,6 @@ impl fmt::Display for SpecialType {
         match *self {
             SpecialType::Flag(shared_types::Flag::IFlags) => write!(f, "iflags"),
             SpecialType::Flag(shared_types::Flag::FFlags) => write!(f, "fflags"),
-            SpecialType::StructArgument => write!(f, "sarg_t"),
         }
     }
 }
@@ -464,7 +442,6 @@ impl fmt::Debug for SpecialType {
             "{}",
             match *self {
                 SpecialType::Flag(_) => format!("FlagsType({})", self),
-                SpecialType::StructArgument => format!("StructArgument"),
             }
         )
     }
@@ -478,14 +455,12 @@ impl From<shared_types::Flag> for SpecialType {
 
 pub(crate) struct SpecialTypeIterator {
     flag_iter: shared_types::FlagIterator,
-    done: bool,
 }
 
 impl SpecialTypeIterator {
     fn new() -> Self {
         Self {
             flag_iter: shared_types::FlagIterator::new(),
-            done: false,
         }
     }
 }
@@ -493,16 +468,7 @@ impl SpecialTypeIterator {
 impl Iterator for SpecialTypeIterator {
     type Item = SpecialType;
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(f) = self.flag_iter.next() {
-            Some(SpecialType::from(f))
-        } else {
-            if !self.done {
-                self.done = true;
-                Some(SpecialType::StructArgument)
-            } else {
-                None
-            }
-        }
+        self.flag_iter.next().map(SpecialType::from)
     }
 }
 

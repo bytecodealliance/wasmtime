@@ -1,5 +1,5 @@
 test compile
-target x86_64 machinst
+target x86_64
 
 function %f0(b8) -> b64 {
 block0(v0: b8):

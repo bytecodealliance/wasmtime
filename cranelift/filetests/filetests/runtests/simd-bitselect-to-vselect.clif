@@ -3,12 +3,7 @@ target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 set opt_level=speed_and_size
 set enable_simd
-target x86_64 machinst skylake
-set opt_level=speed_and_size
-set enable_simd
-target x86_64 legacy haswell
-
-;; x86_64 legacy: Test if bitselect->vselect optimization works properly
+target x86_64 skylake
 
 function %mask_from_icmp(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):

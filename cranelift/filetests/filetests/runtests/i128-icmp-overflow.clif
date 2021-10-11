@@ -1,46 +1,38 @@
 test run
 target aarch64
-; target x86_64 machinst TODO: X86_64 does not implement i128 icmp overflow
 
-; TODO: Cleanup these tests when we have native support for i128 immediates in CLIF's parser
-function %icmp_of_i128(i64, i64, i64, i64) -> b1 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-  v4 = iconcat v0, v1
-  v5 = iconcat v2, v3
-
-  v6 = icmp.i128 of v4, v5
-  return v6
+function %icmp_of_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+  v2 = icmp.i128 of v0, v1
+  return v2
 }
-; run: %icmp_of_i128(0, 0, 0, 0) == false
-; run: %icmp_of_i128(0, 0, 1, 0) == false
-; run: %icmp_of_i128(0, 0, -1, -1) == false
-; run: %icmp_of_i128(-1, -1, -1, -1) == false
-; run: %icmp_of_i128(0x00000000_00000000, 0x80000000_00000000, 0, 0) == false
-; run: %icmp_of_i128(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0, 0) == false
-; run: %icmp_of_i128(1, 0, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == true
-; run: %icmp_of_i128(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 1, 0) == true
-; run: %icmp_of_i128(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x80000000_00000000) == false
-; run: %icmp_of_i128(0x00000000_00000000, 0x80000000_00000000, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == false
-; run: %icmp_of_i128(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x30000000_00000000) == false
-; run: %icmp_of_i128(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x30000000_00000000) == true
+; run: %icmp_of_i128(0, 0) == false
+; run: %icmp_of_i128(0, 1) == false
+; run: %icmp_of_i128(0, -1) == false
+; run: %icmp_of_i128(-1, -1) == false
+; run: %icmp_of_i128(0x80000000_00000000_00000000_00000000, 0) == false
+; run: %icmp_of_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0) == false
+; run: %icmp_of_i128(1, 0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == true
+; run: %icmp_of_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 1) == true
+; run: %icmp_of_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000000) == false
+; run: %icmp_of_i128(0x80000000_00000000_00000000_00000000, 0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == false
+; run: %icmp_of_i128(0x4FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x30000000_00000000_00000000_00000000) == false
+; run: %icmp_of_i128(0x4FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x30000000_00000000_00000000_00000001) == true
 
-function %icmp_nof_i128(i64, i64, i64, i64) -> b1 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-    v4 = iconcat v0, v1
-    v5 = iconcat v2, v3
-
-    v6 = icmp.i128 nof v4, v5
-    return v6
+function %icmp_nof_i128(i128, i128) -> b1 {
+block0(v0: i128, v1: i128):
+    v2 = icmp.i128 nof v0, v1
+    return v2
 }
-; run: %icmp_nof_i128(0, 0, 0, 0) == true
-; run: %icmp_nof_i128(0, 0, 1, 0) == true
-; run: %icmp_nof_i128(0, 0, -1, -1) == true
-; run: %icmp_nof_i128(-1, -1, -1, -1) == true
-; run: %icmp_nof_i128(0x00000000_00000000, 0x80000000_00000000, 0, 0) == true
-; run: %icmp_nof_i128(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0, 0) == true
-; run: %icmp_nof_i128(1, 0, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == false
-; run: %icmp_nof_i128(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 1, 0) == false
-; run: %icmp_nof_i128(0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x80000000_00000000) == true
-; run: %icmp_nof_i128(0x00000000_00000000, 0x80000000_00000000, 0xFFFFFFFF_FFFFFFFF, 0x7FFFFFFF_FFFFFFFF) == true
-; run: %icmp_nof_i128(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000000, 0x30000000_00000000) == true
-; run: %icmp_nof_i128(0xFFFFFFFF_FFFFFFFF, 0x4FFFFFFF_FFFFFFFF, 0x00000000_00000001, 0x30000000_00000000) == false
+; run: %icmp_nof_i128(0, 0) == true
+; run: %icmp_nof_i128(0, 1) == true
+; run: %icmp_nof_i128(0, -1) == true
+; run: %icmp_nof_i128(-1, -1) == true
+; run: %icmp_nof_i128(0x80000000_00000000_00000000_00000000, 0) == true
+; run: %icmp_nof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0) == true
+; run: %icmp_nof_i128(1, 0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == false
+; run: %icmp_nof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 1) == false
+; run: %icmp_nof_i128(0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x80000000_00000000_00000000_00000000) == true
+; run: %icmp_nof_i128(0x80000000_00000000_00000000_00000000, 0x7FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF) == true
+; run: %icmp_nof_i128(0x4FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x30000000_00000000_00000000_00000000) == true
+; run: %icmp_nof_i128(0x4FFFFFFF_FFFFFFFF_FFFFFFFF_FFFFFFFF, 0x30000000_00000000_00000000_00000001) == false

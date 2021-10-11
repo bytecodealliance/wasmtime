@@ -10,7 +10,6 @@ use crate::ir::{
     Block, FuncRef, Inst, SigRef, Signature, SourceLoc, Type, Value, ValueLabelAssignments,
     ValueList, ValueListPool,
 };
-use crate::isa::TargetIsa;
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
 use crate::HashMap;
@@ -466,12 +465,8 @@ impl DataFlowGraph {
     }
 
     /// Returns an object that displays `inst`.
-    pub fn display_inst<'a, I: Into<Option<&'a dyn TargetIsa>>>(
-        &'a self,
-        inst: Inst,
-        isa: I,
-    ) -> DisplayInst<'a> {
-        DisplayInst(self, isa.into(), inst)
+    pub fn display_inst<'a>(&'a self, inst: Inst) -> DisplayInst<'a> {
+        DisplayInst(self, inst)
     }
 
     /// Get all value arguments on `inst` as a slice.
@@ -657,7 +652,7 @@ impl DataFlowGraph {
             old_value,
             "{} wasn't detached from {}",
             old_value,
-            self.display_inst(inst, None)
+            self.display_inst(inst)
         );
         new_value
     }
@@ -963,13 +958,12 @@ impl BlockData {
 }
 
 /// Object that can display an instruction.
-pub struct DisplayInst<'a>(&'a DataFlowGraph, Option<&'a dyn TargetIsa>, Inst);
+pub struct DisplayInst<'a>(&'a DataFlowGraph, Inst);
 
 impl<'a> fmt::Display for DisplayInst<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let dfg = self.0;
-        let isa = self.1;
-        let inst = self.2;
+        let inst = self.1;
 
         if let Some((first, rest)) = dfg.inst_results(inst).split_first() {
             write!(f, "{}", first)?;
@@ -985,7 +979,7 @@ impl<'a> fmt::Display for DisplayInst<'a> {
         } else {
             write!(f, "{}.{}", dfg[inst].opcode(), typevar)?;
         }
-        write_operands(f, dfg, isa, inst)
+        write_operands(f, dfg, inst)
     }
 }
 
@@ -1150,10 +1144,7 @@ mod tests {
 
         dfg.make_inst_results(inst, types::I32);
         assert_eq!(inst.to_string(), "inst0");
-        assert_eq!(
-            dfg.display_inst(inst, None).to_string(),
-            "v0 = iconst.i32 0"
-        );
+        assert_eq!(dfg.display_inst(inst).to_string(), "v0 = iconst.i32 0");
 
         // Immutable reference resolution.
         {
@@ -1188,7 +1179,7 @@ mod tests {
             code: TrapCode::User(0),
         };
         let inst = dfg.make_inst(idata);
-        assert_eq!(dfg.display_inst(inst, None).to_string(), "trap user0");
+        assert_eq!(dfg.display_inst(inst).to_string(), "trap user0");
 
         // Result slice should be empty.
         assert_eq!(dfg.inst_results(inst), &[]);

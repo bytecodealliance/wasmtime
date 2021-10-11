@@ -1,6 +1,7 @@
 test run
 target aarch64
-target x86_64 machinst
+target aarch64 has_lse
+target x86_64
 ; TODO: Merge this with atomic-rmw.clif when s390x supports it
 
 

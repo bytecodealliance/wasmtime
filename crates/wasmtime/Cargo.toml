@@ -59,9 +59,6 @@ default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelif
 # precompiled WebAssembly modules.
 cranelift = ["wasmtime-cranelift"]
 
-# Deprecated, does not actually do anything any more.
-lightbeam = []
-
 # Enables support for the `perf` jitdump profiler
 jitdump = ["wasmtime-jit/jitdump"]
 
@@ -73,9 +70,6 @@ parallel-compilation = ["rayon"]
 
 # Enables support for automatic cache configuration to be enabled in `Config`.
 cache = ["wasmtime-cache"]
-
-# Use Cranelift's old x86 backend.
-old-x86-backend = ["wasmtime-cranelift/old-x86-backend"]
 
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.

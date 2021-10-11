@@ -149,7 +149,7 @@ fn switch_error() {
         Ok(_) => {}
         Err(err) => {
             let pretty_error =
-                cranelift_codegen::print_errors::pretty_verifier_error(&func, None, None, err);
+                cranelift_codegen::print_errors::pretty_verifier_error(&func, None, err);
             panic!("pretty_error:\n{}", pretty_error);
         }
     }

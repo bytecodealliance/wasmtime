@@ -329,17 +329,17 @@ fn mismatched_arguments() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
     let func = instance.get_func(&mut store, "foo").unwrap();
     assert_eq!(
-        func.call(&mut store, &[]).unwrap_err().to_string(),
+        func.call(&mut store, &[], &mut []).unwrap_err().to_string(),
         "expected 1 arguments, got 0"
     );
     assert_eq!(
-        func.call(&mut store, &[Val::F32(0)])
+        func.call(&mut store, &[Val::F32(0)], &mut [])
             .unwrap_err()
             .to_string(),
         "argument type mismatch: found f32 but expected i32",
     );
     assert_eq!(
-        func.call(&mut store, &[Val::I32(0), Val::I32(1)])
+        func.call(&mut store, &[Val::I32(0), Val::I32(1)], &mut [])
             .unwrap_err()
             .to_string(),
         "expected 1 arguments, got 2"
@@ -519,7 +519,10 @@ fn parse_dwarf_info() -> Result<()> {
     );
     linker.module(&mut store, "", &module)?;
     let run = linker.get_default(&mut store, "")?;
-    let trap = run.call(&mut store, &[]).unwrap_err().downcast::<Trap>()?;
+    let trap = run
+        .call(&mut store, &[], &mut [])
+        .unwrap_err()
+        .downcast::<Trap>()?;
 
     let mut found = false;
     for frame in trap.trace() {

@@ -3,7 +3,6 @@
 //! This module defines cursor data types that can be used for inserting instructions.
 
 use crate::ir;
-use crate::isa::TargetIsa;
 
 /// The possible positions of a cursor.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -634,7 +633,7 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
         &mut self.func.dfg
     }
 
-    fn insert_built_inst(self, inst: ir::Inst, _: ir::Type) -> &'c mut ir::DataFlowGraph {
+    fn insert_built_inst(self, inst: ir::Inst) -> &'c mut ir::DataFlowGraph {
         // TODO: Remove this assertion once #796 is fixed.
         #[cfg(debug_assertions)]
         {
@@ -661,155 +660,6 @@ impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut FuncCursor<'f> {
         if !self.srcloc.is_default() {
             self.func.srclocs[inst] = self.srcloc;
         }
-        &mut self.func.dfg
-    }
-}
-
-/// Encoding cursor.
-///
-/// An `EncCursor` can be used to insert instructions that are immediately assigned an encoding.
-/// The cursor holds a mutable reference to the whole function which can be re-borrowed from the
-/// public `pos.func` member.
-pub struct EncCursor<'f> {
-    pos: CursorPosition,
-    srcloc: ir::SourceLoc,
-    built_inst: Option<ir::Inst>,
-
-    /// The referenced function.
-    pub func: &'f mut ir::Function,
-
-    /// The target ISA that will be used to encode instructions.
-    pub isa: &'f dyn TargetIsa,
-}
-
-impl<'f> EncCursor<'f> {
-    /// Create a new `EncCursor` pointing nowhere.
-    pub fn new(func: &'f mut ir::Function, isa: &'f dyn TargetIsa) -> Self {
-        Self {
-            pos: CursorPosition::Nowhere,
-            srcloc: Default::default(),
-            built_inst: None,
-            func,
-            isa,
-        }
-    }
-
-    /// Use the source location of `inst` for future instructions.
-    pub fn use_srcloc(&mut self, inst: ir::Inst) {
-        self.srcloc = self.func.srclocs[inst];
-    }
-
-    /// Create an instruction builder that will insert an encoded instruction at the current
-    /// position.
-    ///
-    /// The builder will panic if it is used to insert an instruction that can't be encoded for
-    /// `self.isa`.
-    pub fn ins(&mut self) -> ir::InsertBuilder<&mut EncCursor<'f>> {
-        ir::InsertBuilder::new(self)
-    }
-
-    /// Get the last built instruction.
-    ///
-    /// This returns the last instruction that was built using the `ins()` method on this cursor.
-    /// Panics if no instruction was built.
-    pub fn built_inst(&self) -> ir::Inst {
-        self.built_inst.expect("No instruction was inserted")
-    }
-
-    /// Return an object that can display `inst`.
-    ///
-    /// This is a convenience wrapper for the DFG equivalent.
-    pub fn display_inst(&self, inst: ir::Inst) -> ir::dfg::DisplayInst {
-        self.func.dfg.display_inst(inst, self.isa)
-    }
-}
-
-impl<'f> Cursor for EncCursor<'f> {
-    fn position(&self) -> CursorPosition {
-        self.pos
-    }
-
-    fn set_position(&mut self, pos: CursorPosition) {
-        self.pos = pos
-    }
-
-    fn srcloc(&self) -> ir::SourceLoc {
-        self.srcloc
-    }
-
-    fn set_srcloc(&mut self, srcloc: ir::SourceLoc) {
-        self.srcloc = srcloc;
-    }
-
-    fn layout(&self) -> &ir::Layout {
-        &self.func.layout
-    }
-
-    fn layout_mut(&mut self) -> &mut ir::Layout {
-        &mut self.func.layout
-    }
-}
-
-impl<'c, 'f> ir::InstInserterBase<'c> for &'c mut EncCursor<'f> {
-    fn data_flow_graph(&self) -> &ir::DataFlowGraph {
-        &self.func.dfg
-    }
-
-    fn data_flow_graph_mut(&mut self) -> &mut ir::DataFlowGraph {
-        &mut self.func.dfg
-    }
-
-    fn insert_built_inst(
-        self,
-        inst: ir::Inst,
-        ctrl_typevar: ir::Type,
-    ) -> &'c mut ir::DataFlowGraph {
-        // TODO: Remove this assertion once #796 is fixed.
-        #[cfg(debug_assertions)]
-        {
-            if let CursorPosition::At(_) = self.position() {
-                if let Some(curr) = self.current_inst() {
-                    if let Some(prev) = self.layout().prev_inst(curr) {
-                        let prev_op = self.data_flow_graph()[prev].opcode();
-                        let inst_op = self.data_flow_graph()[inst].opcode();
-                        if prev_op.is_branch()
-                            && !prev_op.is_terminator()
-                            && !inst_op.is_terminator()
-                        {
-                            panic!(
-                                "Inserting instruction {} after {} and before {}",
-                                self.display_inst(inst),
-                                self.display_inst(prev),
-                                self.display_inst(curr)
-                            )
-                        }
-                    };
-                };
-            };
-        }
-        // Insert the instruction and remember the reference.
-        self.insert_inst(inst);
-        self.built_inst = Some(inst);
-
-        if !self.srcloc.is_default() {
-            self.func.srclocs[inst] = self.srcloc;
-        }
-
-        // Skip the encoding update if we're using a new (MachInst) backend; encodings come later,
-        // during lowering.
-        if self.isa.get_mach_backend().is_none() {
-            // Assign an encoding.
-            // XXX Is there a way to describe this error to the user?
-            #[cfg_attr(feature = "cargo-clippy", allow(clippy::match_wild_err_arm))]
-            match self
-                .isa
-                .encode(&self.func, &self.func.dfg[inst], ctrl_typevar)
-            {
-                Ok(e) => self.func.encodings[inst] = e,
-                Err(_) => panic!("can't encode {}", self.display_inst(inst)),
-            }
-        }
-
         &mut self.func.dfg
     }
 }

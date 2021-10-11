@@ -397,13 +397,17 @@ impl CompiledModule {
     }
 
     /// Returns the per-signature trampolines for this module.
-    pub fn trampolines(&self) -> impl Iterator<Item = (SignatureIndex, VMTrampoline)> + '_ {
+    pub fn trampolines(&self) -> impl Iterator<Item = (SignatureIndex, VMTrampoline, usize)> + '_ {
         let code = self.code();
         self.trampolines.iter().map(move |info| {
-            (info.signature, unsafe {
-                let ptr = &code[info.start as usize];
-                std::mem::transmute::<*const u8, VMTrampoline>(ptr)
-            })
+            (
+                info.signature,
+                unsafe {
+                    let ptr = &code[info.start as usize];
+                    std::mem::transmute::<*const u8, VMTrampoline>(ptr)
+                },
+                info.length as usize,
+            )
         })
     }
 

@@ -4,6 +4,43 @@
 
 ## Unreleased
 
+### Added
+
+* New `Func::new_unchecked` and `Func::call_unchecked` APIs have been added with
+  accompanying functions in the C API to improve the performance of calls into
+  wasm and the host in the C API.
+  [#3350](https://github.com/bytecodealliance/wasmtime/pull/3350)
+
+* Release binaries are now available for the s390x-unknown-linux-gnu
+  architecture.
+  [#3372](https://github.com/bytecodealliance/wasmtime/pull/3372)
+
+### Changed
+
+* The `Func::call` method now takes a slice to write the results into rather
+  than returning a boxed slice.
+  [#3319](https://github.com/bytecodealliance/wasmtime/pull/3319)
+
+* Trampolines are now covered when jitdump profiling is enabled.
+  [#3344](https://github.com/bytecodealliance/wasmtime/pull/3344)
+
+### Fixed
+
+* Debugging with GDB has been fixed on Windows.
+  [#3373](https://github.com/bytecodealliance/wasmtime/pull/3373)
+
+### Removed
+
+* The Lightbeam backend has been removed, as per [RFC 14].
+  [#3390](https://github.com/bytecodealliance/wasmtime/pull/3390)
+
+[RFC 14]: https://github.com/bytecodealliance/rfcs/pull/14
+
+* Cranelift's old x86 backend has been removed, as per [RFC 12].
+  [#3309](https://github.com/bytecodealliance/wasmtime/pull/3009)
+  
+[RFC 12]: https://github.com/bytecodealliance/rfcs/pull/12
+
 ## 0.30.0
 
 Released 2021-09-17.

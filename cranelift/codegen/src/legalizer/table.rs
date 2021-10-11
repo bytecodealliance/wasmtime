@@ -28,7 +28,7 @@ pub fn expand_table_addr(
             debug_assert_eq!(opcode, ir::Opcode::TableAddr);
             (table, arg, offset)
         }
-        _ => panic!("Wanted table_addr: {}", func.dfg.display_inst(inst, None)),
+        _ => panic!("Wanted table_addr: {}", func.dfg.display_inst(inst)),
     };
 
     dynamic_addr(inst, table, index, element_offset, func);

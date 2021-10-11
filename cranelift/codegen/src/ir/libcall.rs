@@ -1,10 +1,6 @@
 //! Naming well-known routines in the runtime library.
 
-use crate::ir::{
-    types, AbiParam, ArgumentPurpose, ExtFuncData, ExternalName, FuncRef, Function, Inst, Opcode,
-    Signature, Type,
-};
-use crate::isa::{CallConv, RegUnit, TargetIsa};
+use crate::ir::{types, ExternalName, FuncRef, Function, Opcode, Type};
 use core::fmt;
 use core::str::FromStr;
 #[cfg(feature = "enable-serde")]
@@ -166,32 +162,11 @@ impl LibCall {
     }
 }
 
-/// Get a function reference for `libcall` in `func`, following the signature
-/// for `inst`.
-///
-/// If there is an existing reference, use it, otherwise make a new one.
-pub(crate) fn get_libcall_funcref(
-    libcall: LibCall,
-    call_conv: CallConv,
-    func: &mut Function,
-    inst: Inst,
-    isa: &dyn TargetIsa,
-) -> FuncRef {
-    find_funcref(libcall, func)
-        .unwrap_or_else(|| make_funcref_for_inst(libcall, call_conv, func, inst, isa))
-}
-
 /// Get a function reference for the probestack function in `func`.
 ///
 /// If there is an existing reference, use it, otherwise make a new one.
-pub fn get_probestack_funcref(
-    func: &mut Function,
-    reg_type: Type,
-    arg_reg: RegUnit,
-    isa: &dyn TargetIsa,
-) -> FuncRef {
+pub fn get_probestack_funcref(func: &mut Function) -> Option<FuncRef> {
     find_funcref(LibCall::Probestack, func)
-        .unwrap_or_else(|| make_funcref_for_probestack(func, reg_type, arg_reg, isa))
 }
 
 /// Get the existing function reference for `libcall` in `func` if it exists.
@@ -209,65 +184,6 @@ fn find_funcref(libcall: LibCall, func: &Function) -> Option<FuncRef> {
         }
     }
     None
-}
-
-/// Create a funcref for `LibCall::Probestack`.
-fn make_funcref_for_probestack(
-    func: &mut Function,
-    reg_type: Type,
-    arg_reg: RegUnit,
-    isa: &dyn TargetIsa,
-) -> FuncRef {
-    let mut sig = Signature::new(CallConv::Probestack);
-    let rax = AbiParam::special_reg(reg_type, ArgumentPurpose::Normal, arg_reg);
-    sig.params.push(rax);
-    if !isa.flags().probestack_func_adjusts_sp() {
-        sig.returns.push(rax);
-    }
-    make_funcref(LibCall::Probestack, func, sig, isa)
-}
-
-/// Create a funcref for `libcall` with a signature matching `inst`.
-fn make_funcref_for_inst(
-    libcall: LibCall,
-    call_conv: CallConv,
-    func: &mut Function,
-    inst: Inst,
-    isa: &dyn TargetIsa,
-) -> FuncRef {
-    let mut sig = Signature::new(call_conv);
-    for &v in func.dfg.inst_args(inst) {
-        sig.params.push(AbiParam::new(func.dfg.value_type(v)));
-    }
-    for &v in func.dfg.inst_results(inst) {
-        sig.returns.push(AbiParam::new(func.dfg.value_type(v)));
-    }
-
-    if call_conv.extends_baldrdash() {
-        // Adds the special VMContext parameter to the signature.
-        sig.params.push(AbiParam::special(
-            isa.pointer_type(),
-            ArgumentPurpose::VMContext,
-        ));
-    }
-
-    make_funcref(libcall, func, sig, isa)
-}
-
-/// Create a funcref for `libcall`.
-fn make_funcref(
-    libcall: LibCall,
-    func: &mut Function,
-    sig: Signature,
-    isa: &dyn TargetIsa,
-) -> FuncRef {
-    let sigref = func.import_signature(sig);
-
-    func.import_function(ExtFuncData {
-        name: ExternalName::LibCall(libcall),
-        signature: sigref,
-        colocated: isa.flags().use_colocated_libcalls(),
-    })
 }
 
 #[cfg(test)]

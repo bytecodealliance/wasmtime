@@ -203,6 +203,98 @@ block0(v0: i8, v1: i64):
 ; nextln: br %r14
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; IADD_IFCOUT
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+function %iadd_i64(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2, v3 = iadd_ifcout.i64 v0, v1
+  return v2
+}
+
+; check:  algr %r2, %r3
+; nextln: br %r14
+
+function %iadd_i64_ext32(i64, i32) -> i64 {
+block0(v0: i64, v1: i32):
+  v2 = uextend.i64 v1
+  v3, v4 = iadd_ifcout.i64 v0, v2
+  return v3
+}
+
+; check:  algfr %r2, %r3
+; nextln: br %r14
+
+function %iadd_i64_imm32(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 32768
+  v2, v3 = iadd_ifcout.i64 v0, v1
+  return v2
+}
+
+; check:  algfi %r2, 32768
+; nextln: br %r14
+
+function %iadd_i64_mem(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = load.i64 v1
+  v3, v4 = iadd_ifcout.i64 v0, v2
+  return v3
+}
+
+; check:  alg %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i64_mem_ext32(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = uload32.i64 v1
+  v3, v4 = iadd_ifcout.i64 v0, v2
+  return v3
+}
+
+; check:  algf %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i32(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+  v2, v3 = iadd_ifcout.i32 v0, v1
+  return v2
+}
+
+; check:  alr %r2, %r3
+; nextln: br %r14
+
+function %iadd_i32_imm(i32) -> i32 {
+block0(v0: i32):
+  v1 = iconst.i32 32768
+  v2, v3 = iadd_ifcout.i32 v0, v1
+  return v2
+}
+
+; check:  alfi %r2, 32768
+; nextln: br %r14
+
+function %iadd_i32_mem(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1
+  v3, v4 = iadd_ifcout.i32 v0, v2
+  return v3
+}
+
+; check:  al %r2, 0(%r3)
+; nextln: br %r14
+
+function %iadd_i32_memoff(i32, i64) -> i32 {
+block0(v0: i32, v1: i64):
+  v2 = load.i32 v1+4096
+  v3, v4 = iadd_ifcout.i32 v0, v2
+  return v3
+}
+
+; check:  aly %r2, 4096(%r3)
+; nextln: br %r14
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ISUB
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

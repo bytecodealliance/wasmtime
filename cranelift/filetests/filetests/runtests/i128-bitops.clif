@@ -1,153 +1,54 @@
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
-; target s390x TODO: Not yet implemented on s390x
-; target x86_64 TODO: Not yet implemented on x86_64
+target x86_64
 
-; i128 tests
-; TODO: Cleanup these tests when we have native support for i128 immediates in CLIF's parser
-function %bnot_i128(i64, i64) -> i64, i64 {
-block0(v0: i64,v1: i64):
-v2 = iconcat v0, v1
-
-v3 = bnot v2
-
-v4, v5 = isplit v3
-return v4, v5
+function %bnot_i128(i128) -> i128 {
+block0(v0: i128):
+    v1 = bnot v0
+    return v1
 }
-; run: %bnot_i128(0, 0) == [-1, -1]
-; run: %bnot_i128(-1, -1) == [0, 0]
-; run: %bnot_i128(-1, 0) == [0, -1]
+; run: %bnot_i128(0) == -1
+; run: %bnot_i128(-1) == 0
+; run: %bnot_i128(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %bnot_i128(0x3F001111_3F001111_21350000_21350000) == 0xC0FFEEEE_C0FFEEEE_DECAFFFF_DECAFFFF
 
-; run: %bnot_i128(0x3F001111_3F001111, 0x21350000_21350000) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
 
 
-function %band_i128(i64, i64, i64, i64) -> i64, i64 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-v4 = iconcat v0, v1
-v5 = iconcat v2, v3
-
-v6 = band v4, v5
-
-v7, v8 = isplit v6
-return v7, v8
+function %band_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = band v0, v1
+    return v2
 }
-; run: %band_i128(0, 0, 0, 0) == [0, 0]
-; run: %band_i128(-1, -1, 0, 0) == [0, 0]
-; run: %band_i128(-1, -1, -1, -1) == [-1, -1]
-; run: %band_i128(-1, -1, 0, -1) == [0, -1]
+; run: %band_i128(0, 0) == 0
+; run: %band_i128(-1, 0) == 0
+; run: %band_i128(-1, -1) == -1
+; run: %band_i128(-1, 0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %band_i128(0xFEDCBA98_76543210_01234567_89ABCDEF, 0x01234567_89ABCDEF_FEDCBA98_76543210) == 0
+; run: %band_i128(0xFEEEFFFF_FEEEFFFF_F1FFFEFE_F1FFFEFE, 0xDFDBFFFF_DFDBFFFF_CEFFEFEF_CEFFEFEF) == 0xDECAFFFF_DECAFFFF_C0FFEEEE_C0FFEEEE
 
-; run: %band_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210, 0x01234567_89ABCDEF) == [0, 0]
-; run: %band_i128(0xF1FFFEFE_F1FFFEFE, 0xFEEEFFFF_FEEEFFFF, 0xCEFFEFEF_CEFFEFEF, 0xDFDBFFFF_DFDBFFFF) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
 
-
-function %bor_i128(i64, i64, i64, i64) -> i64, i64 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-v4 = iconcat v0, v1
-v5 = iconcat v2, v3
-
-v6 = bor v4, v5
-
-v7, v8 = isplit v6
-return v7, v8
+function %bor_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bor v0, v1
+    return v2
 }
-; run: %bor_i128(0, 0, 0, 0) == [0, 0]
-; run: %bor_i128(-1, -1, 0, 0) == [-1, -1]
-; run: %bor_i128(-1, -1, -1, -1) == [-1, -1]
-; run: %bor_i128(0, 0, 0, -1) == [0, -1]
+; run: %bor_i128(0, 0) == 0
+; run: %bor_i128(-1, 0) == -1
+; run: %bor_i128(-1, -1) == -1
+; run: %bor_i128(0, 0x00000000_00000000_FFFFFFFF_FFFFFFFF) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %bor_i128(0xFEDCBA98_76543210_01234567_89ABCDEF, 0x01234567_89ABCDEF_FEDCBA98_76543210) == -1
+; run: %bor_i128(0x8A8AAAAA_8A8AAAAA_80AAAAAA_80AAAAAA, 0x54405555_54405555_40554444_40554444) == 0xDECAFFFF_DECAFFFF_C0FFEEEE_C0FFEEEE
 
-; run: %bor_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210, 0x01234567_89ABCDEF) == [-1, -1]
-; run: %bor_i128(0x80AAAAAA_80AAAAAA, 0x8A8AAAAA_8A8AAAAA, 0x40554444_40554444, 0x54405555_54405555) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
 
-
-function %bxor_i128(i64, i64, i64, i64) -> i64, i64 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-v4 = iconcat v0, v1
-v5 = iconcat v2, v3
-
-v6 = bxor v4, v5
-
-v7, v8 = isplit v6
-return v7, v8
+function %bxor_i128(i128, i128) -> i128 {
+block0(v0: i128, v1: i128):
+    v2 = bxor v0, v1
+    return v2
 }
-; run: %bxor_i128(0, 0, 0, 0) == [0, 0]
-; run: %bxor_i128(-1, -1, 0, 0) == [-1, -1]
-; run: %bxor_i128(-1, -1, -1, -1) == [0, 0]
-; run: %bxor_i128(-1, -1, 0, -1) == [-1, 0]
-
-; run: %bxor_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210, 0x01234567_89ABCDEF) == [-1, -1]
-; run: %bxor_i128(0x8FA50A64_8FA50A64, 0x9440A07D_9440A07D, 0x4F5AE48A_4F5AE48A, 0x4A8A5F82_4A8A5F82) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
-
-
-function %band_not_i128(i64, i64, i64, i64) -> i64, i64 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-v4 = iconcat v0, v1
-v5 = iconcat v2, v3
-
-v6 = band_not v4, v5
-
-v7, v8 = isplit v6
-return v7, v8
-}
-; run: %band_not_i128(0, 0, 0, 0) == [0, 0]
-; run: %band_not_i128(-1, -1, 0, 0) == [-1, -1]
-; run: %band_not_i128(-1, -1, -1, -1) == [0, 0]
-; run: %band_not_i128(-1, -1, 0, -1) == [-1, 0]
-
-; run: %band_not_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210, 0x01234567_89ABCDEF) == [0x01234567_89ABCDEF, 0xFEDCBA98_76543210]
-; run: %band_not_i128(0xF1FFFEFE_F1FFFEFE, 0xFEEEFFFF_FEEEFFFF, 0x31001010_31001010, 0x20240000_20240000) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
-
-
-function %bor_not_i128(i64, i64, i64, i64) -> i64, i64 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-v4 = iconcat v0, v1
-v5 = iconcat v2, v3
-
-v6 = bor_not v4, v5
-
-v7, v8 = isplit v6
-return v7, v8
-}
-; run: %bor_not_i128(0, 0, 0, 0) == [-1, -1]
-; run: %bor_not_i128(-1, -1, 0, 0) == [-1, -1]
-; run: %bor_not_i128(-1, -1, -1, -1) == [-1, -1]
-; run: %bor_not_i128(-1, 0, 0, -1) == [-1, 0]
-
-; run: %bor_not_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210, 0x01234567_89ABCDEF) == [0x01234567_89ABCDEF, 0xFEDCBA98_76543210]
-; run: %bor_not_i128(0x80AAAAAA_80AAAAAA, 0x8A8AAAAA_8A8AAAAA, 0xBFAABBBB_BFAABBBB, 0xABBFAAAA_ABBFAAAA) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
-
-
-function %bxor_not_i128(i64, i64, i64, i64) -> i64, i64 {
-block0(v0: i64,v1: i64,v2: i64,v3: i64):
-v4 = iconcat v0, v1
-v5 = iconcat v2, v3
-
-v6 = bxor_not v4, v5
-
-v7, v8 = isplit v6
-return v7, v8
-}
-; run: %bxor_not_i128(0, 0, 0, 0) == [-1, -1]
-; run: %bxor_not_i128(-1, -1, 0, 0) == [0, 0]
-; run: %bxor_not_i128(-1, -1, -1, -1) == [-1, -1]
-; run: %bxor_not_i128(-1, -1, 0, -1) == [0, -1]
-
-; run: %bxor_not_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210, 0xFEDCBA98_76543210, 0x01234567_89ABCDEF) == [0, 0]
-; run: %bxor_not_i128(0x8FA50A64_8FA50A64, 0x9440A07D_9440A07D, 0xB0A51B75_B0A51B75, 0xB575A07D_B575A07D) == [0xC0FFEEEE_C0FFEEEE, 0xDECAFFFF_DECAFFFF]
-
-
-function %bitrev_i128(i64, i64) -> i64, i64 {
-block0(v0: i64, v1: i64):
-    v2 = iconcat v0, v1
-
-    v3 = bitrev v2
-
-    v4, v5 = isplit v3
-    return v4, v5
-}
-; run: %bitrev_i128(0, 0) == [0, 0]
-; run: %bitrev_i128(-1, -1) == [-1, -1]
-; run: %bitrev_i128(-1, 0) == [0, -1]
-; run: %bitrev_i128(0, -1) == [-1, 0]
-; run: %bitrev_i128(0x00000000_00000000, 0x80000000_00000000) == [1, 0]
-; run: %bitrev_i128(0x01234567_89ABCDEF, 0xFEDCBA98_76543210) == [0x084C2A6E_195D3B7F, 0xF7B3D591_E6A2C480]
-; run: %bitrev_i128(0xC0FFEEEE_DECAFFFF, 0xDECAFFFF_C0FFEEEE) == [0x7777FF03_FFFF537B, 0xFFFF537B_7777FF03]
+; run: %bxor_i128(0, 0) == 0
+; run: %bxor_i128(-1, 0) == -1
+; run: %bxor_i128(-1, -1) == 0
+; run: %bxor_i128(-1, 0xFFFFFFFF_FFFFFFFF_00000000_00000000) == 0x00000000_00000000_FFFFFFFF_FFFFFFFF
+; run: %bxor_i128(0xFEDCBA98_76543210_01234567_89ABCDEF, 0x01234567_89ABCDEF_FEDCBA98_76543210) == -1
+; run: %bxor_i128(0x9440A07D_9440A07D_8FA50A64_8FA50A64, 0x4A8A5F82_4A8A5F82_4F5AE48A_4F5AE48A) == 0xDECAFFFF_DECAFFFF_C0FFEEEE_C0FFEEEE

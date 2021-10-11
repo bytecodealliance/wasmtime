@@ -3,7 +3,7 @@ use crate::instance::{InstanceData, InstancePre};
 use crate::store::StoreOpaque;
 use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
-    IntoFunc, Module, StoreContextMut, Trap, Val,
+    IntoFunc, Module, StoreContextMut, Trap, Val, ValRaw,
 };
 use anyhow::{anyhow, bail, Context, Error, Result};
 use log::warn;
@@ -310,6 +310,24 @@ impl<T> Linker<T> {
         func: impl Fn(Caller<'_, T>, &[Val], &mut [Val]) -> Result<(), Trap> + Send + Sync + 'static,
     ) -> Result<&mut Self> {
         let func = HostFunc::new(&self.engine, ty, func);
+        let key = self.import_key(module, Some(name));
+        self.insert(key, Definition::HostFunc(Arc::new(func)))?;
+        Ok(self)
+    }
+
+    /// Creates a [`Func::new_unchecked`]-style function named in this linker.
+    ///
+    /// For more information see [`Linker::func_wrap`].
+    #[cfg(compiler)]
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
+    pub unsafe fn func_new_unchecked(
+        &mut self,
+        module: &str,
+        name: &str,
+        ty: FuncType,
+        func: impl Fn(Caller<'_, T>, *mut ValRaw) -> Result<(), Trap> + Send + Sync + 'static,
+    ) -> Result<&mut Self> {
+        let func = HostFunc::new_unchecked(&self.engine, ty, func);
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)
@@ -645,20 +663,13 @@ impl<T> Linker<T> {
                                 // `unwrap()` everything here because we know the instance contains a
                                 // function export with the given name and signature because we're
                                 // iterating over the module it was instantiated from.
-                                let command_results = instance
+                                instance
                                     .get_export(&mut caller, &export_name)
                                     .unwrap()
                                     .into_func()
                                     .unwrap()
-                                    .call(&mut caller, params)
+                                    .call(&mut caller, params, results)
                                     .map_err(|error| error.downcast::<Trap>().unwrap())?;
-
-                                // Copy the return values into the output slice.
-                                for (result, command_result) in
-                                    results.iter_mut().zip(command_results.into_vec())
-                                {
-                                    *result = command_result;
-                                }
 
                                 Ok(())
                             },
@@ -718,20 +729,14 @@ impl<T> Linker<T> {
                                 let (instance_pre, export_name) = &*upvars;
                                 let instance = instance_pre.instantiate_async(&mut caller).await?;
 
-                                let command_results = instance
+                                instance
                                     .get_export(&mut caller, &export_name)
                                     .unwrap()
                                     .into_func()
                                     .unwrap()
-                                    .call_async(&mut caller, params)
+                                    .call_async(&mut caller, params, results)
                                     .await
                                     .map_err(|error| error.downcast::<Trap>().unwrap())?;
-
-                                for (result, command_result) in
-                                    results.iter_mut().zip(command_results.into_vec())
-                                {
-                                    *result = command_result;
-                                }
                                 Ok(())
                             })
                         },

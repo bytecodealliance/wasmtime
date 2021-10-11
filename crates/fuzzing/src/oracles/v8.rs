@@ -93,7 +93,9 @@ pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config
     let wasmtime_main = wasmtime_instance
         .get_func(&mut wasmtime_store, func)
         .expect("function export is present");
-    let wasmtime_vals = wasmtime_main.call(&mut wasmtime_store, &wasmtime_params);
+    let mut wasmtime_vals = vec![Val::I32(0); ty.results().len()];
+    let wasmtime_result =
+        wasmtime_main.call(&mut wasmtime_store, &wasmtime_params, &mut wasmtime_vals);
     log::trace!("finished wasmtime invocation");
 
     // V8: call the first exported func
@@ -112,15 +114,15 @@ pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config
     log::trace!("finished v8 invocation");
 
     // Verify V8 and wasmtime match
-    match (wasmtime_vals, v8_vals) {
-        (Ok(wasmtime), Ok(v8)) => {
+    match (wasmtime_result, v8_vals) {
+        (Ok(()), Ok(v8)) => {
             log::trace!("both executed successfully");
-            match wasmtime.len() {
+            match wasmtime_vals.len() {
                 0 => assert!(v8.is_undefined()),
-                1 => assert_val_match(&wasmtime[0], &v8, &mut scope),
+                1 => assert_val_match(&wasmtime_vals[0], &v8, &mut scope),
                 _ => {
                     let array = v8::Local::<'_, v8::Array>::try_from(v8).unwrap();
-                    for (i, wasmtime) in wasmtime.iter().enumerate() {
+                    for (i, wasmtime) in wasmtime_vals.iter().enumerate() {
                         let v8 = array.get_index(&mut scope, i as u32).unwrap();
                         assert_val_match(wasmtime, &v8, &mut scope);
                         // ..
@@ -128,7 +130,7 @@ pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config
                 }
             }
         }
-        (Ok(_), Err(msg)) => {
+        (Ok(()), Err(msg)) => {
             panic!("wasmtime succeeded at invocation, v8 failed: {}", msg)
         }
         (Err(err), Ok(_)) => {
@@ -285,7 +287,18 @@ fn assert_error_matches(wasmtime: &anyhow::Error, v8: &str) {
             TrapCode::IntegerDivisionByZero => {
                 return verify_v8(&["divide by zero", "remainder by zero"])
             }
-            TrapCode::StackOverflow => return verify_v8(&["call stack size exceeded"]),
+            TrapCode::StackOverflow => {
+                return verify_v8(&[
+                    "call stack size exceeded",
+                    // Similar to the above comment in `UnreachableCodeReached`
+                    // if wasmtime hits a stack overflow but v8 ran all the way
+                    // to when the `unreachable` instruction was hit then that's
+                    // ok. This just means that wasmtime either has less optimal
+                    // codegen or different limits on the stack than v8 does,
+                    // which isn't an issue per-se.
+                    "unreachable",
+                ]);
+            }
             TrapCode::IndirectCallToNull => return verify_v8(&["null function"]),
             TrapCode::TableOutOfBounds => {
                 return verify_v8(&[

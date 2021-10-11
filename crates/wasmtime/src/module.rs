@@ -8,7 +8,7 @@ use std::fs;
 use std::mem;
 use std::path::Path;
 use std::sync::Arc;
-use wasmparser::Validator;
+use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{ModuleEnvironment, ModuleIndex, PrimaryMap};
 use wasmtime_jit::{CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
 
@@ -500,7 +500,9 @@ impl Module {
         let signatures = Arc::new(SignatureCollection::new_for_module(
             engine.signatures(),
             &types.wasm_signatures,
-            modules.iter().flat_map(|m| m.trampolines()),
+            modules
+                .iter()
+                .flat_map(|m| m.trampolines().map(|(idx, f, _)| (idx, f))),
         ));
 
         let module = modules.remove(main_module);
@@ -591,7 +593,15 @@ impl Module {
     pub fn validate(engine: &Engine, binary: &[u8]) -> Result<()> {
         let mut validator = Validator::new();
         validator.wasm_features(engine.config().features);
-        validator.validate_all(binary)?;
+
+        let mut functions = Vec::new();
+        for payload in Parser::new(0).parse_all(binary) {
+            if let ValidPayload::Func(a, b) = validator.payload(&payload?)? {
+                functions.push((a, b));
+            }
+        }
+
+        engine.run_maybe_parallel(functions, |(mut validator, body)| validator.validate(&body))?;
         Ok(())
     }
 

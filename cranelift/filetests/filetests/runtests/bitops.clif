@@ -2,8 +2,7 @@ test run
 target aarch64
 target arm
 target s390x
-; target x86_64 machinst TODO: Not yet implemented on x86_64
-target x86_64 legacy
+; target x86_64 TODO: Not yet implemented on x86_64
 
 
 function %bnot_band() -> b1 {

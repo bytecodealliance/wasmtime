@@ -80,12 +80,10 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             // Compile and encode the result to machine code.
             let code_info = context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
-                .map_err(|err| {
-                    anyhow::anyhow!("{}", pretty_error(&context.func, Some(isa), err))
-                })?;
+                .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
 
             if options.print {
-                println!("{}", context.func.display(isa));
+                println!("{}", context.func.display());
             }
 
             if options.disasm {

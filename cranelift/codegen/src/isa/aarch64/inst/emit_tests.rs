@@ -5986,7 +5986,7 @@ fn test_aarch64_binemit() {
     ));
 
     insns.push((
-        Inst::AtomicRMW {
+        Inst::AtomicRMWLoop {
             ty: I16,
             op: inst_common::AtomicRmwOp::Xor,
         },
@@ -5996,6 +5996,359 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Add,
+            rs: xreg(1),
+            rt: writable_xreg(2),
+            rn: xreg(3),
+        },
+        "6200E138",
+        "ldaddalb w1, w2, [x3]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Add,
+            rs: xreg(4),
+            rt: writable_xreg(5),
+            rn: xreg(6),
+        },
+        "C500E478",
+        "ldaddalh w4, w5, [x6]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Add,
+            rs: xreg(7),
+            rt: writable_xreg(8),
+            rn: xreg(9),
+        },
+        "2801E7B8",
+        "ldaddal w7, w8, [x9]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Add,
+            rs: xreg(10),
+            rt: writable_xreg(11),
+            rn: xreg(12),
+        },
+        "8B01EAF8",
+        "ldaddal x10, x11, [x12]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Clr,
+            rs: xreg(13),
+            rt: writable_xreg(14),
+            rn: xreg(15),
+        },
+        "EE11ED38",
+        "ldclralb w13, w14, [x15]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Clr,
+            rs: xreg(16),
+            rt: writable_xreg(17),
+            rn: xreg(18),
+        },
+        "5112F078",
+        "ldclralh w16, w17, [x18]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Clr,
+            rs: xreg(19),
+            rt: writable_xreg(20),
+            rn: xreg(21),
+        },
+        "B412F3B8",
+        "ldclral w19, w20, [x21]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Clr,
+            rs: xreg(22),
+            rt: writable_xreg(23),
+            rn: xreg(24),
+        },
+        "1713F6F8",
+        "ldclral x22, x23, [x24]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Eor,
+            rs: xreg(25),
+            rt: writable_xreg(26),
+            rn: xreg(27),
+        },
+        "7A23F938",
+        "ldeoralb w25, w26, [x27]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Eor,
+            rs: xreg(28),
+            rt: writable_xreg(29),
+            rn: xreg(30),
+        },
+        "DD23FC78",
+        "ldeoralh w28, fp, [lr]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Eor,
+            rs: xreg(29),
+            rt: writable_xreg(28),
+            rn: xreg(27),
+        },
+        "7C23FDB8",
+        "ldeoral fp, w28, [x27]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Eor,
+            rs: xreg(26),
+            rt: writable_xreg(25),
+            rn: xreg(24),
+        },
+        "1923FAF8",
+        "ldeoral x26, x25, [x24]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Set,
+            rs: xreg(23),
+            rt: writable_xreg(22),
+            rn: xreg(21),
+        },
+        "B632F738",
+        "ldsetalb w23, w22, [x21]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Set,
+            rs: xreg(20),
+            rt: writable_xreg(19),
+            rn: xreg(18),
+        },
+        "5332F478",
+        "ldsetalh w20, w19, [x18]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Set,
+            rs: xreg(17),
+            rt: writable_xreg(16),
+            rn: xreg(15),
+        },
+        "F031F1B8",
+        "ldsetal w17, w16, [x15]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Set,
+            rs: xreg(14),
+            rt: writable_xreg(13),
+            rn: xreg(12),
+        },
+        "8D31EEF8",
+        "ldsetal x14, x13, [x12]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Smax,
+            rs: xreg(11),
+            rt: writable_xreg(10),
+            rn: xreg(9),
+        },
+        "2A41EB38",
+        "ldsmaxalb w11, w10, [x9]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Smax,
+            rs: xreg(8),
+            rt: writable_xreg(7),
+            rn: xreg(6),
+        },
+        "C740E878",
+        "ldsmaxalh w8, w7, [x6]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Smax,
+            rs: xreg(5),
+            rt: writable_xreg(4),
+            rn: xreg(3),
+        },
+        "6440E5B8",
+        "ldsmaxal w5, w4, [x3]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Smax,
+            rs: xreg(2),
+            rt: writable_xreg(1),
+            rn: xreg(0),
+        },
+        "0140E2F8",
+        "ldsmaxal x2, x1, [x0]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Smin,
+            rs: xreg(1),
+            rt: writable_xreg(2),
+            rn: xreg(3),
+        },
+        "6250E138",
+        "ldsminalb w1, w2, [x3]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Smin,
+            rs: xreg(4),
+            rt: writable_xreg(5),
+            rn: xreg(6),
+        },
+        "C550E478",
+        "ldsminalh w4, w5, [x6]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Smin,
+            rs: xreg(7),
+            rt: writable_xreg(8),
+            rn: xreg(9),
+        },
+        "2851E7B8",
+        "ldsminal w7, w8, [x9]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Smin,
+            rs: xreg(10),
+            rt: writable_xreg(11),
+            rn: xreg(12),
+        },
+        "8B51EAF8",
+        "ldsminal x10, x11, [x12]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Umax,
+            rs: xreg(13),
+            rt: writable_xreg(14),
+            rn: xreg(15),
+        },
+        "EE61ED38",
+        "ldumaxalb w13, w14, [x15]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Umax,
+            rs: xreg(16),
+            rt: writable_xreg(17),
+            rn: xreg(18),
+        },
+        "5162F078",
+        "ldumaxalh w16, w17, [x18]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Umax,
+            rs: xreg(19),
+            rt: writable_xreg(20),
+            rn: xreg(21),
+        },
+        "B462F3B8",
+        "ldumaxal w19, w20, [x21]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Umax,
+            rs: xreg(22),
+            rt: writable_xreg(23),
+            rn: xreg(24),
+        },
+        "1763F6F8",
+        "ldumaxal x22, x23, [x24]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I8,
+            op: AtomicRMWOp::Umin,
+            rs: xreg(16),
+            rt: writable_xreg(17),
+            rn: xreg(18),
+        },
+        "5172F038",
+        "lduminalb w16, w17, [x18]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I16,
+            op: AtomicRMWOp::Umin,
+            rs: xreg(19),
+            rt: writable_xreg(20),
+            rn: xreg(21),
+        },
+        "B472F378",
+        "lduminalh w19, w20, [x21]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I32,
+            op: AtomicRMWOp::Umin,
+            rs: xreg(22),
+            rt: writable_xreg(23),
+            rn: xreg(24),
+        },
+        "1773F6B8",
+        "lduminal w22, w23, [x24]",
+    ));
+    insns.push((
+        Inst::AtomicRMW {
+            ty: I64,
+            op: AtomicRMWOp::Umin,
+            rs: xreg(25),
+            rt: writable_xreg(26),
+            rn: xreg(27),
+        },
+        "7A73F9F8",
+        "lduminal x25, x26, [x27]",
+    ));
+
+    insns.push((
+        Inst::AtomicRMWLoop {
             ty: I32,
             op: inst_common::AtomicRmwOp::Xchg,
         },

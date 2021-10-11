@@ -193,10 +193,12 @@ fn import_works() -> Result<()> {
                     f.as_ref().unwrap().data().downcast_ref::<String>().unwrap(),
                     "hello"
                 );
-                assert_eq!(
-                    g.as_ref().unwrap().call(&mut caller, &[]).unwrap()[0].unwrap_i32(),
-                    42
-                );
+                let mut results = [Val::I32(0)];
+                g.as_ref()
+                    .unwrap()
+                    .call(&mut caller, &[], &mut results)
+                    .unwrap();
+                assert_eq!(results[0].unwrap_i32(), 42);
                 assert_eq!(HITS.fetch_add(1, SeqCst), 3);
             },
         )
@@ -211,6 +213,7 @@ fn import_works() -> Result<()> {
             Val::ExternRef(Some(ExternRef::new("hello".to_string()))),
             funcref,
         ],
+        &mut [],
     )?;
     assert_eq!(HITS.load(SeqCst), 4);
     Ok(())
@@ -222,7 +225,10 @@ fn trap_smoke() -> Result<()> {
     let f = Func::wrap(&mut store, || -> Result<(), Trap> {
         Err(Trap::new("test"))
     });
-    let err = f.call(&mut store, &[]).unwrap_err().downcast::<Trap>()?;
+    let err = f
+        .call(&mut store, &[], &mut [])
+        .unwrap_err()
+        .downcast::<Trap>()?;
     assert!(err.to_string().contains("test"));
     assert!(err.i32_exit_status().is_none());
     Ok(())
@@ -347,31 +353,29 @@ fn call_wrapped_func() -> Result<()> {
     f.call(
         &mut store,
         &[Val::I32(1), Val::I64(2), 3.0f32.into(), 4.0f64.into()],
+        &mut [],
     )?;
     f.typed::<(i32, i64, f32, f64), (), _>(&store)?
         .call(&mut store, (1, 2, 3.0, 4.0))?;
 
+    let mut results = [Val::I32(0)];
     let f = Func::wrap(&mut store, || 1i32);
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i32(), 1);
     assert_eq!(f.typed::<(), i32, _>(&store)?.call(&mut store, ())?, 1);
 
     let f = Func::wrap(&mut store, || 2i64);
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_i64(), 2);
     assert_eq!(f.typed::<(), i64, _>(&store)?.call(&mut store, ())?, 2);
 
     let f = Func::wrap(&mut store, || 3.0f32);
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_f32(), 3.0);
     assert_eq!(f.typed::<(), f32, _>(&store)?.call(&mut store, ())?, 3.0);
 
     let f = Func::wrap(&mut store, || 4.0f64);
-    let results = f.call(&mut store, &[])?;
-    assert_eq!(results.len(), 1);
+    f.call(&mut store, &[], &mut results)?;
     assert_eq!(results[0].unwrap_f64(), 4.0);
     assert_eq!(f.typed::<(), f64, _>(&store)?.call(&mut store, ())?, 4.0);
     Ok(())
@@ -385,7 +389,7 @@ fn caller_memory() -> anyhow::Result<()> {
         assert!(c.get_export("y").is_none());
         assert!(c.get_export("z").is_none());
     });
-    f.call(&mut store, &[])?;
+    f.call(&mut store, &[], &mut [])?;
 
     let f = Func::wrap(&mut store, |mut c: Caller<'_, ()>| {
         assert!(c.get_export("x").is_none());
@@ -447,7 +451,10 @@ fn func_write_nothing() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let ty = FuncType::new(None, Some(ValType::I32));
     let f = Func::new(&mut store, ty, |_, _, _| Ok(()));
-    let err = f.call(&mut store, &[]).unwrap_err().downcast::<Trap>()?;
+    let err = f
+        .call(&mut store, &[], &mut [Val::I32(0)])
+        .unwrap_err()
+        .downcast::<Trap>()?;
     assert!(err
         .to_string()
         .contains("function attempted to return an incompatible value"));
@@ -479,7 +486,7 @@ fn return_cross_store_value() -> anyhow::Result<()> {
     let instance = Instance::new(&mut store1, &module, &[return_cross_store_func.into()])?;
 
     let run = instance.get_func(&mut store1, "run").unwrap();
-    let result = run.call(&mut store1, &[]);
+    let result = run.call(&mut store1, &[], &mut [Val::I32(0)]);
     assert!(result.is_err());
     assert!(result.unwrap_err().to_string().contains("cross-`Store`"));
 
@@ -500,7 +507,11 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 
     // Using regular `.call` fails with cross-Store arguments.
     assert!(store1_func
-        .call(&mut store1, &[Val::FuncRef(Some(store2_func.clone()))])
+        .call(
+            &mut store1,
+            &[Val::FuncRef(Some(store2_func.clone()))],
+            &mut []
+        )
         .is_err());
 
     // And using `.get` followed by a function call also fails with cross-Store
@@ -514,7 +525,6 @@ fn pass_cross_store_arg() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg_attr(feature = "old-x86-backend", ignore)]
 fn externref_signature_no_reference_types() -> anyhow::Result<()> {
     let mut config = Config::new();
     config.wasm_reference_types(false);
@@ -553,12 +563,11 @@ fn trampolines_always_valid() -> anyhow::Result<()> {
     drop(module2);
 
     // ... and no segfaults! right? right? ...
-    func.call(&mut store, &[])?;
+    func.call(&mut store, &[], &mut [])?;
     Ok(())
 }
 
 #[test]
-#[cfg(not(feature = "old-x86-backend"))]
 fn typed_multiple_results() -> anyhow::Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(
@@ -616,7 +625,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
         Err(Trap::new(""))
     });
     assert!(f1.typed::<(), (), _>(&store)?.call(&mut store, ()).is_err());
-    assert!(f1.call(&mut store, &[]).is_err());
+    assert!(f1.call(&mut store, &[], &mut []).is_err());
 
     // test that `Func::new` is correct
     let canary2 = Canary::default();
@@ -626,7 +635,7 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
         Err(Trap::new(""))
     });
     assert!(f2.typed::<(), (), _>(&store)?.call(&mut store, ()).is_err());
-    assert!(f2.call(&mut store, &[]).is_err());
+    assert!(f2.call(&mut store, &[], &mut []).is_err());
 
     // drop everything and ensure dtors are run
     drop(store);
@@ -636,7 +645,6 @@ fn trap_doesnt_leak() -> anyhow::Result<()> {
 }
 
 #[test]
-#[cfg(not(feature = "old-x86-backend"))]
 fn wrap_multiple_results() -> anyhow::Result<()> {
     fn test<T>(store: &mut Store<()>, t: T) -> anyhow::Result<()>
     where
@@ -651,15 +659,18 @@ fn wrap_multiple_results() -> anyhow::Result<()> {
             + Sync,
     {
         let f = Func::wrap(&mut *store, move || t);
-        assert_eq!(f.typed::<(), T, _>(&store,)?.call(&mut *store, ())?, t);
-        assert!(t.eq_values(&f.call(&mut *store, &[])?));
+        let mut results = vec![Val::I32(0); f.ty(&store).results().len()];
+        assert_eq!(f.typed::<(), T, _>(&store)?.call(&mut *store, ())?, t);
+        f.call(&mut *store, &[], &mut results)?;
+        assert!(t.eq_values(&results));
 
         let module = Module::new(store.engine(), &T::gen_wasm())?;
         let instance = Instance::new(&mut *store, &module, &[f.into()])?;
         let f = instance.get_func(&mut *store, "foo").unwrap();
 
         assert_eq!(f.typed::<(), T, _>(&store)?.call(&mut *store, ())?, t);
-        assert!(t.eq_values(&f.call(&mut *store, &[])?));
+        f.call(&mut *store, &[], &mut results)?;
+        assert!(t.eq_values(&results));
         Ok(())
     }
 
@@ -820,7 +831,7 @@ fn trampoline_for_declared_elem() -> anyhow::Result<()> {
     let g = instance.get_typed_func::<(), Option<Func>, _>(&mut store, "g")?;
 
     let func = g.call(&mut store, ())?;
-    func.unwrap().call(&mut store, &[])?;
+    func.unwrap().call(&mut store, &[], &mut [])?;
     Ok(())
 }
 

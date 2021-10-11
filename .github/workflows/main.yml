@@ -131,7 +131,6 @@ jobs:
     # Check some feature combinations of the `wasmtime` crate
     - run: cargo check -p wasmtime --no-default-features
     - run: cargo check -p wasmtime --no-default-features --features wat
-    - run: cargo check -p wasmtime --no-default-features --features lightbeam
     - run: cargo check -p wasmtime --no-default-features --features jitdump
     - run: cargo check -p wasmtime --no-default-features --features vtune
     - run: cargo check -p wasmtime --no-default-features --features cache
@@ -236,6 +235,12 @@ jobs:
             qemu_target: aarch64-linux-user
             # FIXME(#3183) shouldn't be necessary to specify this
             qemu_flags: -cpu max,pauth=off
+          - os: ubuntu-latest
+            target: s390x-unknown-linux-gnu
+            gcc_package: gcc-s390x-linux-gnu
+            gcc: s390x-linux-gnu-gcc
+            qemu: qemu-s390x -L /usr/s390x-linux-gnu
+            qemu_target: s390x-linux-user
     steps:
     - uses: actions/checkout@v2
       with:
@@ -301,7 +306,7 @@ jobs:
         RUST_BACKTRACE: 1
       if: matrix.target == ''
 
-    # Build and test all features except for lightbeam
+    # Build and test all features
     - run: ./ci/run-tests.sh --locked
       env:
         RUST_BACKTRACE: 1
@@ -320,38 +325,6 @@ jobs:
         cargo test --features uffd -p wasmtime-cli pooling_allocator
         cargo test --features uffd -p wasmtime-cli wast::Cranelift
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''
-      env:
-        RUST_BACKTRACE: 1
-
-    # Build and test lightbeam. Note that
-    # Lightbeam tests fail right now, but we don't want to block on that.
-    - run: cargo build --package lightbeam
-      if: matrix.target != 'aarch64-unknown-linux-gnu'
-    - run: cargo test --package lightbeam
-      if: matrix.target != 'aarch64-unknown-linux-gnu'
-      continue-on-error: true
-      env:
-        RUST_BACKTRACE: 1
-
-  # Perform all tests (debug mode) for `wasmtime` with the old x86 backend.
-  test_x86:
-    name: Test old x86 backend
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-      with:
-        toolchain: stable
-
-    # Install wasm32 targets in order to build various tests throughout the
-    # repo.
-    - run: rustup target add wasm32-wasi
-    - run: rustup target add wasm32-unknown-unknown
-
-    # Run the old x86 backend CI (we will eventually remove this).
-    - run: ./ci/run-tests.sh --features old-x86-backend --locked
       env:
         RUST_BACKTRACE: 1
 
@@ -434,6 +407,11 @@ jobs:
           target: aarch64-unknown-linux-gnu
           gcc_package: gcc-aarch64-linux-gnu
           gcc: aarch64-linux-gnu-gcc
+        - build: s390x-linux
+          os: ubuntu-latest
+          target: s390x-unknown-linux-gnu
+          gcc_package: gcc-s390x-linux-gnu
+          gcc: s390x-linux-gnu-gcc
     steps:
     - uses: actions/checkout@v2
       with:

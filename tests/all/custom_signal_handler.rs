@@ -60,7 +60,12 @@ mod tests {
 
         // So we can later trigger SIGSEGV by performing a read
         unsafe {
-            mprotect(base as *mut std::ffi::c_void, length, MprotectFlags::NONE).unwrap();
+            mprotect(
+                base as *mut std::ffi::c_void,
+                length,
+                MprotectFlags::empty(),
+            )
+            .unwrap();
         }
 
         println!("memory: base={:?}, length={}", base, length);

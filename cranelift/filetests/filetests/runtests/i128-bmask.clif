@@ -1,0 +1,82 @@
+test interpret
+
+function %bmask_b128_i128(b128) -> i128 {
+block0(v0: b128):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_b128_i128(true) == -1
+; run: %bmask_b128_i128(false) == 0
+
+function %bmask_b128_i64(b128) -> i64 {
+block0(v0: b128):
+  v1 = bmask.i64 v0
+  return v1
+}
+; run: %bmask_b128_i64(true) == -1
+; run: %bmask_b128_i64(false) == 0
+
+function %bmask_b128_i32(b128) -> i32 {
+block0(v0: b128):
+  v1 = bmask.i32 v0
+  return v1
+}
+; run: %bmask_b128_i32(true) == -1
+; run: %bmask_b128_i32(false) == 0
+
+function %bmask_b128_i16(b128) -> i16 {
+block0(v0: b128):
+  v1 = bmask.i16 v0
+  return v1
+}
+; run: %bmask_b128_i16(true) == -1
+; run: %bmask_b128_i16(false) == 0
+
+function %bmask_b128_i8(b128) -> i8 {
+block0(v0: b128):
+  v1 = bmask.i8 v0
+  return v1
+}
+; run: %bmask_b128_i8(true) == -1
+; run: %bmask_b128_i8(false) == 0
+
+
+function %bmask_b64_i128(b64) -> i128 {
+block0(v0: b64):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_b64_i128(true) == -1
+; run: %bmask_b64_i128(false) == 0
+
+function %bmask_b32_i128(b32) -> i128 {
+block0(v0: b32):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_b32_i128(true) == -1
+; run: %bmask_b32_i128(false) == 0
+
+function %bmask_b16_i128(b16) -> i128 {
+block0(v0: b16):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_b16_i128(true) == -1
+; run: %bmask_b16_i128(false) == 0
+
+function %bmask_b8_i128(b8) -> i128 {
+block0(v0: b8):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_b8_i128(true) == -1
+; run: %bmask_b8_i128(false) == 0
+
+function %bmask_b1_i128(b1) -> i128 {
+block0(v0: b1):
+  v1 = bmask.i128 v0
+  return v1
+}
+; run: %bmask_b1_i128(true) == -1
+; run: %bmask_b1_i128(false) == 0

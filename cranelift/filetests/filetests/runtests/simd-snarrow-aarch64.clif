@@ -1,0 +1,11 @@
+test interpret
+test run
+target aarch64
+; x86_64 considers the case `i64x2` -> `i32x4` to be 'unreachable'
+
+function %snarrow_i64x2(i64x2, i64x2) -> i32x4 {
+block0(v0: i64x2, v1: i64x2):
+    v2 = snarrow v0, v1
+    return v2
+}
+; run: %snarrow_i64x2([65535 -100000], [5000000000 73]) == [65535 -100000 2147483647 73]

@@ -482,9 +482,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
                 ctx.emit(Inst::AluRRRR {
                     alu_op: ALUOp3::MSub64,
-                    rd: rd,
+                    rd,
                     rn: rd.to_reg(),
-                    rm: rm,
+                    rm,
                     ra: rn,
                 });
             } else {
@@ -1529,20 +1529,41 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let mut r_arg2 = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
             let ty_access = ty.unwrap();
             assert!(is_valid_atomic_transaction_ty(ty_access));
-            // Make sure that both args are in virtual regs, since in effect
-            // we have to do a parallel copy to get them safely to the AtomicRMW input
-            // regs, and that's not guaranteed safe if either is in a real reg.
-            r_addr = ctx.ensure_in_vreg(r_addr, I64);
-            r_arg2 = ctx.ensure_in_vreg(r_arg2, I64);
-            // Move the args to the preordained AtomicRMW input regs
-            ctx.emit(Inst::gen_move(Writable::from_reg(xreg(25)), r_addr, I64));
-            ctx.emit(Inst::gen_move(Writable::from_reg(xreg(26)), r_arg2, I64));
-            // Now the AtomicRMW insn itself
+
             let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
-            ctx.emit(Inst::AtomicRMW { ty: ty_access, op });
-            // And finally, copy the preordained AtomicRMW output reg to its destination.
-            ctx.emit(Inst::gen_move(r_dst, xreg(27), I64));
-            // Also, x24 and x28 are trashed.  `fn aarch64_get_regs` must mention that.
+            let lse_op = match op {
+                AtomicRmwOp::Add => Some(AtomicRMWOp::Add),
+                AtomicRmwOp::And => Some(AtomicRMWOp::Clr),
+                AtomicRmwOp::Xor => Some(AtomicRMWOp::Eor),
+                AtomicRmwOp::Or => Some(AtomicRMWOp::Set),
+                AtomicRmwOp::Smax => Some(AtomicRMWOp::Smax),
+                AtomicRmwOp::Umax => Some(AtomicRMWOp::Umax),
+                AtomicRmwOp::Smin => Some(AtomicRMWOp::Smin),
+                AtomicRmwOp::Umin => Some(AtomicRMWOp::Umin),
+                _ => None,
+            };
+            if isa_flags.use_lse() && lse_op.is_some() {
+                ctx.emit(Inst::AtomicRMW {
+                    op: lse_op.unwrap(),
+                    rs: r_arg2,
+                    rt: r_dst,
+                    rn: r_addr,
+                    ty: ty_access,
+                });
+            } else {
+                // Make sure that both args are in virtual regs, since in effect
+                // we have to do a parallel copy to get them safely to the AtomicRMW input
+                // regs, and that's not guaranteed safe if either is in a real reg.
+                r_addr = ctx.ensure_in_vreg(r_addr, I64);
+                r_arg2 = ctx.ensure_in_vreg(r_arg2, I64);
+                // Move the args to the preordained AtomicRMW input regs
+                ctx.emit(Inst::gen_move(Writable::from_reg(xreg(25)), r_addr, I64));
+                ctx.emit(Inst::gen_move(Writable::from_reg(xreg(26)), r_arg2, I64));
+                ctx.emit(Inst::AtomicRMWLoop { ty: ty_access, op });
+                // And finally, copy the preordained AtomicRMW output reg to its destination.
+                ctx.emit(Inst::gen_move(r_dst, xreg(27), I64));
+                // Also, x24 and x28 are trashed.  `fn aarch64_get_regs` must mention that.
+            }
         }
 
         Opcode::AtomicCas => {
@@ -2144,16 +2165,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Spill
         | Opcode::Fill
         | Opcode::FillNop
-        | Opcode::Regmove
-        | Opcode::CopySpecial
-        | Opcode::CopyToSsa
         | Opcode::CopyNop
         | Opcode::AdjustSpDown
         | Opcode::AdjustSpUpImm
         | Opcode::AdjustSpDownImm
-        | Opcode::IfcmpSp
-        | Opcode::Regspill
-        | Opcode::Regfill => {
+        | Opcode::IfcmpSp => {
             panic!("Unused opcode should not be encountered.");
         }
 
@@ -2376,14 +2392,22 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             // cmp xm, #0
             // cset xm, ne
 
-            let size = VectorSize::from_ty(ctx.input_ty(insn, 0));
+            let s = VectorSize::from_ty(src_ty);
+            let size = if s == VectorSize::Size64x2 {
+                // `vall_true` with 64-bit elements is handled elsewhere.
+                debug_assert_ne!(op, Opcode::VallTrue);
+
+                VectorSize::Size32x4
+            } else {
+                s
+            };
 
             if op == Opcode::VanyTrue {
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Umaxp,
                     rd: tmp,
                     rn: rm,
-                    rm: rm,
+                    rm,
                     size,
                 });
             } else {
@@ -2806,9 +2830,9 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Addp,
-                    rd: rd,
-                    rn: rn,
-                    rm: rm,
+                    rd,
+                    rn,
+                    rm,
                     size: VectorSize::from_ty(ty),
                 });
             }
@@ -2905,42 +2929,62 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::FminPseudo | Opcode::FmaxPseudo => {
-            let ty = ctx.input_ty(insn, 0);
-            if ty == F32X4 || ty == F64X2 {
+            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+            let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
+            let rn = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
+            let (ra, rb) = if op == Opcode::FminPseudo {
+                (rm, rn)
+            } else {
+                (rn, rm)
+            };
+            let ty = ty.unwrap();
+            let lane_type = ty.lane_type();
+
+            debug_assert!(lane_type == F32 || lane_type == F64);
+
+            if ty.is_vector() {
+                let size = VectorSize::from_ty(ty);
+
                 // pmin(a,b) => bitsel(b, a, cmpgt(a, b))
                 // pmax(a,b) => bitsel(b, a, cmpgt(b, a))
-                let r_dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let r_a = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let r_b = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                // Since we're going to write the output register `r_dst` anyway, we might as
-                // well first use it to hold the comparison result.  This has the slightly unusual
+                // Since we're going to write the output register `rd` anyway, we might as well
+                // first use it to hold the comparison result.  This has the slightly unusual
                 // effect that we modify the output register in the first instruction (`fcmgt`)
                 // but read both the inputs again in the second instruction (`bsl`), which means
                 // that the output register can't be either of the input registers.  Regalloc
                 // should handle this correctly, nevertheless.
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Fcmgt,
-                    rd: r_dst,
-                    rn: if op == Opcode::FminPseudo { r_a } else { r_b },
-                    rm: if op == Opcode::FminPseudo { r_b } else { r_a },
-                    size: if ty == F32X4 {
-                        VectorSize::Size32x4
-                    } else {
-                        VectorSize::Size64x2
-                    },
+                    rd,
+                    rn: ra,
+                    rm: rb,
+                    size,
                 });
                 ctx.emit(Inst::VecRRR {
                     alu_op: VecALUOp::Bsl,
-                    rd: r_dst,
-                    rn: r_b,
-                    rm: r_a,
-                    size: VectorSize::Size8x16,
+                    rd,
+                    rn,
+                    rm,
+                    size,
                 });
             } else {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, ty
-                )));
+                if lane_type == F32 {
+                    ctx.emit(Inst::FpuCmp32 { rn: ra, rm: rb });
+                    ctx.emit(Inst::FpuCSel32 {
+                        rd,
+                        rn,
+                        rm,
+                        cond: Cond::Gt,
+                    });
+                } else {
+                    ctx.emit(Inst::FpuCmp64 { rn: ra, rm: rb });
+                    ctx.emit(Inst::FpuCSel64 {
+                        rd,
+                        rn,
+                        rm,
+                        cond: Cond::Gt,
+                    });
+                }
             }
         }
 
@@ -3397,7 +3441,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 ctx.emit(Inst::FpuRRR {
                     fpu_op: choose_32_64(in_ty, FPUOp2::Min32, FPUOp2::Min64),
                     rd: rtmp2,
-                    rn: rn,
+                    rn,
                     rm: rtmp1.to_reg(),
                 });
                 if in_bits == 32 {
@@ -3419,7 +3463,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                 }
                 if in_bits == 32 {
-                    ctx.emit(Inst::FpuCmp32 { rn: rn, rm: rn });
+                    ctx.emit(Inst::FpuCmp32 { rn, rm: rn });
                     ctx.emit(Inst::FpuCSel32 {
                         rd: rtmp2,
                         rn: rtmp1.to_reg(),
@@ -3427,7 +3471,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         cond: Cond::Ne,
                     });
                 } else {
-                    ctx.emit(Inst::FpuCmp64 { rn: rn, rm: rn });
+                    ctx.emit(Inst::FpuCmp64 { rn, rm: rn });
                     ctx.emit(Inst::FpuCSel64 {
                         rd: rtmp2,
                         rn: rtmp1.to_reg(),
@@ -3515,47 +3559,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::IfcmpImm => {
             panic!("ALU+imm and ALU+carry ops should not appear here!");
         }
-
-        #[cfg(feature = "x86")]
-        Opcode::X86Udivmodx
-        | Opcode::X86Sdivmodx
-        | Opcode::X86Umulx
-        | Opcode::X86Smulx
-        | Opcode::X86Cvtt2si
-        | Opcode::X86Fmin
-        | Opcode::X86Fmax
-        | Opcode::X86Push
-        | Opcode::X86Pop
-        | Opcode::X86Bsr
-        | Opcode::X86Bsf
-        | Opcode::X86Pblendw
-        | Opcode::X86Pshufd
-        | Opcode::X86Pshufb
-        | Opcode::X86Pextr
-        | Opcode::X86Pinsr
-        | Opcode::X86Insertps
-        | Opcode::X86Movsd
-        | Opcode::X86Movlhps
-        | Opcode::X86Palignr
-        | Opcode::X86Psll
-        | Opcode::X86Psrl
-        | Opcode::X86Psra
-        | Opcode::X86Ptest
-        | Opcode::X86Pmaxs
-        | Opcode::X86Pmaxu
-        | Opcode::X86Pmins
-        | Opcode::X86Pminu
-        | Opcode::X86Pmullq
-        | Opcode::X86Pmuludq
-        | Opcode::X86Punpckh
-        | Opcode::X86Punpckl
-        | Opcode::X86Vcvtudq2ps
-        | Opcode::X86ElfTlsGetAddr
-        | Opcode::X86MachoTlsGetAddr => {
-            panic!("x86-specific opcode in supposedly arch-neutral IR!");
-        }
-
-        Opcode::DummySargT => unreachable!(),
 
         Opcode::Iabs => {
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();

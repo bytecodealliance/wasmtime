@@ -7,8 +7,3 @@ use wasmtime_fuzzing::oracles;
 fuzz_target!(|data: &[u8]| {
     oracles::compile(data, Strategy::Cranelift);
 });
-
-#[cfg(feature = "lightbeam")]
-fuzz_target!(|data: &[u8]| {
-    oracles::compile(data, Strategy::Lightbeam);
-});

@@ -6,7 +6,6 @@ use crate::subtest::{run_filecheck, Context, SubTest};
 use cranelift_codegen;
 use cranelift_codegen::binemit::{self, CodeInfo};
 use cranelift_codegen::ir;
-use cranelift_codegen::isa;
 use cranelift_reader::TestCommand;
 use log::info;
 use std::borrow::Cow;
@@ -38,48 +37,27 @@ impl SubTest for TestCompile {
         let isa = context.isa.expect("compile needs an ISA");
         let mut comp_ctx = cranelift_codegen::Context::for_function(func.into_owned());
 
-        if isa.get_mach_backend().is_some() {
-            // With `MachBackend`s, we need to explicitly request dissassembly results.
-            comp_ctx.set_disasm(true);
-        }
+        // With `MachBackend`s, we need to explicitly request dissassembly results.
+        comp_ctx.set_disasm(true);
 
         let CodeInfo { total_size, .. } = comp_ctx
             .compile(isa)
-            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, context.isa, e))?;
+            .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
         info!(
             "Generated {} bytes of code:\n{}",
             total_size,
-            comp_ctx.func.display(isa)
+            comp_ctx.func.display()
         );
 
-        if !isa.get_mach_backend().is_some() {
-            // Verify that the returned code size matches the emitted bytes.
-            let mut sink = SizeSink { offset: 0 };
-            binemit::emit_function(
-                &comp_ctx.func,
-                |func, inst, div, sink, isa| isa.emit_inst(func, inst, div, sink),
-                &mut sink,
-                isa,
-            );
-
-            if sink.offset != total_size {
-                anyhow::bail!("Expected code size {}, got {}", total_size, sink.offset);
-            }
-
-            // Run final code through filecheck.
-            let text = comp_ctx.func.display(Some(isa)).to_string();
-            run_filecheck(&text, context)
-        } else {
-            let disasm = comp_ctx
-                .mach_compile_result
-                .as_ref()
-                .unwrap()
-                .disasm
-                .as_ref()
-                .unwrap();
-            run_filecheck(&disasm, context)
-        }
+        let disasm = comp_ctx
+            .mach_compile_result
+            .as_ref()
+            .unwrap()
+            .disasm
+            .as_ref()
+            .unwrap();
+        run_filecheck(&disasm, context)
     }
 }
 
@@ -117,17 +95,8 @@ impl binemit::CodeSink for SizeSink {
         _addend: binemit::Addend,
     ) {
     }
-    fn reloc_constant(&mut self, _: binemit::Reloc, _: ir::ConstantOffset) {}
-    fn reloc_jt(&mut self, _reloc: binemit::Reloc, _jt: ir::JumpTable) {}
     fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
     fn begin_jumptables(&mut self) {}
     fn begin_rodata(&mut self) {}
     fn end_codegen(&mut self) {}
-    fn add_stack_map(
-        &mut self,
-        _: &[ir::entities::Value],
-        _: &ir::Function,
-        _: &dyn isa::TargetIsa,
-    ) {
-    }
 }

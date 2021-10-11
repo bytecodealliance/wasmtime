@@ -18,7 +18,6 @@ use arbitrary::{Arbitrary, Unstructured};
 /// testing between.
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DifferentialConfig {
-    strategy: DifferentialStrategy,
     opt_level: OptLevel,
     force_jump_veneers: bool,
 }
@@ -26,10 +25,7 @@ pub struct DifferentialConfig {
 impl DifferentialConfig {
     /// Convert this differential fuzzing config into a `wasmtime::Config`.
     pub fn to_wasmtime_config(&self) -> anyhow::Result<wasmtime::Config> {
-        let mut config = crate::fuzz_default_config(match self.strategy {
-            DifferentialStrategy::Cranelift => wasmtime::Strategy::Cranelift,
-            DifferentialStrategy::Lightbeam => wasmtime::Strategy::Lightbeam,
-        })?;
+        let mut config = crate::fuzz_default_config(wasmtime::Strategy::Cranelift)?;
         config.cranelift_opt_level(self.opt_level.to_wasmtime());
         if self.force_jump_veneers {
             unsafe {
@@ -38,12 +34,6 @@ impl DifferentialConfig {
         }
         Ok(config)
     }
-}
-
-#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
-enum DifferentialStrategy {
-    Cranelift,
-    Lightbeam,
 }
 
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
@@ -140,12 +130,6 @@ impl wasm_smith::Config for WasmtimeDefaultConfig {
     // Allow multi-table (reference types) to get exercised
     fn max_tables(&self) -> usize {
         4
-    }
-
-    // Turn some wasm features default-on for those that have a finished
-    // implementation in Wasmtime.
-    fn simd_enabled(&self) -> bool {
-        true
     }
 
     fn reference_types_enabled(&self) -> bool {

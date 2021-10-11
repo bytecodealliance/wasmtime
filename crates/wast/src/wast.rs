@@ -163,8 +163,10 @@ impl<T> WastContext<T> {
             .get_export(instance_name, field)?
             .into_func()
             .ok_or_else(|| anyhow!("no function named `{}`", field))?;
-        Ok(match func.call(&mut self.store, args) {
-            Ok(result) => Outcome::Ok(result.into()),
+
+        let mut results = vec![Val::null(); func.ty(&self.store).results().len()];
+        Ok(match func.call(&mut self.store, args, &mut results) {
+            Ok(()) => Outcome::Ok(results.into()),
             Err(e) => Outcome::Trap(e.downcast()?),
         })
     }
@@ -198,10 +200,6 @@ impl<T> WastContext<T> {
             // shepherd that information out.
             || (expected.contains("uninitialized element 2") && actual.contains("uninitialized element"))
         {
-            return Ok(());
-        }
-        if cfg!(feature = "lightbeam") {
-            println!("TODO: Check the assert_trap message: {}", expected);
             return Ok(());
         }
         bail!("expected '{}', got '{}'", expected, actual)

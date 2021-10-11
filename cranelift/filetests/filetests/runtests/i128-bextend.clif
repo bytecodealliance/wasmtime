@@ -1,0 +1,42 @@
+test interpret
+
+function %bextend_b1_b128(b1) -> b128 {
+block0(v0: b1):
+  v1 = bextend.b128 v0
+  return v1
+}
+; run: %bextend_b1_b128(true) == true
+; run: %bextend_b1_b128(false) == false
+
+function %bextend_b8_b128(b8) -> b128 {
+block0(v0: b8):
+  v1 = bextend.b128 v0
+  return v1
+}
+; run: %bextend_b8_b128(true) == true
+; run: %bextend_b8_b128(false) == false
+
+function %bextend_b16_b128(b16) -> b128 {
+block0(v0: b16):
+  v1 = bextend.b128 v0
+  return v1
+}
+; run: %bextend_b16_b128(true) == true
+; run: %bextend_b16_b128(false) == false
+
+function %bextend_b32_b128(b32) -> b128 {
+block0(v0: b32):
+  v1 = bextend.b128 v0
+  return v1
+}
+; run: %bextend_b32_b128(true) == true
+; run: %bextend_b32_b128(false) == false
+
+
+function %bextend_b64_b128(b64) -> b128 {
+block0(v0: b64):
+  v1 = bextend.b128 v0
+  return v1
+}
+; run: %bextend_b64_b128(true) == true
+; run: %bextend_b64_b128(false) == false

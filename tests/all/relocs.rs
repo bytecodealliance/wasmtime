@@ -8,8 +8,6 @@
 //! 32-bits, and right now object files aren't supported larger than 4gb anyway
 //! so we would need a lot of other support necessary to exercise that.
 
-#![cfg(not(feature = "old-x86-backend"))] // multi-value not supported here
-
 use anyhow::Result;
 use wasmtime::*;
 

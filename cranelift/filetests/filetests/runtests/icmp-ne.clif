@@ -1,7 +1,7 @@
 test interpret
 test run
 target aarch64
-target x86_64 machinst
+target x86_64
 
 function %icmp_ne_i8(i8, i8) -> b1 {
 block0(v0: i8, v1: i8):

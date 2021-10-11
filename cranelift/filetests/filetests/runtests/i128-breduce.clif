@@ -1,0 +1,41 @@
+test interpret
+
+function %breduce_b128_b1(b128) -> b1 {
+block0(v0: b128):
+  v1 = breduce.b1 v0
+  return v1
+}
+; run: %breduce_b128_b1(true) == true
+; run: %breduce_b128_b1(false) == false
+
+function %breduce_b128_b8(b128) -> b8 {
+block0(v0: b128):
+  v1 = breduce.b8 v0
+  return v1
+}
+; run: %breduce_b128_b8(true) == true
+; run: %breduce_b128_b8(false) == false
+
+function %breduce_b128_b16(b128) -> b16 {
+block0(v0: b128):
+  v1 = breduce.b16 v0
+  return v1
+}
+; run: %breduce_b128_b16(true) == true
+; run: %breduce_b128_b16(false) == false
+
+function %breduce_b128_b32(b128) -> b32 {
+block0(v0: b128):
+  v1 = breduce.b32 v0
+  return v1
+}
+; run: %breduce_b128_b32(true) == true
+; run: %breduce_b128_b32(false) == false
+
+function %breduce_b128_b64(b128) -> b64 {
+block0(v0: b128):
+  v1 = breduce.b64 v0
+  return v1
+}
+; run: %breduce_b128_b64(true) == true
+; run: %breduce_b128_b64(false) == false

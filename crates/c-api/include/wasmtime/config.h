@@ -26,19 +26,13 @@ typedef uint8_t wasmtime_strategy_t;
  * The default value is #WASMTIME_STRATEGY_AUTO.
  */
 enum wasmtime_strategy_enum { // Strategy
-  /// Wasmtime will automatically determine whether to use Cranelift or
-  /// Lightbeam, and currently it will always pick Cranelift. This default may
-  /// change over time though.
+  /// Automatically picks the compilation backend, currently always defaulting
+  /// to Cranelift.
   WASMTIME_STRATEGY_AUTO,
 
-  /// Indicates that Cranelift will unconditionally use Cranelift to compile
+  /// Indicates that Wasmtime will unconditionally use Cranelift to compile
   /// WebAssembly code.
   WASMTIME_STRATEGY_CRANELIFT,
-
-  /// Indicates that Cranelift will unconditionally use Lightbeam to compile
-  /// WebAssembly code. Note that Lightbeam isn't always enabled at compile
-  /// time, and if that's the case an error will be returned.
-  WASMTIME_STRATEGY_LIGHTBEAM,
 };
 
 /**

@@ -7,7 +7,6 @@ use crate::ir;
 use crate::ir::types;
 use crate::ir::{DataFlowGraph, InstructionData};
 use crate::ir::{Inst, Opcode, Type, Value};
-use crate::isa;
 
 /// Base trait for instruction builders.
 ///
@@ -56,7 +55,7 @@ pub trait InstInserterBase<'f>: Sized {
     fn data_flow_graph_mut(&mut self) -> &mut DataFlowGraph;
 
     /// Insert a new instruction which belongs to the DFG.
-    fn insert_built_inst(self, inst: Inst, ctrl_typevar: Type) -> &'f mut DataFlowGraph;
+    fn insert_built_inst(self, inst: Inst) -> &'f mut DataFlowGraph;
 }
 
 use core::marker::PhantomData;
@@ -129,7 +128,7 @@ impl<'f, IIB: InstInserterBase<'f>> InstBuilderBase<'f> for InsertBuilder<'f, II
             inst = dfg.make_inst(data);
             dfg.make_inst_results(inst, ctrl_typevar);
         }
-        (inst, self.inserter.insert_built_inst(inst, ctrl_typevar))
+        (inst, self.inserter.insert_built_inst(inst))
     }
 }
 
@@ -166,7 +165,7 @@ where
             let ru = self.reuse.as_ref().iter().cloned();
             dfg.make_inst_results_reusing(inst, ctrl_typevar, ru);
         }
-        (inst, self.inserter.insert_built_inst(inst, ctrl_typevar))
+        (inst, self.inserter.insert_built_inst(inst))
     }
 }
 

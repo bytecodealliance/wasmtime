@@ -2,7 +2,7 @@ test interpret
 test run
 target aarch64
 target s390x
-target x86_64 machinst
+target x86_64
 
 ; This test is also a regression test for aarch64.
 ; We were not correctly handling the fact that the rhs constant value

@@ -1,45 +1,42 @@
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
-; target s390x TODO: Not yet implemented on s390x
-target x86_64 machinst
-target x86_64 legacy
+target x86_64
 
 
-function %i128_brz(i64, i64) -> b1 {
-block0(v0: i64, v1: i64):
-    v2 = iconcat v0, v1
-    brz v2, block2
+function %i128_brz(i128) -> b1 {
+block0(v0: i128):
+    brz v0, block2
     jump block1
 
 block1:
-    v3 = bconst.b1 false
-    return v3
+    v1 = bconst.b1 false
+    return v1
 
 block2:
-    v4 = bconst.b1 true
-    return v4
+    v2 = bconst.b1 true
+    return v2
 }
-; run: %i128_brz(0, 0) == true
-; run: %i128_brz(-1, 0) == false
-; run: %i128_brz(0, -1) == false
-; run: %i128_brz(-1, -1) == false
+; run: %i128_brz(0) == true
+; run: %i128_brz(-1) == false
+; run: %i128_brz(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == false
+; run: %i128_brz(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == false
 
 
-function %i128_brnz(i64, i64) -> b1 {
-block0(v0: i64, v1: i64):
-    v2 = iconcat v0, v1
-    brnz v2, block2
+function %i128_brnz(i128) -> b1 {
+block0(v0: i128):
+    brnz v0, block2
     jump block1
 
 block1:
-    v3 = bconst.b1 false
-    return v3
+    v1 = bconst.b1 false
+    return v1
 
 block2:
-    v4 = bconst.b1 true
-    return v4
+    v2 = bconst.b1 true
+    return v2
 }
-; run: %i128_brnz(0, 0) == false
-; run: %i128_brnz(-1, 0) == true
-; run: %i128_brnz(0, -1) == true
-; run: %i128_brnz(-1, -1) == true
+; run: %i128_brnz(0) == false
+; run: %i128_brnz(-1) == true
+; run: %i128_brnz(0x00000000_00000000_FFFFFFFF_FFFFFFFF) == true
+; run: %i128_brnz(0xFFFFFFFF_FFFFFFFF_00000000_00000000) == true

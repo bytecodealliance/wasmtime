@@ -634,7 +634,7 @@ impl Module for JITModule {
         trap_sink: &mut dyn TrapSink,
         stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
-        info!("defining function {}: {}", id, ctx.func.display(self.isa()));
+        info!("defining function {}: {}", id, ctx.func.display());
         let CodeInfo {
             total_size: code_size,
             ..
@@ -657,7 +657,7 @@ impl Module for JITModule {
             .expect("TODO: handle OOM etc.");
 
         let mut reloc_sink = JITRelocSink::default();
-        unsafe { ctx.emit_to_memory(&*self.isa, ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
+        unsafe { ctx.emit_to_memory(ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob {
@@ -892,29 +892,5 @@ impl RelocSink for JITRelocSink {
             name: name.clone(),
             addend,
         });
-    }
-
-    fn reloc_jt(&mut self, _offset: CodeOffset, reloc: Reloc, _jt: ir::JumpTable) {
-        match reloc {
-            Reloc::X86PCRelRodata4 => {
-                // Not necessary to record this unless we are going to split apart code and its
-                // jumptbl/rodata.
-            }
-            _ => {
-                panic!("Unhandled reloc");
-            }
-        }
-    }
-
-    fn reloc_constant(&mut self, _offset: CodeOffset, reloc: Reloc, _constant: ir::ConstantOffset) {
-        match reloc {
-            Reloc::X86PCRelRodata4 => {
-                // Not necessary to record this unless we are going to split apart code and its
-                // jumptbl/rodata.
-            }
-            _ => {
-                panic!("Unhandled reloc");
-            }
-        }
     }
 }

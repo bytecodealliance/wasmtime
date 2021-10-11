@@ -238,11 +238,13 @@ impl FuncType {
     }
 
     /// Returns the list of parameter types for this function.
+    #[inline]
     pub fn params(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
         self.sig.params().iter().map(ValType::from_wasm_type)
     }
 
     /// Returns the list of result types for this function.
+    #[inline]
     pub fn results(&self) -> impl ExactSizeIterator<Item = ValType> + '_ {
         self.sig.returns().iter().map(ValType::from_wasm_type)
     }

@@ -27,15 +27,6 @@ fn main() {
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let target_triple = env::var("TARGET").expect("The TARGET environment variable must be set");
 
-    let new_backend_isas = if env::var("CARGO_FEATURE_X64").is_ok() {
-        // The x64 (new backend for x86_64) is a bit particular: it only requires generating
-        // the shared meta code; the only ISA-specific code is for settings.
-        vec![meta::isa::Isa::X86]
-    } else {
-        Vec::new()
-    };
-
-    // Configure isa targets using the old backend.
     let isa_targets = meta::isa::Isa::all()
         .iter()
         .cloned()
@@ -45,7 +36,7 @@ fn main() {
         })
         .collect::<Vec<_>>();
 
-    let old_backend_isas = if new_backend_isas.is_empty() && isa_targets.is_empty() {
+    let isas = if isa_targets.is_empty() {
         // Try to match native target.
         let target_name = target_triple.split('-').next().unwrap();
         let isa = meta::isa_from_arch(&target_name).expect("error when identifying target");
@@ -65,23 +56,14 @@ fn main() {
         crate_dir.join("build.rs").to_str().unwrap()
     );
 
-    if let Err(err) = meta::generate(&old_backend_isas, &new_backend_isas, &out_dir) {
+    if let Err(err) = meta::generate(&isas, &out_dir) {
         eprintln!("Error: {}", err);
         process::exit(1);
     }
 
     if env::var("CRANELIFT_VERBOSE").is_ok() {
-        for isa in &old_backend_isas {
-            println!(
-                "cargo:warning=Includes old-backend support for {} ISA",
-                isa.to_string()
-            );
-        }
-        for isa in &new_backend_isas {
-            println!(
-                "cargo:warning=Includes new-backend support for {} ISA",
-                isa.to_string()
-            );
+        for isa in &isas {
+            println!("cargo:warning=Includes support for {} ISA", isa.to_string());
         }
         println!(
             "cargo:warning=Build step took {:?}.",

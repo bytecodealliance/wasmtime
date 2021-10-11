@@ -1,21 +1,15 @@
 test run
+set enable_llvm_abi_extensions=true
 target aarch64
-target x86_64 machinst
+target x86_64
 
-function %i128_select(i8, i64, i64, i64, i64) -> i64, i64 {
-block0(v0: i8, v1: i64, v2: i64, v3: i64, v4: i64):
-    v5 = icmp_imm ne v0, 0
-
-    v6 = iconcat v1, v2
-    v7 = iconcat v3, v4
-
-    v8 = select.i128 v5, v6, v7
-
-    v9, v10 = isplit v8
-    return v9, v10
+function %i128_select(b1, i128, i128) -> i128 {
+block0(v0: b1, v1: i128, v2: i128):
+    v3 = select.i128 v0, v1, v2
+    return v3
 }
-; run: %i128_select(1, 0, 0, 1, 1) == [0, 0]
-; run: %i128_select(0, 0, 0, 1, 1) == [1, 1]
+; run: %i128_select(true, 0, 1) == 0
+; run: %i128_select(false, 0, 1) == 1
 
-; run: %i128_select(1, 1, 2, 3, 4) == [1, 2]
-; run: %i128_select(0, 1, 2, 3, 4) == [3, 4]
+; run: %i128_select(true, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0x00000000_00000000_DECAFFFF_C0FFEEEE
+; run: %i128_select(false, 0x00000000_00000000_DECAFFFF_C0FFEEEE, 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF) == 0xFFFFFFFF_FFFFFFFF_C0FFEEEE_DECAFFFF

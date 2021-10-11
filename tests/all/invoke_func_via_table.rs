@@ -26,7 +26,8 @@ fn test_invoke_func_via_table() -> Result<()> {
         .unwrap()
         .unwrap()
         .clone();
-    let result = f.call(&mut store, &[]).unwrap();
-    assert_eq!(result[0].unwrap_i64(), 42);
+    let mut results = [Val::I32(0)];
+    f.call(&mut store, &[], &mut results).unwrap();
+    assert_eq!(results[0].unwrap_i64(), 42);
     Ok(())
 }

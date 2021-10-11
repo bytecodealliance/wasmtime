@@ -37,7 +37,6 @@ mod runone;
 mod runtest_environment;
 mod subtest;
 
-mod test_binemit;
 mod test_cat;
 mod test_compile;
 mod test_dce;
@@ -46,17 +45,12 @@ mod test_interpret;
 mod test_legalizer;
 mod test_licm;
 mod test_peepmatic;
-mod test_postopt;
 mod test_preopt;
 mod test_print_cfg;
-mod test_regalloc;
-mod test_rodata;
 mod test_run;
 mod test_safepoint;
-mod test_shrink;
 mod test_simple_gvn;
 mod test_simple_preopt;
-mod test_stack_maps;
 mod test_unwind;
 mod test_verifier;
 
@@ -118,7 +112,6 @@ pub fn run_passes(
 /// a `.clif` test file.
 fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>> {
     match parsed.command {
-        "binemit" => test_binemit::subtest(parsed),
         "cat" => test_cat::subtest(parsed),
         "compile" => test_compile::subtest(parsed),
         "dce" => test_dce::subtest(parsed),
@@ -127,17 +120,12 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
         "legalizer" => test_legalizer::subtest(parsed),
         "licm" => test_licm::subtest(parsed),
         "peepmatic" => test_peepmatic::subtest(parsed),
-        "postopt" => test_postopt::subtest(parsed),
         "preopt" => test_preopt::subtest(parsed),
         "print-cfg" => test_print_cfg::subtest(parsed),
-        "regalloc" => test_regalloc::subtest(parsed),
-        "rodata" => test_rodata::subtest(parsed),
         "run" => test_run::subtest(parsed),
         "safepoint" => test_safepoint::subtest(parsed),
-        "shrink" => test_shrink::subtest(parsed),
         "simple-gvn" => test_simple_gvn::subtest(parsed),
         "simple_preopt" => test_simple_preopt::subtest(parsed),
-        "stack_maps" => test_stack_maps::subtest(parsed),
         "unwind" => test_unwind::subtest(parsed),
         "verifier" => test_verifier::subtest(parsed),
         _ => anyhow::bail!("unknown test command '{}'", parsed.command),
@@ -146,9 +134,8 @@ fn new_subtest(parsed: &TestCommand) -> anyhow::Result<Box<dyn subtest::SubTest>
 
 fn pretty_anyhow_error(
     func: &cranelift_codegen::ir::Function,
-    isa: Option<&dyn cranelift_codegen::isa::TargetIsa>,
     err: cranelift_codegen::CodegenError,
 ) -> anyhow::Error {
-    let s = cranelift_codegen::print_errors::pretty_error(func, isa, err);
+    let s = cranelift_codegen::print_errors::pretty_error(func, err);
     anyhow::anyhow!("{}", s)
 }

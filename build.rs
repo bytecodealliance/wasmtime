@@ -17,11 +17,7 @@ fn main() -> anyhow::Result<()> {
     );
     let mut out = String::new();
 
-    for strategy in &[
-        "Cranelift",
-        #[cfg(feature = "lightbeam")]
-        "Lightbeam",
-    ] {
+    for strategy in &["Cranelift"] {
         writeln!(out, "#[cfg(test)]")?;
         writeln!(out, "#[allow(non_snake_case)]")?;
         writeln!(out, "mod {} {{", strategy)?;
@@ -185,24 +181,12 @@ fn write_testsuite_tests(
 /// Ignore tests that aren't supported yet.
 fn ignore(testsuite: &str, testname: &str, strategy: &str) -> bool {
     match strategy {
-        #[cfg(feature = "lightbeam")]
-        "Lightbeam" => match (testsuite, testname) {
-            ("simd", _) => return true,
-            ("multi_value", _) => return true,
-            ("reference_types", _) => return true,
-            ("bulk_memory_operations", _) => return true,
-            _ => (),
-        },
         "Cranelift" => match (testsuite, testname) {
-            // Skip all reference types tests on the old backend. The modern
-            // implementation of reference types uses atomic instructions
-            // for reference counts on `externref`, but the old backend does not
-            // implement atomic instructions.
-            ("reference_types", _) if cfg!(feature = "old-x86-backend") => return true,
             // No simd support yet for s390x.
             ("simd", _) if platform_is_s390x() => return true,
-            // No memory64 support yet for s390x.
-            ("memory64", _) if platform_is_s390x() => return true,
+            ("memory64", "simd") if platform_is_s390x() => return true,
+            // No full atomics support yet for s390x.
+            ("memory64", "threads") if platform_is_s390x() => return true,
             _ => {}
         },
         _ => panic!("unrecognized strategy"),

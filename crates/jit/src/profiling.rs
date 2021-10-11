@@ -29,7 +29,10 @@ pub use vtune::VTuneAgent;
 /// Common interface for profiling tools.
 pub trait ProfilingAgent: Send + Sync + 'static {
     /// Notify the profiler of a new module loaded into memory
-    fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) -> ();
+    fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>);
+    /// Notify the profiler that the object file provided contains
+    /// dynamically-generated trampolines which are now being loaded.
+    fn trampoline_load(&self, file: &object::File<'_>);
 }
 
 /// Default agent for unsupported profiling build.
@@ -54,7 +57,8 @@ impl Error for NullProfilerAgentError {
 }
 
 impl ProfilingAgent for NullProfilerAgent {
-    fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) -> () {}
+    fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) {}
+    fn trampoline_load(&self, _file: &object::File<'_>) {}
 }
 
 #[allow(dead_code)]

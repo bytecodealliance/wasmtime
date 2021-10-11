@@ -34,7 +34,6 @@ cap-std = { version = "0.19.1", optional = true }
 
 [features]
 default = ['jitdump', 'wat', 'wasi', 'cache']
-lightbeam = ["wasmtime/lightbeam"]
 jitdump = ["wasmtime/jitdump"]
 cache = ["wasmtime/cache"]
 wasi = ['wasi-common', 'wasi-cap-std-sync', 'wasmtime-wasi', 'cap-std']

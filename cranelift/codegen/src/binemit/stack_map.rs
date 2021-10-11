@@ -1,6 +1,4 @@
 use crate::bitset::BitSet;
-use crate::ir;
-use crate::isa::TargetIsa;
 use alloc::vec::Vec;
 
 type Num = u32;
@@ -76,57 +74,6 @@ pub struct StackMap {
 }
 
 impl StackMap {
-    /// Create a `StackMap` based on where references are located on a
-    /// function's stack.
-    pub fn from_values(
-        args: &[ir::entities::Value],
-        func: &ir::Function,
-        isa: &dyn TargetIsa,
-    ) -> Self {
-        let loc = &func.locations;
-        let mut live_ref_in_stack_slot = crate::HashSet::new();
-        // References can be in registers, and live registers values are pushed onto the stack before calls and traps.
-        // TODO: Implement register maps. If a register containing a reference is spilled and reused after a safepoint,
-        // it could contain a stale reference value if the garbage collector relocated the value.
-        for val in args {
-            if let Some(value_loc) = loc.get(*val) {
-                match *value_loc {
-                    ir::ValueLoc::Stack(stack_slot) => {
-                        live_ref_in_stack_slot.insert(stack_slot);
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        let stack = &func.stack_slots;
-        let info = func.stack_slots.layout_info.unwrap();
-
-        // Refer to the doc comment for `StackMap` above to understand the
-        // bitmap representation used here.
-        let map_size = (info.frame_size + info.inbound_args_size) as usize;
-        let word_size = isa.pointer_bytes() as usize;
-        let num_words = map_size / word_size;
-
-        let mut vec = alloc::vec::Vec::with_capacity(num_words);
-        vec.resize(num_words, false);
-
-        for (ss, ssd) in stack.iter() {
-            if !live_ref_in_stack_slot.contains(&ss)
-                || ssd.kind == ir::stackslot::StackSlotKind::OutgoingArg
-            {
-                continue;
-            }
-
-            debug_assert!(ssd.size as usize == word_size);
-            let bytes_from_bottom = info.frame_size as i32 + ssd.offset.unwrap();
-            let words_from_bottom = (bytes_from_bottom as usize) / word_size;
-            vec[words_from_bottom] = true;
-        }
-
-        Self::from_slice(&vec)
-    }
-
     /// Create a vec of Bitsets from a slice of bools.
     pub fn from_slice(vec: &[bool]) -> Self {
         let len = vec.len();

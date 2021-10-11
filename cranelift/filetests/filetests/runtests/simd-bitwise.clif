@@ -2,7 +2,7 @@ test run
 target aarch64
 ; target s390x TODO: Not yet implemented on s390x
 set enable_simd
-target x86_64 machinst skylake
+target x86_64 skylake
 
 function %bitselect_i8x16(i8x16, i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16, v2: i8x16):

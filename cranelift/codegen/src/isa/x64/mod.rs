@@ -15,7 +15,6 @@ use crate::machinst::{
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
-use core::hash::{Hash, Hasher};
 
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::Triple;
@@ -95,11 +94,6 @@ impl MachBackend for X64Backend {
         self.x64_flags.iter().collect()
     }
 
-    fn hash_all_flags(&self, mut hasher: &mut dyn Hasher) {
-        self.flags.hash(&mut hasher);
-        self.x64_flags.hash(&mut hasher);
-    }
-
     fn name(&self) -> &'static str {
         "x64"
     }
@@ -115,12 +109,6 @@ impl MachBackend for X64Backend {
     fn unsigned_add_overflow_condition(&self) -> IntCC {
         // Unsigned `<`; this corresponds to the carry flag set on x86, which
         // indicates an add has overflowed.
-        IntCC::UnsignedLessThan
-    }
-
-    fn unsigned_sub_overflow_condition(&self) -> IntCC {
-        // unsigned `<`; this corresponds to the carry flag set on x86, which
-        // indicates a sub has underflowed (carry is borrow for subtract).
         IntCC::UnsignedLessThan
     }
 

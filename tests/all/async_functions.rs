@@ -9,8 +9,8 @@ fn async_store() -> Store<()> {
 }
 
 fn run_smoke_test(store: &mut Store<()>, func: Func) {
-    run(func.call_async(&mut *store, &[])).unwrap();
-    run(func.call_async(&mut *store, &[])).unwrap();
+    run(func.call_async(&mut *store, &[], &mut [])).unwrap();
+    run(func.call_async(&mut *store, &[], &mut [])).unwrap();
 }
 
 fn run_smoke_typed_test(store: &mut Store<()>, func: Func) {
@@ -159,7 +159,9 @@ fn recursive_call() {
         FuncType::new(None, None),
         move |mut caller, _params, _results| {
             Box::new(async move {
-                async_wasm_func.call_async(&mut caller, &[]).await?;
+                async_wasm_func
+                    .call_async(&mut caller, &[], &mut [])
+                    .await?;
                 Ok(())
             })
         },
@@ -184,7 +186,7 @@ fn recursive_call() {
     run(async {
         let instance = Instance::new_async(&mut store, &module, &[func2.into()]).await?;
         let func = instance.get_func(&mut store, "").unwrap();
-        func.call_async(&mut store, &[]).await
+        func.call_async(&mut store, &[], &mut []).await
     })
     .unwrap();
 }
@@ -209,7 +211,7 @@ fn suspend_while_suspending() {
         &mut store,
         FuncType::new(None, None),
         move |mut caller, _params, _results| {
-            run(async_thunk.call_async(&mut caller, &[]))?;
+            run(async_thunk.call_async(&mut caller, &[], &mut []))?;
             Ok(())
         },
     );
@@ -249,7 +251,7 @@ fn suspend_while_suspending() {
         )
         .await?;
         let func = instance.get_func(&mut store, "").unwrap();
-        func.call_async(&mut store, &[]).await
+        func.call_async(&mut store, &[], &mut []).await
     })
     .unwrap();
 }
@@ -277,7 +279,7 @@ fn cancel_during_run() {
 
     // Create our future, but as per async conventions this still doesn't
     // actually do anything. No wasm or host function has been called yet.
-    let mut future = Pin::from(Box::new(async_thunk.call_async(&mut store, &[])));
+    let mut future = Pin::from(Box::new(async_thunk.call_async(&mut store, &[], &mut [])));
 
     // Push the future forward one tick, which actually runs the host code in
     // our async func. Our future is designed to be pending once, however.
@@ -608,7 +610,7 @@ fn resume_separate_thread3() {
         // restored even though the asynchronous execution is suspended.
         Err::<(), _>(wasmtime::Trap::new(""))
     });
-    assert!(f.call(&mut store, &[]).is_err());
+    assert!(f.call(&mut store, &[], &mut []).is_err());
 }
 
 #[test]
@@ -636,7 +638,7 @@ fn recursive_async() -> Result<()> {
             Ok(())
         })
     });
-    run(f2.call_async(&mut store, &[]))?;
+    run(f2.call_async(&mut store, &[], &mut []))?;
     Ok(())
 }
 

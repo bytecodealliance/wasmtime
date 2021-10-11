@@ -15,9 +15,7 @@
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::binemit::stack_map::StackMap;
-use crate::ir::entities::Value;
-use crate::ir::{ConstantOffset, ExternalName, Function, JumpTable, Opcode, SourceLoc, TrapCode};
-use crate::isa::TargetIsa;
+use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use core::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
@@ -38,7 +36,6 @@ pub struct MemoryCodeSink<'a> {
     offset: isize,
     relocs: &'a mut dyn RelocSink,
     traps: &'a mut dyn TrapSink,
-    stack_maps: &'a mut dyn StackMapSink,
     /// Information about the generated code and read-only data.
     pub info: CodeInfo,
 }
@@ -54,7 +51,6 @@ impl<'a> MemoryCodeSink<'a> {
         data: *mut u8,
         relocs: &'a mut dyn RelocSink,
         traps: &'a mut dyn TrapSink,
-        stack_maps: &'a mut dyn StackMapSink,
     ) -> Self {
         Self {
             data,
@@ -67,7 +63,6 @@ impl<'a> MemoryCodeSink<'a> {
             },
             relocs,
             traps,
-            stack_maps,
         }
     }
 }
@@ -83,12 +78,6 @@ pub trait RelocSink {
         _: &ExternalName,
         _: Addend,
     );
-
-    /// Add a relocation referencing a constant.
-    fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset);
-
-    /// Add a relocation referencing a jump table.
-    fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable);
 
     /// Track a call site whose return address is the given CodeOffset, for the given opcode. Does
     /// nothing in general, only useful for certain embedders (SpiderMonkey).
@@ -146,16 +135,6 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.relocs.reloc_external(ofs, srcloc, rel, name, addend);
     }
 
-    fn reloc_constant(&mut self, rel: Reloc, constant_offset: ConstantOffset) {
-        let ofs = self.offset();
-        self.relocs.reloc_constant(ofs, rel, constant_offset);
-    }
-
-    fn reloc_jt(&mut self, rel: Reloc, jt: JumpTable) {
-        let ofs = self.offset();
-        self.relocs.reloc_jt(ofs, rel, jt);
-    }
-
     fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
         let ofs = self.offset();
         self.traps.trap(ofs, srcloc, code);
@@ -172,12 +151,6 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn end_codegen(&mut self) {
         self.info.rodata_size = self.offset() - (self.info.jumptables_size + self.info.code_size);
         self.info.total_size = self.offset();
-    }
-
-    fn add_stack_map(&mut self, val_list: &[Value], func: &Function, isa: &dyn TargetIsa) {
-        let ofs = self.offset();
-        let stack_map = StackMap::from_values(&val_list, func, isa);
-        self.stack_maps.add_stack_map(ofs, stack_map);
     }
 
     fn add_call_site(&mut self, opcode: Opcode, loc: SourceLoc) {
@@ -205,8 +178,6 @@ impl RelocSink for NullRelocSink {
         _: Addend,
     ) {
     }
-    fn reloc_constant(&mut self, _: CodeOffset, _: Reloc, _: ConstantOffset) {}
-    fn reloc_jt(&mut self, _: CodeOffset, _: Reloc, _: JumpTable) {}
 }
 
 /// A `TrapSink` implementation that does nothing, which is convenient when

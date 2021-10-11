@@ -3,7 +3,7 @@ use core::mem;
 use cranelift_codegen::binemit::{NullRelocSink, NullStackMapSink, NullTrapSink};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{condcodes::IntCC, Function, InstBuilder, Signature};
-use cranelift_codegen::isa::{BackendVariant, TargetIsa};
+use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{ir, settings, CodegenError, Context};
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_native::builder_with_options;
@@ -47,9 +47,9 @@ impl SingleFunctionCompiler {
     }
 
     /// Build a [SingleFunctionCompiler] using the host machine's ISA and the passed flags.
-    pub fn with_host_isa(flags: settings::Flags, variant: BackendVariant) -> Self {
-        let builder = builder_with_options(variant, true)
-            .expect("Unable to build a TargetIsa for the current host");
+    pub fn with_host_isa(flags: settings::Flags) -> Self {
+        let builder =
+            builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
         let isa = builder.finish(flags);
         Self::new(isa)
     }
@@ -58,7 +58,7 @@ impl SingleFunctionCompiler {
     /// ISA.
     pub fn with_default_host_isa() -> Self {
         let flags = settings::Flags::new(settings::builder());
-        Self::with_host_isa(flags, BackendVariant::Any)
+        Self::with_host_isa(flags)
     }
 
     /// Compile the passed [Function] to a `CompiledFunction`. This function will:
@@ -248,7 +248,7 @@ fn compile(function: Function, isa: &dyn TargetIsa) -> Result<Mmap, CompilationE
     let mut code_page = MmapMut::map_anon(code_info.total_size as usize)?;
 
     unsafe {
-        context.emit_to_memory(isa, code_page.as_mut_ptr(), relocs, traps, stack_maps);
+        context.emit_to_memory(code_page.as_mut_ptr(), relocs, traps, stack_maps);
     };
 
     let code_page = code_page.make_exec()?;

@@ -225,7 +225,9 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
 pub fn compile(wasm: &[u8], strategy: Strategy) {
     crate::init_fuzzing();
 
-    let engine = Engine::new(&crate::fuzz_default_config(strategy).unwrap()).unwrap();
+    let mut config = crate::fuzz_default_config(strategy).unwrap();
+    config.wasm_module_linking(false);
+    let engine = Engine::new(&config).unwrap();
     log_wasm(wasm);
     let _ = Module::new(&engine, wasm);
 }
@@ -253,7 +255,7 @@ pub fn differential_execution(
     let configs: Vec<_> = match configs.iter().map(|c| c.to_wasmtime_config()).collect() {
         Ok(cs) => cs,
         // If the config is trying to use something that was turned off at
-        // compile time, eg lightbeam, just continue to the next fuzz input.
+        // compile time just continue to the next fuzz input.
         Err(_) => return,
     };
 
@@ -297,8 +299,10 @@ pub fn differential_execution(
 
             let ty = f.ty(&store);
             let params = dummy::dummy_values(ty.params());
+            let mut results = vec![Val::I32(0); ty.results().len()];
             let this_result = f
-                .call(&mut store, &params)
+                .call(&mut store, &params, &mut results)
+                .map(|()| results.into())
                 .map_err(|e| e.downcast::<Trap>().unwrap());
 
             let existing_result = export_func_results
@@ -312,7 +316,7 @@ pub fn differential_execution(
         match instance.get_export(&mut *store, "hangLimitInitializer") {
             None => return,
             Some(Extern::Func(f)) => {
-                f.call(store, &[])
+                f.call(store, &[], &mut [])
                     .expect("initializing the hang limit should not fail");
             }
             Some(_) => panic!("unexpected hangLimitInitializer export"),
@@ -478,7 +482,8 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
                 let f = &funcs[nth];
                 let ty = f.ty(&store);
                 let params = dummy::dummy_values(ty.params());
-                let _ = f.call(store, &params);
+                let mut results = vec![Val::I32(0); ty.results().len()];
+                let _ = f.call(store, &params, &mut results);
             }
         }
     }
@@ -636,7 +641,7 @@ pub fn table_ops(
         let args: Vec<_> = (0..ops.num_params())
             .map(|_| Val::ExternRef(Some(ExternRef::new(CountDrops(num_dropped.clone())))))
             .collect();
-        let _ = run.call(&mut store, &args);
+        let _ = run.call(&mut store, &args, &mut []);
     }
 
     assert_eq!(num_dropped.load(SeqCst), expected_drops.load(SeqCst));
@@ -740,7 +745,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
 
     // Introspect wasmtime module to find name of an exported function and of an
     // exported memory.
-    let (func_name, _ty) = first_exported_function(&wasmtime_module)?;
+    let (func_name, ty) = first_exported_function(&wasmtime_module)?;
     let memory_name = first_exported_memory(&wasmtime_module)?;
 
     let wasmi_mem_export = wasmi_instance.export_by_name(memory_name).unwrap();
@@ -755,8 +760,10 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
     let wasmtime_main = wasmtime_instance
         .get_func(&mut wasmtime_store, func_name)
         .expect("function export is present");
-    let wasmtime_vals = wasmtime_main.call(&mut wasmtime_store, &[]);
-    let wasmtime_val = wasmtime_vals.map(|v| v.iter().next().cloned());
+    let mut wasmtime_results = vec![Val::I32(0); ty.results().len()];
+    let wasmtime_val = wasmtime_main
+        .call(&mut wasmtime_store, &[], &mut wasmtime_results)
+        .map(|()| wasmtime_results.get(0).cloned());
 
     debug!(
         "Successful execution: wasmi returned {:?}, wasmtime returned {:?}",
@@ -918,15 +925,17 @@ fn run_in_wasmtime(
         .context("Wasmtime cannot instantiate module")?;
 
     // Find the first exported function.
-    let (func_name, _ty) =
+    let (func_name, ty) =
         first_exported_function(&wasmtime_module).context("Cannot find exported function")?;
     let wasmtime_main = wasmtime_instance
         .get_func(&mut wasmtime_store, &func_name[..])
         .expect("function export is present");
 
     // Execute the function and return the values.
-    let wasmtime_vals = wasmtime_main.call(&mut wasmtime_store, params);
-    wasmtime_vals.map(|v| v.to_vec())
+    let mut results = vec![Val::I32(0); ty.results().len()];
+    wasmtime_main
+        .call(&mut wasmtime_store, params, &mut results)
+        .map(|()| results)
 }
 
 // Introspect wasmtime module to find the name of the first exported function.

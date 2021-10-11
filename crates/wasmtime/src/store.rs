@@ -76,7 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::{module::ModuleRegistry, Engine, Module, Trap, Val};
+use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
 use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
@@ -274,6 +274,9 @@ pub struct StoreOpaque {
     /// `Func::new` to avoid allocating a new vector each time a function is
     /// called.
     hostcall_val_storage: Vec<Val>,
+    /// Same as `hostcall_val_storage`, but for the direction of the host
+    /// calling wasm.
+    wasm_val_raw_storage: Vec<ValRaw>,
 }
 
 #[cfg(feature = "async")]
@@ -430,6 +433,7 @@ impl<T> Store<T> {
                 store_data: StoreData::new(),
                 default_callee,
                 hostcall_val_storage: Vec::new(),
+                wasm_val_raw_storage: Vec::new(),
             },
             limiter: None,
             call_hook: None,
@@ -1160,6 +1164,7 @@ impl StoreOpaque {
 
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get
     /// used as part of calling the host in a `Func::new` method invocation.
+    #[inline]
     pub fn take_hostcall_val_storage(&mut self) -> Vec<Val> {
         mem::take(&mut self.hostcall_val_storage)
     }
@@ -1167,9 +1172,26 @@ impl StoreOpaque {
     /// Restores the vector previously taken by `take_hostcall_val_storage`
     /// above back into the store, allowing it to be used in the future for the
     /// next wasm->host call.
+    #[inline]
     pub fn save_hostcall_val_storage(&mut self, storage: Vec<Val>) {
         if storage.capacity() > self.hostcall_val_storage.capacity() {
             self.hostcall_val_storage = storage;
+        }
+    }
+
+    /// Same as `take_hostcall_val_storage`, but for the direction of the host
+    /// calling wasm.
+    #[inline]
+    pub fn take_wasm_val_raw_storage(&mut self) -> Vec<ValRaw> {
+        mem::take(&mut self.wasm_val_raw_storage)
+    }
+
+    /// Same as `save_hostcall_val_storage`, but for the direction of the host
+    /// calling wasm.
+    #[inline]
+    pub fn save_wasm_val_raw_storage(&mut self, storage: Vec<ValRaw>) {
+        if storage.capacity() > self.wasm_val_raw_storage.capacity() {
+            self.wasm_val_raw_storage = storage;
         }
     }
 }

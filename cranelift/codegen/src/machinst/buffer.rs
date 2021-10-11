@@ -1641,10 +1641,8 @@ impl<I: VCodeInst> TextSectionBuilder for MachTextSectionBuilder<I> {
 #[cfg(all(test, feature = "arm64"))]
 mod test {
     use super::*;
-    use crate::ir::{ConstantOffset, Function, JumpTable, Value};
     use crate::isa::aarch64::inst::xreg;
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
-    use crate::isa::TargetIsa;
     use crate::machinst::MachInstEmit;
     use crate::settings;
     use std::default::Default;
@@ -2068,15 +2066,12 @@ mod test {
             fn reloc_external(&mut self, _: SourceLoc, r: Reloc, _: &ExternalName, _: Addend) {
                 self.relocs.push((self.offset, r));
             }
-            fn reloc_constant(&mut self, _: Reloc, _: ConstantOffset) {}
-            fn reloc_jt(&mut self, _: Reloc, _: JumpTable) {}
             fn trap(&mut self, t: TrapCode, _: SourceLoc) {
                 self.traps.push((self.offset, t));
             }
             fn begin_jumptables(&mut self) {}
             fn begin_rodata(&mut self) {}
             fn end_codegen(&mut self) {}
-            fn add_stack_map(&mut self, _: &[Value], _: &Function, _: &dyn TargetIsa) {}
             fn add_call_site(&mut self, op: Opcode, _: SourceLoc) {
                 self.callsites.push((self.offset, op));
             }

@@ -114,16 +114,24 @@ fn cross_store() -> anyhow::Result<()> {
     let s1_f = s1_inst.get_func(&mut store1, "f").unwrap();
     let s2_f = s2_inst.get_func(&mut store2, "f").unwrap();
 
-    assert!(s1_f.call(&mut store1, &[Val::FuncRef(None)]).is_ok());
-    assert!(s2_f.call(&mut store2, &[Val::FuncRef(None)]).is_ok());
-    assert!(s1_f.call(&mut store1, &[Some(s1_f.clone()).into()]).is_ok());
     assert!(s1_f
-        .call(&mut store1, &[Some(s2_f.clone()).into()])
+        .call(&mut store1, &[Val::FuncRef(None)], &mut [])
+        .is_ok());
+    assert!(s2_f
+        .call(&mut store2, &[Val::FuncRef(None)], &mut [])
+        .is_ok());
+    assert!(s1_f
+        .call(&mut store1, &[Some(s1_f.clone()).into()], &mut [])
+        .is_ok());
+    assert!(s1_f
+        .call(&mut store1, &[Some(s2_f.clone()).into()], &mut [])
         .is_err());
     assert!(s2_f
-        .call(&mut store2, &[Some(s1_f.clone()).into()])
+        .call(&mut store2, &[Some(s1_f.clone()).into()], &mut [])
         .is_err());
-    assert!(s2_f.call(&mut store2, &[Some(s2_f.clone()).into()]).is_ok());
+    assert!(s2_f
+        .call(&mut store2, &[Some(s2_f.clone()).into()], &mut [])
+        .is_ok());
 
     let s1_f_t = s1_f.typed::<Option<Func>, (), _>(&store1)?;
     let s2_f_t = s2_f.typed::<Option<Func>, (), _>(&store2)?;

@@ -1,0 +1,19 @@
+test interpret
+test run
+target aarch64
+set enable_simd
+target x86_64
+
+function %unarrow_i16x8(i16x8, i16x8) -> i8x16 {
+block0(v0: i16x8, v1: i16x8):
+    v2 = unarrow v0, v1
+    return v2
+}
+; run: %unarrow_i16x8([1 127 128 15 65535 -32 48 0], [8 255 -100 100 65534 73 80 42]) == [1 127 128 15 0 0 48 0 8 255 0 100 0 73 80 42]
+
+function %unarrow_i32x4(i32x4, i32x4) -> i16x8 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = unarrow v0, v1
+    return v2
+}
+; run: %unarrow_i32x4([65535 1048575 -70000 -5], [268435455 73 268435455 42]) == [65535 65535 0 0 65535 73 65535 42]

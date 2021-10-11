@@ -36,28 +36,6 @@ impl binemit::RelocSink for PrintRelocs {
             .unwrap();
         }
     }
-
-    fn reloc_jt(&mut self, where_: binemit::CodeOffset, r: binemit::Reloc, jt: ir::JumpTable) {
-        if self.flag_print {
-            writeln!(&mut self.text, "reloc_jt: {} {} at {}", r, jt, where_).unwrap();
-        }
-    }
-
-    fn reloc_constant(
-        &mut self,
-        code_offset: binemit::CodeOffset,
-        reloc: binemit::Reloc,
-        constant: ir::ConstantOffset,
-    ) {
-        if self.flag_print {
-            writeln!(
-                &mut self.text,
-                "reloc_constant: {} {} at {}",
-                reloc, constant, code_offset
-            )
-            .unwrap();
-        }
-    }
 }
 
 pub struct PrintTraps {
@@ -111,28 +89,6 @@ cfg_if! {
 
         fn get_disassembler(isa: &dyn TargetIsa) -> Result<Capstone> {
             let cs = match isa.triple().architecture {
-                Architecture::Riscv32(_) => {
-                    let mut cs = Capstone::new()
-                        .riscv()
-                        .mode(arch::riscv::ArchMode::RiscV32)
-                        .extra_mode(std::iter::once(arch::riscv::ArchExtraMode::RiscVC))
-                        .build()
-                        .map_err(map_caperr)?;
-                    // See the comment of AArch64 below
-                    cs.set_skipdata(true).map_err(map_caperr)?;
-                    cs
-                }
-                Architecture::Riscv64(_) => {
-                    let mut cs = Capstone::new()
-                        .riscv()
-                        .mode(arch::riscv::ArchMode::RiscV64)
-                        .extra_mode(std::iter::once(arch::riscv::ArchExtraMode::RiscVC))
-                        .build()
-                        .map_err(map_caperr)?;
-                    // See the comment of AArch64 below
-                    cs.set_skipdata(true).map_err(map_caperr)?;
-                    cs
-                }
                 Architecture::X86_32(_) => Capstone::new()
                     .x86()
                     .mode(arch::x86::ArchMode::Mode32)
