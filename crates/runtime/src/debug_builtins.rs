@@ -14,10 +14,9 @@ pub unsafe extern "C" fn resolve_vmctx_memory(ptr: usize) -> *const u8 {
         "memory index for debugger is out of bounds"
     );
     let index = MemoryIndex::new(VMCTX_AND_MEMORY.1);
-    let mem = handle.instance().get_memory(index);    
+    let mem = handle.instance().get_memory(index);
     mem.base.add(ptr)
 }
-
 
 #[no_mangle]
 pub unsafe extern "C" fn resolve_vmctx_memory_ptr(p: *const u32) -> *const u8 {
