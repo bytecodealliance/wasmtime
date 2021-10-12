@@ -448,15 +448,6 @@ where
             assign(Value::or(mask_a, mask_b)?)
         }
         Opcode::Copy => assign(arg(0)?),
-        Opcode::Spill => unimplemented!("Spill"),
-        Opcode::Fill => unimplemented!("Fill"),
-        Opcode::FillNop => assign(arg(0)?),
-        Opcode::CopyNop => unimplemented!("CopyNop"),
-        Opcode::AdjustSpDown => unimplemented!("AdjustSpDown"),
-        Opcode::AdjustSpUpImm => unimplemented!("AdjustSpUpImm"),
-        Opcode::AdjustSpDownImm => unimplemented!("AdjustSpDownImm"),
-        Opcode::IfcmpSp => unimplemented!("IfcmpSp"),
-        Opcode::Safepoint => unimplemented!("Safepoint"),
         Opcode::Icmp => assign(icmp(
             ctrl_ty,
             inst.cond_code().unwrap(),

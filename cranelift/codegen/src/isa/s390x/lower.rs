@@ -2888,17 +2888,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Isplit | Opcode::Iconcat => unimplemented!("Wide integer ops not implemented."),
 
-        Opcode::Spill
-        | Opcode::Fill
-        | Opcode::FillNop
-        | Opcode::CopyNop
-        | Opcode::AdjustSpDown
-        | Opcode::AdjustSpUpImm
-        | Opcode::AdjustSpDownImm
-        | Opcode::IfcmpSp => {
-            panic!("Unused opcode should not be encountered.");
-        }
-
         Opcode::Ifcmp
         | Opcode::Ffcmp
         | Opcode::Trapff
@@ -2916,11 +2905,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Brff
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
-        }
-
-
-        Opcode::Safepoint => {
-            panic!("safepoint instructions not used by new backend's safepoints!");
         }
 
         Opcode::IaddImm

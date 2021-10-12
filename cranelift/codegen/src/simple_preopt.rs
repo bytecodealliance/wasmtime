@@ -809,15 +809,6 @@ mod simplify {
                 }
             }
 
-            InstructionData::Unary { opcode, arg } => {
-                if let Opcode::AdjustSpDown = opcode {
-                    if let Some(imm) = resolve_imm64_value(&pos.func.dfg, arg) {
-                        // Note this works for both positive and negative immediate values.
-                        pos.func.dfg.replace(inst).adjust_sp_down_imm(imm);
-                    }
-                }
-            }
-
             InstructionData::BinaryImm64 { opcode, arg, imm } => {
                 let ty = pos.func.dfg.ctrl_typevar(inst);
 

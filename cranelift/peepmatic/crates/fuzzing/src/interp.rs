@@ -325,15 +325,6 @@ mod tests {
     }
 
     #[test]
-    fn regression_8() {
-        interp(
-            b"
-            (=> (adjust_sp_down $C) (adjust_sp_down_imm $C))
-            ",
-        );
-    }
-
-    #[test]
     fn regression_9() {
         interp(
             b"

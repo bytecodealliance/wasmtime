@@ -6858,19 +6858,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("table_addr should have been removed by legalization!");
         }
 
-        Opcode::Safepoint => {
-            panic!("safepoint instructions not used by new backend's safepoints!");
-        }
-
-        Opcode::Spill
-        | Opcode::Fill
-        | Opcode::FillNop
-        | Opcode::CopyNop
-        | Opcode::AdjustSpDown
-        | Opcode::AdjustSpUpImm
-        | Opcode::AdjustSpDownImm
-        | Opcode::IfcmpSp
-        | Opcode::Copy => {
+        Opcode::Copy => {
             panic!("Unused opcode should not be encountered.");
         }
 
@@ -7083,23 +7071,6 @@ impl LowerBackend for X64Backend {
                     if let Some(ifcmp) = matches_input(ctx, flag_input, Opcode::Ifcmp) {
                         let cond_code = ctx.data(branches[0]).cond_code().unwrap();
                         let cond_code = emit_cmp(ctx, ifcmp, cond_code);
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else if let Some(ifcmp_sp) = matches_input(ctx, flag_input, Opcode::IfcmpSp) {
-                        let operand = put_input_in_reg(
-                            ctx,
-                            InsnInput {
-                                insn: ifcmp_sp,
-                                input: 0,
-                            },
-                        );
-                        let ty = ctx.input_ty(ifcmp_sp, 0);
-                        ctx.emit(Inst::cmp_rmi_r(
-                            OperandSize::from_ty(ty),
-                            RegMemImm::reg(regs::rsp()),
-                            operand,
-                        ));
-                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
                         let cc = CC::from_intcc(cond_code);
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else {
