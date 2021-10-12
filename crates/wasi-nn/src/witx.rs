@@ -3,8 +3,16 @@ use crate::ctx::WasiNnCtx;
 use crate::ctx::WasiNnError;
 
 // Generate the traits and types of wasi-nn in several Rust modules (e.g. `types`).
+#[cfg(not(feature = "i2t"))]
 wiggle::from_witx!({
     witx: ["$WASI_ROOT/phases/ephemeral/witx/wasi_ephemeral_nn.witx"],
+    errors: { nn_errno => WasiNnError }
+});
+
+// For building the experimental i2t feature, use the local .witx
+#[cfg(feature = "i2t")]
+wiggle::from_witx!({
+    witx: ["$WASI_ROOT/../src/wasi_ephemeral_nn.witx"],
     errors: { nn_errno => WasiNnError }
 });
 
