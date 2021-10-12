@@ -46,15 +46,7 @@ fn main() {
         isa_targets
     };
 
-    let cur_dir = env::current_dir().expect("Can't access current working directory");
-    let crate_dir = cur_dir.as_path();
-
-    // Make sure we rebuild if this build script changes (will not happen with
-    // if the path to this file contains non-UTF-8 bytes).
-    println!(
-        "cargo:rerun-if-changed={}",
-        crate_dir.join("build.rs").to_str().unwrap()
-    );
+    println!("cargo:rerun-if-changed=build.rs");
 
     if let Err(err) = meta::generate(&isas, &out_dir) {
         eprintln!("Error: {}", err);
@@ -74,6 +66,7 @@ fn main() {
 
     #[cfg(feature = "rebuild-peephole-optimizers")]
     {
+        let cur_dir = env::current_dir().expect("Can't access current working directory");
         std::fs::write(
             std::path::Path::new(&out_dir).join("CRANELIFT_CODEGEN_PATH"),
             cur_dir.to_str().unwrap(),
