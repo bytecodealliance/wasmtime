@@ -92,21 +92,23 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
             }
             log::debug!("Using main function: {:?}", main_func);
 
-            let store = Store::new(&engine);
+            let mut store = Store::new(&engine, ());
 
             // Instantiate the snapshot and call the main function.
-            let snapshot_instance = Instance::new(&store, &snapshot_module, &[]).unwrap();
-            let snapshot_main_func = snapshot_instance.get_func(main_func).unwrap();
-            let main_args = wizer::dummy::dummy_values(snapshot_main_func.ty().params());
-            let snapshot_result = snapshot_main_func.call(&main_args);
+            let snapshot_instance = Instance::new(&mut store, &snapshot_module, &[]).unwrap();
+            let snapshot_main_func = snapshot_instance.get_func(&mut store, main_func).unwrap();
+            let main_args = wizer::dummy::dummy_values(snapshot_main_func.ty(&store).params());
+            let snapshot_result = snapshot_main_func.call(&mut store, &main_args);
 
             // Instantiate the original Wasm and then call the initialization
             // and main functions back to back.
-            let instance = Instance::new(&store, &module, &[]).unwrap();
-            let init_func = instance.get_typed_func::<(), ()>(init_func).unwrap();
-            init_func.call(()).unwrap();
-            let main_func = instance.get_func(main_func).unwrap();
-            let result = main_func.call(&main_args);
+            let instance = Instance::new(&mut store, &module, &[]).unwrap();
+            let init_func = instance
+                .get_typed_func::<(), (), _>(&mut store, init_func)
+                .unwrap();
+            init_func.call(&mut store, ()).unwrap();
+            let main_func = instance.get_func(&mut store, main_func).unwrap();
+            let result = main_func.call(&mut store, &main_args);
 
             // Check that the function return values / traps are the same.
             match (snapshot_result, result) {
@@ -133,25 +135,27 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
             }
 
             // Assert that all other exports have the same state as well.
-            for export in snapshot_instance.exports() {
-                let name = export.name().to_string();
-                match export.into_extern() {
+            let exports = snapshot_instance
+                .exports(&mut store)
+                .map(|export| export.name().to_string())
+                .collect::<Vec<_>>();
+            for name in exports.iter() {
+                let export = snapshot_instance.get_export(&mut store, &name).unwrap();
+                match export {
                     Extern::Global(snapshot_global) => {
-                        let global = instance.get_global(&name).unwrap();
-                        assert_val_eq(&snapshot_global.get(), &global.get());
+                        let global = instance.get_global(&mut store, &name).unwrap();
+                        assert_val_eq(&snapshot_global.get(&mut store), &global.get(&mut store));
                     }
                     Extern::Memory(snapshot_memory) => {
-                        let memory = instance.get_memory(&name).unwrap();
-                        unsafe {
-                            let snapshot_memory = snapshot_memory.data_unchecked();
-                            let memory = memory.data_unchecked();
-                            assert_eq!(snapshot_memory.len(), memory.len());
-                            // NB: Don't use `assert_eq` here so that we don't
-                            // try to print the full memories' debug
-                            // representations on failure.
-                            if snapshot_memory != memory {
-                                panic!("divergence between snapshot and non-snapshot memories");
-                            }
+                        let memory = instance.get_memory(&mut store, &name).unwrap();
+                        let snapshot_memory = snapshot_memory.data(&store);
+                        let memory = memory.data(&store);
+                        assert_eq!(snapshot_memory.len(), memory.len());
+                        // NB: Don't use `assert_eq` here so that we don't
+                        // try to print the full memories' debug
+                        // representations on failure.
+                        if snapshot_memory != memory {
+                            panic!("divergence between snapshot and non-snapshot memories");
                         }
                     }
                     Extern::Instance(_)

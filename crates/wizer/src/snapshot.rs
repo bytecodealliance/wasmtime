@@ -2,7 +2,7 @@ use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 use std::convert::TryFrom;
 use wasmtime::{AsContext, AsContextMut};
 
-const WASM_PAGE_SIZE: u32 = 65_536;
+const WASM_PAGE_SIZE: u64 = 65_536;
 
 /// The maximum number of data segments that most engines support.
 const MAX_DATA_SEGMENTS: usize = 100_000;
@@ -13,7 +13,7 @@ pub struct Snapshot {
     pub globals: Vec<wasmtime::Val>,
 
     /// A new minimum size for each memory (in units of pages).
-    pub memory_mins: Vec<u32>,
+    pub memory_mins: Vec<u64>,
 
     /// Segments of non-zero memory.
     pub data_segments: Vec<DataSegment>,
@@ -117,7 +117,7 @@ fn snapshot_globals(
 fn snapshot_memories(
     ctx: &mut impl AsContextMut,
     instance: &wasmtime::Instance,
-) -> (Vec<u32>, Vec<DataSegment>) {
+) -> (Vec<u64>, Vec<DataSegment>) {
     log::debug!("Snapshotting memories");
 
     // Find and record non-zero regions of memory (in parallel).
