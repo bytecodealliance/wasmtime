@@ -2915,14 +2915,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
-        | Opcode::IndirectJumpTableBr
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
 
-        Opcode::JumpTableEntry | Opcode::JumpTableBase => {
-            panic!("Should not appear: we handle BrTable directly");
-        }
 
         Opcode::Safepoint => {
             panic!("safepoint instructions not used by new backend's safepoints!");

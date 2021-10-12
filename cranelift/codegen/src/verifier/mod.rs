@@ -663,11 +663,6 @@ impl<'a> Verifier<'a> {
                 self.verify_block(inst, destination, errors)?;
                 self.verify_jump_table(inst, table, errors)?;
             }
-            BranchTableBase { table, .. }
-            | BranchTableEntry { table, .. }
-            | IndirectJump { table, .. } => {
-                self.verify_jump_table(inst, table, errors)?;
-            }
             Call {
                 func_ref, ref args, ..
             } => {

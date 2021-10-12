@@ -6874,10 +6874,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("Unused opcode should not be encountered.");
         }
 
-        Opcode::JumpTableEntry | Opcode::JumpTableBase => {
-            panic!("Should not appear: we handle BrTable directly");
-        }
-
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
             panic!("trapz / trapnz / resumable_trapnz should have been removed by legalization!");
         }
@@ -6889,7 +6885,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
-        | Opcode::IndirectJumpTableBr
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }

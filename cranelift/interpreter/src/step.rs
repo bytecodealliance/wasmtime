@@ -1026,10 +1026,6 @@ where
             assign(vectorizelanes(&new_vec, ctrl_ty)?)
         }
         Opcode::IaddPairwise => assign(binary_pairwise(arg(0)?, arg(1)?, ctrl_ty, Value::add)?),
-
-        Opcode::JumpTableBase | Opcode::JumpTableEntry | Opcode::IndirectJumpTableBr => {
-            unimplemented!("Legacy instruction: {}", inst.opcode())
-        }
     })
 }
 

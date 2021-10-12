@@ -2029,10 +2029,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             }
         }
 
-        Opcode::JumpTableEntry | Opcode::JumpTableBase => {
-            panic!("Should not appear: we handle BrTable directly");
-        }
-
         Opcode::Debugtrap => {
             ctx.emit(Inst::Brk);
         }
@@ -2180,7 +2176,6 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
-        | Opcode::IndirectJumpTableBr
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }

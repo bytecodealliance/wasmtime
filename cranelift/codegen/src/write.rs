@@ -462,11 +462,6 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
             table,
             ..
         } => write!(w, " {}, {}, {}", arg, destination, table),
-        BranchTableBase { table, .. } => write!(w, " {}", table),
-        BranchTableEntry {
-            args, imm, table, ..
-        } => write!(w, " {}, {}, {}, {}", args[0], args[1], imm, table),
-        IndirectJump { arg, table, .. } => write!(w, " {}, {}", arg, table),
         Call {
             func_ref, ref args, ..
         } => write!(w, " {}({})", func_ref, DisplayValues(args.as_slice(pool))),

@@ -214,68 +214,6 @@ fn define_control_flow(
         TypeSetBuilder::new().ints(32..64).refs(32..64).build(),
     );
 
-    {
-        let x = &Operand::new("x", iAddr).with_doc("index into jump table");
-        let addr = &Operand::new("addr", iAddr);
-        let Size = &Operand::new("Size", &imm.uimm8).with_doc("Size in bytes");
-        let JT = &Operand::new("JT", &entities.jump_table);
-        let entry = &Operand::new("entry", iAddr).with_doc("entry of jump table");
-
-        ig.push(
-            Inst::new(
-                "jump_table_entry",
-                r#"
-    Get an entry from a jump table.
-
-    Load a serialized ``entry`` from a jump table ``JT`` at a given index
-    ``addr`` with a specific ``Size``. The retrieved entry may need to be
-    decoded after loading, depending upon the jump table type used.
-
-    Currently, the only type supported is entries which are relative to the
-    base of the jump table.
-    "#,
-                &formats.branch_table_entry,
-            )
-            .operands_in(vec![x, addr, Size, JT])
-            .operands_out(vec![entry])
-            .can_load(true),
-        );
-
-        ig.push(
-            Inst::new(
-                "jump_table_base",
-                r#"
-    Get the absolute base address of a jump table.
-
-    This is used for jump tables wherein the entries are stored relative to
-    the base of jump table. In order to use these, generated code should first
-    load an entry using ``jump_table_entry``, then use this instruction to add
-    the relative base back to it.
-    "#,
-                &formats.branch_table_base,
-            )
-            .operands_in(vec![JT])
-            .operands_out(vec![addr]),
-        );
-
-        ig.push(
-            Inst::new(
-                "indirect_jump_table_br",
-                r#"
-    Branch indirectly via a jump table entry.
-
-    Unconditionally jump via a jump table entry that was previously loaded
-    with the ``jump_table_entry`` instruction.
-    "#,
-                &formats.indirect_jump,
-            )
-            .operands_in(vec![addr, JT])
-            .is_indirect_branch(true)
-            .is_terminator(true)
-            .is_branch(true),
-        );
-    }
-
     ig.push(
         Inst::new(
             "debugtrap",

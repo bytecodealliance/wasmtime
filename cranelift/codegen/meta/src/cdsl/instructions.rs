@@ -70,8 +70,6 @@ pub(crate) struct InstructionContent {
     pub is_terminator: bool,
     /// True for all branch or jump instructions.
     pub is_branch: bool,
-    /// True for all indirect branch or jump instructions.',
-    pub is_indirect_branch: bool,
     /// Is this a call instruction?
     pub is_call: bool,
     /// Is this a return instruction?
@@ -145,7 +143,6 @@ pub(crate) struct InstructionBuilder {
     // See Instruction comments for the meaning of these fields.
     is_terminator: bool,
     is_branch: bool,
-    is_indirect_branch: bool,
     is_call: bool,
     is_return: bool,
     is_ghost: bool,
@@ -168,7 +165,6 @@ impl InstructionBuilder {
 
             is_terminator: false,
             is_branch: false,
-            is_indirect_branch: false,
             is_call: false,
             is_return: false,
             is_ghost: false,
@@ -207,12 +203,6 @@ impl InstructionBuilder {
     #[allow(clippy::wrong_self_convention)]
     pub fn is_branch(mut self, val: bool) -> Self {
         self.is_branch = val;
-        self
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_indirect_branch(mut self, val: bool) -> Self {
-        self.is_indirect_branch = val;
         self
     }
 
@@ -300,7 +290,6 @@ impl InstructionBuilder {
             imm_opnums,
             is_terminator: self.is_terminator,
             is_branch: self.is_branch,
-            is_indirect_branch: self.is_indirect_branch,
             is_call: self.is_call,
             is_return: self.is_return,
             is_ghost: self.is_ghost,

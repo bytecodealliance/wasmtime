@@ -470,13 +470,6 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
         );
         gen_bool_accessor(
             all_inst,
-            |inst| inst.is_indirect_branch,
-            "is_indirect_branch",
-            "True for all indirect branch or jump instructions.",
-            fmt,
-        );
-        gen_bool_accessor(
-            all_inst,
             |inst| inst.is_call,
             "is_call",
             "Is this a call instruction?",
