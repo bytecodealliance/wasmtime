@@ -2,10 +2,10 @@
 
 use crate::ir::{lower_rule, ExprSequence, PatternInst, PatternSequence};
 use crate::sema::{RuleId, TermEnv, TermId, TypeEnv};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Construct the tries for each term.
-pub fn build_tries(typeenv: &TypeEnv, termenv: &TermEnv) -> HashMap<TermId, TrieNode> {
+pub fn build_tries(typeenv: &TypeEnv, termenv: &TermEnv) -> BTreeMap<TermId, TrieNode> {
     let mut builder = TermFunctionsBuilder::new(typeenv, termenv);
     builder.build();
     log::trace!("builder: {:?}", builder);
@@ -511,7 +511,7 @@ impl TermFunctionBuilder {
 struct TermFunctionsBuilder<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
-    builders_by_term: HashMap<TermId, TermFunctionBuilder>,
+    builders_by_term: BTreeMap<TermId, TermFunctionBuilder>,
 }
 
 impl<'a> TermFunctionsBuilder<'a> {
@@ -519,7 +519,7 @@ impl<'a> TermFunctionsBuilder<'a> {
         log::trace!("typeenv: {:?}", typeenv);
         log::trace!("termenv: {:?}", termenv);
         Self {
-            builders_by_term: HashMap::new(),
+            builders_by_term: BTreeMap::new(),
             typeenv,
             termenv,
         }
@@ -546,12 +546,12 @@ impl<'a> TermFunctionsBuilder<'a> {
         }
     }
 
-    fn finalize(self) -> HashMap<TermId, TrieNode> {
+    fn finalize(self) -> BTreeMap<TermId, TrieNode> {
         let functions_by_term = self
             .builders_by_term
             .into_iter()
             .map(|(term, builder)| (term, builder.trie))
-            .collect::<HashMap<_, _>>();
+            .collect::<BTreeMap<_, _>>();
         functions_by_term
     }
 }

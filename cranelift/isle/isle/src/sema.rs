@@ -16,8 +16,8 @@
 use crate::ast;
 use crate::error::*;
 use crate::lexer::Pos;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 declare_id!(
@@ -70,7 +70,7 @@ pub struct TypeEnv {
     pub syms: Vec<String>,
 
     /// Map of already-interned symbol names to their `Sym` ids.
-    pub sym_map: HashMap<String, Sym>,
+    pub sym_map: BTreeMap<String, Sym>,
 
     /// Arena of type definitions.
     ///
@@ -78,10 +78,10 @@ pub struct TypeEnv {
     pub types: Vec<Type>,
 
     /// A map from a type name symbol to its `TypeId`.
-    pub type_map: HashMap<Sym, TypeId>,
+    pub type_map: BTreeMap<Sym, TypeId>,
 
     /// The types of constant symbols.
-    pub const_types: HashMap<Sym, TypeId>,
+    pub const_types: BTreeMap<Sym, TypeId>,
 
     /// Type errors that we've found so far during type checking.
     pub errors: Vec<Error>,
@@ -181,7 +181,7 @@ pub struct TermEnv {
     pub terms: Vec<Term>,
 
     /// A map from am interned `Term`'s name to its `TermId`.
-    pub term_map: HashMap<Sym, TermId>,
+    pub term_map: BTreeMap<Sym, TermId>,
 
     /// Arena of interned rules defined in this ISLE program.
     ///
@@ -544,10 +544,10 @@ impl TypeEnv {
             filenames: defs.filenames.clone(),
             file_texts: defs.file_texts.clone(),
             syms: vec![],
-            sym_map: HashMap::new(),
+            sym_map: BTreeMap::new(),
             types: vec![],
-            type_map: HashMap::new(),
-            const_types: HashMap::new(),
+            type_map: BTreeMap::new(),
+            const_types: BTreeMap::new(),
             errors: vec![],
         };
 
@@ -753,7 +753,7 @@ impl TermEnv {
     pub fn from_ast(tyenv: &mut TypeEnv, defs: &ast::Defs) -> Result<TermEnv> {
         let mut env = TermEnv {
             terms: vec![],
-            term_map: HashMap::new(),
+            term_map: BTreeMap::new(),
             rules: vec![],
         };
 
@@ -935,7 +935,7 @@ impl TermEnv {
     }
 
     fn collect_extractor_templates(&mut self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
-        let mut extractor_call_graph = HashMap::new();
+        let mut extractor_call_graph = BTreeMap::new();
 
         for def in &defs.defs {
             if let &ast::Def::Extractor(ref ext) = def {
@@ -954,7 +954,7 @@ impl TermEnv {
                 let template = ext.template.make_macro_template(&ext.args[..]);
                 log::trace!("extractor def: {:?} becomes template {:?}", def, template);
 
-                let mut callees = HashSet::new();
+                let mut callees = BTreeSet::new();
                 template.terms(&mut |pos, t| {
                     let t = tyenv.intern_mut(t);
                     callees.insert(t);
@@ -1008,7 +1008,7 @@ impl TermEnv {
         }
 
         // Check for cycles in the extractor call graph.
-        let mut seen = HashSet::new();
+        let mut seen = BTreeSet::new();
         let mut stack = vec![];
         'outer: for root in extractor_call_graph.keys().copied() {
             seen.clear();
@@ -1828,7 +1828,7 @@ impl TermEnv {
 mod test {
     use super::*;
     use crate::ast::Ident;
-    use crate::lexer::Lexer;
+    use crate::lexer::{Lexer, Pos};
     use crate::parser::parse;
 
     #[test]
@@ -1868,51 +1868,62 @@ mod test {
         assert_eq!(tyenv.type_map.get(&sym_u32).unwrap(), &TypeId(0));
         assert_eq!(tyenv.type_map.get(&sym_a).unwrap(), &TypeId(1));
 
-        assert_eq!(
-            tyenv.types,
-            vec![
-                Type::Primitive(TypeId(0), sym_u32),
-                Type::Enum {
-                    name: sym_a,
-                    id: TypeId(1),
-                    is_extern: true,
-                    variants: vec![
-                        Variant {
-                            name: sym_b,
-                            fullname: sym_a_b,
-                            id: VariantId(0),
-                            fields: vec![
-                                Field {
-                                    name: sym_f1,
-                                    id: FieldId(0),
-                                    ty: TypeId(0),
-                                },
-                                Field {
-                                    name: sym_f2,
-                                    id: FieldId(1),
-                                    ty: TypeId(0),
-                                },
-                            ],
-                        },
-                        Variant {
-                            name: sym_c,
-                            fullname: sym_a_c,
-                            id: VariantId(1),
-                            fields: vec![Field {
+        let expected_types = vec![
+            Type::Primitive(
+                TypeId(0),
+                sym_u32,
+                Pos {
+                    file: 0,
+                    offset: 19,
+                    line: 2,
+                    col: 0,
+                },
+            ),
+            Type::Enum {
+                name: sym_a,
+                id: TypeId(1),
+                is_extern: true,
+                variants: vec![
+                    Variant {
+                        name: sym_b,
+                        fullname: sym_a_b,
+                        id: VariantId(0),
+                        fields: vec![
+                            Field {
                                 name: sym_f1,
                                 id: FieldId(0),
                                 ty: TypeId(0),
-                            },],
-                        },
-                    ],
-                    pos: Pos {
-                        file: 0,
-                        offset: 58,
-                        line: 3,
-                        col: 18,
+                            },
+                            Field {
+                                name: sym_f2,
+                                id: FieldId(1),
+                                ty: TypeId(0),
+                            },
+                        ],
                     },
+                    Variant {
+                        name: sym_c,
+                        fullname: sym_a_c,
+                        id: VariantId(1),
+                        fields: vec![Field {
+                            name: sym_f1,
+                            id: FieldId(0),
+                            ty: TypeId(0),
+                        }],
+                    },
+                ],
+                pos: Pos {
+                    file: 0,
+                    offset: 58,
+                    line: 3,
+                    col: 0,
                 },
-            ]
-        );
+            },
+        ];
+
+        assert_eq!(tyenv.types.len(), expected_types.len());
+        for (i, (actual, expected)) in tyenv.types.iter().zip(&expected_types).enumerate() {
+            assert_eq!(expected, actual, "`{}`th type is not equal!", i);
+        }
     }
 }

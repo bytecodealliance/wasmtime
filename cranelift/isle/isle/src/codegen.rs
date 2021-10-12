@@ -4,11 +4,11 @@ use crate::ir::{ExprInst, InstId, PatternInst, Value};
 use crate::sema::ExternalSig;
 use crate::sema::{TermEnv, TermId, Type, TypeEnv, TypeId, Variant};
 use crate::trie::{TrieEdge, TrieNode, TrieSymbol};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 
 /// Emit Rust source code for the given type and term environments.
-pub fn codegen(typeenv: &TypeEnv, termenv: &TermEnv, tries: &HashMap<TermId, TrieNode>) -> String {
+pub fn codegen(typeenv: &TypeEnv, termenv: &TermEnv, tries: &BTreeMap<TermId, TrieNode>) -> String {
     Codegen::compile(typeenv, termenv, tries).generate_rust()
 }
 
@@ -16,20 +16,20 @@ pub fn codegen(typeenv: &TypeEnv, termenv: &TermEnv, tries: &HashMap<TermId, Tri
 struct Codegen<'a> {
     typeenv: &'a TypeEnv,
     termenv: &'a TermEnv,
-    functions_by_term: &'a HashMap<TermId, TrieNode>,
+    functions_by_term: &'a BTreeMap<TermId, TrieNode>,
 }
 
 #[derive(Clone, Debug, Default)]
 struct BodyContext {
     /// For each value: (is_ref, ty).
-    values: HashMap<Value, (bool, TypeId)>,
+    values: BTreeMap<Value, (bool, TypeId)>,
 }
 
 impl<'a> Codegen<'a> {
     fn compile(
         typeenv: &'a TypeEnv,
         termenv: &'a TermEnv,
-        tries: &'a HashMap<TermId, TrieNode>,
+        tries: &'a BTreeMap<TermId, TrieNode>,
     ) -> Codegen<'a> {
         Codegen {
             typeenv,
@@ -682,7 +682,7 @@ impl<'a> Codegen<'a> {
                 let mut i = 0;
                 while i < edges.len() {
                     let mut last = i;
-                    let mut adjacent_variants = HashSet::new();
+                    let mut adjacent_variants = BTreeSet::new();
                     let mut adjacent_variant_input = None;
                     log::trace!("edge: {:?}", edges[i]);
                     while last < edges.len() {

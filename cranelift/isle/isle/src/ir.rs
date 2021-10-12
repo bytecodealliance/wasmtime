@@ -2,7 +2,7 @@
 
 use crate::lexer::Pos;
 use crate::sema::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 declare_id!(
     /// The id of an instruction in a `PatternSequence`.
@@ -333,7 +333,7 @@ impl PatternSequence {
         typeenv: &TypeEnv,
         termenv: &TermEnv,
         pat: &Pattern,
-        vars: &mut HashMap<VarId, Value>,
+        vars: &mut BTreeMap<VarId, Value>,
     ) {
         match pat {
             &Pattern::BindPattern(_ty, var, ref subpat) => {
@@ -578,7 +578,7 @@ impl ExprSequence {
         typeenv: &TypeEnv,
         termenv: &TermEnv,
         expr: &Expr,
-        vars: &HashMap<VarId, Value>,
+        vars: &BTreeMap<VarId, Value>,
     ) -> Value {
         log::trace!("gen_expr: expr {:?}", expr);
         match expr {
@@ -651,7 +651,7 @@ pub fn lower_rule(
     expr_seq.pos = termenv.rules[rule.index()].pos;
 
     let ruledata = &termenv.rules[rule.index()];
-    let mut vars = HashMap::new();
+    let mut vars = BTreeMap::new();
     let root_term = ruledata
         .lhs
         .root_term()
