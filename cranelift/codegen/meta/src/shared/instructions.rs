@@ -4,7 +4,6 @@ use crate::cdsl::instructions::{
     AllInstructions, InstructionBuilder as Inst, InstructionGroupBuilder,
 };
 use crate::cdsl::operands::Operand;
-use crate::cdsl::type_inference::Constraint::WiderOrEq;
 use crate::cdsl::types::{LaneType, ValueType};
 use crate::cdsl::typevar::{Interval, TypeSetBuilder, TypeVar};
 use crate::shared::formats::Formats;
@@ -3750,8 +3749,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .constraints(vec![WiderOrEq(Bool.clone(), BoolTo.clone())]),
+        .operands_out(vec![a]),
     );
 
     let BoolTo = &TypeVar::new(
@@ -3778,8 +3776,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .constraints(vec![WiderOrEq(BoolTo.clone(), Bool.clone())]),
+        .operands_out(vec![a]),
     );
 
     let IntTo = &TypeVar::new(
@@ -3860,8 +3857,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .constraints(vec![WiderOrEq(Int.clone(), IntTo.clone())]),
+        .operands_out(vec![a]),
     );
 
     let I16or32or64xN = &TypeVar::new(
@@ -4087,8 +4083,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .constraints(vec![WiderOrEq(IntTo.clone(), Int.clone())]),
+        .operands_out(vec![a]),
     );
 
     ig.push(
@@ -4108,8 +4103,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .constraints(vec![WiderOrEq(IntTo.clone(), Int.clone())]),
+        .operands_out(vec![a]),
     );
 
     let FloatTo = &TypeVar::new(
@@ -4142,8 +4136,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .constraints(vec![WiderOrEq(FloatTo.clone(), Float.clone())]),
+        .operands_out(vec![a]),
     );
 
     ig.push(
@@ -4165,8 +4158,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![a])
-        .constraints(vec![WiderOrEq(Float.clone(), FloatTo.clone())]),
+        .operands_out(vec![a]),
     );
 
     let F64x2 = &TypeVar::new(

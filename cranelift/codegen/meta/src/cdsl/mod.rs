@@ -8,7 +8,6 @@ pub mod instructions;
 pub mod isa;
 pub mod operands;
 pub mod settings;
-pub mod type_inference;
 pub mod types;
 pub mod typevar;
 

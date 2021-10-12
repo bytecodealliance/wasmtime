@@ -4,7 +4,6 @@ use std::rc::Rc;
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::operands::Operand;
-use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::typevar::TypeVar;
 
 pub(crate) type AllInstructions = Vec<Instruction>;
@@ -128,7 +127,6 @@ pub(crate) struct InstructionBuilder {
     format: Rc<InstructionFormat>,
     operands_in: Option<Vec<Operand>>,
     operands_out: Option<Vec<Operand>>,
-    constraints: Option<Vec<Constraint>>,
 
     // See Instruction comments for the meaning of these fields.
     is_terminator: bool,
@@ -150,7 +148,6 @@ impl InstructionBuilder {
             format: format.clone(),
             operands_in: None,
             operands_out: None,
-            constraints: None,
 
             is_terminator: false,
             is_branch: false,
@@ -173,12 +170,6 @@ impl InstructionBuilder {
     pub fn operands_out(mut self, operands: Vec<&Operand>) -> Self {
         assert!(self.operands_out.is_none());
         self.operands_out = Some(operands.iter().map(|x| (*x).clone()).collect());
-        self
-    }
-
-    pub fn constraints(mut self, constraints: Vec<Constraint>) -> Self {
-        assert!(self.constraints.is_none());
-        self.constraints = Some(constraints);
         self
     }
 
