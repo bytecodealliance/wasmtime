@@ -2,13 +2,14 @@
 use crate::ctx::WasiNnResult as Result;
 use crate::witx::types::{
     ExecutionTarget, Graph, GraphBuilderArray, GraphEncoding, GraphExecutionContext, Tensor,
-    TensorType,
 };
 use crate::witx::wasi_ephemeral_nn::WasiEphemeralNn;
 use crate::WasiNnCtx;
 use thiserror::Error;
 use wiggle::GuestPtr;
 
+#[cfg(feature = "i2t")]
+use crate::witx::types::TensorType;
 #[cfg(feature = "i2t")]
 use image2tensor;
 
