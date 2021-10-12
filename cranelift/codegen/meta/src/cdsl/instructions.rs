@@ -76,8 +76,6 @@ pub(crate) struct InstructionContent {
     pub is_call: bool,
     /// Is this a return instruction?
     pub is_return: bool,
-    /// Is this a ghost instruction?
-    pub is_ghost: bool,
     /// Can this instruction read from memory?
     pub can_load: bool,
     /// Can this instruction write to memory?
@@ -148,7 +146,6 @@ pub(crate) struct InstructionBuilder {
     is_indirect_branch: bool,
     is_call: bool,
     is_return: bool,
-    is_ghost: bool,
     can_load: bool,
     can_store: bool,
     can_trap: bool,
@@ -171,7 +168,6 @@ impl InstructionBuilder {
             is_indirect_branch: false,
             is_call: false,
             is_return: false,
-            is_ghost: false,
             can_load: false,
             can_store: false,
             can_trap: false,
@@ -225,12 +221,6 @@ impl InstructionBuilder {
     #[allow(clippy::wrong_self_convention)]
     pub fn is_return(mut self, val: bool) -> Self {
         self.is_return = val;
-        self
-    }
-
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_ghost(mut self, val: bool) -> Self {
-        self.is_ghost = val;
         self
     }
 
@@ -303,7 +293,6 @@ impl InstructionBuilder {
             is_indirect_branch: self.is_indirect_branch,
             is_call: self.is_call,
             is_return: self.is_return,
-            is_ghost: self.is_ghost,
             can_load: self.can_load,
             can_store: self.can_store,
             can_trap: self.can_trap,

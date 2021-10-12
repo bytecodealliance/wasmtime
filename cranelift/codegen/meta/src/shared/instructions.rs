@@ -2047,8 +2047,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![lo, hi])
-        .is_ghost(true),
+        .operands_out(vec![lo, hi]),
     );
 
     let Any128 = &TypeVar::new(
@@ -2083,8 +2082,7 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![x, y])
-        .operands_out(vec![a])
-        .is_ghost(true),
+        .operands_out(vec![a]),
     );
 
     let c = &Operand::new("c", &TxN.as_bool()).with_doc("Controlling vector");
@@ -4386,8 +4384,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![x])
-        .operands_out(vec![lo, hi])
-        .is_ghost(true),
+        .operands_out(vec![lo, hi]),
     );
 
     let NarrowInt = &TypeVar::new(
@@ -4417,8 +4414,7 @@ pub(crate) fn define(
             &formats.binary,
         )
         .operands_in(vec![lo, hi])
-        .operands_out(vec![a])
-        .is_ghost(true),
+        .operands_out(vec![a]),
     );
 
     // Instructions relating to atomic memory accesses and fences

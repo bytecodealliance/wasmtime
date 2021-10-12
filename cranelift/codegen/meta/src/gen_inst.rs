@@ -491,13 +491,6 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
         );
         gen_bool_accessor(
             all_inst,
-            |inst| inst.is_ghost,
-            "is_ghost",
-            "Is this a ghost instruction?",
-            fmt,
-        );
-        gen_bool_accessor(
-            all_inst,
             |inst| inst.can_load,
             "can_load",
             "Can this instruction read from memory?",
