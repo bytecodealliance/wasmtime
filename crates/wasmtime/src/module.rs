@@ -435,6 +435,10 @@ impl Module {
     /// [`Module::serialize`] and [`Engine::precompile_module`] back into an
     /// in-memory [`Module`] that's ready to be instantiated.
     ///
+    /// Note that the [`Module::deserialize_file`] method is more optimized than
+    /// this function, so if the serialized module is already present in a file
+    /// it's recommended to use that method instead.
+    ///
     /// # Unsafety
     ///
     /// This function is marked as `unsafe` because if fed invalid input or used
@@ -622,10 +626,15 @@ impl Module {
         sig
     }
 
-    /// Serialize the module to a vector of bytes.
+    /// Serializes this module to a vector of bytes.
     ///
-    /// Use `Module::new` or `Module::from_binary` to create the module
-    /// from the bytes.
+    /// This function is similar to the [`Engine::precompile_module`] method
+    /// where it produces an artifact of Wasmtime which is suitable to later
+    /// pass into [`Module::deserialize`]. If a module is never instantiated
+    /// then it's recommended to use [`Engine::precompile_module`] instead of
+    /// this method, but if a module is both instantiated and serialized then
+    /// this method can be useful to get the serialized version without
+    /// compiling twice.
     #[cfg(compiler)]
     #[cfg_attr(nightlydoc, doc(cfg(feature = "cranelift")))] // see build.rs
     pub fn serialize(&self) -> Result<Vec<u8>> {
