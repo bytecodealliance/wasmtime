@@ -38,26 +38,6 @@ fn define_control_flow(
         .is_branch(true),
     );
 
-    ig.push(
-        Inst::new(
-            "fallthrough",
-            r#"
-        Fall through to the next block.
-
-        This is the same as `jump`, except the destination block must be
-        the next one in the layout.
-
-        Jumps are turned into fall-through instructions by the branch
-        relaxation pass. There is no reason to use this instruction outside
-        that pass.
-        "#,
-            &formats.jump,
-        )
-        .operands_in(vec![block, args])
-        .is_terminator(true)
-        .is_branch(true),
-    );
-
     let Testable = &TypeVar::new(
         "Testable",
         "A scalar boolean or integer type",

@@ -274,12 +274,12 @@ impl Function {
         let mut inst_iter = inst_iter.skip_while(|&inst| !dfg[inst].opcode().is_branch());
 
         // A conditional branch is permitted in a basic block only when followed
-        // by a terminal jump or fallthrough instruction.
+        // by a terminal jump instruction.
         if let Some(_branch) = inst_iter.next() {
             if let Some(next) = inst_iter.next() {
                 match dfg[next].opcode() {
-                    Opcode::Fallthrough | Opcode::Jump => (),
-                    _ => return Err((next, "post-branch instruction not fallthrough or jump")),
+                    Opcode::Jump => (),
+                    _ => return Err((next, "post-branch instruction not jump")),
                 }
             }
         }

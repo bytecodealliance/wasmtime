@@ -6,12 +6,12 @@ block0(v0: i32):
     v1 = icmp_imm ule v0, 2
     v2 = iconst.i32 1
     brnz v1, block3(v2) ; handle base case, n <= 2
-    fallthrough block1(v0, v2)
+    jump block1(v0, v2)
 
 block1(v4: i32, v5:i32):
     v6 = iconst.i32 1
     v7 = iadd_imm v4, -2
-    fallthrough block2(v7, v5, v6)
+    jump block2(v7, v5, v6)
 
 block2(v10: i32, v11: i32, v12: i32): ; params: n, fib(n-1), fib(n-2)
     v13 = iadd v11, v12
@@ -40,7 +40,7 @@ function %fibonacci_recursive(i32) -> i32 {
 block0(v0: i32):
     v1 = icmp_imm ule v0, 2
     brnz v1, block2
-    fallthrough block1(v0)
+    jump block1(v0)
 
 block1(v10: i32):
     v11 = iadd_imm v10, -1

@@ -2158,19 +2158,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ctx.emit(Inst::gen_move(writable_xreg(PINNED_REG), rm, I64));
         }
 
-        Opcode::Spill
-        | Opcode::Fill
-        | Opcode::FillNop
-        | Opcode::CopyNop
-        | Opcode::AdjustSpDown
-        | Opcode::AdjustSpUpImm
-        | Opcode::AdjustSpDownImm
-        | Opcode::IfcmpSp => {
-            panic!("Unused opcode should not be encountered.");
-        }
-
         Opcode::Jump
-        | Opcode::Fallthrough
         | Opcode::Brz
         | Opcode::Brnz
         | Opcode::BrIcmp
@@ -3789,7 +3777,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         let op0 = ctx.data(branches[0]).opcode();
         let op1 = ctx.data(branches[1]).opcode();
 
-        assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
+        assert!(op1 == Opcode::Jump);
         let taken = BranchTarget::Label(targets[0]);
         // not_taken target is the target of the second branch, even if it is a Fallthrough
         // instruction: because we reorder blocks while we lower, the fallthrough in the new
@@ -3932,11 +3920,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         // Must be an unconditional branch or an indirect branch.
         let op = ctx.data(branches[0]).opcode();
         match op {
-            Opcode::Jump | Opcode::Fallthrough => {
+            Opcode::Jump => {
                 assert!(branches.len() == 1);
-                // In the Fallthrough case, the machine-independent driver
-                // fills in `targets[0]` with our fallthrough block, so this
-                // is valid for both Jump and Fallthrough.
                 ctx.emit(Inst::Jump {
                     dest: BranchTarget::Label(targets[0]),
                 });

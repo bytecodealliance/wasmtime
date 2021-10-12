@@ -221,7 +221,7 @@ where
 
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
-        Opcode::Jump | Opcode::Fallthrough => ControlFlow::ContinueAt(branch(), args()?),
+        Opcode::Jump => ControlFlow::ContinueAt(branch(), args()?),
         Opcode::Brz => branch_when(
             !arg(0)?
                 .convert(ValueConversionKind::ToBoolean)?

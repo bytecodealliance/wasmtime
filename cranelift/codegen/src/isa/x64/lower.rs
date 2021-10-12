@@ -6879,7 +6879,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Jump
-        | Opcode::Fallthrough
         | Opcode::Brz
         | Opcode::Brnz
         | Opcode::BrIcmp
@@ -6931,13 +6930,10 @@ impl LowerBackend for X64Backend {
                 op0,
                 op1
             );
-            assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
+            assert!(op1 == Opcode::Jump);
 
             let taken = targets[0];
-            // not_taken target is the target of the second branch, even if it is a Fallthrough
-            // instruction: because we reorder blocks while we lower, the fallthrough in the new
-            // order is not (necessarily) the same as the fallthrough in CLIF. So we use the
-            // explicitly-provided target.
+            // not_taken target is the target of the second branch.
             let not_taken = targets[1];
 
             match op0 {
@@ -7147,7 +7143,7 @@ impl LowerBackend for X64Backend {
             // Must be an unconditional branch or trap.
             let op = ctx.data(branches[0]).opcode();
             match op {
-                Opcode::Jump | Opcode::Fallthrough => {
+                Opcode::Jump => {
                     ctx.emit(Inst::jmp_known(targets[0]));
                 }
 
