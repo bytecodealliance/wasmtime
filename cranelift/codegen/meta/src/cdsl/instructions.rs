@@ -1,5 +1,3 @@
-use cranelift_entity::{entity_impl, PrimaryMap};
-
 use std::fmt;
 use std::rc::Rc;
 
@@ -9,11 +7,7 @@ use crate::cdsl::operands::Operand;
 use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::typevar::TypeVar;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) struct OpcodeNumber(u32);
-entity_impl!(OpcodeNumber);
-
-pub(crate) type AllInstructions = PrimaryMap<OpcodeNumber, Instruction>;
+pub(crate) type AllInstructions = Vec<Instruction>;
 
 pub(crate) struct InstructionGroupBuilder<'all_inst> {
     all_instructions: &'all_inst mut AllInstructions,
@@ -25,8 +19,7 @@ impl<'all_inst> InstructionGroupBuilder<'all_inst> {
     }
 
     pub fn push(&mut self, builder: InstructionBuilder) {
-        let opcode_number = OpcodeNumber(self.all_instructions.next_key().as_u32());
-        let inst = builder.build(opcode_number);
+        let inst = builder.build();
         self.all_instructions.push(inst);
     }
 }
@@ -42,7 +35,6 @@ pub(crate) struct InstructionContent {
     /// Instruction mnemonic, also becomes opcode name.
     pub name: String,
     pub camel_name: String,
-    pub opcode_number: OpcodeNumber,
 
     /// Documentation string.
     pub doc: String,
@@ -240,7 +232,7 @@ impl InstructionBuilder {
         self
     }
 
-    fn build(self, opcode_number: OpcodeNumber) -> Instruction {
+    fn build(self) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
 
@@ -275,7 +267,6 @@ impl InstructionBuilder {
         Rc::new(InstructionContent {
             name: self.name,
             camel_name,
-            opcode_number,
             doc: self.doc,
             operands_in,
             operands_out,
