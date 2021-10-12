@@ -416,10 +416,7 @@ mod tests {
     #[test]
     fn dummy_table_import() {
         let mut store = store();
-        let table = dummy_table(
-            &mut store,
-            TableType::new(ValType::ExternRef, 10, None),
-        );
+        let table = dummy_table(&mut store, TableType::new(ValType::ExternRef, 10, None));
         assert_eq!(table.size(&store), 10);
         for i in 0..10 {
             assert!(table
@@ -474,14 +471,8 @@ mod tests {
         );
 
         // Tables.
-        instance_ty.add_named_export(
-            "table0",
-            TableType::new(ValType::ExternRef, 1, None).into(),
-        );
-        instance_ty.add_named_export(
-            "table1",
-            TableType::new(ValType::ExternRef, 1, None).into(),
-        );
+        instance_ty.add_named_export("table0", TableType::new(ValType::ExternRef, 1, None).into());
+        instance_ty.add_named_export("table1", TableType::new(ValType::ExternRef, 1, None).into());
 
         // Memories.
         instance_ty.add_named_export("memory0", MemoryType::new(1, None).into());
@@ -561,14 +552,8 @@ mod tests {
         );
 
         // Multiple exported and imported tables.
-        module_ty.add_named_export(
-            "table0",
-            TableType::new(ValType::ExternRef, 1, None).into(),
-        );
-        module_ty.add_named_export(
-            "table1",
-            TableType::new(ValType::ExternRef, 1, None).into(),
-        );
+        module_ty.add_named_export("table0", TableType::new(ValType::ExternRef, 1, None).into());
+        module_ty.add_named_export("table1", TableType::new(ValType::ExternRef, 1, None).into());
         module_ty.add_named_import(
             "table2",
             None,

@@ -35,8 +35,8 @@ pub(crate) fn memory_type(ty: wasmparser::MemoryType) -> wasm_encoder::MemoryTyp
             shared: false,
             limits: lims,
         } => wasm_encoder::MemoryType {
-            minimum: lims.initial as u64,
-            maximum: lims.maximum.map(|val| val as u64),
+            minimum: lims.initial.into(),
+            maximum: lims.maximum.map(|val| val.into()),
             memory64: false,
         },
         _ => unreachable!("handled in validation"),
