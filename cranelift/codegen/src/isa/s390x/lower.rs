@@ -2888,17 +2888,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Isplit | Opcode::Iconcat => unimplemented!("Wide integer ops not implemented."),
 
-        Opcode::Spill
-        | Opcode::Fill
-        | Opcode::FillNop
-        | Opcode::CopyNop
-        | Opcode::AdjustSpDown
-        | Opcode::AdjustSpUpImm
-        | Opcode::AdjustSpDownImm
-        | Opcode::IfcmpSp => {
-            panic!("Unused opcode should not be encountered.");
-        }
-
         Opcode::Ifcmp
         | Opcode::Ffcmp
         | Opcode::Trapff
@@ -2909,23 +2898,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Jump
-        | Opcode::Fallthrough
         | Opcode::Brz
         | Opcode::Brnz
         | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
-        | Opcode::IndirectJumpTableBr
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
-        }
-
-        Opcode::JumpTableEntry | Opcode::JumpTableBase => {
-            panic!("Should not appear: we handle BrTable directly");
-        }
-
-        Opcode::Safepoint => {
-            panic!("safepoint instructions not used by new backend's safepoints!");
         }
 
         Opcode::IaddImm
@@ -2984,7 +2963,7 @@ fn lower_branch<C: LowerCtx<I = Inst>>(
         let op0 = ctx.data(branches[0]).opcode();
         let op1 = ctx.data(branches[1]).opcode();
 
-        assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
+        assert!(op1 == Opcode::Jump);
         let taken = BranchTarget::Label(targets[0]);
         let not_taken = BranchTarget::Label(targets[1]);
 
@@ -3033,11 +3012,8 @@ fn lower_branch<C: LowerCtx<I = Inst>>(
         // Must be an unconditional branch or an indirect branch.
         let op = ctx.data(branches[0]).opcode();
         match op {
-            Opcode::Jump | Opcode::Fallthrough => {
+            Opcode::Jump => {
                 assert!(branches.len() == 1);
-                // In the Fallthrough case, the machine-independent driver
-                // fills in `targets[0]` with our fallthrough block, so this
-                // is valid for both Jump and Fallthrough.
                 ctx.emit(Inst::Jump {
                     dest: BranchTarget::Label(targets[0]),
                 });

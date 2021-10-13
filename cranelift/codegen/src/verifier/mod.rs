@@ -65,8 +65,8 @@ use crate::ir;
 use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{BranchInfo, CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{
-    types, ArgumentPurpose, Block, Constant, FuncRef, Function, GlobalValue, Inst, InstructionData,
-    JumpTable, Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
+    types, ArgumentPurpose, Block, Constant, FuncRef, Function, GlobalValue, Inst, JumpTable,
+    Opcode, SigRef, StackSlot, Type, Value, ValueDef, ValueList,
 };
 use crate::isa::TargetIsa;
 use crate::iterators::IteratorExtras;
@@ -663,11 +663,6 @@ impl<'a> Verifier<'a> {
                 self.verify_block(inst, destination, errors)?;
                 self.verify_jump_table(inst, table, errors)?;
             }
-            BranchTableBase { table, .. }
-            | BranchTableEntry { table, .. }
-            | IndirectJump { table, .. } => {
-                self.verify_jump_table(inst, table, errors)?;
-            }
             Call {
                 func_ref, ref args, ..
             } => {
@@ -1221,9 +1216,6 @@ impl<'a> Verifier<'a> {
         let _ = self.typecheck_return(inst, errors);
         let _ = self.typecheck_special(inst, ctrl_type, errors);
 
-        // Misuses of copy_nop instructions are fatal
-        self.typecheck_copy_nop(inst, errors)?;
-
         Ok(())
     }
 
@@ -1555,36 +1547,6 @@ impl<'a> Verifier<'a> {
         Ok(())
     }
 
-    fn typecheck_copy_nop(
-        &self,
-        inst: Inst,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
-        if let InstructionData::Unary {
-            opcode: Opcode::CopyNop,
-            arg,
-        } = self.func.dfg[inst]
-        {
-            let dst_vals = self.func.dfg.inst_results(inst);
-            if dst_vals.len() != 1 {
-                return errors.fatal((
-                    inst,
-                    self.context(inst),
-                    "copy_nop must produce exactly one result",
-                ));
-            }
-            let dst_val = dst_vals[0];
-            if self.func.dfg.value_type(dst_val) != self.func.dfg.value_type(arg) {
-                return errors.fatal((
-                    inst,
-                    self.context(inst),
-                    "copy_nop src and dst types must be the same",
-                ));
-            }
-        }
-        Ok(())
-    }
-
     fn cfg_integrity(
         &self,
         cfg: &ControlFlowGraph,
@@ -1706,24 +1668,6 @@ impl<'a> Verifier<'a> {
         }
     }
 
-    fn verify_safepoint_unused(
-        &self,
-        inst: Inst,
-        errors: &mut VerifierErrors,
-    ) -> VerifierStepResult<()> {
-        if let Some(isa) = self.isa {
-            if !isa.flags().enable_safepoints() && self.func.dfg[inst].opcode() == Opcode::Safepoint
-            {
-                return errors.fatal((
-                    inst,
-                    self.context(inst),
-                    "safepoint instruction cannot be used when it is not enabled.",
-                ));
-            }
-        }
-        Ok(())
-    }
-
     fn typecheck_function_signature(&self, errors: &mut VerifierErrors) -> VerifierStepResult<()> {
         self.func
             .signature
@@ -1787,7 +1731,6 @@ impl<'a> Verifier<'a> {
             for inst in self.func.layout.block_insts(block) {
                 self.block_integrity(block, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
-                self.verify_safepoint_unused(inst, errors)?;
                 self.typecheck(inst, errors)?;
                 self.immediate_constraints(inst, errors)?;
             }

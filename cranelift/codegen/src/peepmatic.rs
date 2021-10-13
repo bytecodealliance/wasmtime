@@ -26,14 +26,6 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 
 peepmatic_traits::define_parse_and_typing_rules_for_operator! {
     Opcode {
-        adjust_sp_down => AdjustSpDown {
-            parameters(iNN);
-            result(void);
-        }
-        adjust_sp_down_imm => AdjustSpDownImm {
-            immediates(iNN);
-            result(void);
-        }
         band => Band {
             parameters(iNN, iNN);
             result(iNN);
@@ -888,10 +880,6 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
             }
 
             InstructionData::Unary {
-                opcode: opcode @ Opcode::AdjustSpDown,
-                arg,
-            }
-            | InstructionData::Unary {
                 opcode: opcode @ Opcode::Bint,
                 arg,
             }
@@ -920,10 +908,6 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
             }
 
             InstructionData::UnaryImm {
-                opcode: opcode @ Opcode::AdjustSpDownImm,
-                imm,
-            }
-            | InstructionData::UnaryImm {
                 opcode: opcode @ Opcode::Iconst,
                 imm,
             } => {
@@ -949,15 +933,6 @@ unsafe impl<'a, 'b> InstructionSet<'b> for &'a dyn TargetIsa {
 
         let root = root.resolve_inst(&pos.func.dfg).unwrap();
         match operator {
-            Opcode::AdjustSpDown => {
-                let a = part_to_value(pos, root, a).unwrap();
-                pos.ins().adjust_sp_down(a).into()
-            }
-            Opcode::AdjustSpDownImm => {
-                let c = a.unwrap_constant();
-                let imm = Imm64::try_from(c).unwrap();
-                pos.ins().adjust_sp_down_imm(imm).into()
-            }
             Opcode::Bconst => {
                 let c = a.unwrap_constant();
                 let val = const_to_value(pos.ins(), c, root);

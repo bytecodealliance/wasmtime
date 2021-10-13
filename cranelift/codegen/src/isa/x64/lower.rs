@@ -6858,24 +6858,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             panic!("table_addr should have been removed by legalization!");
         }
 
-        Opcode::Safepoint => {
-            panic!("safepoint instructions not used by new backend's safepoints!");
-        }
-
-        Opcode::Spill
-        | Opcode::Fill
-        | Opcode::FillNop
-        | Opcode::CopyNop
-        | Opcode::AdjustSpDown
-        | Opcode::AdjustSpUpImm
-        | Opcode::AdjustSpDownImm
-        | Opcode::IfcmpSp
-        | Opcode::Copy => {
+        Opcode::Copy => {
             panic!("Unused opcode should not be encountered.");
-        }
-
-        Opcode::JumpTableEntry | Opcode::JumpTableBase => {
-            panic!("Should not appear: we handle BrTable directly");
         }
 
         Opcode::Trapz | Opcode::Trapnz | Opcode::ResumableTrapnz => {
@@ -6883,13 +6867,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Jump
-        | Opcode::Fallthrough
         | Opcode::Brz
         | Opcode::Brnz
         | Opcode::BrIcmp
         | Opcode::Brif
         | Opcode::Brff
-        | Opcode::IndirectJumpTableBr
         | Opcode::BrTable => {
             panic!("Branch opcode reached non-branch lowering logic!");
         }
@@ -6936,13 +6918,10 @@ impl LowerBackend for X64Backend {
                 op0,
                 op1
             );
-            assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
+            assert!(op1 == Opcode::Jump);
 
             let taken = targets[0];
-            // not_taken target is the target of the second branch, even if it is a Fallthrough
-            // instruction: because we reorder blocks while we lower, the fallthrough in the new
-            // order is not (necessarily) the same as the fallthrough in CLIF. So we use the
-            // explicitly-provided target.
+            // not_taken target is the target of the second branch.
             let not_taken = targets[1];
 
             match op0 {
@@ -7094,23 +7073,6 @@ impl LowerBackend for X64Backend {
                         let cond_code = emit_cmp(ctx, ifcmp, cond_code);
                         let cc = CC::from_intcc(cond_code);
                         ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
-                    } else if let Some(ifcmp_sp) = matches_input(ctx, flag_input, Opcode::IfcmpSp) {
-                        let operand = put_input_in_reg(
-                            ctx,
-                            InsnInput {
-                                insn: ifcmp_sp,
-                                input: 0,
-                            },
-                        );
-                        let ty = ctx.input_ty(ifcmp_sp, 0);
-                        ctx.emit(Inst::cmp_rmi_r(
-                            OperandSize::from_ty(ty),
-                            RegMemImm::reg(regs::rsp()),
-                            operand,
-                        ));
-                        let cond_code = ctx.data(branches[0]).cond_code().unwrap();
-                        let cc = CC::from_intcc(cond_code);
-                        ctx.emit(Inst::jmp_cond(cc, taken, not_taken));
                     } else {
                         // Should be disallowed by flags checks in verifier.
                         unimplemented!("Brif with non-ifcmp input");
@@ -7152,7 +7114,7 @@ impl LowerBackend for X64Backend {
             // Must be an unconditional branch or trap.
             let op = ctx.data(branches[0]).opcode();
             match op {
-                Opcode::Jump | Opcode::Fallthrough => {
+                Opcode::Jump => {
                     ctx.emit(Inst::jmp_known(targets[0]));
                 }
 

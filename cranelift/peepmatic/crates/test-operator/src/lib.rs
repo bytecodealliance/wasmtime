@@ -6,14 +6,6 @@
 peepmatic_traits::define_operator! {
     /// A `TOperator` type for use inside tests.
     TestOperator {
-        adjust_sp_down => AdjustSpDown {
-            parameters(iNN);
-            result(void);
-        }
-        adjust_sp_down_imm => AdjustSpDownImm {
-            immediates(iNN);
-            result(void);
-        }
         band => Band {
             parameters(iNN, iNN);
             result(iNN);

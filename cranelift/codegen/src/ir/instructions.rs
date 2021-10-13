@@ -229,7 +229,6 @@ impl InstructionData {
             Self::BranchTable {
                 table, destination, ..
             } => BranchInfo::Table(table, Some(destination)),
-            Self::IndirectJump { table, .. } => BranchInfo::Table(table, None),
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 BranchInfo::NotABranch
@@ -248,7 +247,7 @@ impl InstructionData {
             | Self::BranchInt { destination, .. }
             | Self::BranchFloat { destination, .. }
             | Self::BranchIcmp { destination, .. } => Some(destination),
-            Self::BranchTable { .. } | Self::IndirectJump { .. } => None,
+            Self::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None
@@ -282,7 +281,7 @@ impl InstructionData {
                 ref mut destination,
                 ..
             } => Some(destination),
-            Self::BranchTable { .. } | Self::IndirectJump { .. } => None,
+            Self::BranchTable { .. } => None,
             _ => {
                 debug_assert!(!self.opcode().is_branch());
                 None
@@ -297,8 +296,7 @@ impl InstructionData {
             &InstructionData::UnaryBool { imm, .. } => Some(DataValue::from(imm)),
             // 8-bit.
             &InstructionData::BinaryImm8 { imm, .. }
-            | &InstructionData::TernaryImm8 { imm, .. }
-            | &InstructionData::BranchTableEntry { imm, .. } => Some(DataValue::from(imm as i8)), // Note the switch from unsigned to signed.
+            | &InstructionData::TernaryImm8 { imm, .. } => Some(DataValue::from(imm as i8)), // Note the switch from unsigned to signed.
             // 32-bit
             &InstructionData::UnaryIeee32 { imm, .. } => Some(DataValue::from(imm)),
             &InstructionData::HeapAddr { imm, .. } => {

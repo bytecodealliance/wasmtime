@@ -1295,32 +1295,23 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
 pub(crate) fn visit_block_succs<F: FnMut(Inst, Block)>(f: &Function, block: Block, mut visit: F) {
     for inst in f.layout.block_likely_branches(block) {
         if f.dfg[inst].opcode().is_branch() {
-            visit_branch_targets(f, block, inst, &mut visit);
+            visit_branch_targets(f, inst, &mut visit);
         }
     }
 }
 
-fn visit_branch_targets<F: FnMut(Inst, Block)>(
-    f: &Function,
-    block: Block,
-    inst: Inst,
-    visit: &mut F,
-) {
-    if f.dfg[inst].opcode() == Opcode::Fallthrough {
-        visit(inst, f.layout.next_block(block).unwrap());
-    } else {
-        match f.dfg[inst].analyze_branch(&f.dfg.value_lists) {
-            BranchInfo::NotABranch => {}
-            BranchInfo::SingleDest(dest, _) => {
+fn visit_branch_targets<F: FnMut(Inst, Block)>(f: &Function, inst: Inst, visit: &mut F) {
+    match f.dfg[inst].analyze_branch(&f.dfg.value_lists) {
+        BranchInfo::NotABranch => {}
+        BranchInfo::SingleDest(dest, _) => {
+            visit(inst, dest);
+        }
+        BranchInfo::Table(table, maybe_dest) => {
+            if let Some(dest) = maybe_dest {
                 visit(inst, dest);
             }
-            BranchInfo::Table(table, maybe_dest) => {
-                if let Some(dest) = maybe_dest {
-                    visit(inst, dest);
-                }
-                for &dest in f.jump_tables[table].as_slice() {
-                    visit(inst, dest);
-                }
+            for &dest in f.jump_tables[table].as_slice() {
+                visit(inst, dest);
             }
         }
     }

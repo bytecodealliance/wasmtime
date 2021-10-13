@@ -82,9 +82,6 @@
       (fits-in-native-word $C))
     (irsub_imm $C $x))
 
-;; Unary instructions whose operand is constant.
-(=> (adjust_sp_down $C) (adjust_sp_down_imm $C))
-
 ;; Fold `(binop_imm $C1 (binop_imm $C2 $x))` into `(binop_imm $(binop $C2 $C1) $x)`.
 (=> (iadd_imm $C1 (iadd_imm $C2 $x)) (iadd_imm $(iadd $C1 $C2) $x))
 (=> (imul_imm $C1 (imul_imm $C2 $x)) (imul_imm $(imul $C1 $C2) $x))

@@ -542,10 +542,9 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
 ) -> CodegenResult<()> {
     // A block should end with at most two branches. The first may be a
     // conditional branch; a conditional branch can be followed only by an
-    // unconditional branch or fallthrough. Otherwise, if only one branch,
-    // it may be an unconditional branch, a fallthrough, a return, or a
-    // trap. These conditions are verified by `is_ebb_basic()` during the
-    // verifier pass.
+    // unconditional branch. Otherwise, if only one branch, it may be an
+    // unconditional branch, a return, or a trap. These conditions are verified
+    // by `is_ebb_basic()` during the verifier pass.
     assert!(branches.len() <= 2);
 
     if branches.len() == 2 {
@@ -553,7 +552,7 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         let op0 = ctx.data(branches[0]).opcode();
         let op1 = ctx.data(branches[1]).opcode();
 
-        assert!(op1 == Opcode::Jump || op1 == Opcode::Fallthrough);
+        assert!(op1 == Opcode::Jump);
         let taken = BranchTarget::Label(targets[0]);
         let not_taken = BranchTarget::Label(targets[1]);
 
@@ -586,11 +585,8 @@ pub(crate) fn lower_branch<C: LowerCtx<I = Inst>>(
         // Must be an unconditional branch or an indirect branch.
         let op = ctx.data(branches[0]).opcode();
         match op {
-            Opcode::Jump | Opcode::Fallthrough => {
+            Opcode::Jump => {
                 assert_eq!(branches.len(), 1);
-                // In the Fallthrough case, the machine-independent driver
-                // fills in `targets[0]` with our fallthrough block, so this
-                // is valid for both Jump and Fallthrough.
                 ctx.emit(Inst::Jump {
                     dest: BranchTarget::Label(targets[0]),
                 });

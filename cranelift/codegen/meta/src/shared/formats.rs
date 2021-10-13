@@ -13,8 +13,6 @@ pub(crate) struct Formats {
     pub(crate) branch_icmp: Rc<InstructionFormat>,
     pub(crate) branch_int: Rc<InstructionFormat>,
     pub(crate) branch_table: Rc<InstructionFormat>,
-    pub(crate) branch_table_base: Rc<InstructionFormat>,
-    pub(crate) branch_table_entry: Rc<InstructionFormat>,
     pub(crate) call: Rc<InstructionFormat>,
     pub(crate) call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
@@ -23,7 +21,6 @@ pub(crate) struct Formats {
     pub(crate) float_cond_trap: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
     pub(crate) heap_addr: Rc<InstructionFormat>,
-    pub(crate) indirect_jump: Rc<InstructionFormat>,
     pub(crate) int_compare: Rc<InstructionFormat>,
     pub(crate) int_compare_imm: Rc<InstructionFormat>,
     pub(crate) int_cond: Rc<InstructionFormat>,
@@ -169,22 +166,6 @@ impl Formats {
             branch_table: Builder::new("BranchTable")
                 .value()
                 .imm(&entities.block)
-                .imm(&entities.jump_table)
-                .build(),
-
-            branch_table_entry: Builder::new("BranchTableEntry")
-                .value()
-                .value()
-                .imm(&imm.uimm8)
-                .imm(&entities.jump_table)
-                .build(),
-
-            branch_table_base: Builder::new("BranchTableBase")
-                .imm(&entities.jump_table)
-                .build(),
-
-            indirect_jump: Builder::new("IndirectJump")
-                .value()
                 .imm(&entities.jump_table)
                 .build(),
 

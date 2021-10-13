@@ -221,7 +221,7 @@ where
 
     // Interpret a Cranelift instruction.
     Ok(match inst.opcode() {
-        Opcode::Jump | Opcode::Fallthrough => ControlFlow::ContinueAt(branch(), args()?),
+        Opcode::Jump => ControlFlow::ContinueAt(branch(), args()?),
         Opcode::Brz => branch_when(
             !arg(0)?
                 .convert(ValueConversionKind::ToBoolean)?
@@ -448,15 +448,6 @@ where
             assign(Value::or(mask_a, mask_b)?)
         }
         Opcode::Copy => assign(arg(0)?),
-        Opcode::Spill => unimplemented!("Spill"),
-        Opcode::Fill => unimplemented!("Fill"),
-        Opcode::FillNop => assign(arg(0)?),
-        Opcode::CopyNop => unimplemented!("CopyNop"),
-        Opcode::AdjustSpDown => unimplemented!("AdjustSpDown"),
-        Opcode::AdjustSpUpImm => unimplemented!("AdjustSpUpImm"),
-        Opcode::AdjustSpDownImm => unimplemented!("AdjustSpDownImm"),
-        Opcode::IfcmpSp => unimplemented!("IfcmpSp"),
-        Opcode::Safepoint => unimplemented!("Safepoint"),
         Opcode::Icmp => assign(icmp(
             ctrl_ty,
             inst.cond_code().unwrap(),
@@ -1026,10 +1017,6 @@ where
             assign(vectorizelanes(&new_vec, ctrl_ty)?)
         }
         Opcode::IaddPairwise => assign(binary_pairwise(arg(0)?, arg(1)?, ctrl_ty, Value::add)?),
-
-        Opcode::JumpTableBase | Opcode::JumpTableEntry | Opcode::IndirectJumpTableBr => {
-            unimplemented!("Legacy instruction: {}", inst.opcode())
-        }
     })
 }
 
