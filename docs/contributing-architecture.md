@@ -60,7 +60,7 @@ their implications in Wasmtime:
   objects are always entirely contained within a `Store`, and at this time
   nothing can cross between stores (except scalars if you manually hook it up).
   In other words, wasm objects from different stores cannot interact with each
-  other. A `Store` cannot be used simultaneously from mulitple threads (almost
+  other. A `Store` cannot be used simultaneously from multiple threads (almost
   all operations require `&mut self`).
 
 * `wasmtime_runtime::InstanceHandle` - this is the low-level representation of a
