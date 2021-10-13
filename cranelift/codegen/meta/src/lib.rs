@@ -11,7 +11,6 @@ mod gen_inst;
 mod gen_settings;
 mod gen_types;
 
-mod default_map;
 mod shared;
 mod unique_table;
 

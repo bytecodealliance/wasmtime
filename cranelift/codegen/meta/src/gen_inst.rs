@@ -2,7 +2,6 @@
 use std::fmt;
 
 use cranelift_codegen_shared::constant_hash;
-use cranelift_entity::EntityRef;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
@@ -388,7 +387,7 @@ fn gen_bool_accessor<T: Fn(&Instruction) -> bool>(
     fmtln!(fmt, "pub fn {}(self) -> bool {{", name);
     fmt.indent(|fmt| {
         let mut m = Match::new("self");
-        for inst in all_inst.values() {
+        for inst in all_inst.iter() {
             if get_attr(inst) {
                 m.arm_no_fields(format!("Self::{}", inst.camel_name), "true");
             }
@@ -424,7 +423,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.line("pub enum Opcode {");
     fmt.indent(|fmt| {
         let mut is_first_opcode = true;
-        for inst in all_inst.values() {
+        for inst in all_inst.iter() {
             fmt.doc_comment(format!("`{}`. ({})", inst, inst.format.name));
 
             // Document polymorphism.
@@ -440,8 +439,6 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
 
             // Enum variant itself.
             if is_first_opcode {
-                assert!(inst.opcode_number.index() == 0);
-                // TODO the python crate requires opcode numbers to start from one.
                 fmtln!(fmt, "{} = 1,", inst.camel_name);
                 is_first_opcode = false;
             } else {
@@ -484,13 +481,6 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
         );
         gen_bool_accessor(
             all_inst,
-            |inst| inst.is_ghost,
-            "is_ghost",
-            "Is this a ghost instruction?",
-            fmt,
-        );
-        gen_bool_accessor(
-            all_inst,
             |inst| inst.can_load,
             "can_load",
             "Can this instruction read from memory?",
@@ -524,13 +514,6 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
             "Does this instruction write to CPU flags?",
             fmt,
         );
-        gen_bool_accessor(
-            all_inst,
-            |inst| inst.clobbers_all_regs,
-            "clobbers_all_regs",
-            "Should this opcode be considered to clobber all the registers, during regalloc?",
-            fmt,
-        );
     });
     fmt.line("}");
     fmt.empty_line();
@@ -542,7 +525,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
         all_inst.len()
     );
     fmt.indent(|fmt| {
-        for inst in all_inst.values() {
+        for inst in all_inst.iter() {
             fmtln!(
                 fmt,
                 "InstructionFormat::{}, // {}",
@@ -558,7 +541,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.line("fn opcode_name(opc: Opcode) -> &\'static str {");
     fmt.indent(|fmt| {
         let mut m = Match::new("opc");
-        for inst in all_inst.values() {
+        for inst in all_inst.iter() {
             m.arm_no_fields(
                 format!("Opcode::{}", inst.camel_name),
                 format!("\"{}\"", inst.name),
@@ -570,7 +553,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.empty_line();
 
     // Generate an opcode hash table for looking up opcodes by name.
-    let hash_table = constant_hash::generate_table(all_inst.values(), all_inst.len(), |inst| {
+    let hash_table = constant_hash::generate_table(all_inst.iter(), all_inst.len(), |inst| {
         constant_hash::simple_hash(&inst.name)
     });
     fmtln!(
@@ -743,7 +726,7 @@ fn gen_type_constraints(all_inst: &AllInstructions, fmt: &mut Formatter) {
         all_inst.len()
     );
     fmt.indent(|fmt| {
-        for inst in all_inst.values() {
+        for inst in all_inst.iter() {
             let (ctrl_typevar, ctrl_typeset) = if let Some(poly) = &inst.polymorphic_info {
                 let index = type_sets.add(&*poly.ctrl_typevar.get_raw_typeset());
                 (Some(&poly.ctrl_typevar), index)
@@ -1137,7 +1120,7 @@ fn gen_builder(
     );
     fmt.line("pub trait InstBuilder<'f>: InstBuilderBase<'f> {");
     fmt.indent(|fmt| {
-        for inst in instructions.values() {
+        for inst in instructions.iter() {
             gen_inst_builder(inst, &*inst.format, fmt);
             fmt.empty_line();
         }

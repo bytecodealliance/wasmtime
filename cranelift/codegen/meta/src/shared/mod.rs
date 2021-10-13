@@ -54,7 +54,7 @@ impl Definitions {
         // of immediate fields.
         let mut format_structures: HashMap<FormatStructure, &InstructionFormat> = HashMap::new();
 
-        for inst in self.all_instructions.values() {
+        for inst in self.all_instructions.iter() {
             // Check name.
             if let Some(existing_format) = format_names.get(&inst.format.name) {
                 assert!(

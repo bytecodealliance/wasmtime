@@ -1,19 +1,12 @@
-use cranelift_entity::{entity_impl, PrimaryMap};
-
 use std::fmt;
 use std::rc::Rc;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::operands::Operand;
-use crate::cdsl::type_inference::Constraint;
 use crate::cdsl::typevar::TypeVar;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub(crate) struct OpcodeNumber(u32);
-entity_impl!(OpcodeNumber);
-
-pub(crate) type AllInstructions = PrimaryMap<OpcodeNumber, Instruction>;
+pub(crate) type AllInstructions = Vec<Instruction>;
 
 pub(crate) struct InstructionGroupBuilder<'all_inst> {
     all_instructions: &'all_inst mut AllInstructions,
@@ -25,8 +18,7 @@ impl<'all_inst> InstructionGroupBuilder<'all_inst> {
     }
 
     pub fn push(&mut self, builder: InstructionBuilder) {
-        let opcode_number = OpcodeNumber(self.all_instructions.next_key().as_u32());
-        let inst = builder.build(opcode_number);
+        let inst = builder.build();
         self.all_instructions.push(inst);
     }
 }
@@ -42,7 +34,6 @@ pub(crate) struct InstructionContent {
     /// Instruction mnemonic, also becomes opcode name.
     pub name: String,
     pub camel_name: String,
-    pub opcode_number: OpcodeNumber,
 
     /// Documentation string.
     pub doc: String,
@@ -74,8 +65,6 @@ pub(crate) struct InstructionContent {
     pub is_call: bool,
     /// Is this a return instruction?
     pub is_return: bool,
-    /// Is this a ghost instruction?
-    pub is_ghost: bool,
     /// Can this instruction read from memory?
     pub can_load: bool,
     /// Can this instruction write to memory?
@@ -86,8 +75,6 @@ pub(crate) struct InstructionContent {
     pub other_side_effects: bool,
     /// Does this instruction write to CPU flags?
     pub writes_cpu_flags: bool,
-    /// Should this opcode be considered to clobber all live registers, during regalloc?
-    pub clobbers_all_regs: bool,
 }
 
 impl InstructionContent {
@@ -138,19 +125,16 @@ pub(crate) struct InstructionBuilder {
     format: Rc<InstructionFormat>,
     operands_in: Option<Vec<Operand>>,
     operands_out: Option<Vec<Operand>>,
-    constraints: Option<Vec<Constraint>>,
 
     // See Instruction comments for the meaning of these fields.
     is_terminator: bool,
     is_branch: bool,
     is_call: bool,
     is_return: bool,
-    is_ghost: bool,
     can_load: bool,
     can_store: bool,
     can_trap: bool,
     other_side_effects: bool,
-    clobbers_all_regs: bool,
 }
 
 impl InstructionBuilder {
@@ -161,18 +145,15 @@ impl InstructionBuilder {
             format: format.clone(),
             operands_in: None,
             operands_out: None,
-            constraints: None,
 
             is_terminator: false,
             is_branch: false,
             is_call: false,
             is_return: false,
-            is_ghost: false,
             can_load: false,
             can_store: false,
             can_trap: false,
             other_side_effects: false,
-            clobbers_all_regs: false,
         }
     }
 
@@ -185,12 +166,6 @@ impl InstructionBuilder {
     pub fn operands_out(mut self, operands: Vec<&Operand>) -> Self {
         assert!(self.operands_out.is_none());
         self.operands_out = Some(operands.iter().map(|x| (*x).clone()).collect());
-        self
-    }
-
-    pub fn constraints(mut self, constraints: Vec<Constraint>) -> Self {
-        assert!(self.constraints.is_none());
-        self.constraints = Some(constraints);
         self
     }
 
@@ -218,12 +193,6 @@ impl InstructionBuilder {
         self
     }
 
-    #[allow(clippy::wrong_self_convention)]
-    pub fn is_ghost(mut self, val: bool) -> Self {
-        self.is_ghost = val;
-        self
-    }
-
     pub fn can_load(mut self, val: bool) -> Self {
         self.can_load = val;
         self
@@ -244,7 +213,7 @@ impl InstructionBuilder {
         self
     }
 
-    fn build(self, opcode_number: OpcodeNumber) -> Instruction {
+    fn build(self) -> Instruction {
         let operands_in = self.operands_in.unwrap_or_else(Vec::new);
         let operands_out = self.operands_out.unwrap_or_else(Vec::new);
 
@@ -279,7 +248,6 @@ impl InstructionBuilder {
         Rc::new(InstructionContent {
             name: self.name,
             camel_name,
-            opcode_number,
             doc: self.doc,
             operands_in,
             operands_out,
@@ -292,13 +260,11 @@ impl InstructionBuilder {
             is_branch: self.is_branch,
             is_call: self.is_call,
             is_return: self.is_return,
-            is_ghost: self.is_ghost,
             can_load: self.can_load,
             can_store: self.can_store,
             can_trap: self.can_trap,
             other_side_effects: self.other_side_effects,
             writes_cpu_flags,
-            clobbers_all_regs: self.clobbers_all_regs,
         })
     }
 }
