@@ -78,22 +78,24 @@ impl<'a> Codegen<'a> {
     fn generate_trait_sig(&self, code: &mut String, indent: &str, sig: &ExternalSig) {
         writeln!(
             code,
-            "{}fn {}(&mut self, {}) -> {}({},){};",
-            indent,
-            sig.func_name,
-            sig.param_tys
+            "{indent}fn {name}(&mut self, {params}) -> {opt_start}{open_paren}{rets}{close_paren}{opt_end};",
+            indent = indent,
+            name = sig.func_name,
+            params = sig.param_tys
                 .iter()
                 .enumerate()
                 .map(|(i, &ty)| format!("arg{}: {}", i, self.type_name(ty, /* by_ref = */ true)))
                 .collect::<Vec<_>>()
                 .join(", "),
-            if sig.infallible { "" } else { "Option<" },
-            sig.ret_tys
+            opt_start = if sig.infallible { "" } else { "Option<" },
+            open_paren = if sig.ret_tys.len() != 1 { "(" } else { "" },
+            rets = sig.ret_tys
                 .iter()
                 .map(|&ty| self.type_name(ty, /* by_ref = */ false))
                 .collect::<Vec<_>>()
                 .join(", "),
-            if sig.infallible { "" } else { ">" },
+            close_paren = if sig.ret_tys.len() != 1 { ")" } else { "" },
+            opt_end = if sig.infallible { "" } else { ">" },
         )
         .unwrap();
     }
@@ -386,8 +388,12 @@ impl<'a> Codegen<'a> {
                 ..
             } => {
                 let mut input_exprs = vec![];
-                for (input_value, _) in inputs {
-                    let value_expr = self.value_by_val(input_value, ctx);
+                for (input_value, input_ty) in inputs {
+                    let value_expr = if self.typeenv.types[input_ty.index()].is_prim() {
+                        self.value_by_val(input_value, ctx)
+                    } else {
+                        self.value_by_ref(input_value, ctx)
+                    };
                     input_exprs.push(value_expr);
                 }
 
@@ -555,11 +561,13 @@ impl<'a> Codegen<'a> {
                 if infallible {
                     writeln!(
                         code,
-                        "{}let ({},) = {}(ctx, {});",
-                        indent,
-                        output_binders.join(", "),
-                        sig.full_name,
-                        input_values.join(", "),
+                        "{indent}let {open_paren}{vars}{close_paren} = {name}(ctx, {args});",
+                        indent = indent,
+                        open_paren = if output_binders.len() == 1 { "" } else { "(" },
+                        vars = output_binders.join(", "),
+                        close_paren = if output_binders.len() == 1 { "" } else { ")" },
+                        name = sig.full_name,
+                        args = input_values.join(", "),
                     )
                     .unwrap();
                     true
