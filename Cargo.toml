@@ -41,7 +41,7 @@ libc = "0.2.60"
 log = "0.4.8"
 rayon = "1.5.0"
 humantime = "2.0.0"
-wasmparser = "0.80.0"
+wasmparser = "0.81.0"
 lazy_static = "1.4.0"
 
 [target.'cfg(unix)'.dependencies]

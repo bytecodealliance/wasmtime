@@ -19,16 +19,9 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
     let multi_memory = feature_found(wast, "multi-memory");
     let module_linking = feature_found(wast, "module-linking");
     let threads = feature_found(wast, "threads");
-    let bulk_mem = memory64 || multi_memory || feature_found(wast, "bulk-memory-operations");
-
-    // Some simd tests assume support for multiple tables, which are introduced
-    // by reference types.
-    let reftypes = simd || feature_found(wast, "reference-types");
 
     let mut cfg = Config::new();
     cfg.wasm_simd(simd)
-        .wasm_bulk_memory(bulk_mem)
-        .wasm_reference_types(reftypes || module_linking)
         .wasm_multi_memory(multi_memory || module_linking)
         .wasm_module_linking(module_linking)
         .wasm_threads(threads)
@@ -90,7 +83,7 @@ fn run_wast(wast: &str, strategy: Strategy, pooling: bool) -> anyhow::Result<()>
                 imported_globals: 11,
                 memories: 2,
                 tables: 4,
-                globals: 11,
+                globals: 13,
                 memory_pages: 805,
                 ..Default::default()
             },

@@ -35,15 +35,24 @@ impl MatchCx<'_> {
     }
 
     pub fn table(&self, expected: &Table, actual: &crate::Table) -> Result<()> {
-        self.table_ty(expected, actual.wasmtime_ty(self.store.store_data()))
+        self.table_ty(
+            expected,
+            actual.wasmtime_ty(self.store.store_data()),
+            Some(actual.internal_size(self.store)),
+        )
     }
 
-    fn table_ty(&self, expected: &Table, actual: &Table) -> Result<()> {
+    fn table_ty(
+        &self,
+        expected: &Table,
+        actual: &Table,
+        actual_runtime_size: Option<u32>,
+    ) -> Result<()> {
         match_ty(expected.wasm_ty, actual.wasm_ty, "table")?;
         match_limits(
             expected.minimum.into(),
             expected.maximum.map(|i| i.into()),
-            actual.minimum.into(),
+            actual_runtime_size.unwrap_or(actual.minimum).into(),
             actual.maximum.map(|i| i.into()),
             "table",
         )?;
@@ -51,10 +60,19 @@ impl MatchCx<'_> {
     }
 
     pub fn memory(&self, expected: &Memory, actual: &crate::Memory) -> Result<()> {
-        self.memory_ty(expected, actual.wasmtime_ty(self.store.store_data()))
+        self.memory_ty(
+            expected,
+            actual.wasmtime_ty(self.store.store_data()),
+            Some(actual.internal_size(self.store)),
+        )
     }
 
-    fn memory_ty(&self, expected: &Memory, actual: &Memory) -> Result<()> {
+    fn memory_ty(
+        &self,
+        expected: &Memory,
+        actual: &Memory,
+        actual_runtime_size: Option<u64>,
+    ) -> Result<()> {
         match_bool(
             expected.shared,
             actual.shared,
@@ -72,7 +90,7 @@ impl MatchCx<'_> {
         match_limits(
             expected.minimum,
             expected.maximum,
-            actual.minimum,
+            actual_runtime_size.unwrap_or(actual.minimum),
             actual.maximum,
             "memory",
         )?;
@@ -280,11 +298,11 @@ impl MatchCx<'_> {
                 _ => bail!("expected global, but found {}", actual_desc),
             },
             EntityType::Table(expected) => match actual_ty {
-                EntityType::Table(actual) => self.table_ty(expected, actual),
+                EntityType::Table(actual) => self.table_ty(expected, actual, None),
                 _ => bail!("expected table, but found {}", actual_desc),
             },
             EntityType::Memory(expected) => match actual_ty {
-                EntityType::Memory(actual) => self.memory_ty(expected, actual),
+                EntityType::Memory(actual) => self.memory_ty(expected, actual, None),
                 _ => bail!("expected memory, but found {}", actual_desc),
             },
             EntityType::Function(expected) => match *actual_ty {

@@ -12,4 +12,4 @@ edition = "2018"
 cranelift-entity = { path = "../../cranelift/entity", version = "0.77.0", features = ['enable-serde'] }
 serde = { version = "1.0.94", features = ["derive"] }
 thiserror = "1.0.4"
-wasmparser = { version = "0.80", default-features = false }
+wasmparser = { version = "0.81", default-features = false }

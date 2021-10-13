@@ -24,8 +24,6 @@ fn main() -> anyhow::Result<()> {
 
         with_test_module(&mut out, "misc", |out| {
             test_directory(out, "tests/misc_testsuite", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/bulk-memory-operations", strategy)?;
-            test_directory_module(out, "tests/misc_testsuite/reference-types", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/multi-memory", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/module-linking", strategy)?;
             test_directory_module(out, "tests/misc_testsuite/simd", strategy)?;
@@ -40,16 +38,6 @@ fn main() -> anyhow::Result<()> {
             // out.
             if spec_tests > 0 {
                 test_directory_module(out, "tests/spec_testsuite/proposals/simd", strategy)?;
-                test_directory_module(
-                    out,
-                    "tests/spec_testsuite/proposals/reference-types",
-                    strategy,
-                )?;
-                test_directory_module(
-                    out,
-                    "tests/spec_testsuite/proposals/bulk-memory-operations",
-                    strategy,
-                )?;
                 test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
             } else {
                 println!(

@@ -523,7 +523,10 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     pub fn size(&self, store: impl AsContext) -> u32 {
-        let store = store.as_context();
+        self.internal_size(store.as_context().0)
+    }
+
+    pub(crate) fn internal_size(&self, store: &StoreOpaque) -> u32 {
         unsafe { (*store[self.0].definition).current_elements }
     }
 
