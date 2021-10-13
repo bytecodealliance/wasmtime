@@ -40,16 +40,6 @@ fn main() -> anyhow::Result<()> {
             // out.
             if spec_tests > 0 {
                 test_directory_module(out, "tests/spec_testsuite/proposals/simd", strategy)?;
-                test_directory_module(
-                    out,
-                    "tests/spec_testsuite/proposals/reference-types",
-                    strategy,
-                )?;
-                test_directory_module(
-                    out,
-                    "tests/spec_testsuite/proposals/bulk-memory-operations",
-                    strategy,
-                )?;
                 test_directory_module(out, "tests/spec_testsuite/proposals/memory64", strategy)?;
             } else {
                 println!(

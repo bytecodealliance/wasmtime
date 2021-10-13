@@ -527,13 +527,28 @@ impl<'data> ModuleEnvironment<'data> {
                     let mut elements =
                         Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
                     for item in items_reader {
-                        elements.push(match item? {
-                            ElementItem::Func(f) => {
+                        let func = match item? {
+                            ElementItem::Func(f) => Some(f),
+                            ElementItem::Expr(init) => {
+                                match init.get_binary_reader().read_operator()? {
+                                    Operator::RefNull { .. } => None,
+                                    Operator::RefFunc { function_index } => Some(function_index),
+                                    s => {
+                                        return Err(WasmError::Unsupported(format!(
+                                            "unsupported init expr in element section: {:?}",
+                                            s
+                                        )));
+                                    }
+                                }
+                            }
+                        };
+                        elements.push(match func {
+                            Some(f) => {
                                 let f = FuncIndex::from_u32(f);
                                 self.flag_func_escaped(f);
                                 f
                             }
-                            ElementItem::Null(_ty) => FuncIndex::reserved_value(),
+                            None => FuncIndex::reserved_value(),
                         });
                     }
 

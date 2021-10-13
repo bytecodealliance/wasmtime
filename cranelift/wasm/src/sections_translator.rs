@@ -337,7 +337,16 @@ fn read_elems(items: &ElementItems) -> WasmResult<Box<[FuncIndex]>> {
     let mut elems = Vec::with_capacity(usize::try_from(items_reader.get_count()).unwrap());
     for item in items_reader {
         let elem = match item? {
-            ElementItem::Null(_ty) => FuncIndex::reserved_value(),
+            ElementItem::Expr(init) => match init.get_binary_reader().read_operator()? {
+                Operator::RefNull { .. } => FuncIndex::reserved_value(),
+                Operator::RefFunc { function_index } => FuncIndex::from_u32(function_index),
+                s => {
+                    return Err(WasmError::Unsupported(format!(
+                        "unsupported init expr in element section: {:?}",
+                        s
+                    )));
+                }
+            },
             ElementItem::Func(index) => FuncIndex::from_u32(index),
         };
         elems.push(elem);

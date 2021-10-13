@@ -3,6 +3,7 @@
   (global (export "g mut i32") (mut i32)  (i32.const 0))
 
   (table (export "t funcref") 0 funcref)
+  (table (export "t externref") 0 externref)
   (memory (export "mem") 0)
 
   (func (export "f"))
@@ -31,6 +32,10 @@
 (assert_unlinkable
   (module (import "m" "t funcref" (table 1 funcref)))
   "expected table limits (min: 1, max: none) doesn't match provided table limits (min: 0, max: none)")
+
+(assert_unlinkable
+  (module (import "m" "t externref" (table 0 funcref)))
+  "expected table of type `funcref`, found table of type `externref`")
 
 ;; errors on memories
 (assert_unlinkable

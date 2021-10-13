@@ -396,7 +396,11 @@ impl Memory {
     ///
     /// Panics if this memory doesn't belong to `store`.
     pub fn data_size(&self, store: impl AsContext) -> usize {
-        unsafe { (*store.as_context()[self.0].definition).current_length }
+        self.internal_data_size(store.as_context().0)
+    }
+
+    pub(crate) fn internal_data_size(&self, store: &StoreOpaque) -> usize {
+        unsafe { (*store[self.0].definition).current_length }
     }
 
     /// Returns the size, in WebAssembly pages, of this wasm memory.
@@ -405,7 +409,11 @@ impl Memory {
     ///
     /// Panics if this memory doesn't belong to `store`.
     pub fn size(&self, store: impl AsContext) -> u64 {
-        (self.data_size(store) / wasmtime_environ::WASM_PAGE_SIZE as usize) as u64
+        self.internal_size(store.as_context().0)
+    }
+
+    pub(crate) fn internal_size(&self, store: &StoreOpaque) -> u64 {
+        (self.internal_data_size(store) / wasmtime_environ::WASM_PAGE_SIZE as usize) as u64
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
