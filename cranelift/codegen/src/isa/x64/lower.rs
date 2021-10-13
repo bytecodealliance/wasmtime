@@ -1,5 +1,8 @@
 //! Lowering rules for X64.
 
+// ISLE integration glue.
+mod isle;
+
 use crate::data_value::DataValue;
 use crate::ir::{
     condcodes::{CondCode, FloatCC, IntCC},
@@ -1497,20 +1500,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    match op {
-        Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
-            let value = ctx
-                .get_constant(insn)
-                .expect("constant value for iconst et al");
-            let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value as u128, ty.unwrap(), |ty| {
-                ctx.alloc_tmp(ty).only_reg().unwrap()
-            }) {
-                ctx.emit(inst);
-            }
-        }
+    if let Ok(()) = isle::lower(ctx, isa_flags, &outputs, insn) {
+        return Ok(());
+    }
 
-        Opcode::Iadd
+    match op {
+        Opcode::Iconst
+        | Opcode::Bconst
+        | Opcode::Null
+        | Opcode::Iadd
         | Opcode::IaddIfcout
         | Opcode::SaddSat
         | Opcode::UaddSat
@@ -1521,149 +1519,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Band
         | Opcode::Bor
         | Opcode::Bxor => {
-            let ty = ty.unwrap();
-            if ty.lane_count() > 1 {
-                let sse_op = match op {
-                    Opcode::Iadd => match ty {
-                        types::I8X16 => SseOpcode::Paddb,
-                        types::I16X8 => SseOpcode::Paddw,
-                        types::I32X4 => SseOpcode::Paddd,
-                        types::I64X2 => SseOpcode::Paddq,
-                        _ => panic!("Unsupported type for packed iadd instruction: {}", ty),
-                    },
-                    Opcode::SaddSat => match ty {
-                        types::I8X16 => SseOpcode::Paddsb,
-                        types::I16X8 => SseOpcode::Paddsw,
-                        _ => panic!("Unsupported type for packed sadd_sat instruction: {}", ty),
-                    },
-                    Opcode::UaddSat => match ty {
-                        types::I8X16 => SseOpcode::Paddusb,
-                        types::I16X8 => SseOpcode::Paddusw,
-                        _ => panic!("Unsupported type for packed uadd_sat instruction: {}", ty),
-                    },
-                    Opcode::Isub => match ty {
-                        types::I8X16 => SseOpcode::Psubb,
-                        types::I16X8 => SseOpcode::Psubw,
-                        types::I32X4 => SseOpcode::Psubd,
-                        types::I64X2 => SseOpcode::Psubq,
-                        _ => panic!("Unsupported type for packed isub instruction: {}", ty),
-                    },
-                    Opcode::SsubSat => match ty {
-                        types::I8X16 => SseOpcode::Psubsb,
-                        types::I16X8 => SseOpcode::Psubsw,
-                        _ => panic!("Unsupported type for packed ssub_sat instruction: {}", ty),
-                    },
-                    Opcode::UsubSat => match ty {
-                        types::I8X16 => SseOpcode::Psubusb,
-                        types::I16X8 => SseOpcode::Psubusw,
-                        _ => panic!("Unsupported type for packed usub_sat instruction: {}", ty),
-                    },
-                    Opcode::AvgRound => match ty {
-                        types::I8X16 => SseOpcode::Pavgb,
-                        types::I16X8 => SseOpcode::Pavgw,
-                        _ => panic!("Unsupported type for packed avg_round instruction: {}", ty),
-                    },
-                    Opcode::Band => match ty {
-                        types::F32X4 => SseOpcode::Andps,
-                        types::F64X2 => SseOpcode::Andpd,
-                        _ => SseOpcode::Pand,
-                    },
-                    Opcode::Bor => match ty {
-                        types::F32X4 => SseOpcode::Orps,
-                        types::F64X2 => SseOpcode::Orpd,
-                        _ => SseOpcode::Por,
-                    },
-                    Opcode::Bxor => match ty {
-                        types::F32X4 => SseOpcode::Xorps,
-                        types::F64X2 => SseOpcode::Xorpd,
-                        _ => SseOpcode::Pxor,
-                    },
-                    _ => panic!("Unsupported packed instruction: {}", op),
-                };
-                let lhs = put_input_in_reg(ctx, inputs[0]);
-                let rhs = input_to_reg_mem(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                // Move the `lhs` to the same register as `dst`.
-                ctx.emit(Inst::gen_move(dst, lhs, ty));
-                ctx.emit(Inst::xmm_rm_r(sse_op, rhs, dst));
-            } else if ty == types::I128 || ty == types::B128 {
-                let alu_ops = match op {
-                    Opcode::Iadd => (AluRmiROpcode::Add, AluRmiROpcode::Adc),
-                    Opcode::Isub => (AluRmiROpcode::Sub, AluRmiROpcode::Sbb),
-                    Opcode::Band => (AluRmiROpcode::And, AluRmiROpcode::And),
-                    Opcode::Bor => (AluRmiROpcode::Or, AluRmiROpcode::Or),
-                    Opcode::Bxor => (AluRmiROpcode::Xor, AluRmiROpcode::Xor),
-                    _ => panic!("Unsupported opcode with 128-bit integers: {:?}", op),
-                };
-                let lhs = put_input_in_regs(ctx, inputs[0]);
-                let rhs = put_input_in_regs(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]);
-                assert_eq!(lhs.len(), 2);
-                assert_eq!(rhs.len(), 2);
-                assert_eq!(dst.len(), 2);
-
-                // For add, sub, and, or, xor: just do ops on lower then upper
-                // half. Carry-flag propagation is implicit (add/adc, sub/sbb).
-                ctx.emit(Inst::gen_move(dst.regs()[0], lhs.regs()[0], types::I64));
-                ctx.emit(Inst::gen_move(dst.regs()[1], lhs.regs()[1], types::I64));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    alu_ops.0,
-                    RegMemImm::reg(rhs.regs()[0]),
-                    dst.regs()[0],
-                ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    alu_ops.1,
-                    RegMemImm::reg(rhs.regs()[1]),
-                    dst.regs()[1],
-                ));
-            } else {
-                let size = if ty == types::I64 {
-                    OperandSize::Size64
-                } else {
-                    OperandSize::Size32
-                };
-                let alu_op = match op {
-                    Opcode::Iadd | Opcode::IaddIfcout => AluRmiROpcode::Add,
-                    Opcode::Isub => AluRmiROpcode::Sub,
-                    Opcode::Band => AluRmiROpcode::And,
-                    Opcode::Bor => AluRmiROpcode::Or,
-                    Opcode::Bxor => AluRmiROpcode::Xor,
-                    _ => unreachable!(),
-                };
-
-                let (lhs, rhs) = match op {
-                    Opcode::Iadd
-                    | Opcode::IaddIfcout
-                    | Opcode::Band
-                    | Opcode::Bor
-                    | Opcode::Bxor => {
-                        // For commutative operations, try to commute operands if one is an
-                        // immediate or direct memory reference. Do so by converting LHS to RMI; if
-                        // reg, then always convert RHS to RMI; else, use LHS as RMI and convert
-                        // RHS to reg.
-                        let lhs = input_to_reg_mem_imm(ctx, inputs[0]);
-                        if let RegMemImm::Reg { reg: lhs_reg } = lhs {
-                            let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
-                            (lhs_reg, rhs)
-                        } else {
-                            let rhs_reg = put_input_in_reg(ctx, inputs[1]);
-                            (rhs_reg, lhs)
-                        }
-                    }
-                    Opcode::Isub => (
-                        put_input_in_reg(ctx, inputs[0]),
-                        input_to_reg_mem_imm(ctx, inputs[1]),
-                    ),
-                    _ => unreachable!(),
-                };
-
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::mov_r_r(OperandSize::Size64, lhs, dst));
-                ctx.emit(Inst::alu_rmi_r(size, alu_op, rhs, dst));
-            }
+            unreachable!(
+                "implemented in ISLE: inst = `{}`, type = `{:?}`",
+                ctx.dfg().display_inst(insn),
+                ty
+            );
         }
 
         Opcode::Imul => {
@@ -1681,469 +1541,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     Opcode::UwidenLow,
                 ],
             ) {
-                // Optimized ext_mul_* lowerings are based on optimized lowerings
-                // here: https://github.com/WebAssembly/simd/pull/376
-                if let Some(swiden0_high) = matches_input(ctx, inputs[0], Opcode::SwidenHigh) {
-                    if let Some(swiden1_high) = matches_input(ctx, inputs[1], Opcode::SwidenHigh) {
-                        let swiden_input = &[
-                            InsnInput {
-                                insn: swiden0_high,
-                                input: 0,
-                            },
-                            InsnInput {
-                                insn: swiden1_high,
-                                input: 0,
-                            },
-                        ];
-                        let input0_ty = ctx.input_ty(swiden0_high, 0);
-                        let input1_ty = ctx.input_ty(swiden1_high, 0);
-                        let output_ty = ctx.output_ty(insn, 0);
-                        let lhs = put_input_in_reg(ctx, swiden_input[0]);
-                        let rhs = put_input_in_reg(ctx, swiden_input[1]);
-                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                        match (input0_ty, input1_ty, output_ty) {
-                            (types::I8X16, types::I8X16, types::I16X8) => {
-                                // i16x8.extmul_high_i8x16_s
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Palignr,
-                                    RegMem::reg(lhs),
-                                    Writable::from_reg(lhs),
-                                    8,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_mov(
-                                    SseOpcode::Pmovsxbw,
-                                    RegMem::reg(lhs),
-                                    Writable::from_reg(lhs),
-                                ));
-
-                                ctx.emit(Inst::gen_move(dst, rhs, output_ty));
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Palignr,
-                                    RegMem::reg(rhs),
-                                    dst,
-                                    8,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_mov(
-                                    SseOpcode::Pmovsxbw,
-                                    RegMem::reg(dst.to_reg()),
-                                    dst,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(lhs), dst));
-                            }
-                            (types::I16X8, types::I16X8, types::I32X4) => {
-                                // i32x4.extmul_high_i16x8_s
-                                ctx.emit(Inst::gen_move(dst, lhs, input0_ty));
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::gen_move(tmp_reg, lhs, input0_ty));
-                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmulhw,
-                                    RegMem::reg(rhs),
-                                    tmp_reg,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Punpckhwd,
-                                    RegMem::from(tmp_reg),
-                                    dst,
-                                ));
-                            }
-                            (types::I32X4, types::I32X4, types::I64X2) => {
-                                // i64x2.extmul_high_i32x4_s
-                                let tmp_reg = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(lhs),
-                                    tmp_reg,
-                                    0xFA,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(rhs),
-                                    dst,
-                                    0xFA,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmuldq,
-                                    RegMem::reg(tmp_reg.to_reg()),
-                                    dst,
-                                ));
-                            }
-                            // Note swiden_high only allows types: I8X16, I16X8, and I32X4
-                            _ => panic!("Unsupported extmul_low_signed type"),
-                        }
-                    }
-                } else if let Some(swiden0_low) = matches_input(ctx, inputs[0], Opcode::SwidenLow) {
-                    if let Some(swiden1_low) = matches_input(ctx, inputs[1], Opcode::SwidenLow) {
-                        let swiden_input = &[
-                            InsnInput {
-                                insn: swiden0_low,
-                                input: 0,
-                            },
-                            InsnInput {
-                                insn: swiden1_low,
-                                input: 0,
-                            },
-                        ];
-                        let input0_ty = ctx.input_ty(swiden0_low, 0);
-                        let input1_ty = ctx.input_ty(swiden1_low, 0);
-                        let output_ty = ctx.output_ty(insn, 0);
-                        let lhs = put_input_in_reg(ctx, swiden_input[0]);
-                        let rhs = put_input_in_reg(ctx, swiden_input[1]);
-                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                        match (input0_ty, input1_ty, output_ty) {
-                            (types::I8X16, types::I8X16, types::I16X8) => {
-                                // i32x4.extmul_low_i8x16_s
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::xmm_mov(
-                                    SseOpcode::Pmovsxbw,
-                                    RegMem::reg(lhs),
-                                    tmp_reg,
-                                ));
-                                ctx.emit(Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmullw,
-                                    RegMem::reg(tmp_reg.to_reg()),
-                                    dst,
-                                ));
-                            }
-                            (types::I16X8, types::I16X8, types::I32X4) => {
-                                // i32x4.extmul_low_i16x8_s
-                                ctx.emit(Inst::gen_move(dst, lhs, input0_ty));
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::gen_move(tmp_reg, lhs, input0_ty));
-                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmulhw,
-                                    RegMem::reg(rhs),
-                                    tmp_reg,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Punpcklwd,
-                                    RegMem::from(tmp_reg),
-                                    dst,
-                                ));
-                            }
-                            (types::I32X4, types::I32X4, types::I64X2) => {
-                                // i64x2.extmul_low_i32x4_s
-                                let tmp_reg = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(lhs),
-                                    tmp_reg,
-                                    0x50,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(rhs),
-                                    dst,
-                                    0x50,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmuldq,
-                                    RegMem::reg(tmp_reg.to_reg()),
-                                    dst,
-                                ));
-                            }
-                            // Note swiden_low only allows types: I8X16, I16X8, and I32X4
-                            _ => panic!("Unsupported extmul_low_signed type"),
-                        }
-                    }
-                } else if let Some(uwiden0_high) = matches_input(ctx, inputs[0], Opcode::UwidenHigh)
-                {
-                    if let Some(uwiden1_high) = matches_input(ctx, inputs[1], Opcode::UwidenHigh) {
-                        let uwiden_input = &[
-                            InsnInput {
-                                insn: uwiden0_high,
-                                input: 0,
-                            },
-                            InsnInput {
-                                insn: uwiden1_high,
-                                input: 0,
-                            },
-                        ];
-                        let input0_ty = ctx.input_ty(uwiden0_high, 0);
-                        let input1_ty = ctx.input_ty(uwiden1_high, 0);
-                        let output_ty = ctx.output_ty(insn, 0);
-                        let lhs = put_input_in_reg(ctx, uwiden_input[0]);
-                        let rhs = put_input_in_reg(ctx, uwiden_input[1]);
-                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                        match (input0_ty, input1_ty, output_ty) {
-                            (types::I8X16, types::I8X16, types::I16X8) => {
-                                // i16x8.extmul_high_i8x16_u
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Palignr,
-                                    RegMem::reg(lhs),
-                                    Writable::from_reg(lhs),
-                                    8,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_mov(
-                                    SseOpcode::Pmovzxbw,
-                                    RegMem::reg(lhs),
-                                    Writable::from_reg(lhs),
-                                ));
-                                ctx.emit(Inst::gen_move(dst, rhs, output_ty));
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Palignr,
-                                    RegMem::reg(rhs),
-                                    dst,
-                                    8,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_mov(
-                                    SseOpcode::Pmovzxbw,
-                                    RegMem::reg(dst.to_reg()),
-                                    dst,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(lhs), dst));
-                            }
-                            (types::I16X8, types::I16X8, types::I32X4) => {
-                                // i32x4.extmul_high_i16x8_u
-                                ctx.emit(Inst::gen_move(dst, lhs, input0_ty));
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::gen_move(tmp_reg, lhs, input0_ty));
-                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmulhuw,
-                                    RegMem::reg(rhs),
-                                    tmp_reg,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Punpckhwd,
-                                    RegMem::from(tmp_reg),
-                                    dst,
-                                ));
-                            }
-                            (types::I32X4, types::I32X4, types::I64X2) => {
-                                // i64x2.extmul_high_i32x4_u
-                                let tmp_reg = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(lhs),
-                                    tmp_reg,
-                                    0xFA,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(rhs),
-                                    dst,
-                                    0xFA,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmuludq,
-                                    RegMem::reg(tmp_reg.to_reg()),
-                                    dst,
-                                ));
-                            }
-                            // Note uwiden_high only allows types: I8X16, I16X8, and I32X4
-                            _ => panic!("Unsupported extmul_high_unsigned type"),
-                        }
-                    }
-                } else if let Some(uwiden0_low) = matches_input(ctx, inputs[0], Opcode::UwidenLow) {
-                    if let Some(uwiden1_low) = matches_input(ctx, inputs[1], Opcode::UwidenLow) {
-                        let uwiden_input = &[
-                            InsnInput {
-                                insn: uwiden0_low,
-                                input: 0,
-                            },
-                            InsnInput {
-                                insn: uwiden1_low,
-                                input: 0,
-                            },
-                        ];
-
-                        let input0_ty = ctx.input_ty(uwiden0_low, 0);
-                        let input1_ty = ctx.input_ty(uwiden1_low, 0);
-                        let output_ty = ctx.output_ty(insn, 0);
-                        let lhs = put_input_in_reg(ctx, uwiden_input[0]);
-                        let rhs = put_input_in_reg(ctx, uwiden_input[1]);
-                        let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                        match (input0_ty, input1_ty, output_ty) {
-                            (types::I8X16, types::I8X16, types::I16X8) => {
-                                // i16x8.extmul_low_i8x16_u
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::xmm_mov(
-                                    SseOpcode::Pmovzxbw,
-                                    RegMem::reg(lhs),
-                                    tmp_reg,
-                                ));
-                                ctx.emit(Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmullw,
-                                    RegMem::reg(tmp_reg.to_reg()),
-                                    dst,
-                                ));
-                            }
-                            (types::I16X8, types::I16X8, types::I32X4) => {
-                                // i32x4.extmul_low_i16x8_u
-                                ctx.emit(Inst::gen_move(dst, lhs, input0_ty));
-                                let tmp_reg = ctx.alloc_tmp(types::I16X8).only_reg().unwrap();
-                                ctx.emit(Inst::gen_move(tmp_reg, lhs, input0_ty));
-                                ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(rhs), dst));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmulhuw,
-                                    RegMem::reg(rhs),
-                                    tmp_reg,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Punpcklwd,
-                                    RegMem::from(tmp_reg),
-                                    dst,
-                                ));
-                            }
-                            (types::I32X4, types::I32X4, types::I64X2) => {
-                                // i64x2.extmul_low_i32x4_u
-                                let tmp_reg = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(lhs),
-                                    tmp_reg,
-                                    0x50,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r_imm(
-                                    SseOpcode::Pshufd,
-                                    RegMem::reg(rhs),
-                                    dst,
-                                    0x50,
-                                    OperandSize::Size32,
-                                ));
-                                ctx.emit(Inst::xmm_rm_r(
-                                    SseOpcode::Pmuludq,
-                                    RegMem::reg(tmp_reg.to_reg()),
-                                    dst,
-                                ));
-                            }
-                            // Note uwiden_low only allows types: I8X16, I16X8, and I32X4
-                            _ => panic!("Unsupported extmul_low_unsigned type"),
-                        }
-                    }
-                } else {
-                    panic!("Unsupported imul operation for type: {}", ty);
-                }
+                unreachable!("implemented in ISLE: {}", ctx.dfg().display_inst(insn));
             } else if ty == types::I64X2 {
-                // Eventually one of these should be `input_to_reg_mem` (TODO).
-                let lhs = put_input_in_reg(ctx, inputs[0]);
-                let rhs = put_input_in_reg(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                if isa_flags.use_avx512vl_simd() && isa_flags.use_avx512dq_simd() {
-                    // With the right AVX512 features (VL + DQ) this operation
-                    // can lower to a single operation.
-                    ctx.emit(Inst::xmm_rm_r_evex(
-                        Avx512Opcode::Vpmullq,
-                        RegMem::reg(rhs),
-                        lhs,
-                        dst,
-                    ));
-                } else {
-                    // Otherwise, for I64X2 multiplication we describe a lane A as being
-                    // composed of a 32-bit upper half "Ah" and a 32-bit lower half
-                    // "Al". The 32-bit long hand multiplication can then be written
-                    // as:
-                    //    Ah Al
-                    // *  Bh Bl
-                    //    -----
-                    //    Al * Bl
-                    // + (Ah * Bl) << 32
-                    // + (Al * Bh) << 32
-                    //
-                    // So for each lane we will compute:
-                    //   A * B  = (Al * Bl) + ((Ah * Bl) + (Al * Bh)) << 32
-                    //
-                    // Note, the algorithm will use pmuldq which operates directly
-                    // on the lower 32-bit (Al or Bl) of a lane and writes the
-                    // result to the full 64-bits of the lane of the destination.
-                    // For this reason we don't need shifts to isolate the lower
-                    // 32-bits, however, we will need to use shifts to isolate the
-                    // high 32-bits when doing calculations, i.e., Ah == A >> 32.
-                    //
-                    // The full sequence then is as follows:
-                    //   A' = A
-                    //   A' = A' >> 32
-                    //   A' = Ah' * Bl
-                    //   B' = B
-                    //   B' = B' >> 32
-                    //   B' = Bh' * Al
-                    //   B' = B' + A'
-                    //   B' = B' << 32
-                    //   A' = A
-                    //   A' = Al' * Bl
-                    //   A' = A' + B'
-                    //   dst = A'
-
-                    // A' = A
-                    let rhs_1 = ctx.alloc_tmp(types::I64X2).only_reg().unwrap();
-                    ctx.emit(Inst::gen_move(rhs_1, rhs, ty));
-
-                    // A' = A' >> 32
-                    // A' = Ah' * Bl
-                    ctx.emit(Inst::xmm_rmi_reg(
-                        SseOpcode::Psrlq,
-                        RegMemImm::imm(32),
-                        rhs_1,
-                    ));
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Pmuludq,
-                        RegMem::reg(lhs.clone()),
-                        rhs_1,
-                    ));
-
-                    // B' = B
-                    let lhs_1 = ctx.alloc_tmp(types::I64X2).only_reg().unwrap();
-                    ctx.emit(Inst::gen_move(lhs_1, lhs, ty));
-
-                    // B' = B' >> 32
-                    // B' = Bh' * Al
-                    ctx.emit(Inst::xmm_rmi_reg(
-                        SseOpcode::Psrlq,
-                        RegMemImm::imm(32),
-                        lhs_1,
-                    ));
-                    ctx.emit(Inst::xmm_rm_r(SseOpcode::Pmuludq, RegMem::reg(rhs), lhs_1));
-
-                    // B' = B' + A'
-                    // B' = B' << 32
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Paddq,
-                        RegMem::reg(rhs_1.to_reg()),
-                        lhs_1,
-                    ));
-                    ctx.emit(Inst::xmm_rmi_reg(
-                        SseOpcode::Psllq,
-                        RegMemImm::imm(32),
-                        lhs_1,
-                    ));
-
-                    // A' = A
-                    // A' = Al' * Bl
-                    // A' = A' + B'
-                    // dst = A'
-                    ctx.emit(Inst::gen_move(rhs_1, rhs, ty));
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Pmuludq,
-                        RegMem::reg(lhs.clone()),
-                        rhs_1,
-                    ));
-                    ctx.emit(Inst::xmm_rm_r(
-                        SseOpcode::Paddq,
-                        RegMem::reg(lhs_1.to_reg()),
-                        rhs_1,
-                    ));
-                    ctx.emit(Inst::gen_move(dst, rhs_1.to_reg(), ty));
-                }
+                unreachable!("implemented in ISLE: {}", ctx.dfg().display_inst(insn));
             } else if ty.lane_count() > 1 {
                 // Emit single instruction lowerings for the remaining vector
                 // multiplications.
@@ -2228,29 +1628,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     dst.regs()[1],
                 ));
             } else {
-                let size = if ty == types::I64 {
-                    OperandSize::Size64
-                } else {
-                    OperandSize::Size32
-                };
-                let alu_op = AluRmiROpcode::Mul;
-
-                // For commutative operations, try to commute operands if one is
-                // an immediate or direct memory reference. Do so by converting
-                // LHS to RMI; if reg, then always convert RHS to RMI; else, use
-                // LHS as RMI and convert RHS to reg.
-                let lhs = input_to_reg_mem_imm(ctx, inputs[0]);
-                let (lhs, rhs) = if let RegMemImm::Reg { reg: lhs_reg } = lhs {
-                    let rhs = input_to_reg_mem_imm(ctx, inputs[1]);
-                    (lhs_reg, rhs)
-                } else {
-                    let rhs_reg = put_input_in_reg(ctx, inputs[1]);
-                    (rhs_reg, lhs)
-                };
-
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::mov_r_r(OperandSize::Size64, lhs, dst));
-                ctx.emit(Inst::alu_rmi_r(size, alu_op, rhs, dst));
+                unreachable!("implemented in ISLE")
             }
         }
 
@@ -5801,7 +5179,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
             // Now the AtomicRmwSeq (pseudo-) instruction itself
             let op = inst_common::AtomicRmwOp::from(ctx.data(insn).atomic_rmw_op().unwrap());
-            ctx.emit(Inst::AtomicRmwSeq { ty: ty_access, op });
+            ctx.emit(Inst::AtomicRmwSeq {
+                ty: ty_access,
+                op,
+                address: regs::r9(),
+                operand: regs::r10(),
+                temp: Writable::from_reg(regs::r11()),
+                dst_old: Writable::from_reg(regs::rax()),
+            });
 
             // And finally, copy the preordained AtomicRmwSeq output reg to its destination.
             ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));
@@ -5827,8 +5212,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             ));
             ctx.emit(Inst::LockCmpxchg {
                 ty: ty_access,
-                src: replacement,
-                dst: addr.into(),
+                mem: addr.into(),
+                replacement,
+                expected: regs::rax(),
+                dst_old: Writable::from_reg(regs::rax()),
             });
             // And finally, copy the old value at the location to its destination reg.
             ctx.emit(Inst::gen_move(dst, regs::rax(), types::I64));

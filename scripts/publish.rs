@@ -26,6 +26,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "peepmatic",
     "peepmatic-souper",
     // cranelift
+    "isle",
     "cranelift-entity",
     "wasmtime-types",
     "cranelift-bforest",

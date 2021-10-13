@@ -1,9 +1,10 @@
 [package]
 name = "islec"
 version = "0.1.0"
-authors = ["Chris Fallin <chris@cfallin.org>"]
+authors = ["The Cranelift Project Developers"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
+publish = false
 
 [dependencies]
 log = "0.4"

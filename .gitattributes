@@ -5,3 +5,10 @@
 *.png binary
 *.ico binary
 *.wasm binary
+
+# ISLE should use lisp syntax highlighting.
+*.isle linguist-language=lisp
+
+# Tell GitHub this is generated code, and doesn't need to be shown in diffs by
+# default.
+cranelift/codegen/src/isa/x64/lower/isle/generated_code.rs linguist-generated

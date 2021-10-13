@@ -62,7 +62,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// The index stored in an `EntityList` points to part 2, the list elements. The value 0 is
 /// reserved for the empty list which isn't allocated in the vector.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct EntityList<T: EntityRef + ReservedValue> {
     index: u32,
@@ -271,7 +271,7 @@ impl<T: EntityRef + ReservedValue> EntityList<T> {
     }
 
     /// Get the list as a slice.
-    pub fn as_slice<'a>(&'a self, pool: &'a ListPool<T>) -> &'a [T] {
+    pub fn as_slice<'a>(&self, pool: &'a ListPool<T>) -> &'a [T] {
         let idx = self.index as usize;
         match pool.len_of(self) {
             None => &[],

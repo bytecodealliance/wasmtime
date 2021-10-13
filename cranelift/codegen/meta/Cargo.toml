@@ -17,3 +17,6 @@ cranelift-codegen-shared = { path = "../shared", version = "0.78.0" }
 
 [badges]
 maintenance = { status = "experimental" }
+
+[features]
+rebuild-isle = []

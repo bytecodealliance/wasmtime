@@ -35,4 +35,5 @@ skip = [
     { name = "wast" }, # old one pulled in by witx
     { name = "itertools" }, # 0.9 pulled in by criterion-plot
     { name = "quick-error" }, # transitive dependencies
+    { name = "textwrap" }, # `miette` and `clap` depend on different versions
 ]

@@ -189,6 +189,21 @@ jobs:
       working-directory: ./fuzz
     - run: cargo fuzz build --dev
 
+  rebuild_isle:
+    name: Rebuild ISLE
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - name: Rebuild ISLE DSL files
+      run: cargo build -p cranelift-codegen --features "rebuild-isle"
+    - name: Reformat
+      run: cargo fmt -p cranelift-codegen
+    - name: Check that the ISLE DSL files are up-to-date
+      run: git diff --exit-code
+
   rebuild_peephole_optimizers:
     name: Rebuild Peephole Optimizers
     runs-on: ubuntu-latest

@@ -11,9 +11,9 @@ use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{
-    ArgumentPurpose, Block, Constant, ConstantData, ExternalName, Function, GlobalValueData, Inst,
-    InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value, ValueDef,
-    ValueLabelAssignments, ValueLabelStart,
+    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
+    GlobalValueData, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value,
+    ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::{
     writable_value_regs, ABICallee, BlockIndex, BlockLoweringOrder, LoweredBlock, MachLabel, VCode,
@@ -60,6 +60,8 @@ impl InstColor {
 pub trait LowerCtx {
     /// The instruction type for which this lowering framework is instantiated.
     type I: VCodeInst;
+
+    fn dfg(&self) -> &DataFlowGraph;
 
     // Function-level queries:
 
@@ -124,8 +126,12 @@ pub trait LowerCtx {
     /// instruction's result(s) must have *no* uses remaining, because it will
     /// not be codegen'd (it has been integrated into the current instruction).
     fn get_input_as_source_or_const(&self, ir_inst: Inst, idx: usize) -> NonRegInput;
+    /// Like `get_input_as_source_or_const` but with a `Value`.
+    fn get_value_as_source_or_const(&self, value: Value) -> NonRegInput;
     /// Put the `idx`th input into register(s) and return the assigned register.
     fn put_input_in_regs(&mut self, ir_inst: Inst, idx: usize) -> ValueRegs<Reg>;
+    /// Put the given value into register(s) and return the assigned register.
+    fn put_value_in_regs(&mut self, value: Value) -> ValueRegs<Reg>;
     /// Get the `idx`th output register(s) of the given IR instruction. When
     /// `backend.lower_inst_to_regs(ctx, inst)` is called, it is expected that
     /// the backend will write results to these output register(s).  This
@@ -1002,100 +1008,14 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         Ok((vcode, stack_map_info))
     }
-
-    fn put_value_in_regs(&mut self, val: Value) -> ValueRegs<Reg> {
-        log::trace!("put_value_in_reg: val {}", val);
-        let mut regs = self.value_regs[val];
-        log::trace!(" -> regs {:?}", regs);
-        assert!(regs.is_valid());
-
-        self.value_lowered_uses[val] += 1;
-
-        // Pinned-reg hack: if backend specifies a fixed pinned register, use it
-        // directly when we encounter a GetPinnedReg op, rather than lowering
-        // the actual op, and do not return the source inst to the caller; the
-        // value comes "out of the ether" and we will not force generation of
-        // the superfluous move.
-        if let ValueDef::Result(i, 0) = self.f.dfg.value_def(val) {
-            if self.f.dfg[i].opcode() == Opcode::GetPinnedReg {
-                if let Some(pr) = self.pinned_reg {
-                    regs = ValueRegs::one(pr);
-                }
-            }
-        }
-
-        regs
-    }
-
-    /// Get the actual inputs for a value. This is the implementation for
-    /// `get_input()` but starting from the SSA value, which is not exposed to
-    /// the backend.
-    fn get_value_as_source_or_const(&self, val: Value) -> NonRegInput {
-        log::trace!(
-            "get_input_for_val: val {} at cur_inst {:?} cur_scan_entry_color {:?}",
-            val,
-            self.cur_inst,
-            self.cur_scan_entry_color,
-        );
-        let inst = match self.f.dfg.value_def(val) {
-            // OK to merge source instruction if (i) we have a source
-            // instruction, and:
-            // - It has no side-effects, OR
-            // - It has a side-effect, has one output value, that one output has
-            //   only one use (this one), and the instruction's color is *one less
-            //   than* the current scan color.
-            //
-            //   This latter set of conditions is testing whether a
-            //   side-effecting instruction can sink to the current scan
-            //   location; this is possible if the in-color of this inst is
-            //   equal to the out-color of the producing inst, so no other
-            //   side-effecting ops occur between them (which will only be true
-            //   if they are in the same BB, because color increments at each BB
-            //   start).
-            //
-            //   If it is actually sunk, then in `merge_inst()`, we update the
-            //   scan color so that as we scan over the range past which the
-            //   instruction was sunk, we allow other instructions (that came
-            //   prior to the sunk instruction) to sink.
-            ValueDef::Result(src_inst, result_idx) => {
-                let src_side_effect = has_lowering_side_effect(self.f, src_inst);
-                log::trace!(" -> src inst {}", src_inst);
-                log::trace!(" -> has lowering side effect: {}", src_side_effect);
-                if !src_side_effect {
-                    // Pure instruction: always possible to sink.
-                    Some((src_inst, result_idx))
-                } else {
-                    // Side-effect: test whether this is the only use of the
-                    // only result of the instruction, and whether colors allow
-                    // the code-motion.
-                    if self.cur_scan_entry_color.is_some()
-                        && self.value_uses[val] == 1
-                        && self.value_lowered_uses[val] == 0
-                        && self.num_outputs(src_inst) == 1
-                        && self
-                            .side_effect_inst_entry_colors
-                            .get(&src_inst)
-                            .unwrap()
-                            .get()
-                            + 1
-                            == self.cur_scan_entry_color.unwrap().get()
-                    {
-                        Some((src_inst, 0))
-                    } else {
-                        None
-                    }
-                }
-            }
-            _ => None,
-        };
-        let constant = inst.and_then(|(inst, _)| self.get_constant(inst));
-
-        NonRegInput { inst, constant }
-    }
 }
 
 impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     type I = I;
+
+    fn dfg(&self) -> &DataFlowGraph {
+        &self.f.dfg
+    }
 
     fn abi(&mut self) -> &mut dyn ABICallee<I = I> {
         self.vcode.abi()
@@ -1207,10 +1127,97 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.get_value_as_source_or_const(val)
     }
 
+    fn get_value_as_source_or_const(&self, val: Value) -> NonRegInput {
+        log::trace!(
+            "get_input_for_val: val {} at cur_inst {:?} cur_scan_entry_color {:?}",
+            val,
+            self.cur_inst,
+            self.cur_scan_entry_color,
+        );
+        let inst = match self.f.dfg.value_def(val) {
+            // OK to merge source instruction if (i) we have a source
+            // instruction, and:
+            // - It has no side-effects, OR
+            // - It has a side-effect, has one output value, that one output has
+            //   only one use (this one), and the instruction's color is *one less
+            //   than* the current scan color.
+            //
+            //   This latter set of conditions is testing whether a
+            //   side-effecting instruction can sink to the current scan
+            //   location; this is possible if the in-color of this inst is
+            //   equal to the out-color of the producing inst, so no other
+            //   side-effecting ops occur between them (which will only be true
+            //   if they are in the same BB, because color increments at each BB
+            //   start).
+            //
+            //   If it is actually sunk, then in `merge_inst()`, we update the
+            //   scan color so that as we scan over the range past which the
+            //   instruction was sunk, we allow other instructions (that came
+            //   prior to the sunk instruction) to sink.
+            ValueDef::Result(src_inst, result_idx) => {
+                let src_side_effect = has_lowering_side_effect(self.f, src_inst);
+                log::trace!(" -> src inst {}", src_inst);
+                log::trace!(" -> has lowering side effect: {}", src_side_effect);
+                if !src_side_effect {
+                    // Pure instruction: always possible to sink.
+                    Some((src_inst, result_idx))
+                } else {
+                    // Side-effect: test whether this is the only use of the
+                    // only result of the instruction, and whether colors allow
+                    // the code-motion.
+                    if self.cur_scan_entry_color.is_some()
+                        && self.value_uses[val] == 1
+                        && self.value_lowered_uses[val] == 0
+                        && self.num_outputs(src_inst) == 1
+                        && self
+                            .side_effect_inst_entry_colors
+                            .get(&src_inst)
+                            .unwrap()
+                            .get()
+                            + 1
+                            == self.cur_scan_entry_color.unwrap().get()
+                    {
+                        Some((src_inst, 0))
+                    } else {
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+        let constant = inst.and_then(|(inst, _)| self.get_constant(inst));
+
+        NonRegInput { inst, constant }
+    }
+
     fn put_input_in_regs(&mut self, ir_inst: Inst, idx: usize) -> ValueRegs<Reg> {
         let val = self.f.dfg.inst_args(ir_inst)[idx];
-        let val = self.f.dfg.resolve_aliases(val);
         self.put_value_in_regs(val)
+    }
+
+    fn put_value_in_regs(&mut self, val: Value) -> ValueRegs<Reg> {
+        let val = self.f.dfg.resolve_aliases(val);
+        log::trace!("put_value_in_reg: val {}", val);
+        let mut regs = self.value_regs[val];
+        log::trace!(" -> regs {:?}", regs);
+        assert!(regs.is_valid());
+
+        self.value_lowered_uses[val] += 1;
+
+        // Pinned-reg hack: if backend specifies a fixed pinned register, use it
+        // directly when we encounter a GetPinnedReg op, rather than lowering
+        // the actual op, and do not return the source inst to the caller; the
+        // value comes "out of the ether" and we will not force generation of
+        // the superfluous move.
+        if let ValueDef::Result(i, 0) = self.f.dfg.value_def(val) {
+            if self.f.dfg[i].opcode() == Opcode::GetPinnedReg {
+                if let Some(pr) = self.pinned_reg {
+                    regs = ValueRegs::one(pr);
+                }
+            }
+        }
+
+        regs
     }
 
     fn get_output(&self, ir_inst: Inst, idx: usize) -> ValueRegs<Writable<Reg>> {
