@@ -11,9 +11,6 @@
 1. Announcements
     1. _Sumbit a PR to add your announcement here_
 1. Other agenda items
-    1. Discuss [Wasm exception handling](https://github.com/WebAssembly/exception-handling)
-       implementation strategy (see
-       [#3427](https://github.com/bytecodealliance/wasmtime/issues/3427)).
     1. _Sumbit a PR to add your item here_
 
 ## Notes
@@ -21,3 +18,5 @@
 ### Attendees
 
 ### Notes
+
+*No agenda; meeting called after a few minutes.*
