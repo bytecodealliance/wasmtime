@@ -85,7 +85,7 @@ raised about `#![no_std]`:
   `#![no_std]` library over time has a number of costs associated with it:
 
   * Rust has no stable way to diagnose `no_std` errors in an otherwise `std`
-    build, which means that to supoprt this feature it must be tested on CI with
+    build, which means that to support this feature it must be tested on CI with
     a `no_std` target. This is costly in terms of CI time, CI maintenance, and
     developers having to do extra builds to avoid CI errors. Note that this
     isn't *more* costly than any other platform supported by Wasmtime, but it's
