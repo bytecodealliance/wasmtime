@@ -497,8 +497,6 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
     log::debug!("running {:?} with {:?}", test.file, fuzz_config);
     let mut config = fuzz_config.to_wasmtime();
     config.wasm_memory64(false);
-    config.wasm_reference_types(false);
-    config.wasm_bulk_memory(false);
     config.wasm_module_linking(false);
     config.wasm_multi_memory(false);
     let mut store = create_store(&Engine::new(&config).unwrap());
