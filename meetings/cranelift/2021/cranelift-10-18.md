@@ -80,7 +80,7 @@ https://github.com/fitzgen/wasmtime/blob/isle/cranelift/codegen/src/isa/x64/inst
 
 - cfallin: not much, working on non-cranelift things. RA2 progressing a bit,
   jseward planning on finishing review for regalloc.rs adapter. Should be able
-  to release to crates.io after than and license bits sorted.
+  to release to crates.io after that and license bits sorted.
 - fitzgen: no other updates than from above.
 - bbouvier: no update
 - acrichto: no update
