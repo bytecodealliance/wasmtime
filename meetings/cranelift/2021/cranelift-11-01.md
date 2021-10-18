@@ -11,6 +11,7 @@
 1. Announcements
     1. _Sumbit a PR to add your announcement here_
 1. Other agenda items
+    1. (fitzgen) ISLE presentation; discussion; decision.
     1. _Sumbit a PR to add your item here_
 
 ## Notes
