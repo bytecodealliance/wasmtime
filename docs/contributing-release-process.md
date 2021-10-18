@@ -10,6 +10,8 @@ made (there's also not really a body governing these decisions, it's more
 whimsical currently, or on request from others) then the following steps need to
 be executed to make the release:
 
+1. Double-check that there are no open [rustsec advisory
+   issues][rustsec-issues] on the Wasmtime repository.
 1. `git pull` - make sure you've got the latest changes
 1. Run `rustc scripts/publish.rs`
 1. Run `./publish bump`
@@ -31,3 +33,5 @@ be executed to make the release:
     a bit between runs of the script.
 
 And that's it, then you've done a Wasmtime release.
+
+[rustsec-issues]: https://github.com/bytecodealliance/wasmtime/issues?q=RUSTSEC+is%3Aissue+is%3Aopen+
