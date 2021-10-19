@@ -321,3 +321,40 @@ fn massive_64_bit_still_limited() -> Result<()> {
         }
     }
 }
+
+#[test]
+fn tiny_static_heap() -> Result<()> {
+    // The size of the memory in the module below is the exact same size as
+    // the static memory size limit in the configuration. This is intended to
+    // specifically test that a load of all the valid addresses of the memory
+    // all pass bounds-checks in cranelift to help weed out any off-by-one bugs.
+    let mut config = Config::new();
+    config.static_memory_maximum_size(65536);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 1 1)
+                (func (export "run")
+                    (local $i i32)
+
+                    (loop
+                        (if (i32.eq (local.get $i) (i32.const 65536))
+                            (return))
+                        (drop (i32.load8_u (local.get $i)))
+                        (local.set $i (i32.add (local.get $i) (i32.const 1)))
+                        br 0
+                    )
+                )
+            )
+        "#,
+    )?;
+
+    let i = Instance::new(&mut store, &module, &[])?;
+    let f = i.get_typed_func::<(), (), _>(&mut store, "run")?;
+    f.call(&mut store, ())?;
+    Ok(())
+}

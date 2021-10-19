@@ -157,10 +157,20 @@ fn static_addr(
     let mut spectre_oob_comparison = None;
     offset = cast_offset_to_pointer_ty(offset, offset_ty, addr_ty, &mut pos);
     if offset_ty != ir::types::I32 || limit < 0xffff_ffff {
+        // Here we want to test the condition `offset > limit` and if that's
+        // true then this is an out-of-bounds access and needs to trap. For ARM
+        // and other RISC architectures it's easier to test against an immediate
+        // that's even instead of odd, so if `limit` is odd then we instead test
+        // for `offset >= limit + 1`.
+        //
+        // The thinking behind this is that:
+        //
+        //      A >= B + 1  =>  A - 1 >= B  =>  A > B
+        //
+        // where the last step here is true because A/B are integers, which
+        // should mean that `A >= B + 1` is an equivalent check for `A > B`
         let (cc, lhs, limit_imm) = if limit & 1 == 1 {
-            // Prefer testing `offset >= limit - 1` when limit is odd because an even number is
-            // likely to be a convenient constant on ARM and other RISC architectures.
-            let limit = limit as i64 - 1;
+            let limit = limit as i64 + 1;
             (IntCC::UnsignedGreaterThanOrEqual, offset, limit)
         } else {
             let limit = limit as i64;
