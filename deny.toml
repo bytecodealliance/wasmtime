@@ -8,13 +8,6 @@ targets = [
     { triple = "aarch64-linux-android" },
 ]
 
-# https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
-[advisories]
-vulnerability = "deny"
-unmaintained = "deny"
-yanked = "deny"
-ignore = []
-
 # https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
 [licenses]
 allow = [
