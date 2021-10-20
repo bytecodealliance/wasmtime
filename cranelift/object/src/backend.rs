@@ -114,7 +114,7 @@ impl ObjectBuilder {
 /// See the `ObjectBuilder` for a convenient way to construct `ObjectModule` instances.
 pub struct ObjectModule {
     isa: Box<dyn TargetIsa>,
-    object: Object,
+    object: Object<'static>,
     declarations: ModuleDeclarations,
     functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,
     data_objects: SecondaryMap<DataId, Option<(SymbolId, bool)>>,
@@ -669,7 +669,7 @@ fn translate_linkage(linkage: Linkage) -> (SymbolScope, bool) {
 /// compilation.
 pub struct ObjectProduct {
     /// Object artifact with all functions and data from the module defined.
-    pub object: Object,
+    pub object: Object<'static>,
     /// Symbol IDs for functions (both declared and defined).
     pub functions: SecondaryMap<FuncId, Option<(SymbolId, bool)>>,
     /// Symbol IDs for data objects (both declared and defined).

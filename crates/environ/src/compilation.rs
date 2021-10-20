@@ -172,7 +172,7 @@ pub trait Compiler: Send + Sync {
         types: &TypeTables,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
-        obj: &mut Object,
+        obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)>;
 
     /// Inserts two functions for host-to-wasm and wasm-to-host trampolines into
@@ -186,7 +186,7 @@ pub trait Compiler: Send + Sync {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-        obj: &mut Object,
+        obj: &mut Object<'static>,
     ) -> Result<(Trampoline, Trampoline)>;
 
     /// Creates a new `Object` file which is used to build the results of a
@@ -195,7 +195,7 @@ pub trait Compiler: Send + Sync {
     /// The returned object file will have an appropriate
     /// architecture/endianness for `self.triple()`, but at this time it is
     /// always an ELF file, regardless of target platform.
-    fn object(&self) -> Result<Object> {
+    fn object(&self) -> Result<Object<'static>> {
         use target_lexicon::Architecture::*;
 
         let triple = self.triple();
