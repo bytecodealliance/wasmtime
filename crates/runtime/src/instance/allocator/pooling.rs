@@ -384,6 +384,12 @@ impl InstancePool {
         instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
         instance.wasm_data = &*req.wasm_data;
 
+        // set_instance_memories and _tables will need the store before we can completely
+        // initialize the vmcontext.
+        if let Some(store) = req.store.as_raw() {
+            instance.set_store(store);
+        }
+
         Self::set_instance_memories(
             instance,
             self.memories.get(index),

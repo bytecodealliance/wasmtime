@@ -92,12 +92,10 @@ impl StorePtr {
     pub fn new(ptr: *mut dyn Store) -> Self {
         Self(Some(ptr))
     }
-    /*
-    /// Update an empty StorePtr to point to a Store.
-    pub fn set(&mut self, ptr: *mut dyn Store) {
-        self.0 = Some(ptr)
+    /// The raw contents of this struct
+    pub fn as_raw(&self) -> Option<*mut dyn Store> {
+        self.0.clone()
     }
-    */
     /// Use the StorePtr as a mut ref to the Store.
     // XXX should this be an unsafe fn? is it always safe at a use site?
     pub(crate) fn get(&mut self) -> Option<&mut dyn Store> {
@@ -461,7 +459,7 @@ fn initialize_instance(
 }
 
 unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
-    if let Some(store) = req.store.0 {
+    if let Some(store) = req.store.as_raw() {
         *instance.interrupts() = (*store).vminterrupts();
         *instance.externref_activations_table() = (*store).externref_activations_table().0;
         instance.set_store(store);
