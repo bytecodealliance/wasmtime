@@ -540,6 +540,7 @@ impl<T> Store<T> {
     /// Note that this limiter is only used to limit the creation/growth of
     /// resources in the future, this does not retroactively attempt to apply
     /// limits to the [`Store`].
+    #[cfg(feature = "async")]
     pub fn limiter_async(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
