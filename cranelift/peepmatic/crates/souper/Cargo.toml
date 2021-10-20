@@ -16,4 +16,4 @@ log = "0.4.8"
 [dev-dependencies]
 peepmatic = { path = "../..", version = "0.77.0" }
 peepmatic-test-operator = { version = "0.77.0", path = "../test-operator" }
-wast = "37.0.0"
+wast = "38.0.0"
