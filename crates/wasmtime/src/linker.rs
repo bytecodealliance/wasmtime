@@ -5,7 +5,7 @@ use crate::{
     AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType, Instance,
     IntoFunc, Module, StoreContextMut, Trap, Val, ValRaw,
 };
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::warn;
 use std::collections::hash_map::{Entry, HashMap};
 #[cfg(feature = "async")]
@@ -1040,20 +1040,9 @@ impl<T> Linker<T> {
         let store = store.as_context_mut().0;
         let imports = module
             .imports()
-            .map(|import| {
-                self._get_by_import(&import)
-                    .ok_or_else(|| self.link_error(&import))
-            })
+            .map(|import| self._get_by_import(&import))
             .collect::<Result<_>>()?;
         unsafe { InstancePre::new(store, module, imports) }
-    }
-
-    fn link_error(&self, import: &ImportType) -> Error {
-        let desc = match import.name() {
-            Some(name) => format!("{}::{}", import.module(), name),
-            None => import.module().to_string(),
-        };
-        anyhow!("unknown import: `{}` has not been defined", desc)
     }
 
     /// Returns an iterator over all items defined in this `Linker`, in
@@ -1133,16 +1122,20 @@ impl<T> Linker<T> {
     ) -> Option<Extern> {
         let store = store.as_context_mut().0;
         // Should be safe since `T` is connecting the linker and store
-        Some(unsafe { self._get_by_import(import)?.to_extern(store) })
+        Some(unsafe { self._get_by_import(import).ok()?.to_extern(store) })
     }
 
-    fn _get_by_import(&self, import: &ImportType) -> Option<Definition> {
-        if let Some(item) = self._get(import.module(), import.name()) {
-            return Some(item.clone());
+    fn _get_by_import(&self, import: &ImportType) -> anyhow::Result<Definition> {
+        fn undef_err(missing_import: &str) -> anyhow::Error {
+            anyhow!("unknown import: `{}` has not been defined", missing_import)
         }
 
-        if import.name().is_some() {
-            return None;
+        if let Some(item) = self._get(import.module(), import.name()) {
+            return Ok(item.clone());
+        }
+
+        if let Some(name) = import.name() {
+            return Err(undef_err(&format!("{}::{}", import.module(), name)));
         }
 
         if let ExternType::Instance(t) = import.ty() {
@@ -1163,13 +1156,15 @@ impl<T> Linker<T> {
             // suffice.
             let mut map = indexmap::IndexMap::new();
             for export in t.exports() {
-                let item = self._get(import.module(), Some(export.name()))?;
+                let item = self
+                    ._get(import.module(), Some(export.name()))
+                    .ok_or_else(|| undef_err(&format!("{}::{}", import.module(), export.name())))?;
                 map.insert(export.name().to_string(), item.clone());
             }
-            return Some(Definition::Instance(Arc::new(map)));
+            return Ok(Definition::Instance(Arc::new(map)));
         }
 
-        None
+        Err(undef_err(&import.module()))
     }
 
     /// Returns the "default export" of a module.

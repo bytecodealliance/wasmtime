@@ -24,6 +24,34 @@ fn link_undefined() -> Result<()> {
 }
 
 #[test]
+fn undefined_error_message_with_linking() {
+    let mut config = Config::new();
+    config.wasm_module_linking(true);
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(
+        &engine,
+        r#"
+        (module
+            (import "foo" "bar" (func))
+        )
+    "#,
+    )
+    .unwrap();
+    let linker = Linker::new(&engine);
+    let mut store = Store::new(&engine, ());
+    assert!(linker
+        .instantiate(&mut store, &module)
+        .unwrap_err()
+        .to_string()
+        .contains("foo"));
+    assert!(linker
+        .instantiate(&mut store, &module)
+        .unwrap_err()
+        .to_string()
+        .contains("bar"));
+}
+
+#[test]
 fn link_twice_bad() -> Result<()> {
     let mut store = Store::<()>::default();
     let mut linker = Linker::<()>::new(store.engine());
