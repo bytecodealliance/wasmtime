@@ -105,7 +105,7 @@ pub struct ObjectBuilder<'a> {
     isa: &'a dyn TargetIsa,
 
     /// The object file that we're generating code into.
-    obj: &'a mut Object,
+    obj: &'a mut Object<'static>,
 
     /// The WebAssembly module we're generating code for.
     module: &'a Module,
@@ -163,7 +163,7 @@ struct RUNTIME_FUNCTION {
 }
 
 impl<'a> ObjectBuilder<'a> {
-    pub fn new(obj: &'a mut Object, module: &'a Module, isa: &'a dyn TargetIsa) -> Self {
+    pub fn new(obj: &'a mut Object<'static>, module: &'a Module, isa: &'a dyn TargetIsa) -> Self {
         // Entire code (functions and trampolines) will be placed
         // in the ".text" section.
         let text_section = obj.add_section(

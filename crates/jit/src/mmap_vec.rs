@@ -195,16 +195,12 @@ impl WritableBuffer for ObjectMmap {
         Ok(())
     }
 
-    fn resize(&mut self, new_len: usize, value: u8) {
+    fn resize(&mut self, new_len: usize) {
+        // Resizing always appends 0 bytes and since new mmaps start out as 0
+        // bytes we don't actually need to do anything as part of this other
+        // than update our own length.
         if new_len <= self.len {
             return;
-        }
-        let mmap = self.mmap.as_mut().expect("write before reserve");
-
-        // new mmaps are automatically filled with zeros, so if we're asked to
-        // fill with zeros then we can skip the actual fill step.
-        if value != 0 {
-            mmap[self.len..][..new_len - self.len].fill(value);
         }
         self.len = new_len;
     }

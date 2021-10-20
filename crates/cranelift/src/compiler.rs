@@ -222,7 +222,7 @@ impl wasmtime_environ::Compiler for Compiler {
         types: &TypeTables,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
         emit_dwarf: bool,
-        obj: &mut Object,
+        obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
         let funcs: crate::CompiledFunctions = funcs
             .into_iter()
@@ -317,7 +317,7 @@ impl wasmtime_environ::Compiler for Compiler {
         &self,
         ty: &WasmFuncType,
         host_fn: usize,
-        obj: &mut Object,
+        obj: &mut Object<'static>,
     ) -> Result<(Trampoline, Trampoline)> {
         let host_to_wasm = self.host_to_wasm_trampoline(ty)?;
         let wasm_to_host = self.wasm_to_host_trampoline(ty, host_fn)?;
