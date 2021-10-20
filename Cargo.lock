@@ -2397,9 +2397,9 @@ dependencies = [
 
 [[package]]
 name = "regalloc"
-version = "0.0.31"
+version = "0.0.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "571f7f397d61c4755285cd37853fe8e03271c243424a907415909379659381c5"
+checksum = "a6304468554ed921da3d32c355ea107b8d13d7b8996c3adfb7aab48d3bc321f4"
 dependencies = [
  "log",
  "rustc-hash",

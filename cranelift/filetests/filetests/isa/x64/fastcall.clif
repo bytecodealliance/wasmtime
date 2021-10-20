@@ -238,35 +238,34 @@ block0(v0: i64):
 ; nextln: unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ; nextln: movq    %rsp, %rbp
 ; nextln: unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 160 }
-; nextln: subq    $$208, %rsp
-; nextln: movdqu  %xmm6, 48(%rsp)
+; nextln: subq    $$192, %rsp
+; nextln: movdqu  %xmm6, 32(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 0, reg: r6V }
-; nextln: movdqu  %xmm7, 64(%rsp)
+; nextln: movdqu  %xmm7, 48(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 16, reg: r7V }
-; nextln: movdqu  %xmm8, 80(%rsp)
+; nextln: movdqu  %xmm8, 64(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 32, reg: r8V }
-; nextln: movdqu  %xmm9, 96(%rsp)
+; nextln: movdqu  %xmm9, 80(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 48, reg: r9V }
-; nextln: movdqu  %xmm10, 112(%rsp)
+; nextln: movdqu  %xmm10, 96(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 64, reg: r10V }
-; nextln: movdqu  %xmm11, 128(%rsp)
+; nextln: movdqu  %xmm11, 112(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 80, reg: r11V }
-; nextln: movdqu  %xmm12, 144(%rsp)
+; nextln: movdqu  %xmm12, 128(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 96, reg: r12V }
-; nextln: movdqu  %xmm13, 160(%rsp)
+; nextln: movdqu  %xmm13, 144(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 112, reg: r13V }
-; nextln: movdqu  %xmm14, 176(%rsp)
+; nextln: movdqu  %xmm14, 160(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 128, reg: r14V }
-; nextln: movdqu  %xmm15, 192(%rsp)
+; nextln: movdqu  %xmm15, 176(%rsp)
 ; nextln: unwind SaveReg { clobber_offset: 144, reg: r15V }
-; nextln: movsd   0(%rcx), %xmm0
-; nextln: movsd   %xmm0, rsp(16 + virtual offset)
+; nextln: movsd   0(%rcx), %xmm4
 ; nextln: movsd   8(%rcx), %xmm1
 ; nextln: movsd   16(%rcx), %xmm0
-; nextln: movsd   %xmm0, rsp(24 + virtual offset)
+; nextln: movsd   %xmm0, rsp(16 + virtual offset)
 ; nextln: movsd   24(%rcx), %xmm3
 ; nextln: movsd   32(%rcx), %xmm0
-; nextln: movsd   %xmm0, rsp(32 + virtual offset)
+; nextln: movsd   %xmm0, rsp(24 + virtual offset)
 ; nextln: movsd   40(%rcx), %xmm5
 ; nextln: movsd   48(%rcx), %xmm6
 ; nextln: movsd   56(%rcx), %xmm7
@@ -284,45 +283,41 @@ block0(v0: i64):
 ; nextln: movsd   144(%rcx), %xmm2
 ; nextln: movsd   %xmm2, rsp(8 + virtual offset)
 ; nextln: movsd   152(%rcx), %xmm2
-; nextln: nop     len=0
-; nextln: movsd   rsp(16 + virtual offset), %xmm4
 ; nextln: addsd   %xmm1, %xmm4
-; nextln: movsd   %xmm4, rsp(16 + virtual offset)
-; nextln: movsd   rsp(24 + virtual offset), %xmm1
+; nextln: movsd   rsp(16 + virtual offset), %xmm1
 ; nextln: addsd   %xmm3, %xmm1
-; nextln: movsd   rsp(32 + virtual offset), %xmm4
-; nextln: addsd   %xmm5, %xmm4
+; nextln: movsd   rsp(24 + virtual offset), %xmm3
+; nextln: addsd   %xmm5, %xmm3
 ; nextln: addsd   %xmm7, %xmm6
 ; nextln: addsd   %xmm9, %xmm8
 ; nextln: addsd   %xmm11, %xmm10
 ; nextln: addsd   %xmm13, %xmm12
 ; nextln: addsd   %xmm15, %xmm14
-; nextln: movsd   rsp(0 + virtual offset), %xmm3
-; nextln: addsd   %xmm0, %xmm3
+; nextln: movsd   rsp(0 + virtual offset), %xmm5
+; nextln: addsd   %xmm0, %xmm5
 ; nextln: movsd   rsp(8 + virtual offset), %xmm0
 ; nextln: addsd   %xmm2, %xmm0
-; nextln: movsd   rsp(16 + virtual offset), %xmm2
-; nextln: addsd   %xmm1, %xmm2
-; nextln: addsd   %xmm6, %xmm4
+; nextln: addsd   %xmm1, %xmm4
+; nextln: addsd   %xmm6, %xmm3
 ; nextln: addsd   %xmm10, %xmm8
 ; nextln: addsd   %xmm14, %xmm12
-; nextln: addsd   %xmm0, %xmm3
-; nextln: addsd   %xmm4, %xmm2
+; nextln: addsd   %xmm0, %xmm5
+; nextln: addsd   %xmm3, %xmm4
 ; nextln: addsd   %xmm12, %xmm8
-; nextln: addsd   %xmm8, %xmm2
-; nextln: addsd   %xmm3, %xmm2
-; nextln: movaps  %xmm2, %xmm0
-; nextln: movdqu  48(%rsp), %xmm6
-; nextln: movdqu  64(%rsp), %xmm7
-; nextln: movdqu  80(%rsp), %xmm8
-; nextln: movdqu  96(%rsp), %xmm9
-; nextln: movdqu  112(%rsp), %xmm10
-; nextln: movdqu  128(%rsp), %xmm11
-; nextln: movdqu  144(%rsp), %xmm12
-; nextln: movdqu  160(%rsp), %xmm13
-; nextln: movdqu  176(%rsp), %xmm14
-; nextln: movdqu  192(%rsp), %xmm15
-; nextln: addq    $$208, %rsp
+; nextln: addsd   %xmm8, %xmm4
+; nextln: addsd   %xmm5, %xmm4
+; nextln: movaps  %xmm4, %xmm0
+; nextln: movdqu  32(%rsp), %xmm6
+; nextln: movdqu  48(%rsp), %xmm7
+; nextln: movdqu  64(%rsp), %xmm8
+; nextln: movdqu  80(%rsp), %xmm9
+; nextln: movdqu  96(%rsp), %xmm10
+; nextln: movdqu  112(%rsp), %xmm11
+; nextln: movdqu  128(%rsp), %xmm12
+; nextln: movdqu  144(%rsp), %xmm13
+; nextln: movdqu  160(%rsp), %xmm14
+; nextln: movdqu  176(%rsp), %xmm15
+; nextln: addq    $$192, %rsp
 ; nextln: movq    %rbp, %rsp
 ; nextln: popq    %rbp
 ; nextln: ret

@@ -52,11 +52,11 @@ block0(v0: i16, v1: i16):
 }
 
 ; check:  llhr %r2, %r2
-; nextln: lr %r5, %r3
-; nextln: lcr %r4, %r3
-; nextln: nill %r5, 15
+; nextln: lr %r3, %r4
+; nextln: lcr %r4, %r4
+; nextln: nill %r3, 15
 ; nextln: nill %r4, 15
-; nextln: sllk %r3, %r2, 0(%r5)
+; nextln: sllk %r3, %r2, 0(%r3)
 ; nextln: srlk %r2, %r2, 0(%r4)
 ; nextln: ork %r2, %r3, %r2
 ; nextln: br %r14
@@ -81,11 +81,11 @@ block0(v0: i8, v1: i8):
 }
 
 ; check:  llcr %r2, %r2
-; nextln: lr %r5, %r3
-; nextln: lcr %r4, %r3
-; nextln: nill %r5, 7
+; nextln: lr %r3, %r4
+; nextln: lcr %r4, %r4
+; nextln: nill %r3, 7
 ; nextln: nill %r4, 7
-; nextln: sllk %r3, %r2, 0(%r5)
+; nextln: sllk %r3, %r2, 0(%r3)
 ; nextln: srlk %r2, %r2, 0(%r4)
 ; nextln: ork %r2, %r3, %r2
 ; nextln: br %r14
