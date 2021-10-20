@@ -168,7 +168,7 @@ impl Table {
     }
 
     fn limit_new(plan: &TablePlan, store: &mut dyn Store) -> Result<()> {
-        if !store.limiter_table_growing(0, plan.table.minimum, plan.table.maximum) {
+        if !store.table_growing(0, plan.table.minimum, plan.table.maximum) {
             bail!(
                 "table minimum size of {} elements exceeds table limits",
                 plan.table.minimum
@@ -292,7 +292,7 @@ impl Table {
         let old_size = self.size();
         let new_size = old_size.checked_add(delta)?;
 
-        if !store.limiter_table_growing(old_size, new_size, self.maximum()) {
+        if !store.table_growing(old_size, new_size, self.maximum()) {
             return None;
         }
 

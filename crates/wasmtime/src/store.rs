@@ -1526,12 +1526,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         (&mut inner.externref_activations_table, &inner.modules)
     }
 
-    fn limiter_memory_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> bool {
+    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool {
         // Need to borrow async_cx before the mut borrow of the limiter.
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
@@ -1560,7 +1555,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn limiter_memory_grow_failed(&mut self, error: &anyhow::Error) {
+    fn memory_grow_failed(&mut self, error: &anyhow::Error) {
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 limiter(&mut self.data).memory_grow_failed(error)
@@ -1573,7 +1568,7 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn limiter_table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
+    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
         // Need to borrow async_cx before the mut borrow of the limiter.
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.

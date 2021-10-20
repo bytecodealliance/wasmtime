@@ -91,17 +91,12 @@ pub unsafe trait Store {
     ) -> (&mut VMExternRefActivationsTable, &dyn ModuleInfoLookup);
 
     /// Callback invoked to allow the store's resource limiter to reject a memory grow operation.
-    fn limiter_memory_growing(
-        &mut self,
-        current: usize,
-        desired: usize,
-        maximum: Option<usize>,
-    ) -> bool;
+    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool;
     /// Callback invoked to notify the store's resource limiter that a memory grow operation has
     /// failed.
-    fn limiter_memory_grow_failed(&mut self, error: &anyhow::Error);
+    fn memory_grow_failed(&mut self, error: &anyhow::Error);
     /// Callback invoked to allow the store's resource limiter to reject a table grow operation.
-    fn limiter_table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
     /// Callback invoked whenever fuel runs out by a wasm instance. If an error
     /// is returned that's raised as a trap. Otherwise wasm execution will
