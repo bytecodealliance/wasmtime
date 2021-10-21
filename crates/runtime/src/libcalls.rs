@@ -190,7 +190,9 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
     delta: u64,
     memory_index: u32,
 ) -> usize {
-    std::panic::catch_unwind(|| {
+    // Memory grow can invoke user code provided in a ResourceLimiter{,Async},
+    // so we need to catch a possible panic
+    match std::panic::catch_unwind(|| {
         let instance = (*vmctx).instance_mut();
         let memory_index = MemoryIndex::from_u32(memory_index);
         match instance.memory_grow(memory_index, delta) {
@@ -198,9 +200,10 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
             Ok(None) => usize::max_value(),
             Err(err) => crate::traphandlers::raise_user_trap(err),
         }
-    })
-    .map_err(|panic| resume_panic(panic))
-    .unwrap()
+    }) {
+        Ok(r) => r,
+        Err(p) => resume_panic(p),
+    }
 }
 
 /// Implementation of `table.grow`.
@@ -212,7 +215,9 @@ pub unsafe extern "C" fn wasmtime_table_grow(
     // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> u32 {
-    std::panic::catch_unwind(|| {
+    // Table grow can invoke user code provided in a ResourceLimiter{,Async},
+    // so we need to catch a possible panic
+    match std::panic::catch_unwind(|| {
         let instance = (*vmctx).instance_mut();
         let table_index = TableIndex::from_u32(table_index);
         let element = match instance.table_element_type(table_index) {
@@ -231,9 +236,10 @@ pub unsafe extern "C" fn wasmtime_table_grow(
             Ok(None) => -1_i32 as u32,
             Err(err) => crate::traphandlers::raise_user_trap(err),
         }
-    })
-    .map_err(|panic| resume_panic(panic))
-    .unwrap()
+    }) {
+        Ok(r) => r,
+        Err(p) => resume_panic(p),
+    }
 }
 
 /// Implementation of `table.fill`.
