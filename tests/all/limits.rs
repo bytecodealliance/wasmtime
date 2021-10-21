@@ -65,6 +65,96 @@ fn test_limits() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_limits_async() -> Result<()> {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config).unwrap();
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+    )?;
+
+    struct LimitsAsync {
+        memory_size: usize,
+        table_elements: u32,
+    }
+    #[async_trait::async_trait]
+    impl ResourceLimiterAsync for LimitsAsync {
+        async fn memory_growing(
+            &mut self,
+            _current: usize,
+            desired: usize,
+            _maximum: Option<usize>,
+        ) -> bool {
+            desired <= self.memory_size
+        }
+        fn memory_grow_failed(&mut self, _error: &anyhow::Error) {}
+        async fn table_growing(
+            &mut self,
+            _current: u32,
+            desired: u32,
+            _maximum: Option<u32>,
+        ) -> bool {
+            desired <= self.table_elements
+        }
+    }
+
+    let mut store = Store::new(
+        &engine,
+        LimitsAsync {
+            memory_size: 10 * WASM_PAGE_SIZE,
+            table_elements: 5,
+        },
+    );
+
+    store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
+
+    let instance = Instance::new_async(&mut store, &module, &[]).await?;
+
+    // Test instance exports and host objects hitting the limit
+    for memory in std::array::IntoIter::new([
+        instance.get_memory(&mut store, "m").unwrap(),
+        Memory::new(&mut store, MemoryType::new(0, None))?,
+    ]) {
+        memory.grow(&mut store, 3)?;
+        memory.grow(&mut store, 5)?;
+        memory.grow(&mut store, 2)?;
+
+        assert_eq!(
+            memory
+                .grow(&mut store, 1)
+                .map_err(|e| e.to_string())
+                .unwrap_err(),
+            "failed to grow memory by `1`"
+        );
+    }
+
+    // Test instance exports and host objects hitting the limit
+    for table in std::array::IntoIter::new([
+        instance.get_table(&mut store, "t").unwrap(),
+        Table::new(
+            &mut store,
+            TableType::new(ValType::FuncRef, 0, None),
+            Val::FuncRef(None),
+        )?,
+    ]) {
+        table.grow(&mut store, 2, Val::FuncRef(None))?;
+        table.grow(&mut store, 1, Val::FuncRef(None))?;
+        table.grow(&mut store, 2, Val::FuncRef(None))?;
+
+        assert_eq!(
+            table
+                .grow(&mut store, 1, Val::FuncRef(None))
+                .map_err(|e| e.to_string())
+                .unwrap_err(),
+            "failed to grow table by `1`"
+        );
+    }
+
+    Ok(())
+}
+
 #[test]
 fn test_limits_memory_only() -> Result<()> {
     let engine = Engine::default();
