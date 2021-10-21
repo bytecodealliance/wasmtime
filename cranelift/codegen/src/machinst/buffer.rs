@@ -250,8 +250,12 @@ pub struct MachBufferFinalized {
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
 }
 
-static UNKNOWN_LABEL_OFFSET: CodeOffset = 0xffff_ffff;
-static UNKNOWN_LABEL: MachLabel = MachLabel(0xffff_ffff);
+const UNKNOWN_LABEL_OFFSET: CodeOffset = 0xffff_ffff;
+const UNKNOWN_LABEL: MachLabel = MachLabel(0xffff_ffff);
+
+/// Threshold on max length of `labels_at_this_branch` list to avoid
+/// unbounded quadratic behavior (see comment below at use-site).
+const LABEL_LIST_THRESHOLD: usize = 100;
 
 /// A label refers to some offset in a `MachBuffer`. It may not be resolved at
 /// the point at which it is used by emitted code; the buffer records "fixups"
@@ -788,6 +792,24 @@ impl<I: VCodeInst> MachBuffer<I> {
             // don't move code once placed, only back up and overwrite), so
             // clear the records and finish.
             if b.end < cur_off {
+                break;
+            }
+
+            // If the "labels at this branch" list on this branch is
+            // longer than a threshold, don't do any simplification,
+            // and let the branch remain to separate those labels from
+            // the current tail. This avoids quadratic behavior (see
+            // #3468): otherwise, if a long string of "goto next;
+            // next:" patterns are emitted, all of the labels will
+            // coalesce into a long list of aliases for the current
+            // buffer tail. We must track all aliases of the current
+            // tail for correctness, but we are also allowed to skip
+            // optimization (removal) of any branch, so we take the
+            // escape hatch here and let it stand. In effect this
+            // "spreads" the many thousands of labels in the
+            // pathological case among an actual (harmless but
+            // suboptimal) instruction once per N labels.
+            if b.labels_at_this_branch.len() > LABEL_LIST_THRESHOLD {
                 break;
             }
 
