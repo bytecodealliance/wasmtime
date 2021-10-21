@@ -223,6 +223,24 @@ impl Memory {
         Memory::_new(store.as_context_mut().0, ty)
     }
 
+    /// Async variant of [`Memory::new`]. You must use this variant with Stores which have a
+    /// [`ResourceLimiterAsync`].
+    #[cfg(feature = "async")]
+    pub async fn new_async<T>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: MemoryType,
+    ) -> Result<Memory>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
+        );
+        store.on_fiber(|store| Memory::_new(store.0, ty)).await?
+    }
+
     fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
         unsafe {
             let export = generate_memory_export(store, &ty)?;
@@ -472,6 +490,23 @@ impl Memory {
         }
     }
 
+    /// Async variant of [`Memory::grow`]. Required when using a [`ResourceLimiterAsync`].
+    #[cfg(feature = "async")]
+    pub async fn grow_async<T>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        delta: u64,
+    ) -> Result<u64>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `grow_async` without enabling async support on the config"
+        );
+        store.on_fiber(|store| self.grow(store, delta)).await?
+    }
     fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut wasmtime_runtime::Memory {
         unsafe {
             let export = &store[self.0];

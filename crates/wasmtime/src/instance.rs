@@ -503,19 +503,19 @@ impl<'a> Instantiator<'a> {
 
         // NB: this is the same code as `run`. It's intentionally
         // small but should be kept in sync (modulo the async bits).
-        loop {
-            let step = self.step(store.0)?;
-            if let Some((instance, start, toplevel)) = step {
-                if let Some(start) = start {
-                    store
-                        .on_fiber(|store| Instantiator::start_raw(store, instance, start))
-                        .await??;
+        store
+            .on_fiber(|store| loop {
+                let step = self.step(store.0)?;
+                if let Some((instance, start, toplevel)) = step {
+                    if let Some(start) = start {
+                        Instantiator::start_raw(store, instance, start)?
+                    }
+                    if toplevel {
+                        break Ok(instance);
+                    }
                 }
-                if toplevel {
-                    break Ok(instance);
-                }
-            }
-        }
+            })
+            .await?
     }
 
     /// Processes the next initializer for the next instance being created

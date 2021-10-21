@@ -115,15 +115,16 @@ async fn test_limits_async() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for memory in std::array::IntoIter::new([
         instance.get_memory(&mut store, "m").unwrap(),
-        Memory::new(&mut store, MemoryType::new(0, None))?,
+        Memory::new_async(&mut store, MemoryType::new(0, None)).await?,
     ]) {
-        memory.grow(&mut store, 3)?;
-        memory.grow(&mut store, 5)?;
-        memory.grow(&mut store, 2)?;
+        memory.grow_async(&mut store, 3).await?;
+        memory.grow_async(&mut store, 5).await?;
+        memory.grow_async(&mut store, 2).await?;
 
         assert_eq!(
             memory
-                .grow(&mut store, 1)
+                .grow_async(&mut store, 1)
+                .await
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
             "failed to grow memory by `1`"
