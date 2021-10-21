@@ -385,7 +385,10 @@ impl std::error::Error for Trap {
 
 impl From<anyhow::Error> for Trap {
     fn from(e: anyhow::Error) -> Trap {
-        Box::<dyn std::error::Error + Send + Sync>::from(e).into()
+        match e.downcast::<Trap>() {
+            Ok(trap) => trap,
+            Err(e) => Box::<dyn std::error::Error + Send + Sync>::from(e).into(),
+        }
     }
 }
 
