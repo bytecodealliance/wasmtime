@@ -2,10 +2,10 @@
 //! signalhandling mechanisms.
 
 use crate::{VMContext, VMInterrupts};
+use anyhow::Error;
 use backtrace::Backtrace;
 use std::any::Any;
 use std::cell::{Cell, UnsafeCell};
-use std::error::Error;
 use std::mem::MaybeUninit;
 use std::ptr;
 use std::sync::atomic::Ordering::SeqCst;
@@ -80,7 +80,7 @@ pub fn init_traps(is_wasm_pc: fn(usize) -> bool) {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_user_trap(data: Box<dyn Error + Send + Sync>) -> ! {
+pub unsafe fn raise_user_trap(data: Error) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::UserTrap(data)))
 }
 
@@ -114,7 +114,7 @@ pub unsafe fn resume_panic(payload: Box<dyn Any + Send>) -> ! {
 #[derive(Debug)]
 pub enum Trap {
     /// A user-raised trap through `raise_user_trap`.
-    User(Box<dyn Error + Send + Sync>),
+    User(Error),
 
     /// A trap raised from jit code
     Jit {
@@ -206,7 +206,7 @@ pub struct CallThreadState {
 
 enum UnwindReason {
     Panic(Box<dyn Any + Send>),
-    UserTrap(Box<dyn Error + Send + Sync>),
+    UserTrap(Error),
     LibTrap(Trap),
     JitTrap { backtrace: Backtrace, pc: usize },
 }

@@ -5,6 +5,7 @@
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
 use crate::Store;
+use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use more_asserts::{assert_ge, assert_le};
 use std::convert::TryFrom;
@@ -315,7 +316,7 @@ impl Memory {
         // calculation overflowed. This means that the `minimum` we're informing
         // the limiter is lossy and may not be 100% accurate, but for now the
         // expected uses of limiter means that's ok.
-        if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum) {
+        if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
             bail!(
                 "memory minimum size of {} pages exceeds memory limits",
                 plan.memory.minimum
@@ -377,11 +378,15 @@ impl Memory {
     ///
     /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
     /// this unsafety.
-    pub unsafe fn grow(&mut self, delta_pages: u64, store: &mut dyn Store) -> Option<usize> {
+    pub unsafe fn grow(
+        &mut self,
+        delta_pages: u64,
+        store: &mut dyn Store,
+    ) -> Result<Option<usize>, Error> {
         let old_byte_size = self.byte_size();
         // Wasm spec: when growing by 0 pages, always return the current size.
         if delta_pages == 0 {
-            return Some(old_byte_size);
+            return Ok(Some(old_byte_size));
         }
 
         // largest wasm-page-aligned region of memory it is possible to
@@ -402,15 +407,15 @@ impl Memory {
 
         let maximum = self.maximum_byte_size();
         // Store limiter gets first chance to reject memory_growing.
-        if !store.memory_growing(old_byte_size, new_byte_size, maximum) {
-            return None;
+        if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
+            return Ok(None);
         }
 
         // Never exceed maximum, even if limiter permitted it.
         if let Some(max) = maximum {
             if new_byte_size > max {
                 store.memory_grow_failed(&format_err!("Memory maximum size exceeded"));
-                return None;
+                return Ok(None);
             }
         }
 
@@ -418,7 +423,10 @@ impl Memory {
         {
             if self.is_static() {
                 // Reset any faulted guard pages before growing the memory.
-                self.reset_guard_pages().ok()?;
+                if let Err(e) = self.reset_guard_pages() {
+                    store.memory_grow_failed(&e);
+                    return Ok(None);
+                }
             }
         }
 
@@ -432,24 +440,27 @@ impl Memory {
                 // Never exceed static memory size
                 if new_byte_size > base.len() {
                     store.memory_grow_failed(&format_err!("static memory size exceeded"));
-                    return None;
+                    return Ok(None);
                 }
 
                 // Operating system can fail to make memory accessible
-                let r = make_accessible(
+                if let Err(e) = make_accessible(
                     base.as_mut_ptr().add(old_byte_size),
                     new_byte_size - old_byte_size,
-                );
-                r.map_err(|e| store.memory_grow_failed(&e)).ok()?;
-
+                ) {
+                    store.memory_grow_failed(&e);
+                    return Ok(None);
+                }
                 *size = new_byte_size;
             }
             Memory::Dynamic(mem) => {
-                let r = mem.grow_to(new_byte_size);
-                r.map_err(|e| store.memory_grow_failed(&e)).ok()?;
+                if let Err(e) = mem.grow_to(new_byte_size) {
+                    store.memory_grow_failed(&e);
+                    return Ok(None);
+                }
             }
         }
-        Some(old_byte_size)
+        Ok(Some(old_byte_size))
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.

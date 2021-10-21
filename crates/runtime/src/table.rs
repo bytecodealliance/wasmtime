@@ -4,6 +4,7 @@
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use crate::{Store, Trap, VMExternRef};
+use anyhow::Error;
 use anyhow::{bail, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
@@ -168,7 +169,7 @@ impl Table {
     }
 
     fn limit_new(plan: &TablePlan, store: &mut dyn Store) -> Result<()> {
-        if !store.table_growing(0, plan.table.minimum, plan.table.maximum) {
+        if !store.table_growing(0, plan.table.minimum, plan.table.maximum)? {
             bail!(
                 "table minimum size of {} elements exceeds table limits",
                 plan.table.minimum
@@ -288,17 +289,20 @@ impl Table {
         delta: u32,
         init_value: TableElement,
         store: &mut dyn Store,
-    ) -> Option<u32> {
+    ) -> Result<Option<u32>, Error> {
         let old_size = self.size();
-        let new_size = old_size.checked_add(delta)?;
+        let new_size = match old_size.checked_add(delta) {
+            Some(s) => s,
+            None => return Ok(None),
+        };
 
-        if !store.table_growing(old_size, new_size, self.maximum()) {
-            return None;
+        if !store.table_growing(old_size, new_size, self.maximum())? {
+            return Ok(None);
         }
 
         if let Some(max) = self.maximum() {
             if new_size > max {
-                return None;
+                return Ok(None);
             }
         }
 
@@ -320,7 +324,7 @@ impl Table {
         self.fill(old_size, init_value, delta)
             .expect("table should not be out of bounds");
 
-        Some(old_size)
+        Ok(Some(old_size))
     }
 
     /// Get reference to the specified element.

@@ -12,6 +12,7 @@ use crate::vmcontext::{
     VMInterrupts, VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
 };
 use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
+use anyhow::Error;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
 use std::alloc::Layout;
@@ -348,7 +349,11 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
-    pub(crate) fn memory_grow(&mut self, index: MemoryIndex, delta: u64) -> Option<usize> {
+    pub(crate) fn memory_grow(
+        &mut self,
+        index: MemoryIndex,
+        delta: u64,
+    ) -> Result<Option<usize>, Error> {
         let (idx, instance) = if let Some(idx) = self.module.defined_memory_index(index) {
             (idx, self)
         } else {
@@ -387,7 +392,7 @@ impl Instance {
         table_index: TableIndex,
         delta: u32,
         init_value: TableElement,
-    ) -> Option<u32> {
+    ) -> Result<Option<u32>, Error> {
         let (defined_table_index, instance) =
             self.get_defined_table_index_and_instance(table_index);
         instance.defined_table_grow(defined_table_index, delta, init_value)
@@ -398,7 +403,7 @@ impl Instance {
         table_index: DefinedTableIndex,
         delta: u32,
         init_value: TableElement,
-    ) -> Option<u32> {
+    ) -> Result<Option<u32>, Error> {
         let store = unsafe { &mut *self.store() };
         let table = self
             .tables
