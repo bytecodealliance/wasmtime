@@ -104,7 +104,7 @@ pub trait ResourceLimiterAsync {
     ) -> bool;
 
     /// Identical to [`ResourceLimiter::memory_grow_failed`]
-    fn memory_grow_failed(&mut self, error: &anyhow::Error);
+    fn memory_grow_failed(&mut self, _error: &anyhow::Error) {}
 
     /// Asynchronous version of [`ResourceLimiter::table_growing`]
     async fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
