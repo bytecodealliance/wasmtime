@@ -81,7 +81,6 @@ use anyhow::{bail, Result};
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::error::Error;
 use std::fmt;
 use std::future::Future;
 use std::marker;
@@ -1527,7 +1526,12 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         (&mut inner.externref_activations_table, &inner.modules)
     }
 
-    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool {
+    fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> Result<bool, anyhow::Error> {
         // Need to borrow async_cx before the mut borrow of the limiter.
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
@@ -1539,20 +1543,19 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         };
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).memory_growing(current, desired, maximum)
+                Ok(limiter(&mut self.data).memory_growing(current, desired, maximum))
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                async_cx
+                Ok(async_cx
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .memory_growing(current, desired, maximum)
                             .as_mut(),
-                    )
-                    .expect("FIXME idk how to deal with a trap here!")
+                    )?)
             },
-            None => true,
+            None => Ok(true),
         }
     }
 
@@ -1569,7 +1572,12 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
-    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
+    fn table_growing(
+        &mut self,
+        current: u32,
+        desired: u32,
+        maximum: Option<u32>,
+    ) -> Result<bool, anyhow::Error> {
         // Need to borrow async_cx before the mut borrow of the limiter.
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
@@ -1582,33 +1590,32 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
 
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
-                limiter(&mut self.data).table_growing(current, desired, maximum)
+                Ok(limiter(&mut self.data).table_growing(current, desired, maximum))
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                async_cx
+                Ok(async_cx
                     .expect("ResourceLimiterAsync requires async Store")
                     .block_on(
                         limiter(&mut self.data)
                             .table_growing(current, desired, maximum)
                             .as_mut(),
-                    )
-                    .expect("FIXME idk how to deal with a trap here!")
+                    )?)
             },
-            None => true,
+            None => Ok(true),
         }
     }
 
-    fn out_of_gas(&mut self) -> Result<(), Box<dyn Error + Send + Sync>> {
+    fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
         return match &mut self.out_of_gas_behavior {
-            OutOfGas::Trap => Err(Box::new(OutOfGasError)),
+            OutOfGas::Trap => Err(anyhow::Error::new(OutOfGasError)),
             #[cfg(feature = "async")]
             OutOfGas::InjectFuel {
                 injection_count,
                 fuel_to_inject,
             } => {
                 if *injection_count == 0 {
-                    return Err(Box::new(OutOfGasError));
+                    return Err(anyhow::Error::new(OutOfGasError));
                 }
                 *injection_count -= 1;
                 let fuel = *fuel_to_inject;

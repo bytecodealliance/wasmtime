@@ -4,8 +4,6 @@ use crate::{
     StoreContext, StoreContextMut, Trap, Val, ValRaw, ValType,
 };
 use anyhow::{bail, Context as _, Result};
-use std::error::Error;
-use std::fmt;
 use std::future::Future;
 use std::mem;
 use std::panic::{self, AssertUnwindSafe};
@@ -1784,25 +1782,6 @@ impl<T> AsContextMut for Caller<'_, T> {
     }
 }
 
-fn cross_store_trap() -> Box<dyn Error + Send + Sync> {
-    #[derive(Debug)]
-    struct CrossStoreError;
-
-    impl Error for CrossStoreError {}
-
-    impl fmt::Display for CrossStoreError {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(
-                f,
-                "host function attempted to return cross-`Store` \
-                 value to Wasm",
-            )
-        }
-    }
-
-    Box::new(CrossStoreError)
-}
-
 macro_rules! impl_into_func {
     ($num:tt $($args:ident)*) => {
         // Implement for functions without a leading `&Caller` parameter,
@@ -1852,7 +1831,7 @@ macro_rules! impl_into_func {
                 {
                     enum CallResult<U> {
                         Ok(U),
-                        Trap(Box<dyn Error + Send + Sync>),
+                        Trap(anyhow::Error),
                         Panic(Box<dyn std::any::Any + Send>),
                     }
 
@@ -1901,7 +1880,9 @@ macro_rules! impl_into_func {
                                 // can't assume it returned a value that is
                                 // compatible with this store.
                                 if !ret.compatible_with_store(caller.store.0) {
-                                    CallResult::Trap(cross_store_trap())
+                                    CallResult::Trap(anyhow::anyhow!(
+                "host function attempted to return cross-`Store` value to Wasm"
+                                            ))
                                 } else {
                                     match ret.into_abi_for_ret(caller.store.0, retptr) {
                                         Ok(val) => CallResult::Ok(val),

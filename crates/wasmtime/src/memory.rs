@@ -479,7 +479,7 @@ impl Memory {
         let store = store.as_context_mut().0;
         let mem = self.wasmtime_memory(store);
         unsafe {
-            match (*mem).grow(delta, store) {
+            match (*mem).grow(delta, store)? {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
                     *store[self.0].definition = vm;
