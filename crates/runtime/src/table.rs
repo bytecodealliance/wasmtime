@@ -4,8 +4,7 @@
 
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMTableDefinition};
 use crate::{Store, Trap, VMExternRef};
-use anyhow::Error;
-use anyhow::{bail, Result};
+use anyhow::{bail, format_err, Error, Result};
 use std::convert::{TryFrom, TryInto};
 use std::ops::Range;
 use std::ptr;
@@ -302,6 +301,7 @@ impl Table {
 
         if let Some(max) = self.maximum() {
             if new_size > max {
+                store.table_grow_failed(&format_err!("Table maximum size exceeded"));
                 return Ok(None);
             }
         }

@@ -50,6 +50,13 @@ pub trait ResourceLimiter {
     /// effect as the table will not grow.
     fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
 
+    /// Notifies the resource limiter that growing a linear memory, permitted by
+    /// the `table_growing` method, has failed.
+    ///
+    /// Reasons for failure include: the growth exceeds the `maximum` passed to
+    /// `table_growing`. This could expand in the future.
+    fn table_grow_failed(&mut self, _error: &anyhow::Error) {}
+
     /// The maximum number of instances that can be created for a `Store`.
     ///
     /// Module instantiation will fail if this limit is exceeded.
@@ -79,9 +86,13 @@ pub trait ResourceLimiter {
 }
 
 #[cfg(feature = "async")]
-/// Used by hosts to limit resource consumption of instances.
-/// Identical to [`ResourceLimiter`], except that the `memory_growing` and `table_growing`
+/// Used by hosts to limit resource consumption of instances.  Identical to
+/// [`ResourceLimiter`], except that the `memory_growing` and `table_growing`
 /// functions are async. Must be used with an async [`Store`].
+///
+/// This trait is used with [`Store::limiter_async`]: see those docs for
+/// restrictions on using other Wasmtime interfaces with an async resource
+/// limiter.
 #[async_trait::async_trait]
 pub trait ResourceLimiterAsync {
     /// Async version of [`ResourceLimiter::memory_growing`]
@@ -97,6 +108,9 @@ pub trait ResourceLimiterAsync {
 
     /// Asynchronous version of [`ResourceLimiter::table_growing`]
     async fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
+
+    /// Identical to [`ResourceLimiter::table_grow_failed`]
+    fn table_grow_failed(&mut self, _error: &anyhow::Error) {}
 
     /// Identical to [`ResourceLimiter::instances`]`
     fn instances(&self) -> usize {

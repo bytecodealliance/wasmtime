@@ -1618,6 +1618,19 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
     }
 
+    fn table_grow_failed(&mut self, error: &anyhow::Error) {
+        match self.limiter {
+            Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
+                limiter(&mut self.data).table_grow_failed(error)
+            }
+            #[cfg(feature = "async")]
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => {
+                limiter(&mut self.data).table_grow_failed(error)
+            }
+            None => {}
+        }
+    }
+
     fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
         return match &mut self.out_of_gas_behavior {
             OutOfGas::Trap => Err(anyhow::Error::new(OutOfGasError)),
