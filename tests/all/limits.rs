@@ -478,6 +478,118 @@ fn test_custom_limiter() -> Result<()> {
     Ok(())
 }
 
+#[async_trait::async_trait]
+impl ResourceLimiterAsync for MemoryContext {
+    async fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> bool {
+        // Check if the desired exceeds a maximum (either from Wasm or from the host)
+        assert!(desired < maximum.unwrap_or(usize::MAX));
+
+        assert_eq!(current as usize, self.wasm_memory_used);
+        let desired = desired as usize;
+
+        if desired + self.host_memory_used > self.memory_limit {
+            self.limit_exceeded = true;
+            return false;
+        }
+
+        self.wasm_memory_used = desired;
+        true
+    }
+    fn memory_grow_failed(&mut self, _e: &anyhow::Error) {}
+    async fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
+        true
+    }
+    fn table_grow_failed(&mut self, _e: &anyhow::Error) {}
+}
+
+#[tokio::test]
+async fn test_custom_limiter_async() -> Result<()> {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config).unwrap();
+    let mut linker = Linker::new(&engine);
+
+    // This approximates a function that would "allocate" resources that the host tracks.
+    // Here this is a simple function that increments the current host memory "used".
+    linker.func_wrap(
+        "",
+        "alloc",
+        |mut caller: Caller<'_, MemoryContext>, size: u32| -> u32 {
+            let mut ctx = caller.data_mut();
+            let size = size as usize;
+
+            if size + ctx.host_memory_used + ctx.wasm_memory_used <= ctx.memory_limit {
+                ctx.host_memory_used += size;
+                return 1;
+            }
+
+            ctx.limit_exceeded = true;
+
+            0
+        },
+    )?;
+
+    let module = Module::new(
+        &engine,
+        r#"(module (import "" "alloc" (func $alloc (param i32) (result i32))) (memory (export "m") 0) (func (export "f") (param i32) (result i32) local.get 0 call $alloc))"#,
+    )?;
+
+    let context = MemoryContext {
+        host_memory_used: 0,
+        wasm_memory_used: 0,
+        memory_limit: 1 << 20, // 16 wasm pages is the limit for both wasm + host memory
+        limit_exceeded: false,
+    };
+
+    let mut store = Store::new(&engine, context);
+    store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+
+    // Grow the memory by 640 KiB
+    memory.grow_async(&mut store, 3).await?;
+    memory.grow_async(&mut store, 5).await?;
+    memory.grow_async(&mut store, 2).await?;
+
+    assert!(!store.data().limit_exceeded);
+
+    // Grow the host "memory" by 384 KiB
+    let f = instance.get_typed_func::<u32, u32, _>(&mut store, "f")?;
+
+    assert_eq!(f.call_async(&mut store, 1 * 0x10000).await?, 1);
+    assert_eq!(f.call_async(&mut store, 3 * 0x10000).await?, 1);
+    assert_eq!(f.call_async(&mut store, 2 * 0x10000).await?, 1);
+
+    // Memory is at the maximum, but the limit hasn't been exceeded
+    assert!(!store.data().limit_exceeded);
+
+    // Try to grow the memory again
+    assert_eq!(
+        memory
+            .grow_async(&mut store, 1)
+            .await
+            .map_err(|e| e.to_string())
+            .unwrap_err(),
+        "failed to grow memory by `1`"
+    );
+
+    assert!(store.data().limit_exceeded);
+
+    // Try to grow the host "memory" again
+    assert_eq!(f.call_async(&mut store, 1).await?, 0);
+
+    assert!(store.data().limit_exceeded);
+
+    drop(store);
+
+    Ok(())
+}
+
 #[derive(Default)]
 struct MemoryGrowFailureDetector {
     /// Arguments of most recent call to memory_growing
@@ -540,6 +652,86 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     // The ResourcLimiter will permit this, but the grow will fail.
     assert_eq!(
         memory.grow(&mut store, 1).unwrap_err().to_string(),
+        "failed to grow memory by `1`"
+    );
+
+    assert_eq!(store.data().current, 10 * 64 * 1024);
+    assert_eq!(store.data().desired, 11 * 64 * 1024);
+    assert_eq!(
+        store.data().error.as_ref().unwrap(),
+        "Memory maximum size exceeded"
+    );
+
+    drop(store);
+
+    Ok(())
+}
+
+#[async_trait::async_trait]
+impl ResourceLimiterAsync for MemoryGrowFailureDetector {
+    async fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        _maximum: Option<usize>,
+    ) -> bool {
+        self.current = current;
+        self.desired = desired;
+        true
+    }
+    fn memory_grow_failed(&mut self, err: &anyhow::Error) {
+        self.error = Some(err.to_string());
+    }
+    async fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
+        true
+    }
+    fn table_grow_failed(&mut self, _err: &anyhow::Error) {}
+}
+
+#[tokio::test]
+async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        return Ok(());
+    }
+    let mut config = Config::new();
+    config.async_support(true);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling {
+        strategy: PoolingAllocationStrategy::NextAvailable,
+        module_limits: ModuleLimits {
+            memory_pages: 10,
+            ..Default::default()
+        },
+        instance_limits: InstanceLimits {
+            ..Default::default()
+        },
+    });
+    let engine = Engine::new(&config).unwrap();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#)?;
+
+    let context = MemoryGrowFailureDetector::default();
+
+    let mut store = Store::new(&engine, context);
+    store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
+    let instance = linker.instantiate_async(&mut store, &module).await?;
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+
+    // Grow the memory by 640 KiB (10 pages)
+    memory.grow_async(&mut store, 10).await?;
+
+    assert!(store.data().error.is_none());
+    assert_eq!(store.data().current, 0);
+    assert_eq!(store.data().desired, 10 * 64 * 1024);
+
+    // Grow past the static limit set by ModuleLimits.
+    // The ResourcLimiterAsync will permit this, but the grow will fail.
+    assert_eq!(
+        memory
+            .grow_async(&mut store, 1)
+            .await
+            .unwrap_err()
+            .to_string(),
         "failed to grow memory by `1`"
     );
 
