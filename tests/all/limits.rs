@@ -399,7 +399,7 @@ impl ResourceLimiter for MemoryContext {
 }
 
 #[test]
-fn test_custom_limiter() -> Result<()> {
+fn test_custom_memory_limiter() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
 
@@ -508,7 +508,7 @@ impl ResourceLimiterAsync for MemoryContext {
 }
 
 #[tokio::test]
-async fn test_custom_limiter_async() -> Result<()> {
+async fn test_custom_memory_limiter_async() -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config).unwrap();
@@ -590,26 +590,107 @@ async fn test_custom_limiter_async() -> Result<()> {
     Ok(())
 }
 
-#[derive(Default)]
-struct MemoryGrowFailureDetector {
-    /// Arguments of most recent call to memory_growing
-    current: usize,
-    desired: usize,
-    /// Display impl of most recent call to memory_grow_failed
-    error: Option<String>,
+struct TableContext {
+    elements_used: u32,
+    element_limit: u32,
+    limit_exceeded: bool,
 }
 
-impl ResourceLimiter for MemoryGrowFailureDetector {
+impl ResourceLimiter for TableContext {
+    fn memory_growing(
+        &mut self,
+        _current: usize,
+        _desired: usize,
+        _maximum: Option<usize>,
+    ) -> bool {
+        true
+    }
+    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool {
+        // Check if the desired exceeds a maximum (either from Wasm or from the host)
+        assert!(desired < maximum.unwrap_or(u32::MAX));
+        assert_eq!(current, self.elements_used);
+        if desired > self.element_limit {
+            self.limit_exceeded = true;
+            return false;
+        } else {
+            self.elements_used = desired;
+            true
+        }
+    }
+}
+
+#[test]
+fn test_custom_table_limiter() -> Result<()> {
+    let engine = Engine::default();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#)?;
+
+    let context = TableContext {
+        elements_used: 0,
+        element_limit: 10,
+        limit_exceeded: false,
+    };
+
+    let mut store = Store::new(&engine, context);
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
+    let instance = linker.instantiate(&mut store, &module)?;
+    let table = instance.get_table(&mut store, "t").unwrap();
+
+    // Grow the memory by 10 elements
+    table.grow(&mut store, 3, Val::FuncRef(None))?;
+    table.grow(&mut store, 5, Val::FuncRef(None))?;
+    table.grow(&mut store, 2, Val::FuncRef(None))?;
+
+    assert!(!store.data().limit_exceeded);
+
+    // Table is at the maximum, but the limit hasn't been exceeded
+    assert!(!store.data().limit_exceeded);
+
+    // Try to grow the memory again
+    assert_eq!(
+        table
+            .grow(&mut store, 1, Val::FuncRef(None))
+            .map_err(|e| e.to_string())
+            .unwrap_err(),
+        "failed to grow table by `1`"
+    );
+
+    assert!(store.data().limit_exceeded);
+
+    Ok(())
+}
+
+#[derive(Default)]
+struct FailureDetector {
+    /// Arguments of most recent call to memory_growing
+    memory_current: usize,
+    memory_desired: usize,
+    /// Display impl of most recent call to memory_grow_failed
+    memory_error: Option<String>,
+    /// Arguments of most recent call to table_growing
+    table_current: u32,
+    table_desired: u32,
+    /// Display impl of most recent call to table_grow_failed
+    table_error: Option<String>,
+}
+
+impl ResourceLimiter for FailureDetector {
     fn memory_growing(&mut self, current: usize, desired: usize, _maximum: Option<usize>) -> bool {
-        self.current = current;
-        self.desired = desired;
+        self.memory_current = current;
+        self.memory_desired = desired;
         true
     }
     fn memory_grow_failed(&mut self, err: &anyhow::Error) {
-        self.error = Some(err.to_string());
+        self.memory_error = Some(err.to_string());
     }
-    fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
+    fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> bool {
+        self.table_current = current;
+        self.table_desired = desired;
         true
+    }
+    fn table_grow_failed(&mut self, err: &anyhow::Error) {
+        self.table_error = Some(err.to_string());
     }
 }
 
@@ -623,6 +704,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 10,
+            table_elements: 10,
             ..Default::default()
         },
         instance_limits: InstanceLimits {
@@ -632,9 +714,12 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#)?;
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+    )?;
 
-    let context = MemoryGrowFailureDetector::default();
+    let context = FailureDetector::default();
 
     let mut store = Store::new(&engine, context);
     store.limiter(|s| s as &mut dyn ResourceLimiter);
@@ -644,22 +729,47 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
     // Grow the memory by 640 KiB (10 pages)
     memory.grow(&mut store, 10)?;
 
-    assert!(store.data().error.is_none());
-    assert_eq!(store.data().current, 0);
-    assert_eq!(store.data().desired, 10 * 64 * 1024);
+    assert!(store.data().memory_error.is_none());
+    assert_eq!(store.data().memory_current, 0);
+    assert_eq!(store.data().memory_desired, 10 * 64 * 1024);
 
     // Grow past the static limit set by ModuleLimits.
-    // The ResourcLimiter will permit this, but the grow will fail.
+    // The ResourceLimiter will permit this, but the grow will fail.
     assert_eq!(
         memory.grow(&mut store, 1).unwrap_err().to_string(),
         "failed to grow memory by `1`"
     );
 
-    assert_eq!(store.data().current, 10 * 64 * 1024);
-    assert_eq!(store.data().desired, 11 * 64 * 1024);
+    assert_eq!(store.data().memory_current, 10 * 64 * 1024);
+    assert_eq!(store.data().memory_desired, 11 * 64 * 1024);
     assert_eq!(
-        store.data().error.as_ref().unwrap(),
+        store.data().memory_error.as_ref().unwrap(),
         "Memory maximum size exceeded"
+    );
+
+    let table = instance.get_table(&mut store, "t").unwrap();
+    // Grow the table 10 elements
+    table.grow(&mut store, 10, Val::FuncRef(None))?;
+
+    assert!(store.data().table_error.is_none());
+    assert_eq!(store.data().table_current, 0);
+    assert_eq!(store.data().table_desired, 10);
+
+    // Grow past the static limit set by ModuleLimits.
+    // The ResourceLimiter will permit this, but the grow will fail.
+    assert_eq!(
+        table
+            .grow(&mut store, 1, Val::FuncRef(None))
+            .unwrap_err()
+            .to_string(),
+        "failed to grow table by `1`"
+    );
+
+    assert_eq!(store.data().table_current, 10);
+    assert_eq!(store.data().table_desired, 11);
+    assert_eq!(
+        store.data().table_error.as_ref().unwrap(),
+        "Table maximum size exceeded"
     );
 
     drop(store);
@@ -668,24 +778,29 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
 }
 
 #[async_trait::async_trait]
-impl ResourceLimiterAsync for MemoryGrowFailureDetector {
+impl ResourceLimiterAsync for FailureDetector {
     async fn memory_growing(
         &mut self,
         current: usize,
         desired: usize,
         _maximum: Option<usize>,
     ) -> bool {
-        self.current = current;
-        self.desired = desired;
+        self.memory_current = current;
+        self.memory_desired = desired;
         true
     }
     fn memory_grow_failed(&mut self, err: &anyhow::Error) {
-        self.error = Some(err.to_string());
+        self.memory_error = Some(err.to_string());
     }
-    async fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
+
+    async fn table_growing(&mut self, current: u32, desired: u32, _maximum: Option<u32>) -> bool {
+        self.table_current = current;
+        self.table_desired = desired;
         true
     }
-    fn table_grow_failed(&mut self, _err: &anyhow::Error) {}
+    fn table_grow_failed(&mut self, err: &anyhow::Error) {
+        self.table_error = Some(err.to_string());
+    }
 }
 
 #[tokio::test]
@@ -699,6 +814,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
         strategy: PoolingAllocationStrategy::NextAvailable,
         module_limits: ModuleLimits {
             memory_pages: 10,
+            table_elements: 10,
             ..Default::default()
         },
         instance_limits: InstanceLimits {
@@ -708,9 +824,12 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#)?;
+    let module = Module::new(
+        &engine,
+        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+    )?;
 
-    let context = MemoryGrowFailureDetector::default();
+    let context = FailureDetector::default();
 
     let mut store = Store::new(&engine, context);
     store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
@@ -720,9 +839,9 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     // Grow the memory by 640 KiB (10 pages)
     memory.grow_async(&mut store, 10).await?;
 
-    assert!(store.data().error.is_none());
-    assert_eq!(store.data().current, 0);
-    assert_eq!(store.data().desired, 10 * 64 * 1024);
+    assert!(store.data().memory_error.is_none());
+    assert_eq!(store.data().memory_current, 0);
+    assert_eq!(store.data().memory_desired, 10 * 64 * 1024);
 
     // Grow past the static limit set by ModuleLimits.
     // The ResourcLimiterAsync will permit this, but the grow will fail.
@@ -735,11 +854,37 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
         "failed to grow memory by `1`"
     );
 
-    assert_eq!(store.data().current, 10 * 64 * 1024);
-    assert_eq!(store.data().desired, 11 * 64 * 1024);
+    assert_eq!(store.data().memory_current, 10 * 64 * 1024);
+    assert_eq!(store.data().memory_desired, 11 * 64 * 1024);
     assert_eq!(
-        store.data().error.as_ref().unwrap(),
+        store.data().memory_error.as_ref().unwrap(),
         "Memory maximum size exceeded"
+    );
+
+    let table = instance.get_table(&mut store, "t").unwrap();
+    // Grow the table 10 elements
+    table.grow_async(&mut store, 10, Val::FuncRef(None)).await?;
+
+    assert!(store.data().table_error.is_none());
+    assert_eq!(store.data().table_current, 0);
+    assert_eq!(store.data().table_desired, 10);
+
+    // Grow past the static limit set by ModuleLimits.
+    // The ResourceLimiter will permit this, but the grow will fail.
+    assert_eq!(
+        table
+            .grow_async(&mut store, 1, Val::FuncRef(None))
+            .await
+            .unwrap_err()
+            .to_string(),
+        "failed to grow table by `1`"
+    );
+
+    assert_eq!(store.data().table_current, 10);
+    assert_eq!(store.data().table_desired, 11);
+    assert_eq!(
+        store.data().table_error.as_ref().unwrap(),
+        "Table maximum size exceeded"
     );
 
     drop(store);
