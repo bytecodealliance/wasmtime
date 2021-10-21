@@ -109,7 +109,7 @@ impl Drop for PtrLen {
 /// program's life.
 pub(crate) struct Memory {
     allocations: Vec<PtrLen>,
-    executable: usize,
+    already_protected: usize,
     current: PtrLen,
     position: usize,
 }
@@ -118,7 +118,7 @@ impl Memory {
     pub(crate) fn new() -> Self {
         Self {
             allocations: Vec::new(),
-            executable: 0,
+            already_protected: 0,
             current: PtrLen::new(),
             position: 0,
         }
@@ -158,7 +158,7 @@ impl Memory {
 
         #[cfg(feature = "selinux-fix")]
         {
-            for &PtrLen { ref map, ptr, len } in &self.allocations[self.executable..] {
+            for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
                 if len != 0 && map.is_some() {
                     unsafe {
                         region::protect(ptr, len, region::Protection::READ_EXECUTE)
@@ -170,7 +170,7 @@ impl Memory {
 
         #[cfg(not(feature = "selinux-fix"))]
         {
-            for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
+            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
                 if len != 0 {
                     unsafe {
                         region::protect(ptr, len, region::Protection::READ_EXECUTE)
@@ -180,7 +180,7 @@ impl Memory {
             }
         }
 
-        self.executable = self.allocations.len();
+        self.already_protected = self.allocations.len();
     }
 
     /// Set all memory allocated in this `Memory` up to now as readonly.
@@ -189,7 +189,7 @@ impl Memory {
 
         #[cfg(feature = "selinux-fix")]
         {
-            for &PtrLen { ref map, ptr, len } in &self.allocations[self.executable..] {
+            for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
                 if len != 0 && map.is_some() {
                     unsafe {
                         region::protect(ptr, len, region::Protection::READ)
@@ -201,7 +201,7 @@ impl Memory {
 
         #[cfg(not(feature = "selinux-fix"))]
         {
-            for &PtrLen { ptr, len } in &self.allocations[self.executable..] {
+            for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
                 if len != 0 {
                     unsafe {
                         region::protect(ptr, len, region::Protection::READ)
@@ -211,14 +211,14 @@ impl Memory {
             }
         }
 
-        self.executable = self.allocations.len();
+        self.already_protected = self.allocations.len();
     }
 
     /// Frees all allocated memory regions that would be leaked otherwise.
     /// Likely to invalidate existing function pointers, causing unsafety.
     pub(crate) unsafe fn free_memory(&mut self) {
         self.allocations.clear();
-        self.executable = 0;
+        self.already_protected = 0;
     }
 }
 
