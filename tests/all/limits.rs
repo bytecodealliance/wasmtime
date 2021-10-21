@@ -89,7 +89,6 @@ async fn test_limits_async() -> Result<()> {
         ) -> bool {
             desired <= self.memory_size
         }
-        fn memory_grow_failed(&mut self, _error: &anyhow::Error) {}
         async fn table_growing(
             &mut self,
             _current: u32,
@@ -500,7 +499,6 @@ impl ResourceLimiterAsync for MemoryContext {
         self.wasm_memory_used = desired;
         true
     }
-    fn memory_grow_failed(&mut self, _e: &anyhow::Error) {}
     async fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
         true
     }
@@ -637,7 +635,7 @@ fn test_custom_table_limiter() -> Result<()> {
     let instance = linker.instantiate(&mut store, &module)?;
     let table = instance.get_table(&mut store, "t").unwrap();
 
-    // Grow the memory by 10 elements
+    // Grow the table by 10 elements
     table.grow(&mut store, 3, Val::FuncRef(None))?;
     table.grow(&mut store, 5, Val::FuncRef(None))?;
     table.grow(&mut store, 2, Val::FuncRef(None))?;
@@ -890,4 +888,109 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     drop(store);
 
     Ok(())
+}
+
+struct Panic;
+
+impl ResourceLimiter for Panic {
+    fn memory_growing(
+        &mut self,
+        _current: usize,
+        _desired: usize,
+        _maximum: Option<usize>,
+    ) -> bool {
+        panic!("resource limiter memory growing");
+    }
+    fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
+        panic!("resource limiter table growing");
+    }
+}
+#[async_trait::async_trait]
+impl ResourceLimiterAsync for Panic {
+    async fn memory_growing(
+        &mut self,
+        _current: usize,
+        _desired: usize,
+        _maximum: Option<usize>,
+    ) -> bool {
+        panic!("async resource limiter memory growing");
+    }
+    async fn table_growing(&mut self, _current: u32, _desired: u32, _maximum: Option<u32>) -> bool {
+        panic!("async resource limiter table growing");
+    }
+}
+
+#[test]
+#[should_panic(expected = "resource limiter memory growing")]
+fn panic_in_memory_limiter() {
+    let engine = Engine::default();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#).unwrap();
+
+    let mut store = Store::new(&engine, Panic);
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
+    let instance = linker.instantiate(&mut store, &module).unwrap();
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+
+    // Grow the memory, which should panic
+    memory.grow(&mut store, 3).unwrap();
+}
+
+#[test]
+#[should_panic(expected = "resource limiter table growing")]
+fn panic_in_table_limiter() {
+    let engine = Engine::default();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#).unwrap();
+
+    let mut store = Store::new(&engine, Panic);
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
+    let instance = linker.instantiate(&mut store, &module).unwrap();
+    let table = instance.get_table(&mut store, "t").unwrap();
+
+    // Grow the table, which should panic
+    table.grow(&mut store, 3, Val::FuncRef(None)).unwrap();
+}
+
+#[tokio::test]
+#[should_panic(expected = "async resource limiter memory growing")]
+async fn panic_in_async_memory_limiter() {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config).unwrap();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#).unwrap();
+
+    let mut store = Store::new(&engine, Panic);
+    store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
+    let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+    let memory = instance.get_memory(&mut store, "m").unwrap();
+
+    // Grow the memory, which should panic
+    memory.grow_async(&mut store, 3).await.unwrap();
+}
+
+#[tokio::test]
+#[should_panic(expected = "async resource limiter table growing")]
+async fn panic_in_async_table_limiter() {
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config).unwrap();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(&engine, r#"(module (table (export "t") 0 anyfunc))"#).unwrap();
+
+    let mut store = Store::new(&engine, Panic);
+    store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
+    let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+    let table = instance.get_table(&mut store, "t").unwrap();
+
+    // Grow the table, which should panic
+    table
+        .grow_async(&mut store, 3, Val::FuncRef(None))
+        .await
+        .unwrap();
 }
