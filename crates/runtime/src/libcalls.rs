@@ -59,7 +59,7 @@
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
-use crate::traphandlers::{raise_lib_trap, Trap};
+use crate::traphandlers::{raise_lib_trap, resume_panic, Trap};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use backtrace::Backtrace;
 use std::mem;
@@ -190,13 +190,17 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
     delta: u64,
     memory_index: u32,
 ) -> usize {
-    let instance = (*vmctx).instance_mut();
-    let memory_index = MemoryIndex::from_u32(memory_index);
-    match instance.memory_grow(memory_index, delta) {
-        Ok(Some(size_in_bytes)) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
-        Ok(None) => usize::max_value(),
-        Err(err) => crate::traphandlers::raise_user_trap(err),
-    }
+    std::panic::catch_unwind(|| {
+        let instance = (*vmctx).instance_mut();
+        let memory_index = MemoryIndex::from_u32(memory_index);
+        match instance.memory_grow(memory_index, delta) {
+            Ok(Some(size_in_bytes)) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+            Ok(None) => usize::max_value(),
+            Err(err) => crate::traphandlers::raise_user_trap(err),
+        }
+    })
+    .map_err(|panic| resume_panic(panic))
+    .unwrap()
 }
 
 /// Implementation of `table.grow`.
@@ -208,24 +212,28 @@ pub unsafe extern "C" fn wasmtime_table_grow(
     // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> u32 {
-    let instance = (*vmctx).instance_mut();
-    let table_index = TableIndex::from_u32(table_index);
-    let element = match instance.table_element_type(table_index) {
-        TableElementType::Func => (init_value as *mut VMCallerCheckedAnyfunc).into(),
-        TableElementType::Extern => {
-            let init_value = if init_value.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(init_value))
-            };
-            init_value.into()
+    std::panic::catch_unwind(|| {
+        let instance = (*vmctx).instance_mut();
+        let table_index = TableIndex::from_u32(table_index);
+        let element = match instance.table_element_type(table_index) {
+            TableElementType::Func => (init_value as *mut VMCallerCheckedAnyfunc).into(),
+            TableElementType::Extern => {
+                let init_value = if init_value.is_null() {
+                    None
+                } else {
+                    Some(VMExternRef::clone_from_raw(init_value))
+                };
+                init_value.into()
+            }
+        };
+        match instance.table_grow(table_index, delta, element) {
+            Ok(Some(r)) => r,
+            Ok(None) => -1_i32 as u32,
+            Err(err) => crate::traphandlers::raise_user_trap(err),
         }
-    };
-    match instance.table_grow(table_index, delta, element) {
-        Ok(Some(r)) => r,
-        Ok(None) => -1_i32 as u32,
-        Err(err) => crate::traphandlers::raise_user_trap(err),
-    }
+    })
+    .map_err(|panic| resume_panic(panic))
+    .unwrap()
 }
 
 /// Implementation of `table.fill`.
