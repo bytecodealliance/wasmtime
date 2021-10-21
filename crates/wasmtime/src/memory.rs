@@ -223,8 +223,12 @@ impl Memory {
         Memory::_new(store.as_context_mut().0, ty)
     }
 
-    /// Async variant of [`Memory::new`]. You must use this variant with Stores which have a
+    /// Async variant of [`Memory::new`]. You must use this variant with [`Store`]s which have a
     /// [`ResourceLimiterAsync`].
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a non-async [`Store`].
     #[cfg(feature = "async")]
     pub async fn new_async<T>(
         mut store: impl AsContextMut<Data = T>,
@@ -491,6 +495,10 @@ impl Memory {
     }
 
     /// Async variant of [`Memory::grow`]. Required when using a [`ResourceLimiterAsync`].
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a non-async [`Store`].
     #[cfg(feature = "async")]
     pub async fn grow_async<T>(
         &self,

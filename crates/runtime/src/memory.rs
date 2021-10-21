@@ -378,6 +378,9 @@ impl Memory {
     ///
     /// Generally, prefer using `InstanceHandle::memory_grow`, which encapsulates
     /// this unsafety.
+    ///
+    /// Ensure that the provided Store is not used to get access any Memory
+    /// which lives inside it.
     pub unsafe fn grow(
         &mut self,
         delta_pages: u64,

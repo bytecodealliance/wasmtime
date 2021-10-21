@@ -97,10 +97,10 @@ impl StorePtr {
         self.0.clone()
     }
     /// Use the StorePtr as a mut ref to the Store.
-    // XXX should this be an unsafe fn? is it always safe at a use site?
-    pub(crate) fn get(&mut self) -> Option<&mut dyn Store> {
+    /// Safety: must not be used outside the original lifetime of the borrow.
+    pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn Store> {
         match self.0 {
-            Some(ptr) => Some(unsafe { &mut *ptr }),
+            Some(ptr) => Some(&mut *ptr),
             None => None,
         }
     }
@@ -630,12 +630,11 @@ impl OnDemandInstanceAllocator {
             PrimaryMap::with_capacity(module.table_plans.len() - num_imports);
         for table in &module.table_plans.values().as_slice()[num_imports..] {
             tables.push(
-                Table::new_dynamic(
-                    table,
+                Table::new_dynamic(table, unsafe {
                     store
                         .get()
-                        .expect("if module has table plans, store is not empty"),
-                )
+                        .expect("if module has table plans, store is not empty")
+                })
                 .map_err(InstantiationError::Resource)?,
             );
         }
@@ -656,13 +655,11 @@ impl OnDemandInstanceAllocator {
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
         for plan in &module.memory_plans.values().as_slice()[num_imports..] {
             memories.push(
-                Memory::new_dynamic(
-                    plan,
-                    creator,
+                Memory::new_dynamic(plan, creator, unsafe {
                     store
                         .get()
-                        .expect("if module has memory plans, store is not empty"),
-                )
+                        .expect("if module has memory plans, store is not empty")
+                })
                 .map_err(InstantiationError::Resource)?,
             );
         }
