@@ -436,6 +436,31 @@ impl Table {
         Table::_new(store.as_context_mut().0, ty, init)
     }
 
+    /// Async variant of [`Table::new`]. You must use this variant with [`Store`]s which have a
+    /// [`ResourceLimiterAsync`].
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a non-async [`Store`].
+    #[cfg(feature = "async")]
+    pub async fn new_async<T>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: TableType,
+        init: Val,
+    ) -> Result<Table>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
+        );
+        store
+            .on_fiber(|store| Table::_new(store.0, ty, init))
+            .await?
+    }
+
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Val) -> Result<Table> {
         let wasmtime_export = generate_table_export(store, &ty)?;
         let init = init.into_table_element(store, ty.element())?;
@@ -560,6 +585,31 @@ impl Table {
                 None => bail!("failed to grow table by `{}`", delta),
             }
         }
+    }
+
+    /// Async variant of [`Table::grow`]. Required when using a [`ResourceLimiterAsync`].
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a non-async [`Store`].
+    #[cfg(feature = "async")]
+    pub async fn grow_async<T>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        delta: u32,
+        init: Val,
+    ) -> Result<u32>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `grow_async` without enabling async support on the config"
+        );
+        store
+            .on_fiber(|store| self.grow(store, delta, init))
+            .await?
     }
 
     /// Copy `len` elements from `src_table[src_index..]` into

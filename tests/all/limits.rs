@@ -134,19 +134,21 @@ async fn test_limits_async() -> Result<()> {
     // Test instance exports and host objects hitting the limit
     for table in std::array::IntoIter::new([
         instance.get_table(&mut store, "t").unwrap(),
-        Table::new(
+        Table::new_async(
             &mut store,
             TableType::new(ValType::FuncRef, 0, None),
             Val::FuncRef(None),
-        )?,
+        )
+        .await?,
     ]) {
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
-        table.grow(&mut store, 1, Val::FuncRef(None))?;
-        table.grow(&mut store, 2, Val::FuncRef(None))?;
+        table.grow_async(&mut store, 2, Val::FuncRef(None)).await?;
+        table.grow_async(&mut store, 1, Val::FuncRef(None)).await?;
+        table.grow_async(&mut store, 2, Val::FuncRef(None)).await?;
 
         assert_eq!(
             table
-                .grow(&mut store, 1, Val::FuncRef(None))
+                .grow_async(&mut store, 1, Val::FuncRef(None))
+                .await
                 .map_err(|e| e.to_string())
                 .unwrap_err(),
             "failed to grow table by `1`"
