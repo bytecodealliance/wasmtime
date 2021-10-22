@@ -8,7 +8,12 @@ fn test_limits() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(
         &engine,
-        r#"(module (memory (export "m") 0) (table (export "t") 0 anyfunc))"#,
+        r#"(module
+            (memory $m (export "m") 0)
+            (table (export "t") 0 anyfunc)
+            (func (export "grow") (param i32) (result i32)
+              (memory.grow $m (local.get 0)))
+           )"#,
     )?;
 
     let mut store = Store::new(
@@ -61,6 +66,26 @@ fn test_limits() -> Result<()> {
             "failed to grow table by `1`"
         );
     }
+
+    // Make a new store and instance to test memory grow through wasm
+    let mut store = Store::new(
+        &engine,
+        StoreLimitsBuilder::new()
+            .memory_size(10 * WASM_PAGE_SIZE)
+            .table_elements(5)
+            .build(),
+    );
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let grow = instance.get_func(&mut store, "grow").unwrap();
+    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+
+    grow.call(&mut store, 3).unwrap();
+    grow.call(&mut store, 5).unwrap();
+    grow.call(&mut store, 2).unwrap();
+
+    // Wasm grow failure returns -1.
+    assert_eq!(grow.call(&mut store, 1).unwrap(), -1);
 
     Ok(())
 }
@@ -938,6 +963,35 @@ fn panic_in_memory_limiter() {
 }
 
 #[test]
+#[should_panic(expected = "resource limiter memory growing")]
+fn panic_in_memory_limiter_wasm_stack() {
+    // Like the test above, except the memory.grow happens in wasm code
+    // instead of a host function call.
+    let engine = Engine::default();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (memory $m (export "m") 0)
+      (func (export "grow") (param i32) (result i32)
+        (memory.grow $m (local.get 0)))
+    )"#,
+    )
+    .unwrap();
+
+    let mut store = Store::new(&engine, Panic);
+    store.limiter(|s| s as &mut dyn ResourceLimiter);
+    let instance = linker.instantiate(&mut store, &module).unwrap();
+    let grow = instance.get_func(&mut store, "grow").unwrap();
+    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+
+    // Grow the memory, which should panic
+    grow.call(&mut store, 3).unwrap();
+}
+
+#[test]
 #[should_panic(expected = "resource limiter table growing")]
 fn panic_in_table_limiter() {
     let engine = Engine::default();
@@ -971,6 +1025,37 @@ async fn panic_in_async_memory_limiter() {
 
     // Grow the memory, which should panic
     memory.grow_async(&mut store, 3).await.unwrap();
+}
+
+#[tokio::test]
+#[should_panic(expected = "async resource limiter memory growing")]
+async fn panic_in_async_memory_limiter_wasm_stack() {
+    // Like the test above, except the memory.grow happens in
+    // wasm code instead of a host function call.
+    let mut config = Config::new();
+    config.async_support(true);
+    let engine = Engine::new(&config).unwrap();
+    let linker = Linker::new(&engine);
+
+    let module = Module::new(
+        &engine,
+        r#"
+    (module
+      (memory $m (export "m") 0)
+      (func (export "grow") (param i32) (result i32)
+        (memory.grow $m (local.get 0)))
+    )"#,
+    )
+    .unwrap();
+
+    let mut store = Store::new(&engine, Panic);
+    store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
+    let instance = linker.instantiate_async(&mut store, &module).await.unwrap();
+    let grow = instance.get_func(&mut store, "grow").unwrap();
+    let grow = grow.typed::<i32, i32, _>(&store).unwrap();
+
+    // Grow the memory, which should panic
+    grow.call_async(&mut store, 3).await.unwrap();
 }
 
 #[tokio::test]
