@@ -436,7 +436,7 @@ mod test {
     use super::*;
     use crate::{
         Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
-        PoolingAllocationStrategy, StorePtr, VMSharedSignatureIndex,
+        PoolingAllocationStrategy, Store, StorePtr, VMSharedSignatureIndex,
     };
     use std::sync::Arc;
     use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, PrimaryMap, Tunables};
@@ -506,6 +506,58 @@ mod test {
 
             module_limits.validate(&module).expect("should validate");
 
+            // An InstanceAllocationRequest with a module must also have
+            // a non-null StorePtr. Here we mock just enough of a store
+            // to satisfy this test.
+            struct MockStore {
+                table: crate::VMExternRefActivationsTable,
+                info: MockModuleInfo,
+            }
+            unsafe impl Store for MockStore {
+                fn vminterrupts(&self) -> *mut crate::VMInterrupts {
+                    std::ptr::null_mut()
+                }
+                fn externref_activations_table(
+                    &mut self,
+                ) -> (
+                    &mut crate::VMExternRefActivationsTable,
+                    &dyn crate::ModuleInfoLookup,
+                ) {
+                    (&mut self.table, &self.info)
+                }
+                fn memory_growing(
+                    &mut self,
+                    _current: usize,
+                    _desired: usize,
+                    _maximum: Option<usize>,
+                ) -> Result<bool, anyhow::Error> {
+                    Ok(true)
+                }
+                fn memory_grow_failed(&mut self, _error: &anyhow::Error) {}
+                fn table_growing(
+                    &mut self,
+                    _current: u32,
+                    _desired: u32,
+                    _maximum: Option<u32>,
+                ) -> Result<bool, anyhow::Error> {
+                    Ok(true)
+                }
+                fn table_grow_failed(&mut self, _error: &anyhow::Error) {}
+                fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
+                    Ok(())
+                }
+            }
+            struct MockModuleInfo;
+            impl crate::ModuleInfoLookup for MockModuleInfo {
+                fn lookup(&self, _pc: usize) -> Option<Arc<dyn crate::ModuleInfo>> {
+                    None
+                }
+            }
+            let mut mock_store = MockStore {
+                table: crate::VMExternRefActivationsTable::new(),
+                info: MockModuleInfo,
+            };
+
             let mut handles = Vec::new();
             let module = Arc::new(module);
             let functions = &PrimaryMap::new();
@@ -528,7 +580,7 @@ mod test {
                                 },
                                 shared_signatures: VMSharedSignatureIndex::default().into(),
                                 host_state: Box::new(()),
-                                store: StorePtr::empty(), // XXX need a real store here: passing in a module implies a non-null store
+                                store: StorePtr::new(&mut mock_store),
                                 wasm_data: &[],
                             },
                         )
