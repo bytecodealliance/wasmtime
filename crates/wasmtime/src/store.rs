@@ -541,16 +541,22 @@ impl<T> Store<T> {
     /// resources in the future, this does not retroactively attempt to apply
     /// limits to the [`Store`].
     ///
-    /// This variation on the [`ResourceLimiter`] makes the `memory_growing`
-    /// and `table_growing` functions `async`. This means that, as part of
-    /// your resource limiting strategy, the async resource limiter may yield
-    /// execution until a resource becomes available.
+    /// This variation on the [`ResourceLimiter`](`crate::ResourceLimiter`)
+    /// makes the `memory_growing` and `table_growing` functions `async`. This
+    /// means that, as part of your resource limiting strategy, the async
+    /// resource limiter may yield execution until a resource becomes
+    /// available.
     ///
-    /// By using a [`ResourceLimiterAsync`] with a [`Store`], you can no
-    /// longer use [`Memory::new`], [`Memory::grow`], [`Table::new`], and
-    /// [`Table::grow`]. Instead, you must use their `async` variants:
-    /// [`Memory::new_async`], [`Memory::grow_async`], [`Table::new_async`],
-    /// and [`Table::grow_async`].
+    /// By using a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
+    /// with a [`Store`], you can no longer use
+    /// [`Memory::new`](`crate::Memory::new`),
+    /// [`Memory::grow`](`crate::Memory::grow`),
+    /// [`Table::new`](`crate::Table::new`), and
+    /// [`Table::grow`](`crate::Table::grow`). Instead, you must use their
+    /// `async` variants: [`Memory::new_async`](`crate::Memory::new_async`),
+    /// [`Memory::grow_async`](`crate::Memory::grow_async`),
+    /// [`Table::new_async`](`crate::Table::new_async`), and
+    /// [`Table::grow_async`](`crate::Table::grow_async`).
     #[cfg(feature = "async")]
     pub fn limiter_async(
         &mut self,

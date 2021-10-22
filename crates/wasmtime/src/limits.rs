@@ -88,10 +88,11 @@ pub trait ResourceLimiter {
 #[cfg(feature = "async")]
 /// Used by hosts to limit resource consumption of instances.  Identical to
 /// [`ResourceLimiter`], except that the `memory_growing` and `table_growing`
-/// functions are async. Must be used with an async [`Store`].
+/// functions are async. Must be used with an async [`Store`](`crate::Store`).
 ///
-/// This trait is used with [`Store::limiter_async`]: see those docs for
-/// restrictions on using other Wasmtime interfaces with an async resource
+/// This trait is used with
+/// [`Store::limiter_async`](`crate::Store::limiter_async`)`: see those docs
+/// for restrictions on using other Wasmtime interfaces with an async resource
 /// limiter.
 #[async_trait::async_trait]
 pub trait ResourceLimiterAsync {

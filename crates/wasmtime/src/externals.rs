@@ -408,9 +408,11 @@ impl Table {
     ///
     /// # Panics
     ///
-    /// This function will panic when used with a [`Store`] which has a
-    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
-    /// using an async resource limiter, use [`Table::new_async`] instead.
+    /// This function will panic when used with a [`Store`](`crate::Store`)
+    /// which has a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
+    /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`).
+    /// When using an async resource limiter, use [`Table::new_async`]
+    /// instead.
     ///
     /// # Examples
     ///
@@ -442,12 +444,14 @@ impl Table {
         Table::_new(store.as_context_mut().0, ty, init)
     }
 
-    /// Async variant of [`Table::new`]. You must use this variant with [`Store`]s which have a
-    /// [`ResourceLimiterAsync`].
+    /// Async variant of [`Table::new`]. You must use this variant with
+    /// [`Store`](`crate::Store`)s which have a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
     /// # Panics
     ///
-    /// This function will panic when used with a non-async [`Store`].
+    /// This function will panic when used with a non-async
+    /// [`Store`](`crate::Store`)
     #[cfg(feature = "async")]
     pub async fn new_async<T>(
         mut store: impl AsContextMut<Data = T>,
@@ -577,9 +581,11 @@ impl Table {
     ///
     /// Panics if `store` does not own this table.
     ///
-    /// This function will panic when used with a [`Store`] which has a
-    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
-    /// using an async resource limiter, use [`Table::grow_async`] instead.
+    /// This function will panic when used with a [`Store`](`crate::Store`)
+    /// which has a [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`)
+    /// (see also: [`Store::limiter_async`](`crate::Store::limiter_async`)).
+    /// When using an async resource limiter, use [`Table::grow_async`]
+    /// instead.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store).element().clone();
@@ -597,11 +603,13 @@ impl Table {
         }
     }
 
-    /// Async variant of [`Table::grow`]. Required when using a [`ResourceLimiterAsync`].
+    /// Async variant of [`Table::grow`]. Required when using a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
     /// # Panics
     ///
-    /// This function will panic when used with a non-async [`Store`].
+    /// This function will panic when used with a non-async
+    /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
     pub async fn grow_async<T>(
         &self,

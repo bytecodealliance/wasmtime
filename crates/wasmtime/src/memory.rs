@@ -204,8 +204,9 @@ impl Memory {
     ///
     /// # Panics
     ///
-    /// This function will panic if the [`Store`] has a
-    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
+    /// This function will panic if the [`Store`](`crate::Store`) has a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`)). When
     /// using an async resource limiter, use [`Memory::new_async`] instead.
     ///
     /// # Examples
@@ -229,12 +230,14 @@ impl Memory {
         Memory::_new(store.as_context_mut().0, ty)
     }
 
-    /// Async variant of [`Memory::new`]. You must use this variant with [`Store`]s which have a
-    /// [`ResourceLimiterAsync`].
+    /// Async variant of [`Memory::new`]. You must use this variant with
+    /// [`Store`](`crate::Store`)s which have a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
     /// # Panics
     ///
-    /// This function will panic when used with a non-async [`Store`].
+    /// This function will panic when used with a non-async
+    /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
     pub async fn new_async<T>(
         mut store: impl AsContextMut<Data = T>,
@@ -465,9 +468,10 @@ impl Memory {
     ///
     /// Panics if this memory doesn't belong to `store`.
     ///
-    /// This function will panic if the [`Store`] has a
-    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
-    /// using an async resource limiter, use [`Memory::grow_async`] instead.
+    /// This function will panic if the [`Store`](`crate::Store`) has a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
+    /// async resource limiter, use [`Memory::grow_async`] instead.
     ///
     /// # Examples
     ///
@@ -504,11 +508,13 @@ impl Memory {
         }
     }
 
-    /// Async variant of [`Memory::grow`]. Required when using a [`ResourceLimiterAsync`].
+    /// Async variant of [`Memory::grow`]. Required when using a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
     ///
     /// # Panics
     ///
-    /// This function will panic when used with a non-async [`Store`].
+    /// This function will panic when used with a non-async
+    /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
     pub async fn grow_async<T>(
         &self,
