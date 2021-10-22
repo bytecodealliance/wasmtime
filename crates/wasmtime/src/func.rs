@@ -1880,9 +1880,7 @@ macro_rules! impl_into_func {
                                 // can't assume it returned a value that is
                                 // compatible with this store.
                                 if !ret.compatible_with_store(caller.store.0) {
-                                    CallResult::Trap(anyhow::anyhow!(
-                "host function attempted to return cross-`Store` value to Wasm"
-                                            ))
+                                    CallResult::Trap(anyhow::anyhow!("host function attempted to return cross-`Store` value to Wasm"))
                                 } else {
                                     match ret.into_abi_for_ret(caller.store.0, retptr) {
                                         Ok(val) => CallResult::Ok(val),

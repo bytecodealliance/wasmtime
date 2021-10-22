@@ -195,13 +195,11 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
     match std::panic::catch_unwind(|| {
         let instance = (*vmctx).instance_mut();
         let memory_index = MemoryIndex::from_u32(memory_index);
-        match instance.memory_grow(memory_index, delta) {
-            Ok(Some(size_in_bytes)) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
-            Ok(None) => usize::max_value(),
-            Err(err) => crate::traphandlers::raise_user_trap(err),
-        }
+        instance.memory_grow(memory_index, delta)
     }) {
-        Ok(r) => r,
+        Ok(Ok(Some(size_in_bytes))) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+        Ok(Ok(None)) => usize::max_value(),
+        Ok(Err(err)) => crate::traphandlers::raise_user_trap(err),
         Err(p) => resume_panic(p),
     }
 }
@@ -231,13 +229,11 @@ pub unsafe extern "C" fn wasmtime_table_grow(
                 init_value.into()
             }
         };
-        match instance.table_grow(table_index, delta, element) {
-            Ok(Some(r)) => r,
-            Ok(None) => -1_i32 as u32,
-            Err(err) => crate::traphandlers::raise_user_trap(err),
-        }
+        instance.table_grow(table_index, delta, element)
     }) {
-        Ok(r) => r,
+        Ok(Ok(Some(r))) => r,
+        Ok(Ok(None)) => -1_i32 as u32,
+        Ok(Err(err)) => crate::traphandlers::raise_user_trap(err),
         Err(p) => resume_panic(p),
     }
 }
