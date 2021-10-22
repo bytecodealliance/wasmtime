@@ -510,6 +510,8 @@ impl ResourceLimiterAsync for MemoryContext {
         desired: usize,
         maximum: Option<usize>,
     ) -> bool {
+        // Show we can await in this async context:
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         // Check if the desired exceeds a maximum (either from Wasm or from the host)
         assert!(desired < maximum.unwrap_or(usize::MAX));
 
@@ -808,6 +810,8 @@ impl ResourceLimiterAsync for FailureDetector {
         desired: usize,
         _maximum: Option<usize>,
     ) -> bool {
+        // Show we can await in this async context:
+        tokio::time::sleep(std::time::Duration::from_millis(1)).await;
         self.memory_current = current;
         self.memory_desired = desired;
         true
