@@ -71,6 +71,7 @@ impl<'a> Codegen<'a> {
             "#![allow(unused_imports, unused_variables, non_snake_case)]"
         )
         .unwrap();
+        writeln!(code, "#[allow(irrefutable_let_patterns)]").unwrap();
 
         writeln!(code, "\nuse super::*;  // Pulls in all external types.").unwrap();
     }
