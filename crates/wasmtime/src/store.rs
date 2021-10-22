@@ -533,6 +533,7 @@ impl<T> Store<T> {
         inner.limiter = Some(ResourceLimiterInner::Sync(Box::new(limiter)));
     }
 
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
     /// Configures the [`ResourceLimiterAsync`](crate::ResourceLimiterAsync)
     /// used to limit resource creation within this [`Store`]. Must be used
     /// with an async `Store`!.
