@@ -575,11 +575,13 @@ impl<'a> Codegen<'a> {
                 } else {
                     writeln!(
                         code,
-                        "{}if let Some(({},)) = {}(ctx, {}) {{",
-                        indent,
-                        output_binders.join(", "),
-                        sig.full_name,
-                        input_values.join(", "),
+                        "{indent}if let Some({open_paren}{vars}{close_paren}) = {name}(ctx, {args}) {{",
+                        indent = indent,
+                        open_paren = if output_binders.len() == 1 { "" } else { "(" },
+                        vars = output_binders.join(", "),
+                        close_paren = if output_binders.len() == 1 { "" } else { ")" },
+                        name = sig.full_name,
+                        args = input_values.join(", "),
                     )
                     .unwrap();
                     false
