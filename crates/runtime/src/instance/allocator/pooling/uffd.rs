@@ -436,7 +436,7 @@ mod test {
     use super::*;
     use crate::{
         Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
-        PoolingAllocationStrategy, VMSharedSignatureIndex,
+        PoolingAllocationStrategy, StorePtr, VMSharedSignatureIndex,
     };
     use std::sync::Arc;
     use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, PrimaryMap, Tunables};
@@ -528,7 +528,7 @@ mod test {
                                 },
                                 shared_signatures: VMSharedSignatureIndex::default().into(),
                                 host_state: Box::new(()),
-                                store: None,
+                                store: StorePtr::empty(), // XXX need a real store here: passing in a module implies a non-null store
                                 wasm_data: &[],
                             },
                         )
