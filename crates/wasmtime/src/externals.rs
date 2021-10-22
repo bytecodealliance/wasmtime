@@ -406,6 +406,12 @@ impl Table {
     /// Returns an error if `init` does not match the element type of the table,
     /// or if `init` does not belong to the `store` provided.
     ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a [`Store`] which has a
+    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
+    /// using an async resource limiter, use [`Table::new_async`] instead.
+    ///
     /// # Examples
     ///
     /// ```
@@ -570,6 +576,10 @@ impl Table {
     /// # Panics
     ///
     /// Panics if `store` does not own this table.
+    ///
+    /// This function will panic when used with a [`Store`] which has a
+    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
+    /// using an async resource limiter, use [`Table::grow_async`] instead.
     pub fn grow(&self, mut store: impl AsContextMut, delta: u32, init: Val) -> Result<u32> {
         let store = store.as_context_mut().0;
         let ty = self.ty(&store).element().clone();

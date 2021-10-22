@@ -202,6 +202,12 @@ impl Memory {
     /// The `store` argument will be the owner of the returned [`Memory`]. All
     /// WebAssembly memory is initialized to zero.
     ///
+    /// # Panics
+    ///
+    /// This function will panic if the [`Store`] has a
+    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
+    /// using an async resource limiter, use [`Memory::new_async`] instead.
+    ///
     /// # Examples
     ///
     /// ```
@@ -458,6 +464,10 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
+    ///
+    /// This function will panic if the [`Store`] has a
+    /// [`ResourceLimiterAsync`] (see also: [`Store::limiter_async`]). When
+    /// using an async resource limiter, use [`Memory::grow_async`] instead.
     ///
     /// # Examples
     ///
