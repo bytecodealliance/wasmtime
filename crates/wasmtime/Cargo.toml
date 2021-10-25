@@ -38,6 +38,7 @@ psm = "0.1.11"
 lazy_static = "1.4"
 rayon = { version = "1.0", optional = true }
 object = { version = "0.27", default-features = false, features = ['read_core', 'elf'] }
+async-trait = { version = "0.1.51", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = "0.3.7"
@@ -73,7 +74,7 @@ cache = ["wasmtime-cache"]
 
 # Enables support for "async stores" as well as defining host functions as
 # `async fn` and calling functions asynchronously.
-async = ["wasmtime-fiber", "wasmtime-runtime/async"]
+async = ["wasmtime-fiber", "wasmtime-runtime/async", "async-trait"]
 
 # Enables userfaultfd support in the runtime's pooling allocator when building on Linux
 uffd = ["wasmtime-runtime/uffd"]

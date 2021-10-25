@@ -59,7 +59,7 @@
 use crate::externref::VMExternRef;
 use crate::instance::Instance;
 use crate::table::{Table, TableElementType};
-use crate::traphandlers::{raise_lib_trap, Trap};
+use crate::traphandlers::{raise_lib_trap, resume_panic, Trap};
 use crate::vmcontext::{VMCallerCheckedAnyfunc, VMContext};
 use backtrace::Backtrace;
 use std::mem;
@@ -190,11 +190,17 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
     delta: u64,
     memory_index: u32,
 ) -> usize {
-    let instance = (*vmctx).instance_mut();
-    let memory_index = MemoryIndex::from_u32(memory_index);
-    match instance.memory_grow(memory_index, delta) {
-        Some(size_in_bytes) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
-        None => usize::max_value(),
+    // Memory grow can invoke user code provided in a ResourceLimiter{,Async},
+    // so we need to catch a possible panic
+    match std::panic::catch_unwind(|| {
+        let instance = (*vmctx).instance_mut();
+        let memory_index = MemoryIndex::from_u32(memory_index);
+        instance.memory_grow(memory_index, delta)
+    }) {
+        Ok(Ok(Some(size_in_bytes))) => size_in_bytes / (wasmtime_environ::WASM_PAGE_SIZE as usize),
+        Ok(Ok(None)) => usize::max_value(),
+        Ok(Err(err)) => crate::traphandlers::raise_user_trap(err),
+        Err(p) => resume_panic(p),
     }
 }
 
@@ -207,22 +213,29 @@ pub unsafe extern "C" fn wasmtime_table_grow(
     // or is a `VMExternRef` until we look at the table type.
     init_value: *mut u8,
 ) -> u32 {
-    let instance = (*vmctx).instance_mut();
-    let table_index = TableIndex::from_u32(table_index);
-    let element = match instance.table_element_type(table_index) {
-        TableElementType::Func => (init_value as *mut VMCallerCheckedAnyfunc).into(),
-        TableElementType::Extern => {
-            let init_value = if init_value.is_null() {
-                None
-            } else {
-                Some(VMExternRef::clone_from_raw(init_value))
-            };
-            init_value.into()
-        }
-    };
-    instance
-        .table_grow(table_index, delta, element)
-        .unwrap_or(-1_i32 as u32)
+    // Table grow can invoke user code provided in a ResourceLimiter{,Async},
+    // so we need to catch a possible panic
+    match std::panic::catch_unwind(|| {
+        let instance = (*vmctx).instance_mut();
+        let table_index = TableIndex::from_u32(table_index);
+        let element = match instance.table_element_type(table_index) {
+            TableElementType::Func => (init_value as *mut VMCallerCheckedAnyfunc).into(),
+            TableElementType::Extern => {
+                let init_value = if init_value.is_null() {
+                    None
+                } else {
+                    Some(VMExternRef::clone_from_raw(init_value))
+                };
+                init_value.into()
+            }
+        };
+        instance.table_grow(table_index, delta, element)
+    }) {
+        Ok(Ok(Some(r))) => r,
+        Ok(Ok(None)) => -1_i32 as u32,
+        Ok(Err(err)) => crate::traphandlers::raise_user_trap(err),
+        Err(p) => resume_panic(p),
+    }
 }
 
 /// Implementation of `table.fill`.
@@ -436,15 +449,6 @@ pub unsafe extern "C" fn wasmtime_externref_global_set(
     drop(old);
 }
 
-#[derive(Debug)]
-struct Unimplemented(&'static str);
-impl std::error::Error for Unimplemented {}
-impl std::fmt::Display for Unimplemented {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "unimplemented: {}", self.0)
-    }
-}
-
 /// Implementation of `memory.atomic.notify` for locally defined memories.
 pub unsafe extern "C" fn wasmtime_memory_atomic_notify(
     vmctx: *mut VMContext,
@@ -460,9 +464,9 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_notify(
         // just to be sure.
         let addr_to_check = addr.checked_add(4).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::User(Box::new(Unimplemented(
-                "wasm atomics (fn wasmtime_memory_atomic_notify) unsupported",
-            ))))
+            Err(Trap::User(anyhow::anyhow!(
+                "unimplemented: wasm atomics (fn wasmtime_memory_atomic_notify) unsupported",
+            )))
         })
     };
     match result {
@@ -486,9 +490,9 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_wait32(
         // but we still double-check
         let addr_to_check = addr.checked_add(4).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::User(Box::new(Unimplemented(
-                "wasm atomics (fn wasmtime_memory_atomic_wait32) unsupported",
-            ))))
+            Err(Trap::User(anyhow::anyhow!(
+                "unimplemented: wasm atomics (fn wasmtime_memory_atomic_wait32) unsupported",
+            )))
         })
     };
     match result {
@@ -512,9 +516,9 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_wait64(
         // but we still double-check
         let addr_to_check = addr.checked_add(8).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
-            Err(Trap::User(Box::new(Unimplemented(
-                "wasm atomics (fn wasmtime_memory_atomic_wait64) unsupported",
-            ))))
+            Err(Trap::User(anyhow::anyhow!(
+                "unimplemented: wasm atomics (fn wasmtime_memory_atomic_wait64) unsupported",
+            )))
         })
     };
     match result {

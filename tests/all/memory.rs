@@ -311,12 +311,16 @@ fn massive_64_bit_still_limited() -> Result<()> {
     }
 
     impl ResourceLimiter for MyLimiter {
-        fn memory_growing(&mut self, _request: usize, _min: usize, _max: Option<usize>) -> bool {
+        fn memory_growing(
+            &mut self,
+            _current: usize,
+            _request: usize,
+            _max: Option<usize>,
+        ) -> bool {
             self.hit = true;
             true
         }
-
-        fn table_growing(&mut self, _request: u32, _min: u32, _max: Option<u32>) -> bool {
+        fn table_growing(&mut self, _current: u32, _request: u32, _max: Option<u32>) -> bool {
             unreachable!()
         }
     }

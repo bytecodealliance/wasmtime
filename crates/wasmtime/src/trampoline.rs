@@ -18,7 +18,7 @@ use std::any::Any;
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, GlobalIndex, MemoryIndex, Module, TableIndex};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator,
+    Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, StorePtr,
     VMFunctionImport, VMSharedSignatureIndex,
 };
 
@@ -46,7 +46,7 @@ fn create_handle(
                 imports,
                 shared_signatures: shared_signature_id.into(),
                 host_state,
-                store: Some(store.traitobj()),
+                store: StorePtr::new(store.traitobj()),
                 wasm_data: &[],
             },
         )?;

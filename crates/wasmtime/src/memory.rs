@@ -202,6 +202,13 @@ impl Memory {
     /// The `store` argument will be the owner of the returned [`Memory`]. All
     /// WebAssembly memory is initialized to zero.
     ///
+    /// # Panics
+    ///
+    /// This function will panic if the [`Store`](`crate::Store`) has a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`)). When
+    /// using an async resource limiter, use [`Memory::new_async`] instead.
+    ///
     /// # Examples
     ///
     /// ```
@@ -221,6 +228,31 @@ impl Memory {
     /// ```
     pub fn new(mut store: impl AsContextMut, ty: MemoryType) -> Result<Memory> {
         Memory::_new(store.as_context_mut().0, ty)
+    }
+
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    /// Async variant of [`Memory::new`]. You must use this variant with
+    /// [`Store`](`crate::Store`)s which have a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a non-async
+    /// [`Store`](`crate::Store`).
+    #[cfg(feature = "async")]
+    pub async fn new_async<T>(
+        mut store: impl AsContextMut<Data = T>,
+        ty: MemoryType,
+    ) -> Result<Memory>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
+        );
+        store.on_fiber(|store| Memory::_new(store.0, ty)).await?
     }
 
     fn _new(store: &mut StoreOpaque, ty: MemoryType) -> Result<Memory> {
@@ -437,6 +469,11 @@ impl Memory {
     ///
     /// Panics if this memory doesn't belong to `store`.
     ///
+    /// This function will panic if the [`Store`](`crate::Store`) has a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`) (see also:
+    /// [`Store::limiter_async`](`crate::Store::limiter_async`). When using an
+    /// async resource limiter, use [`Memory::grow_async`] instead.
+    ///
     /// # Examples
     ///
     /// ```
@@ -461,7 +498,7 @@ impl Memory {
         let store = store.as_context_mut().0;
         let mem = self.wasmtime_memory(store);
         unsafe {
-            match (*mem).grow(delta, store.limiter()) {
+            match (*mem).grow(delta, store)? {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
                     *store[self.0].definition = vm;
@@ -472,6 +509,30 @@ impl Memory {
         }
     }
 
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    /// Async variant of [`Memory::grow`]. Required when using a
+    /// [`ResourceLimiterAsync`](`crate::ResourceLimiterAsync`).
+    ///
+    /// # Panics
+    ///
+    /// This function will panic when used with a non-async
+    /// [`Store`](`crate::Store`).
+    #[cfg(feature = "async")]
+    pub async fn grow_async<T>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        delta: u64,
+    ) -> Result<u64>
+    where
+        T: Send,
+    {
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `grow_async` without enabling async support on the config"
+        );
+        store.on_fiber(|store| self.grow(store, delta)).await?
+    }
     fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut wasmtime_runtime::Memory {
         unsafe {
             let export = &store[self.0];

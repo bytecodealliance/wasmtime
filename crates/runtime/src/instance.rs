@@ -33,86 +33,6 @@ mod allocator;
 
 pub use allocator::*;
 
-/// Value returned by [`ResourceLimiter::instances`] default method
-pub const DEFAULT_INSTANCE_LIMIT: usize = 10000;
-/// Value returned by [`ResourceLimiter::tables`] default method
-pub const DEFAULT_TABLE_LIMIT: usize = 10000;
-/// Value returned by [`ResourceLimiter::memories`] default method
-pub const DEFAULT_MEMORY_LIMIT: usize = 10000;
-
-/// Used by hosts to limit resource consumption of instances.
-///
-/// An instance can be created with a resource limiter so that hosts can take into account
-/// non-WebAssembly resource usage to determine if a linear memory or table should grow.
-pub trait ResourceLimiter {
-    /// Notifies the resource limiter that an instance's linear memory has been
-    /// requested to grow.
-    ///
-    /// * `current` is the current size of the linear memory in bytes.
-    /// * `desired` is the desired size of the linear memory in bytes.
-    /// * `maximum` is either the linear memory's maximum or a maximum from an
-    ///   instance allocator, also in bytes. A value of `None`
-    ///   indicates that the linear memory is unbounded.
-    ///
-    /// This function should return `true` to indicate that the growing
-    /// operation is permitted or `false` if not permitted. Returning `true`
-    /// when a maximum has been exceeded will have no effect as the linear
-    /// memory will not grow.
-    ///
-    /// This function is not guaranteed to be invoked for all requests to
-    /// `memory.grow`. Requests where the allocation requested size doesn't fit
-    /// in `usize` or exceeds the memory's listed maximum size may not invoke
-    /// this method.
-    fn memory_growing(&mut self, current: usize, desired: usize, maximum: Option<usize>) -> bool;
-
-    /// Notifies the resource limiter that growing a linear memory, permitted by
-    /// the `memory_growing` method, has failed.
-    ///
-    /// Reasons for failure include: the growth exceeds the `maximum` passed to
-    /// `memory_growing`, or the operating system failed to allocate additional
-    /// memory. In that case, `error` might be downcastable to a `std::io::Error`.
-    fn memory_grow_failed(&mut self, _error: &Error) {}
-
-    /// Notifies the resource limiter that an instance's table has been requested to grow.
-    ///
-    /// * `current` is the current number of elements in the table.
-    /// * `desired` is the desired number of elements in the table.
-    /// * `maximum` is either the table's maximum or a maximum from an instance allocator.
-    ///   A value of `None` indicates that the table is unbounded.
-    ///
-    /// This function should return `true` to indicate that the growing operation is permitted or
-    /// `false` if not permitted. Returning `true` when a maximum has been exceeded will have no
-    /// effect as the table will not grow.
-    fn table_growing(&mut self, current: u32, desired: u32, maximum: Option<u32>) -> bool;
-
-    /// The maximum number of instances that can be created for a `Store`.
-    ///
-    /// Module instantiation will fail if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    fn instances(&self) -> usize {
-        DEFAULT_INSTANCE_LIMIT
-    }
-
-    /// The maximum number of tables that can be created for a `Store`.
-    ///
-    /// Module instantiation will fail if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    fn tables(&self) -> usize {
-        DEFAULT_TABLE_LIMIT
-    }
-
-    /// The maximum number of linear memories that can be created for a `Store`
-    ///
-    /// Instantiation will fail with an error if this limit is exceeded.
-    ///
-    /// This value defaults to 10,000.
-    fn memories(&self) -> usize {
-        DEFAULT_MEMORY_LIMIT
-    }
-}
-
 /// A type that roughly corresponds to a WebAssembly instance, but is also used
 /// for host-defined objects.
 ///
@@ -429,7 +349,11 @@ impl Instance {
     /// Returns `None` if memory can't be grown by the specified amount
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
-    pub(crate) fn memory_grow(&mut self, index: MemoryIndex, delta: u64) -> Option<usize> {
+    pub(crate) fn memory_grow(
+        &mut self,
+        index: MemoryIndex,
+        delta: u64,
+    ) -> Result<Option<usize>, Error> {
         let (idx, instance) = if let Some(idx) = self.module.defined_memory_index(index) {
             (idx, self)
         } else {
@@ -441,10 +365,10 @@ impl Instance {
                 (foreign_memory_index, foreign_instance)
             }
         };
-        let limiter = unsafe { (*instance.store()).limiter() };
+        let store = unsafe { &mut *instance.store() };
         let memory = &mut instance.memories[idx];
 
-        let result = unsafe { memory.grow(delta, limiter) };
+        let result = unsafe { memory.grow(delta, store) };
         let vmmemory = memory.vmmemory();
 
         // Update the state used by wasm code in case the base pointer and/or
@@ -468,7 +392,7 @@ impl Instance {
         table_index: TableIndex,
         delta: u32,
         init_value: TableElement,
-    ) -> Option<u32> {
+    ) -> Result<Option<u32>, Error> {
         let (defined_table_index, instance) =
             self.get_defined_table_index_and_instance(table_index);
         instance.defined_table_grow(defined_table_index, delta, init_value)
@@ -479,14 +403,14 @@ impl Instance {
         table_index: DefinedTableIndex,
         delta: u32,
         init_value: TableElement,
-    ) -> Option<u32> {
-        let limiter = unsafe { (*self.store()).limiter() };
+    ) -> Result<Option<u32>, Error> {
+        let store = unsafe { &mut *self.store() };
         let table = self
             .tables
             .get_mut(table_index)
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()));
 
-        let result = unsafe { table.grow(delta, init_value, limiter) };
+        let result = unsafe { table.grow(delta, init_value, store) };
 
         // Keep the `VMContext` pointers used by compiled Wasm code up to
         // date.

@@ -15,7 +15,7 @@ use wasmtime_environ::{
 };
 use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, VMContext, VMFunctionBody,
+    Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
     VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
 };
 
@@ -126,6 +126,11 @@ impl Instance {
             typecheck_externs(store.0, module, imports)?;
             Instantiator::new(store.0, module, ImportSource::Externs(imports))?
         };
+        assert!(
+            !store.0.async_support(),
+            "cannot use `new` when async support is enabled on the config"
+        );
+
         i.run(&mut store)
     }
 
@@ -162,7 +167,14 @@ impl Instance {
             typecheck_externs(store.0, module, imports)?;
             Instantiator::new(store.0, module, ImportSource::Externs(imports))?
         };
-        i.run_async(&mut store).await
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
+        );
+        store
+            .on_fiber(|store| i.run(&mut store.as_context_mut()))
+            .await?
     }
 
     pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
@@ -472,44 +484,10 @@ impl<'a> Instantiator<'a> {
     }
 
     fn run<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<Instance, Error> {
-        assert!(
-            !store.0.async_support(),
-            "cannot use `new` when async support is enabled on the config"
-        );
-
-        // NB: this is the same code as `run_async`. It's intentionally
-        // small but should be kept in sync (modulo the async bits).
         loop {
             if let Some((instance, start, toplevel)) = self.step(store.0)? {
                 if let Some(start) = start {
                     Instantiator::start_raw(store, instance, start)?;
-                }
-                if toplevel {
-                    break Ok(instance);
-                }
-            }
-        }
-    }
-
-    #[cfg(feature = "async")]
-    async fn run_async<T>(&mut self, store: &mut StoreContextMut<'_, T>) -> Result<Instance, Error>
-    where
-        T: Send,
-    {
-        assert!(
-            store.0.async_support(),
-            "cannot use `new_async` without enabling async support on the config"
-        );
-
-        // NB: this is the same code as `run`. It's intentionally
-        // small but should be kept in sync (modulo the async bits).
-        loop {
-            let step = self.step(store.0)?;
-            if let Some((instance, start, toplevel)) = step {
-                if let Some(start) = start {
-                    store
-                        .on_fiber(|store| Instantiator::start_raw(store, instance, start))
-                        .await??;
                 }
                 if toplevel {
                     break Ok(instance);
@@ -734,7 +712,7 @@ impl<'a> Instantiator<'a> {
                         imports: self.cur.build(),
                         shared_signatures: self.cur.module.signatures().as_module_map().into(),
                         host_state: Box::new(Instance(instance_to_be)),
-                        store: Some(store.traitobj()),
+                        store: StorePtr::new(store.traitobj()),
                         wasm_data: compiled_module.wasm_data(),
                     })?;
 
@@ -1002,7 +980,15 @@ impl<T> InstancePre<T> {
                 ImportSource::Definitions(&self.items),
             )?
         };
-        i.run_async(&mut store.as_context_mut()).await
+
+        let mut store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `new_async` without enabling async support on the config"
+        );
+        store
+            .on_fiber(|store| i.run(&mut store.as_context_mut()))
+            .await?
     }
 
     fn ensure_comes_from_same_store(&self, store: &StoreOpaque) -> Result<()> {
