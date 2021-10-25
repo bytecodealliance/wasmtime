@@ -431,9 +431,12 @@ mod tls {
             // null out our own previous field for safety in case it's
             // accidentally used later.
             let raw = raw::get();
-            assert!(!raw.is_null());
-            let prev = (*raw).prev.replace(ptr::null());
-            raw::replace(prev)?;
+            if !raw.is_null() {
+                let prev = (*raw).prev.replace(ptr::null());
+                raw::replace(prev)?;
+            }
+            // Null case: we aren't in a wasm context, so theres no tls
+            // to save for restoration.
             Ok(TlsRestore(raw))
         }
 
@@ -442,6 +445,11 @@ mod tls {
         /// This is unsafe because it's intended to only be used within the
         /// context of stack switching within wasmtime.
         pub unsafe fn replace(self) -> Result<(), Box<super::Trap>> {
+            // Null case: we aren't in a wasm context, so theres no tls
+            // to restore.
+            if self.0.is_null() {
+                return Ok(());
+            }
             // We need to configure our previous TLS pointer to whatever is in
             // TLS at this time, and then we set the current state to ourselves.
             let prev = raw::get();
