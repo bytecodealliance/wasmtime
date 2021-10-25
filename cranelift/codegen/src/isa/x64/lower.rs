@@ -236,7 +236,7 @@ fn extend_input_to_reg<C: LowerCtx<I = Inst>>(
     let ext_mode = match (input_size, requested_size) {
         (a, b) if a == b => return put_input_in_reg(ctx, spec),
         (1, 8) => return put_input_in_reg(ctx, spec),
-        (a, b) => ExtMode::new(a, b).expect(&format!("invalid extension: {} -> {}", a, b)),
+        (a, b) => ExtMode::new(a, b).unwrap_or_else(|| panic!("invalid extension: {} -> {}", a, b)),
     };
 
     let src = input_to_reg_mem(ctx, spec);
@@ -5847,11 +5847,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             if ty_access == types::I64 {
                 ctx.emit(Inst::mov64_rm_r(rm, data));
             } else {
-                let ext_mode = ExtMode::new(ty_access.bits(), 64).expect(&format!(
-                    "invalid extension during AtomicLoad: {} -> {}",
-                    ty_access.bits(),
-                    64
-                ));
+                let ext_mode = ExtMode::new(ty_access.bits(), 64).unwrap_or_else(|| {
+                    panic!(
+                        "invalid extension during AtomicLoad: {} -> {}",
+                        ty_access.bits(),
+                        64
+                    )
+                });
                 ctx.emit(Inst::movzx_rm_r(ext_mode, rm, data));
             }
         }
