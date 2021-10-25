@@ -67,6 +67,10 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-cli",
 ];
 
+// Anything **not** mentioned in this array is required to have an `=a.b.c`
+// dependency requirement on it to enable breaking api changes even in "patch"
+// releases since everything not mentioned here is just an organizational detail
+// that no one else should rely on.
 const PUBLIC_CRATES: &[&str] = &[
     // just here to appease the script because these are submodules of this
     // repository.
@@ -79,6 +83,27 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-wasi-nn",
     "wasmtime-wasi-crypto",
     "wasmtime-cli",
+    // all cranelift crates are considered "public" in that they can't
+    // have breaking API changes in patch releases
+    "cranelift-entity",
+    "cranelift-bforest",
+    "cranelift-codegen-shared",
+    "cranelift-codegen-meta",
+    "cranelift-codegen",
+    "cranelift-reader",
+    "cranelift-serde",
+    "cranelift-module",
+    "cranelift-preopt",
+    "cranelift-frontend",
+    "cranelift-wasm",
+    "cranelift-native",
+    "cranelift-object",
+    "cranelift-interpreter",
+    "cranelift",
+    "cranelift-jit",
+    // This is a dependency of cranelift crates and as a result can't break in
+    // patch releases as well
+    "wasmtime-types",
 ];
 
 struct Crate {

@@ -18,8 +18,8 @@ anyhow = "1.0"
 log = { version = "0.4.6", default-features = false }
 
 [dev-dependencies]
-cranelift-frontend = { path = "../frontend" }
-cranelift-entity = { path = "../entity" }
+cranelift-frontend = { path = "../frontend", version = "0.77.0" }
+cranelift-entity = { path = "../entity", version = "0.77.0" }
 
 [badges]
 maintenance = { status = "experimental" }
