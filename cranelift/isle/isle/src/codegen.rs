@@ -651,7 +651,7 @@ impl<'a> Codegen<'a> {
         indent: &str,
         ctx: &mut BodyContext,
     ) -> bool {
-        log::trace!("generate_body: trie {:?}", trie);
+        log::trace!("generate_body:\n{}", trie.pretty());
         let mut returned = false;
         match trie {
             &TrieNode::Empty => {}
@@ -692,10 +692,16 @@ impl<'a> Codegen<'a> {
 
                 let mut i = 0;
                 while i < edges.len() {
+                    // Gather adjacent match variants so that we can turn these
+                    // into a `match` rather than a sequence of `if let`s.
                     let mut last = i;
                     let mut adjacent_variants = BTreeSet::new();
                     let mut adjacent_variant_input = None;
-                    log::trace!("edge: {:?}", edges[i]);
+                    log::trace!(
+                        "edge: range = {:?}, symbol = {:?}",
+                        edges[i].range,
+                        edges[i].symbol
+                    );
                     while last < edges.len() {
                         match &edges[last].symbol {
                             &TrieSymbol::Match {
@@ -719,11 +725,11 @@ impl<'a> Codegen<'a> {
                         }
                     }
 
-                    // edges[i..last] is a run of adjacent
-                    // MatchVariants (possibly an empty one). Only use
-                    // a `match` form if there are at least two
-                    // adjacent options.
+                    // Now `edges[i..last]` is a run of adjacent `MatchVariants`
+                    // (possibly an empty one). Only use a `match` form if there
+                    // are at least two adjacent options.
                     if last - i > 1 {
+                        eprintln!("FITZGEN: generating body matches");
                         self.generate_body_matches(code, depth, &edges[i..last], indent, ctx);
                         i = last;
                         continue;
@@ -738,8 +744,13 @@ impl<'a> Codegen<'a> {
                         match symbol {
                             &TrieSymbol::EndOfMatch => {
                                 returned = self.generate_body(code, depth + 1, node, indent, ctx);
+                                eprintln!(
+                                    "FITZGEN: generated end-of-match; returned = {:?}",
+                                    returned
+                                );
                             }
                             &TrieSymbol::Match { ref op } => {
+                                eprintln!("FITZGEN: generating [if] let");
                                 let id = InstId(depth);
                                 let infallible =
                                     self.generate_pattern_inst(code, id, op, indent, ctx);

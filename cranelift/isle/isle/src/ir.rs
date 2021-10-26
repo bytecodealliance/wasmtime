@@ -31,15 +31,6 @@ pub enum Value {
 /// A single Pattern instruction.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PatternInst {
-    /// Get the Nth input argument, which corresponds to the Nth field
-    /// of the root term.
-    Arg {
-        /// The index of the argument to get.
-        index: usize,
-        /// The type of the argument.
-        ty: TypeId,
-    },
-
     /// Match a value as equal to another value. Produces no values.
     MatchEqual {
         /// The first value.
@@ -83,6 +74,21 @@ pub enum PatternInst {
         variant: VariantId,
     },
 
+    /// Evaluate an expression and provide the given value as the result of this
+    /// match instruction. The expression has access to the pattern-values up to
+    /// this point in the sequence.
+    Expr {
+        /// The expression to evaluate.
+        seq: ExprSequence,
+        /// The value produced by the expression.
+        output: Value,
+        /// The type of the output value.
+        output_ty: TypeId,
+    },
+
+    // NB: this has to come second-to-last, because it might be infallible, for
+    // the same reasons that `Arg` has to be last.
+    //
     /// Invoke an extractor, taking the given values as input (the first is the
     /// value to extract, the other are the `Input`-polarity extractor args) and
     /// producing an output value for each `Output`-polarity extractor arg.
@@ -99,16 +105,17 @@ pub enum PatternInst {
         infallible: bool,
     },
 
-    /// Evaluate an expression and provide the given value as the result of this
-    /// match instruction. The expression has access to the pattern-values up to
-    /// this point in the sequence.
-    Expr {
-        /// The expression to evaluate.
-        seq: ExprSequence,
-        /// The value produced by the expression.
-        output: Value,
-        /// The type of the output value.
-        output_ty: TypeId,
+    // NB: This has to go last, since it is infallible, so that when we sort
+    // edges in the trie, we visit infallible edges after first having tried the
+    // more-specific fallible options.
+    //
+    /// Get the Nth input argument, which corresponds to the Nth field
+    /// of the root term.
+    Arg {
+        /// The index of the argument to get.
+        index: usize,
+        /// The type of the argument.
+        ty: TypeId,
     },
 }
 
