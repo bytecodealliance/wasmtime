@@ -13,7 +13,7 @@ include = ["src/**/*", "README.md", "LICENSE"]
 [dependencies]
 thiserror = "1"
 witx = { path = "../wasi-common/WASI/tools/witx", version = "0.9.1", optional = true }
-wiggle-macro = { path = "macro", version = "0.30.0" }
+wiggle-macro = { path = "macro", version = "=0.30.0" }
 tracing = "0.1.26"
 bitflags = "1.2"
 async-trait = "0.1.42"

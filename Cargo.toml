@@ -22,11 +22,10 @@ doc = false
 
 [dependencies]
 wasmtime = { path = "crates/wasmtime", version = "0.30.0", default-features = false, features = ['cache', 'cranelift'] }
-wasmtime-cache = { path = "crates/cache", version = "0.30.0" }
-wasmtime-cranelift = { path = "crates/cranelift", version = "0.30.0" }
-wasmtime-environ = { path = "crates/environ", version = "0.30.0" }
-wasmtime-jit = { path = "crates/jit", version = "0.30.0" }
-wasmtime-wast = { path = "crates/wast", version = "0.30.0" }
+wasmtime-cache = { path = "crates/cache", version = "=0.30.0" }
+wasmtime-cranelift = { path = "crates/cranelift", version = "=0.30.0" }
+wasmtime-environ = { path = "crates/environ", version = "=0.30.0" }
+wasmtime-wast = { path = "crates/wast", version = "=0.30.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "0.30.0" }
 wasmtime-wasi-crypto = { path = "crates/wasi-crypto", version = "0.30.0", optional = true }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "0.30.0", optional = true }

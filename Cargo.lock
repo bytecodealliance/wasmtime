@@ -3488,7 +3488,6 @@ dependencies = [
  "wasmtime-cranelift",
  "wasmtime-environ",
  "wasmtime-fuzzing",
- "wasmtime-jit",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
@@ -3678,7 +3677,6 @@ dependencies = [
  "thiserror",
  "walkdir",
  "wasmtime",
- "wasmtime-runtime",
  "wasmtime-wasi",
  "wiggle",
 ]

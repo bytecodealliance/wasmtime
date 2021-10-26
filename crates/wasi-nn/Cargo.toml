@@ -16,9 +16,8 @@ edition = "2018"
 anyhow = "1.0"
 log = { version = "0.4", default-features = false }
 wasmtime = { path = "../wasmtime", version = "0.30.0", default-features = false }
-wasmtime-runtime = { path = "../runtime", version = "0.30.0" }
 wasmtime-wasi = { path = "../wasi", version = "0.30.0" }
-wiggle = { path = "../wiggle", version = "0.30.0" }
+wiggle = { path = "../wiggle", version = "=0.30.0" }
 
 # These dependencies are necessary for the wasi-nn implementation:
 openvino = { version = "0.3.1", features = ["runtime-linking"] }
