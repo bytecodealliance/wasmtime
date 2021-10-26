@@ -110,7 +110,6 @@ struct Crate {
     manifest: PathBuf,
     name: String,
     version: String,
-    next_version: String,
     publish: bool,
 }
 
@@ -128,9 +127,9 @@ fn main() {
     crates.sort_by_key(|krate| pos.get(&krate.name[..]));
 
     match &env::args().nth(1).expect("must have one argument")[..] {
-        "bump" => {
+        name @ "bump" | name @ "bump-patch" => {
             for krate in crates.iter() {
-                bump_version(&krate, &crates);
+                bump_version(&krate, &crates, name == "bump-patch");
             }
             // update the lock file
             assert!(Command::new("cargo")
@@ -226,11 +225,6 @@ fn read_crate(manifest: &Path) -> Crate {
     }
     let name = name.unwrap();
     let version = version.unwrap();
-    let next_version = if CRATES_TO_PUBLISH.contains(&&name[..]) {
-        bump(&version)
-    } else {
-        version.clone()
-    };
     if ["witx", "witx-cli", "wasi-crypto"].contains(&&name[..]) {
         publish = false;
     }
@@ -238,13 +232,19 @@ fn read_crate(manifest: &Path) -> Crate {
         manifest: manifest.to_path_buf(),
         name,
         version,
-        next_version,
         publish,
     }
 }
 
-fn bump_version(krate: &Crate, crates: &[Crate]) {
+fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
     let contents = fs::read_to_string(&krate.manifest).unwrap();
+    let next_version = |krate: &Crate| -> String {
+        if CRATES_TO_PUBLISH.contains(&&krate.name[..]) {
+            bump(&krate.version, patch)
+        } else {
+            krate.version.clone()
+        }
+    };
 
     let mut new_manifest = String::new();
     let mut is_deps = false;
@@ -254,9 +254,11 @@ fn bump_version(krate: &Crate, crates: &[Crate]) {
             if CRATES_TO_PUBLISH.contains(&&krate.name[..]) {
                 println!(
                     "bump `{}` {} => {}",
-                    krate.name, krate.version, krate.next_version
+                    krate.name,
+                    krate.version,
+                    next_version(krate),
                 );
-                new_manifest.push_str(&line.replace(&krate.version, &krate.next_version));
+                new_manifest.push_str(&line.replace(&krate.version, &next_version(krate)));
                 rewritten = true;
             }
         }
@@ -298,7 +300,7 @@ fn bump_version(krate: &Crate, crates: &[Crate]) {
                 }
             }
             rewritten = true;
-            new_manifest.push_str(&line.replace(&other.version, &other.next_version));
+            new_manifest.push_str(&line.replace(&other.version, &next_version(other)));
             break;
         }
         if !rewritten {
@@ -316,11 +318,15 @@ fn bump_version(krate: &Crate, crates: &[Crate]) {
 /// repository since we're currently making major version bumps for all our
 /// releases. This may end up getting tweaked as we stabilize crates and start
 /// doing more minor/patch releases, but for now this should do the trick.
-fn bump(version: &str) -> String {
+fn bump(version: &str, patch_bump: bool) -> String {
     let mut iter = version.split('.').map(|s| s.parse::<u32>().unwrap());
     let major = iter.next().expect("major version");
     let minor = iter.next().expect("minor version");
     let patch = iter.next().expect("patch version");
+
+    if patch_bump {
+        return format!("{}.{}.{}", major, minor, patch + 1);
+    }
     if major != 0 {
         format!("{}.0.0", major + 1)
     } else if minor != 0 {

@@ -1,0 +1,86 @@
+# The purpose of this workflow is to, once a month, trigger Wasmtime's release
+# process. All that actually happens here is that whenever this is triggered it
+# will send a PR to the main repository with the version numbers automatically
+# bumped. The next stage of the process is to simply merge the PR, and the
+# `push-tag.yml` process takes over from there.
+#
+# Note that this creates a commit and a PR with a personal access token to
+# ensure that the PR gets CI triggered on it. Additionally the commit message
+# is specifically worded to get recognized by `push-tag.yml`.
+
+name: "Bump version number"
+on:
+  schedule:
+    # “At 00:00 on every day-of-month from 8 through 14 and on Monday.”
+    #
+    # https://crontab.guru/#0_0_8-14_*_1
+    - cron: '0 0 8-14 * 1'
+
+jobs:
+  bump_version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - run: rustup update stable && rustup default stable
+      - name: Bump versions locally
+        id: bump
+        run: |
+          rustc scripts/publish.rs
+          ./publish bump
+          version=$(grep '^version =' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"/\1/')
+          echo "::set-output name=version::$version"
+
+      - name: Commit version changes
+        run: |
+          git config user.name 'Wasmtime Releases'
+          git config user.email 'wasmtime-releases@users.noreply.github.com'
+          git commit -a -F-<<EOF
+          Bump Wasmtime to $version
+
+          [automatically-tag-and-release-this-commit]
+          EOF
+
+      - name: Push to remote
+        run: |
+          git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
+          git push origin main:ci/bump-version -f
+
+      - name: Make a PR
+        # Note that the syntax here is kinda funky, and the general gist is that
+        # I couldn't figure out a good way to have a multiline string-literal
+        # become a json-encoded string literal to send to GitHub. This
+        # represents my best attempt.
+        run: |
+          cat > pr-body <<-EOF
+          This is an automated pull request from CI which is intended to
+          notify maintainers that it's time to release Wasmtime version
+          ${{ steps.bump.outputs.version }}. Version numbers have been bumped
+          in this PR automatically and the release process will automatically
+          enter the next stages once this PR is merged.
+
+          It's recommended that maintainers double-check that [RELEASES.md]
+          is up-to-date. If not please feel free to push to this PR any
+          modifications to the release notes. Additionally before merging it's
+          probably best to double-check the [release process] and make sure that
+          everything is ship-shape.
+
+          [RELEASES.md]: https://github.com/bytecodealliance/wasmtime/blob/main/RELEASES.md
+          [release process]: https://docs.wasmtime.dev/contributing-release-process.html
+          EOF
+          body=$(jq -sR < ./pr-body)
+
+          curl --include --request POST \
+            https://api.github.com/repos/${{ github.repository }}/pulls \
+            --header "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            --data @- << EOF
+          {
+            "head": "ci/bump-version",
+            "base": "main",
+            "title": "Release Wasmtime ${{ steps.bump.outputs.version }}",
+            "body": $body,
+            "maintainer_can_modify": true
+
+          }
+          EOF
