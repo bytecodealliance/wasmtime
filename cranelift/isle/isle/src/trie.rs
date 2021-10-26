@@ -473,6 +473,36 @@ impl TrieNode {
             }
         }
     }
+
+    /// Get a pretty-printed version of this trie, for debugging.
+    pub fn pretty(&self) -> String {
+        let mut s = String::new();
+        pretty_rec(&mut s, self, "");
+        return s;
+
+        fn pretty_rec(s: &mut String, node: &TrieNode, indent: &str) {
+            match node {
+                TrieNode::Decision { edges } => {
+                    s.push_str(indent);
+                    s.push_str("TrieNode::Decision:\n");
+
+                    let new_indent = indent.to_owned() + "    ";
+                    for edge in edges {
+                        s.push_str(indent);
+                        s.push_str(&format!(
+                            "  edge: range = {:?}, symbol: {:?}\n",
+                            edge.range, edge.symbol
+                        ));
+                        pretty_rec(s, &edge.node, &new_indent);
+                    }
+                }
+                TrieNode::Empty | TrieNode::Leaf { .. } => {
+                    s.push_str(indent);
+                    s.push_str(&format!("{:?}\n", node));
+                }
+            }
+        }
+    }
 }
 
 /// Builder context for one function in generated code corresponding
