@@ -43,7 +43,7 @@ fn bench_sequential(c: &mut Criterion, modules: &[&str]) {
 
             let engine = Engine::new(&config).expect("failed to create engine");
             let module = Module::from_file(&engine, &path)
-                .expect(&format!("failed to load benchmark `{}`", path.display()));
+                .unwrap_or_else(|_| panic!("failed to load benchmark `{}`", path.display()));
             let mut linker = Linker::new(&engine);
             wasmtime_wasi::add_to_linker(&mut linker, |cx| cx).unwrap();
 
