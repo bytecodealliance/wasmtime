@@ -44,12 +44,6 @@ impl SubTest for TestCompile {
             .compile(isa)
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
 
-        info!(
-            "Generated {} bytes of code:\n{}",
-            total_size,
-            comp_ctx.func.display()
-        );
-
         let disasm = comp_ctx
             .mach_compile_result
             .as_ref()
@@ -57,6 +51,9 @@ impl SubTest for TestCompile {
             .disasm
             .as_ref()
             .unwrap();
+
+        info!("Generated {} bytes of code:\n{}", total_size, disasm);
+
         run_filecheck(&disasm, context)
     }
 }
