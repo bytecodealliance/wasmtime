@@ -729,7 +729,6 @@ impl<'a> Codegen<'a> {
                     // (possibly an empty one). Only use a `match` form if there
                     // are at least two adjacent options.
                     if last - i > 1 {
-                        eprintln!("FITZGEN: generating body matches");
                         self.generate_body_matches(code, depth, &edges[i..last], indent, ctx);
                         i = last;
                         continue;
@@ -744,13 +743,8 @@ impl<'a> Codegen<'a> {
                         match symbol {
                             &TrieSymbol::EndOfMatch => {
                                 returned = self.generate_body(code, depth + 1, node, indent, ctx);
-                                eprintln!(
-                                    "FITZGEN: generated end-of-match; returned = {:?}",
-                                    returned
-                                );
                             }
                             &TrieSymbol::Match { ref op } => {
-                                eprintln!("FITZGEN: generating [if] let");
                                 let id = InstId(depth);
                                 let infallible =
                                     self.generate_pattern_inst(code, id, op, indent, ctx);
