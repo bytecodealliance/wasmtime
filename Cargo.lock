@@ -612,7 +612,6 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "cranelift",
- "rand 0.8.3",
 ]
 
 [[package]]
