@@ -162,7 +162,7 @@ jobs:
     - run: |
         rustup target add wasm32-unknown-emscripten
         rustup target add armv7-unknown-linux-gnueabihf
-        sudo apt-get install -y gcc-arm-linux-gnueabihf
+        sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
     - run: cargo check --target wasm32-unknown-emscripten -p wasi-common
     - run: cargo check --target armv7-unknown-linux-gnueabihf -p wasi-common
 
