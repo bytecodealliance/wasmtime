@@ -557,7 +557,6 @@ name = "cranelift-codegen-meta"
 version = "0.77.0"
 dependencies = [
  "cranelift-codegen-shared",
- "cranelift-entity",
 ]
 
 [[package]]
