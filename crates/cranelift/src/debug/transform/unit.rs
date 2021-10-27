@@ -244,6 +244,15 @@ where
     Ok(wrapper_die_id)
 }
 
+fn is_dead_code<R: Reader>(entry: &DebuggingInformationEntry<R>) -> bool {
+    const TOMBSTONE: u64 = u32::MAX as u64;
+
+    match entry.attr_value(gimli::DW_AT_low_pc) {
+        Ok(Some(AttributeValue::Addr(addr))) => addr == TOMBSTONE,
+        _ => false,
+    }
+}
+
 pub(crate) fn clone_unit<'a, R>(
     dwarf: &gimli::Dwarf<R>,
     unit: Unit<R, R::Offset>,
@@ -346,12 +355,20 @@ where
     let mut current_value_range = InheritedAttr::new();
     let mut current_scope_ranges = InheritedAttr::new();
     while let Some((depth_delta, entry)) = entries.next_dfs()? {
+        // If `skip_at_depth` is `Some` then we previously decided to skip over
+        // a node and all it's children. Let A be the last node processed, B be
+        // the first node skipped, C be previous node, and D the current node.
+        // Then `cached` is the difference from A to B, `depth` is the diffence
+        // from B to C, and `depth_delta` is the differenc from C to D.
         let depth_delta = if let Some((depth, cached)) = skip_at_depth {
+            // `new_depth` = B to D
             let new_depth = depth + depth_delta;
+            // if D is below B continue to skip
             if new_depth > 0 {
                 skip_at_depth = Some((new_depth, cached));
                 continue;
             }
+            // otherwise process D with `depth_delta` being the difference from A to D
             skip_at_depth = None;
             new_depth + cached
         } else {
@@ -361,8 +378,11 @@ where
         if !context
             .reachable
             .contains(&entry.offset().to_unit_section_offset(&unit))
+            || is_dead_code(&entry)
         {
             // entry is not reachable: discarding all its info.
+            // Here B = C so `depth` is 0. A is the previous node so `cached` =
+            // `depth_delta`.
             skip_at_depth = Some((0, depth_delta));
             continue;
         }

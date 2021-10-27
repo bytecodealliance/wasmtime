@@ -49,6 +49,30 @@ fn check_line_program(wasm_path: &str, directives: &str) -> Result<()> {
     any(target_os = "linux", target_os = "macos"),
     target_pointer_width = "64"
 ))]
+fn test_debug_dwarf_translate_dead_code() -> Result<()> {
+    check_wasm(
+        "tests/all/debug/testsuite/dead_code.wasm",
+        r##"
+check: DW_TAG_compile_unit
+# We don't have "bar" function because it is dead code
+not:      DW_AT_name	("bar")
+# We have "foo" function
+check: DW_TAG_subprogram
+check:      DW_AT_name	("foo")
+# We have "baz" function
+# it was marked `noinline` so isn't dead code
+check: DW_TAG_subprogram
+check:      DW_AT_name	("baz")
+    "##,
+    )
+}
+
+#[test]
+#[ignore]
+#[cfg(all(
+    any(target_os = "linux", target_os = "macos"),
+    target_pointer_width = "64"
+))]
 fn test_debug_dwarf_translate() -> Result<()> {
     check_wasm(
         "tests/all/debug/testsuite/fib-wasm.wasm",
