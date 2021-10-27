@@ -11,6 +11,7 @@ mod gen_inst;
 mod gen_settings;
 mod gen_types;
 
+mod constant_hash;
 mod shared;
 mod unique_table;
 
