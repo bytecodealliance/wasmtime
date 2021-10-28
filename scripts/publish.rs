@@ -270,6 +270,12 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
         };
 
         for other in crates {
+            // If `other` isn't a published crate then it's not going to get a
+            // bumped version so we don't need to update anything in the
+            // manifest.
+            if !other.publish {
+                continue;
+            }
             if !is_deps || !line.starts_with(&format!("{} ", other.name)) {
                 continue;
             }
