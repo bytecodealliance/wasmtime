@@ -42,10 +42,10 @@ jobs:
 
       - name: Commit version changes
         run: |
-          git config user.name 'Wasmtime Releases'
-          git config user.email 'wasmtime-releases@users.noreply.github.com'
+          git config user.name 'Wasmtime Publish'
+          git config user.email 'wasmtime-publish@users.noreply.github.com'
           git commit -a -F-<<EOF
-          Bump Wasmtime to $version
+          Bump Wasmtime to ${{ steps.bump.outputs.version }}
 
           [automatically-tag-and-release-this-commit]
           EOF
