@@ -16,6 +16,14 @@ on:
     # https://crontab.guru/#0_0_8-14_*_1
     - cron: '0 0 8-14 * 1'
 
+  # Allow manually triggering this workflow remotely via a curl request,
+  # described at
+  # https://docs.github.com/en/rest/reference/actions#create-a-workflow-dispatch-event
+  #
+  # Note that this can be also triggered by running the script in
+  # `ci/force-ci-bump-version.sh`
+  workflow_dispatch:
+
 jobs:
   bump_version:
     runs-on: ubuntu-latest
