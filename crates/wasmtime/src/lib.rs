@@ -198,7 +198,7 @@
 //! designed to be as cheap as possible.
 //!
 //! With an [`Instance`] you can then invoke various exports and interact with
-//! the WebAssembly module. Once the request is finished the [`Store`],
+//! the WebAssembly module. Once the request is finished, the [`Store`]
 //! is dropped and everything will be deallocated. Note that if the same
 //! [`Store`] were used for every request then that would have all requests
 //! sharing resources and nothing would ever get deallocated, causing memory
