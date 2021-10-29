@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-serde"
-version = "0.77.0"
+version = "0.78.0"
 authors = ["The Cranelift Project Developers"]
 description = "Serializer/Deserializer for Cranelift IR"
 repository = "https://github.com/bytecodealliance/wasmtime"
@@ -18,8 +18,8 @@ clap = "2.32.0"
 serde = "1.0.8"
 serde_derive = "1.0.75"
 serde_json = "1.0.26"
-cranelift-codegen = { path = "../codegen", version = "0.77.0", features = ["enable-serde"] }
-cranelift-reader = { path = "../reader", version = "0.77.0" }
+cranelift-codegen = { path = "../codegen", version = "0.78.0", features = ["enable-serde"] }
+cranelift-reader = { path = "../reader", version = "0.78.0" }
 
 [badges]
 maintenance = { status = "experimental" }

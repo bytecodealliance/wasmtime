@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+--------------------------------------------------------------------------------
+
+## 0.31.0
+
+Released 2021-10-29.
+
 ### Added
 
 * New `Func::new_unchecked` and `Func::call_unchecked` APIs have been added with
@@ -14,6 +20,10 @@
 * Release binaries are now available for the s390x-unknown-linux-gnu
   architecture.
   [#3372](https://github.com/bytecodealliance/wasmtime/pull/3372)
+
+* A new `ResourceLimiterAsync` trait is added which allows asynchronous blocking
+  of WebAssembly on instructions such as `memory.grow`.
+  [#3393](https://github.com/bytecodealliance/wasmtime/pull/3393)
 
 ### Changed
 
@@ -29,6 +39,19 @@
 * Debugging with GDB has been fixed on Windows.
   [#3373](https://github.com/bytecodealliance/wasmtime/pull/3373)
 
+* Some quadradic behavior in Wasmtime's compilation of modules has been fixed.
+  [#3469](https://github.com/bytecodealliance/wasmtime/pull/3469)
+  [#3466](https://github.com/bytecodealliance/wasmtime/pull/3466)
+
+* Bounds-checks for wasm memory accesses in certain non-default configurations
+  have been fixed to correctly allow loads at the end of the address space.
+  [#3462](https://github.com/bytecodealliance/wasmtime/pull/3462)
+
+* When type-checking memories and tables for satisfying instance imports the
+  runtime size of the table/memory is now consulted instead of the object's
+  original type.
+  [#3450](https://github.com/bytecodealliance/wasmtime/pull/3450)
+
 ### Removed
 
 * The Lightbeam backend has been removed, as per [RFC 14].
@@ -38,7 +61,7 @@
 
 * Cranelift's old x86 backend has been removed, as per [RFC 12].
   [#3309](https://github.com/bytecodealliance/wasmtime/pull/3009)
-  
+
 [RFC 12]: https://github.com/bytecodealliance/rfcs/pull/12
 
 ## 0.30.0
