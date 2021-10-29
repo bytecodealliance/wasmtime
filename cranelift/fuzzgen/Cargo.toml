@@ -15,4 +15,3 @@ cranelift = { path = "../umbrella", version = "0.78.0" }
 
 anyhow = "1.0.19"
 arbitrary = "1.0.0"
-rand = "0.8.0"

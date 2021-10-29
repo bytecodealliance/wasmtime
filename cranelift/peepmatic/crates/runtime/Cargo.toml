@@ -10,7 +10,6 @@ description = "Runtime support for peepmatic peephole optimizers"
 
 [dependencies]
 bincode = "1.2.1"
-bumpalo = "3.2.0"
 log = "0.4.8"
 peepmatic-automata = { version = "=0.78.0", path = "../automata", features = ["serde"] }
 peepmatic-traits = { version = "=0.78.0", path = "../traits" }

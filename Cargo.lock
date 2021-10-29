@@ -557,15 +557,11 @@ name = "cranelift-codegen-meta"
 version = "0.78.0"
 dependencies = [
  "cranelift-codegen-shared",
- "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.78.0"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "cranelift-entity"
@@ -613,7 +609,6 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "cranelift",
- "rand 0.8.3",
 ]
 
 [[package]]
@@ -654,9 +649,7 @@ version = "0.78.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "cranelift-entity",
  "hashbrown",
- "log",
 ]
 
 [[package]]
@@ -687,7 +680,6 @@ name = "cranelift-preopt"
 version = "0.78.0"
 dependencies = [
  "cranelift-codegen",
- "cranelift-entity",
 ]
 
 [[package]]
@@ -697,18 +689,6 @@ dependencies = [
  "cranelift-codegen",
  "smallvec",
  "target-lexicon",
-]
-
-[[package]]
-name = "cranelift-serde"
-version = "0.78.0"
-dependencies = [
- "clap",
- "cranelift-codegen",
- "cranelift-reader",
- "serde",
- "serde_derive",
- "serde_json",
 ]
 
 [[package]]
@@ -723,7 +703,6 @@ dependencies = [
  "cranelift-entity",
  "cranelift-filetests",
  "cranelift-frontend",
- "cranelift-fuzzgen",
  "cranelift-interpreter",
  "cranelift-jit",
  "cranelift-module",
@@ -731,7 +710,6 @@ dependencies = [
  "cranelift-object",
  "cranelift-preopt",
  "cranelift-reader",
- "cranelift-serde",
  "cranelift-wasm",
  "file-per-thread-logger",
  "filecheck",
@@ -1957,7 +1935,6 @@ name = "peepmatic-runtime"
 version = "0.78.0"
 dependencies = [
  "bincode",
- "bumpalo",
  "log",
  "peepmatic-automata",
  "peepmatic-test-operator",
