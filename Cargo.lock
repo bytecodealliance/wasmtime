@@ -2510,19 +2510,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rusty_v8"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fc062fb861b82fa7ac4e1a009da873279a10180d2133574e4219d870038c1c"
-dependencies = [
- "bitflags",
- "fslock",
- "lazy_static",
- "libc",
- "which",
-]
-
-[[package]]
 name = "ryu"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3057,6 +3044,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "v8"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b3adb16fd1af3e28d6fda8348a6d96b5363a128dc5a0216b137b64ecbae6641"
+dependencies = [
+ "bitflags",
+ "fslock",
+ "lazy_static",
+ "libc",
+ "which",
+]
+
+[[package]]
 name = "vec_map"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3532,7 +3532,7 @@ dependencies = [
  "env_logger 0.8.3",
  "log",
  "rayon",
- "rusty_v8",
+ "v8",
  "wasm-encoder",
  "wasm-smith",
  "wasm-spec-interpreter",

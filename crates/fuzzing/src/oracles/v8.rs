@@ -1,5 +1,4 @@
 use super::{first_exported_function, first_exported_memory, log_wasm};
-use rusty_v8 as v8;
 use std::convert::TryFrom;
 use std::sync::Once;
 use wasmtime::*;

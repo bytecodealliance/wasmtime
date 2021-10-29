@@ -22,7 +22,7 @@ use wasmtime::*;
 use wasmtime_wast::WastContext;
 
 #[cfg(not(any(windows, target_arch = "s390x")))]
-pub use v8::*;
+pub use self::v8::*;
 #[cfg(not(any(windows, target_arch = "s390x")))]
 mod v8;
 
