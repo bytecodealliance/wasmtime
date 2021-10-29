@@ -259,7 +259,7 @@
 //!   asynchronously.
 //!
 //! * `jitdump` - Enabled by default, this feature compiles in support for the
-//!   jitdump runtime profilng format. The profiler can be selected with
+//!   jitdump runtime profiling format. The profiler can be selected with
 //!   [`Config::profiler`].
 //!
 //! * `vtune` - Not enabled by default, this feature compiles in support for
