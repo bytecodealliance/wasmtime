@@ -122,15 +122,6 @@ impl InstructionFormatBuilder {
         self
     }
 
-    pub fn imm_with_name(mut self, member: &'static str, operand_kind: &OperandKind) -> Self {
-        let field = FormatField {
-            kind: operand_kind.clone(),
-            member,
-        };
-        self.imm_fields.push(field);
-        self
-    }
-
     pub fn typevar_operand(mut self, operand_index: usize) -> Self {
         assert!(self.typevar_operand.is_none());
         assert!(operand_index < self.num_value_operands);
