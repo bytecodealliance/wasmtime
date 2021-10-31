@@ -2,7 +2,12 @@ use crate::cdsl::operands::{OperandKind, OperandKindFields};
 
 /// Small helper to initialize an OperandBuilder with the right kind, for a given name and doc.
 fn new(format_field_name: &'static str, rust_type: &'static str, doc: &'static str) -> OperandKind {
-    OperandKind::new(format_field_name, rust_type, OperandKindFields::EntityRef).with_doc(doc)
+    OperandKind::new(
+        format_field_name,
+        rust_type,
+        OperandKindFields::EntityRef,
+        doc,
+    )
 }
 
 pub(crate) struct EntityRefs {
@@ -59,7 +64,10 @@ impl EntityRefs {
 
             table: new("table", "ir::Table", "A table."),
 
-            varargs: OperandKind::new("", "&[Value]", OperandKindFields::VariableArgs).with_doc(
+            varargs: OperandKind::new(
+                "",
+                "&[Value]",
+                OperandKindFields::VariableArgs,
                 r#"
                         A variable size list of `value` operands.
 

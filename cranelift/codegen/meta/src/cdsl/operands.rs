@@ -130,18 +130,14 @@ impl OperandKind {
         rust_field_name: &'static str,
         rust_type: &'static str,
         fields: OperandKindFields,
+        doc: &'static str,
     ) -> Self {
         Self {
             rust_field_name,
             rust_type,
             fields,
-            doc: None,
+            doc: Some(doc),
         }
-    }
-    pub fn with_doc(mut self, doc: &'static str) -> Self {
-        assert!(self.doc.is_none());
-        self.doc = Some(doc);
-        self
     }
     fn doc(&self) -> Option<&str> {
         if let Some(doc) = &self.doc {
@@ -152,18 +148,19 @@ impl OperandKind {
             OperandKindFields::ImmEnum(_)
             | OperandKindFields::ImmValue
             | OperandKindFields::EntityRef
-            | OperandKindFields::VariableArgs => None,
+            | OperandKindFields::VariableArgs => unreachable!(),
         }
     }
 }
 
 impl Into<OperandKind> for &TypeVar {
     fn into(self) -> OperandKind {
-        OperandKind::new(
-            "value",
-            "ir::Value",
-            OperandKindFields::TypeVar(self.into()),
-        )
+        OperandKind {
+            rust_field_name: "value",
+            rust_type: "ir::Value",
+            fields: OperandKindFields::TypeVar(self.into()),
+            doc: None,
+        }
     }
 }
 impl Into<OperandKind> for &OperandKind {
