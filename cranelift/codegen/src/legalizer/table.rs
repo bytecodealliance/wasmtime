@@ -4,43 +4,17 @@
 //! instruction into code that depends on the kind of table referenced.
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::IntCC;
 use crate::ir::immediates::Offset32;
 use crate::ir::{self, InstBuilder};
-use crate::isa::TargetIsa;
 
 /// Expand a `table_addr` instruction according to the definition of the table.
 pub fn expand_table_addr(
     inst: ir::Inst,
     func: &mut ir::Function,
-    _cfg: &mut ControlFlowGraph,
-    _isa: &dyn TargetIsa,
-) {
-    // Unpack the instruction.
-    let (table, index, element_offset) = match func.dfg[inst] {
-        ir::InstructionData::TableAddr {
-            opcode,
-            table,
-            arg,
-            offset,
-        } => {
-            debug_assert_eq!(opcode, ir::Opcode::TableAddr);
-            (table, arg, offset)
-        }
-        _ => panic!("Wanted table_addr: {}", func.dfg.display_inst(inst)),
-    };
-
-    dynamic_addr(inst, table, index, element_offset, func);
-}
-
-/// Expand a `table_addr` for a dynamic table.
-fn dynamic_addr(
-    inst: ir::Inst,
     table: ir::Table,
     index: ir::Value,
     element_offset: Offset32,
-    func: &mut ir::Function,
 ) {
     let bound_gv = func.tables[table].bound_gv;
     let index_ty = func.dfg.value_type(index);

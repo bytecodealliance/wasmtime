@@ -4,7 +4,6 @@
 //! instruction into code that depends on the kind of global value referenced.
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{self, InstBuilder};
 use crate::isa::TargetIsa;
 
@@ -12,22 +11,10 @@ use crate::isa::TargetIsa;
 pub fn expand_global_value(
     inst: ir::Inst,
     func: &mut ir::Function,
-    _cfg: &mut ControlFlowGraph,
     isa: &dyn TargetIsa,
+    global_value: ir::GlobalValue,
 ) {
-    // Unpack the instruction.
-    let gv = match func.dfg[inst] {
-        ir::InstructionData::UnaryGlobalValue {
-            opcode,
-            global_value,
-        } => {
-            debug_assert_eq!(opcode, ir::Opcode::GlobalValue);
-            global_value
-        }
-        _ => panic!("Wanted global_value: {}", func.dfg.display_inst(inst)),
-    };
-
-    match func.global_values[gv] {
+    match func.global_values[global_value] {
         ir::GlobalValueData::VMContext => vmctx_addr(inst, func),
         ir::GlobalValueData::IAddImm {
             base,
@@ -40,7 +27,7 @@ pub fn expand_global_value(
             global_type,
             readonly,
         } => load_addr(inst, func, base, offset, global_type, readonly, isa),
-        ir::GlobalValueData::Symbol { tls, .. } => symbol(inst, func, gv, isa, tls),
+        ir::GlobalValueData::Symbol { tls, .. } => symbol(inst, func, global_value, isa, tls),
     }
 }
 

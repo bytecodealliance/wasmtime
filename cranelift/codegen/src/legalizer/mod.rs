@@ -60,21 +60,25 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                     cfg.recompute_block(pos.func, old_block);
                 }
                 InstructionData::CondTrap {
-                    opcode: ir::Opcode::Trapnz | ir::Opcode::Trapz | ir::Opcode::ResumableTrapnz,
-                    ..
+                    opcode:
+                        opcode @ (ir::Opcode::Trapnz | ir::Opcode::Trapz | ir::Opcode::ResumableTrapnz),
+                    arg,
+                    code,
                 } => {
-                    expand_cond_trap(inst, &mut pos.func, cfg, isa);
+                    expand_cond_trap(inst, &mut pos.func, cfg, opcode, arg, code);
                 }
 
                 // memory and constants
                 InstructionData::UnaryGlobalValue {
                     opcode: ir::Opcode::GlobalValue,
-                    ..
-                } => expand_global_value(inst, &mut pos.func, cfg, isa),
+                    global_value,
+                } => expand_global_value(inst, &mut pos.func, isa, global_value),
                 InstructionData::HeapAddr {
                     opcode: ir::Opcode::HeapAddr,
-                    ..
-                } => expand_heap_addr(inst, &mut pos.func, cfg, isa),
+                    heap,
+                    arg,
+                    imm,
+                } => expand_heap_addr(inst, &mut pos.func, cfg, isa, heap, arg, imm),
                 InstructionData::StackLoad {
                     opcode: ir::Opcode::StackLoad,
                     stack_slot,
@@ -113,8 +117,10 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 }
                 InstructionData::TableAddr {
                     opcode: ir::Opcode::TableAddr,
-                    ..
-                } => expand_table_addr(inst, &mut pos.func, cfg, isa),
+                    table,
+                    arg,
+                    offset,
+                } => expand_table_addr(inst, &mut pos.func, table, arg, offset),
 
                 // bitops
                 InstructionData::BinaryImm64 {
@@ -287,25 +293,18 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
 }
 
 /// Custom expansion for conditional trap instructions.
-/// TODO: Add CFG support to the Rust DSL patterns so we won't have to do this.
 fn expand_cond_trap(
     inst: ir::Inst,
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
-    _isa: &dyn TargetIsa,
+    opcode: ir::Opcode,
+    arg: ir::Value,
+    code: ir::TrapCode,
 ) {
     // Parse the instruction.
-    let trapz;
-    let (arg, code, opcode) = match func.dfg[inst] {
-        ir::InstructionData::CondTrap { opcode, arg, code } => {
-            // We want to branch *over* an unconditional trap.
-            trapz = match opcode {
-                ir::Opcode::Trapz => true,
-                ir::Opcode::Trapnz | ir::Opcode::ResumableTrapnz => false,
-                _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst)),
-            };
-            (arg, code, opcode)
-        }
+    let trapz = match opcode {
+        ir::Opcode::Trapz => true,
+        ir::Opcode::Trapnz | ir::Opcode::ResumableTrapnz => false,
         _ => panic!("Expected cond trap: {}", func.dfg.display_inst(inst)),
     };
 

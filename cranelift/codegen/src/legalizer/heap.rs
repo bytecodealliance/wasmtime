@@ -6,6 +6,7 @@
 use crate::cursor::{Cursor, FuncCursor};
 use crate::flowgraph::ControlFlowGraph;
 use crate::ir::condcodes::IntCC;
+use crate::ir::immediates::Uimm32;
 use crate::ir::{self, InstBuilder};
 use crate::isa::TargetIsa;
 
@@ -15,31 +16,26 @@ pub fn expand_heap_addr(
     func: &mut ir::Function,
     cfg: &mut ControlFlowGraph,
     isa: &dyn TargetIsa,
+    heap: ir::Heap,
+    offset: ir::Value,
+    access_size: Uimm32,
 ) {
-    // Unpack the instruction.
-    let (heap, offset, access_size) = match func.dfg[inst] {
-        ir::InstructionData::HeapAddr {
-            opcode,
-            heap,
-            arg,
-            imm,
-        } => {
-            debug_assert_eq!(opcode, ir::Opcode::HeapAddr);
-            (heap, arg, u64::from(imm))
-        }
-        _ => panic!("Wanted heap_addr: {}", func.dfg.display_inst(inst)),
-    };
-
     match func.heaps[heap].style {
-        ir::HeapStyle::Dynamic { bound_gv } => {
-            dynamic_addr(isa, inst, heap, offset, access_size, bound_gv, func)
-        }
+        ir::HeapStyle::Dynamic { bound_gv } => dynamic_addr(
+            isa,
+            inst,
+            heap,
+            offset,
+            u64::from(access_size),
+            bound_gv,
+            func,
+        ),
         ir::HeapStyle::Static { bound } => static_addr(
             isa,
             inst,
             heap,
             offset,
-            access_size,
+            u64::from(access_size),
             bound.into(),
             func,
             cfg,
