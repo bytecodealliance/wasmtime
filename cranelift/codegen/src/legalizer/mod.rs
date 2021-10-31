@@ -40,9 +40,24 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 // control flow
                 InstructionData::BranchIcmp {
                     opcode: ir::Opcode::BrIcmp,
-                    ..
+                    cond,
+                    destination,
+                    ref args,
                 } => {
-                    expand_br_icmp(inst, &mut pos.func, cfg, isa);
+                    let a = args.get(0, &pos.func.dfg.value_lists).unwrap();
+                    let b = args.get(1, &pos.func.dfg.value_lists).unwrap();
+                    let block_args = args.as_slice(&pos.func.dfg.value_lists)[2..].to_vec();
+
+                    let old_block = pos.func.layout.pp_block(inst);
+                    pos.func.dfg.clear_results(inst);
+
+                    let icmp_res = pos.func.dfg.replace(inst).icmp(cond, a, b);
+                    let mut pos = FuncCursor::new(pos.func).after_inst(inst);
+                    pos.use_srcloc(inst);
+                    pos.ins().brnz(icmp_res, destination, &block_args);
+
+                    cfg.recompute_block(pos.func, destination);
+                    cfg.recompute_block(pos.func, old_block);
                 }
                 InstructionData::CondTrap {
                     opcode: ir::Opcode::Trapnz | ir::Opcode::Trapz | ir::Opcode::ResumableTrapnz,
@@ -62,12 +77,40 @@ pub fn simple_legalize(func: &mut ir::Function, cfg: &mut ControlFlowGraph, isa:
                 } => expand_heap_addr(inst, &mut pos.func, cfg, isa),
                 InstructionData::StackLoad {
                     opcode: ir::Opcode::StackLoad,
-                    ..
-                } => expand_stack_load(inst, &mut pos.func, cfg, isa),
+                    stack_slot,
+                    offset,
+                } => {
+                    let ty = pos.func.dfg.value_type(pos.func.dfg.first_result(inst));
+                    let addr_ty = isa.pointer_type();
+
+                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
+                    pos.use_srcloc(inst);
+
+                    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
+
+                    // Stack slots are required to be accessible and aligned.
+                    let mflags = MemFlags::trusted();
+                    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
+                }
                 InstructionData::StackStore {
                     opcode: ir::Opcode::StackStore,
-                    ..
-                } => expand_stack_store(inst, &mut pos.func, cfg, isa),
+                    arg,
+                    stack_slot,
+                    offset,
+                } => {
+                    let addr_ty = isa.pointer_type();
+
+                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
+                    pos.use_srcloc(inst);
+
+                    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
+
+                    let mut mflags = MemFlags::new();
+                    // Stack slots are required to be accessible and aligned.
+                    mflags.set_notrap();
+                    mflags.set_aligned();
+                    pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
+                }
                 InstructionData::TableAddr {
                     opcode: ir::Opcode::TableAddr,
                     ..
@@ -318,98 +361,4 @@ fn expand_cond_trap(
     cfg.recompute_block(pos.func, old_block);
     cfg.recompute_block(pos.func, new_block_resume);
     cfg.recompute_block(pos.func, new_block_trap);
-}
-
-fn expand_br_icmp(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    cfg: &mut ControlFlowGraph,
-    _isa: &dyn TargetIsa,
-) {
-    let (cond, a, b, destination, block_args) = match func.dfg[inst] {
-        ir::InstructionData::BranchIcmp {
-            cond,
-            destination,
-            ref args,
-            ..
-        } => (
-            cond,
-            args.get(0, &func.dfg.value_lists).unwrap(),
-            args.get(1, &func.dfg.value_lists).unwrap(),
-            destination,
-            args.as_slice(&func.dfg.value_lists)[2..].to_vec(),
-        ),
-        _ => panic!("Expected br_icmp {}", func.dfg.display_inst(inst)),
-    };
-
-    let old_block = func.layout.pp_block(inst);
-    func.dfg.clear_results(inst);
-
-    let icmp_res = func.dfg.replace(inst).icmp(cond, a, b);
-    let mut pos = FuncCursor::new(func).after_inst(inst);
-    pos.use_srcloc(inst);
-    pos.ins().brnz(icmp_res, destination, &block_args);
-
-    cfg.recompute_block(pos.func, destination);
-    cfg.recompute_block(pos.func, old_block);
-}
-
-/// Expand illegal `stack_load` instructions.
-fn expand_stack_load(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    _cfg: &mut ControlFlowGraph,
-    isa: &dyn TargetIsa,
-) {
-    let ty = func.dfg.value_type(func.dfg.first_result(inst));
-    let addr_ty = isa.pointer_type();
-
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let (stack_slot, offset) = match pos.func.dfg[inst] {
-        ir::InstructionData::StackLoad {
-            opcode: _opcode,
-            stack_slot,
-            offset,
-        } => (stack_slot, offset),
-        _ => panic!("Expected stack_load: {}", pos.func.dfg.display_inst(inst)),
-    };
-
-    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-    // Stack slots are required to be accessible and aligned.
-    let mflags = MemFlags::trusted();
-    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
-}
-
-/// Expand illegal `stack_store` instructions.
-fn expand_stack_store(
-    inst: ir::Inst,
-    func: &mut ir::Function,
-    _cfg: &mut ControlFlowGraph,
-    isa: &dyn TargetIsa,
-) {
-    let addr_ty = isa.pointer_type();
-
-    let mut pos = FuncCursor::new(func).at_inst(inst);
-    pos.use_srcloc(inst);
-
-    let (val, stack_slot, offset) = match pos.func.dfg[inst] {
-        ir::InstructionData::StackStore {
-            opcode: _opcode,
-            arg,
-            stack_slot,
-            offset,
-        } => (arg, stack_slot, offset),
-        _ => panic!("Expected stack_store: {}", pos.func.dfg.display_inst(inst)),
-    };
-
-    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-    let mut mflags = MemFlags::new();
-    // Stack slots are required to be accessible and aligned.
-    mflags.set_notrap();
-    mflags.set_aligned();
-    pos.func.dfg.replace(inst).store(mflags, val, addr, 0);
 }
