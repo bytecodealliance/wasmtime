@@ -84,32 +84,26 @@ impl InstructionFormat {
     }
 }
 
-pub(crate) struct InstructionFormatBuilder {
-    name: &'static str,
-    num_value_operands: usize,
-    has_value_list: bool,
-    imm_fields: Vec<FormatField>,
-    typevar_operand: Option<usize>,
-}
+pub(crate) struct InstructionFormatBuilder(InstructionFormat);
 
 impl InstructionFormatBuilder {
     pub fn new(name: &'static str) -> Self {
-        Self {
+        Self(InstructionFormat {
             name,
             num_value_operands: 0,
             has_value_list: false,
             imm_fields: Vec::new(),
             typevar_operand: None,
-        }
+        })
     }
 
     pub fn value(mut self) -> Self {
-        self.num_value_operands += 1;
+        self.0.num_value_operands += 1;
         self
     }
 
     pub fn varargs(mut self) -> Self {
-        self.has_value_list = true;
+        self.0.has_value_list = true;
         self
     }
 
@@ -118,33 +112,23 @@ impl InstructionFormatBuilder {
             kind: operand_kind.clone(),
             member: operand_kind.rust_field_name,
         };
-        self.imm_fields.push(field);
+        self.0.imm_fields.push(field);
         self
     }
 
     pub fn typevar_operand(mut self, operand_index: usize) -> Self {
-        assert!(self.typevar_operand.is_none());
-        assert!(operand_index < self.num_value_operands);
-        self.typevar_operand = Some(operand_index);
+        assert!(self.0.typevar_operand.is_none());
+        assert!(operand_index < self.0.num_value_operands);
+        self.0.typevar_operand = Some(operand_index);
         self
     }
 
-    pub fn build(self) -> Rc<InstructionFormat> {
-        let typevar_operand = if self.typevar_operand.is_some() {
-            self.typevar_operand
-        } else if self.num_value_operands > 0 {
+    pub fn build(mut self) -> Rc<InstructionFormat> {
+        if self.0.typevar_operand.is_none() && self.0.num_value_operands > 0 {
             // Default to the first value operand, if there's one.
-            Some(0)
-        } else {
-            None
+            self.0.typevar_operand = Some(0);
         };
 
-        Rc::new(InstructionFormat {
-            name: self.name,
-            num_value_operands: self.num_value_operands,
-            has_value_list: self.has_value_list,
-            imm_fields: self.imm_fields,
-            typevar_operand,
-        })
+        Rc::new(self.0)
     }
 }
