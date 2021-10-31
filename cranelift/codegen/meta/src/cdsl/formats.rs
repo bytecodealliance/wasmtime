@@ -133,7 +133,7 @@ impl InstructionFormatBuilder {
 
     pub fn typevar_operand(mut self, operand_index: usize) -> Self {
         assert!(self.typevar_operand.is_none());
-        assert!(self.has_value_list || operand_index < self.num_value_operands);
+        assert!(operand_index < self.num_value_operands);
         self.typevar_operand = Some(operand_index);
         self
     }
@@ -141,7 +141,7 @@ impl InstructionFormatBuilder {
     pub fn build(self) -> Rc<InstructionFormat> {
         let typevar_operand = if self.typevar_operand.is_some() {
             self.typevar_operand
-        } else if self.has_value_list || self.num_value_operands > 0 {
+        } else if self.num_value_operands > 0 {
             // Default to the first value operand, if there's one.
             Some(0)
         } else {
