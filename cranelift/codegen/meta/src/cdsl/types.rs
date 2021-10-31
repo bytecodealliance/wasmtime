@@ -6,7 +6,7 @@ use crate::shared::types as shared_types;
 use cranelift_codegen_shared::constants;
 
 // Rust name prefix used for the `rust_name` method.
-static _RUST_NAME_PREFIX: &str = "ir::types::";
+static RUST_NAME_PREFIX: &str = "ir::types::";
 
 // ValueType variants (i8, i32, ...) are provided in `shared::types.rs`.
 
@@ -82,14 +82,7 @@ impl ValueType {
 
     /// Return the name of this type for generated Rust source files.
     pub fn rust_name(&self) -> String {
-        format!("{}{}", _RUST_NAME_PREFIX, self.to_string().to_uppercase())
-    }
-
-    /// Return true iff:
-    ///     1. self and other have equal number of lanes
-    ///     2. each lane in self has at least as many bits as a lane in other
-    pub fn _wider_or_equal(&self, rhs: &ValueType) -> bool {
-        (self.lane_count() == rhs.lane_count()) && (self.lane_bits() >= rhs.lane_bits())
+        format!("{}{}", RUST_NAME_PREFIX, self.to_string().to_uppercase())
     }
 
     /// Return the total number of bits of an instance of this type.
