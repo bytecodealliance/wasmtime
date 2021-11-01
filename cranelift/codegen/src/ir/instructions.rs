@@ -319,7 +319,7 @@ impl InstructionData {
             // included in the `InstructionData` for memory-size reasons. This case, returning
             // `None`, is left here to alert users of this method that they should retrieve the
             // value using the `DataFlowGraph`.
-            &InstructionData::Shuffle { mask: _, .. } => None,
+            &InstructionData::Shuffle { imm: _, .. } => None,
             _ => None,
         }
     }

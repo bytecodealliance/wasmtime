@@ -395,8 +395,8 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
         }
         NullAry { .. } => write!(w, " "),
         TernaryImm8 { imm, args, .. } => write!(w, " {}, {}, {}", args[0], args[1], imm),
-        Shuffle { mask, args, .. } => {
-            let data = dfg.immediates.get(mask).expect(
+        Shuffle { imm, args, .. } => {
+            let data = dfg.immediates.get(imm).expect(
                 "Expected the shuffle mask to already be inserted into the immediates table",
             );
             write!(w, " {}, {}, {}", args[0], args[1], data)

@@ -75,14 +75,12 @@ fn gen_instruction_data(formats: &[&InstructionFormat], fmt: &mut Formatter) {
             fmtln!(fmt, "{} {{", format.name);
             fmt.indent(|fmt| {
                 fmt.line("opcode: Opcode,");
-                if format.typevar_operand.is_some() {
-                    if format.has_value_list {
-                        fmt.line("args: ValueList,");
-                    } else if format.num_value_operands == 1 {
-                        fmt.line("arg: Value,");
-                    } else {
-                        fmtln!(fmt, "args: [Value; {}],", format.num_value_operands);
-                    }
+                if format.has_value_list {
+                    fmt.line("args: ValueList,");
+                } else if format.num_value_operands == 1 {
+                    fmt.line("arg: Value,");
+                } else if format.num_value_operands > 0 {
+                    fmtln!(fmt, "args: [Value; {}],", format.num_value_operands);
                 }
                 for field in &format.imm_fields {
                     fmtln!(fmt, "{}: {},", field.member, field.kind.rust_type);
@@ -287,17 +285,17 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                     let name = format!("&Self::{}", format.name);
                     let mut members = vec!["opcode"];
 
-                    let args_eq = if format.typevar_operand.is_none() {
-                        None
-                    } else if format.has_value_list {
+                    let args_eq = if format.has_value_list {
                         members.push("args");
                         Some("args1.as_slice(pool) == args2.as_slice(pool)")
                     } else if format.num_value_operands == 1 {
                         members.push("arg");
                         Some("arg1 == arg2")
-                    } else {
+                    } else if format.num_value_operands > 0 {
                         members.push("args");
                         Some("args1 == args2")
+                    } else {
+                        None
                     };
 
                     for field in &format.imm_fields {
@@ -339,17 +337,17 @@ fn gen_instruction_data_impl(formats: &[&InstructionFormat], fmt: &mut Formatter
                     let name = format!("Self::{}", format.name);
                     let mut members = vec!["opcode"];
 
-                    let args = if format.typevar_operand.is_none() {
-                        "&()"
-                    } else if format.has_value_list {
+                    let args = if format.has_value_list {
                         members.push("ref args");
                         "args.as_slice(pool)"
                     } else if format.num_value_operands == 1 {
                         members.push("ref arg");
                         "arg"
-                    } else {
+                    } else if format.num_value_operands > 0{
                         members.push("ref args");
                         "args"
+                    } else {
+                        "&()"
                     };
 
                     for field in &format.imm_fields {
@@ -948,21 +946,11 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
             op.kind.rust_type.to_string()
         };
         args.push(format!("{}: {}", op.name, t));
-        args_doc.push(format!(
-            "- {}: {}",
-            op.name,
-            op.doc()
-                .expect("every instruction's input operand must be documented")
-        ));
+        args_doc.push(format!("- {}: {}", op.name, op.doc()));
     }
 
     for op in &inst.operands_out {
-        rets_doc.push(format!(
-            "- {}: {}",
-            op.name,
-            op.doc()
-                .expect("every instruction's output operand must be documented")
-        ));
+        rets_doc.push(format!("- {}: {}", op.name, op.doc()));
     }
 
     let rtype = match inst.value_results.len() {

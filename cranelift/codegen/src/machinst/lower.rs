@@ -1264,8 +1264,8 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     fn get_immediate(&self, ir_inst: Inst) -> Option<DataValue> {
         let inst_data = self.data(ir_inst);
         match inst_data {
-            InstructionData::Shuffle { mask, .. } => {
-                let buffer = self.f.dfg.immediates.get(mask.clone()).unwrap().as_slice();
+            InstructionData::Shuffle { imm, .. } => {
+                let buffer = self.f.dfg.immediates.get(imm.clone()).unwrap().as_slice();
                 let value = DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"));
                 Some(value)
             }

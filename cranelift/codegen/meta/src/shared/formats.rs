@@ -101,7 +101,7 @@ impl Formats {
             shuffle: Builder::new("Shuffle")
                 .value()
                 .value()
-                .imm_with_name("mask", &imm.uimm128)
+                .imm(&imm.uimm128)
                 .build(),
 
             int_compare: Builder::new("IntCompare")

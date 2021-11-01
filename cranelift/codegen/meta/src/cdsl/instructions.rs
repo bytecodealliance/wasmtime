@@ -43,7 +43,7 @@ pub(crate) struct InstructionContent {
     /// Output operands. The output operands must be SSA values or `variable_args`.
     pub operands_out: Vec<Operand>,
 
-    /// Instruction format, automatically derived from the input operands.
+    /// Instruction format.
     pub format: Rc<InstructionFormat>,
 
     /// One of the input or output operands is a free type variable. None if the instruction is not
