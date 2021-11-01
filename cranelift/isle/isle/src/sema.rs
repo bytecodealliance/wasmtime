@@ -198,6 +198,8 @@ pub struct TermEnv {
 pub struct Term {
     /// This term's id.
     pub id: TermId,
+    /// The source position where this term was declared.
+    pub decl_pos: Pos,
     /// The name of this term.
     pub name: Sym,
     /// The parameter types to this term.
@@ -776,9 +778,13 @@ impl TermEnv {
                 &ast::Def::Decl(ref decl) => {
                     let tid = TermId(self.terms.len());
                     let name = tyenv.intern_mut(&decl.term);
-                    if self.term_map.contains_key(&name) {
+                    if let Some(tid) = self.term_map.get(&name) {
                         tyenv.report_error(
                             decl.pos,
+                            format!("Duplicate decl for '{}'", decl.term.0),
+                        );
+                        tyenv.report_error(
+                            self.terms[tid.index()].decl_pos,
                             format!("Duplicate decl for '{}'", decl.term.0),
                         );
                     }
@@ -817,6 +823,7 @@ impl TermEnv {
 
                     self.terms.push(Term {
                         id: tid,
+                        decl_pos: decl.pos,
                         name,
                         arg_tys,
                         ret_ty,
@@ -855,6 +862,7 @@ impl TermEnv {
                         let ret_ty = id;
                         self.terms.push(Term {
                             id: tid,
+                            decl_pos: pos,
                             name: variant.fullname,
                             arg_tys,
                             ret_ty,
