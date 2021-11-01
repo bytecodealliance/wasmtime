@@ -2888,6 +2888,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Isplit | Opcode::Iconcat => unimplemented!("Wide integer ops not implemented."),
 
+        Opcode::IfcmpSp => {
+            panic!("Unused opcode should not be encountered.");
+        }
+
         Opcode::Ifcmp
         | Opcode::Ffcmp
         | Opcode::Trapff

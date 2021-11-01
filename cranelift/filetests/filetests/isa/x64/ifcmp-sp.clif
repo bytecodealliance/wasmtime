@@ -1,0 +1,31 @@
+test compile
+target x86_64
+
+function %f(i64) -> i32 {
+block0(v0: i64):
+    v1 = ifcmp_sp v0
+    brif ugt v1, block1
+    jump block2
+
+block1:
+    v2 = iconst.i32 0
+    return v2
+
+block2:
+    v3 = iconst.i32 1
+    return v3
+}
+
+; check:  pushq   %rbp
+; nextln: movq    %rsp, %rbp
+; nextln: cmpq    %rsp, %rdi
+; nextln: jnbe    label1; j label2
+; check:  xorl    %eax, %eax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+; check:  movl    $$1, %eax
+; nextln: movq    %rbp, %rsp
+; nextln: popq    %rbp
+; nextln: ret
+

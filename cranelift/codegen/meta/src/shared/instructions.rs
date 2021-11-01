@@ -1797,6 +1797,21 @@ pub(crate) fn define(
         .operands_out(vec![a]),
     );
 
+    ig.push(
+        Inst::new(
+            "ifcmp_sp",
+            r#"
+    Compare ``addr`` with the stack pointer and set the CPU flags.
+
+    This is like `ifcmp` where ``addr`` is the LHS operand and the stack
+    pointer is the RHS.
+    "#,
+            &formats.unary,
+        )
+        .operands_in(vec![addr])
+        .operands_out(vec![flags]),
+    );
+
     let x = &Operand::new("x", TxN).with_doc("Vector to split");
     let lo = &Operand::new("lo", &TxN.half_vector()).with_doc("Low-numbered lanes of `x`");
     let hi = &Operand::new("hi", &TxN.half_vector()).with_doc("High-numbered lanes of `x`");
