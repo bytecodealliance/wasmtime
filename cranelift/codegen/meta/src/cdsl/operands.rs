@@ -39,12 +39,12 @@ impl Operand {
         self
     }
 
-    pub fn doc(&self) -> Option<&str> {
+    pub fn doc(&self) -> &str {
         if let Some(doc) = &self.doc {
-            return Some(doc);
+            return doc;
         }
         match &self.kind.fields {
-            OperandKindFields::TypeVar(tvar) => Some(&tvar.doc),
+            OperandKindFields::TypeVar(tvar) => &tvar.doc,
             _ => self.kind.doc(),
         }
     }
@@ -139,12 +139,14 @@ impl OperandKind {
             doc: Some(doc),
         }
     }
-    fn doc(&self) -> Option<&str> {
+    fn doc(&self) -> &str {
         if let Some(doc) = &self.doc {
-            return Some(doc);
+            return doc;
         }
         match &self.fields {
-            OperandKindFields::TypeVar(type_var) => Some(&type_var.doc),
+            OperandKindFields::TypeVar(type_var) => &type_var.doc,
+            // The only method to create an OperandKind with `doc` set to None is using a TypeVar,
+            // so all other options are unreachable here.
             OperandKindFields::ImmEnum(_)
             | OperandKindFields::ImmValue
             | OperandKindFields::EntityRef

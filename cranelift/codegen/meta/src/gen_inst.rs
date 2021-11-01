@@ -946,21 +946,11 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
             op.kind.rust_type.to_string()
         };
         args.push(format!("{}: {}", op.name, t));
-        args_doc.push(format!(
-            "- {}: {}",
-            op.name,
-            op.doc()
-                .expect("every instruction's input operand must be documented")
-        ));
+        args_doc.push(format!("- {}: {}", op.name, op.doc()));
     }
 
     for op in &inst.operands_out {
-        rets_doc.push(format!(
-            "- {}: {}",
-            op.name,
-            op.doc()
-                .expect("every instruction's output operand must be documented")
-        ));
+        rets_doc.push(format!("- {}: {}", op.name, op.doc()));
     }
 
     let rtype = match inst.value_results.len() {
