@@ -139,6 +139,9 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features cranelift
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
 
+    # Check that benchmarks of the cranelift project build
+    - run: cargo check --benches -p cranelift-codegen
+
     # Check some feature combinations of the `wasmtime-c-api` crate
     - run: cargo check -p wasmtime-c-api --no-default-features
     - run: cargo check -p wasmtime-c-api --no-default-features --features wat
