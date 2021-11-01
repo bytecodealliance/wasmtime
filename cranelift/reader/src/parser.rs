@@ -2694,10 +2694,10 @@ impl<'a> Parser<'a> {
                 let b = self.match_value("expected SSA value second operand")?;
                 self.match_token(Token::Comma, "expected ',' between operands")?;
                 let uimm128 = self.match_uimm128(I8X16)?;
-                let mask = ctx.function.dfg.immediates.push(uimm128);
+                let imm = ctx.function.dfg.immediates.push(uimm128);
                 InstructionData::Shuffle {
                     opcode,
-                    mask,
+                    imm,
                     args: [a, b],
                 }
             }

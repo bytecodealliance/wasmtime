@@ -76,12 +76,12 @@ where
                     .as_slice();
                 DataValue::V128(buffer.try_into().expect("a 16-byte data buffer"))
             }
-            InstructionData::Shuffle { mask, .. } => {
+            InstructionData::Shuffle { imm, .. } => {
                 let mask = state
                     .get_current_function()
                     .dfg
                     .immediates
-                    .get(mask)
+                    .get(imm)
                     .unwrap()
                     .as_slice();
                 DataValue::V128(mask.try_into().expect("a 16-byte vector mask"))
