@@ -248,21 +248,48 @@ impl<'a> Lexer<'a> {
                 } else {
                     false
                 };
-                let mut num = 0_i64;
-                while self.pos.offset < self.buf.len()
-                    && (self.buf[self.pos.offset] >= b'0' && self.buf[self.pos.offset] <= b'9')
+
+                let mut radix = 10;
+
+                // Check for hex literals.
+                if self.buf.get(self.pos.offset).copied() == Some(b'0')
+                    && self.buf.get(self.pos.offset + 1).copied() == Some(b'x')
                 {
-                    let base = num
-                        .checked_mul(10)
-                        .ok_or_else(|| self.error(start_pos, "integer literal too large"))?;
-                    num = base
-                        .checked_add((self.buf[self.pos.offset] - b'0') as i64)
-                        .ok_or_else(|| self.error(start_pos, "integer literal too large"))?;
                     self.advance_pos();
+                    self.advance_pos();
+                    radix = 16;
                 }
 
+                // Find the range in the buffer for this integer literal. We'll
+                // pass this range to `i64::from_str_radix` to do the actual
+                // string-to-integer conversion.
+                let start_offset = self.pos.offset;
+                while self.pos.offset < self.buf.len()
+                    && ((radix == 10
+                        && self.buf[self.pos.offset] >= b'0'
+                        && self.buf[self.pos.offset] <= b'9')
+                        || (radix == 16
+                            && ((self.buf[self.pos.offset] >= b'0'
+                                && self.buf[self.pos.offset] <= b'9')
+                                || (self.buf[self.pos.offset] >= b'a'
+                                    && self.buf[self.pos.offset] <= b'f')
+                                || (self.buf[self.pos.offset] >= b'A'
+                                    && self.buf[self.pos.offset] <= b'F'))))
+                {
+                    self.advance_pos();
+                }
+                let end_offset = self.pos.offset;
+
+                let num = i64::from_str_radix(
+                    std::str::from_utf8(&self.buf[start_offset..end_offset]).unwrap(),
+                    radix,
+                )
+                .map_err(|e| self.error(start_pos, e.to_string()))?;
+
                 let tok = if neg {
-                    Token::Int(-num)
+                    Token::Int(num.checked_neg().ok_or_else(|| {
+                        self.error(start_pos, "integer literal cannot fit in i64")
+                    })?)
                 } else {
                     Token::Int(num)
                 };
