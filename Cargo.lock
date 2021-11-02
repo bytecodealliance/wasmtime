@@ -692,6 +692,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-serde"
+version = "0.78.0"
+dependencies = [
+ "clap",
+ "cranelift-codegen",
+ "cranelift-reader",
+ "serde_json",
+]
+
+[[package]]
 name = "cranelift-tools"
 version = "0.73.0"
 dependencies = [
