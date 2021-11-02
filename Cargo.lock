@@ -3093,7 +3093,6 @@ version = "0.31.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitflags",
  "cap-fs-ext",
  "cap-rand",
  "cap-std",
@@ -3159,19 +3158,13 @@ name = "wasi-tokio"
 version = "0.31.0"
 dependencies = [
  "anyhow",
- "bitflags",
- "cap-fs-ext",
  "cap-std",
  "cap-tempfile",
- "cap-time-ext",
- "fs-set-times",
  "io-lifetimes",
  "lazy_static",
  "rsix",
- "system-interface",
  "tempfile",
  "tokio",
- "tracing",
  "wasi-cap-std-sync",
  "wasi-common",
  "wiggle",
@@ -3362,7 +3355,6 @@ dependencies = [
  "env_logger 0.8.3",
  "once_cell",
  "wasi-cap-std-sync",
- "wasi-common",
  "wasmtime",
  "wasmtime-c-api-macros",
  "wasmtime-wasi",
@@ -3468,7 +3460,6 @@ name = "wasmtime-environ"
 version = "0.31.0"
 dependencies = [
  "anyhow",
- "cfg-if 1.0.0",
  "cranelift-entity",
  "gimli",
  "indexmap",
@@ -3541,15 +3532,12 @@ dependencies = [
  "cfg-if 1.0.0",
  "gimli",
  "ittapi-rs",
- "log",
- "more-asserts",
  "object",
  "region",
  "rsix",
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser",
  "wasmtime-environ",
  "wasmtime-runtime",
  "winapi",
@@ -3621,8 +3609,6 @@ dependencies = [
  "openvino",
  "thiserror",
  "walkdir",
- "wasmtime",
- "wasmtime-wasi",
  "wiggle",
 ]
 
@@ -3722,7 +3708,6 @@ dependencies = [
  "syn",
  "wiggle",
  "wiggle-generate",
- "witx",
 ]
 
 [[package]]
