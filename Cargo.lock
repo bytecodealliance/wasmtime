@@ -557,15 +557,11 @@ name = "cranelift-codegen-meta"
 version = "0.78.0"
 dependencies = [
  "cranelift-codegen-shared",
- "cranelift-entity",
 ]
 
 [[package]]
 name = "cranelift-codegen-shared"
 version = "0.78.0"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "cranelift-entity"
@@ -613,7 +609,6 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "cranelift",
- "rand 0.8.3",
 ]
 
 [[package]]
@@ -654,9 +649,7 @@ version = "0.78.0"
 dependencies = [
  "anyhow",
  "cranelift-codegen",
- "cranelift-entity",
  "hashbrown",
- "log",
 ]
 
 [[package]]
@@ -687,7 +680,6 @@ name = "cranelift-preopt"
 version = "0.78.0"
 dependencies = [
  "cranelift-codegen",
- "cranelift-entity",
 ]
 
 [[package]]
@@ -706,8 +698,6 @@ dependencies = [
  "clap",
  "cranelift-codegen",
  "cranelift-reader",
- "serde",
- "serde_derive",
  "serde_json",
 ]
 
@@ -723,7 +713,6 @@ dependencies = [
  "cranelift-entity",
  "cranelift-filetests",
  "cranelift-frontend",
- "cranelift-fuzzgen",
  "cranelift-interpreter",
  "cranelift-jit",
  "cranelift-module",
@@ -731,7 +720,6 @@ dependencies = [
  "cranelift-object",
  "cranelift-preopt",
  "cranelift-reader",
- "cranelift-serde",
  "cranelift-wasm",
  "file-per-thread-logger",
  "filecheck",
@@ -1957,7 +1945,6 @@ name = "peepmatic-runtime"
 version = "0.78.0"
 dependencies = [
  "bincode",
- "bumpalo",
  "log",
  "peepmatic-automata",
  "peepmatic-test-operator",
@@ -3106,7 +3093,6 @@ version = "0.31.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bitflags",
  "cap-fs-ext",
  "cap-rand",
  "cap-std",
@@ -3172,19 +3158,13 @@ name = "wasi-tokio"
 version = "0.31.0"
 dependencies = [
  "anyhow",
- "bitflags",
- "cap-fs-ext",
  "cap-std",
  "cap-tempfile",
- "cap-time-ext",
- "fs-set-times",
  "io-lifetimes",
  "lazy_static",
  "rsix",
- "system-interface",
  "tempfile",
  "tokio",
- "tracing",
  "wasi-cap-std-sync",
  "wasi-common",
  "wiggle",
@@ -3375,7 +3355,6 @@ dependencies = [
  "env_logger 0.8.3",
  "once_cell",
  "wasi-cap-std-sync",
- "wasi-common",
  "wasmtime",
  "wasmtime-c-api-macros",
  "wasmtime-wasi",
@@ -3481,7 +3460,6 @@ name = "wasmtime-environ"
 version = "0.31.0"
 dependencies = [
  "anyhow",
- "cfg-if 1.0.0",
  "cranelift-entity",
  "gimli",
  "indexmap",
@@ -3554,15 +3532,12 @@ dependencies = [
  "cfg-if 1.0.0",
  "gimli",
  "ittapi-rs",
- "log",
- "more-asserts",
  "object",
  "region",
  "rsix",
  "serde",
  "target-lexicon",
  "thiserror",
- "wasmparser",
  "wasmtime-environ",
  "wasmtime-runtime",
  "winapi",
@@ -3634,8 +3609,6 @@ dependencies = [
  "openvino",
  "thiserror",
  "walkdir",
- "wasmtime",
- "wasmtime-wasi",
  "wiggle",
 ]
 
@@ -3735,7 +3708,6 @@ dependencies = [
  "syn",
  "wiggle",
  "wiggle-generate",
- "witx",
 ]
 
 [[package]]

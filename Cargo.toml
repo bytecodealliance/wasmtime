@@ -73,6 +73,7 @@ opt-level = 0
 resolver = '2'
 members = [
   "cranelift",
+  "cranelift/serde",
   "crates/bench-api",
   "crates/c-api",
   "crates/misc/run-examples",

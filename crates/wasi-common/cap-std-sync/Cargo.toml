@@ -22,7 +22,6 @@ cap-rand = "0.19.1"
 fs-set-times = "0.12.0"
 system-interface = { version = "0.15.0", features = ["cap_std_impls"] }
 tracing = "0.1.19"
-bitflags = "1.2"
 io-lifetimes = { version = "0.3.0", default-features = false }
 
 [target.'cfg(unix)'.dependencies]

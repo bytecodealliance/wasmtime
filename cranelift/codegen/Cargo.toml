@@ -82,7 +82,6 @@ enable-serde = [
     "serde",
     "regalloc/enable-serde",
     "cranelift-entity/enable-serde",
-    "cranelift-codegen-shared/enable-serde"
 ]
 
 # Allow snapshotting regalloc test cases. Useful only to report bad register
