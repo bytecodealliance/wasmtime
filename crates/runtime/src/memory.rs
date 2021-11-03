@@ -111,10 +111,7 @@ impl MmapMemory {
                 assert_ge!(bound, plan.memory.minimum);
                 let bound_bytes =
                     usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap();
-                maximum = match maximum {
-                    Some(max) => Some(max.min(bound_bytes)),
-                    None => Some(bound_bytes),
-                };
+                maximum = Some(bound_bytes.min(maximum.unwrap_or(usize::MAX)));
                 (bound_bytes, 0)
             }
         };
