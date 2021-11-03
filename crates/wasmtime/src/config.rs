@@ -1119,6 +1119,22 @@ impl Config {
         self
     }
 
+    /// Indicates that the "static" style of memory should always be used.
+    ///
+    /// This configuration option enables selecting the "static" option for all
+    /// linear memories created within this `Config`. This means that all
+    /// memories will be allocated up-front and will never move. Additionally
+    /// this means that all memories are synthetically limited by the
+    /// [`Config::static_memory_maximum_size`] option, irregardless of what the
+    /// actual maximum size is on the memory's original type.
+    ///
+    /// For the difference between static and dynamic memories, see the
+    /// [`Config::static_memory_maximum_size`].
+    pub fn static_memory_forced(&mut self, force: bool) -> &mut Self {
+        self.tunables.static_memory_bound_is_maximum = force;
+        self
+    }
+
     /// Configures the size, in bytes, of the guard region used at the end of a
     /// static memory's address space reservation.
     ///

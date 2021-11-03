@@ -90,7 +90,7 @@ pub struct MmapMemory {
 
 impl MmapMemory {
     /// Create a new linear memory instance with specified minimum and maximum number of wasm pages.
-    pub fn new(plan: &MemoryPlan, minimum: usize, maximum: Option<usize>) -> Result<Self> {
+    pub fn new(plan: &MemoryPlan, minimum: usize, mut maximum: Option<usize>) -> Result<Self> {
         // It's a programmer error for these two configuration values to exceed
         // the host available address space, so panic if such a configuration is
         // found (mostly an issue for hypothetical 32-bit hosts).
@@ -98,13 +98,21 @@ impl MmapMemory {
         let pre_guard_bytes = usize::try_from(plan.pre_guard_size).unwrap();
 
         let (alloc_bytes, extra_to_reserve_on_growth) = match plan.style {
+            // Dynamic memories start with the minimum size plus the `reserve`
+            // amount specified to grow into.
             MemoryStyle::Dynamic { reserve } => (minimum, usize::try_from(reserve).unwrap()),
+
+            // Static memories will never move in memory and consequently get
+            // their entire allocation up-front with no extra room to grow into.
+            // Note that the `maximum` is adjusted here to whatever the smaller
+            // of the two is, the `maximum` given or the `bound` specified for
+            // this memory.
             MemoryStyle::Static { bound } => {
                 assert_ge!(bound, plan.memory.minimum);
-                (
-                    usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap(),
-                    0,
-                )
+                let bound_bytes =
+                    usize::try_from(bound.checked_mul(WASM_PAGE_SIZE_U64).unwrap()).unwrap();
+                maximum = Some(bound_bytes.min(maximum.unwrap_or(usize::MAX)));
+                (bound_bytes, 0)
             }
         };
         let request_bytes = pre_guard_bytes

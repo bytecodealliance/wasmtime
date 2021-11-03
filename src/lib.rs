@@ -244,6 +244,10 @@ struct CommonOptions {
     #[structopt(long, value_name = "MAXIMUM")]
     static_memory_maximum_size: Option<u64>,
 
+    /// Force using a "static" style for all wasm memories.
+    #[structopt(long)]
+    static_memory_forced: bool,
+
     /// Byte size of the guard region after static memories are allocated.
     #[structopt(long, value_name = "SIZE")]
     static_memory_guard_size: Option<u64>,
@@ -318,6 +322,8 @@ impl CommonOptions {
         if let Some(max) = self.static_memory_maximum_size {
             config.static_memory_maximum_size(max);
         }
+
+        config.static_memory_forced(self.static_memory_forced);
 
         if let Some(size) = self.static_memory_guard_size {
             config.static_memory_guard_size(size);

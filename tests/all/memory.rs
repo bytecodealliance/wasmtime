@@ -362,3 +362,17 @@ fn tiny_static_heap() -> Result<()> {
     f.call(&mut store, ())?;
     Ok(())
 }
+
+#[test]
+fn static_forced_max() -> Result<()> {
+    let mut config = Config::new();
+    config.static_memory_maximum_size(5 * 65536);
+    config.static_memory_forced(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let mem = Memory::new(&mut store, MemoryType::new(0, None))?;
+    mem.grow(&mut store, 5).unwrap();
+    assert!(mem.grow(&mut store, 1).is_err());
+    Ok(())
+}
