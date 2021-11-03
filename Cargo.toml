@@ -122,3 +122,6 @@ harness = false
 [[bench]]
 name = "thread_eager_init"
 harness = false
+
+[patch.crates-io]
+userfaultfd = { git = 'https://github.com/alexcrichton/userfaultfd-rs', branch = 'maybe-fix-gha' }
