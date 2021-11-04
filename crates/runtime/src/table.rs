@@ -398,14 +398,14 @@ impl Table {
     }
 
     /// Return a `VMTableDefinition` for exposing the table to compiled wasm code.
-    pub fn vmtable(&self) -> VMTableDefinition {
+    pub fn vmtable(&mut self) -> VMTableDefinition {
         match self {
             Table::Static { data, size, .. } => VMTableDefinition {
-                base: data.as_ptr() as *mut _,
+                base: data.as_mut_ptr().cast(),
                 current_elements: *size,
             },
             Table::Dynamic { elements, .. } => VMTableDefinition {
-                base: elements.as_ptr() as _,
+                base: elements.as_mut_ptr().cast(),
                 current_elements: elements.len().try_into().unwrap(),
             },
         }
