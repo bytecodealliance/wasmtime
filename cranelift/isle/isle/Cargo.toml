@@ -1,9 +1,12 @@
 [package]
-name = "isle"
-version = "0.1.0"
 authors = ["Chris Fallin <chris@cfallin.org>", "Nick Fitzgerald <fitzgen@gmail.com>"]
+description = "ISLE: Instruction Selection and Lowering Expressions. A domain-specific language for instruction selection in Cranelift."
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
+name = "isle"
+readme = "../README.md"
+repository = "https://github.com/cfallin.isle"
+version = "0.1.0"
 
 [dependencies]
 log = "0.4"
