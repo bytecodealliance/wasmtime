@@ -1,7 +1,7 @@
 [package]
 name = "isle"
 version = "0.1.0"
-authors = ["Chris Fallin <chris@cfallin.org>"]
+authors = ["Chris Fallin <chris@cfallin.org>", "Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 
