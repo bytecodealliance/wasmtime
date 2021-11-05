@@ -1545,20 +1545,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             } else if ty == types::I64X2 {
                 unreachable!("implemented in ISLE: {}", ctx.dfg().display_inst(insn));
             } else if ty.lane_count() > 1 {
-                // Emit single instruction lowerings for the remaining vector
-                // multiplications.
-                let sse_op = match ty {
-                    types::I16X8 => SseOpcode::Pmullw,
-                    types::I32X4 => SseOpcode::Pmulld,
-                    _ => panic!("Unsupported type for packed imul instruction: {}", ty),
-                };
-                let lhs = put_input_in_reg(ctx, inputs[0]);
-                let rhs = input_to_reg_mem(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                // Move the `lhs` to the same register as `dst`.
-                ctx.emit(Inst::gen_move(dst, lhs, ty));
-                ctx.emit(Inst::xmm_rm_r(sse_op, rhs, dst));
+                unreachable!("implemented in ISLE: {}", ctx.dfg().display_inst(insn));
             } else if ty == types::I128 || ty == types::B128 {
                 // Handle 128-bit multiplications.
                 let lhs = put_input_in_regs(ctx, inputs[0]);
