@@ -1277,6 +1277,11 @@ and for re-adding support for interface types you can see this issue:
                     let mut names = f.get_map()?;
                     for _ in 0..names.get_count() {
                         let Naming { index, name } = names.read()?;
+                        // Skip this naming if it's naming a function that
+                        // doesn't actually exist.
+                        if (index as usize) >= self.result.module.functions.len() {
+                            continue;
+                        }
                         let index = FuncIndex::from_u32(index);
                         self.result
                             .module
@@ -1305,6 +1310,11 @@ and for re-adding support for interface types you can see this issue:
                     let mut reader = l.get_indirect_map()?;
                     for _ in 0..reader.get_indirect_count() {
                         let f = reader.read()?;
+                        // Skip this naming if it's naming a function that
+                        // doesn't actually exist.
+                        if (f.indirect_index as usize) >= self.result.module.functions.len() {
+                            continue;
+                        }
                         let mut map = f.get_map()?;
                         for _ in 0..map.get_count() {
                             let Naming { index, name } = map.read()?;
