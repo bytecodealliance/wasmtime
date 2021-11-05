@@ -1289,7 +1289,13 @@ impl TermEnv {
             if let ast::Def::Rule(rule) = def {
                 rule.expr.terms(&mut |pos, ident| {
                     let sym = tyenv.intern_mut(ident);
-                    let term = self.term_map[&sym];
+                    let term = match self.term_map.get(&sym) {
+                        None => {
+                            debug_assert!(!tyenv.errors.is_empty());
+                            return;
+                        }
+                        Some(t) => t,
+                    };
                     let term = &self.terms[term.index()];
                     if !term.has_constructor() {
                         tyenv.report_error(

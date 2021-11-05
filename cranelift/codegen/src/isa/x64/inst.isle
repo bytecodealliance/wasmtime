@@ -9,6 +9,12 @@
                      (src1 Reg)
                      (src2 RegMemImm)
                      (dst WritableReg))
+            (MulHi (size OperandSize)
+                   (signed bool)
+                   (src1 Reg)
+                   (src2 RegMem)
+                   (dst_lo WritableReg)
+                   (dst_hi WritableReg))
             (XmmRmR (op SseOpcode)
                     (src1 Reg)
                     (src2 RegMem)
@@ -931,3 +937,26 @@
 (decl psrlq (Reg RegMemImm) Reg)
 (rule (psrlq src1 src2)
       (xmm_rmi_reg (SseOpcode.Psrlq) src1 src2))
+
+;; Helper for creating `MInst.MulHi` instructions.
+;;
+;; Returns the (lo, hi) register halves of the multiplication.
+(decl mul_hi (Type bool Reg RegMem) ValueRegs)
+(rule (mul_hi ty signed src1 src2)
+      (let ((dst_lo WritableReg (temp_writable_reg ty))
+            (dst_hi WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type ty))
+            (_ Unit (emit (MInst.MulHi size
+                                       signed
+                                       src1
+                                       src2
+                                       dst_lo
+                                       dst_hi))))
+        (value_regs (writable_reg_to_reg dst_lo)
+                    (writable_reg_to_reg dst_hi))))
+
+;; Helper for creating `mul` instructions that return both the lower and
+;; (unsigned) higher halves of the result.
+(decl mulhi_u (Type Reg RegMem) ValueRegs)
+(rule (mulhi_u ty src1 src2)
+      (mul_hi ty $false src1 src2))

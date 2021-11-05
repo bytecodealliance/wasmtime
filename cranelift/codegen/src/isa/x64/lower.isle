@@ -678,6 +678,44 @@
                       (put_in_reg y)
                       (sink_load x))))
 
+;; `i128`.
+
+;; mul:
+;;   dst_lo = lhs_lo * rhs_lo
+;;   dst_hi = umulhi(lhs_lo, rhs_lo) +
+;;            lhs_lo * rhs_hi +
+;;            lhs_hi * rhs_lo
+;;
+;; so we emit:
+;;   lo_hi = mul x_lo, y_hi
+;;   hi_lo = mul x_hi, y_lo
+;;   hilo_hilo = add lo_hi, hi_lo
+;;   dst_lo:hi_lolo = mulhi_u x_lo, y_lo
+;;   dst_hi = add hilo_hilo, hi_lolo
+;;   return (dst_lo, dst_hi)
+(rule (lower (has_type $I128 (imul x y)))
+      ;; Put `x` into registers and unpack its hi/lo halves.
+      (let ((x_regs ValueRegs (put_in_regs x))
+            (x_lo Reg (value_regs_get x_regs 0))
+            (x_hi Reg (value_regs_get x_regs 1))
+            ;; Put `y` into registers and unpack its hi/lo halves.
+            (y_regs ValueRegs (put_in_regs y))
+            (y_lo Reg (value_regs_get y_regs 0))
+            (y_hi Reg (value_regs_get y_regs 1))
+            ;; lo_hi = mul x_lo, y_hi
+            (lo_hi Reg (mul $I64 x_lo (RegMemImm.Reg y_hi)))
+            ;; hi_lo = mul x_hi, y_lo
+            (hi_lo Reg (mul $I64 x_hi (RegMemImm.Reg y_lo)))
+            ;; hilo_hilo = add lo_hi, hi_lo
+            (hilo_hilo Reg (add $I64 lo_hi (RegMemImm.Reg hi_lo)))
+            ;; dst_lo:hi_lolo = mulhi_u x_lo, y_lo
+            (mul_regs ValueRegs (mulhi_u $I64 x_lo (RegMem.Reg y_lo)))
+            (dst_lo Reg (value_regs_get mul_regs 0))
+            (hi_lolo Reg (value_regs_get mul_regs 1))
+            ;; dst_hi = add hilo_hilo, hi_lolo
+            (dst_hi Reg (add $I64 hilo_hilo (RegMemImm.Reg hi_lolo))))
+        (value_regs dst_lo dst_hi)))
+
 ;; SSE.
 
 ;; (No i8x16 multiply.)

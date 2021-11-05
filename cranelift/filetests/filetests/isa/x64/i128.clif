@@ -122,18 +122,14 @@ block0(v0: i128, v1: i128):
 
     v2 = imul v0, v1
 ; nextln:  movq    %rsi, %rax
-; nextln:  movq    %rcx, %r8
 ; nextln:  movq    %rdi, %rsi
-; nextln:  imulq   %rdx, %rsi
-; nextln:  movq    %rdi, %rcx
-; nextln:  imulq   %r8, %rcx
+; nextln:  imulq   %rcx, %rsi
 ; nextln:  imulq   %rdx, %rax
-; nextln:  addq    %rax, %rcx
+; nextln:  addq    %rax, %rsi
 ; nextln:  movq    %rdi, %rax
 ; nextln:  mul     %rdx
-; nextln:  addq    %rdx, %rcx
-; nextln:  movq    %rsi, %rax
-; nextln:  movq    %rcx, %rdx
+; nextln:  addq    %rdx, %rsi
+; nextln:  movq    %rsi, %rdx
 
     return v2
 ; nextln:  movq    %rbp, %rsp

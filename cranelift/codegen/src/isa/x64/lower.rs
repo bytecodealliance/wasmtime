@@ -1518,105 +1518,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::AvgRound
         | Opcode::Band
         | Opcode::Bor
-        | Opcode::Bxor => {
+        | Opcode::Bxor
+        | Opcode::Imul => {
             unreachable!(
                 "implemented in ISLE: inst = `{}`, type = `{:?}`",
                 ctx.dfg().display_inst(insn),
                 ty
             );
-        }
-
-        Opcode::Imul => {
-            let ty = ty.unwrap();
-
-            // Check for ext_mul_* instructions which are being shared here under imul. We must
-            // check first for operands that are opcodes since checking for types is not enough.
-            if let Some(_) = matches_input_any(
-                ctx,
-                inputs[0],
-                &[
-                    Opcode::SwidenHigh,
-                    Opcode::SwidenLow,
-                    Opcode::UwidenHigh,
-                    Opcode::UwidenLow,
-                ],
-            ) {
-                unreachable!("implemented in ISLE: {}", ctx.dfg().display_inst(insn));
-            } else if ty == types::I64X2 {
-                unreachable!("implemented in ISLE: {}", ctx.dfg().display_inst(insn));
-            } else if ty.lane_count() > 1 {
-                unreachable!("implemented in ISLE: {}", ctx.dfg().display_inst(insn));
-            } else if ty == types::I128 || ty == types::B128 {
-                // Handle 128-bit multiplications.
-                let lhs = put_input_in_regs(ctx, inputs[0]);
-                let rhs = put_input_in_regs(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]);
-                assert_eq!(lhs.len(), 2);
-                assert_eq!(rhs.len(), 2);
-                assert_eq!(dst.len(), 2);
-
-                // mul:
-                //   dst_lo = lhs_lo * rhs_lo
-                //   dst_hi = umulhi(lhs_lo, rhs_lo) + lhs_lo * rhs_hi + lhs_hi * rhs_lo
-                //
-                // so we emit:
-                //   mov dst_lo, lhs_lo
-                //   mul dst_lo, rhs_lo
-                //   mov dst_hi, lhs_lo
-                //   mul dst_hi, rhs_hi
-                //   mov tmp, lhs_hi
-                //   mul tmp, rhs_lo
-                //   add dst_hi, tmp
-                //   mov rax, lhs_lo
-                //   umulhi rhs_lo  // implicit rax arg/dst
-                //   add dst_hi, rax
-                let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst.regs()[0], lhs.regs()[0], types::I64));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Mul,
-                    RegMemImm::reg(rhs.regs()[0]),
-                    dst.regs()[0],
-                ));
-                ctx.emit(Inst::gen_move(dst.regs()[1], lhs.regs()[0], types::I64));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Mul,
-                    RegMemImm::reg(rhs.regs()[1]),
-                    dst.regs()[1],
-                ));
-                ctx.emit(Inst::gen_move(tmp, lhs.regs()[1], types::I64));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Mul,
-                    RegMemImm::reg(rhs.regs()[0]),
-                    tmp,
-                ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Add,
-                    RegMemImm::reg(tmp.to_reg()),
-                    dst.regs()[1],
-                ));
-                ctx.emit(Inst::gen_move(
-                    Writable::from_reg(regs::rax()),
-                    lhs.regs()[0],
-                    types::I64,
-                ));
-                ctx.emit(Inst::mul_hi(
-                    OperandSize::Size64,
-                    /* signed = */ false,
-                    RegMem::reg(rhs.regs()[0]),
-                ));
-                ctx.emit(Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Add,
-                    RegMemImm::reg(regs::rdx()),
-                    dst.regs()[1],
-                ));
-            } else {
-                unreachable!("implemented in ISLE")
-            }
         }
 
         Opcode::BandNot => {
