@@ -767,6 +767,7 @@ impl TermEnv {
         tyenv.return_errors()?;
         env.collect_rules(tyenv, defs);
         env.check_for_undefined_decls(tyenv, defs);
+        env.check_for_expr_terms_without_constructors(tyenv, defs);
         tyenv.return_errors()?;
 
         Ok(env)
@@ -1279,6 +1280,28 @@ impl TermEnv {
                         ),
                     );
                 }
+            }
+        }
+    }
+
+    fn check_for_expr_terms_without_constructors(&self, tyenv: &mut TypeEnv, defs: &ast::Defs) {
+        for def in &defs.defs {
+            if let ast::Def::Rule(rule) = def {
+                rule.expr.terms(&mut |pos, ident| {
+                    let sym = tyenv.intern_mut(ident);
+                    let term = self.term_map[&sym];
+                    let term = &self.terms[term.index()];
+                    if !term.has_constructor() {
+                        tyenv.report_error(
+                            pos,
+                            format!(
+                                "term `{}` cannot be used in an expression because \
+                                 it does not have a constructor",
+                                ident.0
+                            ),
+                        )
+                    }
+                });
             }
         }
     }

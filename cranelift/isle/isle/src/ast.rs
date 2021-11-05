@@ -338,6 +338,25 @@ impl Expr {
             | &Expr::Let { pos, .. } => pos,
         }
     }
+
+    /// Call `f` for each of the terms in this expression.
+    pub fn terms(&self, f: &mut dyn FnMut(Pos, &Ident)) {
+        match self {
+            Expr::Term { sym, args, pos } => {
+                f(*pos, sym);
+                for arg in args {
+                    arg.terms(f);
+                }
+            }
+            Expr::Let { defs, body, .. } => {
+                for def in defs {
+                    def.val.terms(f);
+                }
+                body.terms(f);
+            }
+            Expr::Var { .. } | Expr::ConstInt { .. } | Expr::ConstPrim { .. } => {}
+        }
+    }
 }
 
 /// One variable locally bound in a `(let ...)` expression.
