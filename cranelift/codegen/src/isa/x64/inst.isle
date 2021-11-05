@@ -329,6 +329,19 @@
             Vpmullq
             Vpopcntb))
 
+(type FcmpImm extern
+      (enum Equal
+            LessThan
+            LessThanOrEqual
+            Unordered
+            NotEqual
+            UnorderedOrGreaterThanOrEqual
+            UnorderedOrGreaterThan
+            Ordered))
+
+(decl encode_fcmp_imm (FcmpImm) u8)
+(extern constructor encode_fcmp_imm encode_fcmp_imm)
+
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl avx512vl_enabled () Type)
@@ -449,6 +462,49 @@
 ;; Sign extending uses `movsx`.
 (rule (extend (ExtendKind.Sign) ty mode src)
       (movsx ty mode src))
+
+;;;; Helpers for Working SSE tidbits ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Determine the appropriate operation for xor-ing vectors of the specified type
+(decl sse_xor_op (Type) SseOpcode)
+(rule (sse_xor_op $F32X4) (SseOpcode.Xorps))
+(rule (sse_xor_op $F64X2) (SseOpcode.Xorpd))
+(rule (sse_xor_op (multi_lane _bits _lanes)) (SseOpcode.Pxor))
+
+;; Performs an xor operation of the two operands specified
+(decl sse_xor (Type Reg RegMem) Reg)
+(rule (sse_xor ty x y) (xmm_rm_r ty (sse_xor_op ty) x y))
+
+;; Determine the appropriate operation to compare two vectors of the specified
+;; type.
+(decl sse_cmp_op (Type) SseOpcode)
+(rule (sse_cmp_op (multi_lane 8 16)) (SseOpcode.Pcmpeqb))
+(rule (sse_cmp_op (multi_lane 16 8)) (SseOpcode.Pcmpeqw))
+(rule (sse_cmp_op (multi_lane 32 4)) (SseOpcode.Pcmpeqd))
+(rule (sse_cmp_op (multi_lane 64 2)) (SseOpcode.Pcmpeqq))
+(rule (sse_cmp_op $F32X4) (SseOpcode.Cmpps))
+(rule (sse_cmp_op $F64X2) (SseOpcode.Cmppd))
+
+;; Generates a register value which has an all-ones pattern of the specified
+;; type.
+;;
+;; Note that this is accomplished by comparing a fresh register with itself,
+;; which for integers is always true. Also note that the comparison is always
+;; done for integers, it doesn't actually take the input `ty` into account. This
+;; is because we're comparing a fresh register to itself and we don't know the
+;; previous contents of the register. If a floating-point comparison is used
+;; then it runs the risk of comparing NaN against NaN and not actually producing
+;; an all-ones mask. By using integer comparision operations we're guaranteeed
+;; that everything is equal to itself.
+(decl vector_all_ones (Type) Reg)
+(rule (vector_all_ones ty)
+      (let ((wr WritableReg (temp_writable_reg ty))
+            (r Reg (writable_reg_to_reg wr))
+            (_ Unit (emit (MInst.XmmRmR (sse_cmp_op $I32X4)
+                                         r
+                                         (RegMem.Reg r)
+                                         wr))))
+        r))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -593,6 +649,17 @@
                                          (AluRmiROpcode.Xor)
                                          r
                                          (RegMemImm.Reg r)
+                                         wr))))
+        r))
+
+;; Special case for zero immediates with vector types, they turn into an xor
+;; specific to the vector type.
+(rule (imm ty @ (multi_lane _bits _lanes) 0)
+      (let ((wr WritableReg (temp_writable_reg ty))
+            (r Reg (writable_reg_to_reg wr))
+            (_ Unit (emit (MInst.XmmRmR (sse_xor_op ty)
+                                         r
+                                         (RegMem.Reg r)
                                          wr))))
         r))
 
@@ -948,6 +1015,11 @@
 (rule (psllq src1 src2)
       (xmm_rmi_reg (SseOpcode.Psllq) src1 src2))
 
+;; Helper for creating `psrld` instructions.
+(decl psrld (Reg RegMemImm) Reg)
+(rule (psrld src1 src2)
+      (xmm_rmi_reg (SseOpcode.Psrld) src1 src2))
+
 ;; Helper for creating `psrlq` instructions.
 (decl psrlq (Reg RegMemImm) Reg)
 (rule (psrlq src1 src2)
@@ -975,3 +1047,25 @@
 (decl mulhi_u (Type Reg RegMem) ValueRegs)
 (rule (mulhi_u ty src1 src2)
       (mul_hi ty $false src1 src2))
+
+;; Helper for creating `cmpps` instructions.
+(decl cmpps (Reg RegMem FcmpImm) Reg)
+(rule (cmpps src1 src2 imm)
+      (xmm_rm_r_imm (SseOpcode.Cmpps)
+                    src1
+                    src2
+                    (encode_fcmp_imm imm)
+                    (OperandSize.Size32)))
+
+;; Helper for creating `cmppd` instructions.
+;;
+;; Note that `Size32` is intentional despite this being used for 64-bit
+;; operations, since this presumably induces the correct encoding of the
+;; instruction.
+(decl cmppd (Reg RegMem FcmpImm) Reg)
+(rule (cmppd src1 src2 imm)
+      (xmm_rm_r_imm (SseOpcode.Cmppd)
+                    src1
+                    src2
+                    (encode_fcmp_imm imm)
+                    (OperandSize.Size32)))
