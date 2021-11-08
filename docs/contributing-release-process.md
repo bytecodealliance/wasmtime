@@ -19,16 +19,16 @@ Specifically what happens for a major version release is:
   * Commit the changes with a special marker in the commit message
   * Push these changes to a branch
   * Open a PR with this branch against `main`
-1. A maintainer of Wasmtime signs off on the PR and merges it.
+2. A maintainer of Wasmtime signs off on the PR and merges it.
   * Most likely someone will need to push updates to `RELEASES.md` beforehand.
   * A maintainer should double-check there are [no open security issues][rustsec-issues].
-1. The `.github/workflow/push-tag.yml` workflow is triggered on all commits to
+3. The `.github/workflow/push-tag.yml` workflow is triggered on all commits to
    `main`, including the one just created with a PR merge. This workflow will:
    * Scan the git logs of pushed changes for the special marker added by
      `bump-version.yml`.
    * If found, tags the current `main` commit and pushes that to the main
      repository.
-1. Once a tag is created CI runs in full on the tag itself. CI for tags will
+4. Once a tag is created CI runs in full on the tag itself. CI for tags will
    create a GitHub release with release artifacts and it will also publish
    crates to crates.io. This is orchestrated by `.github/workflows/main.yml`.
 
@@ -49,20 +49,19 @@ time the process for making a patch release of `2.0.1` the process is:
     `scripts/publish.rs` do not have semver-API-breaking changes (in the
     strictest sense). All security fixes must be done in such a way that the API
     doesn't break between the patch version and the original version.
-1. Locally check out `release-2.0.1` and make sure you're up-to-date.
-1. Run `rustc scripts/publish.rs`
-1. Run `./publish bump-patch`
-1. Update `RELEASES.md`
-1. Commit the changes. Include the marker
-   `[automatically-tag-and-release-this-commit]` in your commit message.
-1. Make a PR against the `release-2.0.1` branch.
-1. Merge the PR when CI is green
+2. Visit [this patch][bump-version] and manually trigger the `bump-version.yml`
+   workflow for the `release-2.0.1` branch with the `bump-patch` argument. This
+   will simulate step (1) of the above release process.
+3. Review the generated PR, probably updating `RLEASES.md` as well.
   * Note that if historical branches may need updates to source code or CI to
     pass itself since the CI likely hasn't been run in a month or so. When in
     doubt don't be afraid to pin the Rust version in use to the rustc version
     that was stable at the time of the branch's release.
+4. Merge the generated PR, and that's the whole patch release.
 
 From this point automated processes should take care of the rest of the steps,
 basically resuming from step 3 above for major releases where `push-tag.yml`
 will recognize the commit message and push an appropriate tag. This new tag will
 then trigger full CI and building of release artifacts.
+
+[bump-version]: https://github.com/bytecodealliance/wasmtime/actions/workflows/bump-version.yml

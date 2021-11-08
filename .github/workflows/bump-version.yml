@@ -11,18 +11,19 @@
 name: "Bump version number"
 on:
   schedule:
-    # “At 00:00 on every day-of-month from 8 through 14 and on Monday.”
+    # “At 00:00 on day-of-month 5.”
     #
-    # https://crontab.guru/#0_0_8-14_*_1
-    - cron: '0 0 8-14 * 1'
+    # https://crontab.guru/#0_0_5_*_*
+    - cron: '0 0 5 * *'
 
-  # Allow manually triggering this workflow remotely via a curl request,
-  # described at
-  # https://docs.github.com/en/rest/reference/actions#create-a-workflow-dispatch-event
-  #
-  # Note that this can be also triggered by running the script in
-  # `ci/force-ci-bump-version.sh`
+  # Allow manually triggering this request via the button at
+  # https://github.com/bytecodealliance/wasmtime/actions/workflows/bump-version.yml
   workflow_dispatch:
+    inputs:
+      publish_cmd:
+        description: 'Publish script argument: "bump" or "bump-patch"'
+        required: false
+        default: 'bump'
 
 jobs:
   bump_version:
@@ -36,7 +37,13 @@ jobs:
         id: bump
         run: |
           rustc scripts/publish.rs
-          ./publish bump
+          if [ "${{ github.event.inputs.publish_cmd }}" != "" ]; then
+            # this was manually triggered
+            ./publish ${{ github.event.inputs.publish_cmd }}
+          else
+            # this was cron-triggered.
+            ./publish bump
+          fi
           version=$(grep '^version =' Cargo.toml | head -n 1 | sed 's/.*"\(.*\)"/\1/')
           echo "::set-output name=version::$version"
 
