@@ -905,6 +905,17 @@ pub struct InstancePre<T> {
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
+/// InstancePre's clone does not require T: Clone
+impl<T> Clone for InstancePre<T> {
+    fn clone(&self) -> Self {
+        Self {
+            module: self.module.clone(),
+            items: self.items.clone(),
+            _marker: self._marker,
+        }
+    }
+}
+
 impl<T> InstancePre<T> {
     pub(crate) unsafe fn new(
         store: &mut StoreOpaque,
