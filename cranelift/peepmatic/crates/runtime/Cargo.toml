@@ -1,6 +1,6 @@
 [package]
 name = "peepmatic-runtime"
-version = "0.78.0"
+version = "0.79.0"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
@@ -11,8 +11,8 @@ description = "Runtime support for peepmatic peephole optimizers"
 [dependencies]
 bincode = "1.2.1"
 log = "0.4.8"
-peepmatic-automata = { version = "=0.78.0", path = "../automata", features = ["serde"] }
-peepmatic-traits = { version = "=0.78.0", path = "../traits" }
+peepmatic-automata = { version = "=0.79.0", path = "../automata", features = ["serde"] }
+peepmatic-traits = { version = "=0.79.0", path = "../traits" }
 serde = { version = "1.0.105", features = ["derive"] }
 thiserror = "1.0.15"
 wast = { version = "38.0.0", optional = true }
