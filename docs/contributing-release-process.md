@@ -51,7 +51,7 @@ time the process for making a patch release of `2.0.1` the process is:
     doesn't break between the patch version and the original version.
 2. Visit [this patch][bump-version] and manually trigger the `bump-version.yml`
    workflow for the `release-2.0.1` branch with the `bump-patch` argument. This
-   will simluate step (1) of the above release process.
+   will simulate step (1) of the above release process.
 3. Review the generated PR, probably updating `RLEASES.md` as well.
   * Note that if historical branches may need updates to source code or CI to
     pass itself since the CI likely hasn't been run in a month or so. When in
