@@ -2,7 +2,38 @@
 
 --------------------------------------------------------------------------------
 
-## Unreleased
+## 0.32.0
+
+Released 2021-12-13.
+
+### Added
+
+* A new configuration option has been added to force using a "static" memory
+  style to automatically limit growth of memories in some configurations.
+  [#3503](https://github.com/bytecodealliance/wasmtime/pull/3503)
+
+* The `InstancePre<T>` type now implements `Clone`.
+  [#3510](https://github.com/bytecodealliance/wasmtime/pull/3510)
+
+* Cranelift's instruction selection process has begun to be migrated towards the
+  ISLE compiler and definition language.
+  [#3506](https://github.com/bytecodealliance/wasmtime/pull/3506)
+
+* A `pooling-allocator` feature has been added, which is on-by-default, to
+  disable the pooling allocator at compile time.
+  [#3514](https://github.com/bytecodealliance/wasmtime/pull/3514)
+
+### Fixed
+
+* A possible panic when parsing a WebAssembly `name` section has been fixed.
+  [#3509](https://github.com/bytecodealliance/wasmtime/pull/3509)
+
+* Generating native DWARF information for some C-produced modules has been
+  fixed, notably those where there may be DWARF about dead code.
+  [#3498](https://github.com/bytecodealliance/wasmtime/pull/3498)
+
+* A number of SIMD code generation bugs have been fixed in the x64 backend
+  by migrating their lowerings to ISLE.
 
 --------------------------------------------------------------------------------
 
