@@ -186,6 +186,7 @@ impl Table {
     }
 
     /// Returns whether or not the underlying storage of the table is "static".
+    #[cfg(feature = "pooling-allocator")]
     pub(crate) fn is_static(&self) -> bool {
         if let Table::Static { .. } = self {
             true

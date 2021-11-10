@@ -40,9 +40,12 @@ pub use crate::export::*;
 pub use crate::externref::*;
 pub use crate::imports::Imports;
 pub use crate::instance::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstanceLimits,
-    InstantiationError, LinkError, ModuleLimits, OnDemandInstanceAllocator,
-    PoolingAllocationStrategy, PoolingInstanceAllocator, StorePtr,
+    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, InstantiationError, LinkError,
+    OnDemandInstanceAllocator, StorePtr,
+};
+#[cfg(feature = "pooling-allocator")]
+pub use crate::instance::{
+    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
 };
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};

@@ -52,7 +52,7 @@ wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelift']
+default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelift', 'pooling-allocator']
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of
@@ -76,8 +76,11 @@ cache = ["wasmtime-cache"]
 # `async fn` and calling functions asynchronously.
 async = ["wasmtime-fiber", "wasmtime-runtime/async", "async-trait"]
 
+# Enables support for the pooling instance allocation strategy
+pooling-allocator = ["wasmtime-runtime/pooling-allocator"]
+
 # Enables userfaultfd support in the runtime's pooling allocator when building on Linux
-uffd = ["wasmtime-runtime/uffd"]
+uffd = ["wasmtime-runtime/uffd", "pooling-allocator"]
 
 # Enables support for all architectures in Cranelift, allowing
 # cross-compilation using the `wasmtime` crate's API, notably the
