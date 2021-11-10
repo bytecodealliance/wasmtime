@@ -3237,16 +3237,30 @@ impl MachInst for Inst {
     ) -> SmallVec<[Self; 4]> {
         let mut ret = SmallVec::new();
         if ty == types::I128 {
-            ret.push(Inst::imm(
-                OperandSize::Size64,
-                value as u64,
-                to_regs.regs()[0],
-            ));
-            ret.push(Inst::imm(
-                OperandSize::Size64,
-                (value >> 64) as u64,
-                to_regs.regs()[1],
-            ));
+            let lo = value as u64;
+            let hi = (value >> 64) as u64;
+            let lo_reg = to_regs.regs()[0];
+            let hi_reg = to_regs.regs()[1];
+            if lo == 0 {
+                ret.push(Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(lo_reg.to_reg()),
+                    lo_reg,
+                ));
+            } else {
+                ret.push(Inst::imm(OperandSize::Size64, lo, lo_reg));
+            }
+            if hi == 0 {
+                ret.push(Inst::alu_rmi_r(
+                    OperandSize::Size64,
+                    AluRmiROpcode::Xor,
+                    RegMemImm::reg(hi_reg.to_reg()),
+                    hi_reg,
+                ));
+            } else {
+                ret.push(Inst::imm(OperandSize::Size64, hi, hi_reg));
+            }
         } else {
             let to_reg = to_regs
                 .only_reg()
