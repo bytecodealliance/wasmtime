@@ -697,32 +697,34 @@ block2(v6: i128):
     return v8
 
 ; check: Block 0:
-; check:  pushq   %rbp
-; nextln: movq    %rsp, %rbp
-; nextln: xorq    %rdi, %rdi
-; nextln: xorq    %rsi, %rsi
-; nextln: testb   $$1, %dl
-; nextln: jnz     label1; j label2
+; check:   pushq   %rbp
+; nextln:  movq    %rsp, %rbp
+; nextln:  testb   $$1, %dl
+; nextln:  jnz     label1; j label2
 ; check: Block 1:
-; check:  movl    $$1, %ecx
-; nextln: xorq    %rax, %rax
-; nextln: addq    %rcx, %rdi
-; nextln: adcq    %rax, %rsi
-; nextln: movq    %rdi, %rax
-; nextln: movq    %rsi, %rdx
-; nextln: movq    %rbp, %rsp
-; nextln: popq    %rbp
-; nextln: ret
+; check:   movl    $$0, %edi
+; nextln:  movl    $$0, %esi
+; nextln:  movl    $$1, %ecx
+; nextln:  movl    $$0, %eax
+; nextln:  addq    %rcx, %rdi
+; nextln:  adcq    %rax, %rsi
+; nextln:  movq    %rdi, %rax
+; nextln:  movq    %rsi, %rdx
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
 ; check: Block 2:
-; check:  movl    $$2, %ecx
-; nextln: xorq    %rax, %rax
-; nextln: addq    %rcx, %rdi
-; nextln: adcq    %rax, %rsi
-; nextln: movq    %rdi, %rax
-; nextln: movq    %rsi, %rdx
-; nextln: movq    %rbp, %rsp
-; nextln: popq    %rbp
-; nextln: ret
+; check:   movl    $$0, %edi
+; nextln:  movl    $$0, %esi
+; nextln:  movl    $$2, %ecx
+; nextln:  movl    $$0, %eax
+; nextln:  addq    %rcx, %rdi
+; nextln:  adcq    %rax, %rsi
+; nextln:  movq    %rdi, %rax
+; nextln:  movq    %rsi, %rdx
+; nextln:  movq    %rbp, %rsp
+; nextln:  popq    %rbp
+; nextln:  ret
 
 }
 
