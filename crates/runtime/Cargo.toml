@@ -49,8 +49,11 @@ default = []
 
 async = ["wasmtime-fiber"]
 
+# Enables support for the pooling instance allocator
+pooling-allocator = []
+
 # Enables support for userfaultfd in the pooling allocator when building on Linux
-uffd = ["userfaultfd"]
+uffd = ["userfaultfd", "pooling-allocator"]
 
 # Enables trap handling using POSIX signals instead of Mach exceptions on MacOS.
 # It is useful for applications that do not bind their own exception ports and

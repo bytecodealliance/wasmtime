@@ -364,6 +364,7 @@ impl Memory {
     }
 
     /// Returns whether or not the underlying storage of the memory is "static".
+    #[cfg(feature = "pooling-allocator")]
     pub(crate) fn is_static(&self) -> bool {
         if let Memory::Static { .. } = self {
             true

@@ -23,8 +23,10 @@ use wasmtime_environ::{
     SignatureIndex, TableInitializer, TrapCode, VMOffsets, WasmType, WASM_PAGE_SIZE,
 };
 
+#[cfg(feature = "pooling-allocator")]
 mod pooling;
 
+#[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
     InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
 };
