@@ -8,13 +8,12 @@ use super::{
     is_mergeable_load, lower_to_amode, AluRmiROpcode, Inst as MInst, OperandSize, Reg, RegMemImm,
     Writable,
 };
+use crate::isa::x64::inst::args::SyntheticAmode;
 use crate::isa::x64::settings as x64_settings;
 use crate::{
     ir::{immediates::*, types::*, Inst, InstructionData, Opcode, Value, ValueList},
     isa::x64::inst::{
-        args::{
-            Amode, Avx512Opcode, CmpOpcode, ExtMode, Imm8Reg, RegMem, ShiftKind, SseOpcode, CC,
-        },
+        args::{Avx512Opcode, CmpOpcode, ExtMode, Imm8Reg, RegMem, ShiftKind, SseOpcode, CC},
         x64_map_regs, RegMapper,
     },
     machinst::{get_output_reg, InsnInput, InsnOutput, LowerCtx},
@@ -369,22 +368,9 @@ where
 
     fn sink_load(&mut self, load: &SinkableLoad) -> RegMemImm {
         self.lower_ctx.sink_inst(load.inst);
-
-        let flags = self
-            .lower_ctx
-            .memflags(load.inst)
-            .expect("sinkable loads should have memflags");
-
-        let base = self
-            .lower_ctx
-            .put_input_in_regs(load.addr_input.insn, load.addr_input.input)
-            .only_reg()
-            .unwrap();
-
+        let addr = lower_to_amode(self.lower_ctx, load.addr_input, load.offset);
         RegMemImm::Mem {
-            addr: Amode::imm_reg(load.offset as u32, base)
-                .with_flags(flags)
-                .into(),
+            addr: SyntheticAmode::Real(addr),
         }
     }
 
