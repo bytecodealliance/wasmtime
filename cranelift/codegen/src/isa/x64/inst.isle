@@ -1115,3 +1115,33 @@
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.GprToXmm op src dst size))))
         (writable_reg_to_reg dst)))
+
+;; Helper for creating `pinsrb` instructions.
+(decl pinsrb (Reg RegMem u8) Reg)
+(rule (pinsrb src1 src2 lane)
+      (xmm_rm_r_imm (SseOpcode.Pinsrb) src1 src2 lane (OperandSize.Size32)))
+
+;; Helper for creating `pinsrw` instructions.
+(decl pinsrw (Reg RegMem u8) Reg)
+(rule (pinsrw src1 src2 lane)
+      (xmm_rm_r_imm (SseOpcode.Pinsrw) src1 src2 lane (OperandSize.Size32)))
+
+;; Helper for creating `pinsrd` instructions.
+(decl pinsrd (Reg RegMem u8 OperandSize) Reg)
+(rule (pinsrd src1 src2 lane size)
+      (xmm_rm_r_imm (SseOpcode.Pinsrd) src1 src2 lane size))
+
+;; Helper for creating `insertps` instructions.
+(decl insertps (Reg RegMem u8) Reg)
+(rule (insertps src1 src2 lane)
+      (xmm_rm_r_imm (SseOpcode.Insertps) src1 src2 lane (OperandSize.Size32)))
+
+;; Helper for creating `movsd` instructions.
+(decl movsd (Reg RegMem) Reg)
+(rule (movsd src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Movsd) src1 src2))
+
+;; Helper for creating `movlhps` instructions.
+(decl movlhps (Reg RegMem) Reg)
+(rule (movlhps src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Movlhps) src1 src2))

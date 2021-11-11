@@ -964,3 +964,60 @@
 ;; all-one value
 (rule (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
       (value_reg (sse_xor ty (put_in_reg x) (RegMem.Reg (vector_all_ones ty)))))
+
+;;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (insertlane vec @ (value_type ty) val (u8_from_uimm8 idx)))
+      (value_reg (vec_insert_lane ty (put_in_reg vec) (put_in_reg_mem val) idx)))
+
+;; Helper function used below for `insertlane` but also here for other
+;; lowerings.
+;;
+;; Note that the `Type` used here is the type of vector the insertion is
+;; happening into, or the type of the first `Reg` argument.
+(decl vec_insert_lane (Type Reg RegMem u8) Reg)
+
+;; i8x16.replace_lane
+(rule (vec_insert_lane $I8X16 vec val idx) (pinsrb vec val idx))
+
+;; i16x8.replace_lane
+(rule (vec_insert_lane $I16X8 vec val idx) (pinsrw vec val idx))
+
+;; i32x4.replace_lane
+(rule (vec_insert_lane $I32X4 vec val idx) (pinsrd vec val idx (OperandSize.Size32)))
+
+;; i64x2.replace_lane
+(rule (vec_insert_lane $I64X2 vec val idx) (pinsrd vec val idx (OperandSize.Size64)))
+
+;; f32x4.replace_lane
+(rule (vec_insert_lane $F32X4 vec val idx) (insertps vec val (sse_insertps_lane_imm idx)))
+
+;; external rust code used to calculate the immediate value to `insertps`
+(decl sse_insertps_lane_imm (u8) u8)
+(extern constructor sse_insertps_lane_imm sse_insertps_lane_imm)
+
+;; f64x2.replace_lane 0
+;;
+;; Here the `movsd` instruction is used specifically to specialize moving
+;; into the fist lane where unlike above cases we're not using the lane
+;; immediate as an immediate to the instruction itself.
+;;
+;; Note, though, the `movsd` has different behavior with respect to the second
+;; lane of the f64x2 depending on whether the RegMem operand is a register or
+;; memory. When loading from a register `movsd` preserves the upper bits, but
+;; when loading from memory it zeros the upper bits. We specifically want to
+;; preserve the upper bits so if a `RegMem.Mem` is passed in we need to emit
+;; two `movsd` instructions. The first `movsd` (used as `xmm_unary_rm_r`) will
+;; load from memory into a temp register and then the second `movsd` (modeled
+;; internally as `xmm_rm_r` will merge the temp register into our `vec`
+;; register.
+(rule (vec_insert_lane $F64X2 vec (RegMem.Reg val) 0) (movsd vec (RegMem.Reg val)))
+(rule (vec_insert_lane $F64X2 vec mem 0)
+      (movsd vec (RegMem.Reg (xmm_unary_rm_r (SseOpcode.Movsd) mem))))
+
+;; f64x2.replace_lane 1
+;;
+;; Here the `movlhps` instruction is used specifically to specialize moving
+;; into the second lane where unlike above cases we're not using the lane
+;; immediate as an immediate to the instruction itself.
+(rule (vec_insert_lane $F64X2 vec val 1) (movlhps vec val))

@@ -207,6 +207,13 @@ where
             None
         }
     }
+
+    #[inline]
+    fn sse_insertps_lane_imm(&mut self, lane: u8) -> u8 {
+        // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
+        // shifted into bits 5:6).
+        0b00_00_00_00 | lane << 4
+    }
 }
 
 #[inline]

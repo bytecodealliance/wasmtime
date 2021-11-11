@@ -5641,22 +5641,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::Insertlane => {
-            // The instruction format maps to variables like: %dst = insertlane %in_vec, %src, %lane
-            let ty = ty.unwrap();
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let in_vec = put_input_in_reg(ctx, inputs[0]);
-            let src_ty = ctx.input_ty(insn, 1);
-            debug_assert!(!src_ty.is_vector());
-            let src = input_to_reg_mem(ctx, inputs[1]);
-            let lane = if let InstructionData::TernaryImm8 { imm, .. } = ctx.data(insn) {
-                *imm
-            } else {
-                unreachable!();
-            };
-            debug_assert!(lane < ty.lane_count() as u8);
-
-            ctx.emit(Inst::gen_move(dst, in_vec, ty));
-            emit_insert_lane(ctx, src, dst, lane, ty.lane_type());
+            unreachable!(
+                "implemented in ISLE: inst = `{}`, type = `{:?}`",
+                ctx.dfg().display_inst(insn),
+                ty
+            );
         }
 
         Opcode::Extractlane => {
