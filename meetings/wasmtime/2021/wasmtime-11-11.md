@@ -29,7 +29,7 @@
 
 ### Notes
 
-* Till: milestone to report: Fastly recently hit 1 trillian Wasm instantiations; no
+* Till: milestone to report: Fastly recently hit 1 trillion Wasm instantiations; no
   operational issues at scale (using Lucet with Cranelift)
   - Close to switching over to Wasmtime
   - Results from security assessment on integration of Wasmtime with Fastly's
