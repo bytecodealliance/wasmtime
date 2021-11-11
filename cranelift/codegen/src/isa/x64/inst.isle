@@ -848,6 +848,21 @@
 (rule (punpcklwd src1 src2)
       (xmm_rm_r $I16X8 (SseOpcode.Punpcklwd) src1 src2))
 
+;; Helper for creating `andnps` instructions.
+(decl andnps (Reg RegMem) Reg)
+(rule (andnps src1 src2)
+      (xmm_rm_r $F32X4 (SseOpcode.Andnps) src1 src2))
+
+;; Helper for creating `andnpd` instructions.
+(decl andnpd (Reg RegMem) Reg)
+(rule (andnpd src1 src2)
+      (xmm_rm_r $F64X2 (SseOpcode.Andnpd) src1 src2))
+
+;; Helper for creating `pandn` instructions.
+(decl pandn (Reg RegMem) Reg)
+(rule (pandn src1 src2)
+      (xmm_rm_r $F64X2 (SseOpcode.Pandn) src1 src2))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Reg)
 (rule (xmm_rm_r_imm op src1 src2 imm size)

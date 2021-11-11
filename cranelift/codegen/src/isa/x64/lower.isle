@@ -926,3 +926,22 @@
                             0x50
                             (OperandSize.Size32))))
         (value_reg (pmuludq x2 (RegMem.Reg y2)))))
+
+;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Note the flipping of operands below. CLIF specifies
+;;
+;;   band_not(x, y) = and(x, not(y))
+;;
+;; while x86 does
+;;
+;;   pandn(x, y) = and(not(x), y)
+
+(rule (lower (has_type $F32X4 (band_not x y)))
+      (value_reg (andnps (put_in_reg y) (put_in_reg_mem x))))
+
+(rule (lower (has_type $F64X2 (band_not x y)))
+      (value_reg (andnpd (put_in_reg y) (put_in_reg_mem x))))
+
+(rule (lower (has_type (multi_lane _bits _lanes) (band_not x y)))
+      (value_reg (pandn (put_in_reg y) (put_in_reg_mem x))))

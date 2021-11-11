@@ -1519,29 +1519,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Band
         | Opcode::Bor
         | Opcode::Bxor
-        | Opcode::Imul => {
+        | Opcode::Imul
+        | Opcode::BandNot => {
             unreachable!(
                 "implemented in ISLE: inst = `{}`, type = `{:?}`",
                 ctx.dfg().display_inst(insn),
                 ty
             );
-        }
-
-        Opcode::BandNot => {
-            let ty = ty.unwrap();
-            debug_assert!(ty.is_vector() && ty.bytes() == 16);
-            let lhs = input_to_reg_mem(ctx, inputs[0]);
-            let rhs = put_input_in_reg(ctx, inputs[1]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let sse_op = match ty {
-                types::F32X4 => SseOpcode::Andnps,
-                types::F64X2 => SseOpcode::Andnpd,
-                _ => SseOpcode::Pandn,
-            };
-            // Note the flipping of operands: the `rhs` operand is used as the destination instead
-            // of the `lhs` as in the other bit operations above (e.g. `band`).
-            ctx.emit(Inst::gen_move(dst, rhs, ty));
-            ctx.emit(Inst::xmm_rm_r(sse_op, lhs, dst));
         }
 
         Opcode::Iabs => {
