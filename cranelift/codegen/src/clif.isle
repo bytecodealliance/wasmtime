@@ -334,37 +334,37 @@
 (decl brz (Value Block ValueSlice) Inst)
 (extractor
     (brz c block args)
-    (inst_data (InstructionData.Branch (Opcode.Brz) block (unwrap_head_value_list_1 c args)))
+    (inst_data (InstructionData.Branch (Opcode.Brz) (unwrap_head_value_list_1 c args) block))
 )
 
 (decl brnz (Value Block ValueSlice) Inst)
 (extractor
     (brnz c block args)
-    (inst_data (InstructionData.Branch (Opcode.Brnz) block (unwrap_head_value_list_1 c args)))
+    (inst_data (InstructionData.Branch (Opcode.Brnz) (unwrap_head_value_list_1 c args) block))
 )
 
 (decl br_icmp (IntCC Value Value Block ValueSlice) Inst)
 (extractor
     (br_icmp Cond x y block args)
-    (inst_data (InstructionData.BranchIcmp (Opcode.BrIcmp) Cond block (unwrap_head_value_list_2 x y args)))
+    (inst_data (InstructionData.BranchIcmp (Opcode.BrIcmp) (unwrap_head_value_list_2 x y args) Cond block))
 )
 
 (decl brif (IntCC Value Block ValueSlice) Inst)
 (extractor
     (brif Cond f block args)
-    (inst_data (InstructionData.BranchInt (Opcode.Brif) Cond block (unwrap_head_value_list_1 f args)))
+    (inst_data (InstructionData.BranchInt (Opcode.Brif) (unwrap_head_value_list_1 f args) Cond block))
 )
 
 (decl brff (FloatCC Value Block ValueSlice) Inst)
 (extractor
     (brff Cond f block args)
-    (inst_data (InstructionData.BranchFloat (Opcode.Brff) Cond block (unwrap_head_value_list_1 f args)))
+    (inst_data (InstructionData.BranchFloat (Opcode.Brff) (unwrap_head_value_list_1 f args) Cond block))
 )
 
 (decl br_table (Value Block JumpTable) Inst)
 (extractor
     (br_table x block JT)
-    (inst_data (InstructionData.BranchTable (Opcode.BrTable) block JT x))
+    (inst_data (InstructionData.BranchTable (Opcode.BrTable) x block JT))
 )
 
 (decl debugtrap () Inst)
@@ -382,7 +382,7 @@
 (decl trapz (Value TrapCode) Inst)
 (extractor
     (trapz c code)
-    (inst_data (InstructionData.CondTrap (Opcode.Trapz) code c))
+    (inst_data (InstructionData.CondTrap (Opcode.Trapz) c code))
 )
 
 (decl resumable_trap (TrapCode) Inst)
@@ -394,25 +394,25 @@
 (decl trapnz (Value TrapCode) Inst)
 (extractor
     (trapnz c code)
-    (inst_data (InstructionData.CondTrap (Opcode.Trapnz) code c))
+    (inst_data (InstructionData.CondTrap (Opcode.Trapnz) c code))
 )
 
 (decl resumable_trapnz (Value TrapCode) Inst)
 (extractor
     (resumable_trapnz c code)
-    (inst_data (InstructionData.CondTrap (Opcode.ResumableTrapnz) code c))
+    (inst_data (InstructionData.CondTrap (Opcode.ResumableTrapnz) c code))
 )
 
 (decl trapif (IntCC Value TrapCode) Inst)
 (extractor
     (trapif Cond f code)
-    (inst_data (InstructionData.IntCondTrap (Opcode.Trapif) Cond code f))
+    (inst_data (InstructionData.IntCondTrap (Opcode.Trapif) f Cond code))
 )
 
 (decl trapff (FloatCC Value TrapCode) Inst)
 (extractor
     (trapff Cond f code)
-    (inst_data (InstructionData.FloatCondTrap (Opcode.Trapff) Cond code f))
+    (inst_data (InstructionData.FloatCondTrap (Opcode.Trapff) f Cond code))
 )
 
 (decl return (ValueSlice) Inst)
@@ -436,7 +436,7 @@
 (decl call_indirect (SigRef Value ValueSlice) Inst)
 (extractor
     (call_indirect SIG callee args)
-    (inst_data (InstructionData.CallIndirect (Opcode.CallIndirect) SIG (unwrap_head_value_list_1 callee args)))
+    (inst_data (InstructionData.CallIndirect (Opcode.CallIndirect) (unwrap_head_value_list_1 callee args) SIG))
 )
 
 (decl func_addr (FuncRef) Inst)
@@ -460,13 +460,13 @@
 (decl insertlane (Value Value Uimm8) Inst)
 (extractor
     (insertlane x y Idx)
-    (inst_data (InstructionData.TernaryImm8 (Opcode.Insertlane) Idx (value_array_2 x y)))
+    (inst_data (InstructionData.TernaryImm8 (Opcode.Insertlane) (value_array_2 x y) Idx))
 )
 
 (decl extractlane (Value Uimm8) Inst)
 (extractor
     (extractlane x Idx)
-    (inst_data (InstructionData.BinaryImm8 (Opcode.Extractlane) Idx x))
+    (inst_data (InstructionData.BinaryImm8 (Opcode.Extractlane) x Idx))
 )
 
 (decl imin (Value Value) Inst)
@@ -526,7 +526,7 @@
 (decl load (MemFlags Value Offset32) Inst)
 (extractor
     (load MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Load) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Load) p MemFlags Offset))
 )
 
 (decl load_complex (MemFlags ValueSlice Offset32) Inst)
@@ -538,19 +538,19 @@
 (decl store (MemFlags Value Value Offset32) Inst)
 (extractor
     (store MemFlags x p Offset)
-    (inst_data (InstructionData.Store (Opcode.Store) MemFlags Offset (value_array_2 x p)))
+    (inst_data (InstructionData.Store (Opcode.Store) (value_array_2 x p) MemFlags Offset))
 )
 
 (decl store_complex (MemFlags Value ValueSlice Offset32) Inst)
 (extractor
     (store_complex MemFlags x args Offset)
-    (inst_data (InstructionData.StoreComplex (Opcode.StoreComplex) MemFlags Offset (unwrap_head_value_list_1 x args)))
+    (inst_data (InstructionData.StoreComplex (Opcode.StoreComplex) (unwrap_head_value_list_1 x args) MemFlags Offset))
 )
 
 (decl uload8 (MemFlags Value Offset32) Inst)
 (extractor
     (uload8 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Uload8) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Uload8) p MemFlags Offset))
 )
 
 (decl uload8_complex (MemFlags ValueSlice Offset32) Inst)
@@ -562,7 +562,7 @@
 (decl sload8 (MemFlags Value Offset32) Inst)
 (extractor
     (sload8 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Sload8) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Sload8) p MemFlags Offset))
 )
 
 (decl sload8_complex (MemFlags ValueSlice Offset32) Inst)
@@ -574,19 +574,19 @@
 (decl istore8 (MemFlags Value Value Offset32) Inst)
 (extractor
     (istore8 MemFlags x p Offset)
-    (inst_data (InstructionData.Store (Opcode.Istore8) MemFlags Offset (value_array_2 x p)))
+    (inst_data (InstructionData.Store (Opcode.Istore8) (value_array_2 x p) MemFlags Offset))
 )
 
 (decl istore8_complex (MemFlags Value ValueSlice Offset32) Inst)
 (extractor
     (istore8_complex MemFlags x args Offset)
-    (inst_data (InstructionData.StoreComplex (Opcode.Istore8Complex) MemFlags Offset (unwrap_head_value_list_1 x args)))
+    (inst_data (InstructionData.StoreComplex (Opcode.Istore8Complex) (unwrap_head_value_list_1 x args) MemFlags Offset))
 )
 
 (decl uload16 (MemFlags Value Offset32) Inst)
 (extractor
     (uload16 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Uload16) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Uload16) p MemFlags Offset))
 )
 
 (decl uload16_complex (MemFlags ValueSlice Offset32) Inst)
@@ -598,7 +598,7 @@
 (decl sload16 (MemFlags Value Offset32) Inst)
 (extractor
     (sload16 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Sload16) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Sload16) p MemFlags Offset))
 )
 
 (decl sload16_complex (MemFlags ValueSlice Offset32) Inst)
@@ -610,19 +610,19 @@
 (decl istore16 (MemFlags Value Value Offset32) Inst)
 (extractor
     (istore16 MemFlags x p Offset)
-    (inst_data (InstructionData.Store (Opcode.Istore16) MemFlags Offset (value_array_2 x p)))
+    (inst_data (InstructionData.Store (Opcode.Istore16) (value_array_2 x p) MemFlags Offset))
 )
 
 (decl istore16_complex (MemFlags Value ValueSlice Offset32) Inst)
 (extractor
     (istore16_complex MemFlags x args Offset)
-    (inst_data (InstructionData.StoreComplex (Opcode.Istore16Complex) MemFlags Offset (unwrap_head_value_list_1 x args)))
+    (inst_data (InstructionData.StoreComplex (Opcode.Istore16Complex) (unwrap_head_value_list_1 x args) MemFlags Offset))
 )
 
 (decl uload32 (MemFlags Value Offset32) Inst)
 (extractor
     (uload32 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Uload32) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Uload32) p MemFlags Offset))
 )
 
 (decl uload32_complex (MemFlags ValueSlice Offset32) Inst)
@@ -634,7 +634,7 @@
 (decl sload32 (MemFlags Value Offset32) Inst)
 (extractor
     (sload32 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Sload32) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Sload32) p MemFlags Offset))
 )
 
 (decl sload32_complex (MemFlags ValueSlice Offset32) Inst)
@@ -646,19 +646,19 @@
 (decl istore32 (MemFlags Value Value Offset32) Inst)
 (extractor
     (istore32 MemFlags x p Offset)
-    (inst_data (InstructionData.Store (Opcode.Istore32) MemFlags Offset (value_array_2 x p)))
+    (inst_data (InstructionData.Store (Opcode.Istore32) (value_array_2 x p) MemFlags Offset))
 )
 
 (decl istore32_complex (MemFlags Value ValueSlice Offset32) Inst)
 (extractor
     (istore32_complex MemFlags x args Offset)
-    (inst_data (InstructionData.StoreComplex (Opcode.Istore32Complex) MemFlags Offset (unwrap_head_value_list_1 x args)))
+    (inst_data (InstructionData.StoreComplex (Opcode.Istore32Complex) (unwrap_head_value_list_1 x args) MemFlags Offset))
 )
 
 (decl uload8x8 (MemFlags Value Offset32) Inst)
 (extractor
     (uload8x8 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Uload8x8) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Uload8x8) p MemFlags Offset))
 )
 
 (decl uload8x8_complex (MemFlags ValueSlice Offset32) Inst)
@@ -670,7 +670,7 @@
 (decl sload8x8 (MemFlags Value Offset32) Inst)
 (extractor
     (sload8x8 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Sload8x8) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Sload8x8) p MemFlags Offset))
 )
 
 (decl sload8x8_complex (MemFlags ValueSlice Offset32) Inst)
@@ -682,7 +682,7 @@
 (decl uload16x4 (MemFlags Value Offset32) Inst)
 (extractor
     (uload16x4 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Uload16x4) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Uload16x4) p MemFlags Offset))
 )
 
 (decl uload16x4_complex (MemFlags ValueSlice Offset32) Inst)
@@ -694,7 +694,7 @@
 (decl sload16x4 (MemFlags Value Offset32) Inst)
 (extractor
     (sload16x4 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Sload16x4) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Sload16x4) p MemFlags Offset))
 )
 
 (decl sload16x4_complex (MemFlags ValueSlice Offset32) Inst)
@@ -706,7 +706,7 @@
 (decl uload32x2 (MemFlags Value Offset32) Inst)
 (extractor
     (uload32x2 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Uload32x2) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Uload32x2) p MemFlags Offset))
 )
 
 (decl uload32x2_complex (MemFlags ValueSlice Offset32) Inst)
@@ -718,7 +718,7 @@
 (decl sload32x2 (MemFlags Value Offset32) Inst)
 (extractor
     (sload32x2 MemFlags p Offset)
-    (inst_data (InstructionData.Load (Opcode.Sload32x2) MemFlags Offset p))
+    (inst_data (InstructionData.Load (Opcode.Sload32x2) p MemFlags Offset))
 )
 
 (decl sload32x2_complex (MemFlags ValueSlice Offset32) Inst)
@@ -736,7 +736,7 @@
 (decl stack_store (Value StackSlot Offset32) Inst)
 (extractor
     (stack_store x SS Offset)
-    (inst_data (InstructionData.StackStore (Opcode.StackStore) SS Offset x))
+    (inst_data (InstructionData.StackStore (Opcode.StackStore) x SS Offset))
 )
 
 (decl stack_addr (StackSlot Offset32) Inst)
@@ -766,7 +766,7 @@
 (decl heap_addr (Heap Value Uimm32) Inst)
 (extractor
     (heap_addr H p Size)
-    (inst_data (InstructionData.HeapAddr (Opcode.HeapAddr) H Size p))
+    (inst_data (InstructionData.HeapAddr (Opcode.HeapAddr) p H Size))
 )
 
 (decl get_pinned_reg () Inst)
@@ -784,7 +784,7 @@
 (decl table_addr (Table Value Offset32) Inst)
 (extractor
     (table_addr T p Offset)
-    (inst_data (InstructionData.TableAddr (Opcode.TableAddr) T Offset p))
+    (inst_data (InstructionData.TableAddr (Opcode.TableAddr) p T Offset))
 )
 
 (decl iconst (Imm64) Inst)
@@ -826,7 +826,7 @@
 (decl shuffle (Value Value Immediate) Inst)
 (extractor
     (shuffle a b mask)
-    (inst_data (InstructionData.Shuffle (Opcode.Shuffle) mask (value_array_2 a b)))
+    (inst_data (InstructionData.Shuffle (Opcode.Shuffle) (value_array_2 a b) mask))
 )
 
 (decl null () Inst)
@@ -850,13 +850,13 @@
 (decl selectif (IntCC Value Value Value) Inst)
 (extractor
     (selectif cc flags x y)
-    (inst_data (InstructionData.IntSelect (Opcode.Selectif) cc (value_array_3 flags x y)))
+    (inst_data (InstructionData.IntSelect (Opcode.Selectif) (value_array_3 flags x y) cc))
 )
 
 (decl selectif_spectre_guard (IntCC Value Value Value) Inst)
 (extractor
     (selectif_spectre_guard cc flags x y)
-    (inst_data (InstructionData.IntSelect (Opcode.SelectifSpectreGuard) cc (value_array_3 flags x y)))
+    (inst_data (InstructionData.IntSelect (Opcode.SelectifSpectreGuard) (value_array_3 flags x y) cc))
 )
 
 (decl bitselect (Value Value Value) Inst)
@@ -916,13 +916,13 @@
 (decl icmp (IntCC Value Value) Inst)
 (extractor
     (icmp Cond x y)
-    (inst_data (InstructionData.IntCompare (Opcode.Icmp) Cond (value_array_2 x y)))
+    (inst_data (InstructionData.IntCompare (Opcode.Icmp) (value_array_2 x y) Cond))
 )
 
 (decl icmp_imm (IntCC Value Imm64) Inst)
 (extractor
     (icmp_imm Cond x Y)
-    (inst_data (InstructionData.IntCompareImm (Opcode.IcmpImm) Cond Y x))
+    (inst_data (InstructionData.IntCompareImm (Opcode.IcmpImm) x Cond Y))
 )
 
 (decl ifcmp (Value Value) Inst)
@@ -934,7 +934,7 @@
 (decl ifcmp_imm (Value Imm64) Inst)
 (extractor
     (ifcmp_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.IfcmpImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.IfcmpImm) x Y))
 )
 
 (decl iadd (Value Value) Inst)
@@ -1012,43 +1012,43 @@
 (decl iadd_imm (Value Imm64) Inst)
 (extractor
     (iadd_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.IaddImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.IaddImm) x Y))
 )
 
 (decl imul_imm (Value Imm64) Inst)
 (extractor
     (imul_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.ImulImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.ImulImm) x Y))
 )
 
 (decl udiv_imm (Value Imm64) Inst)
 (extractor
     (udiv_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.UdivImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.UdivImm) x Y))
 )
 
 (decl sdiv_imm (Value Imm64) Inst)
 (extractor
     (sdiv_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.SdivImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.SdivImm) x Y))
 )
 
 (decl urem_imm (Value Imm64) Inst)
 (extractor
     (urem_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.UremImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.UremImm) x Y))
 )
 
 (decl srem_imm (Value Imm64) Inst)
 (extractor
     (srem_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.SremImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.SremImm) x Y))
 )
 
 (decl irsub_imm (Value Imm64) Inst)
 (extractor
     (irsub_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.IrsubImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.IrsubImm) x Y))
 )
 
 (decl iadd_cin (Value Value Value) Inst)
@@ -1168,19 +1168,19 @@
 (decl band_imm (Value Imm64) Inst)
 (extractor
     (band_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.BandImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.BandImm) x Y))
 )
 
 (decl bor_imm (Value Imm64) Inst)
 (extractor
     (bor_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.BorImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.BorImm) x Y))
 )
 
 (decl bxor_imm (Value Imm64) Inst)
 (extractor
     (bxor_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.BxorImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.BxorImm) x Y))
 )
 
 (decl rotl (Value Value) Inst)
@@ -1198,13 +1198,13 @@
 (decl rotl_imm (Value Imm64) Inst)
 (extractor
     (rotl_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.RotlImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.RotlImm) x Y))
 )
 
 (decl rotr_imm (Value Imm64) Inst)
 (extractor
     (rotr_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.RotrImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.RotrImm) x Y))
 )
 
 (decl ishl (Value Value) Inst)
@@ -1228,19 +1228,19 @@
 (decl ishl_imm (Value Imm64) Inst)
 (extractor
     (ishl_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.IshlImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.IshlImm) x Y))
 )
 
 (decl ushr_imm (Value Imm64) Inst)
 (extractor
     (ushr_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.UshrImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.UshrImm) x Y))
 )
 
 (decl sshr_imm (Value Imm64) Inst)
 (extractor
     (sshr_imm x Y)
-    (inst_data (InstructionData.BinaryImm64 (Opcode.SshrImm) Y x))
+    (inst_data (InstructionData.BinaryImm64 (Opcode.SshrImm) x Y))
 )
 
 (decl bitrev (Value) Inst)
@@ -1276,7 +1276,7 @@
 (decl fcmp (FloatCC Value Value) Inst)
 (extractor
     (fcmp Cond x y)
-    (inst_data (InstructionData.FloatCompare (Opcode.Fcmp) Cond (value_array_2 x y)))
+    (inst_data (InstructionData.FloatCompare (Opcode.Fcmp) (value_array_2 x y) Cond))
 )
 
 (decl ffcmp (Value Value) Inst)
@@ -1402,13 +1402,13 @@
 (decl trueif (IntCC Value) Inst)
 (extractor
     (trueif Cond f)
-    (inst_data (InstructionData.IntCond (Opcode.Trueif) Cond f))
+    (inst_data (InstructionData.IntCond (Opcode.Trueif) f Cond))
 )
 
 (decl trueff (FloatCC Value) Inst)
 (extractor
     (trueff Cond f)
-    (inst_data (InstructionData.FloatCond (Opcode.Trueff) Cond f))
+    (inst_data (InstructionData.FloatCond (Opcode.Trueff) f Cond))
 )
 
 (decl bitcast (Value) Inst)
@@ -1606,25 +1606,25 @@
 (decl atomic_rmw (MemFlags AtomicRmwOp Value Value) Inst)
 (extractor
     (atomic_rmw MemFlags AtomicRmwOp p x)
-    (inst_data (InstructionData.AtomicRmw (Opcode.AtomicRmw) MemFlags AtomicRmwOp (value_array_2 p x)))
+    (inst_data (InstructionData.AtomicRmw (Opcode.AtomicRmw) (value_array_2 p x) MemFlags AtomicRmwOp))
 )
 
 (decl atomic_cas (MemFlags Value Value Value) Inst)
 (extractor
     (atomic_cas MemFlags p e x)
-    (inst_data (InstructionData.AtomicCas (Opcode.AtomicCas) MemFlags (value_array_3 p e x)))
+    (inst_data (InstructionData.AtomicCas (Opcode.AtomicCas) (value_array_3 p e x) MemFlags))
 )
 
 (decl atomic_load (MemFlags Value) Inst)
 (extractor
     (atomic_load MemFlags p)
-    (inst_data (InstructionData.LoadNoOffset (Opcode.AtomicLoad) MemFlags p))
+    (inst_data (InstructionData.LoadNoOffset (Opcode.AtomicLoad) p MemFlags))
 )
 
 (decl atomic_store (MemFlags Value Value) Inst)
 (extractor
     (atomic_store MemFlags x p)
-    (inst_data (InstructionData.StoreNoOffset (Opcode.AtomicStore) MemFlags (value_array_2 x p)))
+    (inst_data (InstructionData.StoreNoOffset (Opcode.AtomicStore) (value_array_2 x p) MemFlags))
 )
 
 (decl fence () Inst)

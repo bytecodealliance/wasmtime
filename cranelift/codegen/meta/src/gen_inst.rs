@@ -1247,17 +1247,6 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
                 inst.format.name, inst.camel_name
             );
 
-            // Immediates.
-            let imm_operands: Vec<_> = inst
-                .operands_in
-                .iter()
-                .filter(|o| !o.is_value() && !o.is_varargs())
-                .collect();
-            assert_eq!(imm_operands.len(), inst.format.imm_fields.len());
-            for op in imm_operands {
-                write!(&mut s, " {}", op.name).unwrap();
-            }
-
             // Value and varargs operands.
             if inst.format.typevar_operand.is_some() {
                 if inst.format.has_value_list {
@@ -1314,6 +1303,18 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
                     .unwrap();
                 }
             }
+
+            // Immediates.
+            let imm_operands: Vec<_> = inst
+                .operands_in
+                .iter()
+                .filter(|o| !o.is_value() && !o.is_varargs())
+                .collect();
+            assert_eq!(imm_operands.len(), inst.format.imm_fields.len());
+            for op in imm_operands {
+                write!(&mut s, " {}", op.name).unwrap();
+            }
+
             s.push_str("))");
             fmt.line(&s);
         });
