@@ -1619,7 +1619,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 ctx.emit(Inst::gen_move(dst, src, ty));
                 let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
-                ctx.emit(Inst::equals(ty, RegMem::from(tmp), tmp));
+
+                // Set tmp to all 1s before flipping the bits
+                ctx.emit(Inst::equals(types::I32X4, RegMem::from(tmp), tmp));
                 ctx.emit(Inst::xor(ty, RegMem::from(tmp), dst));
             } else if ty == types::I128 || ty == types::B128 {
                 let src = put_input_in_regs(ctx, inputs[0]);
