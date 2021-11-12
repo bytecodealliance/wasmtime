@@ -10,15 +10,15 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
     // The new mapping will be to the CoW zero page, so this effectively
     // zeroes the pages.
     unsafe {
-        rsix::io::mmap_anonymous(
+        rustix::io::mmap_anonymous(
             addr as _,
             len,
             if protect {
-                rsix::io::ProtFlags::empty()
+                rustix::io::ProtFlags::empty()
             } else {
-                rsix::io::ProtFlags::READ | rsix::io::ProtFlags::WRITE
+                rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE
             },
-            rsix::io::MapFlags::PRIVATE | rsix::io::MapFlags::FIXED,
+            rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
         )
         .context("mmap failed to remap pages: {}")?;
     }

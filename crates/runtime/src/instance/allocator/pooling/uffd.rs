@@ -33,7 +33,7 @@
 use super::{InstancePool, MemoryPool};
 use crate::instance::Instance;
 use anyhow::{bail, Context, Result};
-use rsix::io::{madvise, Advice};
+use rustix::io::{madvise, Advice};
 use std::thread;
 use userfaultfd::{Event, FeatureFlags, IoctlFlags, Uffd, UffdBuilder};
 use wasmtime_environ::{DefinedMemoryIndex, EntityRef, MemoryInitialization};

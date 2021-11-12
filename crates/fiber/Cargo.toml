@@ -14,7 +14,7 @@ edition = "2018"
 links = "wasmtime-fiber-shims"
 
 [target.'cfg(unix)'.dependencies]
-rsix = "0.23.0"
+rustix = "0.26.2"
 
 [target.'cfg(windows)'.dependencies.winapi]
 version = "0.3.9"
