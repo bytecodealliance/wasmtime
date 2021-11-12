@@ -62,7 +62,7 @@ impl Default for Tunables {
             // impacts performance severely but allows us to have more than a
             // few instances running around.
             #[cfg(target_pointer_width = "32")]
-            static_memory_bound: (10 * (1 << 20)) / crate::WASM_PAGE_SIZE,
+            static_memory_bound: (10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64,
             #[cfg(target_pointer_width = "32")]
             static_memory_offset_guard_size: 0x1_0000,
 
