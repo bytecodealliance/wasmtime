@@ -1,6 +1,0 @@
-[workspace]
-members = [
-  "./fuzz",
-  "./isle",
-  "./islec",
-]
