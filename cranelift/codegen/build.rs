@@ -139,8 +139,9 @@ fn rebuild_isle(crate_dir: &std::path::Path) -> Result<(), Box<dyn std::error::E
         let _ = miette::set_hook(Box::new(|_| {
             Box::new(
                 miette::MietteHandlerOpts::new()
-                    // `miette` mistakenly uses braille-optimized output for emacs's
-                    // `M-x shell`.
+                    // Ensure `miette` emits source snippets, even when the
+                    // output is not a tty (NB: there are no terminal control
+                    // codes in the "graphical" output).
                     .force_graphical(true)
                     .build(),
             )
