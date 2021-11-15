@@ -5,7 +5,7 @@ edition = "2018"
 license = "Apache-2.0 WITH LLVM-exception"
 name = "isle"
 readme = "../README.md"
-repository = "https://github.com/cfallin.isle"
+repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
 version = "0.1.0"
 
 [dependencies]
