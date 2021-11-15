@@ -334,7 +334,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// times, e.g. after calling `add_{cond,uncond}_branch()` and
     /// before emitting branch bytes.
     fn check_label_branch_invariants(&self) {
-        if !cfg!(debug_assertions) {
+        if !cfg!(debug_assertions) || cfg!(fuzzing) {
             return;
         }
         let cur_off = self.cur_offset();
