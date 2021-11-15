@@ -1431,7 +1431,7 @@ checksum = "616cde7c720bb2bb5824a224687d8f77bfd38922027f01d825cd7453be5099fb"
 
 [[package]]
 name = "isle"
-version = "0.1.0"
+version = "0.78.0"
 dependencies = [
  "log",
  "miette",
