@@ -29,10 +29,10 @@ bincode = "1.2.1"
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-rsix = { version = "0.23.0", optional = true }
+rustix = { version = "0.26.2", optional = true }
 
 [features]
-jitdump = ['rsix']
+jitdump = ['rustix']
 vtune = ['ittapi-rs']
 
 [badges]

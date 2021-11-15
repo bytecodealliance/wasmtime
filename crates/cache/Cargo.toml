@@ -24,7 +24,7 @@ zstd = { version = "0.9", default-features = false }
 winapi = "0.3.7"
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
-rsix = "0.23.0"
+rustix = "0.26.2"
 
 [dev-dependencies]
 filetime = "0.2.7"

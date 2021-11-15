@@ -15,17 +15,17 @@ include = ["src/**/*", "README.md", "LICENSE" ]
 wasi-common = { path = "../", version = "=0.31.0" }
 async-trait = "0.1"
 anyhow = "1.0"
-cap-std = "0.19.1"
-cap-fs-ext = "0.19.1"
-cap-time-ext = "0.19.1"
-cap-rand = "0.19.1"
-fs-set-times = "0.12.0"
-system-interface = { version = "0.15.0", features = ["cap_std_impls"] }
+cap-std = "0.21.1"
+cap-fs-ext = "0.21.1"
+cap-time-ext = "0.21.1"
+cap-rand = "0.21.1"
+fs-set-times = "0.13.1"
+system-interface = { version = "0.16.0", features = ["cap_std_impls"] }
 tracing = "0.1.19"
-io-lifetimes = { version = "0.3.0", default-features = false }
+io-lifetimes = { version = "0.3.3", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-rsix = "0.23.0"
+rustix = "0.26.2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"

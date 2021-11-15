@@ -1,6 +1,6 @@
 use cap_std::time::Duration;
 use io_lifetimes::{AsFd, BorrowedFd};
-use rsix::io::{PollFd, PollFlags};
+use rustix::io::{PollFd, PollFlags};
 use std::convert::TryInto;
 use wasi_common::{
     file::WasiFile,
@@ -49,9 +49,9 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
             poll_fds = tracing::field::debug(&pollfds),
             "poll"
         );
-        match rsix::io::poll(&mut pollfds, poll_timeout) {
+        match rustix::io::poll(&mut pollfds, poll_timeout) {
             Ok(ready) => break ready,
-            Err(rsix::io::Error::INTR) => continue,
+            Err(rustix::io::Error::INTR) => continue,
             Err(err) => return Err(err.into()),
         }
     };

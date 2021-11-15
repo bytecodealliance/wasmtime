@@ -57,8 +57,8 @@ impl CodeMemory {
         #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
         {
             // This is a requirement of the `membarrier` call executed by the `publish` method.
-            rsix::process::membarrier(
-                rsix::process::MembarrierCommand::RegisterPrivateExpeditedSyncCore,
+            rustix::process::membarrier(
+                rustix::process::MembarrierCommand::RegisterPrivateExpeditedSyncCore,
             )
             .unwrap();
         }
@@ -171,8 +171,8 @@ impl CodeMemory {
             #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
             {
                 // Ensure that no processor has fetched a stale instruction stream.
-                rsix::process::membarrier(
-                    rsix::process::MembarrierCommand::PrivateExpeditedSyncCore,
+                rustix::process::membarrier(
+                    rustix::process::MembarrierCommand::PrivateExpeditedSyncCore,
                 )
                 .unwrap();
             }

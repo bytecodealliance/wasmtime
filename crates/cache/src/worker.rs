@@ -256,7 +256,7 @@ impl WorkerThread {
 
         const NICE_DELTA_FOR_BACKGROUND_TASKS: i32 = 3;
 
-        match rsix::process::nice(NICE_DELTA_FOR_BACKGROUND_TASKS) {
+        match rustix::process::nice(NICE_DELTA_FOR_BACKGROUND_TASKS) {
             Ok(current_nice) => {
                 debug!("New nice value of worker thread: {}", current_nice);
             }

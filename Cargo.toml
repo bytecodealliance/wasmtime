@@ -44,7 +44,7 @@ wasmparser = "0.81.0"
 lazy_static = "1.4.0"
 
 [target.'cfg(unix)'.dependencies]
-rsix = "0.23.0"
+rustix = "0.26.2"
 
 [dev-dependencies]
 env_logger = "0.8.1"

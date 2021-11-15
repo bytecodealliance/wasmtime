@@ -47,7 +47,7 @@ impl FiberStack {
     pub fn new(size: usize) -> io::Result<Self> {
         // Round up our stack size request to the nearest multiple of the
         // page size.
-        let page_size = rsix::process::page_size();
+        let page_size = rustix::process::page_size();
         let size = if size == 0 {
             page_size
         } else {
@@ -57,17 +57,17 @@ impl FiberStack {
         unsafe {
             // Add in one page for a guard page and then ask for some memory.
             let mmap_len = size + page_size;
-            let mmap = rsix::io::mmap_anonymous(
+            let mmap = rustix::io::mmap_anonymous(
                 ptr::null_mut(),
                 mmap_len,
-                rsix::io::ProtFlags::empty(),
-                rsix::io::MapFlags::PRIVATE,
+                rustix::io::ProtFlags::empty(),
+                rustix::io::MapFlags::PRIVATE,
             )?;
 
-            rsix::io::mprotect(
+            rustix::io::mprotect(
                 mmap.cast::<u8>().add(page_size).cast(),
                 size,
-                rsix::io::MprotectFlags::READ | rsix::io::MprotectFlags::WRITE,
+                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
             )?;
 
             Ok(Self {
@@ -90,7 +90,7 @@ impl Drop for FiberStack {
     fn drop(&mut self) {
         unsafe {
             if let Some(len) = self.len {
-                let ret = rsix::io::munmap(self.top.sub(len) as _, len);
+                let ret = rustix::io::munmap(self.top.sub(len) as _, len);
                 debug_assert!(ret.is_ok());
             }
         }

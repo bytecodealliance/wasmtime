@@ -63,11 +63,11 @@ impl Mmap {
                 .len();
             let len = usize::try_from(len).map_err(|_| anyhow!("file too large to map"))?;
             let ptr = unsafe {
-                rsix::io::mmap(
+                rustix::io::mmap(
                     ptr::null_mut(),
                     len,
-                    rsix::io::ProtFlags::READ,
-                    rsix::io::MapFlags::PRIVATE,
+                    rustix::io::ProtFlags::READ,
+                    rustix::io::MapFlags::PRIVATE,
                     &file,
                     0,
                 )
@@ -170,11 +170,11 @@ impl Mmap {
         Ok(if accessible_size == mapping_size {
             // Allocate a single read-write region at once.
             let ptr = unsafe {
-                rsix::io::mmap_anonymous(
+                rustix::io::mmap_anonymous(
                     ptr::null_mut(),
                     mapping_size,
-                    rsix::io::ProtFlags::READ | rsix::io::ProtFlags::WRITE,
-                    rsix::io::MapFlags::PRIVATE,
+                    rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE,
+                    rustix::io::MapFlags::PRIVATE,
                 )
                 .context(format!("mmap failed to allocate {:#x} bytes", mapping_size))?
             };
@@ -187,11 +187,11 @@ impl Mmap {
         } else {
             // Reserve the mapping size.
             let ptr = unsafe {
-                rsix::io::mmap_anonymous(
+                rustix::io::mmap_anonymous(
                     ptr::null_mut(),
                     mapping_size,
-                    rsix::io::ProtFlags::empty(),
-                    rsix::io::MapFlags::PRIVATE,
+                    rustix::io::ProtFlags::empty(),
+                    rustix::io::MapFlags::PRIVATE,
                 )
                 .context(format!("mmap failed to allocate {:#x} bytes", mapping_size))?
             };
@@ -424,7 +424,7 @@ impl Drop for Mmap {
     #[cfg(not(target_os = "windows"))]
     fn drop(&mut self) {
         if self.len != 0 {
-            unsafe { rsix::io::munmap(self.ptr as *mut std::ffi::c_void, self.len) }
+            unsafe { rustix::io::munmap(self.ptr as *mut std::ffi::c_void, self.len) }
                 .expect("munmap failed");
         }
     }
