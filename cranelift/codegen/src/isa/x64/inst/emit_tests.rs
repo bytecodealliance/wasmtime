@@ -4199,8 +4199,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I8,
-            src: rbx,
-            dst: am1,
+            mem: am1,
+            replacement: rbx,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F0410FB09C9241010000",
         "lock cmpxchgb %bl, 321(%r10,%rdx,4)",
@@ -4209,8 +4211,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I8,
-            src: rdx,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: rdx,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F00FB094F1C7CFFFFF",
         "lock cmpxchgb %dl, -12345(%rcx,%rsi,8)",
@@ -4218,8 +4222,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I8,
-            src: rsi,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: rsi,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F0400FB0B4F1C7CFFFFF",
         "lock cmpxchgb %sil, -12345(%rcx,%rsi,8)",
@@ -4227,8 +4233,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I8,
-            src: r10,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: r10,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F0440FB094F1C7CFFFFF",
         "lock cmpxchgb %r10b, -12345(%rcx,%rsi,8)",
@@ -4236,8 +4244,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I8,
-            src: r15,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: r15,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F0440FB0BCF1C7CFFFFF",
         "lock cmpxchgb %r15b, -12345(%rcx,%rsi,8)",
@@ -4246,8 +4256,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I16,
-            src: rsi,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: rsi,
+            expected: rax,
+            dst_old: w_rax,
         },
         "66F00FB1B4F1C7CFFFFF",
         "lock cmpxchgw %si, -12345(%rcx,%rsi,8)",
@@ -4255,8 +4267,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I16,
-            src: r10,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: r10,
+            expected: rax,
+            dst_old: w_rax,
         },
         "66F0440FB194F1C7CFFFFF",
         "lock cmpxchgw %r10w, -12345(%rcx,%rsi,8)",
@@ -4265,8 +4279,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I32,
-            src: rsi,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: rsi,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F00FB1B4F1C7CFFFFF",
         "lock cmpxchgl %esi, -12345(%rcx,%rsi,8)",
@@ -4274,8 +4290,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I32,
-            src: r10,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: r10,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F0440FB194F1C7CFFFFF",
         "lock cmpxchgl %r10d, -12345(%rcx,%rsi,8)",
@@ -4284,8 +4302,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I64,
-            src: rsi,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: rsi,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F0480FB1B4F1C7CFFFFF",
         "lock cmpxchgq %rsi, -12345(%rcx,%rsi,8)",
@@ -4293,8 +4313,10 @@ fn test_x64_emit() {
     insns.push((
         Inst::LockCmpxchg {
             ty: types::I64,
-            src: r10,
-            dst: am2.clone(),
+            mem: am2.clone(),
+            replacement: r10,
+            expected: rax,
+            dst_old: w_rax,
         },
         "F04C0FB194F1C7CFFFFF",
         "lock cmpxchgq %r10, -12345(%rcx,%rsi,8)",
@@ -4302,27 +4324,62 @@ fn test_x64_emit() {
 
     // AtomicRmwSeq
     insns.push((
-        Inst::AtomicRmwSeq { ty: types::I8, op: inst_common::AtomicRmwOp::Or, },
+        Inst::AtomicRmwSeq {
+            ty: types::I8,
+            op: inst_common::AtomicRmwOp::Or,
+            address: r9,
+            operand: r10,
+            temp: w_r11,
+            dst_old: w_rax
+        },
         "490FB6014989C34D09D3F0450FB0190F85EFFFFFFF",
         "atomically { 8_bits_at_[%r9]) Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
-        Inst::AtomicRmwSeq { ty: types::I16, op: inst_common::AtomicRmwOp::And, },
+        Inst::AtomicRmwSeq {
+            ty: types::I16,
+            op: inst_common::AtomicRmwOp::And,
+            address: r9,
+            operand: r10,
+            temp: w_r11,
+            dst_old: w_rax
+        },
         "490FB7014989C34D21D366F0450FB1190F85EEFFFFFF",
         "atomically { 16_bits_at_[%r9]) And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
-        Inst::AtomicRmwSeq { ty: types::I32, op: inst_common::AtomicRmwOp::Xchg, },
+        Inst::AtomicRmwSeq {
+            ty: types::I32,
+            op: inst_common::AtomicRmwOp::Xchg,
+            address: r9,
+            operand: r10,
+            temp: w_r11,
+            dst_old: w_rax
+        },
         "418B014989C34D89D3F0450FB1190F85EFFFFFFF",
         "atomically { 32_bits_at_[%r9]) Xchg= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
-        Inst::AtomicRmwSeq { ty: types::I32, op: inst_common::AtomicRmwOp::Umin, },
+        Inst::AtomicRmwSeq {
+            ty: types::I32,
+            op: inst_common::AtomicRmwOp::Umin,
+            address: r9,
+            operand: r10,
+            temp: w_r11,
+            dst_old: w_rax
+        },
         "418B014989C34539DA4D0F46DAF0450FB1190F85EBFFFFFF",
         "atomically { 32_bits_at_[%r9]) Umin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
-        Inst::AtomicRmwSeq { ty: types::I64, op: inst_common::AtomicRmwOp::Add, },
+        Inst::AtomicRmwSeq {
+            ty: types::I64,
+            op: inst_common::AtomicRmwOp::Add,
+            address: r9,
+            operand: r10,
+            temp: w_r11,
+            dst_old: w_rax
+        },
         "498B014989C34D01D3F04D0FB1190F85EFFFFFFF",
         "atomically { 64_bits_at_[%r9]) Add= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));

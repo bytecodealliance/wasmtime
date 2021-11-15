@@ -1,14 +1,13 @@
 //! Instruction operand sub-components (aka "parts"): definitions and printing.
 
 use super::regs::{self, show_ireg_sized};
-use super::EmitState;
+use super::{EmitState, RegMapper};
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::{MemFlags, Type};
 use crate::isa::x64::inst::Inst;
 use crate::machinst::*;
 use regalloc::{
-    PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector,
-    RegUsageMapper, Writable,
+    PrettyPrint, PrettyPrintSized, RealRegUniverse, Reg, RegClass, RegUsageCollector, Writable,
 };
 use smallvec::{smallvec, SmallVec};
 use std::fmt;
@@ -175,7 +174,7 @@ impl SyntheticAmode {
         }
     }
 
-    pub(crate) fn map_uses<RUM: RegUsageMapper>(&mut self, map: &RUM) {
+    pub(crate) fn map_uses<RM: RegMapper>(&mut self, map: &RM) {
         match self {
             SyntheticAmode::Real(addr) => addr.map_uses(map),
             SyntheticAmode::NominalSPOffset { .. } => {
@@ -282,6 +281,25 @@ impl PrettyPrintSized for RegMemImm {
             Self::Mem { addr } => addr.show_rru(mb_rru),
             Self::Imm { simm32 } => format!("${}", *simm32 as i32),
         }
+    }
+}
+
+/// An operand which is either an 8-bit integer immediate or a register.
+#[derive(Clone, Debug)]
+pub enum Imm8Reg {
+    Imm8 { imm: u8 },
+    Reg { reg: Reg },
+}
+
+impl From<u8> for Imm8Reg {
+    fn from(imm: u8) -> Self {
+        Self::Imm8 { imm }
+    }
+}
+
+impl From<Reg> for Imm8Reg {
+    fn from(reg: Reg) -> Self {
+        Self::Reg { reg }
     }
 }
 

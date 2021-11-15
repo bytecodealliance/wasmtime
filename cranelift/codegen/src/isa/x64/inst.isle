@@ -1,0 +1,977 @@
+;; Extern type definitions and constructors for the x64 `MachInst` type.
+
+;;;; `MInst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type MInst extern
+      (enum (Nop (len u8))
+            (AluRmiR (size OperandSize)
+                     (op AluRmiROpcode)
+                     (src1 Reg)
+                     (src2 RegMemImm)
+                     (dst WritableReg))
+            (MulHi (size OperandSize)
+                   (signed bool)
+                   (src1 Reg)
+                   (src2 RegMem)
+                   (dst_lo WritableReg)
+                   (dst_hi WritableReg))
+            (XmmRmR (op SseOpcode)
+                    (src1 Reg)
+                    (src2 RegMem)
+                    (dst WritableReg))
+            (XmmUnaryRmR (op SseOpcode)
+                         (src RegMem)
+                         (dst WritableReg))
+            (XmmRmiReg (opcode SseOpcode)
+                       (src1 Reg)
+                       (src2 RegMemImm)
+                       (dst WritableReg))
+            (XmmRmRImm (op SseOpcode)
+                       (src1 Reg)
+                       (src2 RegMem)
+                       (dst WritableReg)
+                       (imm u8)
+                       (size OperandSize))
+            (CmpRmiR (size OperandSize)
+                     (opcode CmpOpcode)
+                     (src RegMemImm)
+                     (dst Reg))
+            (Imm (dst_size OperandSize)
+                 (simm64 u64)
+                 (dst WritableReg))
+            (ShiftR (size OperandSize)
+                    (kind ShiftKind)
+                    (src Reg)
+                    (num_bits Imm8Reg)
+                    (dst WritableReg))
+            (MovzxRmR (ext_mode ExtMode)
+                      (src RegMem)
+                      (dst WritableReg))
+            (MovsxRmR (ext_mode ExtMode)
+                      (src RegMem)
+                      (dst WritableReg))
+            (Cmove (size OperandSize)
+                   (cc CC)
+                   (consequent RegMem)
+                   (alternative Reg)
+                   (dst WritableReg))
+            (XmmRmREvex (op Avx512Opcode)
+                        (src1 RegMem)
+                        (src2 Reg)
+                        (dst WritableReg))))
+
+(type OperandSize extern
+      (enum Size8
+            Size16
+            Size32
+            Size64))
+
+;; Get the `OperandSize` for a given `Type`.
+(decl operand_size_of_type (Type) OperandSize)
+(extern constructor operand_size_of_type operand_size_of_type)
+
+;; Get the bit width of an `OperandSize`.
+(decl operand_size_bits (OperandSize) u16)
+(rule (operand_size_bits (OperandSize.Size8)) 8)
+(rule (operand_size_bits (OperandSize.Size16)) 16)
+(rule (operand_size_bits (OperandSize.Size32)) 32)
+(rule (operand_size_bits (OperandSize.Size64)) 64)
+
+(type AluRmiROpcode extern
+      (enum Add
+            Adc
+            Sub
+            Sbb
+            And
+            Or
+            Xor
+            Mul
+            And8
+            Or8))
+
+(type SseOpcode extern
+      (enum Addps
+            Addpd
+            Addss
+            Addsd
+            Andps
+            Andpd
+            Andnps
+            Andnpd
+            Blendvpd
+            Blendvps
+            Comiss
+            Comisd
+            Cmpps
+            Cmppd
+            Cmpss
+            Cmpsd
+            Cvtdq2ps
+            Cvtdq2pd
+            Cvtpd2ps
+            Cvtps2pd
+            Cvtsd2ss
+            Cvtsd2si
+            Cvtsi2ss
+            Cvtsi2sd
+            Cvtss2si
+            Cvtss2sd
+            Cvttpd2dq
+            Cvttps2dq
+            Cvttss2si
+            Cvttsd2si
+            Divps
+            Divpd
+            Divss
+            Divsd
+            Insertps
+            Maxps
+            Maxpd
+            Maxss
+            Maxsd
+            Minps
+            Minpd
+            Minss
+            Minsd
+            Movaps
+            Movapd
+            Movd
+            Movdqa
+            Movdqu
+            Movlhps
+            Movmskps
+            Movmskpd
+            Movq
+            Movss
+            Movsd
+            Movups
+            Movupd
+            Mulps
+            Mulpd
+            Mulss
+            Mulsd
+            Orps
+            Orpd
+            Pabsb
+            Pabsw
+            Pabsd
+            Packssdw
+            Packsswb
+            Packusdw
+            Packuswb
+            Paddb
+            Paddd
+            Paddq
+            Paddw
+            Paddsb
+            Paddsw
+            Paddusb
+            Paddusw
+            Palignr
+            Pand
+            Pandn
+            Pavgb
+            Pavgw
+            Pblendvb
+            Pcmpeqb
+            Pcmpeqw
+            Pcmpeqd
+            Pcmpeqq
+            Pcmpgtb
+            Pcmpgtw
+            Pcmpgtd
+            Pcmpgtq
+            Pextrb
+            Pextrw
+            Pextrd
+            Pinsrb
+            Pinsrw
+            Pinsrd
+            Pmaddubsw
+            Pmaddwd
+            Pmaxsb
+            Pmaxsw
+            Pmaxsd
+            Pmaxub
+            Pmaxuw
+            Pmaxud
+            Pminsb
+            Pminsw
+            Pminsd
+            Pminub
+            Pminuw
+            Pminud
+            Pmovmskb
+            Pmovsxbd
+            Pmovsxbw
+            Pmovsxbq
+            Pmovsxwd
+            Pmovsxwq
+            Pmovsxdq
+            Pmovzxbd
+            Pmovzxbw
+            Pmovzxbq
+            Pmovzxwd
+            Pmovzxwq
+            Pmovzxdq
+            Pmuldq
+            Pmulhw
+            Pmulhuw
+            Pmulhrsw
+            Pmulld
+            Pmullw
+            Pmuludq
+            Por
+            Pshufb
+            Pshufd
+            Psllw
+            Pslld
+            Psllq
+            Psraw
+            Psrad
+            Psrlw
+            Psrld
+            Psrlq
+            Psubb
+            Psubd
+            Psubq
+            Psubw
+            Psubsb
+            Psubsw
+            Psubusb
+            Psubusw
+            Ptest
+            Punpckhbw
+            Punpckhwd
+            Punpcklbw
+            Punpcklwd
+            Pxor
+            Rcpss
+            Roundps
+            Roundpd
+            Roundss
+            Roundsd
+            Rsqrtss
+            Shufps
+            Sqrtps
+            Sqrtpd
+            Sqrtss
+            Sqrtsd
+            Subps
+            Subpd
+            Subss
+            Subsd
+            Ucomiss
+            Ucomisd
+            Unpcklps
+            Xorps
+            Xorpd))
+
+(type CmpOpcode extern
+      (enum Cmp
+            Test))
+
+(type RegMemImm extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))
+       (Imm (simm32 u32))))
+
+(type RegMem extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))))
+
+;; Put the given clif value into a `RegMem` operand.
+;;
+;; Asserts that the value fits into a single register, and doesn't require
+;; multiple registers for its representation (like `i128` for example).
+;;
+;; As a side effect, this marks the value as used.
+(decl put_in_reg_mem (Value) RegMem)
+(extern constructor put_in_reg_mem put_in_reg_mem)
+
+(type SyntheticAmode extern (enum))
+
+(type ShiftKind extern
+      (enum ShiftLeft
+            ShiftRightLogical
+            ShiftRightArithmetic
+            RotateLeft
+            RotateRight))
+
+(type Imm8Reg extern
+      (enum (Imm8 (imm u8))
+            (Reg (reg Reg))))
+
+(type CC extern
+      (enum O
+            NO
+            B
+            NB
+            Z
+            NZ
+            BE
+            NBE
+            S
+            NS
+            L
+            NL
+            LE
+            NLE
+            P
+            NP))
+
+(type Avx512Opcode extern
+      (enum Vcvtudq2ps
+            Vpabsq
+            Vpermi2b
+            Vpmullq
+            Vpopcntb))
+
+;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl avx512vl_enabled () Type)
+(extern extractor avx512vl_enabled avx512vl_enabled)
+
+(decl avx512dq_enabled () Type)
+(extern extractor avx512dq_enabled avx512dq_enabled)
+
+;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Extract a constant `Imm8Reg.Imm8` from a value operand.
+(decl imm8_from_value (Imm8Reg) Value)
+(extern extractor imm8_from_value imm8_from_value)
+
+;; Extract a constant `RegMemImm.Imm` from a value operand.
+(decl simm32_from_value (RegMemImm) Value)
+(extern extractor simm32_from_value simm32_from_value)
+
+;; Extract a constant `RegMemImm.Imm` from an `Imm64` immediate.
+(decl simm32_from_imm64 (RegMemImm) Imm64)
+(extern extractor simm32_from_imm64 simm32_from_imm64)
+
+;; A load that can be sunk into another operation.
+(type SinkableLoad extern (enum))
+
+;; Extract a `SinkableLoad` that works with `RegMemImm.Mem` from a value
+;; operand.
+(decl sinkable_load (SinkableLoad) Value)
+(extern extractor sinkable_load sinkable_load)
+
+;; Sink a `SinkableLoad` into a `RegMemImm.Mem`.
+;;
+;; This is a side-effectful operation that notifies the context that the
+;; instruction that produced the `SinkableImm` has been sunk into another
+;; instruction, and no longer needs to be lowered.
+(decl sink_load (SinkableLoad) RegMemImm)
+(extern constructor sink_load sink_load)
+
+;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Newtype wrapper around `MInst` for instructions that are used for their
+;; effect on flags.
+(type ProducesFlags (enum (ProducesFlags (inst MInst) (result Reg))))
+
+;; Newtype wrapper around `MInst` for instructions that consume flags.
+(type ConsumesFlags (enum (ConsumesFlags (inst MInst) (result Reg))))
+
+;; Combine flags-producing and -consuming instructions together, ensuring that
+;; they are emitted back-to-back and no other instructions can be emitted
+;; between them and potentially clobber the flags.
+;;
+;; Returns a `ValueRegs` where the first register is the result of the
+;; `ProducesFlags` instruction and the second is the result of the
+;; `ConsumesFlags` instruction.
+(decl with_flags (ProducesFlags ConsumesFlags) ValueRegs)
+(rule (with_flags (ProducesFlags.ProducesFlags producer_inst producer_result)
+                  (ConsumesFlags.ConsumesFlags consumer_inst consumer_result))
+      (let ((_x Unit (emit producer_inst))
+            (_y Unit (emit consumer_inst)))
+        (value_regs producer_result consumer_result)))
+
+;; Like `with_flags` but returns only the result of the consumer operation.
+(decl with_flags_1 (ProducesFlags ConsumesFlags) Reg)
+(rule (with_flags_1 (ProducesFlags.ProducesFlags producer_inst _producer_result)
+                    (ConsumesFlags.ConsumesFlags consumer_inst consumer_result))
+      (let ((_x Unit (emit producer_inst))
+            (_y Unit (emit consumer_inst)))
+        consumer_result))
+
+;; Like `with_flags` but allows two consumers of the same flags. The result is a
+;; `ValueRegs` containing the first consumer's result and then the second
+;; consumer's result.
+(decl with_flags_2 (ProducesFlags ConsumesFlags ConsumesFlags) ValueRegs)
+(rule (with_flags_2 (ProducesFlags.ProducesFlags producer_inst producer_result)
+                    (ConsumesFlags.ConsumesFlags consumer_inst_1 consumer_result_1)
+                    (ConsumesFlags.ConsumesFlags consumer_inst_2 consumer_result_2))
+      (let ((_x Unit (emit producer_inst))
+            (_y Unit (emit consumer_inst_1))
+            (_z Unit (emit consumer_inst_2)))
+        (value_regs consumer_result_1 consumer_result_2)))
+
+;;;; Helpers for Sign/Zero Extending ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type ExtendKind (enum Sign Zero))
+
+(type ExtMode extern (enum BL BQ WL WQ LQ))
+
+;; `ExtMode::new`
+(decl ext_mode (u16 u16) ExtMode)
+(extern constructor ext_mode ext_mode)
+
+;; Put the given value into a register, but extended as the given type.
+(decl extend_to_reg (Value Type ExtendKind) Reg)
+
+;; If the value is already of the requested type, no extending is necessary.
+(rule (extend_to_reg (and val (value_type ty)) =ty _kind)
+      (put_in_reg val))
+
+(rule (extend_to_reg (and val (value_type from_ty))
+                     to_ty
+                     kind)
+      (let ((from_bits u16 (ty_bits from_ty))
+            ;; Use `operand_size_of_type` so that the we clamp the output to 32-
+            ;; or 64-bit width types.
+            (to_bits u16 (operand_size_bits (operand_size_of_type to_ty))))
+        (extend kind
+                to_ty
+                (ext_mode from_bits to_bits)
+                (put_in_reg_mem val))))
+
+;; Do a sign or zero extension of the given `RegMem`.
+(decl extend (ExtendKind Type ExtMode RegMem) Reg)
+
+;; Zero extending uses `movzx`.
+(rule (extend (ExtendKind.Zero) ty mode src)
+      (movzx ty mode src))
+
+;; Sign extending uses `movsx`.
+(rule (extend (ExtendKind.Sign) ty mode src)
+      (movsx ty mode src))
+
+;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; These constructors create SSA-style `MInst`s. It is their responsibility to
+;; maintain the invariant that each temporary register they allocate and define
+;; only gets defined the once.
+
+;; Emit an instruction.
+;;
+;; This is low-level and side-effectful; it should only be used as an
+;; implementation detail by helpers that preserve the SSA facade themselves.
+(decl emit (MInst) Unit)
+(extern constructor emit emit)
+
+;; Helper for emitting `MInst.AluRmiR` instructions.
+(decl alu_rmi_r (Type AluRmiROpcode Reg RegMemImm) Reg)
+(rule (alu_rmi_r ty opcode src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type ty))
+            (_ Unit (emit (MInst.AluRmiR size opcode src1 src2 dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `add` instructions.
+(decl add (Type Reg RegMemImm) Reg)
+(rule (add ty src1 src2)
+      (alu_rmi_r ty
+                 (AluRmiROpcode.Add)
+                 src1
+                 src2))
+
+;; Helper for creating `add` instructions whose flags are also used.
+(decl add_with_flags (Type Reg RegMemImm) ProducesFlags)
+(rule (add_with_flags ty src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type ty)
+                                                    (AluRmiROpcode.Add)
+                                                    src1
+                                                    src2
+                                                    dst)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for creating `adc` instructions.
+(decl adc (Type Reg RegMemImm) ConsumesFlags)
+(rule (adc ty src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type ty)
+                                                    (AluRmiROpcode.Adc)
+                                                    src1
+                                                    src2
+                                                    dst)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for emitting `sub` instructions.
+(decl sub (Type Reg RegMemImm) Reg)
+(rule (sub ty src1 src2)
+      (alu_rmi_r ty
+                 (AluRmiROpcode.Sub)
+                 src1
+                 src2))
+
+;; Helper for creating `sub` instructions whose flags are also used.
+(decl sub_with_flags (Type Reg RegMemImm) ProducesFlags)
+(rule (sub_with_flags ty src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type ty)
+                                                    (AluRmiROpcode.Sub)
+                                                    src1
+                                                    src2
+                                                    dst)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for creating `sbb` instructions.
+(decl sbb (Type Reg RegMemImm) ConsumesFlags)
+(rule (sbb ty src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty)))
+        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type ty)
+                                                    (AluRmiROpcode.Sbb)
+                                                    src1
+                                                    src2
+                                                    dst)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for creating `mul` instructions.
+(decl mul (Type Reg RegMemImm) Reg)
+(rule (mul ty src1 src2)
+      (alu_rmi_r ty
+                 (AluRmiROpcode.Mul)
+                 src1
+                 src2))
+
+;; Helper for emitting `and` instructions.
+;;
+;; Use `m_` prefix (short for "mach inst") to disambiguate with the ISLE-builtin
+;; `and` operator.
+(decl m_and (Type Reg RegMemImm) Reg)
+(rule (m_and ty src1 src2)
+      (alu_rmi_r ty
+                 (AluRmiROpcode.And)
+                 src1
+                 src2))
+
+;; Helper for emitting `or` instructions.
+(decl or (Type Reg RegMemImm) Reg)
+(rule (or ty src1 src2)
+      (alu_rmi_r ty
+                 (AluRmiROpcode.Or)
+                 src1
+                 src2))
+
+;; Helper for emitting `xor` instructions.
+(decl xor (Type Reg RegMemImm) Reg)
+(rule (xor ty src1 src2)
+      (alu_rmi_r ty
+                 (AluRmiROpcode.Xor)
+                 src1
+                 src2))
+
+;; Helper for emitting immediates.
+(decl imm (Type u64) Reg)
+(rule (imm ty simm64)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type ty))
+            (_ Unit (emit (MInst.Imm size simm64 dst))))
+        (writable_reg_to_reg dst)))
+
+(decl nonzero_u64_fits_in_u32 (u64) u64)
+(extern extractor nonzero_u64_fits_in_u32 nonzero_u64_fits_in_u32)
+
+;; Special case for when a 64-bit immediate fits into 32-bits. We can use a
+;; 32-bit move that zero-extends the value, which has a smaller encoding.
+(rule (imm $I64 (nonzero_u64_fits_in_u32 x))
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Imm (OperandSize.Size32) x dst))))
+        (writable_reg_to_reg dst)))
+
+;; Special case for zero immediates: turn them into an `xor r, r`.
+(rule (imm ty 0)
+      (let ((wr WritableReg (temp_writable_reg ty))
+            (r Reg (writable_reg_to_reg wr))
+            (size OperandSize (operand_size_of_type ty))
+            (_ Unit (emit (MInst.AluRmiR size
+                                         (AluRmiROpcode.Xor)
+                                         r
+                                         (RegMemImm.Reg r)
+                                         wr))))
+        r))
+
+;; Helper for creating `MInst.ShifR` instructions.
+(decl shift_r (Type ShiftKind Reg Imm8Reg) Reg)
+(rule (shift_r ty kind src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type ty))
+            (_ Unit (emit (MInst.ShiftR size kind src1 src2 dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `rotl` instructions (prefixed with "m_", short for "mach
+;; inst", to disambiguate this from clif's `rotl`).
+(decl m_rotl (Type Reg Imm8Reg) Reg)
+(rule (m_rotl ty src1 src2)
+      (shift_r ty (ShiftKind.RotateLeft) src1 src2))
+
+;; Helper for creating `shl` instructions.
+(decl shl (Type Reg Imm8Reg) Reg)
+(rule (shl ty src1 src2)
+      (shift_r ty (ShiftKind.ShiftLeft) src1 src2))
+
+;; Helper for creating logical shift-right instructions.
+(decl shr (Type Reg Imm8Reg) Reg)
+(rule (shr ty src1 src2)
+      (shift_r ty (ShiftKind.ShiftRightLogical) src1 src2))
+
+;; Helper for creating arithmetic shift-right instructions.
+(decl sar (Type Reg Imm8Reg) Reg)
+(rule (sar ty src1 src2)
+      (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
+
+;; Helper for creating `MInst.CmpRmiR` instructions.
+(decl cmp_rmi_r (OperandSize CmpOpcode RegMemImm Reg) ProducesFlags)
+(rule (cmp_rmi_r size opcode src1 src2)
+      (ProducesFlags.ProducesFlags (MInst.CmpRmiR size
+                                                  opcode
+                                                  src1
+                                                  src2)
+                                   (invalid_reg)))
+
+;; Helper for creating `cmp` instructions.
+(decl cmp (OperandSize RegMemImm Reg) ProducesFlags)
+(rule (cmp size src1 src2)
+      (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
+
+;; Helper for creating `test` instructions.
+(decl test (OperandSize RegMemImm Reg) ProducesFlags)
+(rule (test size src1 src2)
+      (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
+
+;; Helper for creating `MInst.Cmove` instructions.
+(decl cmove (Type CC RegMem Reg) ConsumesFlags)
+(rule (cmove ty cc consequent alternative)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type ty)))
+        (ConsumesFlags.ConsumesFlags (MInst.Cmove size cc consequent alternative dst)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for creating `MInst.MovzxRmR` instructions.
+(decl movzx (Type ExtMode RegMem) Reg)
+(rule (movzx ty mode src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.MovzxRmR mode src dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `MInst.MovsxRmR` instructions.
+(decl movsx (Type ExtMode RegMem) Reg)
+(rule (movsx ty mode src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.MovsxRmR mode src dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `MInst.XmmRmR` instructions.
+(decl xmm_rm_r (Type SseOpcode Reg RegMem) Reg)
+(rule (xmm_rm_r ty op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.XmmRmR op src1 src2 dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `paddb` instructions.
+(decl paddb (Reg RegMem) Reg)
+(rule (paddb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Paddb) src1 src2))
+
+;; Helper for creating `paddw` instructions.
+(decl paddw (Reg RegMem) Reg)
+(rule (paddw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Paddw) src1 src2))
+
+;; Helper for creating `paddd` instructions.
+(decl paddd (Reg RegMem) Reg)
+(rule (paddd src1 src2)
+      (xmm_rm_r $I32X4 (SseOpcode.Paddd) src1 src2))
+
+;; Helper for creating `paddq` instructions.
+(decl paddq (Reg RegMem) Reg)
+(rule (paddq src1 src2)
+      (xmm_rm_r $I64X2 (SseOpcode.Paddq) src1 src2))
+
+;; Helper for creating `paddsb` instructions.
+(decl paddsb (Reg RegMem) Reg)
+(rule (paddsb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Paddsb) src1 src2))
+
+;; Helper for creating `paddsw` instructions.
+(decl paddsw (Reg RegMem) Reg)
+(rule (paddsw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Paddsw) src1 src2))
+
+;; Helper for creating `paddusb` instructions.
+(decl paddusb (Reg RegMem) Reg)
+(rule (paddusb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Paddusb) src1 src2))
+
+;; Helper for creating `paddusw` instructions.
+(decl paddusw (Reg RegMem) Reg)
+(rule (paddusw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Paddusw) src1 src2))
+
+;; Helper for creating `psubb` instructions.
+(decl psubb (Reg RegMem) Reg)
+(rule (psubb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Psubb) src1 src2))
+
+;; Helper for creating `psubw` instructions.
+(decl psubw (Reg RegMem) Reg)
+(rule (psubw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Psubw) src1 src2))
+
+;; Helper for creating `psubd` instructions.
+(decl psubd (Reg RegMem) Reg)
+(rule (psubd src1 src2)
+      (xmm_rm_r $I32X4 (SseOpcode.Psubd) src1 src2))
+
+;; Helper for creating `psubq` instructions.
+(decl psubq (Reg RegMem) Reg)
+(rule (psubq src1 src2)
+      (xmm_rm_r $I64X2 (SseOpcode.Psubq) src1 src2))
+
+;; Helper for creating `psubsb` instructions.
+(decl psubsb (Reg RegMem) Reg)
+(rule (psubsb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Psubsb) src1 src2))
+
+;; Helper for creating `psubsw` instructions.
+(decl psubsw (Reg RegMem) Reg)
+(rule (psubsw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Psubsw) src1 src2))
+
+;; Helper for creating `psubusb` instructions.
+(decl psubusb (Reg RegMem) Reg)
+(rule (psubusb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Psubusb) src1 src2))
+
+;; Helper for creating `psubusw` instructions.
+(decl psubusw (Reg RegMem) Reg)
+(rule (psubusw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Psubusw) src1 src2))
+
+;; Helper for creating `pavgb` instructions.
+(decl pavgb (Reg RegMem) Reg)
+(rule (pavgb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pavgb) src1 src2))
+
+;; Helper for creating `pavgw` instructions.
+(decl pavgw (Reg RegMem) Reg)
+(rule (pavgw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pavgw) src1 src2))
+
+;; Helper for creating `pand` instructions.
+(decl pand (Reg RegMem) Reg)
+(rule (pand src1 src2)
+      (xmm_rm_r $F32X4 (SseOpcode.Pand) src1 src2))
+
+;; Helper for creating `andps` instructions.
+(decl andps (Reg RegMem) Reg)
+(rule (andps src1 src2)
+      (xmm_rm_r $F32X4 (SseOpcode.Andps) src1 src2))
+
+;; Helper for creating `andpd` instructions.
+(decl andpd (Reg RegMem) Reg)
+(rule (andpd src1 src2)
+      (xmm_rm_r $F64X2 (SseOpcode.Andpd) src1 src2))
+
+;; Helper for creating `por` instructions.
+(decl por (Reg RegMem) Reg)
+(rule (por src1 src2)
+      (xmm_rm_r $F32X4 (SseOpcode.Por) src1 src2))
+
+;; Helper for creating `orps` instructions.
+(decl orps (Reg RegMem) Reg)
+(rule (orps src1 src2)
+      (xmm_rm_r $F32X4 (SseOpcode.Orps) src1 src2))
+
+;; Helper for creating `orpd` instructions.
+(decl orpd (Reg RegMem) Reg)
+(rule (orpd src1 src2)
+      (xmm_rm_r $F64X2 (SseOpcode.Orpd) src1 src2))
+
+;; Helper for creating `pxor` instructions.
+(decl pxor (Reg RegMem) Reg)
+(rule (pxor src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pxor) src1 src2))
+
+;; Helper for creating `xorps` instructions.
+(decl xorps (Reg RegMem) Reg)
+(rule (xorps src1 src2)
+      (xmm_rm_r $F32X4 (SseOpcode.Xorps) src1 src2))
+
+;; Helper for creating `xorpd` instructions.
+(decl xorpd (Reg RegMem) Reg)
+(rule (xorpd src1 src2)
+      (xmm_rm_r $F64X2 (SseOpcode.Xorpd) src1 src2))
+
+;; Helper for creating `pmullw` instructions.
+(decl pmullw (Reg RegMem) Reg)
+(rule (pmullw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pmullw) src1 src2))
+
+;; Helper for creating `pmulld` instructions.
+(decl pmulld (Reg RegMem) Reg)
+(rule (pmulld src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pmulld) src1 src2))
+
+;; Helper for creating `pmulhw` instructions.
+(decl pmulhw (Reg RegMem) Reg)
+(rule (pmulhw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pmulhw) src1 src2))
+
+;; Helper for creating `pmulhuw` instructions.
+(decl pmulhuw (Reg RegMem) Reg)
+(rule (pmulhuw src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pmulhuw) src1 src2))
+
+;; Helper for creating `pmuldq` instructions.
+(decl pmuldq (Reg RegMem) Reg)
+(rule (pmuldq src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Pmuldq) src1 src2))
+
+;; Helper for creating `pmuludq` instructions.
+(decl pmuludq (Reg RegMem) Reg)
+(rule (pmuludq src1 src2)
+      (xmm_rm_r $I64X2 (SseOpcode.Pmuludq) src1 src2))
+
+;; Helper for creating `punpckhwd` instructions.
+(decl punpckhwd (Reg RegMem) Reg)
+(rule (punpckhwd src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Punpckhwd) src1 src2))
+
+;; Helper for creating `punpcklwd` instructions.
+(decl punpcklwd (Reg RegMem) Reg)
+(rule (punpcklwd src1 src2)
+      (xmm_rm_r $I16X8 (SseOpcode.Punpcklwd) src1 src2))
+
+;; Helper for creating `andnps` instructions.
+(decl andnps (Reg RegMem) Reg)
+(rule (andnps src1 src2)
+      (xmm_rm_r $F32X4 (SseOpcode.Andnps) src1 src2))
+
+;; Helper for creating `andnpd` instructions.
+(decl andnpd (Reg RegMem) Reg)
+(rule (andnpd src1 src2)
+      (xmm_rm_r $F64X2 (SseOpcode.Andnpd) src1 src2))
+
+;; Helper for creating `pandn` instructions.
+(decl pandn (Reg RegMem) Reg)
+(rule (pandn src1 src2)
+      (xmm_rm_r $F64X2 (SseOpcode.Pandn) src1 src2))
+
+;; Helper for creating `MInst.XmmRmRImm` instructions.
+(decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Reg)
+(rule (xmm_rm_r_imm op src1 src2 imm size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.XmmRmRImm op
+                                           src1
+                                           src2
+                                           dst
+                                           imm
+                                           size))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `palignr` instructions.
+(decl palignr (Reg RegMem u8 OperandSize) Reg)
+(rule (palignr src1 src2 imm size)
+      (xmm_rm_r_imm (SseOpcode.Palignr)
+                    src1
+                    src2
+                    imm
+                    size))
+
+;; Helper for creating `pshufd` instructions.
+(decl pshufd (RegMem u8 OperandSize) Reg)
+(rule (pshufd src imm size)
+      (let ((w_dst WritableReg (temp_writable_reg $I8X16))
+            (dst Reg (writable_reg_to_reg w_dst))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pshufd)
+                                           dst
+                                           src
+                                           w_dst
+                                           imm
+                                           size))))
+        dst))
+
+;; Helper for creating `MInst.XmmUnaryRmR` instructions.
+(decl xmm_unary_rm_r (SseOpcode RegMem) Reg)
+(rule (xmm_unary_rm_r op src)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `pmovsxbw` instructions.
+(decl pmovsxbw (RegMem) Reg)
+(rule (pmovsxbw src)
+      (xmm_unary_rm_r (SseOpcode.Pmovsxbw) src))
+
+;; Helper for creating `pmovzxbw` instructions.
+(decl pmovzxbw (RegMem) Reg)
+(rule (pmovzxbw src)
+      (xmm_unary_rm_r (SseOpcode.Pmovzxbw) src))
+
+;; Helper for creating `MInst.XmmRmREvex` instructions.
+(decl xmm_rm_r_evex (Avx512Opcode RegMem Reg) Reg)
+(rule (xmm_rm_r_evex op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.XmmRmREvex op
+                                            src1
+                                            src2
+                                            dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `vpmullq` instructions.
+;;
+;; Requires AVX-512 vl and dq.
+(decl vpmullq (RegMem Reg) Reg)
+(rule (vpmullq src1 src2)
+      (xmm_rm_r_evex (Avx512Opcode.Vpmullq)
+                     src1
+                     src2))
+
+;; Helper for creating `MInst.XmmRmiReg` instructions.
+(decl xmm_rmi_reg (SseOpcode Reg RegMemImm) Reg)
+(rule (xmm_rmi_reg op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.XmmRmiReg op
+                                           src1
+                                           src2
+                                           dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `psllq` instructions.
+(decl psllq (Reg RegMemImm) Reg)
+(rule (psllq src1 src2)
+      (xmm_rmi_reg (SseOpcode.Psllq) src1 src2))
+
+;; Helper for creating `psrlq` instructions.
+(decl psrlq (Reg RegMemImm) Reg)
+(rule (psrlq src1 src2)
+      (xmm_rmi_reg (SseOpcode.Psrlq) src1 src2))
+
+;; Helper for creating `MInst.MulHi` instructions.
+;;
+;; Returns the (lo, hi) register halves of the multiplication.
+(decl mul_hi (Type bool Reg RegMem) ValueRegs)
+(rule (mul_hi ty signed src1 src2)
+      (let ((dst_lo WritableReg (temp_writable_reg ty))
+            (dst_hi WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type ty))
+            (_ Unit (emit (MInst.MulHi size
+                                       signed
+                                       src1
+                                       src2
+                                       dst_lo
+                                       dst_hi))))
+        (value_regs (writable_reg_to_reg dst_lo)
+                    (writable_reg_to_reg dst_hi))))
+
+;; Helper for creating `mul` instructions that return both the lower and
+;; (unsigned) higher halves of the result.
+(decl mulhi_u (Type Reg RegMem) ValueRegs)
+(rule (mulhi_u ty src1 src2)
+      (mul_hi ty $false src1 src2))

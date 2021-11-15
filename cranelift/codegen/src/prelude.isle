@@ -1,0 +1,202 @@
+;; This is a prelude of standard definitions for ISLE, the instruction-selector
+;; DSL, as we use it bound to our interfaces.
+
+;;;; Primitive and External Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `()`
+(type Unit (primitive Unit))
+
+;; `bool` is declared in `clif.isle`.
+(extern const $true bool)
+(extern const $false bool)
+
+(type u8 (primitive u8))
+(type u16 (primitive u16))
+(type u32 (primitive u32))
+(type u64 (primitive u64))
+(type u128 (primitive u128))
+(type usize (primitive usize))
+
+(type i8 (primitive i8))
+(type i16 (primitive i16))
+(type i32 (primitive i32))
+(type i64 (primitive i64))
+(type i128 (primitive i128))
+(type isize (primitive isize))
+
+;; `cranelift-entity`-based identifiers.
+(type Inst (primitive Inst))
+(type Type (primitive Type))
+(type Value (primitive Value))
+
+;; ISLE representation of `&[Value]`.
+(type ValueSlice (primitive ValueSlice))
+
+(type ValueList (primitive ValueList))
+(type ValueRegs (primitive ValueRegs))
+
+;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type Reg (primitive Reg))
+(type WritableReg (primitive WritableReg))
+
+;; Construct a `ValueRegs` of one register.
+(decl value_reg (Reg) ValueRegs)
+(extern constructor value_reg value_reg)
+
+;; Construct a `ValueRegs` of two registers.
+(decl value_regs (Reg Reg) ValueRegs)
+(extern constructor value_regs value_regs)
+
+;; Get a temporary register for writing.
+(decl temp_writable_reg (Type) WritableReg)
+(extern constructor temp_writable_reg temp_writable_reg)
+
+;; Get a temporary register for reading.
+(decl temp_reg (Type) Reg)
+(rule (temp_reg ty)
+      (writable_reg_to_reg (temp_writable_reg ty)))
+
+;; Get the invalid register.
+(decl invalid_reg () Reg)
+(extern constructor invalid_reg invalid_reg)
+
+;; Put the given value into a register.
+;;
+;; Asserts that the value fits into a single register, and doesn't require
+;; multiple registers for its representation (like `i128` on x64 for example).
+;;
+;; As a side effect, this marks the value as used.
+(decl put_in_reg (Value) Reg)
+(extern constructor put_in_reg put_in_reg)
+
+;; Put the given value into one or more registers.
+;;
+;; As a side effect, this marks the value as used.
+(decl put_in_regs (Value) ValueRegs)
+(extern constructor put_in_regs put_in_regs)
+
+;; Get the `n`th register inside a `ValueRegs`.
+(decl value_regs_get (ValueRegs usize) Reg)
+(extern constructor value_regs_get value_regs_get)
+
+;; Put the value into one or more registers and return the first register.
+;;
+;; Unlike `put_in_reg`, this does not assert that the value fits in a single
+;; register. This is useful for things like a `i128` shift amount, where we mask
+;; the shift amount to the bit width of the value being shifted, and so the high
+;; half of the `i128` won't ever be used.
+;;
+;; As a side efect, this marks that value as used.
+(decl lo_reg (Value) Reg)
+(rule (lo_reg val)
+      (let ((regs ValueRegs (put_in_regs val)))
+        (value_regs_get regs 0)))
+
+;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl u8_as_u64 (u8) u64)
+(extern constructor u8_as_u64 u8_as_u64)
+
+(decl u16_as_u64 (u16) u64)
+(extern constructor u16_as_u64 u16_as_u64)
+
+(decl u32_as_u64 (u32) u64)
+(extern constructor u32_as_u64 u32_as_u64)
+
+;;;; `cranelift_codegen::ir::Type` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(extern const $B1 Type)
+(extern const $B8 Type)
+(extern const $B16 Type)
+(extern const $B32 Type)
+(extern const $B64 Type)
+(extern const $B128 Type)
+
+(extern const $I8 Type)
+(extern const $I16 Type)
+(extern const $I32 Type)
+(extern const $I64 Type)
+(extern const $I128 Type)
+
+(extern const $B8X16 Type)
+(extern const $B16X8 Type)
+(extern const $B32X4 Type)
+(extern const $B64X2 Type)
+
+(extern const $I8X16 Type)
+(extern const $I16X8 Type)
+(extern const $I32X4 Type)
+(extern const $I64X2 Type)
+
+(extern const $F32X4 Type)
+(extern const $F64X2 Type)
+
+;; Get the bit width of a given type.
+(decl ty_bits (Type) u16)
+(extern constructor ty_bits ty_bits)
+
+;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; An extractor that only matches types that can fit in 64 bits.
+(decl fits_in_64 (Type) Type)
+(extern extractor fits_in_64 fits_in_64)
+
+;; Extractor to get a `ValueSlice` out of a `ValueList`.
+(decl value_list_slice (ValueSlice) ValueList)
+(extern extractor infallible value_list_slice value_list_slice)
+
+;; Extractor to get the first element from a value list, along with its tail as
+;; a `ValueSlice`.
+(decl unwrap_head_value_list_1 (Value ValueSlice) ValueList)
+(extern extractor infallible unwrap_head_value_list_1 unwrap_head_value_list_1)
+
+;; Extractor to get the first two elements from a value list, along with its
+;; tail as a `ValueSlice`.
+(decl unwrap_head_value_list_2 (Value Value ValueSlice) ValueList)
+(extern extractor infallible unwrap_head_value_list_2 unwrap_head_value_list_2)
+
+;; Turn a `Writable<Reg>` into a `Reg` via `Writable::to_reg`.
+(decl writable_reg_to_reg (WritableReg) Reg)
+(extern constructor writable_reg_to_reg writable_reg_to_reg)
+
+;; Extract a `u64` from an `Imm64`.
+(decl u64_from_imm64 (u64) Imm64)
+(extern extractor infallible u64_from_imm64 u64_from_imm64)
+
+;; Extract the result values for the given instruction.
+(decl inst_results (ValueSlice) Inst)
+(extern extractor infallible inst_results inst_results)
+
+;; Extract the first result value of the given instruction.
+(decl first_result (Value) Inst)
+(extern extractor first_result first_result)
+
+;; Extract the `InstructionData` for an `Inst`.
+(decl inst_data (InstructionData) Inst)
+(extern extractor infallible inst_data inst_data)
+
+;; Extract the type of a `Value`.
+(decl value_type (Type) Value)
+(extern extractor infallible value_type value_type)
+
+;; Extract the type of the instruction's first result.
+(decl result_type (Type) Inst)
+(extractor (result_type ty)
+           (first_result (value_type ty)))
+
+;; Extract the type of the instruction's first result and pass along the
+;; instruction as well.
+(decl has_type (Type Inst) Inst)
+(extractor (has_type ty inst)
+           (and (result_type ty)
+                inst))
+
+;; Match a multi-lane type, extracting (# bits per lane, # lanes) from the given
+;; type. Will only match when there is more than one lane.
+(decl multi_lane (u8 u16) Type)
+(extern extractor multi_lane multi_lane)
+
+;; Match the instruction that defines the given value, if any.
+(decl def_inst (Inst) Value)
+(extern extractor def_inst def_inst)

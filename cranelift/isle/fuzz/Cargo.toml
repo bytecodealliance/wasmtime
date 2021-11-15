@@ -1,0 +1,21 @@
+[package]
+name = "isle-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+env_logger = { version = "0.9.0", default-features = false }
+isle = { path = "../isle" }
+libfuzzer-sys = "0.4"
+log = "0.4.14"
+
+[[bin]]
+name = "compile"
+path = "fuzz_targets/compile.rs"
+test = false
+doc = false
