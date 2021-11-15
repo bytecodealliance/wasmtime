@@ -12,29 +12,10 @@ pub mod api;
 
 pub mod table_ops;
 
+use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-
-/// A description of configuration options that we should do differential
-/// testing between.
-#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct DifferentialConfig {
-    opt_level: OptLevel,
-    force_jump_veneers: bool,
-}
-
-impl DifferentialConfig {
-    /// Convert this differential fuzzing config into a `wasmtime::Config`.
-    pub fn to_wasmtime_config(&self) -> anyhow::Result<wasmtime::Config> {
-        let mut config = crate::fuzz_default_config(wasmtime::Strategy::Cranelift)?;
-        config.cranelift_opt_level(self.opt_level.to_wasmtime());
-        if self.force_jump_veneers {
-            unsafe {
-                config.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")?;
-            }
-        }
-        Ok(config)
-    }
-}
+use std::sync::Arc;
+use wasmtime::{LinearMemory, MemoryCreator, MemoryType};
 
 #[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
 enum OptLevel {
@@ -54,7 +35,7 @@ impl OptLevel {
 }
 
 /// Implementation of generating a `wasmtime::Config` arbitrarily
-#[derive(Arbitrary, Debug)]
+#[derive(Arbitrary, Debug, Eq, Hash, PartialEq)]
 pub struct Config {
     opt_level: OptLevel,
     debug_info: bool,
@@ -62,13 +43,29 @@ pub struct Config {
     interruptable: bool,
     #[allow(missing_docs)]
     pub consume_fuel: bool,
+    memory_config: MemoryConfig,
+    force_jump_veneers: bool,
+}
 
-    // Note that we use 32-bit values here to avoid blowing the 64-bit address
-    // space by requesting ungodly-large sizes/guards.
-    static_memory_maximum_size: Option<u32>,
-    static_memory_guard_size: Option<u32>,
-    dynamic_memory_guard_size: Option<u32>,
-    guard_before_linear_memory: bool,
+#[derive(Arbitrary, Debug, Eq, Hash, PartialEq)]
+enum MemoryConfig {
+    /// Configuration for linear memories which correspond to normal
+    /// configuration settings in `wasmtime` itself. This will tweak various
+    /// parameters about static/dynamic memories.
+    ///
+    /// Note that we use 32-bit values here to avoid blowing the 64-bit address
+    /// space by requesting ungodly-large sizes/guards.
+    Normal {
+        static_memory_maximum_size: Option<u32>,
+        static_memory_guard_size: Option<u32>,
+        dynamic_memory_guard_size: Option<u32>,
+        guard_before_linear_memory: bool,
+    },
+
+    /// Configuration to force use of a linear memory that's unaligned at its
+    /// base address to force all wasm addresses to be unaligned at the hardware
+    /// level, even if the wasm itself correctly aligns everything internally.
+    CustomUnaligned,
 }
 
 impl Config {
@@ -76,15 +73,99 @@ impl Config {
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         let mut cfg = crate::fuzz_default_config(wasmtime::Strategy::Auto).unwrap();
         cfg.debug_info(self.debug_info)
-            .static_memory_maximum_size(self.static_memory_maximum_size.unwrap_or(0).into())
-            .static_memory_guard_size(self.static_memory_guard_size.unwrap_or(0).into())
-            .dynamic_memory_guard_size(self.dynamic_memory_guard_size.unwrap_or(0).into())
-            .guard_before_linear_memory(self.guard_before_linear_memory)
             .cranelift_nan_canonicalization(self.canonicalize_nans)
             .cranelift_opt_level(self.opt_level.to_wasmtime())
             .interruptable(self.interruptable)
             .consume_fuel(self.consume_fuel);
+
+        if self.force_jump_veneers {
+            unsafe {
+                cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")
+                    .unwrap();
+            }
+        }
+
+        match &self.memory_config {
+            MemoryConfig::Normal {
+                static_memory_maximum_size,
+                static_memory_guard_size,
+                dynamic_memory_guard_size,
+                guard_before_linear_memory,
+            } => {
+                cfg.static_memory_maximum_size(static_memory_maximum_size.unwrap_or(0).into())
+                    .static_memory_guard_size(static_memory_guard_size.unwrap_or(0).into())
+                    .dynamic_memory_guard_size(dynamic_memory_guard_size.unwrap_or(0).into())
+                    .guard_before_linear_memory(*guard_before_linear_memory);
+            }
+            MemoryConfig::CustomUnaligned => {
+                cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
+                    .static_memory_maximum_size(0)
+                    .dynamic_memory_guard_size(0)
+                    .static_memory_guard_size(0)
+                    .guard_before_linear_memory(false);
+            }
+        }
         return cfg;
+    }
+}
+
+struct UnalignedMemoryCreator;
+
+unsafe impl MemoryCreator for UnalignedMemoryCreator {
+    fn new_memory(
+        &self,
+        _ty: MemoryType,
+        minimum: usize,
+        maximum: Option<usize>,
+        reserved_size_in_bytes: Option<usize>,
+        guard_size_in_bytes: usize,
+    ) -> Result<Box<dyn LinearMemory>, String> {
+        assert_eq!(guard_size_in_bytes, 0);
+        assert!(reserved_size_in_bytes.is_none() || reserved_size_in_bytes == Some(0));
+        Ok(Box::new(UnalignedMemory {
+            src: vec![0; minimum + 1],
+            maximum,
+        }))
+    }
+}
+
+/// A custom "linear memory allocator" for wasm which only works with the
+/// "dynamic" mode of configuration where wasm always does explicit bounds
+/// checks.
+///
+/// This memory attempts to always use unaligned host addresses for the base
+/// address of linear memory with wasm. This means that all jit loads/stores
+/// should be unaligned, which is a "big hammer way" of testing that all our JIT
+/// code works with unaligned addresses since alignment is not required for
+/// correctness in wasm itself.
+struct UnalignedMemory {
+    /// This memory is always one byte larger than the actual size of linear
+    /// memory.
+    src: Vec<u8>,
+    maximum: Option<usize>,
+}
+
+unsafe impl LinearMemory for UnalignedMemory {
+    fn byte_size(&self) -> usize {
+        // Chop off the extra byte reserved for the true byte size of this
+        // linear memory.
+        self.src.len() - 1
+    }
+
+    fn maximum_byte_size(&self) -> Option<usize> {
+        self.maximum
+    }
+
+    fn grow_to(&mut self, new_size: usize) -> Result<()> {
+        // Make sure to allocate an extra byte for our "unalignment"
+        self.src.resize(new_size + 1, 0);
+        Ok(())
+    }
+
+    fn as_ptr(&self) -> *mut u8 {
+        // Return our allocated memory, offset by one, so that the base address
+        // of memory is always unaligned.
+        self.src[1..].as_ptr() as *mut _
     }
 }
 

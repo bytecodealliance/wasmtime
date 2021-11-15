@@ -238,7 +238,7 @@ pub fn compile(wasm: &[u8], strategy: Strategy) {
 /// we call the exported functions for all of our different configs.
 pub fn differential_execution(
     module: &crate::generators::GeneratedModule,
-    configs: &[crate::generators::DifferentialConfig],
+    configs: &[crate::generators::Config],
 ) {
     use std::collections::{HashMap, HashSet};
 
@@ -252,18 +252,13 @@ pub fn differential_execution(
         return;
     }
 
-    let configs: Vec<_> = match configs.iter().map(|c| c.to_wasmtime_config()).collect() {
-        Ok(cs) => cs,
-        // If the config is trying to use something that was turned off at
-        // compile time just continue to the next fuzz input.
-        Err(_) => return,
-    };
-
+    let configs: Vec<_> = configs.iter().map(|c| (c.to_wasmtime(), c)).collect();
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
     let wasm = module.module.to_bytes();
     log_wasm(&wasm);
 
-    for mut config in configs {
+    for (mut config, fuzz_config) in configs {
+        log::debug!("fuzz config: {:?}", fuzz_config);
         // Disable module linking since it isn't enabled by default for
         // `GeneratedModule` but is enabled by default for our fuzz config.
         // Since module linking is currently a breaking change this is required
@@ -272,6 +267,9 @@ pub fn differential_execution(
 
         let engine = Engine::new(&config).unwrap();
         let mut store = create_store(&engine);
+        if fuzz_config.consume_fuel {
+            store.add_fuel(u64::max_value()).unwrap();
+        }
 
         let module = Module::new(&engine, &wasm).unwrap();
 
@@ -293,10 +291,7 @@ pub fn differential_execution(
             })
             .collect::<Vec<_>>();
         for (name, f) in exports {
-            // Always call the hang limit initializer first, so that we don't
-            // infinite loop when calling another export.
-            init_hang_limit(&mut store, instance);
-
+            log::debug!("invoke export {:?}", name);
             let ty = f.ty(&store);
             let params = dummy::dummy_values(ty.params());
             let mut results = vec![Val::I32(0); ty.results().len()];
@@ -309,17 +304,6 @@ pub fn differential_execution(
                 .entry(name.to_string())
                 .or_insert_with(|| this_result.clone());
             assert_same_export_func_result(&existing_result, &this_result, &name);
-        }
-    }
-
-    fn init_hang_limit<T>(store: &mut Store<T>, instance: Instance) {
-        match instance.get_export(&mut *store, "hangLimitInitializer") {
-            None => return,
-            Some(Extern::Func(f)) => {
-                f.call(store, &[], &mut [])
-                    .expect("initializing the hang limit should not fail");
-            }
-            Some(_) => panic!("unexpected hangLimitInitializer export"),
         }
     }
 
@@ -337,7 +321,11 @@ pub fn differential_execution(
         };
 
         match (lhs, rhs) {
-            (Err(_), Err(_)) => {}
+            (Err(a), Err(b)) => {
+                if a.trap_code() != b.trap_code() {
+                    fail();
+                }
+            }
             (Ok(lhs), Ok(rhs)) => {
                 if lhs.len() != rhs.len() {
                     fail();
