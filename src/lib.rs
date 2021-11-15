@@ -162,38 +162,6 @@ struct CommonOptions {
     #[structopt(long)]
     disable_cache: bool,
 
-    /// Enable support for proposed SIMD instructions (deprecated; use `--wasm-features=simd`)
-    #[structopt(long, hidden = true)]
-    enable_simd: bool,
-
-    /// Enable support for reference types (deprecated; use `--wasm-features=reference-types`)
-    #[structopt(long, hidden = true)]
-    enable_reference_types: bool,
-
-    /// Enable support for multi-value functions (deprecated; use `--wasm-features=multi-value`)
-    #[structopt(long, hidden = true)]
-    enable_multi_value: bool,
-
-    /// Enable support for Wasm threads (deprecated; use `--wasm-features=threads`)
-    #[structopt(long, hidden = true)]
-    enable_threads: bool,
-
-    /// Enable support for bulk memory instructions (deprecated; use `--wasm-features=bulk-memory`)
-    #[structopt(long, hidden = true)]
-    enable_bulk_memory: bool,
-
-    /// Enable support for the multi-memory proposal (deprecated; use `--wasm-features=multi-memory`)
-    #[structopt(long, hidden = true)]
-    enable_multi_memory: bool,
-
-    /// Enable support for the module-linking proposal (deprecated; use `--wasm-features=module-linking`)
-    #[structopt(long, hidden = true)]
-    enable_module_linking: bool,
-
-    /// Enable all experimental Wasm features (deprecated; use `--wasm-features=all`)
-    #[structopt(long, hidden = true)]
-    enable_all: bool,
-
     /// Enables or disables WebAssembly features
     #[structopt(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
     wasm_features: Option<wasmparser::WasmFeatures>,
@@ -340,18 +308,14 @@ impl CommonOptions {
         let features = self.wasm_features.unwrap_or_default();
 
         config
-            .wasm_simd(features.simd || self.enable_simd || self.enable_all)
-            .wasm_bulk_memory(features.bulk_memory || self.enable_bulk_memory || self.enable_all)
-            .wasm_reference_types(
-                features.reference_types || self.enable_reference_types || self.enable_all,
-            )
-            .wasm_multi_value(features.multi_value || self.enable_multi_value || self.enable_all)
-            .wasm_threads(features.threads || self.enable_threads || self.enable_all)
-            .wasm_multi_memory(features.multi_memory || self.enable_multi_memory || self.enable_all)
-            .wasm_memory64(features.memory64 || self.enable_all)
-            .wasm_module_linking(
-                features.module_linking || self.enable_module_linking || self.enable_all,
-            );
+            .wasm_simd(features.simd)
+            .wasm_bulk_memory(features.bulk_memory)
+            .wasm_reference_types(features.reference_types)
+            .wasm_multi_value(features.multi_value)
+            .wasm_threads(features.threads)
+            .wasm_multi_memory(features.multi_memory)
+            .wasm_memory64(features.memory64)
+            .wasm_module_linking(features.module_linking);
     }
 
     fn opt_level(&self) -> wasmtime::OptLevel {
