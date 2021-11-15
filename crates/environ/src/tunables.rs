@@ -46,25 +46,26 @@ pub struct Tunables {
 
 impl Default for Tunables {
     fn default() -> Self {
+        let (static_memory_bound, static_memory_offset_guard_size) =
+            if cfg!(target_pointer_width = "64") {
+                // 64-bit has tons of address space to static memories can have 4gb
+                // address space reservations liberally by default, allowing us to
+                // help eliminate bounds checks.
+                //
+                // Coupled with a 2 GiB address space guard it lets us translate
+                // wasm offsets into x86 offsets as aggressively as we can.
+                (0x1_0000, 0x8000_0000)
+            } else if cfg!(target_pointer_width = "32") {
+                // For 32-bit we scale way down to 10MB of reserved memory. This
+                // impacts performance severely but allows us to have more than a
+                // few instances running around.
+                ((10 * (1 << 20)) / crate::WASM_PAGE_SIZE as u64, 0x1_0000)
+            } else {
+                panic!("unsupported target_pointer_width");
+            };
         Self {
-            // 64-bit has tons of address space to static memories can have 4gb
-            // address space reservations liberally by default, allowing us to
-            // help eliminate bounds checks.
-            //
-            // Coupled with a 2 GiB address space guard it lets us translate
-            // wasm offsets into x86 offsets as aggressively as we can.
-            #[cfg(target_pointer_width = "64")]
-            static_memory_bound: 0x1_0000,
-            #[cfg(target_pointer_width = "64")]
-            static_memory_offset_guard_size: 0x8000_0000,
-
-            // For 32-bit we scale way down to 10MB of reserved memory. This
-            // impacts performance severely but allows us to have more than a
-            // few instances running around.
-            #[cfg(target_pointer_width = "32")]
-            static_memory_bound: (10 * (1 << 20)) / crate::WASM_PAGE_SIZE,
-            #[cfg(target_pointer_width = "32")]
-            static_memory_offset_guard_size: 0x1_0000,
+            static_memory_bound,
+            static_memory_offset_guard_size,
 
             // Size in bytes of the offset guard for dynamic memories.
             //
