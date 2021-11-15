@@ -54,7 +54,7 @@
 #### Status
 
 * cfallin: internal project mostly, got info from Mozilla it's ok to relicense
-  and then "all" we need to do is to review the compatibility shim to
+  regalloc2 and then "all" we need to do is to review the compatibility shim to
   regalloc.rs API. Alternatively if timing goes the other way if we transition
   to ISLE happens we can port directly to the pure SSA API, but ISLE does
   everything that would otherwise be done by hand. Still some benefits with a
