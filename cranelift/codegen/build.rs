@@ -139,9 +139,8 @@ fn rebuild_isle(crate_dir: &std::path::Path) -> Result<(), Box<dyn std::error::E
         let _ = miette::set_hook(Box::new(|_| {
             Box::new(
                 miette::MietteHandlerOpts::new()
-                    // Ensure `miette` emits source snippets, even when the
-                    // output is not a tty (NB: there are no terminal control
-                    // codes in the "graphical" output).
+                    // This is necessary for `miette` to properly display errors
+                    // until https://github.com/zkat/miette/issues/93 is fixed.
                     .force_graphical(true)
                     .build(),
             )
