@@ -19,7 +19,7 @@
 
 "cranelift":
   - "cranelift/**"
-  
+
 "cranelift:area:machinst":
   - "cranelift/codegen/src/machinst/**"
 
@@ -53,8 +53,11 @@
   - "crates/fuzzing/**"
   - "fuzz/**"
 
-"lightbeam":
-  - "crates/lightbeam/**"
+"isle":
+  - "cranelift/isle/**"
+  - "**.isle"
+  - "cranelift/codegen/src/isa/x64/lower/isle.rs"
+  - "cranelift/codegen/src/isa/x64/lower/isle/**"
 
 "wasi":
   - "crates/wasi/**"
