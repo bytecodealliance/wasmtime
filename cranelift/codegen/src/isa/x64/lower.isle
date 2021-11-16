@@ -181,17 +181,17 @@
 ;; `i64` and smaller.
 
 ;; When the immediate fits in a `RegMemImm.Imm`, use that.
-(rule (lower (has_type (fits_in_64 ty) (iadd_imm (simm32_from_imm64 x) y)))
+(rule (lower (has_type (fits_in_64 ty) (iadd_imm y (simm32_from_imm64 x))))
       (value_reg (add ty (put_in_reg y) x)))
 
 ;; Otherwise, put the immediate into a register.
-(rule (lower (has_type (fits_in_64 ty) (iadd_imm (u64_from_imm64 x) y)))
+(rule (lower (has_type (fits_in_64 ty) (iadd_imm y (u64_from_imm64 x))))
       (value_reg (add ty (put_in_reg y) (RegMemImm.Reg (imm ty x)))))
 
 ;; `i128`
 
 ;; When the immediate fits in a `RegMemImm.Imm`, use that.
-(rule (lower (has_type $I128 (iadd_imm (simm32_from_imm64 x) y)))
+(rule (lower (has_type $I128 (iadd_imm y (simm32_from_imm64 x))))
       (let ((y_regs ValueRegs (put_in_regs y))
             (y_lo Reg (value_regs_get y_regs 0))
             (y_hi Reg (value_regs_get y_regs 1)))
@@ -199,7 +199,7 @@
                     (adc $I64 y_hi (RegMemImm.Imm 0)))))
 
 ;; Otherwise, put the immediate into a register.
-(rule (lower (has_type $I128 (iadd_imm (u64_from_imm64 x) y)))
+(rule (lower (has_type $I128 (iadd_imm y (u64_from_imm64 x))))
       (let ((y_regs ValueRegs (put_in_regs y))
             (y_lo Reg (value_regs_get y_regs 0))
             (y_hi Reg (value_regs_get y_regs 1))
