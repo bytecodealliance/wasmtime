@@ -484,18 +484,8 @@
 
 ;; SSE.
 
-(rule (lower (has_type $F32X4 (bxor x y)))
-      (value_reg (xorps (put_in_reg x)
-                        (put_in_reg_mem y))))
-
-(rule (lower (has_type $F64X2 (bxor x y)))
-      (value_reg (xorpd (put_in_reg x)
-                        (put_in_reg_mem y))))
-
-(rule (lower (has_type (multi_lane _bits _lanes)
-                       (bxor x y)))
-      (value_reg (pxor (put_in_reg x)
-                       (put_in_reg_mem y))))
+(rule (lower (has_type ty @ (multi_lane _bits _lanes) (bxor x y)))
+      (value_reg (sse_xor ty (put_in_reg x) (put_in_reg_mem y))))
 
 ;; `{i,b}128`.
 
@@ -945,3 +935,22 @@
 
 (rule (lower (has_type (multi_lane _bits _lanes) (band_not x y)))
       (value_reg (pandn (put_in_reg y) (put_in_reg_mem x))))
+
+;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Special case for `f32x4.abs`.
+(rule (lower (has_type $F32X4 (fabs x)))
+      (value_reg (andps (put_in_reg x)
+                        (RegMem.Reg (psrld (vector_all_ones $F32X4) (RegMemImm.Imm 1))))))
+
+;; Special case for `f64x2.abs`.
+(rule (lower (has_type $F64X2 (fabs x)))
+      (value_reg (andpd (put_in_reg x)
+                        (RegMem.Reg (psrlq (vector_all_ones $F64X2) (RegMemImm.Imm 1))))))
+
+;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Special case for vector-types where bit-negation is an xor against an
+;; all-one value
+(rule (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
+      (value_reg (sse_xor ty (put_in_reg x) (RegMem.Reg (vector_all_ones ty)))))

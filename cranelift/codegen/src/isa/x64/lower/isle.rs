@@ -13,7 +13,9 @@ use crate::isa::x64::settings as x64_settings;
 use crate::{
     ir::{immediates::*, types::*, Inst, InstructionData, Opcode, Value, ValueList},
     isa::x64::inst::{
-        args::{Avx512Opcode, CmpOpcode, ExtMode, Imm8Reg, RegMem, ShiftKind, SseOpcode, CC},
+        args::{
+            Avx512Opcode, CmpOpcode, ExtMode, FcmpImm, Imm8Reg, RegMem, ShiftKind, SseOpcode, CC,
+        },
         x64_map_regs, RegMapper,
     },
     machinst::{get_output_reg, InsnInput, InsnOutput, LowerCtx},
@@ -311,6 +313,11 @@ where
         }
 
         RegMem::reg(self.put_in_reg(val))
+    }
+
+    #[inline]
+    fn encode_fcmp_imm(&mut self, imm: &FcmpImm) -> u8 {
+        imm.encode()
     }
 
     #[inline]

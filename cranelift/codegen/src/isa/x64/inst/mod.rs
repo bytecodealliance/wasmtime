@@ -1301,31 +1301,6 @@ impl Inst {
         }
     }
 
-    /// Choose which instruction to use for comparing two values for equality.
-    pub(crate) fn equals(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
-        match ty {
-            types::I8X16 | types::B8X16 => Inst::xmm_rm_r(SseOpcode::Pcmpeqb, from, to),
-            types::I16X8 | types::B16X8 => Inst::xmm_rm_r(SseOpcode::Pcmpeqw, from, to),
-            types::I32X4 | types::B32X4 => Inst::xmm_rm_r(SseOpcode::Pcmpeqd, from, to),
-            types::I64X2 | types::B64X2 => Inst::xmm_rm_r(SseOpcode::Pcmpeqq, from, to),
-            types::F32X4 => Inst::xmm_rm_r_imm(
-                SseOpcode::Cmpps,
-                from,
-                to,
-                FcmpImm::Equal.encode(),
-                OperandSize::Size32,
-            ),
-            types::F64X2 => Inst::xmm_rm_r_imm(
-                SseOpcode::Cmppd,
-                from,
-                to,
-                FcmpImm::Equal.encode(),
-                OperandSize::Size32,
-            ),
-            _ => unimplemented!("unimplemented type for Inst::equals: {}", ty),
-        }
-    }
-
     /// Choose which instruction to use for computing a bitwise AND on two values.
     pub(crate) fn and(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
         match ty {
@@ -1353,16 +1328,6 @@ impl Inst {
             types::F64X2 => Inst::xmm_rm_r(SseOpcode::Orpd, from, to),
             _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Por, from, to),
             _ => unimplemented!("unimplemented type for Inst::or: {}", ty),
-        }
-    }
-
-    /// Choose which instruction to use for computing a bitwise XOR on two values.
-    pub(crate) fn xor(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
-        match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Xorps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Xorpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Pxor, from, to),
-            _ => unimplemented!("unimplemented type for Inst::xor: {}", ty),
         }
     }
 

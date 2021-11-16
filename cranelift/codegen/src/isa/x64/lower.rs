@@ -1615,14 +1615,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let ty = ty.unwrap();
 
             if ty.is_vector() {
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, src, ty));
-                let tmp = ctx.alloc_tmp(ty).only_reg().unwrap();
-
-                // Set tmp to all 1s before flipping the bits
-                ctx.emit(Inst::equals(types::I32X4, RegMem::from(tmp), tmp));
-                ctx.emit(Inst::xor(ty, RegMem::from(tmp), dst));
+                unreachable!(
+                    "implemented in ISLE: inst = `{}`, type = `{:?}`",
+                    ctx.dfg().display_inst(insn),
+                    ty
+                );
             } else if ty == types::I128 || ty == types::B128 {
                 let src = put_input_in_regs(ctx, inputs[0]);
                 let dst = get_output_reg(ctx, outputs[0]);
@@ -4669,8 +4666,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     // Shift the all 1s constant to generate the mask.
                     let lane_bits = output_ty.lane_bits();
                     let (shift_opcode, opcode, shift_by) = match (op, lane_bits) {
-                        (Opcode::Fabs, 32) => (SseOpcode::Psrld, SseOpcode::Andps, 1),
-                        (Opcode::Fabs, 64) => (SseOpcode::Psrlq, SseOpcode::Andpd, 1),
+                        (Opcode::Fabs, _) => {
+                            unreachable!(
+                                "implemented in ISLE: inst = `{}`, type = `{:?}`",
+                                ctx.dfg().display_inst(insn),
+                                ty
+                            );
+                        }
                         (Opcode::Fneg, 32) => (SseOpcode::Pslld, SseOpcode::Xorps, 31),
                         (Opcode::Fneg, 64) => (SseOpcode::Psllq, SseOpcode::Xorpd, 63),
                         _ => unreachable!(

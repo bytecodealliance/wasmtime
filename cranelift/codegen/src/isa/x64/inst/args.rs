@@ -1391,7 +1391,8 @@ impl fmt::Display for CC {
 /// Encode the ways that floats can be compared. This is used in float comparisons such as `cmpps`,
 /// e.g.; it is distinguished from other float comparisons (e.g. `ucomiss`) in that those use EFLAGS
 /// whereas [FcmpImm] is used as an immediate.
-pub(crate) enum FcmpImm {
+#[derive(Clone, Copy)]
+pub enum FcmpImm {
     Equal = 0x00,
     LessThan = 0x01,
     LessThanOrEqual = 0x02,
