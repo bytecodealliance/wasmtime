@@ -619,7 +619,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    fn gen_debug_frame_info(flags: &settings::Flags) -> SmallInstVec<Inst> {
+    fn gen_debug_frame_info(
+        flags: &settings::Flags,
+        _isa_flags: &Vec<settings::Value>,
+    ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
