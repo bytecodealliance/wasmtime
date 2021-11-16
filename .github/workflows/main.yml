@@ -400,7 +400,7 @@ jobs:
         submodules: true
     - name: Install Rust
       run: rustup update stable && rustup default stable
-    - run: cd cranelift/codegen && cargo build --features all-arch
+    - run: cd cranelift/codegen && cargo build --features "all-arch completely-skip-isle-for-ci-deterministic-check"
     - run: ci/ensure_deterministic_build.sh
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds on
