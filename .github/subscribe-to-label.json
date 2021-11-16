@@ -1,5 +1,5 @@
 {
-  "fitzgen": ["fuzzing", "cranelift:area:peepmatic", "wasmtime:ref-types"],
+  "fitzgen": ["cranelift:area:peepmatic", "fuzzing", "isle", "wasmtime:ref-types"],
   "peterhuene": ["wasmtime:api", "wasmtime:c-api"],
   "kubkon": ["wasi"]
 }
