@@ -189,12 +189,8 @@ impl IsleCompilation {
             // One line in the manifest: <filename> <sha-512 hash>.
             let mut hasher = Sha512::default();
             hasher.update(content.as_bytes());
-            writeln!(
-                &mut manifest,
-                "{} {:x}",
-                filename.display(),
-                hasher.finalize()
-            )?;
+            let filename = format!("{}", filename.display()).replace("\\", "/");
+            writeln!(&mut manifest, "{} {:x}", filename, hasher.finalize())?;
         }
 
         Ok(manifest)
