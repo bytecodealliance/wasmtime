@@ -38,22 +38,21 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
+    if let Ok(()) = super::lower::isle::lower(ctx, isa_flags, &outputs, insn) {
+        return Ok(());
+    }
+
+    let implemented_in_isle = || {
+        unreachable!(
+            "implemented in ISLE: inst = `{}`, type = `{:?}`",
+            ctx.dfg().display_inst(insn),
+            ty
+        );
+    };
+
     match op {
-        Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
-            let value = ctx.get_constant(insn).unwrap();
-            match ty.unwrap() {
-                I8 | I16 | I32 | I64 | R64 => {}
-                ty if ty.is_bool() => {}
-                ty => {
-                    return Err(CodegenError::Unsupported(format!(
-                        "{}: Unsupported type: {:?}",
-                        op, ty
-                    )));
-                }
-            }
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_constant_u64(ctx, rd, value);
-        }
+        Opcode::Iconst | Opcode::Bconst | Opcode::Null => implemented_in_isle(),
+
         Opcode::F32const => {
             let value = f32::from_bits(ctx.get_constant(insn).unwrap() as u32);
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();

@@ -1,7 +1,7 @@
 //! Instruction operand sub-components (aka "parts"): definitions and printing.
 
 use super::regs::{self, show_ireg_sized};
-use super::{EmitState, RegMapper};
+use super::EmitState;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::{MemFlags, Type};
 use crate::isa::x64::inst::Inst;

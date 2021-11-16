@@ -25,6 +25,8 @@ use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
 use std::cmp;
 
+pub mod isle;
+
 //============================================================================
 // Result enum types.
 //

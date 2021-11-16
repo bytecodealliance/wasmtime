@@ -1,5 +1,8 @@
 ;; This is a prelude of standard definitions for ISLE, the instruction-selector
 ;; DSL, as we use it bound to our interfaces.
+;;
+;; Note that all `extern` functions here are typically defined in the
+;; `isle_prelude_methods` macro defined in `src/isa/isle.rs`
 
 ;;;; Primitive and External Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

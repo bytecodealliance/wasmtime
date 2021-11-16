@@ -2565,64 +2565,17 @@ fn x64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
 //=============================================================================
 // Instructions and subcomponents: map_regs
 
-// Define our own register-mapping trait so we can do arbitrary register
-// renaming that are more free form than what `regalloc` constrains us to with
-// its `RegUsageMapper` trait definition.
-pub trait RegMapper {
-    fn get_use(&self, reg: Reg) -> Option<Reg>;
-    fn get_def(&self, reg: Reg) -> Option<Reg>;
-    fn get_mod(&self, reg: Reg) -> Option<Reg>;
-}
-
-impl<T> RegMapper for T
-where
-    T: regalloc::RegUsageMapper,
-{
-    fn get_use(&self, reg: Reg) -> Option<Reg> {
-        let v = reg.as_virtual_reg()?;
-        self.get_use(v).map(|r| r.to_reg())
-    }
-
-    fn get_def(&self, reg: Reg) -> Option<Reg> {
-        let v = reg.as_virtual_reg()?;
-        self.get_def(v).map(|r| r.to_reg())
-    }
-
-    fn get_mod(&self, reg: Reg) -> Option<Reg> {
-        let v = reg.as_virtual_reg()?;
-        self.get_mod(v).map(|r| r.to_reg())
-    }
-}
-
-fn map_use<RM: RegMapper>(m: &RM, r: &mut Reg) {
-    if let Some(new) = m.get_use(*r) {
-        *r = new;
-    }
-}
-
-fn map_def<RM: RegMapper>(m: &RM, r: &mut Writable<Reg>) {
-    if let Some(new) = m.get_def(r.to_reg()) {
-        *r = Writable::from_reg(new);
-    }
-}
-
-fn map_mod<RM: RegMapper>(m: &RM, r: &mut Writable<Reg>) {
-    if let Some(new) = m.get_mod(r.to_reg()) {
-        *r = Writable::from_reg(new);
-    }
-}
-
 impl Amode {
     fn map_uses<RM: RegMapper>(&mut self, map: &RM) {
         match self {
-            Amode::ImmReg { ref mut base, .. } => map_use(map, base),
+            Amode::ImmReg { ref mut base, .. } => map.map_use(base),
             Amode::ImmRegRegShift {
                 ref mut base,
                 ref mut index,
                 ..
             } => {
-                map_use(map, base);
-                map_use(map, index);
+                map.map_use(base);
+                map.map_use(index);
             }
             Amode::RipRelative { .. } => {
                 // RIP isn't involved in regalloc.
@@ -2645,7 +2598,7 @@ impl Amode {
 impl RegMemImm {
     fn map_uses<RM: RegMapper>(&mut self, map: &RM) {
         match self {
-            RegMemImm::Reg { ref mut reg } => map_use(map, reg),
+            RegMemImm::Reg { ref mut reg } => map.map_use(reg),
             RegMemImm::Mem { ref mut addr } => addr.map_uses(map),
             RegMemImm::Imm { .. } => {}
         }
@@ -2655,7 +2608,7 @@ impl RegMemImm {
         match self {
             Self::Reg { reg } => {
                 let mut writable_src = Writable::from_reg(*reg);
-                map_def(mapper, &mut writable_src);
+                mapper.map_def(&mut writable_src);
                 *self = Self::reg(writable_src.to_reg());
             }
             _ => panic!("unexpected RegMemImm kind in map_src_reg_as_def"),
@@ -2666,7 +2619,7 @@ impl RegMemImm {
 impl RegMem {
     fn map_uses<RM: RegMapper>(&mut self, map: &RM) {
         match self {
-            RegMem::Reg { ref mut reg } => map_use(map, reg),
+            RegMem::Reg { ref mut reg } => map.map_use(reg),
             RegMem::Mem { ref mut addr, .. } => addr.map_uses(map),
         }
     }
@@ -2675,7 +2628,7 @@ impl RegMem {
         match self {
             Self::Reg { reg } => {
                 let mut writable_src = Writable::from_reg(*reg);
-                map_def(mapper, &mut writable_src);
+                mapper.map_def(&mut writable_src);
                 *self = Self::reg(writable_src.to_reg());
             }
             _ => panic!("unexpected RegMem kind in map_src_reg_as_def"),
@@ -2698,25 +2651,25 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             debug_assert_eq!(*src1, dst.to_reg());
             if produces_const {
                 src2.map_as_def(mapper);
-                map_def(mapper, dst);
+                mapper.map_def(dst);
                 *src1 = dst.to_reg();
             } else {
                 src2.map_uses(mapper);
-                map_mod(mapper, dst);
+                mapper.map_mod(dst);
                 *src1 = dst.to_reg();
             }
         }
         Inst::Not { src, dst, .. } | Inst::Neg { src, dst, .. } => {
             debug_assert_eq!(*src, dst.to_reg());
-            map_mod(mapper, dst);
+            mapper.map_mod(dst);
             *src = dst.to_reg();
         }
         Inst::Div { divisor, .. } => divisor.map_uses(mapper),
         Inst::MulHi { src2, .. } => src2.map_uses(mapper),
         Inst::CheckedDivOrRemSeq { divisor, tmp, .. } => {
-            map_mod(mapper, divisor);
+            mapper.map_mod(divisor);
             if let Some(tmp) = tmp {
-                map_def(mapper, tmp)
+                mapper.map_def(tmp)
             }
         }
         Inst::SignExtendData { .. } => {}
@@ -2736,7 +2689,7 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
         Inst::XmmRmRImm {
             ref op,
@@ -2748,7 +2701,7 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             debug_assert_eq!(*src1, dst.to_reg());
             if produces_const {
                 src2.map_as_def(mapper);
-                map_def(mapper, dst);
+                mapper.map_def(dst);
                 *src1 = dst.to_reg();
             } else if *op == SseOpcode::Pextrb
                 || *op == SseOpcode::Pextrw
@@ -2760,11 +2713,11 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
                 || *op == SseOpcode::Roundpd
             {
                 src2.map_uses(mapper);
-                map_def(mapper, dst);
+                mapper.map_def(dst);
                 *src1 = dst.to_reg();
             } else {
                 src2.map_uses(mapper);
-                map_mod(mapper, dst);
+                mapper.map_mod(dst);
                 *src1 = dst.to_reg();
             }
         }
@@ -2777,11 +2730,11 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             debug_assert_eq!(*src1, dst.to_reg());
             if produces_const {
                 src2.map_as_def(mapper);
-                map_def(mapper, dst);
+                mapper.map_def(dst);
                 *src1 = dst.to_reg();
             } else {
                 src2.map_uses(mapper);
-                map_mod(mapper, dst);
+                mapper.map_mod(dst);
                 *src1 = dst.to_reg();
             }
         }
@@ -2793,10 +2746,10 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src1.map_uses(mapper);
-            map_use(mapper, src2);
+            mapper.map_use(src2);
             match *op {
-                Avx512Opcode::Vpermi2b => map_mod(mapper, dst),
-                _ => map_def(mapper, dst),
+                Avx512Opcode::Vpermi2b => mapper.map_mod(dst),
+                _ => mapper.map_def(dst),
             }
         }
         Inst::XmmRmiReg {
@@ -2807,29 +2760,29 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         } => {
             debug_assert_eq!(*src1, dst.to_reg());
             src2.map_uses(mapper);
-            map_mod(mapper, dst);
+            mapper.map_mod(dst);
             *src1 = dst.to_reg();
         }
         Inst::XmmUninitializedValue { ref mut dst, .. } => {
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
         Inst::XmmLoadConst { ref mut dst, .. } => {
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
         Inst::XmmMinMaxSeq {
             ref mut lhs,
             ref mut rhs_dst,
             ..
         } => {
-            map_use(mapper, lhs);
-            map_mod(mapper, rhs_dst);
+            mapper.map_use(lhs);
+            mapper.map_mod(rhs_dst);
         }
         Inst::XmmMovRM {
             ref mut src,
             ref mut dst,
             ..
         } => {
-            map_use(mapper, src);
+            mapper.map_use(src);
             dst.map_uses(mapper);
         }
         Inst::XmmCmpRmR {
@@ -2838,9 +2791,9 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_use(mapper, dst);
+            mapper.map_use(dst);
         }
-        Inst::Imm { ref mut dst, .. } => map_def(mapper, dst),
+        Inst::Imm { ref mut dst, .. } => mapper.map_def(dst),
         Inst::MovRR {
             ref mut src,
             ref mut dst,
@@ -2851,8 +2804,8 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ref mut dst,
             ..
         } => {
-            map_use(mapper, src);
-            map_def(mapper, dst);
+            mapper.map_use(src);
+            mapper.map_def(dst);
         }
         Inst::GprToXmm {
             ref mut src,
@@ -2860,7 +2813,7 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
         Inst::CvtUint64ToFloatSeq {
             ref mut src,
@@ -2869,10 +2822,10 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ref mut tmp_gpr2,
             ..
         } => {
-            map_mod(mapper, src);
-            map_def(mapper, dst);
-            map_def(mapper, tmp_gpr1);
-            map_def(mapper, tmp_gpr2);
+            mapper.map_mod(src);
+            mapper.map_def(dst);
+            mapper.map_def(tmp_gpr1);
+            mapper.map_def(tmp_gpr2);
         }
         Inst::CvtFloatToSintSeq {
             ref mut src,
@@ -2888,10 +2841,10 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ref mut tmp_xmm,
             ..
         } => {
-            map_mod(mapper, src);
-            map_def(mapper, dst);
-            map_def(mapper, tmp_gpr);
-            map_def(mapper, tmp_xmm);
+            mapper.map_mod(src);
+            mapper.map_def(dst);
+            mapper.map_def(tmp_gpr);
+            mapper.map_def(tmp_xmm);
         }
         Inst::MovzxRmR {
             ref mut src,
@@ -2899,11 +2852,11 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
         Inst::Mov64MR { src, dst, .. } | Inst::LoadEffectiveAddress { addr: src, dst } => {
             src.map_uses(mapper);
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
         Inst::MovsxRmR {
             ref mut src,
@@ -2911,14 +2864,14 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
         Inst::MovRM {
             ref mut src,
             ref mut dst,
             ..
         } => {
-            map_use(mapper, src);
+            mapper.map_use(src);
             dst.map_uses(mapper);
         }
         Inst::ShiftR {
@@ -2927,7 +2880,7 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             debug_assert_eq!(*src, dst.to_reg());
-            map_mod(mapper, dst);
+            mapper.map_mod(dst);
             *src = dst.to_reg();
         }
         Inst::CmpRmiR {
@@ -2936,9 +2889,9 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_use(mapper, dst);
+            mapper.map_use(dst);
         }
-        Inst::Setcc { ref mut dst, .. } => map_def(mapper, dst),
+        Inst::Setcc { ref mut dst, .. } => mapper.map_def(dst),
         Inst::Cmove {
             consequent: ref mut src,
             ref mut dst,
@@ -2946,7 +2899,7 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_mod(mapper, dst);
+            mapper.map_mod(dst);
             *alternative = dst.to_reg();
         }
         Inst::XmmCmove {
@@ -2955,11 +2908,11 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             src.map_uses(mapper);
-            map_mod(mapper, dst);
+            mapper.map_mod(dst);
         }
         Inst::Push64 { ref mut src } => src.map_uses(mapper),
         Inst::Pop64 { ref mut dst } => {
-            map_def(mapper, dst);
+            mapper.map_def(dst);
         }
 
         Inst::CallKnown {
@@ -2968,10 +2921,10 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             for r in uses.iter_mut() {
-                map_use(mapper, r);
+                mapper.map_use(r);
             }
             for r in defs.iter_mut() {
-                map_def(mapper, r);
+                mapper.map_def(r);
             }
         }
 
@@ -2982,10 +2935,10 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ..
         } => {
             for r in uses.iter_mut() {
-                map_use(mapper, r);
+                mapper.map_use(r);
             }
             for r in defs.iter_mut() {
-                map_def(mapper, r);
+                mapper.map_def(r);
             }
             dest.map_uses(mapper);
         }
@@ -2996,25 +2949,25 @@ pub(crate) fn x64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             ref mut tmp2,
             ..
         } => {
-            map_use(mapper, idx);
-            map_def(mapper, tmp1);
-            map_def(mapper, tmp2);
+            mapper.map_use(idx);
+            mapper.map_def(tmp1);
+            mapper.map_def(tmp2);
         }
 
         Inst::JmpUnknown { ref mut target } => target.map_uses(mapper),
 
-        Inst::LoadExtName { ref mut dst, .. } => map_def(mapper, dst),
+        Inst::LoadExtName { ref mut dst, .. } => mapper.map_def(dst),
 
         Inst::LockCmpxchg {
             ref mut replacement,
             ref mut mem,
             ..
         } => {
-            map_use(mapper, replacement);
+            mapper.map_use(replacement);
             mem.map_uses(mapper);
         }
 
-        Inst::ValueLabelMarker { ref mut reg, .. } => map_use(mapper, reg),
+        Inst::ValueLabelMarker { ref mut reg, .. } => mapper.map_use(reg),
 
         Inst::Ret
         | Inst::EpiloguePlaceholder

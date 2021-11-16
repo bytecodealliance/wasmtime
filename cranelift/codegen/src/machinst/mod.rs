@@ -104,6 +104,8 @@ pub use inst_common::*;
 pub mod valueregs;
 pub use valueregs::*;
 pub mod debug;
+pub use regmapping::*;
+pub mod regmapping;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {
