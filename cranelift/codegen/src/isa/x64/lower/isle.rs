@@ -400,6 +400,14 @@ where
             None
         }
     }
+
+    fn u64_from_ieee32(&mut self, val: Ieee32) -> u64 {
+        val.bits().into()
+    }
+
+    fn u64_from_ieee64(&mut self, val: Ieee64) -> u64 {
+        val.bits()
+    }
 }
 
 #[inline]

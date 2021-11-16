@@ -3361,25 +3361,19 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         }
 
         Opcode::F64const => {
-            // TODO use cmpeqpd for all 1s.
-            let value = ctx.get_constant(insn).unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value as u128, types::F64, |ty| {
-                ctx.alloc_tmp(ty).only_reg().unwrap()
-            }) {
-                ctx.emit(inst);
-            }
+            unreachable!(
+                "implemented in ISLE: inst = `{}`, type = `{:?}`",
+                ctx.dfg().display_inst(insn),
+                ty
+            );
         }
 
         Opcode::F32const => {
-            // TODO use cmpeqps for all 1s.
-            let value = ctx.get_constant(insn).unwrap();
-            let dst = get_output_reg(ctx, outputs[0]);
-            for inst in Inst::gen_constant(dst, value as u128, types::F32, |ty| {
-                ctx.alloc_tmp(ty).only_reg().unwrap()
-            }) {
-                ctx.emit(inst);
-            }
+            unreachable!(
+                "implemented in ISLE: inst = `{}`, type = `{:?}`",
+                ctx.dfg().display_inst(insn),
+                ty
+            );
         }
 
         Opcode::WideningPairwiseDotProductS => {
