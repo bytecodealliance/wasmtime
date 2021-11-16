@@ -59,9 +59,6 @@
   - "cranelift/codegen/src/isa/x64/lower/isle.rs"
   - "cranelift/codegen/src/isa/x64/lower/isle/**"
 
-"lightbeam":
-  - "crates/lightbeam/**"
-
 "wasi":
   - "crates/wasi/**"
   - "crates/wasi-common/**"
