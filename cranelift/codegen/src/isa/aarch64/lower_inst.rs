@@ -41,20 +41,16 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     match op {
         Opcode::Iconst | Opcode::Bconst | Opcode::Null => {
             let value = ctx.get_constant(insn).unwrap();
-            // Sign extend constant if necessary
-            let value = match ty.unwrap() {
-                I8 => (((value as i64) << 56) >> 56) as u64,
-                I16 => (((value as i64) << 48) >> 48) as u64,
-                I32 => (((value as i64) << 32) >> 32) as u64,
-                I64 | R64 => value,
-                ty if ty.is_bool() => value,
+            match ty.unwrap() {
+                I8 | I16 | I32 | I64 | R64 => {}
+                ty if ty.is_bool() => {}
                 ty => {
                     return Err(CodegenError::Unsupported(format!(
                         "{}: Unsupported type: {:?}",
                         op, ty
-                    )))
+                    )));
                 }
-            };
+            }
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             lower_constant_u64(ctx, rd, value);
         }
