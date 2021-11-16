@@ -104,6 +104,10 @@ souper-harvest = ["souper-ir", "souper-ir/stringify"]
 # Recompile ISLE DSL source files into their generated Rust code.
 rebuild-isle = ["isle", "cranelift-codegen-meta/rebuild-isle"]
 
+# A hack to skip the ISLE-rebuild logic when testing for determinism
+# with the "Meta deterministic check" CI job.
+completely-skip-isle-for-ci-deterministic-check = []
+
 [badges]
 maintenance = { status = "experimental" }
 

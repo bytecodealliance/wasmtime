@@ -78,7 +78,17 @@ fn main() {
         .unwrap()
     }
 
-    maybe_rebuild_isle(crate_dir).expect("Unhandled failure in ISLE rebuild");
+    // The "Meta deterministic check" CI job runs this build script N
+    // times to ensure it produces the same output
+    // consistently. However, it runs the script in a fresh directory,
+    // without any of the source tree present; this breaks our
+    // manifest check (we need the ISLE source to be present). To keep
+    // things simple, we just disable all ISLE-related logic for this
+    // specific CI job.
+    #[cfg(not(feature = "completely-skip-isle-for-ci-deterministic-check"))]
+    {
+        maybe_rebuild_isle(crate_dir).expect("Unhandled failure in ISLE rebuild");
+    }
 
     let pkg_version = env::var("CARGO_PKG_VERSION").unwrap();
     let mut cmd = std::process::Command::new("git");
@@ -259,6 +269,9 @@ fn maybe_rebuild_isle(
         }
 
         let manifest = std::fs::read_to_string(compilation.manifest_filename())?;
+        // Canonicalize Windows line-endings into Unix line-endings in
+        // the manifest text itself.
+        let manifest = manifest.replace("\r\n", "\n");
         let expected_manifest = compilation.compute_manifest()?;
         if manifest != expected_manifest {
             rebuild_compilations.push((compilation, expected_manifest));
