@@ -119,6 +119,9 @@
 (extern const $I64 Type)
 (extern const $I128 Type)
 
+(extern const $F32 Type)
+(extern const $F64 Type)
+
 (extern const $B8X16 Type)
 (extern const $B16X8 Type)
 (extern const $B32X4 Type)
@@ -163,6 +166,14 @@
 ;; Extract a `u64` from an `Imm64`.
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor infallible u64_from_imm64 u64_from_imm64)
+
+;; Extract a `u64` from an `Ieee32`.
+(decl u64_from_ieee32 (u64) Ieee32)
+(extern extractor infallible u64_from_ieee32 u64_from_ieee32)
+
+;; Extract a `u64` from an `Ieee64`.
+(decl u64_from_ieee64 (u64) Ieee64)
+(extern extractor infallible u64_from_ieee64 u64_from_ieee64)
 
 ;; Extract the result values for the given instruction.
 (decl inst_results (ValueSlice) Inst)

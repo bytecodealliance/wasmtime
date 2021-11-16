@@ -58,7 +58,12 @@
             (XmmRmREvex (op Avx512Opcode)
                         (src1 RegMem)
                         (src2 Reg)
-                        (dst WritableReg))))
+                        (dst WritableReg))
+            (GprToXmm (op SseOpcode)
+                      (src RegMem)
+                      (dst WritableReg)
+                      (src_size OperandSize))
+))
 
 (type OperandSize extern
       (enum Size8
@@ -624,11 +629,21 @@
 
 ;; Helper for emitting immediates.
 (decl imm (Type u64) Reg)
+
+;; Integer immediates.
 (rule (imm ty simm64)
       (let ((dst WritableReg (temp_writable_reg ty))
             (size OperandSize (operand_size_of_type ty))
             (_ Unit (emit (MInst.Imm size simm64 dst))))
         (writable_reg_to_reg dst)))
+
+;; `f32` immediates.
+(rule (imm $F32 bits)
+      (gpr_to_xmm $F32 (SseOpcode.Movd) (RegMem.Reg (imm $I32 bits)) (OperandSize.Size32)))
+
+;; `f64` immediates.
+(rule (imm $F64 bits)
+      (gpr_to_xmm $F64 (SseOpcode.Movq) (RegMem.Reg (imm $I64 bits)) (OperandSize.Size64)))
 
 (decl nonzero_u64_fits_in_u32 (u64) u64)
 (extern extractor nonzero_u64_fits_in_u32 nonzero_u64_fits_in_u32)
@@ -640,7 +655,7 @@
             (_ Unit (emit (MInst.Imm (OperandSize.Size32) x dst))))
         (writable_reg_to_reg dst)))
 
-;; Special case for zero immediates: turn them into an `xor r, r`.
+;; Special case for integer zero immediates: turn them into an `xor r, r`.
 (rule (imm ty 0)
       (let ((wr WritableReg (temp_writable_reg ty))
             (r Reg (writable_reg_to_reg wr))
@@ -662,6 +677,30 @@
                                          (RegMem.Reg r)
                                          wr))))
         r))
+
+;; Special case for `f32` zero immediates to use `xorps`.
+(rule (imm $F32 0)
+      (let ((wr WritableReg (temp_writable_reg $F32))
+            (r Reg (writable_reg_to_reg wr))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Xorps)
+                                        r
+                                        (RegMem.Reg r)
+                                        wr))))
+        r))
+
+;; TODO: use cmpeqps for all 1s
+
+;; Special case for `f64` zero immediates to use `xorpd`.
+(rule (imm $F64 0)
+      (let ((wr WritableReg (temp_writable_reg $F64))
+            (r Reg (writable_reg_to_reg wr))
+            (_ Unit (emit (MInst.XmmRmR (SseOpcode.Xorpd)
+                                        r
+                                        (RegMem.Reg r)
+                                        wr))))
+        r))
+
+;; TODO: use cmpeqpd for all 1s
 
 ;; Helper for creating `MInst.ShifR` instructions.
 (decl shift_r (Type ShiftKind Reg Imm8Reg) Reg)
@@ -1069,3 +1108,10 @@
                     src2
                     (encode_fcmp_imm imm)
                     (OperandSize.Size32)))
+
+;; Helper for creating `MInst.GprToXmm` instructions.
+(decl gpr_to_xmm (Type SseOpcode RegMem OperandSize) Reg)
+(rule (gpr_to_xmm ty op src size)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.GprToXmm op src dst size))))
+        (writable_reg_to_reg dst)))
