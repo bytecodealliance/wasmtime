@@ -272,7 +272,7 @@ fn maybe_rebuild_isle(
         // Canonicalize Windows line-endings into Unix line-endings in
         // the manifest text itself.
         let manifest = manifest.replace("\r\n", "\n");
-        let expected_manifest = compilation.compute_manifest()?;
+        let expected_manifest = compilation.compute_manifest()?.replace("\r\n", "\n");
         if manifest != expected_manifest {
             rebuild_compilations.push((compilation, expected_manifest));
         }
