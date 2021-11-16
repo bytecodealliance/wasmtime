@@ -1,4 +1,5 @@
 {
+  "cfallin": ["isle"],
   "fitzgen": ["cranelift:area:peepmatic", "fuzzing", "isle", "wasmtime:ref-types"],
   "peterhuene": ["wasmtime:api", "wasmtime:c-api"],
   "kubkon": ["wasi"]
