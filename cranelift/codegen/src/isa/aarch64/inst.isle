@@ -1339,21 +1339,16 @@
 
 (decl imm (Type u64) Reg)
 
-;; First up some special cases for constants which match certain custom
-;; conditions. Note that these have explicit priorities to explicitly list
-;; that we prefer instructions in the order that they're listed here. Otherwise
-;; ISLE has no way of determining which is the more relevant matcher.
-
 ;; 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVZ
-(rule 3 (imm (integral_ty _ty) (move_wide_const_from_u64 n))
+(rule (imm (integral_ty _ty) (move_wide_const_from_u64 n))
       (movz n (OperandSize.Size64)))
 
 ;; 16-bit immediate (shifted by 0, 16, 32 or 48 bits) in MOVN
-(rule 2 (imm (integral_ty _ty) (move_wide_const_from_negated_u64 n))
+(rule (imm (integral_ty _ty) (move_wide_const_from_negated_u64 n))
       (movn n (OperandSize.Size64)))
 
 ;; Weird logical-instruction immediate in ORI using zero register
-(rule 1 (imm (integral_ty _ty) (imm_logic_from_u64 n))
+(rule (imm (integral_ty _ty) (imm_logic_from_u64 n))
       (orr64 (zero_reg) n))
 
 (decl load_constant64_full (u64) Reg)
