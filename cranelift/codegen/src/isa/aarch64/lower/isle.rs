@@ -7,8 +7,8 @@ pub mod generated_code;
 use super::{
     zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget, CallIndInfo,
     CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, Imm12, ImmLogic, ImmShift, Inst as MInst,
-    JTSequenceInfo, MachLabel, MoveWideConst, Opcode, OperandSize, PairAMode, Reg, ScalarSize,
-    ShiftOpAndAmt, UImm5, VectorSize, NZCV,
+    JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg,
+    ScalarSize, ShiftOpAndAmt, UImm5, VectorSize, NZCV,
 };
 use crate::isa::aarch64::settings as aarch64_settings;
 use crate::machinst::isle::*;
@@ -19,8 +19,9 @@ use crate::{
         ValueLabel, ValueList,
     },
     isa::aarch64::inst::aarch64_map_regs,
+    isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::unwind::UnwindInst,
-    machinst::{get_output_reg, InsnOutput, LowerCtx, RegRenamer},
+    machinst::{get_output_reg, ty_bits, InsnOutput, LowerCtx, RegRenamer},
 };
 use smallvec::SmallVec;
 use std::boxed::Box;
@@ -76,6 +77,11 @@ pub struct IsleContext<'a, C> {
     emitted_insts: SmallVec<[MInst; 6]>,
 }
 
+pub struct ExtendedValue {
+    val: Value,
+    extend: ExtendOp,
+}
+
 impl<'a, C> IsleContext<'a, C> {
     pub fn new(lower_ctx: &'a mut C, isa_flags: &'a aarch64_settings::Flags) -> Self {
         IsleContext {
@@ -106,6 +112,25 @@ where
 
     fn imm_logic_from_u64(&mut self, n: u64) -> Option<ImmLogic> {
         ImmLogic::maybe_from_u64(n, I64)
+    }
+
+    fn imm12_from_u64(&mut self, n: u64) -> Option<Imm12> {
+        Imm12::maybe_from_u64(n)
+    }
+
+    fn imm12_from_negated_u64(&mut self, n: u64) -> Option<Imm12> {
+        Imm12::maybe_from_u64((n as i64).wrapping_neg() as u64)
+    }
+
+    fn lshl_from_imm64(&mut self, n: Imm64, ty: Type) -> Option<ShiftOpAndAmt> {
+        let shiftimm = ShiftOpShiftImm::maybe_from_shift(n.bits() as u64)?;
+        let shiftee_bits = ty_bits(ty);
+        if shiftee_bits <= std::u8::MAX as usize {
+            let shiftimm = shiftimm.mask(shiftee_bits as u8);
+            Some(ShiftOpAndAmt::new(ShiftOp::LSL, shiftimm))
+        } else {
+            None
+        }
     }
 
     fn integral_ty(&mut self, ty: Type) -> Option<Type> {
@@ -179,6 +204,20 @@ where
 
     fn zero_reg(&mut self) -> Reg {
         zero_reg()
+    }
+
+    fn extended_value_from_value(&mut self, val: Value) -> Option<ExtendedValue> {
+        let (val, extend) =
+            super::get_as_extended_value(self.lower_ctx, val, NarrowValueMode::None)?;
+        Some(ExtendedValue { val, extend })
+    }
+
+    fn put_extended_in_reg(&mut self, reg: &ExtendedValue) -> Reg {
+        self.put_in_reg(reg.val)
+    }
+
+    fn get_extended_op(&mut self, reg: &ExtendedValue) -> ExtendOp {
+        reg.extend
     }
 
     fn emit(&mut self, inst: &MInst) -> Unit {

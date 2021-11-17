@@ -105,6 +105,8 @@ pub trait LowerCtx {
     fn num_outputs(&self, ir_inst: Inst) -> usize;
     /// Get the type for an instruction's input.
     fn input_ty(&self, ir_inst: Inst, idx: usize) -> Type;
+    /// Get the type for a value.
+    fn value_ty(&self, val: Value) -> Type;
     /// Get the type for an instruction's output.
     fn output_ty(&self, ir_inst: Inst, idx: usize) -> Type;
     /// Get the value of a constant instruction (`iconst`, etc.) as a 64-bit
@@ -129,6 +131,9 @@ pub trait LowerCtx {
     fn get_input_as_source_or_const(&self, ir_inst: Inst, idx: usize) -> NonRegInput;
     /// Like `get_input_as_source_or_const` but with a `Value`.
     fn get_value_as_source_or_const(&self, value: Value) -> NonRegInput;
+    /// Resolves a particular input of an instruction to the `Value` that it is
+    /// represented with.
+    fn input_as_value(&self, ir_inst: Inst, idx: usize) -> Value;
     /// Put the `idx`th input into register(s) and return the assigned register.
     fn put_input_in_regs(&mut self, ir_inst: Inst, idx: usize) -> ValueRegs<Reg>;
     /// Put the given value into register(s) and return the assigned register.
@@ -1109,8 +1114,10 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
     }
 
     fn input_ty(&self, ir_inst: Inst, idx: usize) -> Type {
-        let val = self.f.dfg.inst_args(ir_inst)[idx];
-        let val = self.f.dfg.resolve_aliases(val);
+        self.value_ty(self.input_as_value(ir_inst, idx))
+    }
+
+    fn value_ty(&self, val: Value) -> Type {
         self.f.dfg.value_type(val)
     }
 
@@ -1122,9 +1129,13 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         self.inst_constants.get(&ir_inst).cloned()
     }
 
-    fn get_input_as_source_or_const(&self, ir_inst: Inst, idx: usize) -> NonRegInput {
+    fn input_as_value(&self, ir_inst: Inst, idx: usize) -> Value {
         let val = self.f.dfg.inst_args(ir_inst)[idx];
-        let val = self.f.dfg.resolve_aliases(val);
+        self.f.dfg.resolve_aliases(val)
+    }
+
+    fn get_input_as_source_or_const(&self, ir_inst: Inst, idx: usize) -> NonRegInput {
+        let val = self.input_as_value(ir_inst, idx);
         self.get_value_as_source_or_const(val)
     }
 

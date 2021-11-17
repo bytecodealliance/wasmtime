@@ -31,6 +31,7 @@ pub trait Context {
     fn u16_as_u64(&mut self, arg0: u16) -> u64;
     fn u32_as_u64(&mut self, arg0: u32) -> u64;
     fn ty_bits(&mut self, arg0: Type) -> u16;
+    fn fits_in_32(&mut self, arg0: Type) -> Option<Type>;
     fn fits_in_64(&mut self, arg0: Type) -> Option<Type>;
     fn value_list_slice(&mut self, arg0: ValueList) -> ValueSlice;
     fn unwrap_head_value_list_1(&mut self, arg0: ValueList) -> (Value, ValueSlice);

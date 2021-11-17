@@ -947,6 +947,13 @@
     (Size64x2)
 ))
 
+;; Helper for calculating the `VectorSize` corresponding to a type
+(decl vector_size (Type) VectorSize)
+(rule (vector_size (multi_lane 8 16)) (VectorSize.Size8x16))
+(rule (vector_size (multi_lane 16 8)) (VectorSize.Size16x8))
+(rule (vector_size (multi_lane 32 4)) (VectorSize.Size32x4))
+(rule (vector_size (multi_lane 64 2)) (VectorSize.Size64x2))
+
 ;; A floating-point unit (FPU) operation with one arg.
 (type FPUOp1
   (enum
@@ -1294,8 +1301,40 @@
 (decl imm_logic_from_u64 (ImmLogic) u64)
 (extern extractor imm_logic_from_u64 imm_logic_from_u64)
 
+(decl imm12_from_u64 (Imm12) u64)
+(extern extractor imm12_from_u64 imm12_from_u64)
+
+(decl imm12_from_negated_u64 (Imm12) u64)
+(extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
+
+(decl lshl_from_imm64 (Type ShiftOpAndAmt) Imm64)
+(extern extractor lshl_from_imm64 lshl_from_imm64 (in out))
+
 (decl integral_ty (Type) Type)
 (extern extractor integral_ty integral_ty)
+
+;; Helper to go directly from a `Value`, when it's an `iconst`, to an `Imm12`.
+(decl imm12_from_value (Imm12) Value)
+(extractor
+  (imm12_from_value n)
+  (def_inst (iconst (u64_from_imm64 (imm12_from_u64 n)))))
+
+;; Same as `imm12_from_value`, but tries negating the constant value.
+(decl imm12_from_negated_value (Imm12) Value)
+(extractor
+  (imm12_from_negated_value n)
+  (def_inst (iconst (u64_from_imm64 (imm12_from_negated_u64 n)))))
+
+;; Helper type to represent a value and an extend operation fused together.
+(type ExtendedValue extern (enum))
+(decl extended_value_from_value (ExtendedValue) Value)
+(extern extractor extended_value_from_value extended_value_from_value)
+
+;; Constructors used to poke at the fields of an `ExtendedValue`.
+(decl put_extended_in_reg (ExtendedValue) Reg)
+(extern constructor put_extended_in_reg put_extended_in_reg)
+(decl get_extended_op (ExtendedValue) ExtendOp)
+(extern constructor get_extended_op get_extended_op)
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1331,9 +1370,55 @@
             (_ Unit (emit (MInst.AluRRImmLogic op dst src imm))))
         (writable_reg_to_reg dst)))
 
-;; Helper for emitting `orr64` instructions.
-(decl orr64 (Reg ImmLogic) Reg)
-(rule (orr64 src imm) (alu_rr_imm_logic (ALUOp.Orr64) src imm))
+;; Helper for emitting `MInst.AluRRR` instructions.
+(decl alu_rrr (ALUOp Reg Reg) Reg)
+(rule (alu_rrr op src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRR op dst src1 src2))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.VecRRR` instructions.
+(decl vec_rrr (VecALUOp Reg Reg VectorSize) Reg)
+(rule (vec_rrr op src1 src2 size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecRRR op dst src1 src2 size))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.AluRRImm12` instructions.
+(decl alu_rr_imm12 (ALUOp Reg Imm12) Reg)
+(rule (alu_rr_imm12 op src imm)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRImm12 op dst src imm))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.AluRRRShift` instructions.
+(decl alu_rrr_shift (ALUOp Reg Reg ShiftOpAndAmt) Reg)
+(rule (alu_rrr_shift op src1 src2 shift)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRRShift op dst src1 src2 shift))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.AluRRRExtend` instructions.
+(decl alu_rrr_extend (ALUOp Reg Reg ExtendOp) Reg)
+(rule (alu_rrr_extend op src1 src2 extend)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRRExtend op dst src1 src2 extend))))
+        (writable_reg_to_reg dst)))
+
+;; Same as `alu_rrr_extend`, but takes an `ExtendedValue` packed "pair" instead
+;; of a `Reg` and an `ExtendOp`.
+(decl alu_rr_extend_reg (ALUOp Reg ExtendedValue) Reg)
+(rule (alu_rr_extend_reg op src1 extended_reg)
+      (let ((src2 Reg (put_extended_in_reg extended_reg))
+            (extend ExtendOp (get_extended_op extended_reg)))
+        (alu_rrr_extend op src1 src2 extend)))
+
+;; Helper for emitting `MInst.AluRRRR` instructions.
+(decl alu_rrrr (ALUOp3 Reg Reg Reg) Reg)
+(rule (alu_rrrr op src1 src2 src3)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
+        (writable_reg_to_reg dst)))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1349,7 +1434,7 @@
 
 ;; Weird logical-instruction immediate in ORI using zero register
 (rule (imm (integral_ty _ty) (imm_logic_from_u64 n))
-      (orr64 (zero_reg) n))
+      (alu_rr_imm_logic (ALUOp.Orr64) (zero_reg) n))
 
 (decl load_constant64_full (u64) Reg)
 (extern constructor load_constant64_full load_constant64_full)

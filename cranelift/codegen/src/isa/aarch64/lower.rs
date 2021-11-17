@@ -10,7 +10,7 @@
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
 use crate::ir::Inst as IRInst;
-use crate::ir::{Opcode, Type};
+use crate::ir::{Opcode, Type, Value};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::{CodegenError, CodegenResult};
@@ -272,20 +272,20 @@ fn extend_reg<C: LowerCtx<I = Inst>>(
 }
 
 /// Lowers an instruction input to multiple regs
-fn lower_input_to_regs<C: LowerCtx<I = Inst>>(
+fn lower_value_to_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
-    input: InsnInput,
+    value: Value,
 ) -> (ValueRegs<Reg>, Type, bool) {
-    log::trace!("lower_input_to_regs: input {:?}", input);
-    let ty = ctx.input_ty(input.insn, input.input);
-    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
+    log::trace!("lower_value_to_regs: value {:?}", value);
+    let ty = ctx.value_ty(value);
+    let inputs = ctx.get_value_as_source_or_const(value);
     let is_const = inputs.constant.is_some();
 
     let in_regs = if let Some(c) = inputs.constant {
         // Generate constants fresh at each use to minimize long-range register pressure.
         generate_constant(ctx, ty, c as u128)
     } else {
-        ctx.put_input_in_regs(input.insn, input.input)
+        ctx.put_value_in_regs(value)
     };
 
     (in_regs, ty, is_const)
@@ -301,7 +301,17 @@ pub(crate) fn put_input_in_reg<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     narrow_mode: NarrowValueMode,
 ) -> Reg {
-    let (in_regs, ty, is_const) = lower_input_to_regs(ctx, input);
+    let value = ctx.input_as_value(input.insn, input.input);
+    put_value_in_reg(ctx, value, narrow_mode)
+}
+
+/// Like above, only for values
+fn put_value_in_reg<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    value: Value,
+    narrow_mode: NarrowValueMode,
+) -> Reg {
+    let (in_regs, ty, is_const) = lower_value_to_regs(ctx, value);
     let reg = in_regs
         .only_reg()
         .expect("Multi-register value not expected");
@@ -314,7 +324,8 @@ pub(crate) fn put_input_in_regs<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
 ) -> ValueRegs<Reg> {
-    let (in_regs, _, _) = lower_input_to_regs(ctx, input);
+    let value = ctx.input_as_value(input.insn, input.input);
+    let (in_regs, _, _) = lower_value_to_regs(ctx, value);
     in_regs
 }
 
@@ -367,87 +378,92 @@ fn put_input_in_rse<C: LowerCtx<I = Inst>>(
     input: InsnInput,
     narrow_mode: NarrowValueMode,
 ) -> ResultRSE {
-    let inputs = ctx.get_input_as_source_or_const(input.insn, input.input);
-    if let Some((insn, 0)) = inputs.inst {
-        let op = ctx.data(insn).opcode();
-        let out_ty = ctx.output_ty(insn, 0);
-        let out_bits = ty_bits(out_ty);
-
-        // Is this a zero-extend or sign-extend and can we handle that with a register-mode operator?
-        if op == Opcode::Uextend || op == Opcode::Sextend {
-            let sign_extend = op == Opcode::Sextend;
-            let inner_ty = ctx.input_ty(insn, 0);
-            let inner_bits = ty_bits(inner_ty);
-            assert!(inner_bits < out_bits);
-            if match (sign_extend, narrow_mode) {
-                // A single zero-extend or sign-extend is equal to itself.
-                (_, NarrowValueMode::None) => true,
-                // Two zero-extends or sign-extends in a row is equal to a single zero-extend or sign-extend.
-                (false, NarrowValueMode::ZeroExtend32) | (false, NarrowValueMode::ZeroExtend64) => {
-                    true
-                }
-                (true, NarrowValueMode::SignExtend32) | (true, NarrowValueMode::SignExtend64) => {
-                    true
-                }
-                // A zero-extend and a sign-extend in a row is not equal to a single zero-extend or sign-extend
-                (false, NarrowValueMode::SignExtend32) | (false, NarrowValueMode::SignExtend64) => {
-                    false
-                }
-                (true, NarrowValueMode::ZeroExtend32) | (true, NarrowValueMode::ZeroExtend64) => {
-                    false
-                }
-            } {
-                let extendop = match (sign_extend, inner_bits) {
-                    (true, 8) => ExtendOp::SXTB,
-                    (false, 8) => ExtendOp::UXTB,
-                    (true, 16) => ExtendOp::SXTH,
-                    (false, 16) => ExtendOp::UXTH,
-                    (true, 32) => ExtendOp::SXTW,
-                    (false, 32) => ExtendOp::UXTW,
-                    _ => unreachable!(),
-                };
-                let reg =
-                    put_input_in_reg(ctx, InsnInput { insn, input: 0 }, NarrowValueMode::None);
-                return ResultRSE::RegExtend(reg, extendop);
-            }
-        }
-
-        // If `out_ty` is smaller than 32 bits and we need to zero- or sign-extend,
-        // then get the result into a register and return an Extend-mode operand on
-        // that register.
-        if narrow_mode != NarrowValueMode::None
-            && ((narrow_mode.is_32bit() && out_bits < 32)
-                || (!narrow_mode.is_32bit() && out_bits < 64))
-        {
-            let reg = put_input_in_reg(ctx, input, NarrowValueMode::None);
-            let extendop = match (narrow_mode, out_bits) {
-                (NarrowValueMode::SignExtend32, 1) | (NarrowValueMode::SignExtend64, 1) => {
-                    ExtendOp::SXTB
-                }
-                (NarrowValueMode::ZeroExtend32, 1) | (NarrowValueMode::ZeroExtend64, 1) => {
-                    ExtendOp::UXTB
-                }
-                (NarrowValueMode::SignExtend32, 8) | (NarrowValueMode::SignExtend64, 8) => {
-                    ExtendOp::SXTB
-                }
-                (NarrowValueMode::ZeroExtend32, 8) | (NarrowValueMode::ZeroExtend64, 8) => {
-                    ExtendOp::UXTB
-                }
-                (NarrowValueMode::SignExtend32, 16) | (NarrowValueMode::SignExtend64, 16) => {
-                    ExtendOp::SXTH
-                }
-                (NarrowValueMode::ZeroExtend32, 16) | (NarrowValueMode::ZeroExtend64, 16) => {
-                    ExtendOp::UXTH
-                }
-                (NarrowValueMode::SignExtend64, 32) => ExtendOp::SXTW,
-                (NarrowValueMode::ZeroExtend64, 32) => ExtendOp::UXTW,
-                _ => unreachable!(),
-            };
-            return ResultRSE::RegExtend(reg, extendop);
-        }
+    let value = ctx.input_as_value(input.insn, input.input);
+    if let Some((val, extendop)) = get_as_extended_value(ctx, value, narrow_mode) {
+        let reg = put_value_in_reg(ctx, val, NarrowValueMode::None);
+        return ResultRSE::RegExtend(reg, extendop);
     }
 
     ResultRSE::from_rs(put_input_in_rs(ctx, input, narrow_mode))
+}
+
+fn get_as_extended_value<C: LowerCtx<I = Inst>>(
+    ctx: &mut C,
+    val: Value,
+    narrow_mode: NarrowValueMode,
+) -> Option<(Value, ExtendOp)> {
+    let inputs = ctx.get_value_as_source_or_const(val);
+    let (insn, n) = inputs.inst?;
+    if n != 0 {
+        return None;
+    }
+    let op = ctx.data(insn).opcode();
+    let out_ty = ctx.output_ty(insn, 0);
+    let out_bits = ty_bits(out_ty);
+
+    // Is this a zero-extend or sign-extend and can we handle that with a register-mode operator?
+    if op == Opcode::Uextend || op == Opcode::Sextend {
+        let sign_extend = op == Opcode::Sextend;
+        let inner_ty = ctx.input_ty(insn, 0);
+        let inner_bits = ty_bits(inner_ty);
+        assert!(inner_bits < out_bits);
+        if match (sign_extend, narrow_mode) {
+            // A single zero-extend or sign-extend is equal to itself.
+            (_, NarrowValueMode::None) => true,
+            // Two zero-extends or sign-extends in a row is equal to a single zero-extend or sign-extend.
+            (false, NarrowValueMode::ZeroExtend32) | (false, NarrowValueMode::ZeroExtend64) => true,
+            (true, NarrowValueMode::SignExtend32) | (true, NarrowValueMode::SignExtend64) => true,
+            // A zero-extend and a sign-extend in a row is not equal to a single zero-extend or sign-extend
+            (false, NarrowValueMode::SignExtend32) | (false, NarrowValueMode::SignExtend64) => {
+                false
+            }
+            (true, NarrowValueMode::ZeroExtend32) | (true, NarrowValueMode::ZeroExtend64) => false,
+        } {
+            let extendop = match (sign_extend, inner_bits) {
+                (true, 8) => ExtendOp::SXTB,
+                (false, 8) => ExtendOp::UXTB,
+                (true, 16) => ExtendOp::SXTH,
+                (false, 16) => ExtendOp::UXTH,
+                (true, 32) => ExtendOp::SXTW,
+                (false, 32) => ExtendOp::UXTW,
+                _ => unreachable!(),
+            };
+            return Some((ctx.input_as_value(insn, 0), extendop));
+        }
+    }
+
+    // If `out_ty` is smaller than 32 bits and we need to zero- or sign-extend,
+    // then get the result into a register and return an Extend-mode operand on
+    // that register.
+    if narrow_mode != NarrowValueMode::None
+        && ((narrow_mode.is_32bit() && out_bits < 32) || (!narrow_mode.is_32bit() && out_bits < 64))
+    {
+        let extendop = match (narrow_mode, out_bits) {
+            (NarrowValueMode::SignExtend32, 1) | (NarrowValueMode::SignExtend64, 1) => {
+                ExtendOp::SXTB
+            }
+            (NarrowValueMode::ZeroExtend32, 1) | (NarrowValueMode::ZeroExtend64, 1) => {
+                ExtendOp::UXTB
+            }
+            (NarrowValueMode::SignExtend32, 8) | (NarrowValueMode::SignExtend64, 8) => {
+                ExtendOp::SXTB
+            }
+            (NarrowValueMode::ZeroExtend32, 8) | (NarrowValueMode::ZeroExtend64, 8) => {
+                ExtendOp::UXTB
+            }
+            (NarrowValueMode::SignExtend32, 16) | (NarrowValueMode::SignExtend64, 16) => {
+                ExtendOp::SXTH
+            }
+            (NarrowValueMode::ZeroExtend32, 16) | (NarrowValueMode::ZeroExtend64, 16) => {
+                ExtendOp::UXTH
+            }
+            (NarrowValueMode::SignExtend64, 32) => ExtendOp::SXTW,
+            (NarrowValueMode::ZeroExtend64, 32) => ExtendOp::UXTW,
+            _ => unreachable!(),
+        };
+        return Some((val, extendop));
+    }
+    None
 }
 
 pub(crate) fn put_input_in_rse_imm12<C: LowerCtx<I = Inst>>(
@@ -470,35 +486,6 @@ pub(crate) fn put_input_in_rse_imm12<C: LowerCtx<I = Inst>>(
     }
 
     ResultRSEImm12::from_rse(put_input_in_rse(ctx, input, narrow_mode))
-}
-
-/// Like `put_input_in_rse_imm12` above, except is allowed to negate the
-/// argument (assuming a two's-complement representation with the given bit
-/// width) if this allows use of 12-bit immediate. Used to flip `add`s with
-/// negative immediates to `sub`s (and vice-versa).
-pub(crate) fn put_input_in_rse_imm12_maybe_negated<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    input: InsnInput,
-    twos_complement_bits: usize,
-    narrow_mode: NarrowValueMode,
-) -> (ResultRSEImm12, bool) {
-    assert!(twos_complement_bits <= 64);
-    if let Some(imm_value) = input_to_const(ctx, input) {
-        if let Some(i) = Imm12::maybe_from_u64(imm_value) {
-            return (ResultRSEImm12::Imm12(i), false);
-        }
-        let sign_extended =
-            ((imm_value as i64) << (64 - twos_complement_bits)) >> (64 - twos_complement_bits);
-        let inverted = sign_extended.wrapping_neg();
-        if let Some(i) = Imm12::maybe_from_u64(inverted as u64) {
-            return (ResultRSEImm12::Imm12(i), true);
-        }
-    }
-
-    (
-        ResultRSEImm12::from_rse(put_input_in_rse(ctx, input, narrow_mode)),
-        false,
-    )
 }
 
 pub(crate) fn put_input_in_rs_immlogic<C: LowerCtx<I = Inst>>(

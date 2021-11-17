@@ -21,3 +21,128 @@
 
 (rule (lower (has_type ty (null)))
       (value_reg (imm ty 0)))
+
+;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i64` and smaller
+
+;; base case, simply adding things in registers
+(rule (lower (has_type (fits_in_64 ty) (iadd x y)))
+      (value_reg (alu_rrr (iadd_op ty) (put_in_reg x) (put_in_reg y))))
+
+;; special case for when one operand is an immediate that fits in 12 bits
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
+      (value_reg (alu_rr_imm12 (iadd_op ty) (put_in_reg x) y)))
+
+;; same as the previous special case, except we can switch the addition to a
+;; subtraction if the negated immediate fits in 12 bits.
+(rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
+      (value_reg (alu_rr_imm12 (isub_op ty) (put_in_reg x) y)))
+
+;; special case for when we're adding an extended register where the extending
+;; operation can get folded into the add itself.
+(rule (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
+      (value_reg (alu_rr_extend_reg (iadd_op ty) (put_in_reg x) y)))
+
+;; special case for when we're adding the shift of a different
+;; register by a constant amount and the shift can get folded into the add.
+(rule (lower (has_type (fits_in_64 ty)
+                       (iadd x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
+      (value_reg (alu_rrr_shift (iadd_op ty) (put_in_reg x) (put_in_reg y) amt)))
+
+;; Fold an `iadd` and `imul` combination into a `madd` instruction
+(rule (lower (has_type (fits_in_64 ty) (iadd x (def_inst (imul y z)))))
+      (value_reg (alu_rrrr (madd_op ty) (put_in_reg y) (put_in_reg z) (put_in_reg x))))
+
+(rule (lower (has_type (fits_in_64 ty) (iadd (def_inst (imul x y)) z)))
+      (value_reg (alu_rrrr (madd_op ty) (put_in_reg x) (put_in_reg y) (put_in_reg z))))
+
+;; helper to use either a 32 or 64-bit add depending on the input type
+(decl iadd_op (Type) ALUOp)
+(rule (iadd_op (fits_in_32 _ty)) (ALUOp.Add32))
+(rule (iadd_op _ty) (ALUOp.Add64))
+
+;; helper to use either a 32 or 64-bit sub depending on the input type
+(decl isub_op (Type) ALUOp)
+(rule (isub_op (fits_in_32 _ty)) (ALUOp.Sub32))
+(rule (isub_op _ty) (ALUOp.Sub64))
+
+;; helper to use either a 32 or 64-bit madd depending on the input type
+(decl madd_op (Type) ALUOp3)
+(rule (madd_op (fits_in_32 _ty)) (ALUOp3.MAdd32))
+(rule (madd_op _ty) (ALUOp3.MAdd64))
+
+;; vectors
+
+(rule (lower (has_type ty @ (multi_lane _ _) (iadd x y)))
+      (value_reg (vec_rrr (VecALUOp.Add) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;; `i128`
+(rule (lower (has_type $I128 (iadd x y)))
+      (let (
+          ;; Get the high/low registers for `x`.
+          (x_regs ValueRegs (put_in_regs x))
+          (x_lo Reg (value_regs_get x_regs 0))
+          (x_hi Reg (value_regs_get x_regs 1))
+
+          ;; Get the high/low registers for `y`.
+          (y_regs ValueRegs (put_in_regs y))
+          (y_lo Reg (value_regs_get y_regs 0))
+          (y_hi Reg (value_regs_get y_regs 1))
+        )
+        ;; the actual addition is `adds` followed by `adc` which comprises the
+        ;; low/high bits of the result
+        (value_regs
+          (alu_rrr (ALUOp.AddS64) x_lo y_lo)
+          (alu_rrr (ALUOp.Adc64) x_hi y_hi))))
+
+;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i64` and smaller
+
+;; base case, simply subtracting things in registers
+(rule (lower (has_type (fits_in_64 ty) (isub x y)))
+      (value_reg (alu_rrr (isub_op ty) (put_in_reg x) (put_in_reg y))))
+
+;; special case for when one operand is an immediate that fits in 12 bits
+(rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
+      (value_reg (alu_rr_imm12 (isub_op ty) (put_in_reg x) y)))
+
+;; same as the previous special case, except we can switch the subtraction to an
+;; addition if the negated immediate fits in 12 bits.
+(rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_negated_value y))))
+      (value_reg (alu_rr_imm12 (iadd_op ty) (put_in_reg x) y)))
+
+;; special cases for when we're subtracting an extended register where the
+;; extending operation can get folded into the sub itself.
+(rule (lower (has_type (fits_in_64 ty) (isub x (extended_value_from_value y))))
+      (value_reg (alu_rr_extend_reg (isub_op ty) (put_in_reg x) y)))
+
+;; finally a special case for when we're subtracting the shift of a different
+;; register by a constant amount and the shift can get folded into the sub.
+(rule (lower (has_type (fits_in_64 ty)
+                       (isub x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
+      (value_reg (alu_rrr_shift (isub_op ty) (put_in_reg x) (put_in_reg y) amt)))
+
+;; vectors
+(rule (lower (has_type ty @ (multi_lane _ _) (isub x y)))
+      (value_reg (vec_rrr (VecALUOp.Sub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;; `i128`
+(rule (lower (has_type $I128 (isub x y)))
+      (let (
+          ;; Get the high/low registers for `x`.
+          (x_regs ValueRegs (put_in_regs x))
+          (x_lo Reg (value_regs_get x_regs 0))
+          (x_hi Reg (value_regs_get x_regs 1))
+
+          ;; Get the high/low registers for `y`.
+          (y_regs ValueRegs (put_in_regs y))
+          (y_lo Reg (value_regs_get y_regs 0))
+          (y_hi Reg (value_regs_get y_regs 1))
+        )
+        ;; the actual subtraction is `subs` followed by `sbc` which comprises
+        ;; the low/high bits of the result
+        (value_regs
+          (alu_rrr (ALUOp.SubS64) x_lo y_lo)
+          (alu_rrr (ALUOp.Sbc64) x_hi y_hi))))
