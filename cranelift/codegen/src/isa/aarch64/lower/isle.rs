@@ -8,9 +8,10 @@ use super::{
     zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget, CallIndInfo,
     CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, Imm12, ImmLogic, ImmShift, Inst as MInst,
     JTSequenceInfo, MachLabel, MoveWideConst, Opcode, OperandSize, PairAMode, Reg, ScalarSize,
-    ShiftOpAndAmt, UImm5, VectorSize, Writable, NZCV,
+    ShiftOpAndAmt, UImm5, VectorSize, NZCV,
 };
 use crate::isa::aarch64::settings as aarch64_settings;
+use crate::isa::isle::*;
 use crate::{
     binemit::CodeOffset,
     ir::{
@@ -25,12 +26,6 @@ use smallvec::SmallVec;
 use std::boxed::Box;
 use std::vec::Vec;
 
-type Unit = ();
-type ValueSlice<'a> = &'a [Value];
-type ValueArray2 = [Value; 2];
-type ValueArray3 = [Value; 3];
-type WritableReg = Writable<Reg>;
-type ValueRegs = crate::machinst::ValueRegs<Reg>;
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type VecMachLabel = Vec<MachLabel>;

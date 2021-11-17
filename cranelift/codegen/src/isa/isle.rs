@@ -1,3 +1,13 @@
+use crate::ir::Value;
+use regalloc::{Reg, Writable};
+
+pub type Unit = ();
+pub type ValueSlice<'a> = &'a [Value];
+pub type ValueArray2 = [Value; 2];
+pub type ValueArray3 = [Value; 3];
+pub type WritableReg = Writable<Reg>;
+pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
+
 #[macro_export]
 #[doc(hidden)]
 macro_rules! isle_prelude_methods {

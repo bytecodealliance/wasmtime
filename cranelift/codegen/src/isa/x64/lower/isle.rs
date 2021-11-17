@@ -6,8 +6,8 @@ mod generated_code;
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
     is_mergeable_load, lower_to_amode, AluRmiROpcode, Inst as MInst, OperandSize, Reg, RegMemImm,
-    Writable,
 };
+use crate::isa::isle::*;
 use crate::isa::x64::inst::args::SyntheticAmode;
 use crate::isa::x64::settings as x64_settings;
 use crate::{
@@ -22,13 +22,6 @@ use crate::{
 };
 use smallvec::SmallVec;
 use std::convert::TryFrom;
-
-type Unit = ();
-type ValueSlice<'a> = &'a [Value];
-type ValueArray2 = [Value; 2];
-type ValueArray3 = [Value; 3];
-type WritableReg = Writable<Reg>;
-type ValueRegs = crate::machinst::ValueRegs<Reg>;
 
 pub struct SinkableLoad {
     inst: Inst,
