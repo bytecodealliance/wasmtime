@@ -410,7 +410,7 @@ fn gen_opcodes(all_inst: &AllInstructions, fmt: &mut Formatter) {
     fmt.line("#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]");
     fmt.line(
         r#"#[cfg_attr(
-            any(feature = "enable-peepmatic", feature = "enable-serde"),
+            feature = "enable-serde",
             derive(serde::Serialize, serde::Deserialize)
         )]"#,
     );

@@ -68,16 +68,6 @@ fn main() {
         println!("cargo:warning=Generated files are in {}", out_dir);
     }
 
-    #[cfg(feature = "rebuild-peephole-optimizers")]
-    {
-        let cur_dir = env::current_dir().expect("Can't access current working directory");
-        std::fs::write(
-            std::path::Path::new(&out_dir).join("CRANELIFT_CODEGEN_PATH"),
-            cur_dir.to_str().unwrap(),
-        )
-        .unwrap()
-    }
-
     // The "Meta deterministic check" CI job runs this build script N
     // times to ensure it produces the same output
     // consistently. However, it runs the script in a fresh directory,

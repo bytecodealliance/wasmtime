@@ -109,9 +109,6 @@ mod simple_preopt;
 mod unreachable_code;
 mod value_label;
 
-#[cfg(feature = "enable-peepmatic")]
-mod peepmatic;
-
 #[cfg(feature = "souper-harvest")]
 mod souper_harvest;
 

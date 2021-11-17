@@ -34,7 +34,6 @@ termcolor = "1.1.2"
 capstone = { version = "0.9.0", optional = true }
 wat = { version = "1.0.36", optional = true }
 target-lexicon = { version = "0.12", features = ["std"] }
-peepmatic-souper = { path = "./peepmatic/crates/souper", version = "0.78.0", optional = true }
 pretty_env_logger = "0.4.0"
 rayon = { version = "1", optional = true }
 file-per-thread-logger = "0.1.2"
@@ -45,9 +44,8 @@ anyhow = "1.0.32"
 structopt = "0.3.17"
 
 [features]
-default = ["disas", "wasm", "cranelift-codegen/all-arch", "peepmatic-souper", "souper-harvest"]
+default = ["disas", "wasm", "cranelift-codegen/all-arch", "souper-harvest"]
 disas = ["capstone"]
-enable-peepmatic = ["cranelift-codegen/enable-peepmatic", "cranelift-filetests/enable-peepmatic"]
 wasm = ["wat", "cranelift-wasm"]
 experimental_arm32 = ["cranelift-codegen/arm32", "cranelift-filetests/experimental_arm32"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]

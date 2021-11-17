@@ -28,9 +28,6 @@ mod utils;
 #[cfg(feature = "souper-harvest")]
 mod souper_harvest;
 
-#[cfg(feature = "peepmatic-souper")]
-mod souper_to_peepmatic;
-
 #[cfg(feature = "wasm")]
 mod wasm;
 
@@ -58,11 +55,6 @@ enum Commands {
     Wasm(wasm::Options),
     #[cfg(not(feature = "wasm"))]
     Wasm(CompiledWithoutSupportOptions),
-
-    #[cfg(feature = "peepmatic-souper")]
-    SouperToPeepmatic(souper_to_peepmatic::Options),
-    #[cfg(not(feature = "peepmatic-souper"))]
-    SouperToPeepmatic(CompiledWithoutSupportOptions),
 
     #[cfg(feature = "souper-harvest")]
     SouperHarvest(souper_harvest::Options),
@@ -134,14 +126,6 @@ fn main() -> anyhow::Result<()> {
         Commands::Wasm(w) => wasm::run(&w)?,
         #[cfg(not(feature = "wasm"))]
         Commands::Wasm(_) => anyhow::bail!("Error: clif-util was compiled without wasm support."),
-
-        #[cfg(feature = "peepmatic-souper")]
-        Commands::SouperToPeepmatic(s) => souper_to_peepmatic::run(&s)?,
-        #[cfg(not(feature = "peepmatic-souper"))]
-        Commands::SouperToPeepmatic(_) => anyhow::bail!(
-            "Error: clif-util was compiled without support for the `souper-to-peepmatic` \
-             subcommand",
-        ),
 
         #[cfg(feature = "souper-harvest")]
         Commands::SouperHarvest(s) => souper_harvest::run(&s)?,

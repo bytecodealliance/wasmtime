@@ -17,14 +17,6 @@ use std::time::Duration;
 
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
-    // peepmatic
-    "peepmatic-traits",
-    "peepmatic-macro",
-    "peepmatic-automata",
-    "peepmatic-test-operator",
-    "peepmatic-runtime",
-    "peepmatic",
-    "peepmatic-souper",
     // cranelift
     "isle",
     "cranelift-entity",
@@ -461,7 +453,6 @@ fn verify(crates: &[Crate]) {
             .env("CARGO_TARGET_DIR", "./target");
         if krate.name == "witx"
             || krate.name.contains("wasi-nn")
-            || krate.name.contains("peepmatic")
         {
             cmd.arg("--no-verify");
         }
