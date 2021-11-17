@@ -271,12 +271,18 @@ impl StackAMode {
     }
 }
 
+/// Trait implemented by machine-specific backend to represent ISA flags.
+pub trait IsaFlags: Clone {}
+
 /// Trait implemented by machine-specific backend to provide information about
 /// register assignments and to allow generating the specific instructions for
 /// stack loads/saves, prologues/epilogues, etc.
 pub trait ABIMachineSpec {
     /// The instruction type.
     type I: VCodeInst;
+
+    /// The ISA flags type.
+    type F: IsaFlags;
 
     /// Returns the number of bits in a word, that is 32/64 for 32/64-bit architecture.
     fn word_bits() -> u32;
@@ -340,7 +346,7 @@ pub trait ABIMachineSpec {
     ) -> Self::I;
 
     /// Generate a return instruction.
-    fn gen_ret(rets: Vec<Reg>) -> Self::I;
+    fn gen_ret(setup_frame: bool, isa_flags: &Self::F, rets: Vec<Reg>) -> Self::I;
 
     /// Generate an add-with-immediate. Note that even if this uses a scratch
     /// register, it must satisfy two requirements:
@@ -387,12 +393,14 @@ pub trait ABIMachineSpec {
     /// Generate a meta-instruction that adjusts the nominal SP offset.
     fn gen_nominal_sp_adj(amount: i32) -> Self::I;
 
-    /// Generates extra unwind instructions for a new frame  for this
-    /// architecture, whether the frame has a prologue sequence or not.
-    fn gen_debug_frame_info(
+    /// Generates the mandatory part of the prologue, irrespective of whether
+    /// the usual frame-setup sequence for this architecture is required or not,
+    /// e.g. extra unwind instructions.
+    fn gen_prologue_start(
+        _setup_frame: bool,
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        _isa_flags: &Vec<settings::Value>,
+        _isa_flags: &Self::F,
     ) -> SmallInstVec<Self::I> {
         // By default, generates nothing.
         smallvec![]
@@ -722,7 +730,7 @@ pub struct ABICalleeImpl<M: ABIMachineSpec> {
     /// The settings controlling this function's compilation.
     flags: settings::Flags,
     /// The ISA-specific flag values controlling this function's compilation.
-    isa_flags: Vec<settings::Value>,
+    isa_flags: M::F,
     /// Whether or not this function is a "leaf", meaning it calls no other
     /// functions
     is_leaf: bool,
@@ -763,7 +771,7 @@ fn get_special_purpose_param_register(
 
 impl<M: ABIMachineSpec> ABICalleeImpl<M> {
     /// Create a new body ABI instance.
-    pub fn new(f: &ir::Function, isa: &dyn TargetIsa) -> CodegenResult<Self> {
+    pub fn new(f: &ir::Function, isa: &dyn TargetIsa, isa_flags: &M::F) -> CodegenResult<Self> {
         trace!("ABI: func signature {:?}", f.signature);
 
         let flags = isa.flags().clone();
@@ -857,7 +865,7 @@ impl<M: ABIMachineSpec> ABICalleeImpl<M> {
             ret_area_ptr: None,
             call_conv,
             flags,
-            isa_flags: isa.isa_flags(),
+            isa_flags: isa_flags.clone(),
             is_leaf: f.is_leaf(),
             stack_limit,
             probestack_min_frame,
@@ -1275,7 +1283,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             }
         }
 
-        M::gen_ret(rets)
+        M::gen_ret(self.setup_frame, &self.isa_flags, rets)
     }
 
     fn set_num_spillslots(&mut self, slots: usize) {
@@ -1399,7 +1407,13 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
             );
 
         insts.extend(
-            M::gen_debug_frame_info(self.call_conv, &self.flags, &self.isa_flags).into_iter(),
+            M::gen_prologue_start(
+                self.setup_frame,
+                self.call_conv,
+                &self.flags,
+                &self.isa_flags,
+            )
+            .into_iter(),
         );
 
         if self.setup_frame {
@@ -1473,7 +1487,7 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
         // This `ret` doesn't need any return registers attached
         // because we are post-regalloc and don't need to
         // represent the implicit uses anymore.
-        insts.push(M::gen_ret(vec![]));
+        insts.push(M::gen_ret(self.setup_frame, &self.isa_flags, vec![]));
 
         trace!("Epilogue: {:?}", insts);
         insts

@@ -3,7 +3,7 @@
 use crate::ir::types::*;
 use crate::ir::{self, types, ExternalName, LibCall, MemFlags, Opcode, Signature, TrapCode, Type};
 use crate::isa;
-use crate::isa::{unwind::UnwindInst, x64::inst::*, CallConv};
+use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
 use crate::machinst::abi_impl::*;
 use crate::machinst::*;
 use crate::settings;
@@ -29,8 +29,12 @@ pub(crate) type X64ABICaller = ABICallerImpl<X64ABIMachineSpec>;
 /// Implementation of ABI primitives for x64.
 pub(crate) struct X64ABIMachineSpec;
 
+impl IsaFlags for x64_settings::Flags {}
+
 impl ABIMachineSpec for X64ABIMachineSpec {
     type I = Inst;
+
+    type F = x64_settings::Flags;
 
     fn word_bits() -> u32 {
         64
@@ -270,7 +274,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         }
     }
 
-    fn gen_ret(rets: Vec<Reg>) -> Self::I {
+    fn gen_ret(_setup_frame: bool, _isa_flags: &x64_settings::Flags, rets: Vec<Reg>) -> Self::I {
         Inst::ret(rets)
     }
 

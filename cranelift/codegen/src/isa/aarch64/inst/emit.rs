@@ -2774,6 +2774,19 @@ impl MachInstEmit for Inst {
             &Inst::Ret { .. } => {
                 sink.put4(0xd65f03c0);
             }
+            &Inst::AuthenticatedRet { key, is_hint, .. } => {
+                let key = match key {
+                    APIKey::A => 0b0,
+                    APIKey::B => 0b1,
+                };
+
+                if is_hint {
+                    sink.put4(0xd50323bf | key << 6); // autiasp / autibsp
+                    Inst::Ret { rets: vec![] }.emit(&[], sink, emit_info, state);
+                } else {
+                    sink.put4(0xd65f0bff | key << 10); // retaa / retab
+                }
+            }
             &Inst::Call { ref info } => {
                 if let Some(s) = state.take_stack_map() {
                     sink.add_stack_map(StackMapExtent::UpcomingBytes(4), s);
@@ -3063,6 +3076,14 @@ impl MachInstEmit for Inst {
                     };
                     add.emit(&[], sink, emit_info, state);
                 }
+            }
+            &Inst::Pacisp { key } => {
+                let key = match key {
+                    APIKey::A => 0b0,
+                    APIKey::B => 0b1,
+                };
+
+                sink.put4(0xd503233f | key << 6);
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 trace!(

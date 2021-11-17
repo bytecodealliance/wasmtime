@@ -449,6 +449,18 @@ impl Engine {
         {
             enabled = match flag {
                 "has_lse" => Some(std::arch::is_aarch64_feature_detected!("lse")),
+                // No effect on its own, but in order to simplify the code on a
+                // platform without pointer authentication support we fail if
+                // "has_pauth" is enabled, but "sign_return_address" is not.
+                "has_pauth" => Some(std::arch::is_aarch64_feature_detected!("paca")),
+                // No effect on its own.
+                "sign_return_address_all" => Some(true),
+                // The pointer authentication instructions act as a `NOP` when
+                // unsupported (but keep in mind "has_pauth" as well), so it is
+                // safe to enable them.
+                "sign_return_address" => Some(true),
+                // No effect on its own.
+                "sign_return_address_with_bkey" => Some(true),
                 // fall through to the very bottom to indicate that support is
                 // not enabled to test whether this feature is enabled on the
                 // host.
@@ -582,18 +594,15 @@ mod tests {
         assert_eq!(engine.config().cache_config.cache_hits(), 1);
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
-        // FIXME(#1523) need debuginfo on aarch64 before we run this test there
-        if !cfg!(target_arch = "aarch64") {
-            let mut cfg = Config::new();
-            cfg.debug_info(true).cache_config_load(&config_path)?;
-            let engine = Engine::new(&cfg)?;
-            Module::new(&engine, "(module (func))")?;
-            assert_eq!(engine.config().cache_config.cache_hits(), 0);
-            assert_eq!(engine.config().cache_config.cache_misses(), 1);
-            Module::new(&engine, "(module (func))")?;
-            assert_eq!(engine.config().cache_config.cache_hits(), 1);
-            assert_eq!(engine.config().cache_config.cache_misses(), 1);
-        }
+        let mut cfg = Config::new();
+        cfg.debug_info(true).cache_config_load(&config_path)?;
+        let engine = Engine::new(&cfg)?;
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 0);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        Module::new(&engine, "(module (func))")?;
+        assert_eq!(engine.config().cache_config.cache_hits(), 1);
+        assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         Ok(())
     }

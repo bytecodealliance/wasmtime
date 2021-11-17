@@ -73,7 +73,7 @@ use crate::ir::MemFlags;
 use crate::ir::Signature;
 use crate::ir::Type;
 use crate::isa;
-use crate::isa::s390x::inst::*;
+use crate::isa::s390x::{inst::*, settings as s390x_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::*;
 use crate::machinst::{RealReg, Reg, RegClass, Writable};
@@ -206,8 +206,12 @@ impl Into<MemArg> for StackAMode {
 /// point for the trait; it is never actually instantiated.
 pub struct S390xMachineDeps;
 
+impl IsaFlags for s390x_settings::Flags {}
+
 impl ABIMachineSpec for S390xMachineDeps {
     type I = Inst;
+
+    type F = s390x_settings::Flags;
 
     fn word_bits() -> u32 {
         64
@@ -391,7 +395,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn gen_ret(rets: Vec<Reg>) -> Inst {
+    fn gen_ret(_setup_frame: bool, _isa_flags: &s390x_settings::Flags, rets: Vec<Reg>) -> Inst {
         Inst::Ret {
             link: gpr(14),
             rets,
