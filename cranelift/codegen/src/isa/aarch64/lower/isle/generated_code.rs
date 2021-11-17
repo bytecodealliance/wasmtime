@@ -1025,25 +1025,25 @@ pub fn constructor_imm<C: Context>(ctx: &mut C, arg0: Type, arg1: u64) -> Option
     let pattern0_0 = arg0;
     if let Some(pattern1_0) = C::integral_ty(ctx, pattern0_0) {
         let pattern2_0 = arg1;
+        if let Some(pattern3_0) = C::imm_logic_from_u64(ctx, pattern2_0) {
+            // Rule at src/isa/aarch64/inst.isle line 1351.
+            let expr0_0 = C::zero_reg(ctx);
+            let expr1_0 = constructor_orr64(ctx, expr0_0, pattern3_0)?;
+            return Some(expr1_0);
+        }
         if let Some(pattern3_0) = C::move_wide_const_from_u64(ctx, pattern2_0) {
-            // Rule at src/isa/aarch64/inst.isle line 1348.
+            // Rule at src/isa/aarch64/inst.isle line 1343.
             let expr0_0 = OperandSize::Size64;
             let expr1_0 = constructor_movz(ctx, pattern3_0, &expr0_0)?;
             return Some(expr1_0);
         }
         if let Some(pattern3_0) = C::move_wide_const_from_negated_u64(ctx, pattern2_0) {
-            // Rule at src/isa/aarch64/inst.isle line 1352.
+            // Rule at src/isa/aarch64/inst.isle line 1347.
             let expr0_0 = OperandSize::Size64;
             let expr1_0 = constructor_movn(ctx, pattern3_0, &expr0_0)?;
             return Some(expr1_0);
         }
-        if let Some(pattern3_0) = C::imm_logic_from_u64(ctx, pattern2_0) {
-            // Rule at src/isa/aarch64/inst.isle line 1356.
-            let expr0_0 = C::zero_reg(ctx);
-            let expr1_0 = constructor_orr64(ctx, expr0_0, pattern3_0)?;
-            return Some(expr1_0);
-        }
-        // Rule at src/isa/aarch64/inst.isle line 1363.
+        // Rule at src/isa/aarch64/inst.isle line 1358.
         let expr0_0 = C::load_constant64_full(ctx, pattern2_0);
         return Some(expr0_0);
     }

@@ -269,7 +269,8 @@ fn maybe_rebuild_isle(
             println!("cargo:rerun-if-changed={}", file.display());
         }
 
-        let manifest = std::fs::read_to_string(compilation.manifest_filename())?;
+        let manifest =
+            std::fs::read_to_string(compilation.manifest_filename()).unwrap_or(String::new());
         // Canonicalize Windows line-endings into Unix line-endings in
         // the manifest text itself.
         let manifest = manifest.replace("\r\n", "\n");
