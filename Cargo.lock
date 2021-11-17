@@ -545,16 +545,12 @@ dependencies = [
  "isle",
  "log",
  "miette",
- "peepmatic",
- "peepmatic-runtime",
- "peepmatic-traits",
  "regalloc",
  "serde",
  "sha2",
  "smallvec",
  "souper-ir",
  "target-lexicon",
- "wast 38.0.1",
 ]
 
 [[package]]
@@ -730,7 +726,6 @@ dependencies = [
  "filecheck",
  "indicatif",
  "log",
- "peepmatic-souper",
  "pretty_env_logger",
  "rayon",
  "structopt",
@@ -1203,12 +1198,6 @@ dependencies = [
  "libc",
  "winapi",
 ]
-
-[[package]]
-name = "fst"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e398fae362f4124bbe630d99519fb2d68a03e2e3a23b441028cdcdc4f4895687"
 
 [[package]]
 name = "funty"
@@ -1995,109 +1984,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
 
 [[package]]
-name = "peepmatic"
-version = "0.78.0"
-dependencies = [
- "anyhow",
- "peepmatic-automata",
- "peepmatic-macro",
- "peepmatic-runtime",
- "peepmatic-test-operator",
- "peepmatic-traits",
- "serde",
- "wast 38.0.1",
- "z3",
-]
-
-[[package]]
-name = "peepmatic-automata"
-version = "0.78.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "peepmatic-fuzzing"
-version = "0.66.0"
-dependencies = [
- "arbitrary",
- "bincode",
- "env_logger 0.8.3",
- "fst",
- "log",
- "peepmatic",
- "peepmatic-automata",
- "peepmatic-runtime",
- "peepmatic-test",
- "peepmatic-test-operator",
- "peepmatic-traits",
- "rand 0.8.3",
- "serde",
- "wast 38.0.1",
-]
-
-[[package]]
-name = "peepmatic-macro"
-version = "0.78.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "peepmatic-runtime"
-version = "0.78.0"
-dependencies = [
- "bincode",
- "log",
- "peepmatic-automata",
- "peepmatic-test-operator",
- "peepmatic-traits",
- "serde",
- "serde_test",
- "thiserror",
- "wast 38.0.1",
-]
-
-[[package]]
-name = "peepmatic-souper"
-version = "0.78.0"
-dependencies = [
- "anyhow",
- "log",
- "peepmatic",
- "peepmatic-test-operator",
- "souper-ir",
- "wast 38.0.1",
-]
-
-[[package]]
-name = "peepmatic-test"
-version = "0.2.0"
-dependencies = [
- "env_logger 0.8.3",
- "log",
- "peepmatic",
- "peepmatic-runtime",
- "peepmatic-test-operator",
- "peepmatic-traits",
-]
-
-[[package]]
-name = "peepmatic-test-operator"
-version = "0.78.0"
-dependencies = [
- "peepmatic-traits",
- "serde",
- "wast 38.0.1",
-]
-
-[[package]]
-name = "peepmatic-traits"
-version = "0.78.0"
-
-[[package]]
 name = "pem-rfc7468"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2672,15 +2558,6 @@ checksum = "799e97dc9fdae36a5c8b8f2cae9ce2ee9fdce2058c57a93e6099d919fd982f79"
 dependencies = [
  "itoa",
  "ryu",
- "serde",
-]
-
-[[package]]
-name = "serde_test"
-version = "1.0.126"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd1055d1c20532080b9da5040ec8e27425f4d4573d8e29eb19ba4ff1e4b9da2d"
-dependencies = [
  "serde",
 ]
 
@@ -3664,7 +3541,6 @@ dependencies = [
  "cranelift-reader",
  "cranelift-wasm",
  "libfuzzer-sys",
- "peepmatic-fuzzing",
  "target-lexicon",
  "wasm-smith",
  "wasmtime",
@@ -3959,26 +3835,6 @@ checksum = "5c3eb43ef4c9cf03b367689d487f745639655d670f2208b1c5f544cfb506b640"
 dependencies = [
  "rawbytes",
  "zeroize",
-]
-
-[[package]]
-name = "z3"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa17be9852c6c2a8de2ea0875350dc5f8626f3eaa6b683148753b827f1b39ce5"
-dependencies = [
- "lazy_static",
- "log",
- "z3-sys",
-]
-
-[[package]]
-name = "z3-sys"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afa18ba5fbd4933e41ffb440c3fd91f91fe9cdb7310cce3ddfb6648563811de0"
-dependencies = [
- "cmake",
 ]
 
 [[package]]

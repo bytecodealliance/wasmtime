@@ -88,8 +88,7 @@ jobs:
         cargo doc --no-deps --workspace \
           --exclude wasmtime-cli \
           --exclude test-programs \
-          --exclude cranelift-codegen-meta \
-          --exclude 'peepmatic*'
+          --exclude cranelift-codegen-meta
     - run: cargo doc --package cranelift-codegen-meta --document-private-items
 
     # Assemble the documentation, and always upload it as an artifact for
@@ -203,33 +202,6 @@ jobs:
       run: cargo fmt -p cranelift-codegen
     - name: Check that the ISLE DSL files are up-to-date
       run: git diff --exit-code
-
-  rebuild_peephole_optimizers:
-    name: Rebuild Peephole Optimizers
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        submodules: true
-    - run: rustup update stable && rustup default stable
-    - name: Test `peepmatic`
-      run: cargo test --package 'peepmatic*'
-    - name: Rebuild Peepmatic-based peephole optimizers
-      run: |
-        cargo test \
-          --features 'enable-peepmatic rebuild-peephole-optimizers' \
-          peepmatic
-      working-directory: ./cranelift/codegen
-    - name: Upload rebuilt peephole optimizers
-      uses: actions/upload-artifact@v2
-      with:
-        name: peephole-optimizers
-        path: cranelift/codegen/src/preopt.serialized
-    - name: Check that built peephole optimizers are up to date
-      run: git diff --exit-code
-    - name: Test with Peepmatic-based peephole optimizers
-      run: cargo test --features 'enable-peepmatic'
-      working-directory: ./cranelift
 
   # Perform all tests (debug mode) for `wasmtime`. This runs stable/beta/nightly
   # channels of Rust as well as macOS/Linux/Windows.

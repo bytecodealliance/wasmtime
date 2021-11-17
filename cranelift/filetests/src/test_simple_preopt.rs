@@ -41,16 +41,6 @@ impl SubTest for TestSimplePreopt {
             .map_err(|e| crate::pretty_anyhow_error(&comp_ctx.func, e))?;
         let text = &comp_ctx.func.display().to_string();
         log::debug!("After simple_preopt:\n{}", text);
-
-        // Only actually run the filecheck if peepmatic is *not* enabled,
-        // because it can generate slightly different code (alias a result vs
-        // replace an instruction) than the non-peepmatic versions of peephole
-        // optimizations. Note that the `peepmatic`-based results can be tested
-        // with the `test peepmatic` subtest.
-        if cfg!(feature = "enable-peepmatic") {
-            Ok(())
-        } else {
-            run_filecheck(&text, context)
-        }
+        run_filecheck(&text, context)
     }
 }

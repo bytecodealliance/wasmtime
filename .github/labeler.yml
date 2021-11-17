@@ -29,10 +29,6 @@
 "cranelift:area:x64":
   - "cranelift/codegen/src/isa/x64/**"
 
-"cranelift:area:peepmatic":
-  - "cranelift/peepmatic/**"
-  - "cranelift/codegen/src/peepmatic.rs"
-
 "cranelift:docs":
   - "cranelift/docs/**"
 

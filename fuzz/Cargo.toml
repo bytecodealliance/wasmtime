@@ -17,7 +17,6 @@ cranelift-interpreter = { path = "../cranelift/interpreter" }
 cranelift-fuzzgen = { path = "../cranelift/fuzzgen" }
 libfuzzer-sys = "0.4.0"
 target-lexicon = "0.12"
-peepmatic-fuzzing = { path = "../cranelift/peepmatic/crates/fuzzing", optional = true }
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
 wasm-smith = "0.7.0"
