@@ -36,6 +36,7 @@ pub trait Context {
     fn unwrap_head_value_list_1(&mut self, arg0: ValueList) -> (Value, ValueSlice);
     fn unwrap_head_value_list_2(&mut self, arg0: ValueList) -> (Value, Value, ValueSlice);
     fn writable_reg_to_reg(&mut self, arg0: WritableReg) -> Reg;
+    fn u8_from_uimm8(&mut self, arg0: Uimm8) -> u8;
     fn u64_from_imm64(&mut self, arg0: Imm64) -> u64;
     fn u64_from_ieee32(&mut self, arg0: Ieee32) -> u64;
     fn u64_from_ieee64(&mut self, arg0: Ieee64) -> u64;
@@ -58,6 +59,7 @@ pub trait Context {
     fn ext_mode(&mut self, arg0: u16, arg1: u16) -> ExtMode;
     fn emit(&mut self, arg0: &MInst) -> Unit;
     fn nonzero_u64_fits_in_u32(&mut self, arg0: u64) -> Option<u64>;
+    fn sse_insertps_lane_imm(&mut self, arg0: u8) -> u8;
 }
 
 /// Internal type ProducesFlags: defined at src/isa/x64/inst.isle line 392.
@@ -1724,6 +1726,102 @@ pub fn constructor_gpr_to_xmm<C: Context>(
     return Some(expr3_0);
 }
 
+// Generated as internal constructor for term pinsrb.
+pub fn constructor_pinsrb<C: Context>(
+    ctx: &mut C,
+    arg0: Reg,
+    arg1: &RegMem,
+    arg2: u8,
+) -> Option<Reg> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 1121.
+    let expr0_0 = SseOpcode::Pinsrb;
+    let expr1_0 = OperandSize::Size32;
+    let expr2_0 =
+        constructor_xmm_rm_r_imm(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, &expr1_0)?;
+    return Some(expr2_0);
+}
+
+// Generated as internal constructor for term pinsrw.
+pub fn constructor_pinsrw<C: Context>(
+    ctx: &mut C,
+    arg0: Reg,
+    arg1: &RegMem,
+    arg2: u8,
+) -> Option<Reg> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 1126.
+    let expr0_0 = SseOpcode::Pinsrw;
+    let expr1_0 = OperandSize::Size32;
+    let expr2_0 =
+        constructor_xmm_rm_r_imm(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, &expr1_0)?;
+    return Some(expr2_0);
+}
+
+// Generated as internal constructor for term pinsrd.
+pub fn constructor_pinsrd<C: Context>(
+    ctx: &mut C,
+    arg0: Reg,
+    arg1: &RegMem,
+    arg2: u8,
+    arg3: &OperandSize,
+) -> Option<Reg> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    let pattern3_0 = arg3;
+    // Rule at src/isa/x64/inst.isle line 1131.
+    let expr0_0 = SseOpcode::Pinsrd;
+    let expr1_0 = constructor_xmm_rm_r_imm(
+        ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, pattern3_0,
+    )?;
+    return Some(expr1_0);
+}
+
+// Generated as internal constructor for term insertps.
+pub fn constructor_insertps<C: Context>(
+    ctx: &mut C,
+    arg0: Reg,
+    arg1: &RegMem,
+    arg2: u8,
+) -> Option<Reg> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    let pattern2_0 = arg2;
+    // Rule at src/isa/x64/inst.isle line 1136.
+    let expr0_0 = SseOpcode::Insertps;
+    let expr1_0 = OperandSize::Size32;
+    let expr2_0 =
+        constructor_xmm_rm_r_imm(ctx, &expr0_0, pattern0_0, pattern1_0, pattern2_0, &expr1_0)?;
+    return Some(expr2_0);
+}
+
+// Generated as internal constructor for term movsd.
+pub fn constructor_movsd<C: Context>(ctx: &mut C, arg0: Reg, arg1: &RegMem) -> Option<Reg> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    // Rule at src/isa/x64/inst.isle line 1141.
+    let expr0_0: Type = I8X16;
+    let expr1_0 = SseOpcode::Movsd;
+    let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
+    return Some(expr2_0);
+}
+
+// Generated as internal constructor for term movlhps.
+pub fn constructor_movlhps<C: Context>(ctx: &mut C, arg0: Reg, arg1: &RegMem) -> Option<Reg> {
+    let pattern0_0 = arg0;
+    let pattern1_0 = arg1;
+    // Rule at src/isa/x64/inst.isle line 1146.
+    let expr0_0: Type = I8X16;
+    let expr1_0 = SseOpcode::Movlhps;
+    let expr2_0 = constructor_xmm_rm_r(ctx, expr0_0, &expr1_0, pattern0_0, pattern1_0)?;
+    return Some(expr2_0);
+}
+
 // Generated as internal constructor for term lower.
 pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueRegs> {
     let pattern0_0 = arg0;
@@ -1753,6 +1851,24 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                 let expr1_0 = constructor_imm(ctx, expr0_0, pattern4_0)?;
                 let expr2_0 = C::value_reg(ctx, expr1_0);
                 return Some(expr2_0);
+            }
+        }
+        &InstructionData::TernaryImm8 {
+            opcode: ref pattern2_0,
+            args: ref pattern2_1,
+            imm: pattern2_2,
+        } => {
+            if let &Opcode::Insertlane = &pattern2_0 {
+                let (pattern4_0, pattern4_1) = C::unpack_value_array_2(ctx, &pattern2_1);
+                let pattern5_0 = C::value_type(ctx, pattern4_0);
+                let pattern6_0 = C::u8_from_uimm8(ctx, pattern2_2);
+                // Rule at src/isa/x64/lower.isle line 970.
+                let expr0_0 = C::put_in_reg(ctx, pattern4_0);
+                let expr1_0 = C::put_in_reg_mem(ctx, pattern4_1);
+                let expr2_0 =
+                    constructor_vec_insert_lane(ctx, pattern5_0, expr0_0, &expr1_0, pattern6_0)?;
+                let expr3_0 = C::value_reg(ctx, expr2_0);
+                return Some(expr3_0);
             }
         }
         _ => {}
@@ -3966,4 +4082,86 @@ pub fn constructor_shr_i128<C: Context>(
     let expr48_0 = constructor_cmove(ctx, expr42_0, &expr43_0, &expr44_0, expr47_0)?;
     let expr49_0 = constructor_with_flags_2(ctx, &expr37_0, &expr41_0, &expr48_0)?;
     return Some(expr49_0);
+}
+
+// Generated as internal constructor for term vec_insert_lane.
+pub fn constructor_vec_insert_lane<C: Context>(
+    ctx: &mut C,
+    arg0: Type,
+    arg1: Reg,
+    arg2: &RegMem,
+    arg3: u8,
+) -> Option<Reg> {
+    let pattern0_0 = arg0;
+    if pattern0_0 == I8X16 {
+        let pattern2_0 = arg1;
+        let pattern3_0 = arg2;
+        let pattern4_0 = arg3;
+        // Rule at src/isa/x64/lower.isle line 981.
+        let expr0_0 = constructor_pinsrb(ctx, pattern2_0, pattern3_0, pattern4_0)?;
+        return Some(expr0_0);
+    }
+    if pattern0_0 == I16X8 {
+        let pattern2_0 = arg1;
+        let pattern3_0 = arg2;
+        let pattern4_0 = arg3;
+        // Rule at src/isa/x64/lower.isle line 984.
+        let expr0_0 = constructor_pinsrw(ctx, pattern2_0, pattern3_0, pattern4_0)?;
+        return Some(expr0_0);
+    }
+    if pattern0_0 == I32X4 {
+        let pattern2_0 = arg1;
+        let pattern3_0 = arg2;
+        let pattern4_0 = arg3;
+        // Rule at src/isa/x64/lower.isle line 987.
+        let expr0_0 = OperandSize::Size32;
+        let expr1_0 = constructor_pinsrd(ctx, pattern2_0, pattern3_0, pattern4_0, &expr0_0)?;
+        return Some(expr1_0);
+    }
+    if pattern0_0 == I64X2 {
+        let pattern2_0 = arg1;
+        let pattern3_0 = arg2;
+        let pattern4_0 = arg3;
+        // Rule at src/isa/x64/lower.isle line 990.
+        let expr0_0 = OperandSize::Size64;
+        let expr1_0 = constructor_pinsrd(ctx, pattern2_0, pattern3_0, pattern4_0, &expr0_0)?;
+        return Some(expr1_0);
+    }
+    if pattern0_0 == F32X4 {
+        let pattern2_0 = arg1;
+        let pattern3_0 = arg2;
+        let pattern4_0 = arg3;
+        // Rule at src/isa/x64/lower.isle line 993.
+        let expr0_0 = C::sse_insertps_lane_imm(ctx, pattern4_0);
+        let expr1_0 = constructor_insertps(ctx, pattern2_0, pattern3_0, expr0_0)?;
+        return Some(expr1_0);
+    }
+    if pattern0_0 == F64X2 {
+        let pattern2_0 = arg1;
+        let pattern3_0 = arg2;
+        if let &RegMem::Reg { reg: pattern4_0 } = pattern3_0 {
+            let pattern5_0 = arg3;
+            if pattern5_0 == 0 {
+                // Rule at src/isa/x64/lower.isle line 1014.
+                let expr0_0 = RegMem::Reg { reg: pattern4_0 };
+                let expr1_0 = constructor_movsd(ctx, pattern2_0, &expr0_0)?;
+                return Some(expr1_0);
+            }
+        }
+        let pattern4_0 = arg3;
+        if pattern4_0 == 0 {
+            // Rule at src/isa/x64/lower.isle line 1015.
+            let expr0_0 = SseOpcode::Movsd;
+            let expr1_0 = constructor_xmm_unary_rm_r(ctx, &expr0_0, pattern3_0)?;
+            let expr2_0 = RegMem::Reg { reg: expr1_0 };
+            let expr3_0 = constructor_movsd(ctx, pattern2_0, &expr2_0)?;
+            return Some(expr3_0);
+        }
+        if pattern4_0 == 1 {
+            // Rule at src/isa/x64/lower.isle line 1023.
+            let expr0_0 = constructor_movlhps(ctx, pattern2_0, pattern3_0)?;
+            return Some(expr0_0);
+        }
+    }
+    return None;
 }

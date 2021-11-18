@@ -175,6 +175,10 @@ macro_rules! isle_prelude_methods {
         fn u64_from_ieee64(&mut self, val: Ieee64) -> u64 {
             val.bits()
         }
+
+        fn u8_from_uimm8(&mut self, val: Uimm8) -> u8 {
+            val
+        }
     };
 }
 

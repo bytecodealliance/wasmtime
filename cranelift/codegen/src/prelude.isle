@@ -166,6 +166,10 @@
 (decl writable_reg_to_reg (WritableReg) Reg)
 (extern constructor writable_reg_to_reg writable_reg_to_reg)
 
+;; Extract a `u8` from an `Uimm8`.
+(decl u8_from_uimm8 (u8) Uimm8)
+(extern extractor infallible u8_from_uimm8 u8_from_uimm8)
+
 ;; Extract a `u64` from an `Imm64`.
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor infallible u64_from_imm64 u64_from_imm64)

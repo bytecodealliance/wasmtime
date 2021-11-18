@@ -36,6 +36,7 @@ pub trait Context {
     fn unwrap_head_value_list_1(&mut self, arg0: ValueList) -> (Value, ValueSlice);
     fn unwrap_head_value_list_2(&mut self, arg0: ValueList) -> (Value, Value, ValueSlice);
     fn writable_reg_to_reg(&mut self, arg0: WritableReg) -> Reg;
+    fn u8_from_uimm8(&mut self, arg0: Uimm8) -> u8;
     fn u64_from_imm64(&mut self, arg0: Imm64) -> u64;
     fn u64_from_ieee32(&mut self, arg0: Ieee32) -> u64;
     fn u64_from_ieee64(&mut self, arg0: Ieee64) -> u64;
