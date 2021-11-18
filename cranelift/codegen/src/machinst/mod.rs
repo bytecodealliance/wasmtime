@@ -81,6 +81,9 @@ use target_lexicon::Triple;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 
+#[macro_use]
+pub mod isle;
+
 pub mod lower;
 pub use lower::*;
 pub mod vcode;
@@ -104,6 +107,8 @@ pub use inst_common::*;
 pub mod valueregs;
 pub use valueregs::*;
 pub mod debug;
+pub use regmapping::*;
+pub mod regmapping;
 
 /// A machine instruction.
 pub trait MachInst: Clone + Debug {

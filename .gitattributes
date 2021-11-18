@@ -11,4 +11,4 @@
 
 # Tell GitHub this is generated code, and doesn't need to be shown in diffs by
 # default.
-cranelift/codegen/src/isa/x64/lower/isle/generated_code.rs linguist-generated
+cranelift/codegen/src/isa/*/lower/isle/generated_code.rs linguist-generated

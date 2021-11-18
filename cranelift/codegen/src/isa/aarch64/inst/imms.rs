@@ -327,7 +327,7 @@ impl Imm12 {
 }
 
 /// An immediate for logical instructions.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ImmLogic {
     /// The actual value.
     value: u64,

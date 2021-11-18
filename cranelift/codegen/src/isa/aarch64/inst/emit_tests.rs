@@ -1,4 +1,5 @@
 use crate::ir::types::*;
+use crate::ir::TrapCode;
 use crate::isa::aarch64::inst::*;
 use crate::isa::test_utils;
 use crate::isa::CallConv;

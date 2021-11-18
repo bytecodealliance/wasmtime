@@ -1,0 +1,23 @@
+;; aarch64 instruction selection and CLIF-to-MachInst lowering.
+
+;; The main lowering constructor term: takes a clif `Inst` and returns the
+;; register(s) within which the lowered instruction's result values live.
+(decl lower (Inst) ValueRegs)
+
+;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (iconst (u64_from_imm64 n))))
+      (value_reg (imm ty n)))
+
+;;;; Rules for `bconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (bconst $false)))
+      (value_reg (imm ty 0)))
+
+(rule (lower (has_type ty (bconst $true)))
+      (value_reg (imm ty 1)))
+
+;;;; Rules for `null` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty (null)))
+      (value_reg (imm ty 0)))

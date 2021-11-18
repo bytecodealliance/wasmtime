@@ -150,7 +150,11 @@ impl<'a> Codegen<'a> {
                         pos.pretty_print_line(&self.typeenv.filenames[..])
                     )
                     .unwrap();
-                    writeln!(code, "#[derive(Clone, Debug)]").unwrap();
+                    if variants.iter().all(|v| v.fields.is_empty()) {
+                        writeln!(code, "#[derive(Copy, Clone, Debug, PartialEq, Eq)]").unwrap();
+                    } else {
+                        writeln!(code, "#[derive(Clone, Debug)]").unwrap();
+                    }
                     writeln!(code, "pub enum {} {{", name).unwrap();
                     for variant in variants {
                         let name = &self.typeenv.syms[variant.name.index()];
