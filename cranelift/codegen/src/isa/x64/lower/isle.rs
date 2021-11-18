@@ -7,9 +7,9 @@ mod generated_code;
 use super::{
     is_mergeable_load, lower_to_amode, AluRmiROpcode, Inst as MInst, OperandSize, Reg, RegMemImm,
 };
-use crate::isa::isle::*;
 use crate::isa::x64::inst::args::SyntheticAmode;
 use crate::isa::x64::settings as x64_settings;
+use crate::machinst::isle::*;
 use crate::{
     ir::{immediates::*, types::*, Inst, InstructionData, Opcode, Value, ValueList},
     isa::x64::inst::{

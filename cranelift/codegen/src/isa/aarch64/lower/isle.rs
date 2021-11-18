@@ -11,7 +11,7 @@ use super::{
     ShiftOpAndAmt, UImm5, VectorSize, NZCV,
 };
 use crate::isa::aarch64::settings as aarch64_settings;
-use crate::isa::isle::*;
+use crate::machinst::isle::*;
 use crate::{
     binemit::CodeOffset,
     ir::{

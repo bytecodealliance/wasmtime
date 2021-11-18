@@ -68,6 +68,9 @@ pub use cranelift_entity as entity;
 #[cfg(feature = "unwind")]
 pub use gimli;
 
+#[macro_use]
+mod machinst;
+
 pub mod binemit;
 pub mod cfg_printer;
 pub mod cursor;
@@ -99,7 +102,6 @@ mod iterators;
 mod legalizer;
 mod licm;
 mod log;
-mod machinst;
 mod nan_canonicalization;
 mod remove_constant_phis;
 mod result;

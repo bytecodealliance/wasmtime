@@ -58,9 +58,6 @@ use core::fmt;
 use core::fmt::{Debug, Formatter};
 use target_lexicon::{triple, Architecture, OperatingSystem, PointerWidth, Triple};
 
-#[macro_use]
-mod isle;
-
 // This module is made public here for benchmarking purposes. No guarantees are
 // made regarding API stability.
 #[cfg(feature = "x86")]

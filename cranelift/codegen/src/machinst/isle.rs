@@ -108,7 +108,7 @@ macro_rules! isle_prelude_methods {
         fn unwrap_head_value_list_1(&mut self, list: ValueList) -> (Value, ValueSlice) {
             match self.value_list_slice(list) {
                 [head, tail @ ..] => (*head, tail),
-                _ => crate::isa::isle::out_of_line_panic(
+                _ => crate::machinst::isle::out_of_line_panic(
                     "`unwrap_head_value_list_1` on empty `ValueList`",
                 ),
             }
@@ -118,7 +118,7 @@ macro_rules! isle_prelude_methods {
         fn unwrap_head_value_list_2(&mut self, list: ValueList) -> (Value, Value, ValueSlice) {
             match self.value_list_slice(list) {
                 [head1, head2, tail @ ..] => (*head1, *head2, tail),
-                _ => crate::isa::isle::out_of_line_panic(
+                _ => crate::machinst::isle::out_of_line_panic(
                     "`unwrap_head_value_list_2` on list without at least two elements",
                 ),
             }
