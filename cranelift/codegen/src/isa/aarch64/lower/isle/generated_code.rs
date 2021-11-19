@@ -33,6 +33,7 @@ pub trait Context {
     fn ty_bits(&mut self, arg0: Type) -> u16;
     fn fits_in_32(&mut self, arg0: Type) -> Option<Type>;
     fn fits_in_64(&mut self, arg0: Type) -> Option<Type>;
+    fn vec128(&mut self, arg0: Type) -> Option<Type>;
     fn value_list_slice(&mut self, arg0: ValueList) -> ValueSlice;
     fn unwrap_head_value_list_1(&mut self, arg0: ValueList) -> (Value, ValueSlice);
     fn unwrap_head_value_list_2(&mut self, arg0: ValueList) -> (Value, Value, ValueSlice);
@@ -62,13 +63,13 @@ pub trait Context {
     fn load_constant64_full(&mut self, arg0: u64) -> Reg;
 }
 
-/// Internal type ProducesFlags: defined at src/prelude.isle line 230.
+/// Internal type ProducesFlags: defined at src/prelude.isle line 234.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlags { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 233.
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 237.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlags { inst: MInst, result: Reg },
@@ -982,7 +983,7 @@ pub fn constructor_with_flags<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 243.
+            // Rule at src/prelude.isle line 247.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -1010,7 +1011,7 @@ pub fn constructor_with_flags_1<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 251.
+            // Rule at src/prelude.isle line 255.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             return Some(pattern3_1);
@@ -1044,7 +1045,7 @@ pub fn constructor_with_flags_2<C: Context>(
                 result: pattern5_1,
             } = pattern4_0
             {
-                // Rule at src/prelude.isle line 261.
+                // Rule at src/prelude.isle line 265.
                 let expr0_0 = C::emit(ctx, &pattern1_0);
                 let expr1_0 = C::emit(ctx, &pattern3_0);
                 let expr2_0 = C::emit(ctx, &pattern5_0);
@@ -1973,6 +1974,66 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
                         let expr3_0 = constructor_alu_rrr(ctx, &expr0_0, expr1_0, expr2_0)?;
                         let expr4_0 = C::value_reg(ctx, expr3_0);
                         return Some(expr4_0);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if let Some(pattern3_0) = C::vec128(ctx, pattern2_0) {
+            let pattern4_0 = C::inst_data(ctx, pattern0_0);
+            if let &InstructionData::Binary {
+                opcode: ref pattern5_0,
+                args: ref pattern5_1,
+            } = &pattern4_0
+            {
+                match &pattern5_0 {
+                    &Opcode::UaddSat => {
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        // Rule at src/isa/aarch64/lower.isle line 165.
+                        let expr0_0 = VecALUOp::Uqadd;
+                        let expr1_0 = C::put_in_reg(ctx, pattern7_0);
+                        let expr2_0 = C::put_in_reg(ctx, pattern7_1);
+                        let expr3_0 = constructor_vector_size(ctx, pattern3_0)?;
+                        let expr4_0 =
+                            constructor_vec_rrr(ctx, &expr0_0, expr1_0, expr2_0, &expr3_0)?;
+                        let expr5_0 = C::value_reg(ctx, expr4_0);
+                        return Some(expr5_0);
+                    }
+                    &Opcode::SaddSat => {
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        // Rule at src/isa/aarch64/lower.isle line 170.
+                        let expr0_0 = VecALUOp::Sqadd;
+                        let expr1_0 = C::put_in_reg(ctx, pattern7_0);
+                        let expr2_0 = C::put_in_reg(ctx, pattern7_1);
+                        let expr3_0 = constructor_vector_size(ctx, pattern3_0)?;
+                        let expr4_0 =
+                            constructor_vec_rrr(ctx, &expr0_0, expr1_0, expr2_0, &expr3_0)?;
+                        let expr5_0 = C::value_reg(ctx, expr4_0);
+                        return Some(expr5_0);
+                    }
+                    &Opcode::UsubSat => {
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        // Rule at src/isa/aarch64/lower.isle line 175.
+                        let expr0_0 = VecALUOp::Uqsub;
+                        let expr1_0 = C::put_in_reg(ctx, pattern7_0);
+                        let expr2_0 = C::put_in_reg(ctx, pattern7_1);
+                        let expr3_0 = constructor_vector_size(ctx, pattern3_0)?;
+                        let expr4_0 =
+                            constructor_vec_rrr(ctx, &expr0_0, expr1_0, expr2_0, &expr3_0)?;
+                        let expr5_0 = C::value_reg(ctx, expr4_0);
+                        return Some(expr5_0);
+                    }
+                    &Opcode::SsubSat => {
+                        let (pattern7_0, pattern7_1) = C::unpack_value_array_2(ctx, &pattern5_1);
+                        // Rule at src/isa/aarch64/lower.isle line 180.
+                        let expr0_0 = VecALUOp::Sqsub;
+                        let expr1_0 = C::put_in_reg(ctx, pattern7_0);
+                        let expr2_0 = C::put_in_reg(ctx, pattern7_1);
+                        let expr3_0 = constructor_vector_size(ctx, pattern3_0)?;
+                        let expr4_0 =
+                            constructor_vec_rrr(ctx, &expr0_0, expr1_0, expr2_0, &expr3_0)?;
+                        let expr5_0 = C::value_reg(ctx, expr4_0);
+                        return Some(expr5_0);
                     }
                     _ => {}
                 }

@@ -159,3 +159,23 @@
         (with_flags
           (sub64_with_flags x_lo y_lo)
           (sbc64 x_hi y_hi))))
+
+;;;; Rules for `uadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (vec128 ty) (uadd_sat x y)))
+      (value_reg (vec_rrr (VecALUOp.Uqadd) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `sadd_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (vec128 ty) (sadd_sat x y)))
+      (value_reg (vec_rrr (VecALUOp.Sqadd) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `usub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (vec128 ty) (usub_sat x y)))
+      (value_reg (vec_rrr (VecALUOp.Uqsub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `ssub_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (vec128 ty) (ssub_sat x y)))
+      (value_reg (vec_rrr (VecALUOp.Sqsub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
