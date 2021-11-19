@@ -86,7 +86,13 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn ty_bits(&mut self, ty: Type) -> u16 {
+        fn ty_bits(&mut self, ty: Type) -> u8 {
+            use std::convert::TryInto;
+            ty.bits().try_into().unwrap()
+        }
+
+        #[inline]
+        fn ty_bits_u16(&mut self, ty: Type) -> u16 {
             ty.bits()
         }
 

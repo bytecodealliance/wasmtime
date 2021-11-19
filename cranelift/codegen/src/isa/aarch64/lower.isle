@@ -369,3 +369,32 @@
                        (imul (def_inst (uwiden_high x @ (value_type $I32X4)))
                              (def_inst (uwiden_high y @ (value_type $I32X4))))))
       (value_reg (vec_rrr_long (VecRRRLongOp.Umull32) (put_in_reg x) (put_in_reg y) $true)))
+
+;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I64 (smulhi x y)))
+      (value_reg (alu_rrr (ALUOp.SMulH) (put_in_reg x) (put_in_reg y))))
+
+(rule (lower (has_type (fits_in_32 ty) (smulhi x y)))
+      (let (
+          (x64 Reg (put_in_reg_sext64 x))
+          (y64 Reg (put_in_reg_sext64 y))
+          (mul Reg (alu_rrrr (ALUOp3.MAdd64) x64 y64 (zero_reg)))
+          (result Reg (alu_rr_imm_shift (ALUOp.Asr64) mul (imm_shift_from_u8 (ty_bits ty))))
+        )
+        (value_reg result)))
+
+;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I64 (umulhi x y)))
+      (value_reg (alu_rrr (ALUOp.UMulH) (put_in_reg x) (put_in_reg y))))
+
+(rule (lower (has_type (fits_in_32 ty) (umulhi x y)))
+      (let (
+          (x64 Reg (put_in_reg_zext64 x))
+          (y64 Reg (put_in_reg_zext64 y))
+          (mul Reg (alu_rrrr (ALUOp3.MAdd64) x64 y64 (zero_reg)))
+          (result Reg (alu_rr_imm_shift (ALUOp.Lsr64) mul (imm_shift_from_u8 (ty_bits ty))))
+        )
+        (value_reg result)))
+

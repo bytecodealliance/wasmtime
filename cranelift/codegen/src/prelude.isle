@@ -139,8 +139,12 @@
 (extern const $F64X2 Type)
 
 ;; Get the bit width of a given type.
-(decl ty_bits (Type) u16)
+(decl ty_bits (Type) u8)
 (extern constructor ty_bits ty_bits)
+
+;; Get the bit width of a given type.
+(decl ty_bits_u16 (Type) u16)
+(extern constructor ty_bits_u16 ty_bits_u16)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

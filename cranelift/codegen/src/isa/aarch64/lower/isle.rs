@@ -122,6 +122,10 @@ where
         Imm12::maybe_from_u64((n as i64).wrapping_neg() as u64)
     }
 
+    fn imm_shift_from_u8(&mut self, n: u8) -> ImmShift {
+        ImmShift::maybe_from_u64(n.into()).unwrap()
+    }
+
     fn lshl_from_imm64(&mut self, n: Imm64, ty: Type) -> Option<ShiftOpAndAmt> {
         let shiftimm = ShiftOpShiftImm::maybe_from_shift(n.bits() as u64)?;
         let shiftee_bits = ty_bits(ty);

@@ -73,66 +73,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Imul => implemented_in_isle(ctx),
 
-        Opcode::Umulhi | Opcode::Smulhi => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let is_signed = op == Opcode::Smulhi;
-            let input_ty = ctx.input_ty(insn, 0);
-            assert!(ctx.input_ty(insn, 1) == input_ty);
-            assert!(ctx.output_ty(insn, 0) == input_ty);
-
-            match input_ty {
-                I64 => {
-                    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                    let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                    let alu_op = if is_signed {
-                        ALUOp::SMulH
-                    } else {
-                        ALUOp::UMulH
-                    };
-                    ctx.emit(Inst::AluRRR { alu_op, rd, rn, rm });
-                }
-                I32 | I16 | I8 => {
-                    let narrow_mode = if is_signed {
-                        NarrowValueMode::SignExtend64
-                    } else {
-                        NarrowValueMode::ZeroExtend64
-                    };
-                    let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                    let rm = put_input_in_reg(ctx, inputs[1], narrow_mode);
-                    let ra = zero_reg();
-                    ctx.emit(Inst::AluRRRR {
-                        alu_op: ALUOp3::MAdd64,
-                        rd,
-                        rn,
-                        rm,
-                        ra,
-                    });
-                    let shift_op = if is_signed {
-                        ALUOp::Asr64
-                    } else {
-                        ALUOp::Lsr64
-                    };
-                    let shift_amt = match input_ty {
-                        I32 => 32,
-                        I16 => 16,
-                        I8 => 8,
-                        _ => unreachable!(),
-                    };
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: shift_op,
-                        rd,
-                        rn: rd.to_reg(),
-                        immshift: ImmShift::maybe_from_u64(shift_amt).unwrap(),
-                    });
-                }
-                _ => {
-                    return Err(CodegenError::Unsupported(format!(
-                        "{}: Unsupported type: {:?}",
-                        op, input_ty
-                    )));
-                }
-            }
-        }
+        Opcode::Umulhi | Opcode::Smulhi => implemented_in_isle(ctx),
 
         Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem => {
             let ty = ty.unwrap();
