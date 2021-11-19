@@ -369,3 +369,23 @@ block0(v0: i128, v1: i128):
 ; nextln: madd x0, x0, x2, xzr
 ; nextln: ret
 
+function %add_mul_1(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = iadd v0, v3
+    return v4
+}
+
+; check:  madd w0, w1, w2, w0
+; nextln: ret
+
+function %add_mul_2(i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = imul v1, v2
+    v4 = iadd v3, v0
+    return v4
+}
+
+; check:  madd w0, w1, w2, w0
+; nextln: ret
+

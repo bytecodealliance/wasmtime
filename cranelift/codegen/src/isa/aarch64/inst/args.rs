@@ -62,7 +62,7 @@ impl ShiftOpShiftImm {
 }
 
 /// A shift operator with an amount, guaranteed to be within range.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ShiftOpAndAmt {
     op: ShiftOp,
     shift: ShiftOpShiftImm,

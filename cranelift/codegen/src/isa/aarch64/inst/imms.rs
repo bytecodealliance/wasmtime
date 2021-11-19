@@ -272,7 +272,7 @@ impl UImm12Scaled {
 
 /// A shifted immediate value in 'imm12' format: supports 12 bits, shifted
 /// left by 0 or 12 places.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Imm12 {
     /// The immediate bits.
     pub bits: u16,
