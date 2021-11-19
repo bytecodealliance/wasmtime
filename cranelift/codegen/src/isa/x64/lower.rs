@@ -5297,7 +5297,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 if is_int_or_ref_ty(ty) || ty == types::I128 {
                     emit_cmoves(ctx, size, cc, lhs, dst);
                 } else {
-                    debug_assert!(ty == types::F32 || ty == types::F64);
+                    debug_assert!(
+                        ty == types::F32
+                            || ty == types::F64
+                            || (ty.is_vector() && ty.bits() == 128)
+                    );
                     ctx.emit(Inst::xmm_cmove(
                         if ty == types::F64 {
                             OperandSize::Size64
