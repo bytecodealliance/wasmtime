@@ -222,3 +222,47 @@
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
+
+;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Newtype wrapper around `MInst` for instructions that are used for their
+;; effect on flags.
+(type ProducesFlags (enum (ProducesFlags (inst MInst) (result Reg))))
+
+;; Newtype wrapper around `MInst` for instructions that consume flags.
+(type ConsumesFlags (enum (ConsumesFlags (inst MInst) (result Reg))))
+
+;; Combine flags-producing and -consuming instructions together, ensuring that
+;; they are emitted back-to-back and no other instructions can be emitted
+;; between them and potentially clobber the flags.
+;;
+;; Returns a `ValueRegs` where the first register is the result of the
+;; `ProducesFlags` instruction and the second is the result of the
+;; `ConsumesFlags` instruction.
+(decl with_flags (ProducesFlags ConsumesFlags) ValueRegs)
+(rule (with_flags (ProducesFlags.ProducesFlags producer_inst producer_result)
+                  (ConsumesFlags.ConsumesFlags consumer_inst consumer_result))
+      (let ((_x Unit (emit producer_inst))
+            (_y Unit (emit consumer_inst)))
+        (value_regs producer_result consumer_result)))
+
+;; Like `with_flags` but returns only the result of the consumer operation.
+(decl with_flags_1 (ProducesFlags ConsumesFlags) Reg)
+(rule (with_flags_1 (ProducesFlags.ProducesFlags producer_inst _producer_result)
+                    (ConsumesFlags.ConsumesFlags consumer_inst consumer_result))
+      (let ((_x Unit (emit producer_inst))
+            (_y Unit (emit consumer_inst)))
+        consumer_result))
+
+;; Like `with_flags` but allows two consumers of the same flags. The result is a
+;; `ValueRegs` containing the first consumer's result and then the second
+;; consumer's result.
+(decl with_flags_2 (ProducesFlags ConsumesFlags ConsumesFlags) ValueRegs)
+(rule (with_flags_2 (ProducesFlags.ProducesFlags producer_inst producer_result)
+                    (ConsumesFlags.ConsumesFlags consumer_inst_1 consumer_result_1)
+                    (ConsumesFlags.ConsumesFlags consumer_inst_2 consumer_result_2))
+      (let ((_x Unit (emit producer_inst))
+            (_y Unit (emit consumer_inst_1))
+            (_z Unit (emit consumer_inst_2)))
+        (value_regs consumer_result_1 consumer_result_2)))
+

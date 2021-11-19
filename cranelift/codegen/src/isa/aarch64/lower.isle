@@ -105,9 +105,9 @@
         )
         ;; the actual addition is `adds` followed by `adc` which comprises the
         ;; low/high bits of the result
-        (value_regs
-          (alu_rrr (ALUOp.AddS64) x_lo y_lo)
-          (alu_rrr (ALUOp.Adc64) x_hi y_hi))))
+        (with_flags
+          (add64_with_flags x_lo y_lo)
+          (adc64 x_hi y_hi))))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -156,6 +156,6 @@
         )
         ;; the actual subtraction is `subs` followed by `sbc` which comprises
         ;; the low/high bits of the result
-        (value_regs
-          (alu_rrr (ALUOp.SubS64) x_lo y_lo)
-          (alu_rrr (ALUOp.Sbc64) x_hi y_hi))))
+        (with_flags
+          (sub64_with_flags x_lo y_lo)
+          (sbc64 x_hi y_hi))))

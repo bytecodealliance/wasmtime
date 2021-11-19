@@ -1420,6 +1420,34 @@
             (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
         (writable_reg_to_reg dst)))
 
+;; Helper for emitting `adds` instructions.
+(decl add64_with_flags (Reg Reg) ProducesFlags)
+(rule (add64_with_flags src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.AddS64) dst src1 src2)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for emitting `adc` instructions.
+(decl adc64 (Reg Reg) ConsumesFlags)
+(rule (adc64 src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Adc64) dst src1 src2)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for emitting `subs` instructions.
+(decl sub64_with_flags (Reg Reg) ProducesFlags)
+(rule (sub64_with_flags src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.SubS64) dst src1 src2)
+                                     (writable_reg_to_reg dst))))
+
+;; Helper for emitting `sbc` instructions.
+(decl sbc64 (Reg Reg) ConsumesFlags)
+(rule (sbc64 src1 src2)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Sbc64) dst src1 src2)
+                                     (writable_reg_to_reg dst))))
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl imm (Type u64) Reg)
