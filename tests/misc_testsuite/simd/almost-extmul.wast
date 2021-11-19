@@ -13,4 +13,4 @@
     unreachable)
   (func (;1;) (type 0)
     nop)
-  (memory (;0;) 5613 17832))
+  (memory (;0;) 1 1))
