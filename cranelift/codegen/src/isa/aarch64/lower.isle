@@ -189,3 +189,183 @@
 ;; vectors.
 (rule (lower (has_type (vec128 ty) (ineg x)))
       (value_reg (vec_misc (VecMisc2.Neg) (put_in_reg x) (vector_size ty))))
+
+;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i64` and smaller.
+(rule (lower (has_type (fits_in_64 ty) (imul x y)))
+      (value_reg (alu_rrrr (madd_op ty) (put_in_reg x) (put_in_reg y) (zero_reg))))
+
+;; `i128`.
+(rule (lower (has_type $I128 (imul x y)))
+      (let (
+          ;; Get the high/low registers for `x`.
+          (x_regs ValueRegs (put_in_regs x))
+          (x_lo Reg (value_regs_get x_regs 0))
+          (x_hi Reg (value_regs_get x_regs 1))
+
+          ;; Get the high/low registers for `y`.
+          (y_regs ValueRegs (put_in_regs y))
+          (y_lo Reg (value_regs_get y_regs 0))
+          (y_hi Reg (value_regs_get y_regs 1))
+
+          ;; 128bit mul formula:
+          ;;   dst_lo = x_lo * y_lo
+          ;;   dst_hi = umulhi(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
+          ;;
+          ;; We can convert the above formula into the following
+          ;; umulh   dst_hi, x_lo, y_lo
+          ;; madd    dst_hi, x_lo, y_hi, dst_hi
+          ;; madd    dst_hi, x_hi, y_lo, dst_hi
+          ;; madd    dst_lo, x_lo, y_lo, zero
+          (dst_hi1 Reg (alu_rrr (ALUOp.UMulH) x_lo y_lo))
+          (dst_hi2 Reg (alu_rrrr (ALUOp3.MAdd64) x_lo y_hi dst_hi1))
+          (dst_hi Reg (alu_rrrr (ALUOp3.MAdd64) x_hi y_lo dst_hi2))
+          (dst_lo Reg (alu_rrrr (ALUOp3.MAdd64) x_lo y_lo (zero_reg)))
+        )
+        (value_regs dst_lo dst_hi)))
+
+;; Case for i8x16, i16x8, and i32x4.
+(rule (lower (has_type (vec128 ty @ (not_i64x2)) (imul x y)))
+      (value_reg (vec_rrr (VecALUOp.Mul) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;; Special lowering for i64x2.
+;;
+;; This I64X2 multiplication is performed with several 32-bit
+;; operations.
+;;
+;; 64-bit numbers x and y, can be represented as:
+;;   x = a + 2^32(b)
+;;   y = c + 2^32(d)
+;;
+;; A 64-bit multiplication is:
+;;   x * y = ac + 2^32(ad + bc) + 2^64(bd)
+;; note: `2^64(bd)` can be ignored, the value is too large to fit in
+;; 64 bits.
+;;
+;; This sequence implements a I64X2 multiply, where the registers
+;; `rn` and `rm` are split up into 32-bit components:
+;;   rn = |d|c|b|a|
+;;   rm = |h|g|f|e|
+;;
+;;   rn * rm = |cg + 2^32(ch + dg)|ae + 2^32(af + be)|
+;;
+;;  The sequence is:
+;;  rev64 rd.4s, rm.4s
+;;  mul rd.4s, rd.4s, rn.4s
+;;  xtn tmp1.2s, rn.2d
+;;  addp rd.4s, rd.4s, rd.4s
+;;  xtn tmp2.2s, rm.2d
+;;  shll rd.2d, rd.2s, #32
+;;  umlal rd.2d, tmp2.2s, tmp1.2s
+(rule (lower (has_type $I64X2 (imul x y)))
+      (let (
+          (rn Reg (put_in_reg x))
+          (rm Reg (put_in_reg y))
+          ;; Reverse the 32-bit elements in the 64-bit words.
+          ;;   rd = |g|h|e|f|
+          (rev Reg (vec_misc (VecMisc2.Rev64) rm (VectorSize.Size32x4)))
+
+          ;; Calculate the high half components.
+          ;;   rd = |dg|ch|be|af|
+          ;;
+          ;; Note that this 32-bit multiply of the high half
+          ;; discards the bits that would overflow, same as
+          ;; if 64-bit operations were used. Also the Shll
+          ;; below would shift out the overflow bits anyway.
+          (mul Reg (vec_rrr (VecALUOp.Mul) rev rn (VectorSize.Size32x4)))
+
+          ;; Extract the low half components of rn.
+          ;;   tmp1 = |c|a|
+          (tmp1 Reg (vec_rr_narrow (VecRRNarrowOp.Xtn64) rn $false))
+
+          ;; Sum the respective high half components.
+          ;;   rd = |dg+ch|be+af||dg+ch|be+af|
+          (sum Reg (vec_rrr (VecALUOp.Addp) mul mul (VectorSize.Size32x4)))
+
+          ;; Extract the low half components of rm.
+          ;;   tmp2 = |g|e|
+          (tmp2 Reg (vec_rr_narrow (VecRRNarrowOp.Xtn64) rm $false))
+
+          ;; Shift the high half components, into the high half.
+          ;;   rd = |dg+ch << 32|be+af << 32|
+          (shift Reg (vec_rr_long (VecRRLongOp.Shll32) sum $false))
+
+          ;; Multiply the low components together, and accumulate with the high
+          ;; half.
+          ;;   rd = |rd[1] + cg|rd[0] + ae|
+          (result Reg (vec_rrrr_long (VecRRRLongOp.Umlal32) shift tmp2 tmp1 $false))
+        )
+        (value_reg result)))
+
+;; Special case for `i16x8.extmul_low_i8x16_s`.
+(rule (lower (has_type $I16X8
+                       (imul (def_inst (swiden_low x @ (value_type $I8X16)))
+                             (def_inst (swiden_low y @ (value_type $I8X16))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Smull8) (put_in_reg x) (put_in_reg y) $false)))
+
+;; Special case for `i16x8.extmul_high_i8x16_s`.
+(rule (lower (has_type $I16X8
+                       (imul (def_inst (swiden_high x @ (value_type $I8X16)))
+                             (def_inst (swiden_high y @ (value_type $I8X16))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Smull8) (put_in_reg x) (put_in_reg y) $true)))
+
+;; Special case for `i16x8.extmul_low_i8x16_u`.
+(rule (lower (has_type $I16X8
+                       (imul (def_inst (uwiden_low x @ (value_type $I8X16)))
+                             (def_inst (uwiden_low y @ (value_type $I8X16))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Umull8) (put_in_reg x) (put_in_reg y) $false)))
+
+;; Special case for `i16x8.extmul_high_i8x16_u`.
+(rule (lower (has_type $I16X8
+                       (imul (def_inst (uwiden_high x @ (value_type $I8X16)))
+                             (def_inst (uwiden_high y @ (value_type $I8X16))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Umull8) (put_in_reg x) (put_in_reg y) $true)))
+
+;; Special case for `i32x4.extmul_low_i16x8_s`.
+(rule (lower (has_type $I32X4
+                       (imul (def_inst (swiden_low x @ (value_type $I16X8)))
+                             (def_inst (swiden_low y @ (value_type $I16X8))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Smull16) (put_in_reg x) (put_in_reg y) $false)))
+
+;; Special case for `i32x4.extmul_high_i16x8_s`.
+(rule (lower (has_type $I32X4
+                       (imul (def_inst (swiden_high x @ (value_type $I16X8)))
+                             (def_inst (swiden_high y @ (value_type $I16X8))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Smull16) (put_in_reg x) (put_in_reg y) $true)))
+
+;; Special case for `i32x4.extmul_low_i16x8_u`.
+(rule (lower (has_type $I32X4
+                       (imul (def_inst (uwiden_low x @ (value_type $I16X8)))
+                             (def_inst (uwiden_low y @ (value_type $I16X8))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Umull16) (put_in_reg x) (put_in_reg y) $false)))
+
+;; Special case for `i32x4.extmul_high_i16x8_u`.
+(rule (lower (has_type $I32X4
+                       (imul (def_inst (uwiden_high x @ (value_type $I16X8)))
+                             (def_inst (uwiden_high y @ (value_type $I16X8))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Umull16) (put_in_reg x) (put_in_reg y) $true)))
+
+;; Special case for `i64x2.extmul_low_i32x4_s`.
+(rule (lower (has_type $I64X2
+                       (imul (def_inst (swiden_low x @ (value_type $I32X4)))
+                             (def_inst (swiden_low y @ (value_type $I32X4))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Smull32) (put_in_reg x) (put_in_reg y) $false)))
+
+;; Special case for `i64x2.extmul_high_i32x4_s`.
+(rule (lower (has_type $I64X2
+                       (imul (def_inst (swiden_high x @ (value_type $I32X4)))
+                             (def_inst (swiden_high y @ (value_type $I32X4))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Smull32) (put_in_reg x) (put_in_reg y) $true)))
+
+;; Special case for `i64x2.extmul_low_i32x4_u`.
+(rule (lower (has_type $I64X2
+                       (imul (def_inst (uwiden_low x @ (value_type $I32X4)))
+                             (def_inst (uwiden_low y @ (value_type $I32X4))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Umull32) (put_in_reg x) (put_in_reg y) $false)))
+
+;; Special case for `i64x2.extmul_high_i32x4_u`.
+(rule (lower (has_type $I64X2
+                       (imul (def_inst (uwiden_high x @ (value_type $I32X4)))
+                             (def_inst (uwiden_high y @ (value_type $I32X4))))))
+      (value_reg (vec_rrr_long (VecRRRLongOp.Umull32) (put_in_reg x) (put_in_reg y) $true)))
