@@ -946,6 +946,33 @@
 (rule (lower (has_type (multi_lane _bits _lanes) (band_not x y)))
       (value_reg (pandn (put_in_reg y) (put_in_reg_mem x))))
 
+;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (iabs x)))
+      (value_reg (pabsb (put_in_reg_mem x))))
+
+(rule (lower (has_type $I16X8 (iabs x)))
+      (value_reg (pabsw (put_in_reg_mem x))))
+
+(rule (lower (has_type $I32X4 (iabs x)))
+      (value_reg (pabsd (put_in_reg_mem x))))
+
+;; When AVX512 is available, we can use a single `vpabsq` instruction.
+(rule (lower (has_type (and (avx512vl_enabled)
+                            (avx512f_enabled)
+                            $I64X2)
+                       (iabs x)))
+      (value_reg (vpabsq (put_in_reg_mem x))))
+
+;; Otherwise, we use a separate register, `neg`, to contain the results of `0 -
+;; x` and then blend in those results with `blendvpd` if the MSB of `neg` was
+;; set to 1 (i.e. if `neg` was negative or, conversely, if `x` was originally
+;; positive).
+(rule (lower (has_type $I64X2 (iabs x)))
+      (let ((rx Reg (put_in_reg x))
+            (neg Reg (psubq (imm $I64X2 0) (RegMem.Reg rx))))
+        (value_reg (blendvpd neg (RegMem.Reg rx) neg))))
+
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Special case for `f32x4.abs`.

@@ -22,6 +22,9 @@
             (XmmUnaryRmR (op SseOpcode)
                          (src RegMem)
                          (dst WritableReg))
+            (XmmUnaryRmREvex (op Avx512Opcode)
+                             (src RegMem)
+                             (dst WritableReg))
             (XmmRmiReg (opcode SseOpcode)
                        (src1 Reg)
                        (src2 RegMemImm)
@@ -347,6 +350,15 @@
 (decl encode_fcmp_imm (FcmpImm) u8)
 (extern constructor encode_fcmp_imm encode_fcmp_imm)
 
+;;;; Helpers for Getting Particular Physical Registers ;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; These should only be used for legalization purposes, when we can't otherwise
+;; rely on something like `Inst::mov_mitosis` to put an operand into the
+;; appropriate physical register for whatever reason.
+
+(decl xmm0 () WritableReg)
+(extern constructor xmm0 xmm0)
+
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl avx512vl_enabled () Type)
@@ -354,6 +366,9 @@
 
 (decl avx512dq_enabled () Type)
 (extern extractor avx512dq_enabled avx512dq_enabled)
+
+(decl avx512f_enabled () Type)
+(extern extractor avx512f_enabled avx512f_enabled)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -926,6 +941,18 @@
 (rule (pandn src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Pandn) src1 src2))
 
+;; Helper for creating `blendvpd` instructions.
+(decl blendvpd (Reg RegMem Reg) Reg)
+(rule (blendvpd src1 src2 mask)
+      ;; Move the mask into `xmm0`, as `blendvpd` implicitly operates on that
+      ;; register. (This kind of thing would normally happen inside of
+      ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
+      ;; mask register, because the mask is implicit and doesn't appear in the
+      ;; `Inst` itself.)
+      (let ((mask2 WritableReg (xmm0))
+            (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movapd) (RegMem.Reg mask) mask2))))
+        (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Reg)
 (rule (xmm_rm_r_imm op src1 src2 imm size)
@@ -976,6 +1003,33 @@
 (decl pmovzxbw (RegMem) Reg)
 (rule (pmovzxbw src)
       (xmm_unary_rm_r (SseOpcode.Pmovzxbw) src))
+
+;; Helper for creating `pabsb` instructions.
+(decl pabsb (RegMem) Reg)
+(rule (pabsb src)
+      (xmm_unary_rm_r (SseOpcode.Pabsb) src))
+
+;; Helper for creating `pabsw` instructions.
+(decl pabsw (RegMem) Reg)
+(rule (pabsw src)
+      (xmm_unary_rm_r (SseOpcode.Pabsw) src))
+
+;; Helper for creating `pabsd` instructions.
+(decl pabsd (RegMem) Reg)
+(rule (pabsd src)
+      (xmm_unary_rm_r (SseOpcode.Pabsd) src))
+
+;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
+(decl xmm_unary_rm_r_evex (Avx512Opcode RegMem) Reg)
+(rule (xmm_unary_rm_r_evex op src)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.XmmUnaryRmREvex op src dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `vpabsq` instructions.
+(decl vpabsq (RegMem) Reg)
+(rule (vpabsq src)
+      (xmm_unary_rm_r_evex (Avx512Opcode.Vpabsq) src))
 
 ;; Helper for creating `MInst.XmmRmREvex` instructions.
 (decl xmm_rm_r_evex (Avx512Opcode RegMem Reg) Reg)

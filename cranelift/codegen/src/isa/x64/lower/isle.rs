@@ -8,6 +8,7 @@ use super::{
     is_mergeable_load, lower_to_amode, AluRmiROpcode, Inst as MInst, OperandSize, Reg, RegMemImm,
 };
 use crate::isa::x64::inst::args::SyntheticAmode;
+use crate::isa::x64::inst::regs;
 use crate::isa::x64::settings as x64_settings;
 use crate::machinst::isle::*;
 use crate::{
@@ -146,6 +147,15 @@ where
     }
 
     #[inline]
+    fn avx512f_enabled(&mut self, _: Type) -> Option<()> {
+        if self.isa_flags.use_avx512f_simd() {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    #[inline]
     fn imm8_from_value(&mut self, val: Value) -> Option<Imm8Reg> {
         let inst = self.lower_ctx.dfg().value_def(val).inst()?;
         let constant = self.lower_ctx.get_constant(inst)?;
@@ -213,6 +223,11 @@ where
         // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
         // shifted into bits 5:6).
         0b00_00_00_00 | lane << 4
+    }
+
+    #[inline]
+    fn xmm0(&mut self) -> WritableReg {
+        WritableReg::from_reg(regs::xmm0())
     }
 }
 
