@@ -69,24 +69,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             implemented_in_isle(ctx)
         }
 
-        Opcode::Ineg => {
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-            if !ty.is_vector() {
-                let rn = zero_reg();
-                let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let alu_op = choose_32_64(ty, ALUOp::Sub32, ALUOp::Sub64);
-                ctx.emit(Inst::AluRRR { alu_op, rd, rn, rm });
-            } else {
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                ctx.emit(Inst::VecMisc {
-                    op: VecMisc2::Neg,
-                    rd,
-                    rn,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
-        }
+        Opcode::Ineg => implemented_in_isle(ctx),
 
         Opcode::Imul => {
             let ty = ty.unwrap();

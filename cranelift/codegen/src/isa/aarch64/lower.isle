@@ -179,3 +179,13 @@
 
 (rule (lower (has_type (vec128 ty) (ssub_sat x y)))
       (value_reg (vec_rrr (VecALUOp.Sqsub) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i64` and smaller.
+(rule (lower (has_type (fits_in_64 ty) (ineg x)))
+      (value_reg (alu_rrr (isub_op ty) (zero_reg) (put_in_reg x))))
+
+;; vectors.
+(rule (lower (has_type (vec128 ty) (ineg x)))
+      (value_reg (vec_misc (VecMisc2.Neg) (put_in_reg x) (vector_size ty))))
