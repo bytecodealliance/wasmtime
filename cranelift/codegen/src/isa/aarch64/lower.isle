@@ -26,48 +26,48 @@
 
 ;; `i64` and smaller
 
-;; base case, simply adding things in registers
+;; Base case, simply adding things in registers.
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
       (value_reg (alu_rrr (iadd_op ty) (put_in_reg x) (put_in_reg y))))
 
-;; special case for when one operand is an immediate that fits in 12 bits
+;; Special case for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
       (value_reg (alu_rr_imm12 (iadd_op ty) (put_in_reg x) y)))
 
-;; same as the previous special case, except we can switch the addition to a
+;; Same as the previous special case, except we can switch the addition to a
 ;; subtraction if the negated immediate fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
       (value_reg (alu_rr_imm12 (isub_op ty) (put_in_reg x) y)))
 
-;; special case for when we're adding an extended register where the extending
+;; Special case for when we're adding an extended register where the extending
 ;; operation can get folded into the add itself.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
       (value_reg (alu_rr_extend_reg (iadd_op ty) (put_in_reg x) y)))
 
-;; special case for when we're adding the shift of a different
+;; Special case for when we're adding the shift of a different
 ;; register by a constant amount and the shift can get folded into the add.
 (rule (lower (has_type (fits_in_64 ty)
                        (iadd x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
       (value_reg (alu_rrr_shift (iadd_op ty) (put_in_reg x) (put_in_reg y) amt)))
 
-;; Fold an `iadd` and `imul` combination into a `madd` instruction
+;; Fold an `iadd` and `imul` combination into a `madd` instruction.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (def_inst (imul y z)))))
       (value_reg (alu_rrrr (madd_op ty) (put_in_reg y) (put_in_reg z) (put_in_reg x))))
 
 (rule (lower (has_type (fits_in_64 ty) (iadd (def_inst (imul x y)) z)))
       (value_reg (alu_rrrr (madd_op ty) (put_in_reg x) (put_in_reg y) (put_in_reg z))))
 
-;; helper to use either a 32 or 64-bit add depending on the input type
+;; Helper to use either a 32 or 64-bit add depending on the input type.
 (decl iadd_op (Type) ALUOp)
 (rule (iadd_op (fits_in_32 _ty)) (ALUOp.Add32))
 (rule (iadd_op _ty) (ALUOp.Add64))
 
-;; helper to use either a 32 or 64-bit sub depending on the input type
+;; Helper to use either a 32 or 64-bit sub depending on the input type.
 (decl isub_op (Type) ALUOp)
 (rule (isub_op (fits_in_32 _ty)) (ALUOp.Sub32))
 (rule (isub_op _ty) (ALUOp.Sub64))
 
-;; helper to use either a 32 or 64-bit madd depending on the input type
+;; Helper to use either a 32 or 64-bit madd depending on the input type.
 (decl madd_op (Type) ALUOp3)
 (rule (madd_op (fits_in_32 _ty)) (ALUOp3.MAdd32))
 (rule (madd_op _ty) (ALUOp3.MAdd64))
@@ -100,25 +100,25 @@
 
 ;; `i64` and smaller
 
-;; base case, simply subtracting things in registers
+;; Base case, simply subtracting things in registers.
 (rule (lower (has_type (fits_in_64 ty) (isub x y)))
       (value_reg (alu_rrr (isub_op ty) (put_in_reg x) (put_in_reg y))))
 
-;; special case for when one operand is an immediate that fits in 12 bits
+;; Special case for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_value y))))
       (value_reg (alu_rr_imm12 (isub_op ty) (put_in_reg x) y)))
 
-;; same as the previous special case, except we can switch the subtraction to an
+;; Same as the previous special case, except we can switch the subtraction to an
 ;; addition if the negated immediate fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (isub x (imm12_from_negated_value y))))
       (value_reg (alu_rr_imm12 (iadd_op ty) (put_in_reg x) y)))
 
-;; special cases for when we're subtracting an extended register where the
+;; Special cases for when we're subtracting an extended register where the
 ;; extending operation can get folded into the sub itself.
 (rule (lower (has_type (fits_in_64 ty) (isub x (extended_value_from_value y))))
       (value_reg (alu_rr_extend_reg (isub_op ty) (put_in_reg x) y)))
 
-;; finally a special case for when we're subtracting the shift of a different
+;; Finally a special case for when we're subtracting the shift of a different
 ;; register by a constant amount and the shift can get folded into the sub.
 (rule (lower (has_type (fits_in_64 ty)
                        (isub x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
