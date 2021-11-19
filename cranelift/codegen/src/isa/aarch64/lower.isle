@@ -30,25 +30,38 @@
 (rule (lower (has_type (fits_in_64 ty) (iadd x y)))
       (value_reg (alu_rrr (iadd_op ty) (put_in_reg x) (put_in_reg y))))
 
-;; Special case for when one operand is an immediate that fits in 12 bits.
+;; Special cases for when one operand is an immediate that fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_value y))))
       (value_reg (alu_rr_imm12 (iadd_op ty) (put_in_reg x) y)))
 
-;; Same as the previous special case, except we can switch the addition to a
+(rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_value x) y)))
+      (value_reg (alu_rr_imm12 (iadd_op ty) (put_in_reg y) x)))
+
+;; Same as the previous special cases, except we can switch the addition to a
 ;; subtraction if the negated immediate fits in 12 bits.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (imm12_from_negated_value y))))
       (value_reg (alu_rr_imm12 (isub_op ty) (put_in_reg x) y)))
 
-;; Special case for when we're adding an extended register where the extending
+(rule (lower (has_type (fits_in_64 ty) (iadd (imm12_from_negated_value x) y)))
+      (value_reg (alu_rr_imm12 (isub_op ty) (put_in_reg y) x)))
+
+;; Special cases for when we're adding an extended register where the extending
 ;; operation can get folded into the add itself.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (extended_value_from_value y))))
       (value_reg (alu_rr_extend_reg (iadd_op ty) (put_in_reg x) y)))
 
-;; Special case for when we're adding the shift of a different
+(rule (lower (has_type (fits_in_64 ty) (iadd (extended_value_from_value x) y)))
+      (value_reg (alu_rr_extend_reg (iadd_op ty) (put_in_reg y) x)))
+
+;; Special cases for when we're adding the shift of a different
 ;; register by a constant amount and the shift can get folded into the add.
 (rule (lower (has_type (fits_in_64 ty)
                        (iadd x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
       (value_reg (alu_rrr_shift (iadd_op ty) (put_in_reg x) (put_in_reg y) amt)))
+
+(rule (lower (has_type (fits_in_64 ty)
+                       (iadd (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))) y)))
+      (value_reg (alu_rrr_shift (iadd_op ty) (put_in_reg y) (put_in_reg x) amt)))
 
 ;; Fold an `iadd` and `imul` combination into a `madd` instruction.
 (rule (lower (has_type (fits_in_64 ty) (iadd x (def_inst (imul y z)))))
