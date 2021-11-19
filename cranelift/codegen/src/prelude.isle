@@ -152,6 +152,10 @@
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
+;; An extractor that only matches 128-bit vector types.
+(decl vec128 (Type) Type)
+(extern extractor vec128 vec128)
+
 ;; Extractor to get a `ValueSlice` out of a `ValueList`.
 (decl value_list_slice (ValueSlice) ValueList)
 (extern extractor infallible value_list_slice value_list_slice)
