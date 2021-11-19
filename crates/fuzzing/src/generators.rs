@@ -213,6 +213,12 @@ impl wasm_smith::Config for WasmtimeDefaultConfig {
         4
     }
 
+    // Turn some wasm features default-on for those that have a finished
+    // implementation in Wasmtime.
+    fn simd_enabled(&self) -> bool {
+        true
+    }
+
     fn reference_types_enabled(&self) -> bool {
         true
     }
