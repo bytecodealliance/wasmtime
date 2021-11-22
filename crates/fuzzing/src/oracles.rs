@@ -265,6 +265,12 @@ pub fn differential_execution(
         // to accept modules that would otherwise be broken by module linking.
         config.wasm_module_linking(false);
 
+        // We don't want different configurations with different values for nan
+        // canonicalization since that can affect results. All configs should
+        // have the same value configured for this option, so `true` is
+        // arbitrarily chosen here.
+        config.cranelift_nan_canonicalization(true);
+
         let engine = Engine::new(&config).unwrap();
         let mut store = create_store(&engine);
         if fuzz_config.consume_fuel {
