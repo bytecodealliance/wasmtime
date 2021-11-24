@@ -2046,38 +2046,47 @@ pub fn constructor_lower<C: Context>(ctx: &mut C, arg0: Inst) -> Option<ValueReg
 // Generated as internal constructor for term iadd_op.
 pub fn constructor_iadd_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<ALUOp> {
     let pattern0_0 = arg0;
+    if pattern0_0 == I64 {
+        // Rule at src/isa/aarch64/lower.isle line 76.
+        let expr0_0 = ALUOp::Add64;
+        return Some(expr0_0);
+    }
     if let Some(pattern1_0) = C::fits_in_32(ctx, pattern0_0) {
         // Rule at src/isa/aarch64/lower.isle line 75.
         let expr0_0 = ALUOp::Add32;
         return Some(expr0_0);
     }
-    // Rule at src/isa/aarch64/lower.isle line 76.
-    let expr0_0 = ALUOp::Add64;
-    return Some(expr0_0);
+    return None;
 }
 
 // Generated as internal constructor for term isub_op.
 pub fn constructor_isub_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<ALUOp> {
     let pattern0_0 = arg0;
+    if pattern0_0 == I64 {
+        // Rule at src/isa/aarch64/lower.isle line 81.
+        let expr0_0 = ALUOp::Sub64;
+        return Some(expr0_0);
+    }
     if let Some(pattern1_0) = C::fits_in_32(ctx, pattern0_0) {
         // Rule at src/isa/aarch64/lower.isle line 80.
         let expr0_0 = ALUOp::Sub32;
         return Some(expr0_0);
     }
-    // Rule at src/isa/aarch64/lower.isle line 81.
-    let expr0_0 = ALUOp::Sub64;
-    return Some(expr0_0);
+    return None;
 }
 
 // Generated as internal constructor for term madd_op.
 pub fn constructor_madd_op<C: Context>(ctx: &mut C, arg0: Type) -> Option<ALUOp3> {
     let pattern0_0 = arg0;
+    if pattern0_0 == I64 {
+        // Rule at src/isa/aarch64/lower.isle line 86.
+        let expr0_0 = ALUOp3::MAdd64;
+        return Some(expr0_0);
+    }
     if let Some(pattern1_0) = C::fits_in_32(ctx, pattern0_0) {
         // Rule at src/isa/aarch64/lower.isle line 85.
         let expr0_0 = ALUOp3::MAdd32;
         return Some(expr0_0);
     }
-    // Rule at src/isa/aarch64/lower.isle line 86.
-    let expr0_0 = ALUOp3::MAdd64;
-    return Some(expr0_0);
+    return None;
 }

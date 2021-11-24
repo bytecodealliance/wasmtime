@@ -73,17 +73,17 @@
 ;; Helper to use either a 32 or 64-bit add depending on the input type.
 (decl iadd_op (Type) ALUOp)
 (rule (iadd_op (fits_in_32 _ty)) (ALUOp.Add32))
-(rule (iadd_op _ty) (ALUOp.Add64))
+(rule (iadd_op $I64) (ALUOp.Add64))
 
 ;; Helper to use either a 32 or 64-bit sub depending on the input type.
 (decl isub_op (Type) ALUOp)
 (rule (isub_op (fits_in_32 _ty)) (ALUOp.Sub32))
-(rule (isub_op _ty) (ALUOp.Sub64))
+(rule (isub_op $I64) (ALUOp.Sub64))
 
 ;; Helper to use either a 32 or 64-bit madd depending on the input type.
 (decl madd_op (Type) ALUOp3)
 (rule (madd_op (fits_in_32 _ty)) (ALUOp3.MAdd32))
-(rule (madd_op _ty) (ALUOp3.MAdd64))
+(rule (madd_op $I64) (ALUOp3.MAdd64))
 
 ;; vectors
 
