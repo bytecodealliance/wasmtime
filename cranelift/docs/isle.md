@@ -1,0 +1,1306 @@
+# ISLE: Instruction Selection Lowering Expressions
+
+This document will describe ISLE (Instruction Set Lowering
+Expressions), a DSL (domain-specific language) that we have developed
+in order to help us express certain parts of the Cranelift compiler
+backend more naturally. ISLE was first [described in RFC
+#15](https://github.com/bytecodealliance/rfcs/pull/15) and now is used
+by and lives in the Cranelift tree in
+[cranelift/isle](https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle).
+
+## Intro and Whirlwind Tour: DSL for Instruction Lowering
+
+The goal of ISLE is to represent *instruction lowering patterns*. An
+instruction lowering pattern is a specification that a certain
+combination of operators in the IR (CLIF), when combined under certain
+conditions, can be compiled down into a certain sequence of machine
+instructions. For example:
+
+- An `iadd` (integer add) operator can always be lowered to an x86
+  `ADD` instruction with two register sources.
+  
+- An `iadd` operator with one `iconst` (integer-constant) argument can
+  be lowered to an x86 `ADD` instruction with a register and an
+  immediate.
+  
+One could write something like the following in ISLE (simplified from
+the real code [here](../codegen/src/isa/x64/lower.isle):
+
+```lisp
+;; Add two registers.
+(rule (lower (iadd x y))
+      (value_reg (add
+                   (put_in_reg x)
+                   (RegMemImm.Reg (put_in_reg y)))))
+
+;; Add a register and an immediate.
+(rule (lower (iadd x (simm32_from_value y))
+      (value_reg (add
+                   (put_in_reg x)
+                   ;; `y` is a `RegMemImm.Imm`.
+                   y)))
+```
+  
+ISLE lets the compiler backend developer express this information in a
+declarative way -- i.e., just write down a list of patterns, without
+worrying how the compilation process tries them out -- and the ISLE
+DSL compiler will convert this list of patterns into efficient Rust
+code that becomes part of Cranelift.
+
+The rest of this document will describe the semantics of the DSL
+itself. ISLE has been designed to be a general-purpose DSL that can
+apply to any sort of backtracking pattern-matching problem, and will
+generate a decision tree in Rust that can call into arbitrary
+interface code.
+
+Separate documentation will describe how we have written *bindings*
+and *helpers* to allow ISLE to be specifically used to write Cranelift
+lowering patterns like the above. (TODO: link this documentation)
+
+## Outline of This Document
+
+This document is organized into the following sections:
+
+* Term-Rewriting Systems: a general overview of how term-rewriting
+  systems work, how to think about nested terms, patterns and rewrite
+  rules, how they provide a general mechanism for computation, and how
+  term-rewriting is often used in a compiler-implementation context.
+  
+* Core ISLE: the foundational concepts of the ISLE DSL, building upon
+  a general-purpose term-rewriting base. Covers the type system (typed
+  terms) and how rules are written.
+  
+* ISLE with Rust: covers how ISLE provides an "FFI" (foreign function
+  interface) of sorts to allow interactino with Rust code, and
+  describes the scheme by which ISLE execution is mapped onto Rust
+  (data structures and control flow).[^1]
+  
+* ISLE Internals: describes how the ISLE compiler works. Provides
+  insight into how an unordered collection of rewrite rules are
+  combined into executable Rust code that efficiently traverses the
+  input and matches on it.
+
+[^1]: One might call this the BRIDGE (Basic Rust Interface Designed
+    for Good Efficiency) to the ISLE, but unfortunately we missed the
+    chance to introduce that backronym when we wrote the initial
+    implementation.
+
+## Term-Rewriting Systems
+
+A [term-rewriting
+system](https://en.wikipedia.org/wiki/Rewriting#Term_rewriting_systems), or TRS,
+is a system that works by representing data as *terms* and then
+applying *rules* to "rewrite" the terms until no more rules are
+applicable, at which point the resulting term is the system's output.
+
+Term-rewriting systems are a general kind of computing system, at the
+same level as (e.g.) Turing machines or other abstract computing
+machines. Term-rewriting is actually Turing-complete, or in other
+words, can express any program, if no limits are placed on term length
+or recursion.[^2]
+
+[^2]: In fact, the [lambda
+      calculus](https://en.wikipedia.org/wiki/Lambda_calculus)
+      introduced by Alonzo Church is actually a term-rewriting system
+      and was developed at the same time as Turing's concepts of
+      universal computation!
+
+Why might one want to use a TRS rather than some other, more
+conventional, way of computing an answer? One reason is that they are
+highly applicable to *pattern-matching* problems: for example,
+translating data in one domain to data in another domain, where the
+translation consists of a bunch of specific equivalences. This is part
+of why term-rewriting is so interesting in the compiler domain:
+compiler backends work to lower certain patterns in the program (e.g.:
+a multiply-add combination) into instructions that the target machine
+provides (e.g.: a dedicated multiply-add instruction).
+
+Term rewriting as a process also naturally handles issues of
+*priority*, i.e. applying a more specific rule before a less specific
+one. This is because the abstraction allows for multiple rules to be
+"applicable", and so there is a natural place to reason about priority
+when we choose which rule to apply.
+
+Additionally, term rewriting allows for a sort of *modularity* that is
+not present in hand-written pattern-matching code: the specific rules
+can be specified in any order, and the term-rewriting engine "weaves"
+them together so that in any state, when we have partially matched the
+input and are narrowing down which rule will apply, we consider all
+the related rules at once. Said another way: hand-written code tends
+to accumulate a lot of nested conditionals and switch/match
+statements, i.e., resembles a very large decision tree, while
+term-rewriting code tends to resemble a flat list of simple patterns
+that, when composed and combined, become that more complex tree.
+
+### Data: Nested Trees of Constructors
+
+A term-rewriting system typically operates on data that is in a *tree*
+form, or at least can be interpreted that way.[^3]
+
+[^3]: In the most fundamental and mathematical sense, a TRS just
+      operates on a sequence of symbols, but we can talk about
+      structure that is present in those symbols in any well-formed
+      sequence. For example, we can define a TRS that only operates on
+      terms with balanced parentheses; then we have our tree.
+      
+In ISLE and hence in this document, we operate on terms that are
+written in an
+[S-expression](https://en.wikipedia.org/wiki/S-expression) syntax,
+borrowed from the Lisp world. So we might have a term:
+
+```lisp
+    (a (b c 1 2) (d) (e 3 4))
+```
+
+which we can write more clearly as the tree:
+
+```lisp
+    (a
+      (b
+        c 1 2)
+      (d)
+      (e
+        3 4))
+```
+
+Each term consists of either a *constructor* (which looks like a
+function call to Lisp-trained eyes) or a *primitive*. In the above,
+the `(a ...)`, `(b ...)`, `(d)`, and `(e ...)` terms/subterms are
+constructor invocations. A constructor takes some number of arguments
+(its *arity*), each of which is itself a term. Primitives can be
+things like integer, string, symbolic, or boolean constants, or
+variable names.
+
+Some term-rewriting systems have other syntax conventions: for
+example, systems based on
+[Prolog](https://en.wikipedia.org/wiki/Prolog) tend to write terms
+like `a(b(c, 1, 2), d, e(3, 4))`, i.e., with the name of the term on
+the outside of the parentheses. This is just a cosmetic difference to
+the above, but we note it to make clear that the term structure is
+important, not the syntax.
+
+It may not be immediately clear how to use this data representation,
+but we can give a small flavor here: if one defines *constructors* for
+each instruction or operator in a compiler's intermediate
+representation (IR), one can start to write expressions from that IR
+as terms; for example:
+
+```lisp
+    v1 = imul y, z
+    v2 = iadd x, v1
+```
+
+could become:
+
+```lisp
+    (iadd x (imul y z))
+```
+
+This will become much more useful once we have rewrite rules to
+perform transformations on the terms!
+
+Representing an IR is, of course, just one possible use of term data
+(albeit the original "MVP" that guided ISLE's design); there are many
+others, too. Interested readers are encouraged to read more on, e.g.,
+[Prolog](https://en.wikipedia.org/wiki/Prolog), which has been used to
+represent logical predicates, "facts" in expert systems, symbolic
+mathematical terms, and more.
+
+### Rules: Left-hand-side Patterns, Right-hand-side Expressions
+
+The heart of a term-rewriting system is in the set of *rules* that
+actually perform the rewrites. The "program" itself, in a
+term-rewriting DSL, consists simply of an unordered list of
+rules. Each rule may or may not apply; if it applies, then it can be
+used to edit the term. Execution consists of repeated application of
+rules until no more rules can be applied.
+
+A rule consists of two parts: the left-hand side (LHS), or *pattern*,
+and right-hand side (RHS), or *expression*. The left-hand and
+right-hand nomenclature comes from a common way of writing rules as:
+
+```plain
+    A -> B              ;; any term "A" is rewritten to "B"
+    
+    (A x) -> (B (C x))  ;; any term (A x), for some x, is rewritten to (B (C x)).
+    
+    (A _) -> (D)        ;; any term (A _), where `_` is a wildcard (any subterm),
+                        ;; is rewritten to (D).
+```
+
+#### Left-hand Sides: Patterns
+
+Each left-hand side is written in a pattern language that commonly has
+a few different kinds of "matchers", or operators that can match
+subterms:
+
+* `(A pat1 pat2 ...)` matches a constructor `A` with patterms for each
+  of its arguments.
+  
+* `x` matches any subterm and captures its value in a variable
+  binding, which can be used later when we specify the right-hand side
+  (so that the rewrite contains parts of the original term).
+  
+* `_` is a wildcard and matches anything, without capturing it.
+
+* Primitive constant values, such as `42` or `$Symbol`, match only if
+  the term is exactly equal to this constnat.
+  
+These pattern-matching operators can be combined, so we could write,
+for example, `(A (B x _) z)`. This pattern would match the term `(A (B
+1 2) 3)` but not `(A (C 4 5) 6)`.
+
+A pattern can properly be seen as a partial function from input term
+to captured (bound) variables: it either matches or it doesn't, and if
+it does, it provides specific term values for each variable binding
+that can be used by the right-hand side.
+
+A fully-featured term rewriting system usually has other operators as
+well, for convenience: for example, "match already-captured value", or
+"bind variable to subterm and also match it with subpattern", or
+"match subterm with all of these subpatterns". But even the above is
+powerful enough for Turing-complete term reduction, surprisingly; the
+essence of term-rewriting's power is just its ability to trigger
+different rules on different "shapes" of the tree of constructors in
+the input, and on special cases for certain argument values.
+
+Pattern-based term rewriting has a notable and important feature: it
+typically allows *overlapping* rules. This means that more than one
+pattern might match on the input. For example, the two rules:
+
+```plain
+    (A (B x)) -> (C x)
+    (A _) -> (D)
+```
+
+could *both* apply to an input term `(A (B 1))`. The first rule would
+rewrite this input to `(C 1)`, and the second rule would rewrite it to
+`(D)`. Either rewrite would be an acceptable execution step under the
+base semantics of most term-rewriting systems; ordinarily, the
+*correctness* of the rewrite should not depend on which rule is
+chosen, only possibly the "optimality" of the output (whatever that
+means for the application domain in question) or the number of rewrite
+steps to get there.
+
+However, in order to provide a deterministic answer, the system must
+somehow specify which rule will be applied in such a situation based
+on precedence, or specificity, or some other tie-breaker. A common
+heuristic is "more specific rule wins". We will see how ISLE resolves
+this question below by using both this heuristic and an explicit
+priority mechanism.
+
+#### Right-hand Sides: Rewrite Expressions
+
+Given a rule whose pattern has matched, we now need to compute the
+rewritten term that replaces the original input term. This rewrite is
+specified by the right-hand side (RHS), which consists of an
+*expression* that generates a new term. This expression can use parts
+of the input term that have been captured by variables in the
+pattern.
+
+We have already seen a few examples of this above: simple term
+expressions, with variables used in place of concrete subterms where
+desired. A typical term-rewrite system allows just a few options in
+the output expression:
+
+* Terms, with sub-expressions as arguments;
+* Constant primitives (`42` or `$Symbol`); and
+* Captured variable values (`x`).
+
+The options are more limited in expressions than in patterns (e.g.,
+there are no wildcards) because a pattern is matching on a range of
+possible terms while an expression must specify a specific rewrite
+result.
+
+### Rewrite Steps and Intermediate Terms
+
+Now that we can specify rewrites via a list of rules, we can study how
+the top-level execution of a term-rewriting system proceeds. Much of
+the power of term-rewriting comes from the fact that rewrites can
+*chain together* into a multi-step traversal through several
+intermediate terms before the final answer is computed.
+
+For a simple example, consider the following rules:
+
+```plain
+    (A (B x)) -> (C x)
+    (C (D x)) -> (E x)
+    (C (F x)) -> (G x)
+```
+
+This set of rules will rewrite `(A (B (D 42)))` to `(C (D 42))`, then
+to `(E 42)` (via the first and third rules respectively).
+
+How is this useful? First, rewriting one term to another (here, `C` at
+the top level) that in turn appears in the left-hand side of other
+rules allows us to *factor* a "program" of term-rewriting rules in the
+same way that imperative programs are factored into separate
+functions.[^4] The usual advantages of a well-factored program, where
+each problem is solved with a small step that "reduces to a previously
+solved problem", apply here.
+
+Second, repeating the rewrite step is actually what grants
+term-rewriting its Turing-completeness: it allows for arbitrary
+control flow.[^5] This might be useful in cases where, for example, a
+term-rewriting program needs "loop" over a list of elements in the
+input: it can recurse and use intermediate terms to store state.
+
+While this full generality may not be used often in the
+domain-specific applications of term-rewriting that emphasize its
+pattern-matching (such as instruction selectors), the user should not
+be afraid to define and use intermediate terms -- rewriting into them,
+then defining additional rules to rewrite further -- when it helps to
+factor common behavior out of multiple rules, or aids in conceptual
+clarity.
+
+[^4]: In fact, ISLE actually compiles rules for different top-level
+      pattern terms (`(A ...)` and `(C ...)` in the example) into
+      separate Rust functions, so factoring rules to use intermediate
+      terms can provide code-size and compile-time benefits for the
+      ISLE-generated Rust code as well.
+      
+[^5]: The [lambda calculus' reduction
+      rules](https://en.wikipedia.org/wiki/Lambda_calculus#Reduction)
+      are a good example of this.
+
+### Application to Compilers: A Term is a Value; Rewrites are Lowerings
+
+So far this has been a fairly abstract introduction to term-rewriting
+systems as a general computing paradigm. How does this relate (or, how
+is it commonly mapped) to the instruction-selection problem?
+
+In a domain such as instruction selection, we manipulate terms that
+represent computations described by an IR, and the terms are
+eventually rewritten into terms that name specific machine
+instructions. We can think of each term as having a denotational value
+that that *is* that program value. Then, any rewrite is correct if it
+preserves the denotational value of the term.
+
+In other words, terms are just values, and rules specify alternative
+ways to compute the same values. We might have rewrite rules that
+correspond to common algebraic identities (`a + b` == `b + a`, and
+`a + 0` == `a`), for example. The main sort of rewrite rule, however,
+will be one that takes a machine-*independent* operator term and
+rewrites it into a machine-*dependent* instruction term. For example:
+
+```plain
+    (iadd a b) -> (isa.add_reg_reg a b)
+    
+    (iadd a (iconst 0)) -> a
+    
+    (iadd a (iconst n)) (isa.add_reg_imm a n)
+```
+
+These rules specify three ways to convert an IR `iadd` operator into
+an ISA-specific instruction. Recall from above that in general, an
+application of a term-rewriting system should not depend for
+correctness on the order or choice of rule application: when multiple
+rules are applicable, then any sequence of rewrites that ends in a
+terminating state (a state with no further-applicable rules) should be
+considered a "correct" answer.[^6] Here, this is true: if, for
+example, we choose the register-plus-register form (the first rule)
+for an `iadd` operation, but the second argument is actually an
+`iconst`, then that is still valid, and the `iconst` will separately
+be rewritten by some other rule that generates a constant into a
+register. It simply may not be as efficient as the more specific third
+rule (or second rule, if the constant is zero). Hence, rule ordering
+and prioritization is nevertheless important for the quality of the
+instruction selector.
+
+[^6]: Note that this suggests an interesting testing strategy: we
+      could choose arbitrary (random) orders of lowering rules to
+      apply, or even deliberately worst-case orders according to some
+      heuristic. If we can differentially test programs compiled with
+      such randomized lowerings against "normally" compiled programs
+      and show that the results are always the same, then we have
+      shown that are lowering rules are "internally consistent",
+      without any other external oracle. This will have a similar
+      effect to
+      [wasm-mutate](https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-mutate),
+      but takes mutations implicitly from the pool of rules rather
+      than a separate externally-defined pool of mutations. This idea
+      remains future work.
+
+## Core ISLE: a Term-Rewriting System
+
+This section describes the core ISLE language. ISLE's core is a
+term-rewriting system, with a design that very closely follows the
+generic concepts that we have described above.
+
+In the core language, ISLE's key departure from many other
+term-rewriting systems is that it is *strongly typed*. A classical
+term-rewriting system, especially one designed for instruction
+rewriting, will typically have just one type of term, corresponding to
+a "value" in the program. In contrast, ISLE is designed so that terms
+can represent various concepts in a compiler backend: values, but also
+machine instructions or parts of those instructions ("integer
+immediate value encodable in machine's particular format"), or
+abstract bundles of information with invariants or guarantees encoded
+in the type system ("load that I can sink", "instruciton that produces
+flags").
+
+ISLE's other key departure from many other systems is its first-class
+integration with Rust, including a well-defined "FFI" mapping that
+allows ISLE rules to call into Rust in both their patterns and
+expressions, and to operate directly on types that are defined in the
+surrounding Rust code. This allows for easy and direct embedding into
+an existing compiler backend. We will cover this aspect more in the
+next section, [ISLE to Rust](#isle-to-rust).
+
+### Rules
+
+ISLE allows the user to specify rewrite rules, with a syntax similar
+in spirit to that shown above:
+
+```lisp
+    (rule
+      ;; left-hand side (pattern): if the input matches this ...
+      (A (B _ x) (C y))
+      ;; ... then rewrite to this:
+      (D x y))
+```
+
+The pattern (left-hand side) is made up of the following match
+operators:
+
+* Wildcards (`_`).
+* Integer constants (decimal/hex, positive/negative: `1`, `-1`,
+  `0x80`, `-0x80`).
+* Symbolic constants (`$Symbol`).
+* Variable captures (bare identifiers like `x`; an identifier consists
+  of alphanumeric characters and underscores, and does not start with
+  a digit).
+* Variable captures with sub-patterns: `x @ PAT`, which captures the
+  subterm in `x` as above but also matches `PAT` against the subterm.
+* "Equal-variable" constraints (`=x`): a subterm must match an
+  already-captured value.
+* conjunctions of subpatterns: `(and PAT1 PAT2 ...)` matches all of
+  the subpatterns against the term. If any subpattern does not match,
+  then this matcher fails.
+* Term deconstruction: `(term PAT1 PAT2 ...)`, where `term` is a
+  defined term (type variant or constructor) and the subpatterns are
+  applied to each argument value in turn.
+  
+The expression (right-hand side) is made up of the following
+expression operators:
+
+* Integer and symbolic constants, as above.
+* Boolean constants `#t` and `#f` (following Scheme syntax).
+* Variable uses (bare `x` identifier).
+* Term constructors (`(term EXPR1 EXPR2 ...)`, where each
+  subexpression is evaluated first and then the term is constructed).
+* `let`-expressions that bind new variables, possibly using the values
+  multiple times within the body: `(let ((var1 type1 EXPR1) (var2 ...)
+  ...) BODY ...)`. Each variable's initialization expression can refer
+  to the immediately previous variable bindings (i.e., this is like a
+  `let*` in Scheme). `let`s are lexically-scoped, meaning that bound
+  variables are available only within the body of the `let`.
+  
+When multiple rules are applicable to rewrite a particular term, ISLE
+will choose the "more specific" rule according to a particular
+heuristic: in the lowered sequence of matching steps, when one
+left-hand side completes a match while another with the same prefix
+continues with further steps, the latter (more specific) is run first.
+
+The more-specific-first heuristic is usually good enough, but when an
+undesirable choice occurs, explicit priorities can be specified.
+Rules with explicit priorities are written as `(rule PRIO lhs rhs)`
+where `PRIO` is a signed (positive or negative) integer. An applicable
+rule with a higher priority will always match before a rule with a
+lower priority. The default priority for all rules if not otherwise
+specified is `0`.
+
+### Typed Terms
+
+ISLE allows the programmer to define types, and requires every term to
+have *parameter types* and a *return type* (analogous to first-order
+functions).
+
+The universe of types is very simple: there are *primitives*, which
+can be integers or symbolic constants (imported from the Rust
+embedding), and *enums*, which correspond direclty to Rust enums with
+variants that have named fields. There is no subtyping. Some examples
+of type definitions are:
+
+```lisp
+
+    (type u32 (primitive u32))  ;; u32 is a primitive, and is
+                                ;; spelled `u32` in the generated Rust code.
+                                
+    (type MyType (enum
+                   (A (x u32) (y u32))
+                   (B (z u32))
+                   (C)))        ;; MyType is an enum, with variants
+                                ;; `MyType::A { x, y }`, `MyType::B { z }`,
+                                ;; and `MyType::C`.
+                                
+    (type MyType2 extern (enum (A)))
+                                ;; MyType2 is an enum with variant `MyType2::A`.
+                                ;; Its type definition is not included in the
+                                ;; generated Rust, but rather, assumed to exist
+                                ;; in surrounding code. Useful for binding to
+                                ;; existing definitions.
+```
+
+We then declare constructors with their parameter and return types as
+follows:
+
+```lisp
+
+    (decl Term1 (u32 u32) MyType)  ;; Term1 has two `u32`-typed parameters,
+                                   ;; and itself has type `MyType`.
+    (decl Term2 () u32)            ;; Term2 has no parameters and type `u32`.
+```
+
+Note that when an enum type is defined, its variants are implicitly
+defined as constructors as well. These constructors are namespaced
+under the name of the type, to avoid ambiguity (or the need to do
+type-dependent lookups in the compiler, which can complicate type
+inference). For example, given the above `MyType` definitions, we
+automatically have the following constructors:
+
+```lisp
+
+    ;; These definitions are implicit and do not need to be written (doing
+    ;; so is a compile-time error, actually). We write them here just to
+    ;; show what they would look like.
+    
+    (decl MyType.A (u32 u32) MyType)
+    (decl MyType.B (u32) MyType)
+    (decl MyType.C () MyType)
+    
+    (decl MyType2.A () MyType2)
+```
+
+### Why Types?
+
+For terms that are not enum variants, the notion that a term "has a
+type" is somewhat foreign to a classical term-rewriting system. In
+most formal symbolic systems, the terms are manipulated as opaque
+sequences or trees of symbols; they have no inherent meaning other
+than what the user implicitly defines with the given rules. What does
+it mean for a term to "have a type" when it is just data? Or, said
+another way: why isn't the type of `Term2` just `Term2`?
+
+The types come into play when we define *rules*: one term of type `T`
+can only be rewritten into another term of type `T`, and when a
+parameter has a certain type, only subterms with that type can
+appear. Without explicit types on terms and their parameters, any term
+could be rewritten to any other, or substituted in as a parameter, and
+there is thus a kind of dynamic typing about which the programmer must
+have some caution. In most applications of a term-rewriting system,
+there is already some de-facto "schema": some parameter of a term
+representing a machine instruction can only take on one of a few
+subterms (representing, say, different addressing modes). ISLE's types
+just make this explicit.
+
+Thus, the first answer to "why types" is that they enforce a schema on
+the terms, allowing the programmer to have stronger well-formed-data
+invariants.
+
+The second reason is that the types are an integral part of the
+compilation-to-Rust strategy: every constructor actually does evaluate
+to a Rust value of the given "return value" type, given actual Rust
+values for its parameters of the appropriate parameter types. We will
+see more on this below.
+
+### Well-Typed Rules and Type Inference
+
+Now that we understand how to define types, let's examine in more
+detail how they are used to verify that the pattern and rewrite
+expression of a rule have the same type.
+
+ISLE uses a simple unidirectional type-inference algorithm that
+propagates type information through the pattern, resulting in a "type
+environment" that specifies the type for each captured variable, and
+then uses this to typecheck the rewrite expression. The result of this
+is that types are almost completely inferred, and are only annotated
+in a few places (`let` bindings specifically).
+
+The typing rules for patterns in ISLE are:
+
+* At the root of the pattern, we require that a *constructor* pattern
+  is used, rather than some other match operation (a wildcard, integer
+  constant, etc.). This is because compilation and dispatch into rules
+  is organized by the top-level constructor of the term being
+  rewritten.
+  
+* At each part of the pattern except the root, there is an "expected
+  type" that is inferred from the surrounding context. We check that
+  this matches the actual type of the pattern.
+  
+* A constructor pattern `(C x y z)`, given a constructor `(decl C (T1
+  T2 T2) R)`, has type `R` and provides expected types `T1`, `T2`, and
+  `T3` to its subpatterns.
+  
+* A variable capture pattern `x` is compatible with any expected type,
+  and captures this expected type under the variable identifier `x` in
+  the type environment.
+  
+* A variable-equality pattern `=x` checks that the expected type is
+  equal to the already-captured type for `x` in the type environment.
+  
+* A conjunction `(and PAT1 PAT2 ...)` checks that each subpattern is
+  compatible with the expected type.
+  
+* Integer constants are compatible with any primitive expected
+  type. (This may change in the future if we add non-numeric
+  primitives, such as strings.)
+  
+If we are able to typecheck the pattern, we have a type environment
+that is a map from variable bindings to types: e.g., `{ x: MyType, y:
+MyType2, z: u32 }`. We then typecheck the rewrite expression.
+
+* Every expression also has an expected type, from the surrounding
+  context. We check that the provided expression matches this type.
+  
+* The top-level rewrite expression must have the same type as the
+  top-level constructor in the pattern. (In other words, a term can
+  only be rewritten to another term of the same type.)
+  
+* Constructors check their return values against the expected type,
+  and typecheck their argument expressions against their parameter
+  types.
+
+* A `let` expression provides types for additional variable bindings;
+  these are added to the type environment while typechecking the
+  body. The expected type for the body is the same as the expected
+  type for the `let` itself.
+  
+### A Note on Heterogeneous Types
+
+We should illuminate one particular aspect of the ISLE type system
+that we described above. We have said that a term must be rewritten to
+another term of the same type. Note that this does *not* mean that,
+for example, a set of ISLE rules cannot be used to translate a term of
+type `T1` to a term of type `T2`. The trick is to define a top-level
+"driver" that wraps the `T1`, such that reducing this term results in
+a `T2`. Concretely:
+
+```lisp
+    (type T1 ...)
+    (type T2 ...)
+    
+    (decl Translate (T1) T2)
+    
+    (rule (Translate (T1.A ...)
+                     (T2.X ...)))
+    (rule (Translate (T1.B ...)
+                     (T2.Y ...)))
+```
+
+This gets to the heart of rewrite-system-based computation, and has
+relevance for applications of ISLE to compiler backends. A common
+technique in rewrite systems is to "kick off" a computation by
+wrapping a term in some intermediate term that then drives a series of
+reductions. Here we are using `Translate` as this top-level term. A
+difference between ISLE and some other rewrite-based instruction
+selectors is that rewrites are always driven by term reduction from
+such a toplevel term, rather than a series of equivalences directly
+from IR instruction to machine instruction forms.
+
+In other words, a conventional isel pattern engine might let one
+specify `(Inst.A ...) -> (Inst.X ...)`. Here the instruction/opcode
+type on the LHS and RHS must be the same single instruction type
+(otherwise rewrites could not be chained), and rewrite relation (which
+we wrote as `->`) is in essence a single privileged relation. One can
+see ISLE as a generalization: we can define many different types, and
+many different toplevel terms from which we can start the
+reduction. In principle, one could have:
+
+```lisp
+
+    (type IR ...)
+    (type Machine1 ...)
+    (type Machine2 ...)
+    
+    (decl TranslateToMachine1 (IR) Machine1)
+    (decl TranslateToMachine2 (IR) Machine2)
+    
+    (rule (TranslateToMachine1 (IR.add a b) (Machine1.add a b)))
+    (rule (TranslateToMachine2 (IR.add a b) (Machine2.weird_inst a b)))
+```
+
+and then both translations are available. We are "rewriting" from `IR`
+to `Machine1` and from `IR` to `Machine2`, even if rewrites always
+preserve the same type; we get aorund the rule by using a constructor.
+
+### Constructors and Extractors
+
+So far, we have spoken of terms and constructors: a term is a schema
+for data, like `(A arg1 arg2)`, while we have used the term
+"constructor" to refer to the `A`, like a function. We now refine this
+notion somewhat and define what it means for a term to appear in the
+left-hand (pattern) or right-hand (expression) side of a rule.
+
+More precisely, a term, like `A`, can have three kinds of behavior
+associated with it: it can be an enum type variant, it can be a
+constructor, or it can be an *extractor*, which we will define in a
+moment. A term can be both an extractor and constructor
+simultaneously, but the enum type variant case is mutually exclusive
+with the others.
+
+The distinction between a "constructor" and an "extractor" is whether
+a term is being deconstructed (matched on) -- by an extractor -- or
+constructed -- by a constructor.
+
+#### Constructors
+
+Constructor behavior on a term allows it to be invoked in the
+right-hand side of a rule. A term can have either an "external
+constructor" (see below) or an "internal constructor", defined in
+ISLE. Any term `A` that has one or more `(rule (A ...) RHS)` rules in
+the ISLE source implicitly has an internal constructor, and this
+constructor can be invoked from the right-hand side of other rules.
+
+#### Extractors
+
+Extractor behavior on a term allows it to be used in a pattern in the
+left-hand side of a rule. If one considers a constructor to be a
+function that goes from argument values to the complete term, then an
+extractor is a function that takes a complete term and possibly
+matches on it (it is fallible). If it does match, it provides the
+arguments *as results*.
+
+One can see extractors as "programmable match operators". They are a
+generalization of enum-variant deconstruction. Where a traditional
+term-rewriting system operates on a term data-structure that exists in
+memory, and can discover that a pattern `(A x y)` matches a term `A`
+at a particular point in the input, an extractor-based system instead
+sees `A` as an *arbitrary programmable operator* that is invoked
+wherever a pattern-match is attempted, and can return "success" with
+the resulting "fields" as if it were actually an enum variant. For
+more on this topic, see the motivation and description in [RFC 15
+under "programmable matching on virtual
+nodes"](https://github.com/bytecodealliance/rfcs/blob/main/accepted/cranelift-isel-isle-peepmatic.md#extractors-programmable-matching-on-virtual-nodes).
+
+To provide a concrete example, if we have the term declarations
+
+```lisp
+    (decl A (u32 u32) T)
+    (decl B (T) U)
+```
+
+then if we write a rule like
+
+```lisp
+    (rule (B (A x y))
+          (U.Variant1 x y))
+```
+
+then we have used `A` as an *extractor*. When `B` is invoked as a
+constructor with some `T`, this rule uses `A` as an extractor and
+attempts (via whatever programmable matching behavior) to use `A` to
+turn the `T` into two `u32`s, binding `x` and `y`. `A` can succeed or
+fail, just as any other part of a pattern-match can.
+
+Just as for constructors, there are *internal* and *external*
+extractors. Most of the interesting programmable behavior occurs in
+external extractors, which are defined in Rust; we will discuss this
+further in a section below. Internal extractors, in contrast, behave
+like macros, and can be defined for convenience: for example, we can
+write
+
+```lisp
+    (decl A (u32 u32) T)
+    (extractor (A pat1 pat2)
+               (and
+                 (extractArg1 pat1)
+                 (extractArg2 pat2)))
+```
+
+which will, for example, expand a pattern `(A (subterm ...) _)` into
+`(and (extractArg1 (subterm ...)) (extractArg2 _))`.
+
+#### Summary: Terms, Constructors, and Extractors
+
+We start with a `term`, which is just a schema for data:
+
+```lisp
+    (decl Term (A B C u32 u32) T)
+```
+
+A term can have:
+
+1. A single internal extractor body, via a toplevel `(extractor ...)`
+   form, OR
+   
+2. A single external extractor binding, via an `(extern extractor
+   ...)` form, defined below; AND
+   
+3. One or more `(rule (Term ...) ...)` toplevel forms, which together
+   make up an internal constructor definition, OR
+   
+4. A single external constructor binding, via an `(extern constructor
+   ...)` form, defined below.
+
+## ISLE to Rust
+
+Now that we have described the core ISLE language, we will document
+how it interacts with Rust code. We consider these interactions to be
+semantically as important as the core language: they are not
+implementation details, but rather, a well-defined interface by which
+ISLE can interface with the outside world (an "FFI" of sorts).
+
+### Mapping to Rust: Constructors, Functions, and Control Flow
+
+ISLE was designed to have a simple, easy-to-understand mapping from
+its language semantics to Rust semantics. This means that the
+execution of ISLE rewriting has a well-defined implementation in
+Rust. The basic principles are:
+
+1. Every constructor with rules in ISLE becomes a Rust function. The
+   constructor arguments are the Rust function arguments. The
+   constructor's "return value" is the Rust function's return value
+   (usually wrapped in an `Option` because pattern coverage can be
+   incomplete).
+
+2. One rewrite step is one Rust function call.
+
+3. Rewriting is thus eager, and reified through ordinary Rust control
+   flow. The code that embeds the ISLE generated code will kick off
+   execution by calling a top-level "driver" constructor; this will
+   invoke constructors in its rewrite expression, making other Rust
+   function calls, until eventually a value is returned.
+   
+4. This design means that "intermediate terms" -- constructed terms
+   that are then further rewritten -- are never actually built as
+   in-memory data-structures. Rather, they exist only as ephemeral
+   stack-frames while the corresponding Rust function executes. This
+   means that there is very little or no performance penalty to
+   factoring code into many sub-rules (subject only to function-call
+   overhead and/or the effectiveness of the Rust inliner).
+   
+5. Backtracking -- attempting to match rules, and backing up to follow
+   a different path when a match fails -- is entirely internal to the
+   generated Rust function for a constructor. Once we are rewriting a
+   constructor and its subterms, we have committed to that
+   constructor. Internally to the rewrite-evaluation of one
+   constructor, it evaluates left-hand side patterns, finding one that
+   matches, and then commits to that and starts to invoke constructors
+   to build the rewritten right-hand side.
+   
+   Said another way, the principle is that left-hand sides are
+   fallible, and have no side-effects as they execute; right-hand
+   sides, in contrast, are infallible. This simplifies the control
+   flow and makes reasoning about side-effects (especially with
+   respect to external Rust actions) easier.
+   
+This will become more clear as we look at how Rust interfaces are
+defined, and how the generated code appears, below.
+  
+### Extern Constructors and Extractors
+
+ISLE programs interact with the surrounding Rust code in which they
+are embedded by allowing the programmer to define a term to have
+*external constructors* and an *external extractor*.
+
+The design philosophy of ISLE is that while internally it operates as
+a fairly standard term-rewriting system, on the boundaries the "terms"
+should be virtual, and defined procedurally rather than reified into
+data structures, in order to allow for very flexible binding to the
+embedding application. Thus, when term-rewriting bottoms out on the
+input side, it just calls "extractors" to match on whatever ultimate
+input the user provides, and these are fully programmable; and when it
+bottoms out on the output side, the "term tree" is reified as a tree
+of Rust function calls rather than plain data.
+
+#### Constructors
+
+As we defined above, a "constructor" is a term form that appears in an
+expression and builds its return value from its argument
+values. During the rewriting process, a constructor that can trigger
+further rewriting rules results in a Rust function call to the body of
+the "internal constructor" built from these rules; the term thus never
+exists except as argument values on the stack. However, ultimately the
+ISLE code needs to return some result to the outside world, and this
+result may be built up of many parts; this is where *external
+constructors* come into play.
+
+For any term declared like
+
+```lisp
+    (decl T (A B C) U)
+```
+
+the programmer can declare
+
+```lisp
+    (extern constructor T ctor_func)
+```
+
+which means that there is a Rust function `ctor_func` on the context
+trait (see below) that can be *invoked* with arguments of type `A`,
+`B`, `C` (actually borrows `&A`, `&B`, `&C`, for non-primitive types)
+and returns a `U`.
+
+External constructors are infallible: that is, they must succeed, and
+always return their return type. In contrast, internal constructors
+are fallible because they are implemented by a list of rules whose
+patterns may not cover the entire domain. If fallible behavior is
+needed when invoking external Rust code, that behavior should occur in
+an extractor (see below) instead: only pattern left-hand sides are
+meant to be fallible. Note, incidentally, that fallibility in a
+constructor does not backtrack to try other rules; instead it just
+trickles the `None` failure all the way up.
+
+#### Extractors
+
+An *external extractor* is an implementation of matching behavior in
+left-hand sides (patterns) that is fully programmable to interface
+with the embedding application. When the generated pattern-matching
+code is attempting to match a rule, and has a value to match against
+an extractor pattern defined as an external extractor, it simply calls
+a Rust function with the value of the term to be deconstructed, and
+receives an `Option<(arg1, arg2, ...)>` in return. In other words, the
+external extractor can choose to match or not, and if it does, it
+provides the values that are in turn matched by sub-patterns.
+
+For any term declared like
+
+```lisp
+    (decl T (A B C) U)`
+```
+
+the programmer can declare
+
+```lisp
+    (extern extractor T etor_func)
+```
+
+which means that there is a Rust function `etor_func` on the context
+trait (see below) that can be *invoked* with an argument of type `&U`,
+and returns an `Option<(A, B, C)>`.
+
+If an extractor returns `None`, then the generated matching code
+proceeds just as if an enum variant match had failed: it moves on to
+try the next rule in turn.
+
+#### Advanced Extractors: Arg-Polarity
+
+There is one shortcoming in the extractor mechanism as defined so far:
+there is no mechanism to provide additional context or "parameterize"
+an external extractor; it only receives the term to deconstruct, with
+no other parameters.  For example, one might wish to write a
+`(GetNthArg n arg_pattern)` extractor that matches on an instruction,
+fetches the `n`th "arg" from it, and then returns that as the
+extracted match result, allowing `arg_pattern` to match against it.
+
+Inspired by Prolog, where argument data can flow in both directions
+during "unification", we implement a limited form of bidirectionality
+in ISLE for extractor arguments. Specifically, we can declare the
+"polarity" of the arguments to an extractor so that some of the
+arguments flow "in" rather than "out". This lets us provide data to
+the extractor via expressions embedded in the pattern.
+
+An example might make this more clear: we can define a term
+
+```lisp
+    (decl GetNthArg (u32 Arg) Inst)
+```
+
+that we wish to use as in the example given above, and then we can define
+an external extractor
+
+```lisp
+    (extern extractor GetNthArg get_nth_arg (in out))
+```
+
+which indicates that `get_nth_arg()` will take parameters of `&Inst`
+(the value being extracted) *and* `u32` (the in-arg), and return
+`Option<(Arg,)>`, i.e., *just* the out-args.
+
+In order to use this extractor, to avoid parse ambiguity (i.e., to
+avoid the need for the parser to know argument polarity while it is
+still parsing), we require special syntax for the in-argument so that
+it is parsed as an expression: it must be prepended by `<`. So one
+might use `GetNthArg` as follows:
+
+```lisp
+    (rule (Lower (and
+                   (Inst ...)
+                   (GetNthArg <2 second_arg)))
+          ...)
+```
+
+This functionality is meant to improve the expressive power of the
+DSL, but is not intended to be commonly used outside of "binding" or
+"library" ISLE code. In other words, because it is somewhat
+non-intuitive, it is best to wrap it within friendlier internal
+extractors.
+
+### Mapping Type Declarations to Rust
+
+When we declare a type like
+
+```lisp
+    (decl MyEnum (enum
+                   (A (x u32) (y u32))
+                   (B)))
+```
+
+ISLE will generate the Rust type definition
+
+```rust
+#[derive(Clone, Debug)]
+pub enum MyEnum {
+    A { x: u32, y: u32, },
+    B,
+}
+```
+
+Note that enum variants with no fields take on the brace-less form,
+while those with fields use the named-struct-field `A { x: ... }`
+form. If all variants are field-less, then the type will additionally
+derive `Copy`, `PartialEq`, and `Eq`.
+
+If the type is declared as extern (`(decl MyEnum extern (enum ...))`)
+then the same definition is assumed to exist. Primitives (`(decl u32
+(primitive u32))`) are assumed to be defined already, and are required
+to be `Copy`.
+
+All imported/extern types are pulled in via `use super::*` at the top
+of the generated code; thus, these types should exist in (or be
+re-exported from) the parent module.
+
+### Symbolic Constants
+
+ISLE allows the user to refer to external constants as follows:
+
+```lisp
+    (extern const $I32 Type)
+```
+
+This allows code to refer to `$I32` whenever a value of type `Type` is
+needed, in either a pattern (LHS) or an expression (RHS). These
+constants are pulled in via the same `use super::*` that imports all
+external types.
+  
+### Exported Interface: Functions and Context Trait
+
+The generated ISLE code provides an interface that is designed to be
+agnostic to the embedding application. This means that ISLE knows
+nothing about, e.g., Cranelift or compiler concepts in
+general. Rather, the generated code provides function entry points
+with well-defined signatures based on the terms, and imports the
+extern constructors and extractors via a trait that the embedder must
+implement.
+
+When a term `T` is defined like
+
+```lisp
+    (decl T (A B C) U)
+```
+
+and has an internal constructor (provided by `rule` bodies), then a
+function with the following signature will be exported from the
+generated code:
+
+```rust
+    pub fn constructor_T<C: Context>(ctx: &mut C, arg0: &A, arg1: &B, arg2: &C) -> Option<U>;
+```
+
+In other words, `constructor_` is prepended, and the function takes
+the expected arguments, along with a "context" (more on this
+below). It returns an `Option<U>` because internal constructors can be
+partial: if no rule's pattern matches, then the constructor
+fails. Note that if a sub-constructor fails, no backtracking occurs;
+rather, the failure propagates all the way up to the entry point.
+
+What is this "context" for? The context argument is used to allow
+external extractors and constructors to access the necessary state of
+the embedding application. (For example, in Cranelift, it might be the
+`LowerCtx` that controls the code-lowering process.)
+
+The context is a trait because we want to decouple the generated code
+from the application as much as possible. The trait will have a method
+for each defined external extractor and constructor. For example, if
+we have the following terms and declarations:
+
+```lisp
+    (decl A (u32 u32) T)
+    (extern constructor A build_a)
+    
+    (decl B (T) U)
+    (external extractor B disassemble_b)
+```
+
+then the `Context` trait will include these methods:
+
+```rust
+    trait Context {
+        fn build_a(&mut self, arg0: u32, arg1: u32) -> T;
+        fn disassemble_b(&mut self, arg0: &U) -> Option<T>;
+    }
+```
+
+These functions should be implemented as described above for external
+constructors and extractors.
+
+Note that some external extractors are known to always succeed, for
+example if they are just fetching some information that is always
+present; in this case, the generated code can be made slightly more
+efficient if we tell the ISLE compiler that this is so. By declaring
+
+```lisp
+    (external extractor infallible B disassemble_b)
+```
+
+we eliminate the `Option` on the return type, so the method is instead
+
+```rust
+    trait Context {
+        // ...
+        fn disassemble_b(&mut self, arg0: &U) -> T;
+    }
+```
+
+## ISLE Internals
+
+### Compiler Stages
+
+Some detail and pointers to the compilation stages can be found in the
+[README](../isle/README.md). The sequence starts as any ordinary
+compiler: lexing, parsing, semantic analysis, and generation of an
+IR. The most unique part is the "decision trie generation", which is
+what converts the unordered-list-of-rule representation into something
+that corresponds to the final Rust code's control flow and order of
+matching operations.
+
+### Decision Trie
+
+The heart of the ISLE transformation lies in how the compiler converts
+a list of rules into a scheme to attempt to match rules in some order,
+possibly sharing match operations between similar rules to reduce
+work.
+
+The core data structure we produce is a "decision trie" per internal
+constructor body. This is an intermediate representation of sorts that
+is built from individual-rule IR (LHS + RHS) sequences, and is then
+used to generate Rust source.
+
+The decision trie is, as the name implies, a kind of decision tree, in
+the sense that we start at the root and move down the tree based on
+the result of match operations (each feeding one "decision").
+
+It is a "trie" (which is a kind of tree) because at each level, its
+edges are labeled with match operations; a trie is a tree where one
+input character from an alphabet is used to index children at each
+level.
+
+Each node in the tree is either an internal decision node, or a leaf
+"expression" node (which we reach once we have a successful rule
+match). The "execution semantics" of the trie are
+backtracking-based. We attempt to find some path down the tree through
+edges whose match ops run successfully; when we do this to reach a
+leaf, we have the values generated by all of the match ops, and we can
+execute the sequence of "expression instructions" in the leaf. Each
+rule's left-hand side becomes a series of edges (merged into the
+existing tree as we process rules) and each rule's right-hand side
+becomes one leaf node with expression instructions.
+
+At any point, if a match op does not succeed, we try the next out-edge
+in sequence. If we have tried all out-edges from a decision node and
+none were successful, then we backtrack one level further. Thus, we
+simply perform an in-order tree traversal and find the first
+successful match.
+
+Though this sounds possibly very inefficient if some decision node has
+a high fan-out, in practice it is not because the edges are often
+known to be *mutually exclusive*. The canonical example of this is
+when an enum-typed value is destructured into different variants by
+various edges; we can use a Rust `match` statement in the generated
+source and have `O(1)` (or close to it) cost for the dispatch at this
+level.
+
+Building the trie is a somewhat subtle procedure because we must be
+mindful of *priorities*. In order to ensure that rule priorities are
+obeyed, we actually label each edge with a *priority range* and a
+match op. Edges must then be considered in priority order. When
+building the trie, we uphold an important *non-overlapping-priority*
+invariant: there must not be two edges with overlapping priority
+ranges and different match ops, or else it would be unclear which to
+run next. Priority ranges are inclusive in a discrete (integer) space,
+so "overlap" is also subtle: we can allow edges with "unit" priority
+ranges (just one priority), and these do not overlap. So, e.g., we can
+allow an edge with priority `[0, 10]` (higher is more prioritized) and
+op `A`, followed by an edge with priority `[0, 0]` and op `B`,
+followed by an edge with priority `[-1, -10]`, `A`, though they must
+occur in that order.
+
+See [this block
+comment](https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/isle/isle/src/trie.rs#L15-L166)
+for more information regarding the trie construction algorithm.
+
+## Reference: ISLE Language Grammar
+
+Baseline: allow arbitrary whitespace, and Lisp-style comments (`;` to
+newline). The grammar accepted by the parser is as follows:
+
+```bnf
+
+<ISLE> ::= <def>*
+
+<def> ::= "(" "type" <typedecl> ")"
+        | "(" "decl" <decl> ")"
+        | "(" "rule" <rule> ")"
+        | "(" "extractor" <etor> ")"
+        | "(" "extern" <extern> ")"
+        
+<typedecl> ::= <ident> [ "extern" ] <typevalue>
+
+<ident> ::= ( "A".."Z" | "a".."z" | "_" | "$" )
+            ( "A".."Z" | "a".."z" | "_" | "$" | "0".."9" | "." )*
+<const-ident> ::= "$" ( "A".."Z" | "a".."z" | "_" | "$" | "0".."9" | "." )*
+
+<int> ::= [ "-" ] ( "0".."9" )+
+        | [ "-" ] "0x" ( "0".."9" "A".."F" "a".."f" )+
+
+<typevalue> ::= "(" "primitive" <ident> ")"
+              | "(" "enum" <enumvariant>* ")"
+
+<enumvariant> ::= <ident>
+                | "(" <ident> <enumfield>* ")"
+
+<enumfield> ::= "(" <ident> <ty> ")"
+
+<ty> ::= <ident>
+
+<decl> ::= <ident> "(" <ty>* ")" <ty>
+
+<rule> ::= <pattern> <expr>
+         | <prio> <pattern> <expr>
+         
+<prio> ::= <int>
+
+<etor> ::= "(" <ident> <ident>* ")" <pattern>
+
+<pattern> ::= <int>
+            | <const-ident>
+            | "_"
+            | "=" <ident>
+            | <ident> "@" <pattern>
+            | "(" "and" <pattern>* ")"
+            | "(" <ident> <pattern-arg>* ")"
+
+<pattern-arg> ::= <pattern>
+                | "<" <expr>  ;; in-argument to an extractor
+
+<expr> ::= <int>
+         | <const-ident>
+         | "#t"               ;; Scheme-like "true": shorthand for 1
+         | "#f"               ;; Scheme-like "false": shorthand for 0
+         | <ident>
+         | "(" "let" "(" <let-binding>* ")" <expr> ")"
+         | "(" <ident> <expr>* ")"
+         
+<let-binding> ::= "(" <ident> <ty> <expr> ")"
+
+<extern> ::= "constructor" <ident> <ident>
+           | "extractor" [ "infallible" ] <ident> <ident>
+             [ "(" <polarity>* ")" ]
+           | "const" <const-ident> <ident> <ty>
+           
+<polarity> ::= "in" | "out"
+
+```
