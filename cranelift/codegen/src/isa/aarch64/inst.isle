@@ -1448,6 +1448,13 @@
         (ConsumesFlags.ConsumesFlags (MInst.AluRRR (ALUOp.Sbc64) dst src1 src2)
                                      (writable_reg_to_reg dst))))
 
+;; Helper for emitting `MInst.VecMisc` instructions.
+(decl vec_misc (VecMisc2 Reg VectorSize) Reg)
+(rule (vec_misc op src size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecMisc op dst src size))))
+        (writable_reg_to_reg dst)))
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl imm (Type u64) Reg)
