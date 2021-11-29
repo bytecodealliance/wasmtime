@@ -160,7 +160,7 @@ fn trap_display_pretty() -> Result<()> {
     assert_eq!(
         e.to_string(),
         "\
-wasm trap: unreachable
+wasm trap: wasm `unreachable` instruction executed
 wasm backtrace:
     0:   0x23 - m!die
     1:   0x27 - m!<wasm function 1>
@@ -206,7 +206,7 @@ fn trap_display_multi_module() -> Result<()> {
     assert_eq!(
         e.to_string(),
         "\
-wasm trap: unreachable
+wasm trap: wasm `unreachable` instruction executed
 wasm backtrace:
     0:   0x23 - a!die
     1:   0x27 - a!<wasm function 1>
@@ -400,7 +400,7 @@ fn start_trap_pretty() -> Result<()> {
     assert_eq!(
         e.to_string(),
         "\
-wasm trap: unreachable
+wasm trap: wasm `unreachable` instruction executed
 wasm backtrace:
     0:   0x1d - m!die
     1:   0x21 - m!<wasm function 1>
@@ -565,7 +565,7 @@ fn no_hint_even_with_dwarf_info() -> Result<()> {
     assert_eq!(
         trap.to_string(),
         "\
-wasm trap: unreachable
+wasm trap: wasm `unreachable` instruction executed
 wasm backtrace:
     0:   0x1a - <unknown>!start
 "
@@ -600,7 +600,7 @@ fn hint_with_dwarf_info() -> Result<()> {
     assert_eq!(
         trap.to_string(),
         "\
-wasm trap: unreachable
+wasm trap: wasm `unreachable` instruction executed
 wasm backtrace:
     0:   0x1a - <unknown>!start
 note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable to may show more debugging information

@@ -119,7 +119,7 @@ impl fmt::Display for TrapCode {
             IntegerOverflow => "integer overflow",
             IntegerDivisionByZero => "integer divide by zero",
             BadConversionToInteger => "invalid conversion to integer",
-            UnreachableCodeReached => "unreachable",
+            UnreachableCodeReached => "wasm `unreachable` instruction executed",
             Interrupt => "interrupt",
         };
         write!(f, "{}", desc)
