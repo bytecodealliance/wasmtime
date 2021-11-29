@@ -210,6 +210,21 @@ macro_rules! isle_prelude_methods {
                 Some(())
             }
         }
+
+        fn trap_code_division_by_zero(&mut self) -> TrapCode {
+            TrapCode::IntegerDivisionByZero
+        }
+
+        fn trap_code_integer_overflow(&mut self) -> TrapCode {
+            TrapCode::IntegerOverflow
+        }
+
+        fn nonzero_u64_from_imm64(&mut self, val: Imm64) -> Option<u64> {
+            match val.bits() {
+                0 => None,
+                n => Some(n as u64),
+            }
+        }
     };
 }
 
