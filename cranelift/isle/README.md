@@ -30,8 +30,10 @@ level, the rules can be seen as simple equivalences between values in two
 languages, and so should be translatable to formal constraints or other logical
 specification languages.
 
-Some more details and motivation are in [BA RFC
-#15](https://github.com/bytecodealliance/rfcs/pull/15). Reference documentation can be found [here](../docs/isle.md).
+Some more details and motivation are in [BA RFC #15](https://github.com/bytecodealliance/rfcs/pull/15).
+Reference documentation can be found [here](docs/language-reference.md).
+Details on ISLE's integration into Cranelift can be found
+[here](../docs/isle-integration.md).
 
 ## Example Usage
 

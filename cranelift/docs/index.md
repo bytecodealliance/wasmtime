@@ -14,10 +14,6 @@
  - [Cranelift's register allocator](regalloc.md)
    This page document Cranelift's current register allocator.
    
- - [ISLE](isle.md)
-   This page documents the domain-specific language (DSL), ISLE, that
-   we use to define instruction-lowering patterns.
-
 ## Cranelift crate documentation:
 
  - [cranelift](https://docs.rs/cranelift)
