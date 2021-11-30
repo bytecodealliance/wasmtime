@@ -13,6 +13,7 @@ use cranelift_codegen::ir::{
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
+use std::convert::TryInto; // FIXME: Remove in edition2021
 
 /// Structure used for translating a series of functions into Cranelift IR.
 ///
@@ -892,13 +893,7 @@ impl<'a> FunctionBuilder<'a> {
         }
 
         // Future work could consider expanding this to handle more-complex scenarios.
-        fn type_from_byte_size(size: u64) -> Option<Type> {
-            if size > 16 {
-                return None;
-            }
-            Type::int(size as u16 * 8)
-        }
-        if let Some(small_type) = type_from_byte_size(size) {
+        if let Some(small_type) = size.try_into().ok().and_then(Type::int_with_byte_size) {
             if let Equal | NotEqual = zero_cc {
                 let mut left_flags = flags;
                 if size == left_align.get().into() {
