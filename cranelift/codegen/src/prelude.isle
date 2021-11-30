@@ -156,6 +156,10 @@
 (decl vec128 (Type) Type)
 (extern extractor vec128 vec128)
 
+;; An extractor that matches everything except i64x2
+(decl not_i64x2 () Type)
+(extern extractor not_i64x2 not_i64x2)
+
 ;; Extractor to get a `ValueSlice` out of a `ValueList`.
 (decl value_list_slice (ValueSlice) ValueList)
 (extern extractor infallible value_list_slice value_list_slice)

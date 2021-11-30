@@ -196,6 +196,14 @@ macro_rules! isle_prelude_methods {
         fn u8_from_uimm8(&mut self, val: Uimm8) -> u8 {
             val
         }
+
+        fn not_i64x2(&mut self, ty: Type) -> Option<()> {
+            if ty == I64X2 {
+                None
+            } else {
+                Some(())
+            }
+        }
     };
 }
 

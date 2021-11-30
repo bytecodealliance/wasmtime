@@ -1455,6 +1455,38 @@
             (_ Unit (emit (MInst.VecMisc op dst src size))))
         (writable_reg_to_reg dst)))
 
+;; Helper for emitting `MInst.VecRRRLong` instructions.
+(decl vec_rrr_long (VecRRRLongOp Reg Reg bool) Reg)
+(rule (vec_rrr_long op src1 src2 high_half)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecRRRLong op dst src1 src2 high_half))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.VecRRRLong` instructions, but for variants
+;; where the operation both reads and modifies the destination register.
+;;
+;; Currently this is only used for `VecRRRLongOp.Umlal*`
+(decl vec_rrrr_long (VecRRRLongOp Reg Reg Reg bool) Reg)
+(rule (vec_rrrr_long op src1 src2 src3 high_half)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
+            (_2 Unit (emit (MInst.VecRRRLong op dst src2 src3 high_half))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.VecRRNarrow` instructions.
+(decl vec_rr_narrow (VecRRNarrowOp Reg bool) Reg)
+(rule (vec_rr_narrow op src high_half)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecRRNarrow op dst src high_half))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.VecRRLong` instructions.
+(decl vec_rr_long (VecRRLongOp Reg bool) Reg)
+(rule (vec_rr_long op src high_half)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecRRLong op dst src high_half))))
+        (writable_reg_to_reg dst)))
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl imm (Type u64) Reg)
