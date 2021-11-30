@@ -8,6 +8,9 @@ backend more naturally. ISLE was first [described in RFC
 by and lives in the Cranelift tree in
 [cranelift/isle](https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle).
 
+Documentation on how ISLE is used in Cranelift can be found
+[here](../../docs/isle-integration.md).
+
 ## Intro and Whirlwind Tour: DSL for Instruction Lowering
 
 The goal of ISLE is to represent *instruction lowering patterns*. An
