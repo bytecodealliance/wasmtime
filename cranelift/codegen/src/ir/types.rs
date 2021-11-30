@@ -104,6 +104,8 @@ impl Type {
     }
 
     /// Get an integer type with the requested number of bits.
+    ///
+    /// For the same thing but in *bytes*, use [`Self::int_with_byte_size`].
     pub fn int(bits: u16) -> Option<Self> {
         match bits {
             8 => Some(I8),
@@ -113,6 +115,13 @@ impl Type {
             128 => Some(I128),
             _ => None,
         }
+    }
+
+    /// Get an integer type with the requested number of bytes.
+    ///
+    /// For the same thing but in *bits*, use [`Self::int`].
+    pub fn int_with_byte_size(bytes: u16) -> Option<Self> {
+        Self::int(bytes.checked_mul(8)?)
     }
 
     /// Get a type with the same number of lanes as `self`, but using `lane` as the lane type.
@@ -594,5 +603,23 @@ mod tests {
         assert_eq!(B1.as_int(), I8);
         assert_eq!(B8.as_int(), I8);
         assert_eq!(B128.as_int(), I128);
+    }
+
+    #[test]
+    fn int_from_size() {
+        assert_eq!(Type::int(0), None);
+        assert_eq!(Type::int(8), Some(I8));
+        assert_eq!(Type::int(33), None);
+        assert_eq!(Type::int(64), Some(I64));
+
+        assert_eq!(Type::int_with_byte_size(0), None);
+        assert_eq!(Type::int_with_byte_size(2), Some(I16));
+        assert_eq!(Type::int_with_byte_size(6), None);
+        assert_eq!(Type::int_with_byte_size(16), Some(I128));
+
+        // Ensure `int_with_byte_size` handles overflow properly
+        let evil = 0xE001_u16;
+        assert_eq!(evil.wrapping_mul(8), 8, "check the constant is correct");
+        assert_eq!(Type::int_with_byte_size(evil), None);
     }
 }
