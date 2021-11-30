@@ -420,7 +420,7 @@
 (rule (extend_to_reg (and val (value_type from_ty))
                      to_ty
                      kind)
-      (let ((from_bits u16 (ty_bits from_ty))
+      (let ((from_bits u16 (ty_bits_u16 from_ty))
             ;; Use `operand_size_of_type` so that the we clamp the output to 32-
             ;; or 64-bit width types.
             (to_bits u16 (operand_size_bits (operand_size_of_type to_ty))))

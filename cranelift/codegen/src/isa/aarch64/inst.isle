@@ -1301,6 +1301,9 @@
 (decl imm_logic_from_u64 (ImmLogic) u64)
 (extern extractor imm_logic_from_u64 imm_logic_from_u64)
 
+(decl imm_shift_from_u8 (u8) ImmShift)
+(extern constructor imm_shift_from_u8 imm_shift_from_u8)
+
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 
@@ -1368,6 +1371,13 @@
 (rule (alu_rr_imm_logic op src imm)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.AluRRImmLogic op dst src imm))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.AluRRImmShift` instructions.
+(decl alu_rr_imm_shift (ALUOp Reg ImmShift) Reg)
+(rule (alu_rr_imm_shift op src imm)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.AluRRImmShift op dst src imm))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
@@ -1509,3 +1519,27 @@
 ;; Fallback for integral 64-bit constants that uses lots of `movk`
 (rule (imm (integral_ty _ty) n)
       (load_constant64_full n))
+
+;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Place a `Value` into a register, sign extending it to 64-bits
+(decl put_in_reg_sext64 (Value) Reg)
+(rule (put_in_reg_sext64 val @ (value_type (fits_in_32 ty)))
+      (let ((dst WritableReg (temp_writable_reg $I32))
+            (src Reg (put_in_reg val))
+            (_ Unit (emit (MInst.Extend dst src $true (ty_bits ty) 64))))
+        (writable_reg_to_reg dst)))
+
+;; 64-bit passthrough.
+(rule (put_in_reg_sext64 val @ (value_type $I64)) (put_in_reg val))
+
+;; Place a `Value` into a register, zero extending it to 64-bits
+(decl put_in_reg_zext64 (Value) Reg)
+(rule (put_in_reg_zext64 val @ (value_type (fits_in_32 ty)))
+      (let ((dst WritableReg (temp_writable_reg $I32))
+            (src Reg (put_in_reg val))
+            (_ Unit (emit (MInst.Extend dst src $false (ty_bits ty) 64))))
+        (writable_reg_to_reg dst)))
+
+;; 64-bit passthrough.
+(rule (put_in_reg_zext64 val @ (value_type $I64)) (put_in_reg val))

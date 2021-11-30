@@ -30,7 +30,8 @@ pub trait Context {
     fn u8_as_u64(&mut self, arg0: u8) -> u64;
     fn u16_as_u64(&mut self, arg0: u16) -> u64;
     fn u32_as_u64(&mut self, arg0: u32) -> u64;
-    fn ty_bits(&mut self, arg0: Type) -> u16;
+    fn ty_bits(&mut self, arg0: Type) -> u8;
+    fn ty_bits_u16(&mut self, arg0: Type) -> u16;
     fn fits_in_32(&mut self, arg0: Type) -> Option<Type>;
     fn fits_in_64(&mut self, arg0: Type) -> Option<Type>;
     fn vec128(&mut self, arg0: Type) -> Option<Type>;
@@ -67,13 +68,13 @@ pub trait Context {
     fn sse_insertps_lane_imm(&mut self, arg0: u8) -> u8;
 }
 
-/// Internal type ProducesFlags: defined at src/prelude.isle line 238.
+/// Internal type ProducesFlags: defined at src/prelude.isle line 242.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlags { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 241.
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 245.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlags { inst: MInst, result: Reg },
@@ -123,7 +124,7 @@ pub fn constructor_with_flags<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 251.
+            // Rule at src/prelude.isle line 255.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -151,7 +152,7 @@ pub fn constructor_with_flags_1<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 259.
+            // Rule at src/prelude.isle line 263.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             return Some(pattern3_1);
@@ -185,7 +186,7 @@ pub fn constructor_with_flags_2<C: Context>(
                 result: pattern5_1,
             } = pattern4_0
             {
-                // Rule at src/prelude.isle line 269.
+                // Rule at src/prelude.isle line 273.
                 let expr0_0 = C::emit(ctx, &pattern1_0);
                 let expr1_0 = C::emit(ctx, &pattern3_0);
                 let expr2_0 = C::emit(ctx, &pattern5_0);
@@ -244,7 +245,7 @@ pub fn constructor_extend_to_reg<C: Context>(
     }
     let pattern3_0 = arg2;
     // Rule at src/isa/x64/inst.isle line 420.
-    let expr0_0 = C::ty_bits(ctx, pattern1_0);
+    let expr0_0 = C::ty_bits_u16(ctx, pattern1_0);
     let expr1_0 = C::operand_size_of_type(ctx, pattern2_0);
     let expr2_0 = constructor_operand_size_bits(ctx, &expr1_0)?;
     let expr3_0 = C::ext_mode(ctx, expr0_0, expr2_0);
