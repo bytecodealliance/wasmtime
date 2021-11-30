@@ -1,6 +1,6 @@
 # ISLE: Instruction Selection Lowering Expressions
 
-This document will describe ISLE (Instruction Set Lowering
+This document will describe ISLE (Instruction Selection Lowering
 Expressions), a DSL (domain-specific language) that we have developed
 in order to help us express certain parts of the Cranelift compiler
 backend more naturally. ISLE was first [described in RFC
@@ -24,7 +24,7 @@ instructions. For example:
   immediate.
   
 One could write something like the following in ISLE (simplified from
-the real code [here](../codegen/src/isa/x64/lower.isle):
+the real code [here](../codegen/src/isa/x64/lower.isle)):
 
 ```lisp
 ;; Add two registers.
@@ -71,7 +71,7 @@ This document is organized into the following sections:
   terms) and how rules are written.
   
 * ISLE with Rust: covers how ISLE provides an "FFI" (foreign function
-  interface) of sorts to allow interactino with Rust code, and
+  interface) of sorts to allow interaction with Rust code, and
   describes the scheme by which ISLE execution is mapped onto Rust
   (data structures and control flow).[^1]
   
@@ -85,13 +85,23 @@ This document is organized into the following sections:
     chance to introduce that backronym when we wrote the initial
     implementation.
 
-## Term-Rewriting Systems
+## Background: Term-Rewriting Systems
+
+*Note: this section provides general background on term-rewriting
+systems that is useful to better understand the context for ISLE and
+how to develop systems using it. Readers already familiar with
+term-rewriting systems, or wishing to skip to details on ISLE's
+version of term rewriting, can skip to the [next
+section](#core-isle-a-term-rewriting-system).*
 
 A [term-rewriting
-system](https://en.wikipedia.org/wiki/Rewriting#Term_rewriting_systems), or TRS,
-is a system that works by representing data as *terms* and then
-applying *rules* to "rewrite" the terms until no more rules are
-applicable, at which point the resulting term is the system's output.
+system](https://en.wikipedia.org/wiki/Rewriting#Term_rewriting_systems),
+or TRS, is a system that works by representing data as *terms* and
+then applying *rules* to "rewrite" the terms. This rewrite process
+continues until some application-specific end-condition is met, for
+example until no more rules are applicable or until the term reaches a
+"lowered" state by some definition, at which point the resulting term
+is the system's output.
 
 Term-rewriting systems are a general kind of computing system, at the
 same level as (e.g.) Turing machines or other abstract computing
@@ -119,7 +129,11 @@ Term rewriting as a process also naturally handles issues of
 *priority*, i.e. applying a more specific rule before a less specific
 one. This is because the abstraction allows for multiple rules to be
 "applicable", and so there is a natural place to reason about priority
-when we choose which rule to apply.
+when we choose which rule to apply. This permits a nice separation of
+concerns: we can specify which rewrites are *possible* to apply
+separately from which are *desirable* to apply, and adjust or tune the
+latter (the "strategy") at will without breaking the system's
+correctness.
 
 Additionally, term rewriting allows for a sort of *modularity* that is
 not present in hand-written pattern-matching code: the specific rules
@@ -130,7 +144,9 @@ the related rules at once. Said another way: hand-written code tends
 to accumulate a lot of nested conditionals and switch/match
 statements, i.e., resembles a very large decision tree, while
 term-rewriting code tends to resemble a flat list of simple patterns
-that, when composed and combined, become that more complex tree.
+that, when composed and combined, become that more complex tree. This
+allows the programmer to more easily maintain and update the set of
+lowering rules, considering each in isolation.
 
 ### Data: Nested Trees of Constructors
 
@@ -168,8 +184,7 @@ function call to Lisp-trained eyes) or a *primitive*. In the above,
 the `(a ...)`, `(b ...)`, `(d)`, and `(e ...)` terms/subterms are
 constructor invocations. A constructor takes some number of arguments
 (its *arity*), each of which is itself a term. Primitives can be
-things like integer, string, symbolic, or boolean constants, or
-variable names.
+things like integer, string, or boolean constants, or variable names.
 
 Some term-rewriting systems have other syntax conventions: for
 example, systems based on
@@ -213,7 +228,7 @@ actually perform the rewrites. The "program" itself, in a
 term-rewriting DSL, consists simply of an unordered list of
 rules. Each rule may or may not apply; if it applies, then it can be
 used to edit the term. Execution consists of repeated application of
-rules until no more rules can be applied.
+rules until some criteria are met.
 
 A rule consists of two parts: the left-hand side (LHS), or *pattern*,
 and right-hand side (RHS), or *expression*. The left-hand and
@@ -244,7 +259,7 @@ subterms:
 * `_` is a wildcard and matches anything, without capturing it.
 
 * Primitive constant values, such as `42` or `$Symbol`, match only if
-  the term is exactly equal to this constnat.
+  the term is exactly equal to this constant.
   
 These pattern-matching operators can be combined, so we could write,
 for example, `(A (B x _) z)`. This pattern would match the term `(A (B
@@ -287,7 +302,19 @@ somehow specify which rule will be applied in such a situation based
 on precedence, or specificity, or some other tie-breaker. A common
 heuristic is "more specific rule wins". We will see how ISLE resolves
 this question below by using both this heuristic and an explicit
-priority mechanism.
+priority mechanism.[^4]
+
+[^4]: Some term-rewriting systems actually elaborate the entire space
+      of possibilities, following *all* possible rule application
+      sequences / rewrite paths. For example, the *equality
+      saturation* technique
+      ([paper](https://cseweb.ucsd.edu/~lerner/papers/popl09.pdf),
+      [example implementation
+      Egg](https://blog.sigplan.org/2021/04/06/equality-saturation-with-egg/))
+      builds a data structure that represents all equivalent terms
+      under a set of rewrite rules, from which a heuristic
+      (cost/goodness function) can be used to extract one answer when
+      needed.
 
 #### Right-hand Sides: Rewrite Expressions
 
@@ -335,13 +362,13 @@ How is this useful? First, rewriting one term to another (here, `C` at
 the top level) that in turn appears in the left-hand side of other
 rules allows us to *factor* a "program" of term-rewriting rules in the
 same way that imperative programs are factored into separate
-functions.[^4] The usual advantages of a well-factored program, where
+functions.[^5] The usual advantages of a well-factored program, where
 each problem is solved with a small step that "reduces to a previously
 solved problem", apply here.
 
 Second, repeating the rewrite step is actually what grants
 term-rewriting its Turing-completeness: it allows for arbitrary
-control flow.[^5] This might be useful in cases where, for example, a
+control flow.[^6] This might be useful in cases where, for example, a
 term-rewriting program needs "loop" over a list of elements in the
 input: it can recurse and use intermediate terms to store state.
 
@@ -353,13 +380,13 @@ then defining additional rules to rewrite further -- when it helps to
 factor common behavior out of multiple rules, or aids in conceptual
 clarity.
 
-[^4]: In fact, ISLE actually compiles rules for different top-level
+[^5]: In fact, ISLE actually compiles rules for different top-level
       pattern terms (`(A ...)` and `(C ...)` in the example) into
       separate Rust functions, so factoring rules to use intermediate
       terms can provide code-size and compile-time benefits for the
       ISLE-generated Rust code as well.
       
-[^5]: The [lambda calculus' reduction
+[^6]: The [lambda calculus' reduction
       rules](https://en.wikipedia.org/wiki/Lambda_calculus#Reduction)
       are a good example of this.
 
@@ -397,7 +424,7 @@ application of a term-rewriting system should not depend for
 correctness on the order or choice of rule application: when multiple
 rules are applicable, then any sequence of rewrites that ends in a
 terminating state (a state with no further-applicable rules) should be
-considered a "correct" answer.[^6] Here, this is true: if, for
+considered a "correct" answer.[^7] Here, this is true: if, for
 example, we choose the register-plus-register form (the first rule)
 for an `iadd` operation, but the second argument is actually an
 `iconst`, then that is still valid, and the `iconst` will separately
@@ -407,7 +434,7 @@ rule (or second rule, if the constant is zero). Hence, rule ordering
 and prioritization is nevertheless important for the quality of the
 instruction selector.
 
-[^6]: Note that this suggests an interesting testing strategy: we
+[^7]: Note that this suggests an interesting testing strategy: we
       could choose arbitrary (random) orders of lowering rules to
       apply, or even deliberately worst-case orders according to some
       heuristic. If we can differentially test programs compiled with
@@ -465,13 +492,17 @@ operators:
 
 * Wildcards (`_`).
 * Integer constants (decimal/hex, positive/negative: `1`, `-1`,
-  `0x80`, `-0x80`).
-* Symbolic constants (`$Symbol`).
+  `0x80`, `-0x80`) and boolean constants (`#t`, `#f`).
+* constants imported from the embedding, of arbitrary type
+  (`$MyConst`).
 * Variable captures (bare identifiers like `x`; an identifier consists
   of alphanumeric characters and underscores, and does not start with
   a digit).
 * Variable captures with sub-patterns: `x @ PAT`, which captures the
-  subterm in `x` as above but also matches `PAT` against the subterm.
+  subterm in `x` as above but also matches `PAT` against the
+  subterm. For example, `x @ (A y z)` matches an `A` term and captures
+  its arguments as `y` and `z`, but also captures the whole term as
+  `x`.
 * "Equal-variable" constraints (`=x`): a subterm must match an
   already-captured value.
 * conjunctions of subpatterns: `(and PAT1 PAT2 ...)` matches all of
@@ -479,7 +510,8 @@ operators:
   then this matcher fails.
 * Term deconstruction: `(term PAT1 PAT2 ...)`, where `term` is a
   defined term (type variant or constructor) and the subpatterns are
-  applied to each argument value in turn.
+  applied to each argument value in turn. Note that `term` cannot be a
+  wildcard; it must be a specific, concrete term.
   
 The expression (right-hand side) is made up of the following
 expression operators:
@@ -500,7 +532,7 @@ When multiple rules are applicable to rewrite a particular term, ISLE
 will choose the "more specific" rule according to a particular
 heuristic: in the lowered sequence of matching steps, when one
 left-hand side completes a match while another with the same prefix
-continues with further steps, the latter (more specific) is run first.
+continues with further steps, the latter (more specific) is chosen.
 
 The more-specific-first heuristic is usually good enough, but when an
 undesirable choice occurs, explicit priorities can be specified.
@@ -509,6 +541,18 @@ where `PRIO` is a signed (positive or negative) integer. An applicable
 rule with a higher priority will always match before a rule with a
 lower priority. The default priority for all rules if not otherwise
 specified is `0`.
+
+Note that the system allows multiple applicable rules to exist with
+the same priority: that is, while the priority system allows for
+manual tie-breaking, this tie-breaking is not required.
+
+Finally, one important note: the priority system is considered part of
+the core language semantics and execution of rules with different
+priorities is well-defined, so can be relied upon when specifying
+correct rules. However, the tie-breaking heuristic is *not* part of
+the specified language semantics, and so the user should never write
+rules whose correctness depends on one rule overriding another
+according to the heuristic.
 
 ### Typed Terms
 
@@ -699,14 +743,15 @@ selectors is that rewrites are always driven by term reduction from
 such a toplevel term, rather than a series of equivalences directly
 from IR instruction to machine instruction forms.
 
-In other words, a conventional isel pattern engine might let one
-specify `(Inst.A ...) -> (Inst.X ...)`. Here the instruction/opcode
-type on the LHS and RHS must be the same single instruction type
-(otherwise rewrites could not be chained), and rewrite relation (which
-we wrote as `->`) is in essence a single privileged relation. One can
-see ISLE as a generalization: we can define many different types, and
-many different toplevel terms from which we can start the
-reduction. In principle, one could have:
+In other words, a conventional instruction selection pattern engine
+might let one specify `(Inst.A ...) -> (Inst.X ...)`. In this
+conventional design, the instruction/opcode type on the LHS and RHS
+must be the same single instruction type (otherwise rewrites could not
+be chained), and rewrite relation (which we wrote as `->`) is in
+essence a single privileged relation. One can see ISLE as a
+generalization: we can define many different types, and many different
+toplevel terms from which we can start the reduction. In principle,
+one could have:
 
 ```lisp
 
@@ -723,7 +768,7 @@ reduction. In principle, one could have:
 
 and then both translations are available. We are "rewriting" from `IR`
 to `Machine1` and from `IR` to `Machine2`, even if rewrites always
-preserve the same type; we get aorund the rule by using a constructor.
+preserve the same type; we get around the rule by using a constructor.
 
 ### Constructors and Extractors
 
@@ -810,7 +855,9 @@ write
 ```
 
 which will, for example, expand a pattern `(A (subterm ...) _)` into
-`(and (extractArg1 (subterm ...)) (extractArg2 _))`.
+`(and (extractArg1 (subterm ...)) (extractArg2 _))`: in other words,
+the arguments to `A` are substituted into the extractor body and then
+this body is inlined.
 
 #### Summary: Terms, Constructors, and Extractors
 
@@ -825,14 +872,12 @@ A term can have:
 1. A single internal extractor body, via a toplevel `(extractor ...)`
    form, OR
    
-2. A single external extractor binding, via an `(extern extractor
-   ...)` form, defined below; AND
+2. A single external extractor binding (see next section); AND
    
 3. One or more `(rule (Term ...) ...)` toplevel forms, which together
    make up an internal constructor definition, OR
    
-4. A single external constructor binding, via an `(extern constructor
-   ...)` form, defined below.
+4. A single external constructor binding (see next section).
 
 ## ISLE to Rust
 
@@ -849,19 +894,24 @@ its language semantics to Rust semantics. This means that the
 execution of ISLE rewriting has a well-defined implementation in
 Rust. The basic principles are:
 
-1. Every constructor with rules in ISLE becomes a Rust function. The
-   constructor arguments are the Rust function arguments. The
-   constructor's "return value" is the Rust function's return value
-   (usually wrapped in an `Option` because pattern coverage can be
-   incomplete).
+1. Every term with rules in ISLE becomes a single Rust function. The
+   arguments are the Rust function arguments. The term's "return
+   value" is the Rust function's return value (wrapped in an `Option`
+   because pattern coverage can be incomplete).
 
 2. One rewrite step is one Rust function call.
 
 3. Rewriting is thus eager, and reified through ordinary Rust control
-   flow. The code that embeds the ISLE generated code will kick off
-   execution by calling a top-level "driver" constructor; this will
-   invoke constructors in its rewrite expression, making other Rust
-   function calls, until eventually a value is returned.
+   flow. When we construct a term that appears on the left-hand side
+   of rules, we do so by calling a function (the "constructor body");
+   and this function *is* the rewrite logic, so the term is rewritten
+   as soon as it exists. The code that embeds the ISLE generated code
+   will kick off execution by calling a top-level "driver"
+   constructor. The body of the constructor will eventually choose one
+   of several rules to apply, and execute code to build the right-hand
+   side expression; this can invoke further constructors for its
+   subparts, kicking off more rewrites, until eventually a value is
+   returned.
    
 4. This design means that "intermediate terms" -- constructed terms
    that are then further rewritten -- are never actually built as
@@ -872,13 +922,15 @@ Rust. The basic principles are:
    overhead and/or the effectiveness of the Rust inliner).
    
 5. Backtracking -- attempting to match rules, and backing up to follow
-   a different path when a match fails -- is entirely internal to the
-   generated Rust function for a constructor. Once we are rewriting a
-   constructor and its subterms, we have committed to that
-   constructor. Internally to the rewrite-evaluation of one
-   constructor, it evaluates left-hand side patterns, finding one that
-   matches, and then commits to that and starts to invoke constructors
-   to build the rewritten right-hand side.
+   a different path when a match fails -- exists, but is entirely
+   internal to the generated Rust function for rewriting one
+   term. Once we are rewriting a term, we have committed to that term
+   existing as a rewrite step; we cannot backtrack further. However,
+   backtracking can occur within the delimited scope of this one
+   term's rewrite; we have a phase during which we evaluate left-hand
+   sides, trying to find a matching rule, and once we find one, we
+   commit and start to invoke constructors to build the right-hand
+   side.
    
    Said another way, the principle is that left-hand sides are
    fallible, and have no side-effects as they execute; right-hand
@@ -1083,8 +1135,8 @@ agnostic to the embedding application. This means that ISLE knows
 nothing about, e.g., Cranelift or compiler concepts in
 general. Rather, the generated code provides function entry points
 with well-defined signatures based on the terms, and imports the
-extern constructors and extractors via a trait that the embedder must
-implement.
+extern constructors and extractors via a context trait that the
+embedder must implement.
 
 When a term `T` is defined like
 
@@ -1167,6 +1219,14 @@ what converts the unordered-list-of-rule representation into something
 that corresponds to the final Rust code's control flow and order of
 matching operations.
 
+We describe this data structure below with the intent to provide an
+understanding of how the DSL compiler weaves rules together into Rust
+control flow. While this understanding shouldn't be strictly necessary
+to use the DSL, it may be helpful. (The ultimate answer to "how does
+the generated code work" is, of course, found by reading the generated
+code; some care has been taken to ensure it is reasonably legible for
+human consumption!)
+
 ### Decision Trie
 
 The heart of the ISLE transformation lies in how the compiler converts
@@ -1211,26 +1271,22 @@ known to be *mutually exclusive*. The canonical example of this is
 when an enum-typed value is destructured into different variants by
 various edges; we can use a Rust `match` statement in the generated
 source and have `O(1)` (or close to it) cost for the dispatch at this
-level.
+level.[^8]
 
-Building the trie is a somewhat subtle procedure because we must be
-mindful of *priorities*. In order to ensure that rule priorities are
-obeyed, we actually label each edge with a *priority range* and a
-match op. Edges must then be considered in priority order. When
-building the trie, we uphold an important *non-overlapping-priority*
-invariant: there must not be two edges with overlapping priority
-ranges and different match ops, or else it would be unclear which to
-run next. Priority ranges are inclusive in a discrete (integer) space,
-so "overlap" is also subtle: we can allow edges with "unit" priority
-ranges (just one priority), and these do not overlap. So, e.g., we can
-allow an edge with priority `[0, 10]` (higher is more prioritized) and
-op `A`, followed by an edge with priority `[0, 0]` and op `B`,
-followed by an edge with priority `[-1, -10]`, `A`, though they must
-occur in that order.
-
-See [this block
+Building the trie is a somewhat subtle procedure; see [this block
 comment](https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/isle/isle/src/trie.rs#L15-L166)
 for more information regarding the trie construction algorithm.
+
+[^8]: The worst-case complexity for a single term rewriting operation
+      is still the cost of evaluating each rule's left-hand side
+      sequentially, because in general there is no guarantee of
+      overlap between the patterns. Ordering of the edges out of a
+      decision node also affects complexity: if mutually-exclusive
+      match operations are not adjacent, then they cannot be merged
+      into a single `match` with `O(1)` dispatch. In general this
+      ordering problem is quite difficult. We could do better with
+      stronger heuristics; this is an open area for improvement in the
+      DSL compiler!
 
 ## Reference: ISLE Language Grammar
 
