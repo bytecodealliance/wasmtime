@@ -1,5 +1,7 @@
-use crate::ir::Value;
+use crate::ir::{Inst, Value};
+use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, MachInst, RegRenamer};
 use regalloc::{Reg, Writable};
+use smallvec::SmallVec;
 
 pub type Unit = ();
 pub type ValueSlice<'a> = &'a [Value];
@@ -8,6 +10,8 @@ pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
 
+/// Helper macro to define methods in `prelude.isle` within `impl Context for
+/// ...` for each backend. These methods are shared amongst all backends.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! isle_prelude_methods {
@@ -226,6 +230,102 @@ macro_rules! isle_prelude_methods {
             }
         }
     };
+}
+
+/// This structure is used to implement the ISLE-generated `Context` trait and
+/// internally has a temporary reference to a machinst `LowerCtx`.
+pub(crate) struct IsleContext<'a, C: LowerCtx, F, const N: usize>
+where
+    [C::I; N]: smallvec::Array,
+{
+    pub lower_ctx: &'a mut C,
+    pub isa_flags: &'a F,
+    pub emitted_insts: SmallVec<[C::I; N]>,
+}
+
+/// Shared lowering code amongst all backends for doing ISLE-based lowering.
+///
+/// The `isle_lower` argument here is an ISLE-generated function for `lower` and
+/// then this function otherwise handles register mapping and such around the
+/// lowering.
+pub(crate) fn lower_common<C, F, const N: usize>(
+    lower_ctx: &mut C,
+    isa_flags: &F,
+    outputs: &[InsnOutput],
+    inst: Inst,
+    isle_lower: fn(&mut IsleContext<'_, C, F, N>, Inst) -> Option<ValueRegs>,
+    map_regs: fn(&mut C::I, &RegRenamer),
+) -> Result<(), ()>
+where
+    C: LowerCtx,
+    [C::I; N]: smallvec::Array<Item = C::I>,
+{
+    // TODO: reuse the ISLE context across lowerings so we can reuse its
+    // internal heap allocations.
+    let mut isle_ctx = IsleContext {
+        lower_ctx,
+        isa_flags,
+        emitted_insts: SmallVec::new(),
+    };
+
+    let temp_regs = isle_lower(&mut isle_ctx, inst).ok_or(())?;
+    let mut temp_regs = temp_regs.regs().iter();
+
+    #[cfg(debug_assertions)]
+    {
+        let all_dsts_len = outputs
+            .iter()
+            .map(|out| get_output_reg(isle_ctx.lower_ctx, *out).len())
+            .sum();
+        debug_assert_eq!(
+            temp_regs.len(),
+            all_dsts_len,
+            "the number of temporary registers and destination registers do \
+         not match ({} != {}); ensure the correct registers are being \
+         returned.",
+            temp_regs.len(),
+            all_dsts_len,
+        );
+    }
+
+    // The ISLE generated code emits its own registers to define the
+    // instruction's lowered values in. We rename those registers to the
+    // registers they were assigned when their value was used as an operand in
+    // earlier lowerings.
+    let mut renamer = RegRenamer::default();
+    for output in outputs {
+        let dsts = get_output_reg(isle_ctx.lower_ctx, *output);
+        let ty = isle_ctx.lower_ctx.output_ty(output.insn, output.output);
+        let (_, tys) = <C::I>::rc_for_type(ty).unwrap();
+        for ((temp, dst), ty) in temp_regs.by_ref().zip(dsts.regs()).zip(tys) {
+            renamer.add_rename(*temp, dst.to_reg(), *ty);
+        }
+    }
+    for inst in isle_ctx.emitted_insts.iter_mut() {
+        map_regs(inst, &renamer);
+    }
+
+    // If any renamed register wasn't actually defined in the ISLE-generated
+    // instructions then what we're actually doing is "renaming" an input to a
+    // new name which requires manually inserting a `mov` instruction. Note that
+    // this typically doesn't happen and is only here for cases where the input
+    // is sometimes passed through unmodified to the output, such as
+    // zero-extending a 64-bit input to a 128-bit output which doesn't actually
+    // change the input and simply produces another zero'd register.
+    for (old, new, ty) in renamer.unmapped_defs() {
+        isle_ctx
+            .lower_ctx
+            .emit(<C::I>::gen_move(Writable::from_reg(new), old, ty));
+    }
+
+    // Once everything is remapped we forward all emitted instructions to the
+    // `lower_ctx`. Note that this happens after the synthetic mov's above in
+    // case any of these instruction use those movs.
+    for inst in isle_ctx.emitted_insts {
+        lower_ctx.emit(inst);
+    }
+
+    Ok(())
 }
 
 #[inline(never)]

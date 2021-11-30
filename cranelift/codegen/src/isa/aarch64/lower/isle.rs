@@ -10,7 +10,7 @@ use super::{
     Inst as MInst, JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode, OperandSize,
     PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VectorSize, NZCV,
 };
-use crate::isa::aarch64::settings as aarch64_settings;
+use crate::isa::aarch64::settings::Flags;
 use crate::machinst::isle::*;
 use crate::{
     binemit::CodeOffset,
@@ -21,9 +21,8 @@ use crate::{
     isa::aarch64::inst::aarch64_map_regs,
     isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::unwind::UnwindInst,
-    machinst::{get_output_reg, ty_bits, InsnOutput, LowerCtx, RegRenamer},
+    machinst::{ty_bits, InsnOutput, LowerCtx},
 };
-use smallvec::SmallVec;
 use std::boxed::Box;
 use std::vec::Vec;
 
@@ -36,62 +35,21 @@ type BoxExternalName = Box<ExternalName>;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
-    isa_flags: &aarch64_settings::Flags,
+    isa_flags: &Flags,
     outputs: &[InsnOutput],
     inst: Inst,
 ) -> Result<(), ()>
 where
     C: LowerCtx<I = MInst>,
 {
-    // TODO: reuse the ISLE context across lowerings so we can reuse its
-    // internal heap allocations.
-    let mut isle_ctx = IsleContext::new(lower_ctx, isa_flags);
-
-    let temp_regs = generated_code::constructor_lower(&mut isle_ctx, inst).ok_or(())?;
-    let mut temp_regs = temp_regs.regs().iter();
-
-    #[cfg(debug_assertions)]
-    {
-        let all_dsts_len = outputs
-            .iter()
-            .map(|out| get_output_reg(isle_ctx.lower_ctx, *out).len())
-            .sum();
-        debug_assert_eq!(
-            temp_regs.len(),
-            all_dsts_len,
-            "the number of temporary registers and destination registers do \
-         not match ({} != {}); ensure the correct registers are being \
-         returned.",
-            temp_regs.len(),
-            all_dsts_len,
-        );
-    }
-
-    // The ISLE generated code emits its own registers to define the
-    // instruction's lowered values in. We rename those registers to the
-    // registers they were assigned when their value was used as an operand in
-    // earlier lowerings.
-    let mut renamer = RegRenamer::default();
-    for output in outputs {
-        let dsts = get_output_reg(isle_ctx.lower_ctx, *output);
-        for (temp, dst) in temp_regs.by_ref().zip(dsts.regs()) {
-            renamer.add_rename(*temp, dst.to_reg());
-        }
-    }
-
-    for mut inst in isle_ctx.into_emitted_insts() {
-        aarch64_map_regs(&mut inst, &renamer);
-        lower_ctx.emit(inst);
-    }
-
-    Ok(())
-}
-
-pub struct IsleContext<'a, C> {
-    lower_ctx: &'a mut C,
-    #[allow(dead_code)] // dead for now, but probably not for long
-    isa_flags: &'a aarch64_settings::Flags,
-    emitted_insts: SmallVec<[MInst; 6]>,
+    lower_common(
+        lower_ctx,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+        aarch64_map_regs,
+    )
 }
 
 pub struct ExtendedValue {
@@ -99,21 +57,12 @@ pub struct ExtendedValue {
     extend: ExtendOp,
 }
 
-impl<'a, C> IsleContext<'a, C> {
-    pub fn new(lower_ctx: &'a mut C, isa_flags: &'a aarch64_settings::Flags) -> Self {
-        IsleContext {
-            lower_ctx,
-            isa_flags,
-            emitted_insts: SmallVec::new(),
-        }
-    }
-
-    pub fn into_emitted_insts(self) -> SmallVec<[MInst; 6]> {
-        self.emitted_insts
-    }
+pub struct SinkableAtomicLoad {
+    atomic_load: Inst,
+    atomic_addr: Value,
 }
 
-impl<'a, C> generated_code::Context for IsleContext<'a, C>
+impl<C> generated_code::Context for IsleContext<'_, C, Flags, 6>
 where
     C: LowerCtx<I = MInst>,
 {
@@ -274,5 +223,24 @@ where
             0 | -1 => None,
             n => Some(n as u64),
         }
+    }
+
+    fn sinkable_atomic_load(&mut self, val: Value) -> Option<SinkableAtomicLoad> {
+        let input = self.lower_ctx.get_value_as_source_or_const(val);
+        if let Some((atomic_load, 0)) = input.inst {
+            if self.lower_ctx.data(atomic_load).opcode() == Opcode::AtomicLoad {
+                let atomic_addr = self.lower_ctx.input_as_value(atomic_load, 0);
+                return Some(SinkableAtomicLoad {
+                    atomic_load,
+                    atomic_addr,
+                });
+            }
+        }
+        None
+    }
+
+    fn sink_atomic_load(&mut self, load: &SinkableAtomicLoad) -> Reg {
+        self.lower_ctx.sink_inst(load.atomic_load);
+        self.put_in_reg(load.atomic_addr)
     }
 }

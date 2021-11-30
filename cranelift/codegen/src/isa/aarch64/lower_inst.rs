@@ -77,112 +77,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Udiv | Opcode::Sdiv | Opcode::Urem | Opcode::Srem => implemented_in_isle(ctx),
 
-        Opcode::Uextend | Opcode::Sextend => {
-            let output_ty = ty.unwrap();
-
-            if output_ty.is_vector() {
-                return Err(CodegenError::Unsupported(format!(
-                    "{}: Unsupported type: {:?}",
-                    op, output_ty
-                )));
-            }
-
-            if op == Opcode::Uextend {
-                let inputs = ctx.get_input_as_source_or_const(inputs[0].insn, inputs[0].input);
-                if let Some((atomic_load, 0)) = inputs.inst {
-                    if ctx.data(atomic_load).opcode() == Opcode::AtomicLoad {
-                        let output_ty = ty.unwrap();
-                        assert!(output_ty == I32 || output_ty == I64);
-                        let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                        emit_atomic_load(ctx, rt, atomic_load);
-                        ctx.sink_inst(atomic_load);
-                        return Ok(());
-                    }
-                }
-            }
-            let input_ty = ctx.input_ty(insn, 0);
-            let from_bits = ty_bits(input_ty) as u8;
-            let to_bits = ty_bits(output_ty) as u8;
-            let to_bits = std::cmp::max(32, to_bits);
-            assert!(from_bits <= to_bits);
-
-            let signed = op == Opcode::Sextend;
-            let dst = get_output_reg(ctx, outputs[0]);
-            let src =
-                if let Some(extract_insn) = maybe_input_insn(ctx, inputs[0], Opcode::Extractlane) {
-                    put_input_in_regs(
-                        ctx,
-                        InsnInput {
-                            insn: extract_insn,
-                            input: 0,
-                        },
-                    )
-                } else {
-                    put_input_in_regs(ctx, inputs[0])
-                };
-
-            let needs_extend = from_bits < to_bits && to_bits <= 64;
-            // For i128, we want to extend the lower half, except if it is already 64 bits.
-            let needs_lower_extend = to_bits > 64 && from_bits < 64;
-            let pass_through_lower = to_bits > 64 && !needs_lower_extend;
-
-            if needs_extend || needs_lower_extend {
-                let rn = src.regs()[0];
-                let rd = dst.regs()[0];
-
-                if let Some(extract_insn) = maybe_input_insn(ctx, inputs[0], Opcode::Extractlane) {
-                    let idx =
-                        if let InstructionData::BinaryImm8 { imm, .. } = ctx.data(extract_insn) {
-                            *imm
-                        } else {
-                            unreachable!();
-                        };
-
-                    let size = VectorSize::from_ty(ctx.input_ty(extract_insn, 0));
-
-                    if signed {
-                        let scalar_size = OperandSize::from_ty(output_ty);
-
-                        ctx.emit(Inst::MovFromVecSigned {
-                            rd,
-                            rn,
-                            idx,
-                            size,
-                            scalar_size,
-                        });
-                    } else {
-                        ctx.emit(Inst::MovFromVec { rd, rn, idx, size });
-                    }
-                } else {
-                    // If we reach this point, we weren't able to incorporate the extend as
-                    // a register-mode on another instruction, so we have a 'None'
-                    // narrow-value/extend mode here, and we emit the explicit instruction.
-                    let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                    ctx.emit(Inst::Extend {
-                        rd,
-                        rn,
-                        signed,
-                        from_bits,
-                        to_bits: std::cmp::min(64, to_bits),
-                    });
-                }
-            } else if pass_through_lower {
-                ctx.emit(Inst::gen_move(dst.regs()[0], src.regs()[0], I64));
-            }
-
-            if output_ty == I128 {
-                if signed {
-                    ctx.emit(Inst::AluRRImmShift {
-                        alu_op: ALUOp::Asr64,
-                        rd: dst.regs()[1],
-                        rn: dst.regs()[0].to_reg(),
-                        immshift: ImmShift::maybe_from_u64(63).unwrap(),
-                    });
-                } else {
-                    lower_constant_u64(ctx, dst.regs()[1], 0);
-                }
-            }
-        }
+        Opcode::Uextend | Opcode::Sextend => implemented_in_isle(ctx),
 
         Opcode::Bnot => {
             let out_regs = get_output_reg(ctx, outputs[0]);
@@ -1147,7 +1042,8 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::AtomicLoad => {
             let rt = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            emit_atomic_load(ctx, rt, insn);
+            let inst = emit_atomic_load(ctx, rt, insn);
+            ctx.emit(inst);
         }
 
         Opcode::AtomicStore => {
