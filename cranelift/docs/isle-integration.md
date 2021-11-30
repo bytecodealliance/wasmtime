@@ -17,7 +17,7 @@ The build integration is inside of `cranelift/codegen/build.rs`.
 
 For regular builds, we check a manifest that records the file hashes of the ISLE
 source files that went into building a given ISLE-generated Rust file. If the
-hashes of these files on disk doesn't match the hashes in the manifest, then the
+hashes of these files on disk don't match the hashes in the manifest, then the
 ISLE-generated Rust file is stale and needs to be rebuilt. In this case, the
 `build.rs` will report a build error. This way, downstream crates that use
 Cranelift don't need to build ISLE, and get fewer transitive dependencies and
@@ -91,8 +91,8 @@ The lowering rules themselves, defined in
 `cranelift/codegen/src/isa/<arch>/lower.isle`, must always be a pure mapping
 from a CLIF instruction to the target ISA's `MachInst`.
 
-Examples of things that the lowering rules themselves they shouldn't deal with
-or talk about:
+Examples of things that the lowering rules themselves shouldn't deal with or
+talk about:
 
 * Registers that are modified (both read and written to, violating SSA)
 * Implicit uses of registers
@@ -128,7 +128,7 @@ aarch64, we implement the handful of move mitosis special cases at the
 `inst.isle` layer. Either way, the important thing is that the lowering rules
 remain pure.
 
-Fnally, note that these moves are generally cleaned up by the register
+Finally, note that these moves are generally cleaned up by the register
 allocator's move coalescing, and move mitosis will eventually go away completely
 once we switch over to `regalloc2`, which takes instructions in SSA form
 directly as input.
@@ -161,20 +161,66 @@ load. But if we are compiling for x86 we can sink loads into other the operand
 for another operation depending on how the loaded value is used. If we sink that
 load into, say, an `add` then we need to tell the lowering context *not* to
 lower the CLIF `load` instruction anymore, because its effectively already
-lowered as part of lowering the `add` that uses the loaded value. That is a side
-effect, and we might be tempted to perform that side effect in the extractor
-that matches sinkable loads. But we can't do that because although the load
-itself might be sinkable, there might be a reason why we ultimately don't
-perform this load-sinking rule, and if that happens we still need to lower the
-CLIF load. So we make the `sinkable_load` extractor create a `SinkableLoad` type
+lowered as part of lowering the `add` that uses the loaded value. Marking an
+instruction as "already lowered" is a side effect, and we might be tempted to
+perform that side effect in the extractor that matches sinkable loads. But we
+can't do that because although the load itself might be sinkable, there might be
+a reason why we ultimately don't perform this load-sinking rule, and if that
+happens we still need to lower the CLIF load.
+
+Therefore, we make the `sinkable_load` extractor create a `SinkableLoad` type
 that packages up everything we need to know about the load and how to tell the
 lowering context that we've sunk it and the lowering context doesn't need to
 lower it anymore, but *it doesn't actually tell that to the lowering context
-yet*. Then, we pair that with a `sink_load` constructor that takes the
-`SinkableLoad`, performs the associated side effect of telling the lowering
-context not to lower the load anymore, and returns the x86 operand with the load
-sunken into it. See `sinkable_load`, `SinkableLoad`, and `sink_load` inside
-`cranelift/codegen/src/isa/x64/inst.isle` for details.
+yet*.
+
+```lisp
+;; inst.isle
+
+;; A load that can be sunk into another operation.
+(type SinkableLoad extern (enum))
+
+;; Extract a `SinkableLoad` from a value if the value is defined by a compatible
+;; load.
+(decl sinkable_load (SinkableLoad) Value)
+(extern extractor sinkable_load sinkable_load)
+```
+
+Then, we pair that with a `sink_load` constructor that takes the `SinkableLoad`,
+performs the associated side effect of telling the lowering context not to lower
+the load anymore, and returns the x86 operand with the load sunken into it.
+
+```lisp
+;; inst.isle
+
+;; Sink a `SinkableLoad` into a `RegMemImm.Mem`.
+;;
+;; This is a side-effectful operation that notifies the context that the
+;; instruction that produced the `SinkableImm` has been sunk into another
+;; instruction, and no longer needs to be lowered.
+(decl sink_load (SinkableLoad) RegMemImm)
+(extern constructor sink_load sink_load)
+```
+
+Finally, we can use `sinkable_load` and `sink_load` inside lowering rules that
+create instructions where an operand is loaded directly from memory:
+
+```
+;; lower.isle
+
+(rule (lower (has_type (fits_in_64 ty)
+                       (iadd x (sinkable_load y))))
+      (value_reg (add ty
+                      (put_in_reg x)
+                      (sink_load y))))
+```
+
+See the `sinkable_load`, `SinkableLoad`, and `sink_load` declarations inside
+`cranelift/codegen/src/isa/x64/inst.isle` as well as their external
+implementations inside `cranelift/codegen/src/isa/x64/lower/isle.rs` for
+details.
+
+See also the "ISLE code should leverage types" section below.
 
 ## ISLE code should leverage types
 
@@ -183,6 +229,6 @@ of bugs where possible. Use newtypes liberally.
 
 For example, use the `with_flags` family of helpers to pair flags-producing
 instructions with flags-consuming instructions, ensuring that no errant
-instructions caare ever inserted between our flags-using instructions,
-clobbering their flags. See `with_flags`, `ProducesFlags`, and `ConsumesFlags`
-inside `cranelift/codegen/src/prelude.isle` for details.
+instructions are ever inserted between our flags-using instructions, clobbering
+their flags. See `with_flags`, `ProducesFlags`, and `ConsumesFlags` inside
+`cranelift/codegen/src/prelude.isle` for details.
