@@ -13,7 +13,7 @@
 
  - [Cranelift's register allocator](regalloc.md)
    This page document Cranelift's current register allocator.
-
+   
 ## Cranelift crate documentation:
 
  - [cranelift](https://docs.rs/cranelift)

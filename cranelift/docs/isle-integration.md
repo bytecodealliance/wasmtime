@@ -9,7 +9,8 @@ ISLE is a domain-specific language for authoring instruction selection and
 rewrite rules. ISLE source text is [compiled down into Rust
 code](https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle#implementation).
 
-TODO: link to @cfallin's language reference/tutorial
+Documentation on the ISLE language itself can be found
+[here](../isle/docs/language-reference.md).
 
 ## How does ISLE integrate with the build system?
 

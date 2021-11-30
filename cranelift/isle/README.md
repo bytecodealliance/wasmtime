@@ -1,12 +1,13 @@
 # ISLE: Instruction Selection/Lowering Expressions DSL
 
+See also: [Language Reference](../docs/isle.md)
+
 ## Table of Contents
 
 * [Introduction](#introduction)
 * [Example Usage](#example-usage)
 * [Tutorial](#tutorial)
 * [Implementation](#implementation)
-* [Sketch of Instruction Selector](#sketch-of-instruction-selector)
 
 ## Introduction
 
@@ -29,10 +30,10 @@ level, the rules can be seen as simple equivalences between values in two
 languages, and so should be translatable to formal constraints or other logical
 specification languages.
 
-Some more details and motivation are in [BA RFC
-#15](https://github.com/bytecodealliance/rfcs/pull/15); additional
-documentation will eventually be added to carefully specify the language
-semantics.
+Some more details and motivation are in [BA RFC #15](https://github.com/bytecodealliance/rfcs/pull/15).
+Reference documentation can be found [here](docs/language-reference.md).
+Details on ISLE's integration into Cranelift can be found
+[here](../docs/isle-integration.md).
 
 ## Example Usage
 
@@ -522,9 +523,3 @@ implements it.
 Relevant source files:
 
 * `isle/src/codegen.rs`
-
-## Sketch of Instruction Selector
-
-Please see [this Cranelift
-branch](https://github.com/cfallin/wasmtime/tree/isle) for an ongoing sketch of
-an instruction selector backend in Cranelift that uses ISLE.
