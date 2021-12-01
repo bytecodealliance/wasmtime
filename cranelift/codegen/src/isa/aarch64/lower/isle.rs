@@ -76,8 +76,13 @@ where
         MoveWideConst::maybe_from_u64(!n)
     }
 
-    fn imm_logic_from_u64(&mut self, n: u64) -> Option<ImmLogic> {
-        ImmLogic::maybe_from_u64(n, I64)
+    fn imm_logic_from_u64(&mut self, n: u64, ty: Type) -> Option<ImmLogic> {
+        let ty = if ty.bits() < 32 { I32 } else { ty };
+        ImmLogic::maybe_from_u64(n, ty)
+    }
+
+    fn imm_logic_from_imm64(&mut self, n: Imm64, ty: Type) -> Option<ImmLogic> {
+        self.imm_logic_from_u64(n.bits() as u64, ty)
     }
 
     fn imm12_from_u64(&mut self, n: u64) -> Option<Imm12> {
