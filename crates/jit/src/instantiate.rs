@@ -571,5 +571,7 @@ fn wasm_section_name(id: gimli::SectionId) -> &'static str {
         DebugStr => ".debug_str.wasm",
         DebugStrOffsets => ".debug_str_offsets.wasm",
         DebugTypes => ".debug_types.wasm",
+        DebugCuIndex => ".debug_cu_index.wasm",
+        DebugTuIndex => ".debug_tu_index.wasm",
     }
 }
