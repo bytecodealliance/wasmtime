@@ -7,7 +7,6 @@ license = "Apache-2.0 WITH LLVM-exception"
 publish = false
 
 [dependencies]
-log = "0.4"
 isle = { version = "*", path = "../isle/" }
 env_logger = { version = "0.8", default-features = false }
 miette = { version = "3.0.0", features = ["fancy"] }

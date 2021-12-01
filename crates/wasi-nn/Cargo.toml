@@ -14,7 +14,6 @@ edition = "2018"
 [dependencies]
 # These dependencies are necessary for the witx-generation macros to work:
 anyhow = "1.0"
-log = { version = "0.4", default-features = false }
 wiggle = { path = "../wiggle", version = "=0.31.0" }
 
 # These dependencies are necessary for the wasi-nn implementation:

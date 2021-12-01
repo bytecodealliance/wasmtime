@@ -1445,7 +1445,6 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.8.3",
  "isle",
- "log",
  "miette",
  "structopt",
 ]
@@ -3163,7 +3162,6 @@ dependencies = [
  "bitflags",
  "cap-rand",
  "cap-std",
- "io-lifetimes",
  "rustix",
  "thiserror",
  "tracing",
@@ -3452,11 +3450,9 @@ dependencies = [
  "humantime 2.1.0",
  "lazy_static",
  "libc",
- "log",
  "memchr",
  "more-asserts",
  "num_cpus",
- "object",
  "pretty_env_logger",
  "rayon",
  "rustix",
@@ -3651,7 +3647,6 @@ name = "wasmtime-wasi-nn"
 version = "0.31.0"
 dependencies = [
  "anyhow",
- "log",
  "openvino",
  "thiserror",
  "walkdir",
