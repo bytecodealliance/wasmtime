@@ -33,7 +33,6 @@ skip = [
     { name = "env_logger" }, # pretty_env_logger and file-per-thread-logger depend on 0.7
     { name = "humantime" }, # caused by env_logger
     { name = "wast" }, # old one pulled in by witx
-    { name = "itertools" }, # 0.9 pulled in by criterion-plot
     { name = "quick-error" }, # transitive dependencies
     { name = "textwrap" }, # `miette` and `clap` depend on different versions
 ]
