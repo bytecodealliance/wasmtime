@@ -29,7 +29,6 @@ macro_rules! declare_vecs {
         ))*
     ) => {$(
         #[repr(C)]
-        #[derive(Clone)]
         pub struct $name {
             size: usize,
             data: *mut $elem_ty,
@@ -77,6 +76,12 @@ macro_rules! declare_vecs {
                 self.data = ptr::null_mut();
                 self.size = 0;
                 return vec;
+            }
+        }
+
+        impl Clone for $name {
+            fn clone(&self) -> Self {
+                self.as_slice().to_vec().into()
             }
         }
 
