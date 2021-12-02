@@ -454,6 +454,12 @@
       (rn Reg)
       (size ScalarSize))
 
+    ;; Loads a floating-point immediate.
+    (FpuMoveFPImm
+      (rd WritableReg)
+      (imm ASIMDFPModImm)
+      (size ScalarSize))
+
     ;; Move to a vector element from a GPR.
     (MovToVec
       (rd WritableReg)

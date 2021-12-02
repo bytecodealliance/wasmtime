@@ -2052,6 +2052,25 @@ fn test_aarch64_binemit() {
         "fmov s1, w28",
     ));
     insns.push((
+        Inst::FpuMoveFPImm {
+            rd: writable_vreg(31),
+            imm: ASIMDFPModImm::maybe_from_u64(f64::to_bits(1.0), ScalarSize::Size64).unwrap(),
+            size: ScalarSize::Size64,
+        },
+        "1F106E1E",
+        "fmov d31, #1",
+    ));
+    insns.push((
+        Inst::FpuMoveFPImm {
+            rd: writable_vreg(1),
+            imm: ASIMDFPModImm::maybe_from_u64(f32::to_bits(31.0).into(), ScalarSize::Size32)
+                .unwrap(),
+            size: ScalarSize::Size32,
+        },
+        "01F0271E",
+        "fmov s1, #31",
+    ));
+    insns.push((
         Inst::MovToVec {
             rd: writable_vreg(0),
             rn: xreg(0),

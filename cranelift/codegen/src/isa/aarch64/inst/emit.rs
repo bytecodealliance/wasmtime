@@ -1983,6 +1983,19 @@ impl MachInstEmit for Inst {
                 };
                 sink.put4(template | (machreg_to_gpr(rn) << 5) | machreg_to_vec(rd.to_reg()));
             }
+            &Inst::FpuMoveFPImm { rd, imm, size } => {
+                let size_code = match size {
+                    ScalarSize::Size32 => 0b00,
+                    ScalarSize::Size64 => 0b01,
+                    _ => unimplemented!(),
+                };
+                sink.put4(
+                    0b000_11110_00_1_00_000_000100_00000_00000
+                        | size_code << 22
+                        | ((imm.enc_bits() as u32) << 13)
+                        | machreg_to_vec(rd.to_reg()),
+                );
+            }
             &Inst::MovToVec { rd, rn, idx, size } => {
                 let (imm5, shift) = match size.lane_size() {
                     ScalarSize::Size8 => (0b00001, 1),
