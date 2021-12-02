@@ -120,8 +120,8 @@ macro_rules! declare_vecs {
             size: usize,
             ptr: *const $elem_ty,
         ) {
-            let slice = slice::from_raw_parts(ptr, size);
-            out.set_buffer(slice.to_vec());
+            let vec = (0..size).map(|i| ptr.add(i).read()).collect();
+            out.set_buffer(vec);
         }
 
         #[no_mangle]
