@@ -129,12 +129,13 @@ impl Wizer {
                     encoder.section(&globals);
                 }
 
-                // Remove the initialization function's export and perform any
-                // requested renames.
+                // Remove exports for the wizer initialization
+                // function and WASI reactor _initialize function,
+                // then perform any requested renames.
                 s if s.id == SectionId::Export.into() => {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports(cx) {
-                        if export.field == self.init_func {
+                        if export.field == self.init_func || export.field == "_initialize" {
                             continue;
                         }
 
@@ -415,7 +416,7 @@ impl Wizer {
         let mut aliases = wasm_encoder::AliasSection::new();
         let mut exports = wasm_encoder::ExportSection::new();
         for exp in cx.root().exports(cx) {
-            if exp.field == self.init_func {
+            if exp.field == self.init_func || exp.field == "_initialize" {
                 continue;
             }
 
