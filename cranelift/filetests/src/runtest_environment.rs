@@ -58,6 +58,7 @@ type HeapMemory = Vec<u8>;
 pub struct RuntestContext {
     /// Store the heap memory alongside the context info so that we don't accidentally deallocate
     /// it too early.
+    #[allow(dead_code)]
     heaps: Vec<HeapMemory>,
 
     /// This is the actual struct that gets passed into the `vmctx`  argument of the tests.
