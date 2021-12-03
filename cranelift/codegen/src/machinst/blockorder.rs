@@ -86,6 +86,7 @@ pub struct BlockLoweringOrder {
     lowered_order: Vec<LoweredBlock>,
     /// Successors for all lowered blocks, in one serialized vector. Indexed by
     /// the ranges in `lowered_succ_ranges`.
+    #[allow(dead_code)]
     lowered_succs: Vec<(Inst, LoweredBlock)>,
     /// BlockIndex values for successors for all lowered blocks, in the same
     /// order as `lowered_succs`.
@@ -96,6 +97,7 @@ pub struct BlockLoweringOrder {
     /// Mapping from CLIF BB to BlockIndex (index in lowered order). Note that
     /// some CLIF BBs may not be lowered; in particular, we skip unreachable
     /// blocks.
+    #[allow(dead_code)]
     orig_map: SecondaryMap<Block, Option<BlockIndex>>,
 }
 

@@ -111,6 +111,7 @@ mod windowsx64 {
         version: u8,
         flags: u8,
         prologue_size: u8,
+        #[allow(dead_code)]
         unwind_code_count_raw: u8,
         frame_register: u8,
         frame_register_offset: u8,
