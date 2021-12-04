@@ -873,3 +873,26 @@ fn renames_and_module_linking() -> anyhow::Result<()> {
     assert!(wat.trim().ends_with(expected_wat.trim()));
     Ok(())
 }
+
+#[test]
+fn wasi_reactor() -> anyhow::Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+(module
+  (global $g (mut i32) i32.const 0)
+  (func (export "_initialize")
+    i32.const 6
+    global.set $g
+  )
+  (func (export "wizer.initialize")
+    global.get $g
+    i32.const 7
+    i32.mul
+    global.set $g)
+  (func (export "run") (result i32)
+    global.get $g))
+        "#,
+    )
+}
