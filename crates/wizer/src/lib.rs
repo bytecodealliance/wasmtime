@@ -24,6 +24,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
+use wasmtime::Extern;
 use wasmtime_wasi::WasiCtx;
 
 const DEFAULT_INHERIT_STDIO: bool = true;
@@ -562,6 +563,14 @@ impl Wizer {
         let instance = linker
             .instantiate(&mut *store, module)
             .context("failed to instantiate the Wasm module")?;
+
+        if let Some(export) = instance.get_export(&mut *store, "_initialize") {
+            if let Extern::Func(func) = export {
+                func.typed::<(), (), _>(&store)
+                    .and_then(|f| f.call(&mut *store, ()).map_err(Into::into))
+                    .context("calling the Reactor initialization function")?;
+            }
+        }
 
         let init_func = instance
             .get_typed_func::<(), (), _>(&mut *store, &self.init_func)
