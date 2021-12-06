@@ -24,13 +24,14 @@ impl Wizer {
         store: &crate::Store,
         snapshot: &Snapshot,
         renames: &FuncRenames,
+        has_wasi_initialize: bool,
     ) -> Vec<u8> {
         log::debug!("Rewriting input Wasm to pre-initialized state");
 
         if cx.uses_module_linking() {
-            self.rewrite_with_module_linking(cx, store, snapshot, renames)
+            self.rewrite_with_module_linking(cx, store, snapshot, renames, has_wasi_initialize)
         } else {
-            self.rewrite_without_module_linking(cx, store, snapshot, renames)
+            self.rewrite_without_module_linking(cx, store, snapshot, renames, has_wasi_initialize)
         }
     }
 
@@ -42,6 +43,7 @@ impl Wizer {
         store: &crate::Store,
         snapshot: &Snapshot,
         renames: &FuncRenames,
+        has_wasi_initialize: bool,
     ) -> Vec<u8> {
         assert!(snapshot.instantiations.is_empty());
 
@@ -129,12 +131,15 @@ impl Wizer {
                     encoder.section(&globals);
                 }
 
-                // Remove the initialization function's export and perform any
-                // requested renames.
+                // Remove exports for the wizer initialization
+                // function and WASI reactor _initialize function,
+                // then perform any requested renames.
                 s if s.id == SectionId::Export.into() => {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports(cx) {
-                        if export.field == self.init_func {
+                        if export.field == self.init_func
+                            || (has_wasi_initialize && export.field == "_initialize")
+                        {
                             continue;
                         }
 
@@ -333,6 +338,7 @@ impl Wizer {
         store: &crate::Store,
         snapshot: &Snapshot,
         renames: &FuncRenames,
+        has_wasi_initialize: bool,
     ) -> Vec<u8> {
         let mut umbrella = wasm_encoder::Module::new();
 
@@ -415,7 +421,7 @@ impl Wizer {
         let mut aliases = wasm_encoder::AliasSection::new();
         let mut exports = wasm_encoder::ExportSection::new();
         for exp in cx.root().exports(cx) {
-            if exp.field == self.init_func {
+            if exp.field == self.init_func || (has_wasi_initialize && exp.field == "_initialize") {
                 continue;
             }
 

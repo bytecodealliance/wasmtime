@@ -24,6 +24,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 #[cfg(feature = "structopt")]
 use structopt::StructOpt;
+use wasmtime::Extern;
 use wasmtime_wasi::WasiCtx;
 
 const DEFAULT_INHERIT_STDIO: bool = true;
@@ -336,9 +337,15 @@ impl Wizer {
             .context("failed to compile the Wasm module")?;
         self.validate_init_func(&module)?;
 
-        let instance = self.initialize(&mut store, &module)?;
+        let (instance, has_wasi_initialize) = self.initialize(&mut store, &module)?;
         let snapshot = snapshot::snapshot(&mut store, &instance);
-        let rewritten_wasm = self.rewrite(&mut cx, &mut store, &snapshot, &renames);
+        let rewritten_wasm = self.rewrite(
+            &mut cx,
+            &mut store,
+            &snapshot,
+            &renames,
+            has_wasi_initialize,
+        );
 
         if cfg!(debug_assertions) {
             if let Err(error) = self.wasm_validate(&rewritten_wasm) {
@@ -546,7 +553,7 @@ impl Wizer {
         &self,
         store: &mut Store,
         module: &wasmtime::Module,
-    ) -> anyhow::Result<wasmtime::Instance> {
+    ) -> anyhow::Result<(wasmtime::Instance, bool)> {
         log::debug!("Calling the initialization function");
 
         let mut linker = wasmtime::Linker::new(store.engine());
@@ -563,6 +570,19 @@ impl Wizer {
             .instantiate(&mut *store, module)
             .context("failed to instantiate the Wasm module")?;
 
+        let mut has_wasi_initialize = false;
+
+        if let Some(export) = instance.get_export(&mut *store, "_initialize") {
+            if let Extern::Func(func) = export {
+                func.typed::<(), (), _>(&store)
+                    .and_then(|f| {
+                        has_wasi_initialize = true;
+                        f.call(&mut *store, ()).map_err(Into::into)
+                    })
+                    .context("calling the Reactor initialization function")?;
+            }
+        }
+
         let init_func = instance
             .get_typed_func::<(), (), _>(&mut *store, &self.init_func)
             .expect("checked by `validate_init_func`");
@@ -570,6 +590,6 @@ impl Wizer {
             .call(&mut *store, ())
             .with_context(|| format!("the `{}` function trapped", self.init_func))?;
 
-        Ok(instance)
+        Ok((instance, has_wasi_initialize))
     }
 }
