@@ -9,7 +9,6 @@
 (type AtomicRmwOp (primitive AtomicRmwOp))
 (type Block (primitive Block))
 (type Constant (primitive Constant))
-(type FloatCC (primitive FloatCC))
 (type FuncRef (primitive FuncRef))
 (type GlobalValue (primitive GlobalValue))
 (type Heap (primitive Heap))
@@ -28,6 +27,27 @@
 (type Uimm32 (primitive Uimm32))
 (type Uimm8 (primitive Uimm8))
 (type bool (primitive bool))
+
+;;;; FloatCC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type FloatCC extern
+    (enum
+        Equal
+        GreaterThan
+        GreaterThanOrEqual
+        LessThan
+        LessThanOrEqual
+        NotEqual
+        Ordered
+        OrderedNotEqual
+        Unordered
+        UnorderedOrEqual
+        UnorderedOrGreaterThan
+        UnorderedOrGreaterThanOrEqual
+        UnorderedOrLessThan
+        UnorderedOrLessThanOrEqual
+    )
+)
 
 ;;;; Value Arrays ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

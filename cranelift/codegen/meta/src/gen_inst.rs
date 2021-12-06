@@ -1087,8 +1087,11 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
 
 #[cfg(feature = "rebuild-isle")]
 fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt: &mut Formatter) {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::fmt::Write;
+
+    use crate::cdsl::formats::FormatField;
+    use crate::cdsl::operands::OperandKindFields;
 
     fmt.multi_line(
         r#"
@@ -1104,18 +1107,40 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
     // Generate all the extern type declarations we need for various immediates.
     fmt.line(";;;; Extern type declarations for immediates ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
     fmt.empty_line();
-    let imm_tys: BTreeSet<_> = formats
+    let rust_name = |f: &FormatField| f.kind.rust_type.rsplit("::").next().unwrap();
+    let fields = |f: &FormatField| f.kind.fields.clone();
+    let imm_tys: BTreeMap<_, _> = formats
         .iter()
         .flat_map(|f| {
             f.imm_fields
                 .iter()
-                .map(|i| i.kind.rust_type.rsplit("::").next().unwrap())
+                .map(|i| (rust_name(i), fields(i)))
                 .collect::<Vec<_>>()
         })
         .collect();
-    for ty in imm_tys {
+    for ty in imm_tys.keys().filter(|&&k| k != "FloatCC") {
         fmtln!(fmt, "(type {} (primitive {}))", ty, ty);
     }
+    fmt.empty_line();
+
+    // Generate `FloatCC` enumeration.
+    fmt.line(";;;; FloatCC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
+    fmt.empty_line();
+    fmtln!(fmt, "(type FloatCC extern",);
+    fmt.indent(|fmt| {
+        fmt.line("(enum");
+        fmt.indent(|fmt| {
+            if let Some(OperandKindFields::ImmEnum(map)) = imm_tys.get("FloatCC") {
+                let mut variants = map.values().collect::<Vec<_>>();
+                variants.sort();
+                for variant in variants {
+                    fmtln!(fmt, "{}", variant);
+                }
+            }
+        });
+        fmt.line(")");
+    });
+    fmt.line(")");
     fmt.empty_line();
 
     // Generate all of the value arrays we need for `InstructionData` as well as
