@@ -35,7 +35,7 @@ criterion = "0.3"
 
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.78.0" }
-isle = { path = "../isle/isle", version = "0.78.0", optional = true }
+cranelift-isle = { path = "../isle/isle", version = "=0.78.0", optional = true }
 miette = { version = "3", features = ["fancy"], optional = true }
 sha2 = "0.9.8"
 
@@ -91,7 +91,7 @@ regalloc-snapshot = ["bincode", "regalloc/enable-serde"]
 souper-harvest = ["souper-ir", "souper-ir/stringify"]
 
 # Recompile ISLE DSL source files into their generated Rust code.
-rebuild-isle = ["isle", "miette", "cranelift-codegen-meta/rebuild-isle"]
+rebuild-isle = ["cranelift-isle", "miette", "cranelift-codegen-meta/rebuild-isle"]
 
 # A hack to skip the ISLE-rebuild logic when testing for determinism
 # with the "Meta deterministic check" CI job.

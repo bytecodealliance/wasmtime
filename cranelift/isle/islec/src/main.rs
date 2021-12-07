@@ -1,4 +1,4 @@
-use isle::{compile, lexer, parser};
+use cranelift_isle::{compile, lexer, parser};
 use miette::{Context, IntoDiagnostic, Result};
 use std::{
     fs,
