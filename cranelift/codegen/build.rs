@@ -369,6 +369,8 @@ fn rebuild_isle(
     compilation: &IsleCompilation,
     manifest: &str,
 ) -> Result<(), Box<dyn std::error::Error + 'static>> {
+    use cranelift_isle as isle;
+
     // First, remove the manifest, if any; we will recreate it
     // below if the compilation is successful. Ignore error if no
     // manifest was present.

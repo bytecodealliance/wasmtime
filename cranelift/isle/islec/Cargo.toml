@@ -7,7 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 publish = false
 
 [dependencies]
-isle = { version = "*", path = "../isle/" }
+cranelift-isle = { version = "*", path = "../isle/" }
 env_logger = { version = "0.8", default-features = false }
 miette = { version = "3.0.0", features = ["fancy"] }
 structopt = "0.3.23"

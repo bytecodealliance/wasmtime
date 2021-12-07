@@ -10,7 +10,7 @@ cargo-fuzz = true
 
 [dependencies]
 env_logger = { version = "0.9.0", default-features = false }
-isle = { path = "../isle" }
+cranelift-isle = { path = "../isle" }
 libfuzzer-sys = "0.4"
 log = "0.4.14"
 
