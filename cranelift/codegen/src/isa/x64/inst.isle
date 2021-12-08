@@ -953,6 +953,16 @@
             (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movapd) (RegMem.Reg mask) mask2))))
         (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
 
+;; Helper for creating `movsd` instructions.
+(decl movsd (Reg RegMem) Reg)
+(rule (movsd src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Movsd) src1 src2))
+
+;; Helper for creating `movlhps` instructions.
+(decl movlhps (Reg RegMem) Reg)
+(rule (movlhps src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Movlhps) src1 src2))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Reg)
 (rule (xmm_rm_r_imm op src1 src2 imm size)
@@ -1146,13 +1156,3 @@
 (decl insertps (Reg RegMem u8) Reg)
 (rule (insertps src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Insertps) src1 src2 lane (OperandSize.Size32)))
-
-;; Helper for creating `movsd` instructions.
-(decl movsd (Reg RegMem) Reg)
-(rule (movsd src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Movsd) src1 src2))
-
-;; Helper for creating `movlhps` instructions.
-(decl movlhps (Reg RegMem) Reg)
-(rule (movlhps src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Movlhps) src1 src2))
