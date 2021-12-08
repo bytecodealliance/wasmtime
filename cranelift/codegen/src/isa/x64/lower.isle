@@ -153,36 +153,56 @@
 
 ;;;; Rules for `iadd_ifcout` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; N.B.: the second output of `iadd_ifcout` is meant to be the
+;; `iflags` value containing the carry result. However, we plan to
+;; replace this with a bool carry flag, and all consumers of `iflags`
+;; remain in the handwritten pattern-matching code and explicitly
+;; match on the flags producer. So we can get away with just
+;; allocating a second temp so that the reg-renaming code does the
+;; right thing, for now. For safety, we assert elsewhere that no one
+;; actually uses the register assigned to the SSA `iflags`-typed
+;; `Value`.
+
 ;; Add two registers.
 (rule (lower (has_type (fits_in_64 ty)
                        (iadd_ifcout x y)))
-      (value_reg (add ty
-                      (put_in_reg x)
-                      (RegMemImm.Reg (put_in_reg y)))))
+      (let ((unused_iflags Reg (writable_reg_to_reg (temp_writable_reg $I64))))
+        (value_regs (add ty
+                         (put_in_reg x)
+                         (RegMemImm.Reg (put_in_reg y)))
+                    unused_iflags)))
 
 ;; Add a register and an immediate.
 
 (rule (lower (has_type (fits_in_64 ty)
                        (iadd_ifcout x (simm32_from_value y))))
-      (value_reg (add ty (put_in_reg x) y)))
+      (let ((unused_iflags Reg (writable_reg_to_reg (temp_writable_reg $I64))))
+        (value_regs (add ty (put_in_reg x) y)
+                    unused_iflags)))
 
 (rule (lower (has_type (fits_in_64 ty)
                        (iadd_ifcout (simm32_from_value x) y)))
-      (value_reg (add ty (put_in_reg y) x)))
+      (let ((unused_iflags Reg (writable_reg_to_reg (temp_writable_reg $I64))))
+        (value_regs (add ty (put_in_reg y) x)
+                    unused_iflags)))
 
 ;; Add a register and memory.
 
 (rule (lower (has_type (fits_in_64 ty)
                        (iadd_ifcout x (sinkable_load y))))
-      (value_reg (add ty
-                      (put_in_reg x)
-                      (sink_load y))))
+      (let ((unused_iflags Reg (writable_reg_to_reg (temp_writable_reg $I64))))
+        (value_regs (add ty
+                         (put_in_reg x)
+                         (sink_load y))
+                    unused_iflags)))
 
 (rule (lower (has_type (fits_in_64 ty)
                        (iadd_ifcout (sinkable_load x) y)))
-      (value_reg (add ty
-                      (put_in_reg y)
-                      (sink_load x))))
+      (let ((unused_iflags Reg (writable_reg_to_reg (temp_writable_reg $I64))))
+        (value_regs (add ty
+                         (put_in_reg y)
+                         (sink_load x))
+                    unused_iflags)))
 
 ;; (No `iadd_ifcout` for `i128`.)
 

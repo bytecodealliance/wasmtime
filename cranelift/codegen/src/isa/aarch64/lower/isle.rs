@@ -50,6 +50,23 @@ where
     let temp_regs = generated_code::constructor_lower(&mut isle_ctx, inst).ok_or(())?;
     let mut temp_regs = temp_regs.regs().iter();
 
+    #[cfg(debug_assertions)]
+    {
+        let all_dsts_len = outputs
+            .iter()
+            .map(|out| get_output_reg(isle_ctx.lower_ctx, *out).len())
+            .sum();
+        debug_assert_eq!(
+            temp_regs.len(),
+            all_dsts_len,
+            "the number of temporary registers and destination registers do \
+         not match ({} != {}); ensure the correct registers are being \
+         returned.",
+            temp_regs.len(),
+            all_dsts_len,
+        );
+    }
+
     // The ISLE generated code emits its own registers to define the
     // instruction's lowered values in. We rename those registers to the
     // registers they were assigned when their value was used as an operand in
