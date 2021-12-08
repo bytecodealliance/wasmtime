@@ -1068,3 +1068,47 @@
 ;; into the second lane where unlike above cases we're not using the lane
 ;; immediate as an immediate to the instruction itself.
 (rule (vec_insert_lane $F64X2 vec val 1) (movlhps vec val))
+
+;;;; Rules for `imax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (imax x y)))
+      (value_reg (pmaxsb (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I16X8 (imax x y)))
+      (value_reg (pmaxsw (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I32X4 (imax x y)))
+      (value_reg (pmaxsd (put_in_reg x) (put_in_reg_mem y))))
+
+;;;; Rules for `imin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (imin x y)))
+      (value_reg (pminsb (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I16X8 (imin x y)))
+      (value_reg (pminsw (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I32X4 (imin x y)))
+      (value_reg (pminsd (put_in_reg x) (put_in_reg_mem y))))
+
+;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (umax x y)))
+      (value_reg (pmaxub (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I16X8 (umax x y)))
+      (value_reg (pmaxuw (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I32X4 (umax x y)))
+      (value_reg (pmaxud (put_in_reg x) (put_in_reg_mem y))))
+
+;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (umin x y)))
+      (value_reg (pminub (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I16X8 (umin x y)))
+      (value_reg (pminuw (put_in_reg x) (put_in_reg_mem y))))
+
+(rule (lower (has_type $I32X4 (umin x y)))
+      (value_reg (pminud (put_in_reg x) (put_in_reg_mem y))))
