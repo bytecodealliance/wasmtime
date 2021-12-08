@@ -11,6 +11,7 @@ use crate::fx::{FxHashMap, FxHashSet};
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::instructions::BranchInfo;
 use crate::ir::{
+    types::{FFLAGS, IFLAGS},
     ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
     GlobalValueData, Inst, InstructionData, MemFlags, Opcode, Signature, SourceLoc, Type, Value,
     ValueDef, ValueLabelAssignments, ValueLabelStart,
@@ -1211,6 +1212,12 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
         let val = self.f.dfg.resolve_aliases(val);
         log::trace!("put_value_in_regs: val {}", val);
 
+        // Assert that the value is not `iflags`/`fflags`-typed; these
+        // cannot be reified into normal registers. TODO(#3249)
+        // eventually remove the `iflags` type altogether!
+        let ty = self.f.dfg.value_type(val);
+        assert!(ty != IFLAGS && ty != FFLAGS);
+
         // If the value is a constant, then (re)materialize it at each use. This
         // lowers register pressure.
         if let Some(c) = self
@@ -1220,8 +1227,6 @@ impl<'func, I: VCodeInst> LowerCtx for Lower<'func, I> {
             .inst()
             .and_then(|inst| self.get_constant(inst))
         {
-            let ty = self.f.dfg.value_type(val);
-
             let regs = self.alloc_tmp(ty);
             log::trace!(" -> regs {:?}", regs);
             assert!(regs.is_valid());
