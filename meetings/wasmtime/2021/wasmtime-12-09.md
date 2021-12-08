@@ -9,9 +9,13 @@
     1. Please help take notes.
     1. Thanks!
 1. Announcements
-    1. _Sumbit a PR to add your announcement here_
+    1. _Submit a PR to add your announcement here_
 1. Other agenda items
-    1. _Sumbit a PR to add your item here_
+    1. Profiling (with vtune on linux and windows, other approaches on Windows)
+    2. Benchmarking infrastructure
+    3. Feature: Incremental compilation cache (function granularity)
+    4. Feature: CPU intrinsics
+    5. Feature: read-only wasm memories
 
 ## Notes
 
