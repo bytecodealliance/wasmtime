@@ -953,6 +953,76 @@
             (_ Unit (emit (MInst.XmmUnaryRmR (SseOpcode.Movapd) (RegMem.Reg mask) mask2))))
         (xmm_rm_r $F64X2 (SseOpcode.Blendvpd) src1 src2)))
 
+;; Helper for creating `movsd` instructions.
+(decl movsd (Reg RegMem) Reg)
+(rule (movsd src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Movsd) src1 src2))
+
+;; Helper for creating `movlhps` instructions.
+(decl movlhps (Reg RegMem) Reg)
+(rule (movlhps src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Movlhps) src1 src2))
+
+;; Helper for creating `pmaxsb` instructions.
+(decl pmaxsb (Reg RegMem) Reg)
+(rule (pmaxsb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaxsb) src1 src2))
+
+;; Helper for creating `pmaxsw` instructions.
+(decl pmaxsw (Reg RegMem) Reg)
+(rule (pmaxsw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaxsw) src1 src2))
+
+;; Helper for creating `pmaxsd` instructions.
+(decl pmaxsd (Reg RegMem) Reg)
+(rule (pmaxsd src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaxsd) src1 src2))
+
+;; Helper for creating `pminsb` instructions.
+(decl pminsb (Reg RegMem) Reg)
+(rule (pminsb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pminsb) src1 src2))
+
+;; Helper for creating `pminsw` instructions.
+(decl pminsw (Reg RegMem) Reg)
+(rule (pminsw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pminsw) src1 src2))
+
+;; Helper for creating `pminsd` instructions.
+(decl pminsd (Reg RegMem) Reg)
+(rule (pminsd src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pminsd) src1 src2))
+
+;; Helper for creating `pmaxub` instructions.
+(decl pmaxub (Reg RegMem) Reg)
+(rule (pmaxub src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaxub) src1 src2))
+
+;; Helper for creating `pmaxuw` instructions.
+(decl pmaxuw (Reg RegMem) Reg)
+(rule (pmaxuw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaxuw) src1 src2))
+
+;; Helper for creating `pmaxud` instructions.
+(decl pmaxud (Reg RegMem) Reg)
+(rule (pmaxud src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pmaxud) src1 src2))
+
+;; Helper for creating `pminub` instructions.
+(decl pminub (Reg RegMem) Reg)
+(rule (pminub src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pminub) src1 src2))
+
+;; Helper for creating `pminuw` instructions.
+(decl pminuw (Reg RegMem) Reg)
+(rule (pminuw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pminuw) src1 src2))
+
+;; Helper for creating `pminud` instructions.
+(decl pminud (Reg RegMem) Reg)
+(rule (pminud src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Pminud) src1 src2))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Reg)
 (rule (xmm_rm_r_imm op src1 src2 imm size)
@@ -1146,13 +1216,3 @@
 (decl insertps (Reg RegMem u8) Reg)
 (rule (insertps src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Insertps) src1 src2 lane (OperandSize.Size32)))
-
-;; Helper for creating `movsd` instructions.
-(decl movsd (Reg RegMem) Reg)
-(rule (movsd src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Movsd) src1 src2))
-
-;; Helper for creating `movlhps` instructions.
-(decl movlhps (Reg RegMem) Reg)
-(rule (movlhps src1 src2)
-      (xmm_rm_r $I8X16 (SseOpcode.Movlhps) src1 src2))
