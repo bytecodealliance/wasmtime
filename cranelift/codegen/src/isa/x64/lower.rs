@@ -1533,33 +1533,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Imax
         | Opcode::Umax
         | Opcode::Imin
-        | Opcode::Umin => implemented_in_isle(ctx),
-
-        Opcode::Bnot => {
-            let ty = ty.unwrap();
-
-            if ty.is_vector() {
-                unreachable!(
-                    "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                    ctx.dfg().display_inst(insn),
-                    ty
-                );
-            } else if ty == types::I128 || ty == types::B128 {
-                let src = put_input_in_regs(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]);
-                ctx.emit(Inst::gen_move(dst.regs()[0], src.regs()[0], types::I64));
-                ctx.emit(Inst::not(OperandSize::Size64, dst.regs()[0]));
-                ctx.emit(Inst::gen_move(dst.regs()[1], src.regs()[1], types::I64));
-                ctx.emit(Inst::not(OperandSize::Size64, dst.regs()[1]));
-            } else if ty.is_bool() {
-                unimplemented!("bool bnot")
-            } else {
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, src, ty));
-                ctx.emit(Inst::not(OperandSize::from_ty(ty), dst));
-            }
-        }
+        | Opcode::Umin
+        | Opcode::Bnot => implemented_in_isle(ctx),
 
         Opcode::Bitselect => {
             let ty = ty.unwrap();
