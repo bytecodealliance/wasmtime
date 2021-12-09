@@ -1007,6 +1007,27 @@
 
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; `i64` and smaller.
+
+(rule (lower (has_type (fits_in_64 ty) (bnot x)))
+      (value_reg (not ty (put_in_reg x))))
+
+;; `i128`.
+
+(decl i128_not (Value) ValueRegs)
+(rule (i128_not x)
+      (let ((x_regs ValueRegs (put_in_regs x))
+            (x_lo Reg (value_regs_get x_regs 0))
+            (x_hi Reg (value_regs_get x_regs 1)))
+        (value_regs (not $I64 x_lo)
+                    (not $I64 x_hi))))
+
+(rule (lower (has_type $I128 (bnot x)))
+      (i128_not x))
+
+(rule (lower (has_type $B128 (bnot x)))
+      (i128_not x))
+
 ;; Special case for vector-types where bit-negation is an xor against an
 ;; all-one value
 (rule (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))

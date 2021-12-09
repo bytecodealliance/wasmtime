@@ -66,6 +66,9 @@
                       (src RegMem)
                       (dst WritableReg)
                       (src_size OperandSize))
+            (Not (size OperandSize)
+                 (src Reg)
+                 (dst WritableReg))
 ))
 
 (type OperandSize extern
@@ -1216,3 +1219,11 @@
 (decl insertps (Reg RegMem u8) Reg)
 (rule (insertps src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Insertps) src1 src2 lane (OperandSize.Size32)))
+
+;; Helper for creating `not` instructions.
+(decl not (Type Reg) Reg)
+(rule (not ty src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type ty))
+            (_ Unit (emit (MInst.Not size src dst))))
+        (writable_reg_to_reg dst)))
