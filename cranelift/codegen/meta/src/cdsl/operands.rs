@@ -111,6 +111,16 @@ pub(crate) enum OperandKindFields {
     TypeVar(TypeVar),
 }
 
+impl OperandKindFields {
+    /// Return the [EnumValues] for this field if it is an `enum`.
+    pub(crate) fn enum_values(&self) -> Option<&EnumValues> {
+        match self {
+            OperandKindFields::ImmEnum(map) => Some(map),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct OperandKind {
     /// String representation of the Rust type mapping to this OperandKind.
