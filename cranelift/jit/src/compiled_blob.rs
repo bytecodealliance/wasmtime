@@ -97,7 +97,8 @@ impl CompiledBlob {
                     // immediate offset argument.
                     let chop = 32 - 26;
                     let imm26 = (diff as u32) << chop >> chop;
-                    unsafe { *iptr |= imm26; }
+                    let ins = unsafe { iptr.read_unaligned() } | imm26;
+                    unsafe { iptr.write_unaligned(ins); }
                 }
                 _ => unimplemented!(),
             }
