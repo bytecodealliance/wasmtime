@@ -81,6 +81,27 @@ impl CompiledBlob {
                         write_unaligned(at as *mut i32, pcrel)
                     };
                 }
+                Reloc::Arm64Call => {
+                    let base = get_address(name);
+                    // The instruction is 32 bits long.
+                    let iptr = at as *mut u32;
+                    // The offset encoded in the `bl` instruction is the
+                    // number of bytes divided by 4.
+                    let diff = ((base as isize) - (at as isize)) >> 2;
+                    // Sign propagating right shift disposes of the
+                    // included bits, so the result is expected to be
+                    // either all sign bits or 0, depending on if the original
+                    // value was negative or positive.
+                    assert!((diff >> 26 == -1) || (diff >> 26 == 0));
+                    // The lower 26 bits of the `bl` instruction form the
+                    // immediate offset argument.
+                    let chop = 32 - 26;
+                    let imm26 = (diff as u32) << chop >> chop;
+                    let ins = unsafe { iptr.read_unaligned() } | imm26;
+                    unsafe {
+                        iptr.write_unaligned(ins);
+                    }
+                }
                 _ => unimplemented!(),
             }
         }
