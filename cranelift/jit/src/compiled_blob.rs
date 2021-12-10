@@ -98,7 +98,9 @@ impl CompiledBlob {
                     let chop = 32 - 26;
                     let imm26 = (diff as u32) << chop >> chop;
                     let ins = unsafe { iptr.read_unaligned() } | imm26;
-                    unsafe { iptr.write_unaligned(ins); }
+                    unsafe {
+                        iptr.write_unaligned(ins);
+                    }
                 }
                 _ => unimplemented!(),
             }
