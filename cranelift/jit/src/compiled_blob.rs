@@ -81,6 +81,17 @@ impl CompiledBlob {
                         write_unaligned(at as *mut i32, pcrel)
                     };
                 }
+                Reloc::Arm64Call => {
+                    let base = get_address(name);
+                    // The instruction is 32 bits long.
+                    let iptr = at as *mut u32;
+                    let diff = (base as isize) - (at as isize);
+                    // The lower 26 bits of the `bl` instruction form the
+                    // immediate offset argument.
+                    let chop = 32 - 26;
+                    let imm26 = ((diff >> 2) as u32) << chop >> chop;
+                    unsafe { *iptr |= imm26; }
+                }
                 _ => unimplemented!(),
             }
         }
