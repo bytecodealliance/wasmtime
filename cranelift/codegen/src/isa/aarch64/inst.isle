@@ -1564,8 +1564,8 @@
 
 ;; Misc instruction helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl trap_if_zero (Reg) Reg)
-(rule (trap_if_zero reg)
+(decl trap_if_zero_divisor (Reg) Reg)
+(rule (trap_if_zero_divisor reg)
       (let ((_ Unit (emit (MInst.TrapIf (cond_br_zero reg) (trap_code_division_by_zero)))))
         reg))
 

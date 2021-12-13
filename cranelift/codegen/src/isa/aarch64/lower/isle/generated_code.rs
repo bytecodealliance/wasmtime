@@ -1691,8 +1691,8 @@ pub fn constructor_put_in_reg_zext64<C: Context>(ctx: &mut C, arg0: Value) -> Op
     return None;
 }
 
-// Generated as internal constructor for term trap_if_zero.
-pub fn constructor_trap_if_zero<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
+// Generated as internal constructor for term trap_if_zero_divisor.
+pub fn constructor_trap_if_zero_divisor<C: Context>(ctx: &mut C, arg0: Reg) -> Option<Reg> {
     let pattern0_0 = arg0;
     // Rule at src/isa/aarch64/inst.isle line 1568.
     let expr0_0 = C::cond_br_zero(ctx, pattern0_0);
@@ -3223,7 +3223,7 @@ pub fn constructor_put_nonzero_in_reg_zext64<C: Context>(ctx: &mut C, arg0: Valu
     }
     // Rule at src/isa/aarch64/lower.isle line 415.
     let expr0_0 = constructor_put_in_reg_zext64(ctx, pattern0_0)?;
-    let expr1_0 = constructor_trap_if_zero(ctx, expr0_0)?;
+    let expr1_0 = constructor_trap_if_zero_divisor(ctx, expr0_0)?;
     return Some(expr1_0);
 }
 
@@ -3249,6 +3249,6 @@ pub fn constructor_put_nonzero_in_reg_sext64<C: Context>(ctx: &mut C, arg0: Valu
     }
     // Rule at src/isa/aarch64/lower.isle line 465.
     let expr0_0 = constructor_put_in_reg_sext64(ctx, pattern0_0)?;
-    let expr1_0 = constructor_trap_if_zero(ctx, expr0_0)?;
+    let expr1_0 = constructor_trap_if_zero_divisor(ctx, expr0_0)?;
     return Some(expr1_0);
 }

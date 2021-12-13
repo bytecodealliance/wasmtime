@@ -403,8 +403,8 @@
 ;; TODO: Add UDiv32 to implement 32-bit directly, rather
 ;; than extending the input.
 ;;
-;; Note that `udiv` doesn't trap so to respect the semantics of `udiv` the check
-;; for zero needs to be manually performed.
+;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
+;; CLIF's `udiv` the check for zero needs to be manually performed.
 (rule (lower (has_type (fits_in_64 ty) (udiv x y)))
       (value_reg (alu_rrr (ALUOp.UDiv64)
                           (put_in_reg_zext64 x)
@@ -413,7 +413,7 @@
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
 (decl put_nonzero_in_reg_zext64 (Value) Reg)
 (rule (put_nonzero_in_reg_zext64 val)
-      (trap_if_zero (put_in_reg_zext64 val)))
+      (trap_if_zero_divisor (put_in_reg_zext64 val)))
 
 ;; Special case where if a `Value` is known to be nonzero we can trivially
 ;; move it into a register.
@@ -463,7 +463,7 @@
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
 (decl put_nonzero_in_reg_sext64 (Value) Reg)
 (rule (put_nonzero_in_reg_sext64 val)
-      (trap_if_zero (put_in_reg_sext64 val)))
+      (trap_if_zero_divisor (put_in_reg_sext64 val)))
 
 ;; Note that this has a special case where if the `Value` is a constant that's
 ;; not zero we can skip the zero check.
