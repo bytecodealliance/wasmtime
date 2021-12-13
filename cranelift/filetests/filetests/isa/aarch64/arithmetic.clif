@@ -54,12 +54,11 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  sdiv x2, x0, x1
-; nextln:  cbnz x1, 8 ; udf
+; check:   cbnz x1, 8 ; udf
 ; nextln:  adds xzr, x1, #1
 ; nextln:  ccmp x0, #1, #nzcv, eq
 ; nextln:  b.vc 8 ; udf
-; nextln:  mov x0, x2
+; nextln:  sdiv x0, x0, x1
 ; nextln:  ret
 
 function %f7(i64) -> i64 {
@@ -69,13 +68,8 @@ block0(v0: i64):
   return v2
 }
 
-; check:  movz x2, #2
-; nextln:  sdiv x1, x0, x2
-; nextln:  cbnz x2, 8 ; udf
-; nextln:  adds xzr, x2, #1
-; nextln:  ccmp x0, #1, #nzcv, eq
-; nextln:  b.vc 8 ; udf
-; nextln:  mov x0, x1
+; check:   orr x1, xzr, #2
+; nextln:  sdiv x0, x0, x1
 ; nextln:  ret
 
 function %f8(i64, i64) -> i64 {
@@ -84,8 +78,8 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  udiv x0, x0, x1
-; nextln:  cbnz x1, 8 ; udf
+; check:   cbnz x1, 8 ; udf
+; nextln:  udiv x0, x0, x1
 ; nextln:  ret
 
 function %f9(i64) -> i64 {
@@ -95,9 +89,8 @@ block0(v0: i64):
   return v2
 }
 
-; check:  movz x1, #2
+; check:   orr x1, xzr, #2
 ; nextln:  udiv x0, x0, x1
-; nextln:  cbnz x1, 8 ; udf
 ; nextln:  ret
 
 function %f10(i64, i64) -> i64 {
@@ -106,8 +99,8 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  sdiv x2, x0, x1
-; nextln:  cbnz x1, 8 ; udf
+; check:   cbnz x1, 8 ; udf
+; nextln:  sdiv x2, x0, x1
 ; nextln:  msub x0, x2, x1, x0
 ; nextln:  ret
 
@@ -117,8 +110,8 @@ block0(v0: i64, v1: i64):
   return v2
 }
 
-; check:  udiv x2, x0, x1
-; nextln:  cbnz x1, 8 ; udf
+; check:   cbnz x1, 8 ; udf
+; nextln:  udiv x2, x0, x1
 ; nextln:  msub x0, x2, x1, x0
 ; nextln:  ret
 
@@ -129,13 +122,13 @@ block0(v0: i32, v1: i32):
   return v2
 }
 
-; check:  sxtw x3, w0
-; nextln:  sxtw x2, w1
-; nextln:  sdiv x0, x3, x2
-; nextln:  cbnz x2, 8 ; udf
-; nextln:  adds wzr, w2, #1
-; nextln:  ccmp w3, #1, #nzcv, eq
+; check:  sxtw x0, w0
+; nextln:  sxtw x1, w1
+; nextln:  cbnz x1, 8 ; udf
+; nextln:  adds wzr, w1, #1
+; nextln:  ccmp w0, #1, #nzcv, eq
 ; nextln:  b.vc 8 ; udf
+; nextln:  sdiv x0, x0, x1
 ; nextln:  ret
 
 function %f13(i32) -> i32 {
@@ -145,15 +138,9 @@ block0(v0: i32):
   return v2
 }
 
-; check: sxtw x0, w0
-; nextln: movz x1, #2
-; nextln: sxtw x2, w1
-; nextln: sdiv x1, x0, x2
-; nextln: cbnz x2, 8 ; udf
-; nextln: adds wzr, w2, #1
-; nextln: ccmp w0, #1, #nzcv, eq
-; nextln: b.vc 8 ; udf
-; nextln: mov x0, x1
+; check:  sxtw x0, w0
+; nextln: orr x1, xzr, #2
+; nextln: sdiv x0, x0, x1
 ; nextln: ret
 
 function %f14(i32, i32) -> i32 {
@@ -164,8 +151,8 @@ block0(v0: i32, v1: i32):
 
 ; check: mov w0, w0
 ; nextln: mov w1, w1
-; nextln: udiv x0, x0, x1
 ; nextln: cbnz x1, 8 ; udf
+; nextln: udiv x0, x0, x1
 ; nextln: ret
 
 
@@ -176,10 +163,9 @@ block0(v0: i32):
   return v2
 }
 
-; check:  mov w0, w0
-; nextln:  movz x1, #2
+; check:   mov w0, w0
+; nextln:  orr x1, xzr, #2
 ; nextln:  udiv x0, x0, x1
-; nextln:  cbnz x1, 8 ; udf
 ; nextln:  ret
 
 function %f16(i32, i32) -> i32 {
@@ -190,8 +176,8 @@ block0(v0: i32, v1: i32):
 
 ; check:  sxtw x0, w0
 ; nextln:  sxtw x1, w1
-; nextln:  sdiv x2, x0, x1
 ; nextln:  cbnz x1, 8 ; udf
+; nextln:  sdiv x2, x0, x1
 ; nextln:  msub x0, x2, x1, x0
 ; nextln:  ret
 
@@ -203,8 +189,8 @@ block0(v0: i32, v1: i32):
 
 ; check:  mov w0, w0
 ; nextln:  mov w1, w1
-; nextln:  udiv x2, x0, x1
 ; nextln:  cbnz x1, 8 ; udf
+; nextln:  udiv x2, x0, x1
 ; nextln:  msub x0, x2, x1, x0
 ; nextln:  ret
 
@@ -389,3 +375,40 @@ block0(v0: i32, v1: i32, v2: i32):
 ; check:  madd w0, w1, w2, w0
 ; nextln: ret
 
+function %srem_const (i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = srem.i64 v0, v1
+  return v2
+}
+
+; check:   orr x1, xzr, #2
+; nextln:  sdiv x2, x0, x1
+; nextln:  msub x0, x2, x1, x0
+; nextln:  ret
+
+function %urem_const (i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 2
+  v2 = urem.i64 v0, v1
+  return v2
+}
+
+; check:   orr x1, xzr, #2
+; nextln:  udiv x2, x0, x1
+; nextln:  msub x0, x2, x1, x0
+; nextln:  ret
+
+function %sdiv_minus_one(i64) -> i64 {
+block0(v0: i64):
+  v1 = iconst.i64 -1
+  v2 = sdiv.i64 v0, v1
+  return v2
+}
+
+; check:  movn x1, #0
+; nextln:  adds xzr, x1, #1
+; nextln:  ccmp x0, #1, #nzcv, eq
+; nextln:  b.vc 8 ; udf
+; nextln:  sdiv x0, x0, x1
+; nextln:  ret

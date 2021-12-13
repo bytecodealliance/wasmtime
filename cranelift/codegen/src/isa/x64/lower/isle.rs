@@ -12,7 +12,7 @@ use crate::isa::x64::inst::regs;
 use crate::isa::x64::settings as x64_settings;
 use crate::machinst::isle::*;
 use crate::{
-    ir::{immediates::*, types::*, Inst, InstructionData, Opcode, Value, ValueList},
+    ir::{immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode, Value, ValueList},
     isa::x64::inst::{
         args::{
             Avx512Opcode, CmpOpcode, ExtMode, FcmpImm, Imm8Reg, RegMem, ShiftKind, SseOpcode, CC,

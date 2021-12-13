@@ -1307,6 +1307,12 @@
 (decl imm12_from_u64 (Imm12) u64)
 (extern extractor imm12_from_u64 imm12_from_u64)
 
+(decl u8_into_uimm5 (u8) UImm5)
+(extern constructor u8_into_uimm5 u8_into_uimm5)
+
+(decl u8_into_imm12 (u8) Imm12)
+(extern constructor u8_into_imm12 u8_into_imm12)
+
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
 
@@ -1339,6 +1345,15 @@
 (decl get_extended_op (ExtendedValue) ExtendOp)
 (extern constructor get_extended_op get_extended_op)
 
+(decl nzcv (bool bool bool bool) NZCV)
+(extern constructor nzcv nzcv)
+
+(decl cond_br_zero (Reg) CondBrKind)
+(extern constructor cond_br_zero cond_br_zero)
+
+(decl cond_br_cond (Cond) CondBrKind)
+(extern constructor cond_br_cond cond_br_cond)
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Emit an instruction.
@@ -1351,6 +1366,9 @@
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)
+
+(decl writable_zero_reg () WritableReg)
+(extern constructor writable_zero_reg writable_zero_reg)
 
 ;; Helper for emitting `MInst.MovZ` instructions.
 (decl movz (MoveWideConst OperandSize) Reg)
@@ -1543,3 +1561,41 @@
 
 ;; 64-bit passthrough.
 (rule (put_in_reg_zext64 val @ (value_type $I64)) (put_in_reg val))
+
+;; Misc instruction helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl trap_if_zero_divisor (Reg) Reg)
+(rule (trap_if_zero_divisor reg)
+      (let ((_ Unit (emit (MInst.TrapIf (cond_br_zero reg) (trap_code_division_by_zero)))))
+        reg))
+
+(decl size_from_ty (Type) OperandSize)
+(rule (size_from_ty (fits_in_32 _ty)) (OperandSize.Size32))
+(rule (size_from_ty $I64) (OperandSize.Size64))
+
+;; Check for signed overflow. The only case is min_value / -1.
+;; The following checks must be done in 32-bit or 64-bit, depending
+;; on the input type.
+(decl trap_if_div_overflow (Type Reg Reg) Reg)
+(rule (trap_if_div_overflow ty x y)
+      (let (
+          ;; Check RHS is -1.
+          (_1 Unit (emit (MInst.AluRRImm12 (adds_op ty) (writable_zero_reg) y (u8_into_imm12 1))))
+
+          ;; Check LHS is min_value, by subtracting 1 and branching if
+          ;; there is overflow.
+          (_2 Unit (emit (MInst.CCmpImm (size_from_ty ty)
+                                        x
+                                        (u8_into_uimm5 1)
+                                        (nzcv $false $false $false $false)
+                                        (Cond.Eq))))
+          (_3 Unit (emit (MInst.TrapIf (cond_br_cond (Cond.Vs))
+                                      (trap_code_integer_overflow))))
+        )
+        x))
+
+;; Helper to use either a 32 or 64-bit adds depending on the input type.
+(decl adds_op (Type) ALUOp)
+(rule (adds_op (fits_in_32 _ty)) (ALUOp.AddS32))
+(rule (adds_op $I64) (ALUOp.AddS64))
+

@@ -398,3 +398,107 @@
         )
         (value_reg result)))
 
+;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; TODO: Add UDiv32 to implement 32-bit directly, rather
+;; than extending the input.
+;;
+;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
+;; CLIF's `udiv` the check for zero needs to be manually performed.
+(rule (lower (has_type (fits_in_64 ty) (udiv x y)))
+      (value_reg (alu_rrr (ALUOp.UDiv64)
+                          (put_in_reg_zext64 x)
+                          (put_nonzero_in_reg_zext64 y))))
+
+;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
+(decl put_nonzero_in_reg_zext64 (Value) Reg)
+(rule (put_nonzero_in_reg_zext64 val)
+      (trap_if_zero_divisor (put_in_reg_zext64 val)))
+
+;; Special case where if a `Value` is known to be nonzero we can trivially
+;; move it into a register.
+(rule (put_nonzero_in_reg_zext64 (and (value_type ty)
+                                      (def_inst (iconst (nonzero_u64_from_imm64 n)))))
+      (imm ty n))
+
+;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; TODO: Add SDiv32 to implement 32-bit directly, rather
+;; than extending the input.
+;;
+;; The sequence of checks here should look like:
+;;
+;;   cbnz rm, #8
+;;   udf ; divide by zero
+;;   cmn rm, 1
+;;   ccmp rn, 1, #nzcv, eq
+;;   b.vc #8
+;;   udf ; signed overflow
+;;
+;; Note The div instruction does not trap on divide by zero or overflow, so
+;; checks need to be manually inserted.
+;;
+;; TODO: if `y` is -1 then a check that `x` is not INT_MIN is all that's
+;; necessary, but right now `y` is checked to not be -1 as well.
+(rule (lower (has_type (fits_in_64 ty) (sdiv x y)))
+      (let (
+          (x64 Reg (put_in_reg_sext64 x))
+          (y64 Reg (put_nonzero_in_reg_sext64 y))
+          (valid_x64 Reg (trap_if_div_overflow ty x64 y64))
+          (result Reg (alu_rrr (ALUOp.SDiv64) valid_x64 y64))
+        )
+        (value_reg result)))
+
+;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
+(decl safe_divisor_from_imm64 (u64) Imm64)
+(extern extractor safe_divisor_from_imm64 safe_divisor_from_imm64)
+
+;; Special case for `sdiv` where no checks are needed due to division by a
+;; constant meaning the checks are always passed.
+(rule (lower (has_type (fits_in_64 ty) (sdiv x (def_inst (iconst (safe_divisor_from_imm64 y))))))
+      (value_reg (alu_rrr (ALUOp.SDiv64)
+                          (put_in_reg_sext64 x)
+                          (imm ty y))))
+
+;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
+(decl put_nonzero_in_reg_sext64 (Value) Reg)
+(rule (put_nonzero_in_reg_sext64 val)
+      (trap_if_zero_divisor (put_in_reg_sext64 val)))
+
+;; Note that this has a special case where if the `Value` is a constant that's
+;; not zero we can skip the zero check.
+(rule (put_nonzero_in_reg_sext64 (and (value_type ty)
+                                      (def_inst (iconst (nonzero_u64_from_imm64 n)))))
+      (imm ty n))
+
+;;;; Rules for `urem` and `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Remainder (x % y) is implemented as:
+;;
+;;   tmp = x / y
+;;   result = x - (tmp*y)
+;;
+;; use 'result' for tmp and you have:
+;;
+;;   cbnz y, #8         ; branch over trap
+;;   udf                ; divide by zero
+;;   div rd, x, y       ; rd = x / y
+;;   msub rd, rd, y, x  ; rd = x - rd * y
+
+(rule (lower (has_type (fits_in_64 ty) (urem x y)))
+      (let (
+          (x64 Reg (put_in_reg_zext64 x))
+          (y64 Reg (put_nonzero_in_reg_zext64 y))
+          (div Reg (alu_rrr (ALUOp.UDiv64) x64 y64))
+          (result Reg (alu_rrrr (ALUOp3.MSub64) div y64 x64))
+        )
+        (value_reg result)))
+
+(rule (lower (has_type (fits_in_64 ty) (srem x y)))
+      (let (
+          (x64 Reg (put_in_reg_sext64 x))
+          (y64 Reg (put_nonzero_in_reg_sext64 y))
+          (div Reg (alu_rrr (ALUOp.SDiv64) x64 y64))
+          (result Reg (alu_rrrr (ALUOp3.MSub64) div y64 x64))
+        )
+        (value_reg result)))

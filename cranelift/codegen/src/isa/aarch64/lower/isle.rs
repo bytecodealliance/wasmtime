@@ -5,10 +5,10 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget, CallIndInfo,
-    CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, Imm12, ImmLogic, ImmShift, Inst as MInst,
-    JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode, OperandSize, PairAMode, Reg,
-    ScalarSize, ShiftOpAndAmt, UImm5, VectorSize, NZCV,
+    writable_zero_reg, zero_reg, AMode, ASIMDFPModImm, ASIMDMovModImm, AtomicRmwOp, BranchTarget,
+    CallIndInfo, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI, Imm12, ImmLogic, ImmShift,
+    Inst as MInst, JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode, OperandSize,
+    PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VectorSize, NZCV,
 };
 use crate::isa::aarch64::settings as aarch64_settings;
 use crate::machinst::isle::*;
@@ -243,5 +243,36 @@ where
 
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.emitted_insts.push(inst.clone());
+    }
+
+    fn cond_br_zero(&mut self, reg: Reg) -> CondBrKind {
+        CondBrKind::Zero(reg)
+    }
+
+    fn cond_br_cond(&mut self, cond: &Cond) -> CondBrKind {
+        CondBrKind::Cond(*cond)
+    }
+
+    fn nzcv(&mut self, n: bool, z: bool, c: bool, v: bool) -> NZCV {
+        NZCV::new(n, z, c, v)
+    }
+
+    fn u8_into_uimm5(&mut self, x: u8) -> UImm5 {
+        UImm5::maybe_from_u8(x).unwrap()
+    }
+
+    fn u8_into_imm12(&mut self, x: u8) -> Imm12 {
+        Imm12::maybe_from_u64(x.into()).unwrap()
+    }
+
+    fn writable_zero_reg(&mut self) -> WritableReg {
+        writable_zero_reg()
+    }
+
+    fn safe_divisor_from_imm64(&mut self, val: Imm64) -> Option<u64> {
+        match val.bits() {
+            0 | -1 => None,
+            n => Some(n as u64),
+        }
     }
 }

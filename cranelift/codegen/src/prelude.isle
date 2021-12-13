@@ -190,6 +190,10 @@
 (decl u64_from_imm64 (u64) Imm64)
 (extern extractor infallible u64_from_imm64 u64_from_imm64)
 
+;; Extract a `u64` from an `Imm64` which is not zero.
+(decl nonzero_u64_from_imm64 (u64) Imm64)
+(extern extractor nonzero_u64_from_imm64 nonzero_u64_from_imm64)
+
 ;; Extract a `u64` from an `Ieee32`.
 (decl u64_from_ieee32 (u64) Ieee32)
 (extern extractor infallible u64_from_ieee32 u64_from_ieee32)
@@ -278,3 +282,10 @@
             (_z Unit (emit consumer_inst_2)))
         (value_regs consumer_result_1 consumer_result_2)))
 
+;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl trap_code_division_by_zero () TrapCode)
+(extern constructor trap_code_division_by_zero trap_code_division_by_zero)
+
+(decl trap_code_integer_overflow () TrapCode)
+(extern constructor trap_code_integer_overflow trap_code_integer_overflow)
