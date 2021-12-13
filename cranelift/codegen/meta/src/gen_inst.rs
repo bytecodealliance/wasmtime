@@ -1087,8 +1087,10 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
 
 #[cfg(feature = "rebuild-isle")]
 fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt: &mut Formatter) {
-    use std::collections::BTreeSet;
+    use std::collections::{BTreeMap, BTreeSet};
     use std::fmt::Write;
+
+    use crate::cdsl::formats::FormatField;
 
     fmt.multi_line(
         r#"
@@ -1101,22 +1103,41 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
     );
     fmt.empty_line();
 
-    // Generate all the extern type declarations we need for various immediates.
-    fmt.line(";;;; Extern type declarations for immediates ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
-    fmt.empty_line();
-    let imm_tys: BTreeSet<_> = formats
+    // Collect and deduplicate the immediate types from the instruction fields.
+    let rust_name = |f: &FormatField| f.kind.rust_type.rsplit("::").next().unwrap();
+    let fields = |f: &FormatField| f.kind.fields.clone();
+    let immediate_types: BTreeMap<_, _> = formats
         .iter()
         .flat_map(|f| {
             f.imm_fields
                 .iter()
-                .map(|i| i.kind.rust_type.rsplit("::").next().unwrap())
+                .map(|i| (rust_name(i), fields(i)))
                 .collect::<Vec<_>>()
         })
         .collect();
-    for ty in imm_tys {
+
+    // Separate the `enum` immediates (e.g., `FloatCC`) from other kinds of
+    // immediates.
+    let (enums, others): (BTreeMap<_, _>, BTreeMap<_, _>) = immediate_types
+        .iter()
+        .partition(|(_, field)| field.enum_values().is_some());
+
+    // Generate all the extern type declarations we need for the non-`enum`
+    // immediates.
+    fmt.line(";;;; Extern type declarations for immediates ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;");
+    fmt.empty_line();
+    for ty in others.keys() {
         fmtln!(fmt, "(type {} (primitive {}))", ty, ty);
     }
     fmt.empty_line();
+
+    // Generate the `enum` immediates, expanding all of the available variants
+    // into ISLE.
+    for (name, field) in enums {
+        let field = field.enum_values().expect("only enums considered here");
+        let variants = field.values().cloned().collect();
+        gen_isle_enum(name, variants, fmt)
+    }
 
     // Generate all of the value arrays we need for `InstructionData` as well as
     // the constructors and extractors for them.
@@ -1321,6 +1342,27 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
         fmt.line(")");
         fmt.empty_line();
     }
+}
+
+/// Generate an `enum` immediate in ISLE.
+#[cfg(feature = "rebuild-isle")]
+fn gen_isle_enum(name: &str, mut variants: Vec<&str>, fmt: &mut Formatter) {
+    variants.sort();
+    let prefix = format!(";;;; Enumerated Immediate: {} ", name);
+    fmtln!(fmt, "{:;<80}", prefix);
+    fmt.empty_line();
+    fmtln!(fmt, "(type {} extern", name);
+    fmt.indent(|fmt| {
+        fmt.line("(enum");
+        fmt.indent(|fmt| {
+            for variant in variants {
+                fmtln!(fmt, "{}", variant);
+            }
+        });
+        fmt.line(")");
+    });
+    fmt.line(")");
+    fmt.empty_line();
 }
 
 /// Generate a Builder trait with methods for all instructions.

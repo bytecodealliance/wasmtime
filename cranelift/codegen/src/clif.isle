@@ -6,10 +6,8 @@
 
 ;;;; Extern type declarations for immediates ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(type AtomicRmwOp (primitive AtomicRmwOp))
 (type Block (primitive Block))
 (type Constant (primitive Constant))
-(type FloatCC (primitive FloatCC))
 (type FuncRef (primitive FuncRef))
 (type GlobalValue (primitive GlobalValue))
 (type Heap (primitive Heap))
@@ -17,17 +15,84 @@
 (type Ieee64 (primitive Ieee64))
 (type Imm64 (primitive Imm64))
 (type Immediate (primitive Immediate))
-(type IntCC (primitive IntCC))
 (type JumpTable (primitive JumpTable))
 (type MemFlags (primitive MemFlags))
 (type Offset32 (primitive Offset32))
 (type SigRef (primitive SigRef))
 (type StackSlot (primitive StackSlot))
 (type Table (primitive Table))
-(type TrapCode (primitive TrapCode))
 (type Uimm32 (primitive Uimm32))
 (type Uimm8 (primitive Uimm8))
 (type bool (primitive bool))
+
+;;;; Enumerated Immediate: AtomicRmwOp ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type AtomicRmwOp extern
+    (enum
+        Add
+        And
+        Nand
+        Or
+        Smax
+        Smin
+        Sub
+        Umax
+        Umin
+        Xchg
+        Xor
+    )
+)
+
+;;;; Enumerated Immediate: FloatCC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type FloatCC extern
+    (enum
+        Equal
+        GreaterThan
+        GreaterThanOrEqual
+        LessThan
+        LessThanOrEqual
+        NotEqual
+        Ordered
+        OrderedNotEqual
+        Unordered
+        UnorderedOrEqual
+        UnorderedOrGreaterThan
+        UnorderedOrGreaterThanOrEqual
+        UnorderedOrLessThan
+        UnorderedOrLessThanOrEqual
+    )
+)
+
+;;;; Enumerated Immediate: IntCC ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type IntCC extern
+    (enum
+        Equal
+        NotEqual
+        NotOverflow
+        Overflow
+        SignedGreaterThan
+        SignedGreaterThanOrEqual
+        SignedLessThan
+        SignedLessThanOrEqual
+        UnsignedGreaterThan
+        UnsignedGreaterThanOrEqual
+        UnsignedLessThan
+        UnsignedLessThanOrEqual
+    )
+)
+
+;;;; Enumerated Immediate: TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type TrapCode extern
+    (enum
+        HeapOutOfBounds
+        IntegerDivisionByZero
+        IntegerOverflow
+        StackOverflow
+    )
+)
 
 ;;;; Value Arrays ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
