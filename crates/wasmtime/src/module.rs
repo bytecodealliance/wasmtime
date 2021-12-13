@@ -398,13 +398,10 @@ impl Module {
                 .collect();
 
             let mut obj = engine.compiler().object()?;
-            let (funcs, trampolines) = engine.compiler().emit_obj(
-                &translation,
-                &types,
-                funcs,
-                tunables.generate_native_debuginfo,
-                &mut obj,
-            )?;
+            let (funcs, trampolines) =
+                engine
+                    .compiler()
+                    .emit_obj(&translation, &types, funcs, tunables, &mut obj)?;
 
             // If configured, attempt to use paged memory initialization
             // instead of the default mode of memory initialization

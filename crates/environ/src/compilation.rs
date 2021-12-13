@@ -171,7 +171,7 @@ pub trait Compiler: Send + Sync {
         module: &ModuleTranslation,
         types: &TypeTables,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
-        emit_dwarf: bool,
+        tunables: &Tunables,
         obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)>;
 

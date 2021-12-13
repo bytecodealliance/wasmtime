@@ -321,7 +321,11 @@ impl fmt::Display for Trap {
         writeln!(f, "\nwasm backtrace:")?;
         for (i, frame) in self.trace().iter().enumerate() {
             let name = frame.module_name().unwrap_or("<unknown>");
-            write!(f, "  {:>3}: {:#6x} - ", i, frame.module_offset())?;
+            write!(f, "  {:>3}: ", i)?;
+
+            if let Some(offset) = frame.module_offset() {
+                write!(f, "{:#6x} - ", offset)?;
+            }
 
             let demangle =
                 |f: &mut fmt::Formatter<'_>, name: &str| match rustc_demangle::try_demangle(name) {

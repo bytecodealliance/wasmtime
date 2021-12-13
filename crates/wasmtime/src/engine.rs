@@ -50,7 +50,7 @@ impl Engine {
         // Ensure that wasmtime_runtime's signal handlers are configured. This
         // is the per-program initialization required for handling traps, such
         // as configuring signals, vectored exception handlers, etc.
-        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_pc);
+        wasmtime_runtime::init_traps(crate::module::GlobalModuleRegistry::is_wasm_trap_pc);
         debug_builtins::ensure_exported();
 
         let registry = SignatureRegistry::new();

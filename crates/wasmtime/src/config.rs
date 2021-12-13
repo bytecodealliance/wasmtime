@@ -1052,6 +1052,20 @@ impl Config {
         self
     }
 
+    /// Configures whether compiled artifacts will contain information to map
+    /// native program addresses back to the original wasm module.
+    ///
+    /// This configuration option is `true` by default and, if enables,
+    /// generates the appropriate tables in compiled modules to map from native
+    /// address back to wasm source addresses. This is used for displaying wasm
+    /// program counters in backtraces as well as generating filenames/line
+    /// numbers if so configured as well (and the original wasm module has DWARF
+    /// debugging information present).
+    pub fn generate_address_map(&mut self, generate: bool) -> &mut Self {
+        self.tunables.generate_address_map = generate;
+        self
+    }
+
     pub(crate) fn build_allocator(&self) -> Result<Box<dyn InstanceAllocator>> {
         #[cfg(feature = "async")]
         let stack_size = self.async_stack_size;

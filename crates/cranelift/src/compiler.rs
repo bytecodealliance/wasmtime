@@ -221,7 +221,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation,
         types: &TypeTables,
         funcs: PrimaryMap<DefinedFuncIndex, Box<dyn Any + Send>>,
-        emit_dwarf: bool,
+        tunables: &Tunables,
         obj: &mut Object<'static>,
     ) -> Result<(PrimaryMap<DefinedFuncIndex, FunctionInfo>, Vec<Trampoline>)> {
         let funcs: crate::CompiledFunctions = funcs
@@ -266,7 +266,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         builder.unwind_info();
 
-        if emit_dwarf && funcs.len() > 0 {
+        if tunables.generate_native_debuginfo && funcs.len() > 0 {
             let ofs = VMOffsets::new(
                 self.isa
                     .triple()
@@ -297,7 +297,10 @@ impl wasmtime_environ::Compiler for Compiler {
         }
 
         builder.finish()?;
-        addrs.append_to(obj);
+
+        if tunables.generate_address_map {
+            addrs.append_to(obj);
+        }
         traps.append_to(obj);
 
         Ok((
