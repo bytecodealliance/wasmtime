@@ -42,6 +42,10 @@ pub struct Tunables {
     /// Whether or not linear memory allocations will have a guard region at the
     /// beginning of the allocation in addition to the end.
     pub guard_before_linear_memory: bool,
+
+    /// Indicates whether an address map from compiled native code back to wasm
+    /// offsets in the original file is generated.
+    pub generate_address_map: bool,
 }
 
 impl Default for Tunables {
@@ -86,6 +90,7 @@ impl Default for Tunables {
             consume_fuel: false,
             static_memory_bound_is_maximum: false,
             guard_before_linear_memory: true,
+            generate_address_map: true,
         }
     }
 }

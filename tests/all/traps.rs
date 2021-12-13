@@ -54,13 +54,13 @@ fn test_trap_trace() -> Result<()> {
     assert_eq!(trace[0].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[0].func_index(), 1);
     assert_eq!(trace[0].func_name(), Some("hello"));
-    assert_eq!(trace[0].func_offset(), 1);
-    assert_eq!(trace[0].module_offset(), 0x26);
+    assert_eq!(trace[0].func_offset(), Some(1));
+    assert_eq!(trace[0].module_offset(), Some(0x26));
     assert_eq!(trace[1].module_name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 0);
     assert_eq!(trace[1].func_name(), None);
-    assert_eq!(trace[1].func_offset(), 1);
-    assert_eq!(trace[1].module_offset(), 0x21);
+    assert_eq!(trace[1].func_offset(), Some(1));
+    assert_eq!(trace[1].module_offset(), Some(0x21));
     assert!(
         e.to_string().contains("unreachable"),
         "wrong message: {}",
@@ -635,5 +635,39 @@ fn multithreaded_traps() -> Result<()> {
 
     handle.join().expect("couldn't join thread");
 
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
+fn traps_without_address_map() -> Result<()> {
+    let mut config = Config::new();
+    config.generate_address_map(false);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+    let wat = r#"
+        (module $hello_mod
+            (func (export "run") (call $hello))
+            (func $hello (unreachable))
+        )
+    "#;
+
+    let module = Module::new(store.engine(), wat)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let run_func = instance.get_typed_func::<(), (), _>(&mut store, "run")?;
+
+    let e = run_func
+        .call(&mut store, ())
+        .err()
+        .expect("error calling function");
+
+    let trace = e.trace();
+    assert_eq!(trace.len(), 2);
+    assert_eq!(trace[0].func_name(), Some("hello"));
+    assert_eq!(trace[0].func_index(), 1);
+    assert_eq!(trace[0].module_offset(), None);
+    assert_eq!(trace[1].func_name(), None);
+    assert_eq!(trace[1].func_index(), 0);
+    assert_eq!(trace[1].module_offset(), None);
     Ok(())
 }

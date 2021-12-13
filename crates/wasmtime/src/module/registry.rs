@@ -172,13 +172,12 @@ pub struct GlobalModuleRegistry(BTreeMap<usize, GlobalRegisteredModule>);
 impl GlobalModuleRegistry {
     /// Returns whether the `pc`, according to globally registered information,
     /// is a wasm trap or not.
-    pub(crate) fn is_wasm_pc(pc: usize) -> bool {
+    pub(crate) fn is_wasm_trap_pc(pc: usize) -> bool {
         let modules = GLOBAL_MODULES.read().unwrap();
 
         match modules.module(pc) {
             Some((entry, text_offset)) => {
-                wasmtime_environ::lookup_file_pos(entry.module.address_map_data(), text_offset)
-                    .is_some()
+                wasmtime_environ::lookup_trap_code(entry.module.trap_data(), text_offset).is_some()
             }
             None => false,
         }
@@ -275,13 +274,14 @@ impl GlobalRegisteredModule {
         // the function, because otherwise something is buggy along the way and
         // not accounting for all the instructions. This isn't super critical
         // though so we can omit this check in release mode.
+        //
+        // Note that if the module doesn't even have an address map due to
+        // compilation settings then it's expected that `instr` is `None`.
         debug_assert!(
-            instr.is_some(),
+            instr.is_some() || !self.module.has_address_map(),
             "failed to find instruction for {:#x}",
             text_offset
         );
-
-        let instr = instr.unwrap_or(info.start_srcloc);
 
         // Use our wasm-relative pc to symbolize this frame. If there's a
         // symbolication context (dwarf debug info) available then we can try to
@@ -294,7 +294,7 @@ impl GlobalRegisteredModule {
         let mut symbols = Vec::new();
 
         if let Some(s) = &self.module.symbolize_context().ok().and_then(|c| c) {
-            if let Some(offset) = instr.file_offset() {
+            if let Some(offset) = instr.and_then(|i| i.file_offset()) {
                 let to_lookup = u64::from(offset) - s.code_section_offset();
                 if let Ok(mut frames) = s.addr2line().find_frames(to_lookup) {
                     while let Ok(Some(frame)) = frames.next() {
@@ -344,7 +344,7 @@ pub struct FrameInfo {
     func_index: u32,
     func_name: Option<String>,
     func_start: FilePos,
-    instr: FilePos,
+    instr: Option<FilePos>,
     symbols: Vec<FrameSymbol>,
 }
 
@@ -393,8 +393,14 @@ impl FrameInfo {
     ///
     /// The offset here is the offset from the beginning of the original wasm
     /// module to the instruction that this frame points to.
-    pub fn module_offset(&self) -> usize {
-        self.instr.file_offset().unwrap_or(u32::MAX) as usize
+    ///
+    /// Note that `None` may be returned if the original module was not
+    /// compiled with mapping information to yield this information. This is
+    /// controlled by the
+    /// [`Config::generate_address_map`](crate::Config::generate_address_map)
+    /// configuration option.
+    pub fn module_offset(&self) -> Option<usize> {
+        Some(self.instr?.file_offset()? as usize)
     }
 
     /// Returns the offset from the original wasm module's function to this
@@ -403,11 +409,15 @@ impl FrameInfo {
     /// The offset here is the offset from the beginning of the defining
     /// function of this frame (within the wasm module) to the instruction this
     /// frame points to.
-    pub fn func_offset(&self) -> usize {
-        match self.instr.file_offset() {
-            Some(i) => (i - self.func_start.file_offset().unwrap()) as usize,
-            None => u32::MAX as usize,
-        }
+    ///
+    /// Note that `None` may be returned if the original module was not
+    /// compiled with mapping information to yield this information. This is
+    /// controlled by the
+    /// [`Config::generate_address_map`](crate::Config::generate_address_map)
+    /// configuration option.
+    pub fn func_offset(&self) -> Option<usize> {
+        let instr_offset = self.instr?.file_offset()?;
+        Some((instr_offset - self.func_start.file_offset()?) as usize)
     }
 
     /// Returns the debug symbols found, if any, for this function frame.

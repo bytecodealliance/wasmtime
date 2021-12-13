@@ -601,6 +601,12 @@ impl<'a> SerializedModule<'a> {
 
             // This doesn't affect compilation, it's just a runtime setting.
             dynamic_memory_growth_reserve: _,
+
+            // This does technically affect compilation but modules with/without
+            // trap information can be loaded into engines with the opposite
+            // setting just fine (it's just a section in the compiled file and
+            // whether it's present or not)
+            generate_address_map: _,
         } = self.metadata.tunables;
 
         Self::check_int(

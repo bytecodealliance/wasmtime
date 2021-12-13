@@ -297,16 +297,21 @@ impl CompiledModule {
         };
 
         let mut ret = Self {
-            meta: info.meta,
             module: Arc::new(info.module),
             funcs: info.funcs,
             trampolines: info.trampolines,
             wasm_data: subslice_range(section(ELF_WASM_DATA)?, code.mmap),
-            address_map_data: subslice_range(section(ELF_WASMTIME_ADDRMAP)?, code.mmap),
+            address_map_data: code
+                .obj
+                .section_by_name(ELF_WASMTIME_ADDRMAP)
+                .and_then(|s| s.data().ok())
+                .map(|slice| subslice_range(slice, code.mmap))
+                .unwrap_or(0..0),
             trap_data: subslice_range(section(ELF_WASMTIME_TRAPS)?, code.mmap),
             code: subslice_range(code.text, code.mmap),
             dbg_jit_registration: None,
             code_memory,
+            meta: info.meta,
         };
         ret.register_debug_and_profiling(profiler)?;
 
@@ -499,6 +504,15 @@ impl CompiledModule {
     /// based on the tunables configuration.
     pub fn has_unparsed_debuginfo(&self) -> bool {
         self.meta.has_unparsed_debuginfo
+    }
+
+    /// Indicates whether this module came with n address map such that lookups
+    /// via `wasmtime_environ::lookup_file_pos` will succeed.
+    ///
+    /// If this function returns `false` then `lookup_file_pos` will always
+    /// return `None`.
+    pub fn has_address_map(&self) -> bool {
+        !self.address_map_data().is_empty()
     }
 }
 
