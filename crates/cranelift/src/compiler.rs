@@ -63,6 +63,7 @@ impl Compiler {
         context: &Context,
         data: &FunctionBodyData<'_>,
         body_len: u32,
+        tunables: &Tunables,
     ) -> FunctionAddressMap {
         // Generate artificial srcloc for function start/end to identify boundary
         // within module.
@@ -75,17 +76,21 @@ impl Compiler {
 
         // New-style backend: we have a `MachCompileResult` that will give us `MachSrcLoc` mapping
         // tuples.
-        let instructions = collect_address_maps(
-            body_len,
-            context
-                .mach_compile_result
-                .as_ref()
-                .unwrap()
-                .buffer
-                .get_srclocs_sorted()
-                .into_iter()
-                .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start))),
-        );
+        let instructions = if tunables.generate_address_map {
+            collect_address_maps(
+                body_len,
+                context
+                    .mach_compile_result
+                    .as_ref()
+                    .unwrap()
+                    .buffer
+                    .get_srclocs_sorted()
+                    .into_iter()
+                    .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start))),
+            )
+        } else {
+            Vec::new()
+        };
 
         FunctionAddressMap {
             instructions: instructions.into(),
@@ -179,7 +184,7 @@ impl wasmtime_environ::Compiler for Compiler {
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
 
         let address_transform =
-            self.get_function_address_map(&context, &input, code_buf.len() as u32);
+            self.get_function_address_map(&context, &input, code_buf.len() as u32, tunables);
 
         let ranges = if tunables.generate_native_debuginfo {
             Some(
@@ -244,7 +249,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut func_starts = Vec::with_capacity(funcs.len());
         for (i, func) in funcs.iter() {
             let range = builder.func(i, func);
-            addrs.push(range.clone(), &func.address_map.instructions);
+            if tunables.generate_address_map {
+                addrs.push(range.clone(), &func.address_map.instructions);
+            }
             traps.push(range.clone(), &func.traps);
             func_starts.push(range.start);
             if self.linkopts.padding_between_functions > 0 {
