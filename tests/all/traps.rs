@@ -640,7 +640,7 @@ fn multithreaded_traps() -> Result<()> {
 
 #[test]
 #[cfg_attr(all(target_os = "macos", target_arch = "aarch64"), ignore)] // TODO #2808 system libunwind is broken on aarch64
-fn traps_without_addres_map() -> Result<()> {
+fn traps_without_address_map() -> Result<()> {
     let mut config = Config::new();
     config.generate_address_map(false);
     let engine = Engine::new(&config)?;
