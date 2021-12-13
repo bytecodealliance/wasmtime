@@ -396,8 +396,9 @@ impl FrameInfo {
     ///
     /// Note that `None` may be returned if the original module was not
     /// compiled with mapping information to yield this information. This is
-    /// controlled by the [`Config::generate_address_map`] configuration
-    /// option.
+    /// controlled by the
+    /// [`Config::generate_address_map`](crate::Config::generate_address_map)
+    /// configuration option.
     pub fn module_offset(&self) -> Option<usize> {
         Some(self.instr?.file_offset()? as usize)
     }
@@ -411,8 +412,9 @@ impl FrameInfo {
     ///
     /// Note that `None` may be returned if the original module was not
     /// compiled with mapping information to yield this information. This is
-    /// controlled by the [`Config::generate_address_map`] configuration
-    /// option.
+    /// controlled by the
+    /// [`Config::generate_address_map`](crate::Config::generate_address_map)
+    /// configuration option.
     pub fn func_offset(&self) -> Option<usize> {
         let instr_offset = self.instr?.file_offset()?;
         Some((instr_offset - self.func_start.file_offset()?) as usize)
