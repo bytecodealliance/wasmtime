@@ -1345,6 +1345,7 @@ fn gen_isle(formats: &[&InstructionFormat], instructions: &AllInstructions, fmt:
 }
 
 /// Generate an `enum` immediate in ISLE.
+#[cfg(feature = "rebuild-isle")]
 fn gen_isle_enum(name: &str, mut variants: Vec<&str>, fmt: &mut Formatter) {
     variants.sort();
     let prefix = format!(";;;; Enumerated Immediate: {} ", name);
