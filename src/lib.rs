@@ -231,6 +231,19 @@ struct CommonOptions {
     /// Enable Cranelift's internal NaN canonicalization
     #[structopt(long)]
     enable_cranelift_nan_canonicalization: bool,
+
+    /// Executing wasm code will consume fuel, limiting its execution.
+    #[structopt(long)]
+    consume_fuel: bool,
+
+    /// Disables the on-by-default address map from native code to wasm code.
+    #[structopt(long)]
+    disable_address_map: bool,
+
+    /// Switches memory initialization to happen in a paged fashion instead of
+    /// the data segments specified in the original wasm module.
+    #[structopt(long)]
+    paged_memory_initialization: bool,
 }
 
 impl CommonOptions {
@@ -300,6 +313,10 @@ impl CommonOptions {
         if let Some(size) = self.dynamic_memory_guard_size {
             config.dynamic_memory_guard_size(size);
         }
+
+        config.consume_fuel(self.consume_fuel);
+        config.generate_address_map(!self.disable_address_map);
+        config.paged_memory_initialization(self.paged_memory_initialization);
 
         Ok(config)
     }
