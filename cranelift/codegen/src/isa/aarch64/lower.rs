@@ -80,25 +80,6 @@ impl ResultRSEImm12 {
     }
 }
 
-/// A lowering result: register, register-shift, or logical immediate form.
-/// An SSA value can always be lowered into one of these options; the register form is the
-/// fallback.
-#[derive(Clone, Debug)]
-pub(crate) enum ResultRSImmLogic {
-    Reg(Reg),
-    RegShift(Reg, ShiftOpAndAmt),
-    ImmLogic(ImmLogic),
-}
-
-impl ResultRSImmLogic {
-    fn from_rs(rse: ResultRS) -> ResultRSImmLogic {
-        match rse {
-            ResultRS::Reg(r) => ResultRSImmLogic::Reg(r),
-            ResultRS::RegShift(r, s) => ResultRSImmLogic::RegShift(r, s),
-        }
-    }
-}
-
 /// A lowering result: register or immediate shift amount (arg to a shift op).
 /// An SSA value can always be lowered into one of these options; the register form is the
 /// fallback.
@@ -488,22 +469,6 @@ pub(crate) fn put_input_in_rse_imm12<C: LowerCtx<I = Inst>>(
     ResultRSEImm12::from_rse(put_input_in_rse(ctx, input, narrow_mode))
 }
 
-pub(crate) fn put_input_in_rs_immlogic<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    input: InsnInput,
-    narrow_mode: NarrowValueMode,
-) -> ResultRSImmLogic {
-    if let Some(imm_value) = input_to_const(ctx, input) {
-        let ty = ctx.input_ty(input.insn, input.input);
-        let ty = if ty_bits(ty) < 32 { I32 } else { ty };
-        if let Some(i) = ImmLogic::maybe_from_u64(imm_value, ty) {
-            return ResultRSImmLogic::ImmLogic(i);
-        }
-    }
-
-    ResultRSImmLogic::from_rs(put_input_in_rs(ctx, input, narrow_mode))
-}
-
 pub(crate) fn put_input_in_reg_immshift<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     input: InsnInput,
@@ -549,35 +514,6 @@ pub(crate) fn alu_inst_imm12(op: ALUOp, rd: Writable<Reg>, rn: Reg, rm: ResultRS
             rn,
             rm,
             extendop,
-        },
-    }
-}
-
-pub(crate) fn alu_inst_immlogic(
-    op: ALUOp,
-    rd: Writable<Reg>,
-    rn: Reg,
-    rm: ResultRSImmLogic,
-) -> Inst {
-    match rm {
-        ResultRSImmLogic::ImmLogic(imml) => Inst::AluRRImmLogic {
-            alu_op: op,
-            rd,
-            rn,
-            imml,
-        },
-        ResultRSImmLogic::Reg(rm) => Inst::AluRRR {
-            alu_op: op,
-            rd,
-            rn,
-            rm,
-        },
-        ResultRSImmLogic::RegShift(rm, shiftop) => Inst::AluRRRShift {
-            alu_op: op,
-            rd,
-            rn,
-            rm,
-            shiftop,
         },
     }
 }
