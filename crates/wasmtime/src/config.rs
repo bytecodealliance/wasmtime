@@ -138,6 +138,7 @@ impl Config {
         ret.wasm_reference_types(true);
         ret.wasm_multi_value(true);
         ret.wasm_bulk_memory(true);
+        ret.wasm_simd(true);
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
         ret
     }
@@ -433,23 +434,15 @@ impl Config {
     /// Configures whether the WebAssembly SIMD proposal will be
     /// enabled for compilation.
     ///
-    /// The [WebAssembly SIMD proposal][proposal] is not currently
-    /// fully standardized and is undergoing development. Additionally the
-    /// support in wasmtime itself is still being worked on. Support for this
-    /// feature can be enabled through this method for appropriate wasm
-    /// modules.
+    /// The [WebAssembly SIMD proposal][proposal]. This feature gates items such
+    /// as the `v128` type and all of its operators being in a module. Note that
+    /// this does not enable the [relaxed simd proposal] as that is not
+    /// implemented in Wasmtime at this time.
     ///
-    /// This feature gates items such as the `v128` type and all of its
-    /// operators being in a module.
-    ///
-    /// This is `false` by default.
-    ///
-    /// > **Note**: Wasmtime does not implement everything for the wasm simd
-    /// > spec at this time, so bugs, panics, and possibly segfaults should be
-    /// > expected. This should not be enabled in a production setting right
-    /// > now.
+    /// This is `true` by default.
     ///
     /// [proposal]: https://github.com/webassembly/simd
+    /// [relaxed simd proposal]: https://github.com/WebAssembly/relaxed-simd
     pub fn wasm_simd(&mut self, enable: bool) -> &mut Self {
         self.features.simd = enable;
         #[cfg(compiler)]
