@@ -106,3 +106,211 @@ block0(v0: i8):
 ; check: sxtb x0, w0
 ; nextln: asr x1, x0, #63
 ; nextln: ret
+
+function %i8x16_uextend_i16(i8x16) -> i16 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i16 v1
+    return v2
+}
+
+; check:  umov w0, v0.b[1]
+; nextln: ret
+
+function %i8x16_uextend_i32(i8x16) -> i32 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; check:  umov w0, v0.b[1]
+; nextln: ret
+
+function %i8x16_uextend_i64(i8x16) -> i64 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i64 v1
+    return v2
+}
+
+; check:  umov w0, v0.b[1]
+; nextln: ret
+
+function %i8x16_uextend_i128(i8x16) -> i128 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; check:  umov w0, v0.b[1]
+; nextln: movz x1, #0
+; nextln: ret
+
+function %i8x16_sextend_i16(i8x16) -> i16 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i16 v1
+    return v2
+}
+
+; check:  smov w0, v0.b[1]
+; nextln: ret
+
+function %i8x16_sextend_i32(i8x16) -> i32 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i32 v1
+    return v2
+}
+
+; check:  smov w0, v0.b[1]
+; nextln: ret
+
+function %i8x16_sextend_i64(i8x16) -> i64 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i64 v1
+    return v2
+}
+
+; check:  smov x0, v0.b[1]
+; nextln: ret
+
+function %i8x16_sextend_i128(i8x16) -> i128 {
+block0(v0: i8x16):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; check:  smov x0, v0.b[1]
+; nextln: asr x1, x0, #63
+; nextln: ret
+
+function %i16x8_uextend_i32(i16x8) -> i32 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = uextend.i32 v1
+    return v2
+}
+
+; check:  umov w0, v0.h[1]
+; nextln: ret
+
+function %i16x8_uextend_i64(i16x8) -> i64 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = uextend.i64 v1
+    return v2
+}
+
+; check:  umov w0, v0.h[1]
+; nextln: ret
+
+function %i16x8_uextend_i128(i16x8) -> i128 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; check:  umov w0, v0.h[1]
+; nextln: movz x1, #0
+; nextln: ret
+
+function %i16x8_sextend_i32(i16x8) -> i32 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = sextend.i32 v1
+    return v2
+}
+
+; check:  smov w0, v0.h[1]
+; nextln: ret
+
+function %i16x8_sextend_i64(i16x8) -> i64 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = sextend.i64 v1
+    return v2
+}
+
+; check:  smov x0, v0.h[1]
+; nextln: ret
+
+function %i16x8_sextend_i128(i16x8) -> i128 {
+block0(v0: i16x8):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; check:  smov x0, v0.h[1]
+; nextln: asr x1, x0, #63
+; nextln: ret
+
+function %i32x4_uextend_i64(i32x4) -> i64 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = uextend.i64 v1
+    return v2
+}
+
+; check:  mov w0, v0.s[1]
+; nextln: ret
+
+function %i32x4_uextend_i128(i32x4) -> i128 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; check:  mov w0, v0.s[1]
+; nextln: movz x1, #0
+; nextln: ret
+
+function %i32x4_sextend_i64(i32x4) -> i64 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = sextend.i64 v1
+    return v2
+}
+
+; check:  smov x0, v0.s[1]
+; nextln: ret
+
+function %i32x4_sextend_i128(i32x4) -> i128 {
+block0(v0: i32x4):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; check:  smov x0, v0.s[1]
+; nextln: asr x1, x0, #63
+; nextln: ret
+
+function %i64x2_uextend_i128(i64x2) -> i128 {
+block0(v0: i64x2):
+    v1 = extractlane v0, 1
+    v2 = uextend.i128 v1
+    return v2
+}
+
+; check:  mov x0, v0.d[1]
+; nextln: movz x1, #0
+; nextln: ret
+
+function %i64x2_sextend_i128(i64x2) -> i128 {
+block0(v0: i64x2):
+    v1 = extractlane v0, 1
+    v2 = sextend.i128 v1
+    return v2
+}
+
+; check:  mov x0, v0.d[1]
+; nextln: asr x1, x0, #63
+; nextln: ret

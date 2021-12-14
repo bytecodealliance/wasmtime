@@ -1629,7 +1629,7 @@ pub(crate) fn emit_atomic_load<C: LowerCtx<I = Inst>>(
     ctx: &mut C,
     rt: Writable<Reg>,
     insn: IRInst,
-) {
+) -> Inst {
     assert!(ctx.data(insn).opcode() == Opcode::AtomicLoad);
     let inputs = insn_inputs(ctx, insn);
     let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
@@ -1638,7 +1638,7 @@ pub(crate) fn emit_atomic_load<C: LowerCtx<I = Inst>>(
     // We're ignoring the result type of the load because the LoadAcquire will
     // explicitly zero extend to the nearest word, and also zero the high half
     // of an X register.
-    ctx.emit(Inst::LoadAcquire { access_ty, rt, rn });
+    Inst::LoadAcquire { access_ty, rt, rn }
 }
 
 fn load_op_to_ty(op: Opcode) -> Option<Type> {

@@ -502,3 +502,89 @@
           (result Reg (alu_rrrr (ALUOp3.MSub64) div y64 x64))
         )
         (value_reg result)))
+
+;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; General rule for extending input to an output which fits in a single
+;; register.
+(rule (lower (has_type (fits_in_64 out) (uextend x @ (value_type in))))
+      (value_reg (extend (put_in_reg x) $false (ty_bits in) (ty_bits out))))
+
+;; Extraction of a vector lane automatically extends as necessary, so we can
+;; skip an explicit extending instruction.
+(rule (lower (has_type (fits_in_64 out)
+                       (uextend (def_inst (extractlane vec @ (value_type in)
+                                                       (u8_from_uimm8 lane))))))
+      (value_reg (mov_from_vec (put_in_reg vec) lane (vector_size in))))
+
+;; Atomic loads will also automatically zero their upper bits so the `uextend`
+;; instruction can effectively get skipped here.
+(rule (lower (has_type (fits_in_64 out)
+                       (uextend (and (value_type in) (sinkable_atomic_load addr)))))
+      (value_reg (load_acquire in (sink_atomic_load addr))))
+
+;; Conversion to 128-bit needs a zero-extension of the lower bits and the upper
+;; bits are all zero.
+(rule (lower (has_type $I128 (uextend x)))
+      (value_regs (put_in_reg_zext64 x) (imm $I64 0)))
+
+;; Like above where vector extraction automatically zero-extends extending to
+;; i128 only requires generating a 0 constant for the upper bits.
+(rule (lower (has_type $I128
+                       (uextend (def_inst (extractlane vec @ (value_type in)
+                                                       (u8_from_uimm8 lane))))))
+      (value_regs (mov_from_vec (put_in_reg vec) lane (vector_size in)) (imm $I64 0)))
+
+;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; General rule for extending input to an output which fits in a single
+;; register.
+(rule (lower (has_type (fits_in_64 out) (sextend x @ (value_type in))))
+      (value_reg (extend (put_in_reg x) $true (ty_bits in) (ty_bits out))))
+
+;; Extraction of a vector lane automatically extends as necessary, so we can
+;; skip an explicit extending instruction.
+(rule (lower (has_type (fits_in_64 out)
+                       (sextend (def_inst (extractlane vec @ (value_type in)
+                                                       (u8_from_uimm8 lane))))))
+      (value_reg (mov_from_vec_signed (put_in_reg vec)
+                                      lane
+                                      (vector_size in)
+                                      (size_from_ty out))))
+
+;; 64-bit to 128-bit only needs to sign-extend the input to the upper bits.
+(rule (lower (has_type $I128 (sextend x)))
+      (let (
+          (lo Reg (put_in_reg_sext64 x))
+          (hi Reg (alu_rr_imm_shift (ALUOp.Asr64) lo (imm_shift_from_u8 63)))
+        )
+        (value_regs lo hi)))
+
+;; Like above where vector extraction automatically zero-extends extending to
+;; i128 only requires generating a 0 constant for the upper bits.
+;;
+;; Note that `mov_from_vec_signed` doesn't exist for i64x2, so that's
+;; specifically excluded here.
+(rule (lower (has_type $I128
+                       (sextend (def_inst (extractlane vec @ (value_type in @ (not_i64x2))
+                                                       (u8_from_uimm8 lane))))))
+      (let (
+          (lo Reg (mov_from_vec_signed (put_in_reg vec)
+                                       lane
+                                       (vector_size in)
+                                       (size_from_ty $I64)))
+          (hi Reg (alu_rr_imm_shift (ALUOp.Asr64) lo (imm_shift_from_u8 63)))
+        )
+        (value_regs lo hi)))
+
+;; Extension from an extraction of i64x2 into i128.
+(rule (lower (has_type $I128
+                       (sextend (def_inst (extractlane vec @ (value_type $I64X2)
+                                                       (u8_from_uimm8 lane))))))
+      (let (
+          (lo Reg (mov_from_vec (put_in_reg vec)
+                                lane
+                                (VectorSize.Size64x2)))
+          (hi Reg (alu_rr_imm_shift (ALUOp.Asr64) lo (imm_shift_from_u8 63)))
+        )
+        (value_regs lo hi)))

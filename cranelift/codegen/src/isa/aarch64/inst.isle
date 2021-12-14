@@ -1515,6 +1515,34 @@
             (_ Unit (emit (MInst.VecRRLong op dst src high_half))))
         (writable_reg_to_reg dst)))
 
+;; Helper for emitting `MInst.MovFromVec` instructions.
+(decl mov_from_vec (Reg u8 VectorSize) Reg)
+(rule (mov_from_vec rn idx size)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovFromVec dst rn idx size))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.MovFromVecSigned` instructions.
+(decl mov_from_vec_signed (Reg u8 VectorSize OperandSize) Reg)
+(rule (mov_from_vec_signed rn idx size scalar_size)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.MovFromVecSigned dst rn idx size scalar_size))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.Extend` instructions.
+(decl extend (Reg bool u8 u8) Reg)
+(rule (extend rn signed from_bits to_bits)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.Extend dst rn signed from_bits to_bits))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.LoadAcquire` instructions.
+(decl load_acquire (Type Reg) Reg)
+(rule (load_acquire ty addr)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.LoadAcquire ty dst addr))))
+        (writable_reg_to_reg dst)))
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl imm (Type u64) Reg)
@@ -1543,10 +1571,7 @@
 ;; Place a `Value` into a register, sign extending it to 64-bits
 (decl put_in_reg_sext64 (Value) Reg)
 (rule (put_in_reg_sext64 val @ (value_type (fits_in_32 ty)))
-      (let ((dst WritableReg (temp_writable_reg $I32))
-            (src Reg (put_in_reg val))
-            (_ Unit (emit (MInst.Extend dst src $true (ty_bits ty) 64))))
-        (writable_reg_to_reg dst)))
+      (extend (put_in_reg val) $true (ty_bits ty) 64))
 
 ;; 64-bit passthrough.
 (rule (put_in_reg_sext64 val @ (value_type $I64)) (put_in_reg val))
@@ -1554,10 +1579,7 @@
 ;; Place a `Value` into a register, zero extending it to 64-bits
 (decl put_in_reg_zext64 (Value) Reg)
 (rule (put_in_reg_zext64 val @ (value_type (fits_in_32 ty)))
-      (let ((dst WritableReg (temp_writable_reg $I32))
-            (src Reg (put_in_reg val))
-            (_ Unit (emit (MInst.Extend dst src $false (ty_bits ty) 64))))
-        (writable_reg_to_reg dst)))
+      (extend (put_in_reg val) $false (ty_bits ty) 64))
 
 ;; 64-bit passthrough.
 (rule (put_in_reg_zext64 val @ (value_type $I64)) (put_in_reg val))
@@ -1599,3 +1621,18 @@
 (rule (adds_op (fits_in_32 _ty)) (ALUOp.AddS32))
 (rule (adds_op $I64) (ALUOp.AddS64))
 
+;; An atomic load that can be sunk into another operation.
+(type SinkableAtomicLoad extern (enum))
+
+;; Extract a `SinkableAtomicLoad` that works with `Reg` from a value
+;; operand.
+(decl sinkable_atomic_load (SinkableAtomicLoad) Value)
+(extern extractor sinkable_atomic_load sinkable_atomic_load)
+
+;; Sink a `SinkableLoad` into a `Reg`.
+;;
+;; This is a side-effectful operation that notifies the context that the
+;; instruction that produced the `SinkableAtomicLoad` has been sunk into another
+;; instruction, and no longer needs to be lowered.
+(decl sink_atomic_load (SinkableAtomicLoad) Reg)
+(extern constructor sink_atomic_load sink_atomic_load)

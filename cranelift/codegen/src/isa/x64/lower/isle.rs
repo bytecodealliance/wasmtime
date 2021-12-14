@@ -9,7 +9,7 @@ use super::{
 };
 use crate::isa::x64::inst::args::SyntheticAmode;
 use crate::isa::x64::inst::regs;
-use crate::isa::x64::settings as x64_settings;
+use crate::isa::x64::settings::Flags;
 use crate::machinst::isle::*;
 use crate::{
     ir::{immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode, Value, ValueList},
@@ -19,9 +19,8 @@ use crate::{
         },
         x64_map_regs,
     },
-    machinst::{get_output_reg, InsnInput, InsnOutput, LowerCtx, RegRenamer},
+    machinst::{InsnInput, InsnOutput, LowerCtx},
 };
-use smallvec::SmallVec;
 use std::convert::TryFrom;
 
 pub struct SinkableLoad {
@@ -33,78 +32,24 @@ pub struct SinkableLoad {
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
-    isa_flags: &x64_settings::Flags,
+    isa_flags: &Flags,
     outputs: &[InsnOutput],
     inst: Inst,
 ) -> Result<(), ()>
 where
     C: LowerCtx<I = MInst>,
 {
-    // TODO: reuse the ISLE context across lowerings so we can reuse its
-    // internal heap allocations.
-    let mut isle_ctx = IsleContext::new(lower_ctx, isa_flags);
-
-    let temp_regs = generated_code::constructor_lower(&mut isle_ctx, inst).ok_or(())?;
-    let mut temp_regs = temp_regs.regs().iter();
-
-    #[cfg(debug_assertions)]
-    {
-        let all_dsts_len = outputs
-            .iter()
-            .map(|out| get_output_reg(isle_ctx.lower_ctx, *out).len())
-            .sum();
-        debug_assert_eq!(
-            temp_regs.len(),
-            all_dsts_len,
-            "the number of temporary registers and destination registers do \
-         not match ({} != {}); ensure the correct registers are being \
-         returned.",
-            temp_regs.len(),
-            all_dsts_len,
-        );
-    }
-
-    // The ISLE generated code emits its own registers to define the
-    // instruction's lowered values in. We rename those registers to the
-    // registers they were assigned when their value was used as an operand in
-    // earlier lowerings.
-    let mut renamer = RegRenamer::default();
-    for output in outputs {
-        let dsts = get_output_reg(isle_ctx.lower_ctx, *output);
-        for (temp, dst) in temp_regs.by_ref().zip(dsts.regs()) {
-            renamer.add_rename(*temp, dst.to_reg());
-        }
-    }
-
-    for mut inst in isle_ctx.into_emitted_insts() {
-        x64_map_regs(&mut inst, &renamer);
-        lower_ctx.emit(inst);
-    }
-
-    Ok(())
+    lower_common(
+        lower_ctx,
+        isa_flags,
+        outputs,
+        inst,
+        |cx, insn| generated_code::constructor_lower(cx, insn),
+        x64_map_regs,
+    )
 }
 
-pub struct IsleContext<'a, C> {
-    lower_ctx: &'a mut C,
-    isa_flags: &'a x64_settings::Flags,
-    emitted_insts: SmallVec<[MInst; 6]>,
-}
-
-impl<'a, C> IsleContext<'a, C> {
-    pub fn new(lower_ctx: &'a mut C, isa_flags: &'a x64_settings::Flags) -> Self {
-        IsleContext {
-            lower_ctx,
-            isa_flags,
-            emitted_insts: SmallVec::new(),
-        }
-    }
-
-    pub fn into_emitted_insts(self) -> SmallVec<[MInst; 6]> {
-        self.emitted_insts
-    }
-}
-
-impl<'a, C> generated_code::Context for IsleContext<'a, C>
+impl<C> generated_code::Context for IsleContext<'_, C, Flags, 6>
 where
     C: LowerCtx<I = MInst>,
 {
