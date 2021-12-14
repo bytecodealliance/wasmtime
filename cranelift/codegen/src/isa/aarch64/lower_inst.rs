@@ -79,112 +79,14 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Uextend | Opcode::Sextend => implemented_in_isle(ctx),
 
-        Opcode::Bnot => {
-            let out_regs = get_output_reg(ctx, outputs[0]);
-            let ty = ty.unwrap();
-            if ty == I128 {
-                // TODO: We can merge this block with the one below once we support immlogic here
-                let in_regs = put_input_in_regs(ctx, inputs[0]);
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::OrrNot64,
-                    rd: out_regs.regs()[0],
-                    rn: zero_reg(),
-                    rm: in_regs.regs()[0],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op: ALUOp::OrrNot64,
-                    rd: out_regs.regs()[1],
-                    rn: zero_reg(),
-                    rm: in_regs.regs()[1],
-                });
-            } else if !ty.is_vector() {
-                let rd = out_regs.only_reg().unwrap();
-                let rm = put_input_in_rs_immlogic(ctx, inputs[0], NarrowValueMode::None);
-                let alu_op = choose_32_64(ty, ALUOp::OrrNot32, ALUOp::OrrNot64);
-                // NOT rd, rm ==> ORR_NOT rd, zero, rm
-                ctx.emit(alu_inst_immlogic(alu_op, rd, zero_reg(), rm));
-            } else {
-                let rd = out_regs.only_reg().unwrap();
-                let rm = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                ctx.emit(Inst::VecMisc {
-                    op: VecMisc2::Not,
-                    rd,
-                    rn: rm,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
-        }
+        Opcode::Bnot => implemented_in_isle(ctx),
 
         Opcode::Band
         | Opcode::Bor
         | Opcode::Bxor
         | Opcode::BandNot
         | Opcode::BorNot
-        | Opcode::BxorNot => {
-            let out_regs = get_output_reg(ctx, outputs[0]);
-            let ty = ty.unwrap();
-            if ty == I128 {
-                // TODO: Support immlogic here
-                let lhs = put_input_in_regs(ctx, inputs[0]);
-                let rhs = put_input_in_regs(ctx, inputs[1]);
-                let alu_op = match op {
-                    Opcode::Band => ALUOp::And64,
-                    Opcode::Bor => ALUOp::Orr64,
-                    Opcode::Bxor => ALUOp::Eor64,
-                    Opcode::BandNot => ALUOp::AndNot64,
-                    Opcode::BorNot => ALUOp::OrrNot64,
-                    Opcode::BxorNot => ALUOp::EorNot64,
-                    _ => unreachable!(),
-                };
-
-                ctx.emit(Inst::AluRRR {
-                    alu_op,
-                    rd: out_regs.regs()[0],
-                    rn: lhs.regs()[0],
-                    rm: rhs.regs()[0],
-                });
-                ctx.emit(Inst::AluRRR {
-                    alu_op,
-                    rd: out_regs.regs()[1],
-                    rn: lhs.regs()[1],
-                    rm: rhs.regs()[1],
-                });
-            } else if !ty.is_vector() {
-                let rd = out_regs.only_reg().unwrap();
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rm = put_input_in_rs_immlogic(ctx, inputs[1], NarrowValueMode::None);
-                let alu_op = match op {
-                    Opcode::Band => choose_32_64(ty, ALUOp::And32, ALUOp::And64),
-                    Opcode::Bor => choose_32_64(ty, ALUOp::Orr32, ALUOp::Orr64),
-                    Opcode::Bxor => choose_32_64(ty, ALUOp::Eor32, ALUOp::Eor64),
-                    Opcode::BandNot => choose_32_64(ty, ALUOp::AndNot32, ALUOp::AndNot64),
-                    Opcode::BorNot => choose_32_64(ty, ALUOp::OrrNot32, ALUOp::OrrNot64),
-                    Opcode::BxorNot => choose_32_64(ty, ALUOp::EorNot32, ALUOp::EorNot64),
-                    _ => unreachable!(),
-                };
-                ctx.emit(alu_inst_immlogic(alu_op, rd, rn, rm));
-            } else {
-                let alu_op = match op {
-                    Opcode::Band => VecALUOp::And,
-                    Opcode::BandNot => VecALUOp::Bic,
-                    Opcode::Bor => VecALUOp::Orr,
-                    Opcode::Bxor => VecALUOp::Eor,
-                    _ => unreachable!(),
-                };
-
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                let rd = out_regs.only_reg().unwrap();
-
-                ctx.emit(Inst::VecRRR {
-                    alu_op,
-                    rd,
-                    rn,
-                    rm,
-                    size: VectorSize::from_ty(ty),
-                });
-            }
-        }
+        | Opcode::BxorNot => implemented_in_isle(ctx),
 
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
             let out_regs = get_output_reg(ctx, outputs[0]);
