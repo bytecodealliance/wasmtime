@@ -164,7 +164,7 @@ struct CommonOptions {
 
     /// Enables or disables WebAssembly features
     #[structopt(long, value_name = "FEATURE,FEATURE,...", parse(try_from_str = parse_wasm_features))]
-    wasm_features: Option<wasmparser::WasmFeatures>,
+    wasm_features: Option<WasmFeatures>,
 
     /// Enables or disables WASI modules
     #[structopt(long, value_name = "MODULE,MODULE,...", parse(try_from_str = parse_wasi_modules))]
@@ -305,17 +305,41 @@ impl CommonOptions {
     }
 
     fn enable_wasm_features(&self, config: &mut Config) {
-        let features = self.wasm_features.unwrap_or_default();
+        let WasmFeatures {
+            simd,
+            bulk_memory,
+            reference_types,
+            multi_value,
+            threads,
+            multi_memory,
+            memory64,
+            module_linking,
+        } = self.wasm_features.unwrap_or_default();
 
-        config
-            .wasm_simd(features.simd)
-            .wasm_bulk_memory(features.bulk_memory)
-            .wasm_reference_types(features.reference_types)
-            .wasm_multi_value(features.multi_value)
-            .wasm_threads(features.threads)
-            .wasm_multi_memory(features.multi_memory)
-            .wasm_memory64(features.memory64)
-            .wasm_module_linking(features.module_linking);
+        if let Some(enable) = simd {
+            config.wasm_simd(enable);
+        }
+        if let Some(enable) = bulk_memory {
+            config.wasm_bulk_memory(enable);
+        }
+        if let Some(enable) = reference_types {
+            config.wasm_reference_types(enable);
+        }
+        if let Some(enable) = multi_value {
+            config.wasm_multi_value(enable);
+        }
+        if let Some(enable) = threads {
+            config.wasm_threads(enable);
+        }
+        if let Some(enable) = multi_memory {
+            config.wasm_multi_memory(enable);
+        }
+        if let Some(enable) = memory64 {
+            config.wasm_memory64(enable);
+        }
+        if let Some(enable) = module_linking {
+            config.wasm_module_linking(enable);
+        }
     }
 
     fn opt_level(&self) -> wasmtime::OptLevel {
@@ -339,7 +363,19 @@ fn parse_opt_level(opt_level: &str) -> Result<wasmtime::OptLevel> {
     }
 }
 
-fn parse_wasm_features(features: &str) -> Result<wasmparser::WasmFeatures> {
+#[derive(Default, Clone, Copy)]
+struct WasmFeatures {
+    reference_types: Option<bool>,
+    multi_value: Option<bool>,
+    bulk_memory: Option<bool>,
+    simd: Option<bool>,
+    module_linking: Option<bool>,
+    threads: Option<bool>,
+    multi_memory: Option<bool>,
+    memory64: Option<bool>,
+}
+
+fn parse_wasm_features(features: &str) -> Result<WasmFeatures> {
     let features = features.trim();
 
     let mut all = None;
@@ -377,18 +413,15 @@ fn parse_wasm_features(features: &str) -> Result<wasmparser::WasmFeatures> {
         }
     }
 
-    Ok(wasmparser::WasmFeatures {
-        reference_types: all.unwrap_or(values["reference-types"].unwrap_or(true)),
-        multi_value: all.unwrap_or(values["multi-value"].unwrap_or(true)),
-        bulk_memory: all.unwrap_or(values["bulk-memory"].unwrap_or(true)),
-        module_linking: all.unwrap_or(values["module-linking"].unwrap_or(false)),
-        simd: all.unwrap_or(values["simd"].unwrap_or(false)),
-        threads: all.unwrap_or(values["threads"].unwrap_or(false)),
-        tail_call: false,
-        deterministic_only: false,
-        multi_memory: all.unwrap_or(values["multi-memory"].unwrap_or(false)),
-        exceptions: false,
-        memory64: all.unwrap_or(values["memory64"].unwrap_or(false)),
+    Ok(WasmFeatures {
+        reference_types: all.or(values["reference-types"]),
+        multi_value: all.or(values["multi-value"]),
+        bulk_memory: all.or(values["bulk-memory"]),
+        module_linking: all.or(values["module-linking"]),
+        simd: all.or(values["simd"]),
+        threads: all.or(values["threads"]),
+        multi_memory: all.or(values["multi-memory"]),
+        memory64: all.or(values["memory64"]),
     })
 }
 
@@ -483,31 +516,25 @@ mod test {
     fn test_all_features() -> Result<()> {
         let options = CommonOptions::from_iter_safe(vec!["foo", "--wasm-features=all"])?;
 
-        let wasmparser::WasmFeatures {
+        let WasmFeatures {
             reference_types,
             multi_value,
             bulk_memory,
             module_linking,
             simd,
             threads,
-            tail_call,
-            deterministic_only,
             multi_memory,
-            exceptions,
             memory64,
         } = options.wasm_features.unwrap();
 
-        assert!(reference_types);
-        assert!(multi_value);
-        assert!(bulk_memory);
-        assert!(module_linking);
-        assert!(simd);
-        assert!(threads);
-        assert!(!tail_call); // Not supported
-        assert!(!deterministic_only); // Not supported
-        assert!(multi_memory);
-        assert!(!exceptions); // Not supported
-        assert!(memory64);
+        assert_eq!(reference_types, Some(true));
+        assert_eq!(multi_value, Some(true));
+        assert_eq!(bulk_memory, Some(true));
+        assert_eq!(module_linking, Some(true));
+        assert_eq!(simd, Some(true));
+        assert_eq!(threads, Some(true));
+        assert_eq!(multi_memory, Some(true));
+        assert_eq!(memory64, Some(true));
 
         Ok(())
     }
@@ -516,31 +543,25 @@ mod test {
     fn test_no_features() -> Result<()> {
         let options = CommonOptions::from_iter_safe(vec!["foo", "--wasm-features=-all"])?;
 
-        let wasmparser::WasmFeatures {
+        let WasmFeatures {
             reference_types,
             multi_value,
             bulk_memory,
             module_linking,
             simd,
             threads,
-            tail_call,
-            deterministic_only,
             multi_memory,
-            exceptions,
             memory64,
         } = options.wasm_features.unwrap();
 
-        assert!(!reference_types);
-        assert!(!multi_value);
-        assert!(!bulk_memory);
-        assert!(!module_linking);
-        assert!(!simd);
-        assert!(!threads);
-        assert!(!tail_call);
-        assert!(!deterministic_only);
-        assert!(!multi_memory);
-        assert!(!exceptions);
-        assert!(!memory64);
+        assert_eq!(reference_types, Some(false));
+        assert_eq!(multi_value, Some(false));
+        assert_eq!(bulk_memory, Some(false));
+        assert_eq!(module_linking, Some(false));
+        assert_eq!(simd, Some(false));
+        assert_eq!(threads, Some(false));
+        assert_eq!(multi_memory, Some(false));
+        assert_eq!(memory64, Some(false));
 
         Ok(())
     }
@@ -552,31 +573,25 @@ mod test {
             "--wasm-features=-reference-types,simd,multi-memory,memory64",
         ])?;
 
-        let wasmparser::WasmFeatures {
+        let WasmFeatures {
             reference_types,
             multi_value,
             bulk_memory,
             module_linking,
             simd,
             threads,
-            tail_call,
-            deterministic_only,
             multi_memory,
-            exceptions,
             memory64,
         } = options.wasm_features.unwrap();
 
-        assert!(!reference_types);
-        assert!(multi_value);
-        assert!(bulk_memory);
-        assert!(!module_linking);
-        assert!(simd);
-        assert!(!threads);
-        assert!(!tail_call); // Not supported
-        assert!(!deterministic_only); // Not supported
-        assert!(multi_memory);
-        assert!(!exceptions); // Not supported
-        assert!(memory64);
+        assert_eq!(reference_types, Some(false));
+        assert_eq!(multi_value, None);
+        assert_eq!(bulk_memory, None);
+        assert_eq!(module_linking, None);
+        assert_eq!(simd, Some(true));
+        assert_eq!(threads, None);
+        assert_eq!(multi_memory, Some(true));
+        assert_eq!(memory64, Some(true));
 
         Ok(())
     }
@@ -588,18 +603,18 @@ mod test {
                 let options =
                     CommonOptions::from_iter_safe(vec!["foo", concat!("--wasm-features=", $flag)])?;
 
-                let wasmparser::WasmFeatures { $name, .. } = options.wasm_features.unwrap();
+                let WasmFeatures { $name, .. } = options.wasm_features.unwrap();
 
-                assert!($name);
+                assert_eq!($name, Some(true));
 
                 let options = CommonOptions::from_iter_safe(vec![
                     "foo",
                     concat!("--wasm-features=-", $flag),
                 ])?;
 
-                let wasmparser::WasmFeatures { $name, .. } = options.wasm_features.unwrap();
+                let WasmFeatures { $name, .. } = options.wasm_features.unwrap();
 
-                assert!(!$name);
+                assert_eq!($name, Some(false));
 
                 Ok(())
             }
