@@ -1,11 +1,20 @@
-//! Adds support for profiling jitted code using VTune Amplifier
+//! Adds support for profiling JIT-ed code using VTune.
 //!
-//! Build:
-//!     cargo build --features=vtune
-//! Profile:
-//!     amplxe-cl -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --vtune test.wasm
+//! ### Build
 //!
-//! Note: amplxe-cl is a command-line tool for Vtune which should be installed.
+//! ```ignore
+//! cargo build --features=vtune
+//! ```
+//!
+//! ### Profile
+//!
+//! ```ignore
+//! amplxe-cl -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --vtune test.wasm
+//! ```
+//!
+//! Note: `amplxe-cl` is a command-line tool for VTune which must [be
+//! installed](https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html#standalone)
+//! for this to work.
 
 use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
