@@ -1298,8 +1298,11 @@
 (decl move_wide_const_from_negated_u64 (MoveWideConst) u64)
 (extern extractor move_wide_const_from_negated_u64 move_wide_const_from_negated_u64)
 
-(decl imm_logic_from_u64 (ImmLogic) u64)
-(extern extractor imm_logic_from_u64 imm_logic_from_u64)
+(decl imm_logic_from_u64 (Type ImmLogic) u64)
+(extern extractor imm_logic_from_u64 imm_logic_from_u64 (in out))
+
+(decl imm_logic_from_imm64 (Type ImmLogic) Imm64)
+(extern extractor imm_logic_from_imm64 imm_logic_from_imm64 (in out))
 
 (decl imm_shift_from_u8 (u8) ImmShift)
 (extern constructor imm_shift_from_u8 imm_shift_from_u8)
@@ -1556,7 +1559,7 @@
       (movn n (OperandSize.Size64)))
 
 ;; Weird logical-instruction immediate in ORI using zero register
-(rule (imm (integral_ty _ty) (imm_logic_from_u64 n))
+(rule (imm (integral_ty _ty) (imm_logic_from_u64 <$I64 n))
       (alu_rr_imm_logic (ALUOp.Orr64) (zero_reg) n))
 
 (decl load_constant64_full (u64) Reg)
@@ -1636,3 +1639,52 @@
 ;; instruction, and no longer needs to be lowered.
 (decl sink_atomic_load (SinkableAtomicLoad) Reg)
 (extern constructor sink_atomic_load sink_atomic_load)
+
+;; Helper for generating either an `AluRRR`, `AluRRRShift`, or `AluRRImmLogic`
+;; instruction depending on the input. Note that this requires that the `ALUOp`
+;; specified is commutative.
+(decl alu_rs_imm_logic_commutative (ALUOp Type Value Value) Reg)
+
+;; Base case of operating on registers.
+(rule (alu_rs_imm_logic_commutative op ty x y)
+      (alu_rrr op (put_in_reg x) (put_in_reg y)))
+
+;; Special cases for when one operand is a constant.
+(rule (alu_rs_imm_logic_commutative op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
+      (alu_rr_imm_logic op (put_in_reg x) imm))
+(rule (alu_rs_imm_logic_commutative op ty (def_inst (iconst (imm_logic_from_imm64 <ty imm))) x)
+      (alu_rr_imm_logic op (put_in_reg x) imm))
+
+;; Special cases for when one operand is shifted left by a constant.
+(rule (alu_rs_imm_logic_commutative op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
+      (alu_rrr_shift op (put_in_reg x) (put_in_reg y) amt))
+(rule (alu_rs_imm_logic_commutative op ty (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))) y)
+      (alu_rrr_shift op (put_in_reg y) (put_in_reg x) amt))
+
+;; Same as `alu_rs_imm_logic_commutative` above, except that it doesn't require
+;; that the operation is commutative.
+(decl alu_rs_imm_logic (ALUOp Type Value Value) Reg)
+(rule (alu_rs_imm_logic op ty x y)
+      (alu_rrr op (put_in_reg x) (put_in_reg y)))
+(rule (alu_rs_imm_logic op ty x (def_inst (iconst (imm_logic_from_imm64 <ty imm))))
+      (alu_rr_imm_logic op (put_in_reg x) imm))
+(rule (alu_rs_imm_logic op ty x (def_inst (ishl y (def_inst (iconst (lshl_from_imm64 <ty amt))))))
+      (alu_rrr_shift op (put_in_reg x) (put_in_reg y) amt))
+
+;; Helper for generating i128 bitops which simply do the same operation to the
+;; hi/lo registers.
+;;
+;; TODO: Support immlogic here
+(decl i128_alu_bitop (ALUOp Value Value) ValueRegs)
+(rule (i128_alu_bitop op x y)
+      (let (
+          (x_regs ValueRegs (put_in_regs x))
+          (x_lo Reg (value_regs_get x_regs 0))
+          (x_hi Reg (value_regs_get x_regs 1))
+          (y_regs ValueRegs (put_in_regs y))
+          (y_lo Reg (value_regs_get y_regs 0))
+          (y_hi Reg (value_regs_get y_regs 1))
+        )
+        (value_regs
+          (alu_rrr op x_lo y_lo)
+          (alu_rrr op x_hi y_hi))))

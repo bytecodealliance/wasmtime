@@ -588,3 +588,110 @@
           (hi Reg (alu_rr_imm_shift (ALUOp.Asr64) lo (imm_shift_from_u8 63)))
         )
         (value_regs lo hi)))
+
+;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl orr_not_op (Type) ALUOp)
+(rule (orr_not_op (fits_in_32 _ty)) (ALUOp.OrrNot32))
+(rule (orr_not_op $I64) (ALUOp.OrrNot64))
+
+;; Base case using `orn` between two registers.
+;;
+;; Note that bitwise negation is implemented here as
+;;
+;;      NOT rd, rm ==> ORR_NOT rd, zero, rm
+(rule (lower (has_type (fits_in_64 ty) (bnot x)))
+      (value_reg (alu_rrr (orr_not_op ty) (zero_reg) (put_in_reg x))))
+
+;; Special case to use `AluRRRShift` if it's a `bnot` of a const-left-shifted
+;; value.
+(rule (lower (has_type (fits_in_64 ty)
+                       (bnot (def_inst (ishl x (def_inst (iconst (lshl_from_imm64 <ty amt))))))))
+      (value_reg (alu_rrr_shift (orr_not_op ty) (zero_reg) (put_in_reg x) amt)))
+
+;; Implementation of `bnot` for `i128`.
+(rule (lower (has_type $I128 (bnot x)))
+      (let (
+          (x_regs ValueRegs (put_in_regs x))
+          (x_lo Reg (value_regs_get x_regs 0))
+          (x_hi Reg (value_regs_get x_regs 1))
+          (new_lo Reg (alu_rrr (ALUOp.OrrNot64) (zero_reg) x_lo))
+          (new_hi Reg (alu_rrr (ALUOp.OrrNot64) (zero_reg) x_hi))
+        )
+        (value_regs new_lo new_hi)))
+
+;; Implementation of `bnot` for vector types.
+(rule (lower (has_type (vec128 ty) (bnot x)))
+      (value_reg (vec_misc (VecMisc2.Not) (put_in_reg x) (vector_size ty))))
+
+;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_32 ty) (band x y)))
+      (value_reg (alu_rs_imm_logic_commutative (ALUOp.And32) ty x y)))
+
+(rule (lower (has_type $I64 (band x y)))
+      (value_reg (alu_rs_imm_logic_commutative (ALUOp.And64) $I64 x y)))
+
+(rule (lower (has_type $I128 (band x y))) (i128_alu_bitop (ALUOp.And64) x y))
+
+(rule (lower (has_type (vec128 ty) (band x y)))
+      (value_reg (vec_rrr (VecALUOp.And) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_32 ty) (bor x y)))
+      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Orr32) ty x y)))
+
+(rule (lower (has_type $I64 (bor x y)))
+      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Orr64) $I64 x y)))
+
+(rule (lower (has_type $I128 (bor x y))) (i128_alu_bitop (ALUOp.Orr64) x y))
+
+(rule (lower (has_type (vec128 ty) (bor x y)))
+      (value_reg (vec_rrr (VecALUOp.Orr) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_32 ty) (bxor x y)))
+      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Eor32) ty x y)))
+
+(rule (lower (has_type $I64 (bxor x y)))
+      (value_reg (alu_rs_imm_logic_commutative (ALUOp.Eor64) $I64 x y)))
+
+(rule (lower (has_type $I128 (bxor x y))) (i128_alu_bitop (ALUOp.Eor64) x y))
+
+(rule (lower (has_type (vec128 ty) (bxor x y)))
+      (value_reg (vec_rrr (VecALUOp.Eor) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_32 ty) (band_not x y)))
+      (value_reg (alu_rs_imm_logic (ALUOp.AndNot32) ty x y)))
+
+(rule (lower (has_type $I64 (band_not x y)))
+      (value_reg (alu_rs_imm_logic (ALUOp.AndNot64) $I64 x y)))
+
+(rule (lower (has_type $I128 (band_not x y))) (i128_alu_bitop (ALUOp.AndNot64) x y))
+
+(rule (lower (has_type (vec128 ty) (band_not x y)))
+      (value_reg (vec_rrr (VecALUOp.Bic) (put_in_reg x) (put_in_reg y) (vector_size ty))))
+
+;;;; Rules for `bor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_32 ty) (bor_not x y)))
+      (value_reg (alu_rs_imm_logic (ALUOp.OrrNot32) ty x y)))
+
+(rule (lower (has_type $I64 (bor_not x y)))
+      (value_reg (alu_rs_imm_logic (ALUOp.OrrNot64) $I64 x y)))
+
+(rule (lower (has_type $I128 (bor_not x y))) (i128_alu_bitop (ALUOp.OrrNot64) x y))
+
+;;;; Rules for `bxor_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_32 ty) (bxor_not x y)))
+      (value_reg (alu_rs_imm_logic (ALUOp.EorNot32) ty x y)))
+
+(rule (lower (has_type $I64 (bxor_not x y)))
+      (value_reg (alu_rs_imm_logic (ALUOp.EorNot64) $I64 x y)))
+
+(rule (lower (has_type $I128 (bxor_not x y))) (i128_alu_bitop (ALUOp.EorNot64) x y))
