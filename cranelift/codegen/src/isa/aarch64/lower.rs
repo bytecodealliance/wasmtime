@@ -89,15 +89,6 @@ pub(crate) enum ResultRegImmShift {
     ImmShift(ImmShift),
 }
 
-impl ResultRegImmShift {
-    pub fn unwrap_reg(self) -> Reg {
-        match self {
-            ResultRegImmShift::Reg(r) => r,
-            _ => panic!("Unwrapped ResultRegImmShift, expected reg, got: {:?}", self),
-        }
-    }
-}
-
 //============================================================================
 // Lowering: convert instruction inputs to forms that we can use.
 
@@ -514,28 +505,6 @@ pub(crate) fn alu_inst_imm12(op: ALUOp, rd: Writable<Reg>, rn: Reg, rm: ResultRS
             rn,
             rm,
             extendop,
-        },
-    }
-}
-
-pub(crate) fn alu_inst_immshift(
-    op: ALUOp,
-    rd: Writable<Reg>,
-    rn: Reg,
-    rm: ResultRegImmShift,
-) -> Inst {
-    match rm {
-        ResultRegImmShift::ImmShift(immshift) => Inst::AluRRImmShift {
-            alu_op: op,
-            rd,
-            rn,
-            immshift,
-        },
-        ResultRegImmShift::Reg(rm) => Inst::AluRRR {
-            alu_op: op,
-            rd,
-            rn,
-            rm,
         },
     }
 }
@@ -1513,43 +1482,6 @@ pub(crate) fn materialize_bool_result<C: LowerCtx<I = Inst>>(
         ctx.emit(Inst::CSetm { rd, cond });
     } else {
         ctx.emit(Inst::CSet { rd, cond });
-    }
-}
-
-pub(crate) fn lower_shift_amt<C: LowerCtx<I = Inst>>(
-    ctx: &mut C,
-    amt_input: InsnInput,
-    dst_ty: Type,
-    tmp_reg: Writable<Reg>,
-) -> ResultRegImmShift {
-    let amt_ty = ctx.input_ty(amt_input.insn, amt_input.input);
-
-    match (dst_ty, amt_ty) {
-        // When shifting for amounts larger than the size of the type, the CLIF shift
-        // instructions implement a "wrapping" behaviour, such that an i8 << 8 is
-        // equivalent to i8 << 0
-        //
-        // On i32 and i64 types this matches what the aarch64 spec does, but on smaller
-        // types (i16, i8) we need to do this manually, so we wrap the shift amount
-        // with an AND instruction
-        (I16 | I8, _) => {
-            // We can ignore the top half of the shift amount register if the type is I128
-            let amt_reg = put_input_in_regs(ctx, amt_input).regs()[0];
-            let mask = (ty_bits(dst_ty) - 1) as u64;
-            ctx.emit(Inst::AluRRImmLogic {
-                alu_op: ALUOp::And32,
-                rd: tmp_reg,
-                rn: amt_reg,
-                imml: ImmLogic::maybe_from_u64(mask, I32).unwrap(),
-            });
-            ResultRegImmShift::Reg(tmp_reg.to_reg())
-        }
-        // TODO: We can use immlogic for i128 types here
-        (I128, _) | (_, I128) => {
-            // For I128 shifts, we need a register without immlogic
-            ResultRegImmShift::Reg(put_input_in_regs(ctx, amt_input).regs()[0])
-        }
-        _ => put_input_in_reg_immshift(ctx, amt_input, ty_bits(dst_ty)),
     }
 }
 

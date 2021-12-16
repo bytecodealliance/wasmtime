@@ -42,7 +42,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         return Ok(());
     }
 
-    let implemented_in_isle = |ctx: &mut C| {
+    let implemented_in_isle = |ctx: &mut C| -> ! {
         unreachable!(
             "implemented in ISLE: inst = `{}`, type = `{:?}`",
             ctx.dfg().display_inst(insn),
@@ -88,81 +88,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::BorNot
         | Opcode::BxorNot => implemented_in_isle(ctx),
 
-        Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => {
-            let out_regs = get_output_reg(ctx, outputs[0]);
-            let ty = ty.unwrap();
-            if ty == I128 {
-                let src = put_input_in_regs(ctx, inputs[0]);
-                let amt = lower_shift_amt(ctx, inputs[1], ty, out_regs.regs()[0]).unwrap_reg();
-
-                match op {
-                    Opcode::Ishl => emit_shl_i128(ctx, src, out_regs, amt),
-                    Opcode::Ushr => {
-                        emit_shr_i128(ctx, src, out_regs, amt, /* is_signed = */ false)
-                    }
-                    Opcode::Sshr => {
-                        emit_shr_i128(ctx, src, out_regs, amt, /* is_signed = */ true)
-                    }
-                    _ => unreachable!(),
-                };
-            } else if !ty.is_vector() {
-                let rd = out_regs.only_reg().unwrap();
-                let size = OperandSize::from_bits(ty_bits(ty));
-                let narrow_mode = match (op, size) {
-                    (Opcode::Ishl, _) => NarrowValueMode::None,
-                    (Opcode::Ushr, OperandSize::Size64) => NarrowValueMode::ZeroExtend64,
-                    (Opcode::Ushr, OperandSize::Size32) => NarrowValueMode::ZeroExtend32,
-                    (Opcode::Sshr, OperandSize::Size64) => NarrowValueMode::SignExtend64,
-                    (Opcode::Sshr, OperandSize::Size32) => NarrowValueMode::SignExtend32,
-                    _ => unreachable!(),
-                };
-                let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
-                let rm = lower_shift_amt(ctx, inputs[1], ty, out_regs.regs()[0]);
-                let alu_op = match op {
-                    Opcode::Ishl => choose_32_64(ty, ALUOp::Lsl32, ALUOp::Lsl64),
-                    Opcode::Ushr => choose_32_64(ty, ALUOp::Lsr32, ALUOp::Lsr64),
-                    Opcode::Sshr => choose_32_64(ty, ALUOp::Asr32, ALUOp::Asr64),
-                    _ => unreachable!(),
-                };
-                ctx.emit(alu_inst_immshift(alu_op, rd, rn, rm));
-            } else {
-                let rd = out_regs.only_reg().unwrap();
-                let rn = put_input_in_reg(ctx, inputs[0], NarrowValueMode::None);
-                let size = VectorSize::from_ty(ty);
-                let (alu_op, is_right_shift) = match op {
-                    Opcode::Ishl => (VecALUOp::Sshl, false),
-                    Opcode::Ushr => (VecALUOp::Ushl, true),
-                    Opcode::Sshr => (VecALUOp::Sshl, true),
-                    _ => unreachable!(),
-                };
-
-                let rm = if is_right_shift {
-                    // Right shifts are implemented with a negative left shift.
-                    let tmp = ctx.alloc_tmp(I32).only_reg().unwrap();
-                    let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                    let rn = zero_reg();
-                    ctx.emit(Inst::AluRRR {
-                        alu_op: ALUOp::Sub32,
-                        rd: tmp,
-                        rn,
-                        rm,
-                    });
-                    tmp.to_reg()
-                } else {
-                    put_input_in_reg(ctx, inputs[1], NarrowValueMode::None)
-                };
-
-                ctx.emit(Inst::VecDup { rd, rn: rm, size });
-
-                ctx.emit(Inst::VecRRR {
-                    alu_op,
-                    rd,
-                    rn,
-                    rm: rd.to_reg(),
-                    size,
-                });
-            }
-        }
+        Opcode::Ishl | Opcode::Ushr | Opcode::Sshr => implemented_in_isle(ctx),
 
         Opcode::Rotr | Opcode::Rotl => {
             // aarch64 doesn't have a left-rotate instruction, but a left rotation of K places is

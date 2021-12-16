@@ -1304,6 +1304,9 @@
 (decl imm_logic_from_imm64 (Type ImmLogic) Imm64)
 (extern extractor imm_logic_from_imm64 imm_logic_from_imm64 (in out))
 
+(decl imm_shift_from_imm64 (Type ImmShift) Imm64)
+(extern extractor imm_shift_from_imm64 imm_shift_from_imm64 (in out))
+
 (decl imm_shift_from_u8 (u8) ImmShift)
 (extern constructor imm_shift_from_u8 imm_shift_from_u8)
 
@@ -1315,6 +1318,9 @@
 
 (decl u8_into_imm12 (u8) Imm12)
 (extern constructor u8_into_imm12 u8_into_imm12)
+
+(decl u64_into_imm_logic (Type u64) ImmLogic)
+(extern constructor u64_into_imm_logic u64_into_imm_logic)
 
 (decl imm12_from_negated_u64 (Imm12) u64)
 (extern extractor imm12_from_negated_u64 imm12_from_negated_u64)
@@ -1413,6 +1419,13 @@
 (rule (vec_rrr op src1 src2 size)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecRRR op dst src1 src2 size))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.VecDup` instructions.
+(decl vec_dup (Reg VectorSize) Reg)
+(rule (vec_dup src size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecDup dst src size))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.AluRRImm12` instructions.
@@ -1546,6 +1559,30 @@
             (_ Unit (emit (MInst.LoadAcquire ty dst addr))))
         (writable_reg_to_reg dst)))
 
+;; Helper for generating a `tst` instruction.
+;;
+;; Produces a `ProducesFlags` rather than a register or emitted instruction
+;; which must be paired with `with_flags*` helpers.
+(decl tst64_imm (Reg ImmLogic) ProducesFlags)
+(rule (tst64_imm reg imm)
+      (ProducesFlags.ProducesFlags (MInst.AluRRImmLogic (ALUOp.AndS64)
+                                                        (writable_zero_reg)
+                                                        reg
+                                                        imm)
+                                   (invalid_reg)))
+
+;; Helper for generating a `CSel` instruction.
+;;
+;; Note that this doesn't actually emit anything, instead it produces a
+;; `ConsumesFlags` instruction which must be consumed with `with_flags*`
+;; helpers.
+(decl csel (Cond Reg Reg) ConsumesFlags)
+(rule (csel cond if_true if_false)
+      (let ((dst WritableReg (temp_writable_reg $I64)))
+        (ConsumesFlags.ConsumesFlags (MInst.CSel dst cond if_true if_false)
+                                     (writable_reg_to_reg dst))))
+
+
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl imm (Type u64) Reg)
@@ -1570,6 +1607,24 @@
       (load_constant64_full n))
 
 ;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Place a `Value` into a register, sign extending it to 32-bits
+(decl put_in_reg_sext32 (Value) Reg)
+(rule (put_in_reg_sext32 val @ (value_type (fits_in_32 ty)))
+      (extend (put_in_reg val) $true (ty_bits ty) 32))
+
+;; 32/64-bit passthrough.
+(rule (put_in_reg_sext32 val @ (value_type $I32)) (put_in_reg val))
+(rule (put_in_reg_sext32 val @ (value_type $I64)) (put_in_reg val))
+
+;; Place a `Value` into a register, zero extending it to 32-bits
+(decl put_in_reg_zext32 (Value) Reg)
+(rule (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
+      (extend (put_in_reg val) $false (ty_bits ty) 32))
+
+;; 32/64-bit passthrough.
+(rule (put_in_reg_zext32 val @ (value_type $I32)) (put_in_reg val))
+(rule (put_in_reg_zext32 val @ (value_type $I64)) (put_in_reg val))
 
 ;; Place a `Value` into a register, sign extending it to 64-bits
 (decl put_in_reg_sext64 (Value) Reg)

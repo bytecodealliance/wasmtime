@@ -148,6 +148,10 @@
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; An extractor that only matches types that can fit in 16 bits.
+(decl fits_in_16 (Type) Type)
+(extern extractor fits_in_16 fits_in_16)
+
 ;; An extractor that only matches types that can fit in 32 bits.
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)
@@ -287,12 +291,15 @@
 ;; `ValueRegs` containing the first consumer's result and then the second
 ;; consumer's result.
 (decl with_flags_2 (ProducesFlags ConsumesFlags ConsumesFlags) ValueRegs)
-(rule (with_flags_2 (ProducesFlags.ProducesFlags producer_inst producer_result)
+(rule (with_flags_2 (ProducesFlags.ProducesFlags producer_inst _producer_result)
                     (ConsumesFlags.ConsumesFlags consumer_inst_1 consumer_result_1)
                     (ConsumesFlags.ConsumesFlags consumer_inst_2 consumer_result_2))
       (let ((_x Unit (emit producer_inst))
-            (_y Unit (emit consumer_inst_1))
-            (_z Unit (emit consumer_inst_2)))
+            ;; Note that the order of emission here is swapped, as this seems
+            ;; to generate better register allocation for now with fewer
+            ;; `mov` instructions.
+            (_y Unit (emit consumer_inst_2))
+            (_z Unit (emit consumer_inst_1)))
         (value_regs consumer_result_1 consumer_result_2)))
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

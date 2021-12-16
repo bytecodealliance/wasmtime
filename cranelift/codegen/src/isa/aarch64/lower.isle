@@ -695,3 +695,202 @@
       (value_reg (alu_rs_imm_logic (ALUOp.EorNot64) $I64 x y)))
 
 (rule (lower (has_type $I128 (bxor_not x y))) (i128_alu_bitop (ALUOp.EorNot64) x y))
+
+;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Shift for i8/i16/i32.
+(rule (lower (has_type (fits_in_32 ty) (ishl x y)))
+      (value_reg (do_shift (ALUOp.Lsl32) ty (put_in_reg x) y)))
+
+;; Shift for i64.
+(rule (lower (has_type $I64 (ishl x y)))
+      (value_reg (do_shift (ALUOp.Lsl64) $I64 (put_in_reg x) y)))
+
+;; Shift for i128.
+(rule (lower (has_type $I128 (ishl x y)))
+      (lower_shl128 (put_in_regs x) (value_regs_get (put_in_regs y) 0)))
+
+;;     lsl     lo_lshift, src_lo, amt
+;;     lsl     hi_lshift, src_hi, amt
+;;     mvn     inv_amt, amt
+;;     lsr     lo_rshift, src_lo, #1
+;;     lsr     lo_rshift, lo_rshift, inv_amt
+;;     orr     maybe_hi, hi_lshift, lo_rshift
+;;     tst     amt, #0x40
+;;     csel    dst_hi, lo_lshift, maybe_hi, ne
+;;     csel    dst_lo, xzr, lo_lshift, ne
+(decl lower_shl128 (ValueRegs Reg) ValueRegs)
+(rule (lower_shl128 src amt)
+      (let (
+          (src_lo Reg (value_regs_get src 0))
+          (src_hi Reg (value_regs_get src 1))
+          (lo_lshift Reg (alu_rrr (ALUOp.Lsl64) src_lo amt))
+          (hi_lshift Reg (alu_rrr (ALUOp.Lsl64) src_hi amt))
+          (inv_amt Reg (alu_rrr (ALUOp.OrrNot32) (zero_reg) amt))
+          (lo_rshift Reg (alu_rrr (ALUOp.Lsr64)
+                                  (alu_rr_imm_shift (ALUOp.Lsr64)
+                                                    src_lo
+                                                    (imm_shift_from_u8 1))
+                                  inv_amt))
+          (maybe_hi Reg (alu_rrr (ALUOp.Orr64) hi_lshift lo_rshift))
+        )
+        (with_flags_2
+          (tst64_imm amt (u64_into_imm_logic $I64 64))
+          (csel (Cond.Ne) (zero_reg) lo_lshift)
+          (csel (Cond.Ne) lo_lshift maybe_hi))))
+
+;; Shift for vector types.
+(rule (lower (has_type (vec128 ty) (ishl x y)))
+      (let (
+          (size VectorSize (vector_size ty))
+          (shift Reg (vec_dup (put_in_reg y) size))
+        )
+        (value_reg (vec_rrr (VecALUOp.Sshl) (put_in_reg x) shift size))))
+
+;; Helper function to emit a shift operation with the opcode specified and
+;; the output type specified. The `Reg` provided is shifted by the `Value`
+;; given.
+;;
+;; Note that this automatically handles the clif semantics of masking the
+;; shift amount where necessary.
+(decl do_shift (ALUOp Type Reg Value) Reg)
+
+;; 8/16-bit shift base case.
+;;
+;; When shifting for amounts larger than the size of the type, the CLIF shift
+;; instructions implement a "wrapping" behaviour, such that an i8 << 8 is
+;; equivalent to i8 << 0
+;;
+;; On i32 and i64 types this matches what the aarch64 spec does, but on smaller
+;; types (i16, i8) we need to do this manually, so we wrap the shift amount
+;; with an AND instruction
+(rule (do_shift op (fits_in_16 ty) x y)
+      (let (
+          (shift_amt Reg (value_regs_get (put_in_regs y) 0))
+          (masked_shift_amt Reg (alu_rr_imm_logic (ALUOp.And32) shift_amt (shift_mask ty)))
+        )
+        (alu_rrr op x masked_shift_amt)))
+
+(decl shift_mask (Type) ImmLogic)
+(extern constructor shift_mask shift_mask)
+
+;; 32/64-bit shift base cases.
+(rule (do_shift op $I32 x y) (alu_rrr op x (value_regs_get (put_in_regs y) 0)))
+(rule (do_shift op $I64 x y) (alu_rrr op x (value_regs_get (put_in_regs y) 0)))
+
+;; Special case for shifting by a constant value where the value can fit into an
+;; `ImmShift`.
+;;
+;; Note that this rule explicitly has a higher priority than the others
+;; to ensure it's attempted first, otherwise the type-based filters on the
+;; previous rules seem to take priority over this rule.
+(rule 1 (do_shift op ty x (def_inst (iconst (imm_shift_from_imm64 <ty shift))))
+      (alu_rr_imm_shift op x shift))
+
+;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Shift for i8/i16/i32.
+(rule (lower (has_type (fits_in_32 ty) (ushr x y)))
+      (value_reg (do_shift (ALUOp.Lsr32) ty (put_in_reg_zext32 x) y)))
+
+;; Shift for i64.
+(rule (lower (has_type $I64 (ushr x y)))
+      (value_reg (do_shift (ALUOp.Lsr64) $I64 (put_in_reg_zext64 x) y)))
+
+;; Shift for i128.
+(rule (lower (has_type $I128 (ushr x y)))
+      (lower_ushr128 (put_in_regs x) (value_regs_get (put_in_regs y) 0)))
+
+;; Vector shifts.
+(rule (lower (has_type (vec128 ty) (ushr x y)))
+      (let (
+          (size VectorSize (vector_size ty))
+          (shift Reg (vec_dup (alu_rrr (ALUOp.Sub32) (zero_reg) (put_in_reg y)) size))
+        )
+        (value_reg (vec_rrr (VecALUOp.Ushl) (put_in_reg x) shift size))))
+
+;;     lsr       lo_rshift, src_lo, amt
+;;     lsr       hi_rshift, src_hi, amt
+;;     mvn       inv_amt, amt
+;;     lsl       hi_lshift, src_hi, #1
+;;     lsl       hi_lshift, hi_lshift, inv_amt
+;;     tst       amt, #0x40
+;;     orr       maybe_lo, lo_rshift, hi_lshift
+;;     csel      dst_hi, xzr, hi_rshift, ne
+;;     csel      dst_lo, hi_rshift, maybe_lo, ne
+(decl lower_ushr128 (ValueRegs Reg) ValueRegs)
+(rule (lower_ushr128 src amt)
+      (let (
+          (src_lo Reg (value_regs_get src 0))
+          (src_hi Reg (value_regs_get src 1))
+          (lo_rshift Reg (alu_rrr (ALUOp.Lsr64) src_lo amt))
+          (hi_rshift Reg (alu_rrr (ALUOp.Lsr64) src_hi amt))
+
+          (inv_amt Reg (alu_rrr (ALUOp.OrrNot32) (zero_reg) amt))
+          (hi_lshift Reg (alu_rrr (ALUOp.Lsl64)
+                                  (alu_rr_imm_shift (ALUOp.Lsl64)
+                                                    src_hi
+                                                    (imm_shift_from_u8 1))
+                                  inv_amt))
+          (maybe_lo Reg (alu_rrr (ALUOp.Orr64) lo_rshift hi_lshift))
+        )
+        (with_flags_2
+          (tst64_imm amt (u64_into_imm_logic $I64 64))
+          (csel (Cond.Ne) hi_rshift maybe_lo)
+          (csel (Cond.Ne) (zero_reg) hi_rshift))))
+
+;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Shift for i8/i16/i32.
+(rule (lower (has_type (fits_in_32 ty) (sshr x y)))
+      (value_reg (do_shift (ALUOp.Asr32) ty (put_in_reg_sext32 x) y)))
+
+;; Shift for i64.
+(rule (lower (has_type $I64 (sshr x y)))
+      (value_reg (do_shift (ALUOp.Asr64) $I64 (put_in_reg_sext64 x) y)))
+
+;; Shift for i128.
+(rule (lower (has_type $I128 (sshr x y)))
+      (lower_sshr128 (put_in_regs x) (value_regs_get (put_in_regs y) 0)))
+
+;; Vector shifts.
+;;
+;; Note that right shifts are implemented with a negative left shift.
+(rule (lower (has_type (vec128 ty) (sshr x y)))
+      (let (
+          (size VectorSize (vector_size ty))
+          (shift Reg (vec_dup (alu_rrr (ALUOp.Sub32) (zero_reg) (put_in_reg y)) size))
+        )
+        (value_reg (vec_rrr (VecALUOp.Sshl) (put_in_reg x) shift size))))
+
+;;     lsr       lo_rshift, src_lo, amt
+;;     asr       hi_rshift, src_hi, amt
+;;     mvn       inv_amt, amt
+;;     lsl       hi_lshift, src_hi, #1
+;;     lsl       hi_lshift, hi_lshift, inv_amt
+;;     asr       hi_sign, src_hi, #63
+;;     orr       maybe_lo, lo_rshift, hi_lshift
+;;     tst       amt, #0x40
+;;     csel      dst_hi, hi_sign, hi_rshift, ne
+;;     csel      dst_lo, hi_rshift, maybe_lo, ne
+(decl lower_sshr128 (ValueRegs Reg) ValueRegs)
+(rule (lower_sshr128 src amt)
+      (let (
+          (src_lo Reg (value_regs_get src 0))
+          (src_hi Reg (value_regs_get src 1))
+          (lo_rshift Reg (alu_rrr (ALUOp.Lsr64) src_lo amt))
+          (hi_rshift Reg (alu_rrr (ALUOp.Asr64) src_hi amt))
+
+          (inv_amt Reg (alu_rrr (ALUOp.OrrNot32) (zero_reg) amt))
+          (hi_lshift Reg (alu_rrr (ALUOp.Lsl64)
+                                  (alu_rr_imm_shift (ALUOp.Lsl64)
+                                                    src_hi
+                                                    (imm_shift_from_u8 1))
+                                  inv_amt))
+          (hi_sign Reg (alu_rr_imm_shift (ALUOp.Asr64) src_hi (imm_shift_from_u8 63)))
+          (maybe_lo Reg (alu_rrr (ALUOp.Orr64) lo_rshift hi_lshift))
+        )
+        (with_flags_2
+          (tst64_imm amt (u64_into_imm_logic $I64 64))
+          (csel (Cond.Ne) hi_rshift maybe_lo)
+          (csel (Cond.Ne) hi_sign hi_rshift))))

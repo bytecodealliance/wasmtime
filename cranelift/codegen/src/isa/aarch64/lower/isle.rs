@@ -248,4 +248,18 @@ where
         self.lower_ctx.sink_inst(load.atomic_load);
         self.put_in_reg(load.atomic_addr)
     }
+
+    fn shift_mask(&mut self, ty: Type) -> ImmLogic {
+        let mask = (ty.bits() - 1) as u64;
+        ImmLogic::maybe_from_u64(mask, I32).unwrap()
+    }
+
+    fn imm_shift_from_imm64(&mut self, val: Imm64, ty: Type) -> Option<ImmShift> {
+        let imm_value = (val.bits() as u64) & ((ty.bits() - 1) as u64);
+        ImmShift::maybe_from_u64(imm_value)
+    }
+
+    fn u64_into_imm_logic(&mut self, ty: Type, val: u64) -> ImmLogic {
+        ImmLogic::maybe_from_u64(val, ty).unwrap()
+    }
 }
