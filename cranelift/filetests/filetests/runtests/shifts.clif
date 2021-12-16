@@ -318,3 +318,25 @@ block0(v0: i32, v1: i8):
 ; run: %sshr_i32_i8(0x40000000, 32) == 0x40000000
 ; run: %sshr_i32_i8(0x40000000, 33) == 0x20000000
 ; run: %sshr_i32_i8(0x40000000, 34) == 0x10000000
+
+function %rotl_i8_const_37(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 37
+  v2 = rotl.i8 v0, v1
+  return v2
+}
+
+; run: %rotl_i8_const_37(0x00) == 0x00
+; run: %rotl_i8_const_37(0x01) == 0x20
+; run: %rotl_i8_const_37(0x12) == 0x42
+
+function %rotr_i8_const_37(i8) -> i8 {
+block0(v0: i8):
+  v1 = iconst.i8 37
+  v2 = rotr.i8 v0, v1
+  return v2
+}
+
+; run: %rotr_i8_const_37(0x00) == 0x00
+; run: %rotr_i8_const_37(0x01) == 0x08
+; run: %rotr_i8_const_37(0x12) == 0x90

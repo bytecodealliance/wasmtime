@@ -633,15 +633,26 @@
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `i64` and smaller.
+;; `i16` and `i8`: we need to extend the shift amount, or mask the
+;; constant.
 
-(rule (lower (has_type (fits_in_64 ty) (rotl src amt)))
+(rule (lower (has_type (ty_8_or_16 ty) (rotl src amt)))
+      (let ((amt_ Reg (extend_to_reg amt $I32 (ExtendKind.Zero))))
+        (value_reg (m_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
+
+(rule (lower (has_type (ty_8_or_16 ty) (rotl src (imm8_from_value amt))))
+      (value_reg (m_rotl ty (put_in_reg src) (mask_imm8_const amt (ty_bits_mask ty)))))
+
+;; `i64` and `i32`: we can rely on x86's rotate-amount masking since
+;;  we operate on the whole register.
+
+(rule (lower (has_type (ty_32_or_64 ty) (rotl src amt)))
       ;; NB: Only the low bits of `amt` matter since we logically mask the
       ;; shift amount to the value's bit width.
       (let ((amt_ Reg (lo_reg amt)))
         (value_reg (m_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
 
-(rule (lower (has_type (fits_in_64 ty) (rotl src (imm8_from_value amt))))
+(rule (lower (has_type (ty_32_or_64 ty) (rotl src (imm8_from_value amt))))
       (value_reg (m_rotl ty (put_in_reg src) amt)))
 
 ;; `i128`.
