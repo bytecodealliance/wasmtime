@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -328,7 +328,7 @@ block0(v0: i64):
     return v3
 }
 
-; check:  orn x0, xzr, x0, LSL 3
+; check: orn x0, xzr, x0, LSL 3
 ; nextln: ret
 
 function %bnot_i128(i128) -> i128 {
@@ -414,6 +414,9 @@ block0(v0: i64, v1: i64):
     v4 = band v0, v3
     return v4
 }
+
+; check: and x0, x0, x1, LSL 3
+; nextln: ret
 
 function %band_i64_constant_shift2(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
