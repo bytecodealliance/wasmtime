@@ -710,15 +710,15 @@
 (rule (lower (has_type $I128 (ishl x y)))
       (lower_shl128 (put_in_regs x) (value_regs_get (put_in_regs y) 0)))
 
-;;     lsl     tmp3, src_lo, amt
-;;     lsl     tmp2, src_hi, amt
+;;     lsl     lo_lshift, src_lo, amt
+;;     lsl     hi_lshift, src_hi, amt
 ;;     mvn     inv_amt, amt
-;;     lsr     tmp1, src_lo, #1
-;;     lsr     tmp1, tmp1, inv_amt
+;;     lsr     lo_rshift, src_lo, #1
+;;     lsr     lo_rshift, lo_rshift, inv_amt
 ;;     tst     amt, #0x40
-;;     orr     tmp2, tmp2, tmp1
-;;     csel    dst_hi, tmp3, tmp2, ne
-;;     csel    dst_lo, xzr, tmp3, ne
+;;     orr     maybe_hi, hi_lshift, lo_rshift
+;;     csel    dst_hi, lo_lshift, maybe_hi, ne
+;;     csel    dst_lo, xzr, lo_lshift, ne
 (decl lower_shl128 (ValueRegs Reg) ValueRegs)
 (rule (lower_shl128 src amt)
       (let (
@@ -816,15 +816,15 @@
         )
         (value_reg (vec_rrr (VecALUOp.Ushl) (put_in_reg x) shift size))))
 
-;;     lsr       tmp3, src_hi, amt
-;;     lsr       tmp2, src_lo, amt
+;;     lsr       lo_rshift, src_lo, amt
+;;     lsr       hi_rshift, src_hi, amt
 ;;     mvn       inv_amt, amt
-;;     lsl       tmp1, src_hi, #1
-;;     lsl       tmp1, tmp1, inv_amt
+;;     lsl       hi_lshift, src_hi, #1
+;;     lsl       hi_lshift, hi_lshift, inv_amt
 ;;     tst       amt, #0x40
-;;     orr       tmp2, tmp2, tmp1
-;;     csel      dst_hi, xzr, tmp3, ne
-;;     csel      dst_lo, tmp3, tmp2, ne
+;;     orr       maybe_lo, lo_rshift, hi_lshift
+;;     csel      dst_hi, xzr, hi_rshift, ne
+;;     csel      dst_lo, hi_rshift, maybe_lo, ne
 (decl lower_ushr128 (ValueRegs Reg) ValueRegs)
 (rule (lower_ushr128 src amt)
       (let (
@@ -877,15 +877,16 @@
         )
         (value_reg (vec_rrr (VecALUOp.Sshl) (put_in_reg x) shift size))))
 
-;;     asr       tmp3, src_hi, amt
-;;     lsr       tmp2, src_lo, amt
+;;     lsr       lo_rshift, src_lo, amt
+;;     asr       hi_rshift, src_hi, amt
 ;;     mvn       inv_amt, amt
-;;     lsl       tmp1, src_hi, #1
-;;     lsl       tmp1, tmp1, inv_amt
+;;     lsl       hi_lshift, src_hi, #1
+;;     lsl       hi_lshift, hi_lshift, inv_amt
 ;;     tst       amt, #0x40
-;;     orr       tmp2, tmp2, tmp1
-;;     csel      dst_hi, tmp4, tmp3, ne
-;;     csel      dst_lo, tmp3, tmp2, ne
+;;     asr       hi_sign, src_hi, #63
+;;     orr       maybe_lo, lo_rshift, hi_lshift
+;;     csel      dst_hi, hi_sign, hi_rshift, ne
+;;     csel      dst_lo, hi_rshift, maybe_lo, ne
 (decl lower_sshr128 (ValueRegs Reg) ValueRegs)
 (rule (lower_sshr128 src amt)
       (let (
