@@ -734,10 +734,10 @@
                                   inv_amt))
           (maybe_hi Reg (alu_rrr (ALUOp.Orr64) hi_lshift lo_rshift))
         )
-        (csel2 (tst64_imm amt (u64_into_imm_logic $I64 64))
-               (Cond.Ne)
-               (value_regs (zero_reg) lo_lshift)
-               (value_regs lo_lshift maybe_hi))))
+        (with_flags_2
+          (tst64_imm amt (u64_into_imm_logic $I64 64))
+          (csel (Cond.Ne) (zero_reg) lo_lshift)
+          (csel (Cond.Ne) lo_lshift maybe_hi))))
 
 ;; Shift for vector types.
 (rule (lower (has_type (vec128 ty) (ishl x y)))
@@ -834,10 +834,10 @@
                                   inv_amt))
           (maybe_lo Reg (alu_rrr (ALUOp.Orr64) lo_rshift hi_lshift))
         )
-        (csel2 (tst64_imm amt (u64_into_imm_logic $I64 64))
-               (Cond.Ne)
-               (value_regs hi_rshift (zero_reg))
-               (value_regs maybe_lo hi_rshift))))
+        (with_flags_2
+          (tst64_imm amt (u64_into_imm_logic $I64 64))
+          (csel (Cond.Ne) hi_rshift maybe_lo)
+          (csel (Cond.Ne) (zero_reg) hi_rshift))))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -890,7 +890,7 @@
           (hi_sign Reg (alu_rr_imm_shift (ALUOp.Asr64) src_hi (imm_shift_from_u8 63)))
           (maybe_lo Reg (alu_rrr (ALUOp.Orr64) lo_rshift hi_lshift))
         )
-        (csel2 (tst64_imm amt (u64_into_imm_logic $I64 64))
-               (Cond.Ne)
-               (value_regs hi_rshift hi_sign)
-               (value_regs maybe_lo hi_rshift))))
+        (with_flags_2
+          (tst64_imm amt (u64_into_imm_logic $I64 64))
+          (csel (Cond.Ne) hi_rshift maybe_lo)
+          (csel (Cond.Ne) hi_sign hi_rshift))))

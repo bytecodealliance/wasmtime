@@ -295,8 +295,8 @@
                     (ConsumesFlags.ConsumesFlags consumer_inst_1 consumer_result_1)
                     (ConsumesFlags.ConsumesFlags consumer_inst_2 consumer_result_2))
       (let ((_x Unit (emit producer_inst))
-            (_y Unit (emit consumer_inst_1))
-            (_z Unit (emit consumer_inst_2)))
+            (_y Unit (emit consumer_inst_2))
+            (_z Unit (emit consumer_inst_1)))
         (value_regs consumer_result_1 consumer_result_2)))
 
 ;;;; Helpers for Working with TrapCode ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

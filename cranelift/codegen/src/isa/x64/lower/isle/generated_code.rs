@@ -217,8 +217,8 @@ pub fn constructor_with_flags_2<C: Context>(
                 // Rule at src/prelude.isle line 281.
 >>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
                 let expr0_0 = C::emit(ctx, &pattern1_0);
-                let expr1_0 = C::emit(ctx, &pattern3_0);
-                let expr2_0 = C::emit(ctx, &pattern5_0);
+                let expr1_0 = C::emit(ctx, &pattern5_0);
+                let expr2_0 = C::emit(ctx, &pattern3_0);
                 let expr3_0 = C::value_regs(ctx, pattern3_1, pattern5_1);
                 return Some(expr3_0);
             }

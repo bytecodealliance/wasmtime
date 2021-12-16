@@ -917,10 +917,11 @@ block0(v0: i128, v1: i128):
 ; nextln: cmovzq  %rcx, %rax
 ; nextln: orq     %rdi, %rax
 ; nextln: testq   $$64, %rdx
+; nextln: movq    %rsi, %rdi
+; nextln: cmovzq  %rax, %rdi
 ; nextln: cmovzq  %rsi, %rcx
-; nextln: cmovzq  %rax, %rsi
 ; nextln: movq    %rcx, %rax
-; nextln: movq    %rsi, %rdx
+; nextln: movq    %rdi, %rdx
 ; nextln: movq    %rbp, %rsp
 ; nextln: popq    %rbp
 ; nextln: ret
@@ -946,13 +947,12 @@ block0(v0: i128, v1: i128):
 ; nextln: testq   $$127, %rdx
 ; nextln: cmovzq  %rcx, %rax
 ; nextln: orq     %rdi, %rax
-; nextln: xorq    %rcx, %rcx
+; nextln: xorq    %rdi, %rdi
 ; nextln: testq   $$64, %rdx
-; nextln: movq    %rsi, %rdi
-; nextln: cmovzq  %rax, %rdi
-; nextln: cmovzq  %rsi, %rcx
-; nextln: movq    %rdi, %rax
-; nextln: movq    %rcx, %rdx
+; nextln: cmovzq  %rsi, %rdi
+; nextln: cmovzq  %rax, %rsi
+; nextln: movq    %rsi, %rax
+; nextln: movq    %rdi, %rdx
 ; nextln: movq    %rbp, %rsp
 ; nextln: popq    %rbp
 ; nextln: ret
@@ -1000,24 +1000,24 @@ block0(v0: i128, v1: i128):
 
 ; check:  pushq   %rbp
 ; nextln: movq    %rsp, %rbp
-; nextln: movq    %rdi, %rax
+; nextln: movq    %rdi, %r9
+; nextln: movq    %rdx, %rcx
+; nextln: shlq    %cl, %r9
+; nextln: movq    %rsi, %rax
 ; nextln: movq    %rdx, %rcx
 ; nextln: shlq    %cl, %rax
-; nextln: movq    %rsi, %r8
-; nextln: movq    %rdx, %rcx
-; nextln: shlq    %cl, %r8
 ; nextln: movl    $$64, %ecx
 ; nextln: subq    %rdx, %rcx
-; nextln: movq    %rdi, %r9
-; nextln: shrq    %cl, %r9
-; nextln: xorq    %rcx, %rcx
+; nextln: movq    %rdi, %r10
+; nextln: shrq    %cl, %r10
+; nextln: xorq    %r8, %r8
 ; nextln: testq   $$127, %rdx
-; nextln: cmovzq  %rcx, %r9
-; nextln: orq     %r8, %r9
+; nextln: cmovzq  %r8, %r10
+; nextln: orq     %rax, %r10
 ; nextln: testq   $$64, %rdx
-; nextln: movq    %rcx, %r8
-; nextln: cmovzq  %rax, %r8
-; nextln: cmovzq  %r9, %rax
+; nextln: movq    %r9, %rax
+; nextln: cmovzq  %r10, %rax
+; nextln: cmovzq  %r9, %r8
 ; nextln: movl    $$128, %r9d
 ; nextln: subq    %rdx, %r9
 ; nextln: movq    %rdi, %rdx
@@ -1033,14 +1033,12 @@ block0(v0: i128, v1: i128):
 ; nextln: testq   $$127, %r9
 ; nextln: cmovzq  %rcx, %rsi
 ; nextln: orq     %rdx, %rsi
-; nextln: xorq    %rdx, %rdx
+; nextln: xorq    %rcx, %rcx
 ; nextln: testq   $$64, %r9
-; nextln: movq    %rdi, %rcx
-; nextln: cmovzq  %rsi, %rcx
-; nextln: movq    %rdx, %rsi
-; nextln: cmovzq  %rdi, %rsi
-; nextln: orq     %rcx, %r8
-; nextln: orq     %rsi, %rax
+; nextln: cmovzq  %rdi, %rcx
+; nextln: cmovzq  %rsi, %rdi
+; nextln: orq     %rdi, %r8
+; nextln: orq     %rcx, %rax
 ; nextln: movq    %rax, %rdx
 ; nextln: movq    %r8, %rax
 ; nextln: movq    %rbp, %rsp
