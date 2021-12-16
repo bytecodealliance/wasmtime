@@ -295,6 +295,9 @@
                     (ConsumesFlags.ConsumesFlags consumer_inst_1 consumer_result_1)
                     (ConsumesFlags.ConsumesFlags consumer_inst_2 consumer_result_2))
       (let ((_x Unit (emit producer_inst))
+            ;; Note that the order of emission here is swapped, as this seems
+            ;; to generate better register allocation for now with fewer
+            ;; `mov` instructions.
             (_y Unit (emit consumer_inst_2))
             (_z Unit (emit consumer_inst_1)))
         (value_regs consumer_result_1 consumer_result_2)))
