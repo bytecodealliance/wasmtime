@@ -272,20 +272,20 @@ pub extern "C" fn wasm_bench_create(
 
                 let stdout = std::fs::File::create(&stdout_path)
                     .with_context(|| format!("failed to create {}", stdout_path.display()))?;
-                let stdout = cap_std::fs::File::from_std(stdout, cap_std::ambient_authority());
+                let stdout = cap_std::fs::File::from_std(stdout);
                 let stdout = wasi_cap_std_sync::file::File::from_cap_std(stdout);
                 cx = cx.stdout(Box::new(stdout));
 
                 let stderr = std::fs::File::create(&stderr_path)
                     .with_context(|| format!("failed to create {}", stderr_path.display()))?;
-                let stderr = cap_std::fs::File::from_std(stderr, cap_std::ambient_authority());
+                let stderr = cap_std::fs::File::from_std(stderr);
                 let stderr = wasi_cap_std_sync::file::File::from_cap_std(stderr);
                 cx = cx.stderr(Box::new(stderr));
 
                 if let Some(stdin_path) = &stdin_path {
                     let stdin = std::fs::File::open(stdin_path)
                         .with_context(|| format!("failed to open {}", stdin_path.display()))?;
-                    let stdin = cap_std::fs::File::from_std(stdin, cap_std::ambient_authority());
+                    let stdin = cap_std::fs::File::from_std(stdin);
                     let stdin = wasi_cap_std_sync::file::File::from_cap_std(stdin);
                     cx = cx.stdin(Box::new(stdin));
                 }

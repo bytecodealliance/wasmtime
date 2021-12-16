@@ -122,7 +122,7 @@ impl TryFrom<std::io::Error> for types::Errno {
                 Some(Error::IO) => Some(types::Errno::Io),
                 Some(Error::BADF) => Some(types::Errno::Badf),
                 Some(Error::BUSY) => Some(types::Errno::Busy),
-                Some(Error::ACCES) => Some(types::Errno::Acces),
+                Some(Error::ACCESS) => Some(types::Errno::Acces),
                 Some(Error::FAULT) => Some(types::Errno::Fault),
                 Some(Error::NOTDIR) => Some(types::Errno::Notdir),
                 Some(Error::ISDIR) => Some(types::Errno::Isdir),
