@@ -148,6 +148,10 @@
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; An extractor that only matches types that can fit in 16 bits.
+(decl fits_in_16 (Type) Type)
+(extern extractor fits_in_16 fits_in_16)
+
 ;; An extractor that only matches types that can fit in 32 bits.
 (decl fits_in_32 (Type) Type)
 (extern extractor fits_in_32 fits_in_32)

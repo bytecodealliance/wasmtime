@@ -32,6 +32,7 @@ pub trait Context {
     fn u32_as_u64(&mut self, arg0: u32) -> u64;
     fn ty_bits(&mut self, arg0: Type) -> u8;
     fn ty_bits_u16(&mut self, arg0: Type) -> u16;
+    fn fits_in_16(&mut self, arg0: Type) -> Option<Type>;
     fn fits_in_32(&mut self, arg0: Type) -> Option<Type>;
     fn fits_in_64(&mut self, arg0: Type) -> Option<Type>;
     fn ty_32_or_64(&mut self, arg0: Type) -> Option<Type>;
@@ -76,13 +77,21 @@ pub trait Context {
     fn sse_insertps_lane_imm(&mut self, arg0: u8) -> u8;
 }
 
+<<<<<<< HEAD
 /// Internal type ProducesFlags: defined at src/prelude.isle line 259.
+=======
+/// Internal type ProducesFlags: defined at src/prelude.isle line 250.
+>>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlags { inst: MInst, result: Reg },
 }
 
+<<<<<<< HEAD
 /// Internal type ConsumesFlags: defined at src/prelude.isle line 262.
+=======
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 253.
+>>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlags { inst: MInst, result: Reg },
@@ -132,7 +141,11 @@ pub fn constructor_with_flags<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
+<<<<<<< HEAD
             // Rule at src/prelude.isle line 272.
+=======
+            // Rule at src/prelude.isle line 263.
+>>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -160,7 +173,11 @@ pub fn constructor_with_flags_1<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
+<<<<<<< HEAD
             // Rule at src/prelude.isle line 280.
+=======
+            // Rule at src/prelude.isle line 271.
+>>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             return Some(pattern3_1);
@@ -194,7 +211,11 @@ pub fn constructor_with_flags_2<C: Context>(
                 result: pattern5_1,
             } = pattern4_0
             {
+<<<<<<< HEAD
                 // Rule at src/prelude.isle line 290.
+=======
+                // Rule at src/prelude.isle line 281.
+>>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
                 let expr0_0 = C::emit(ctx, &pattern1_0);
                 let expr1_0 = C::emit(ctx, &pattern3_0);
                 let expr2_0 = C::emit(ctx, &pattern5_0);

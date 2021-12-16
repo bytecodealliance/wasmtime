@@ -105,6 +105,14 @@ macro_rules! isle_prelude_methods {
             ty.bits()
         }
 
+        fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() <= 16 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
         #[inline]
         fn fits_in_32(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() <= 32 {
