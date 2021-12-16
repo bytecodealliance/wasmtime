@@ -181,7 +181,7 @@ jobs:
     - uses: ./.github/actions/install-rust
       with:
         toolchain: nightly-2021-12-15
-    - run: cargo install cargo-fuzz --vers "^0.8"
+    - run: cargo install cargo-fuzz --vers "^0.10"
     # Install OCaml packages necessary for 'differential_spec' fuzz target.
     - run: sudo apt install -y ocaml-nox ocamlbuild
     - run: cargo fetch
