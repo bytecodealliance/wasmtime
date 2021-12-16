@@ -715,8 +715,8 @@
 ;;     mvn     inv_amt, amt
 ;;     lsr     lo_rshift, src_lo, #1
 ;;     lsr     lo_rshift, lo_rshift, inv_amt
-;;     tst     amt, #0x40
 ;;     orr     maybe_hi, hi_lshift, lo_rshift
+;;     tst     amt, #0x40
 ;;     csel    dst_hi, lo_lshift, maybe_hi, ne
 ;;     csel    dst_lo, xzr, lo_lshift, ne
 (decl lower_shl128 (ValueRegs Reg) ValueRegs)
@@ -732,19 +732,12 @@
                                                     src_lo
                                                     (imm_shift_from_u8 1))
                                   inv_amt))
-
-          ;; TODO: this is probably best-expressed with something along the
-          ;; lines of `ProducesFlags` and `ConsumesFlags` but for now this
-          ;; should work at least while we transition.
-          (_ Unit (emit (MInst.AluRRImmLogic (ALUOp.AndS64)
-                                             (writable_zero_reg)
-                                             amt
-                                             (u64_into_imm_logic $I64 64))))
           (maybe_hi Reg (alu_rrr (ALUOp.Orr64) hi_lshift lo_rshift))
-          (dst_hi Reg (csel (Cond.Ne) lo_lshift maybe_hi))
-          (dst_lo Reg (csel (Cond.Ne) (zero_reg) lo_lshift))
         )
-        (value_regs dst_lo dst_hi)))
+        (csel2 (tst64_imm amt (u64_into_imm_logic $I64 64))
+               (Cond.Ne)
+               (value_regs (zero_reg) lo_lshift)
+               (value_regs lo_lshift maybe_hi))))
 
 ;; Shift for vector types.
 (rule (lower (has_type (vec128 ty) (ishl x y)))
@@ -839,19 +832,12 @@
                                                     src_hi
                                                     (imm_shift_from_u8 1))
                                   inv_amt))
-
-          ;; TODO: this is probably best-expressed with something along the
-          ;; lines of `ProducesFlags` and `ConsumesFlags` but for now this
-          ;; should work at least while we transition.
-          (_ Unit (emit (MInst.AluRRImmLogic (ALUOp.AndS64)
-                                             (writable_zero_reg)
-                                             amt
-                                             (u64_into_imm_logic $I64 64))))
           (maybe_lo Reg (alu_rrr (ALUOp.Orr64) lo_rshift hi_lshift))
-          (dst_hi Reg (csel (Cond.Ne) (zero_reg) hi_rshift))
-          (dst_lo Reg (csel (Cond.Ne) hi_rshift maybe_lo))
         )
-        (value_regs dst_lo dst_hi)))
+        (csel2 (tst64_imm amt (u64_into_imm_logic $I64 64))
+               (Cond.Ne)
+               (value_regs hi_rshift (zero_reg))
+               (value_regs maybe_lo hi_rshift))))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -882,9 +868,9 @@
 ;;     mvn       inv_amt, amt
 ;;     lsl       hi_lshift, src_hi, #1
 ;;     lsl       hi_lshift, hi_lshift, inv_amt
-;;     tst       amt, #0x40
 ;;     asr       hi_sign, src_hi, #63
 ;;     orr       maybe_lo, lo_rshift, hi_lshift
+;;     tst       amt, #0x40
 ;;     csel      dst_hi, hi_sign, hi_rshift, ne
 ;;     csel      dst_lo, hi_rshift, maybe_lo, ne
 (decl lower_sshr128 (ValueRegs Reg) ValueRegs)
@@ -901,17 +887,10 @@
                                                     src_hi
                                                     (imm_shift_from_u8 1))
                                   inv_amt))
-
-          ;; TODO: this is probably best-expressed with something along the
-          ;; lines of `ProducesFlags` and `ConsumesFlags` but for now this
-          ;; should work at least while we transition.
-          (_ Unit (emit (MInst.AluRRImmLogic (ALUOp.AndS64)
-                                             (writable_zero_reg)
-                                             amt
-                                             (u64_into_imm_logic $I64 64))))
           (hi_sign Reg (alu_rr_imm_shift (ALUOp.Asr64) src_hi (imm_shift_from_u8 63)))
           (maybe_lo Reg (alu_rrr (ALUOp.Orr64) lo_rshift hi_lshift))
-          (dst_hi Reg (csel (Cond.Ne) hi_sign hi_rshift))
-          (dst_lo Reg (csel (Cond.Ne) hi_rshift maybe_lo))
         )
-        (value_regs dst_lo dst_hi)))
+        (csel2 (tst64_imm amt (u64_into_imm_logic $I64 64))
+               (Cond.Ne)
+               (value_regs hi_rshift hi_sign)
+               (value_regs maybe_lo hi_rshift))))

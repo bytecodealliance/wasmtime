@@ -1559,12 +1559,50 @@
             (_ Unit (emit (MInst.LoadAcquire ty dst addr))))
         (writable_reg_to_reg dst)))
 
+(type SetsFlags (enum (Inst (inst MInst))))
+
+;; Helper for generating a `SetsFlags` variant which uses the `ands` instruction
+;; where the destination is the zero register (effectively generating a `tst`
+;; instruction).
+;;
+;; Note that this doesn't actually emit any instructions, it returns the
+;; instruction within the `SetsFlags` return value which must be consumed by
+;; another instruction (such as "csel2" below).
+(decl tst64_imm (Reg ImmLogic) SetsFlags)
+(rule (tst64_imm reg imm)
+      (SetsFlags.Inst (MInst.AluRRImmLogic (ALUOp.AndS64)
+                                           (writable_zero_reg)
+                                           reg
+                                           imm)))
+
 ;; Helper for emitting `MInst.CSel` instructions.
-(decl csel (Cond Reg Reg) Reg)
-(rule (csel cond rn rm)
-      (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.CSel dst cond rn rm))))
-        (writable_reg_to_reg dst)))
+;;
+;; Note that this takes a `SetsFlags` argument to represent the instruction
+;; which actually sets the flags register, and it guarantees that the
+;; `csel` instructions generated come after that instruction.
+;;
+;; Additionally the "2" in the "csel2" name here is for the `ValueRegs` argument
+;; and return value for emitting a `csel` over two registers for a 128-bit
+;; value.
+(decl csel2 (SetsFlags Cond ValueRegs ValueRegs) ValueRegs)
+(rule (csel2 (SetsFlags.Inst flags) cond if_true if_false)
+      (let (
+          ;; unpack the arguments
+          (if_true_lo Reg (value_regs_get if_true 0))
+          (if_true_hi Reg (value_regs_get if_true 1))
+          (if_false_lo Reg (value_regs_get if_false 0))
+          (if_false_hi Reg (value_regs_get if_false 1))
+          ;; create temporaries for the results
+          (dst_lo WritableReg (temp_writable_reg $I64))
+          (dst_hi WritableReg (temp_writable_reg $I64))
+          ;; Emit, adjacently, the flags-setting instruction followed
+          ;; immediately by two `csel` instructions for each half of the
+          ;; 128-bit value's bits.
+          (_1 Unit (emit flags))
+          (_2 Unit (emit (MInst.CSel dst_hi cond if_true_hi if_false_hi)))
+          (_3 Unit (emit (MInst.CSel dst_lo cond if_true_lo if_false_lo)))
+        )
+        (value_regs (writable_reg_to_reg dst_lo) (writable_reg_to_reg dst_hi))))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

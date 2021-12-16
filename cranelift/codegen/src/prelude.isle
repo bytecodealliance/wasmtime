@@ -291,7 +291,7 @@
 ;; `ValueRegs` containing the first consumer's result and then the second
 ;; consumer's result.
 (decl with_flags_2 (ProducesFlags ConsumesFlags ConsumesFlags) ValueRegs)
-(rule (with_flags_2 (ProducesFlags.ProducesFlags producer_inst producer_result)
+(rule (with_flags_2 (ProducesFlags.ProducesFlags producer_inst _producer_result)
                     (ConsumesFlags.ConsumesFlags consumer_inst_1 consumer_result_1)
                     (ConsumesFlags.ConsumesFlags consumer_inst_2 consumer_result_2))
       (let ((_x Unit (emit producer_inst))
