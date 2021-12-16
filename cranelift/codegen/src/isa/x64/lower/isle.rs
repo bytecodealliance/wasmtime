@@ -57,11 +57,7 @@ where
 
     #[inline]
     fn operand_size_of_type(&mut self, ty: Type) -> OperandSize {
-        if ty.bits() == 64 {
-            OperandSize::Size64
-        } else {
-            OperandSize::Size32
-        }
+        OperandSize::from_ty(ty)
     }
 
     fn put_in_reg_mem(&mut self, val: Value) -> RegMem {
@@ -123,6 +119,16 @@ where
         let constant = self.lower_ctx.get_constant(inst)?;
         let imm = u8::try_from(constant).ok()?;
         Some(Imm8Reg::Imm8 { imm })
+    }
+
+    #[inline]
+    fn mask_imm8_const(&mut self, imm8: &Imm8Reg, mask: u64) -> Imm8Reg {
+        match imm8 {
+            &Imm8Reg::Reg { reg } => Imm8Reg::Reg { reg },
+            &Imm8Reg::Imm8 { imm } => Imm8Reg::Imm8 {
+                imm: imm & (mask as u8),
+            },
+        }
     }
 
     #[inline]

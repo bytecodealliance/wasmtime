@@ -379,6 +379,10 @@
 (decl imm8_from_value (Imm8Reg) Value)
 (extern extractor imm8_from_value imm8_from_value)
 
+;; Mask an `Imm8Reg.Imm8`.
+(decl mask_imm8_const (Imm8Reg u64) Imm8Reg)
+(extern constructor mask_imm8_const mask_imm8_const)
+
 ;; Extract a constant `RegMemImm.Imm` from a value operand.
 (decl simm32_from_value (RegMemImm) Value)
 (extern extractor simm32_from_value simm32_from_value)
