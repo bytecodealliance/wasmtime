@@ -96,6 +96,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn ty_bits_mask(&mut self, ty: Type) -> u64 {
+            (1 << (self.ty_bits(ty) as u64)) - 1
+        }
+
+        #[inline]
         fn ty_bits_u16(&mut self, ty: Type) -> u16 {
             ty.bits()
         }
@@ -112,6 +117,24 @@ macro_rules! isle_prelude_methods {
         #[inline]
         fn fits_in_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() <= 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_32_or_64(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 32 || ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_8_or_16(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 8 || ty.bits() == 16 {
                 Some(ty)
             } else {
                 None

@@ -77,9 +77,13 @@
             Size32
             Size64))
 
-;; Get the `OperandSize` for a given `Type`.
-(decl operand_size_of_type (Type) OperandSize)
-(extern constructor operand_size_of_type operand_size_of_type)
+;; Get the `OperandSize` for a given `Type`, rounding smaller types up to 32 bits.
+(decl operand_size_of_type_32_64 (Type) OperandSize)
+(extern constructor operand_size_of_type_32_64 operand_size_of_type_32_64)
+
+;; Get the true `OperandSize` for a given `Type`, with no rounding.
+(decl raw_operand_size_of_type (Type) OperandSize)
+(extern constructor raw_operand_size_of_type raw_operand_size_of_type)
 
 ;; Get the bit width of an `OperandSize`.
 (decl operand_size_bits (OperandSize) u16)
@@ -379,6 +383,10 @@
 (decl imm8_from_value (Imm8Reg) Value)
 (extern extractor imm8_from_value imm8_from_value)
 
+;; Mask an `Imm8Reg.Imm8`.
+(decl mask_imm8_const (Imm8Reg u64) Imm8Reg)
+(extern constructor mask_imm8_const mask_imm8_const)
+
 ;; Extract a constant `RegMemImm.Imm` from a value operand.
 (decl simm32_from_value (RegMemImm) Value)
 (extern extractor simm32_from_value simm32_from_value)
@@ -426,7 +434,7 @@
       (let ((from_bits u16 (ty_bits_u16 from_ty))
             ;; Use `operand_size_of_type` so that the we clamp the output to 32-
             ;; or 64-bit width types.
-            (to_bits u16 (operand_size_bits (operand_size_of_type to_ty))))
+            (to_bits u16 (operand_size_bits (operand_size_of_type_32_64 to_ty))))
         (extend kind
                 to_ty
                 (ext_mode from_bits to_bits)
@@ -503,7 +511,7 @@
 (decl alu_rmi_r (Type AluRmiROpcode Reg RegMemImm) Reg)
 (rule (alu_rmi_r ty opcode src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (size OperandSize (operand_size_of_type ty))
+            (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.AluRmiR size opcode src1 src2 dst))))
         (writable_reg_to_reg dst)))
 
@@ -519,7 +527,7 @@
 (decl add_with_flags (Type Reg RegMemImm) ProducesFlags)
 (rule (add_with_flags ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty)))
-        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type ty)
+        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Add)
                                                     src1
                                                     src2
@@ -530,7 +538,7 @@
 (decl adc (Type Reg RegMemImm) ConsumesFlags)
 (rule (adc ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type ty)
+        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Adc)
                                                     src1
                                                     src2
@@ -549,7 +557,7 @@
 (decl sub_with_flags (Type Reg RegMemImm) ProducesFlags)
 (rule (sub_with_flags ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty)))
-        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type ty)
+        (ProducesFlags.ProducesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Sub)
                                                     src1
                                                     src2
@@ -560,7 +568,7 @@
 (decl sbb (Type Reg RegMemImm) ConsumesFlags)
 (rule (sbb ty src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty)))
-        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type ty)
+        (ConsumesFlags.ConsumesFlags (MInst.AluRmiR (operand_size_of_type_32_64 ty)
                                                     (AluRmiROpcode.Sbb)
                                                     src1
                                                     src2
@@ -608,7 +616,7 @@
 ;; Integer immediates.
 (rule (imm ty simm64)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (size OperandSize (operand_size_of_type ty))
+            (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Imm size simm64 dst))))
         (writable_reg_to_reg dst)))
 
@@ -634,7 +642,7 @@
 (rule (imm ty 0)
       (let ((wr WritableReg (temp_writable_reg ty))
             (r Reg (writable_reg_to_reg wr))
-            (size OperandSize (operand_size_of_type ty))
+            (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.AluRmiR size
                                          (AluRmiROpcode.Xor)
                                          r
@@ -681,7 +689,9 @@
 (decl shift_r (Type ShiftKind Reg Imm8Reg) Reg)
 (rule (shift_r ty kind src1 src2)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (size OperandSize (operand_size_of_type ty))
+            ;; Use actual 8/16-bit instructions when appropriate: we
+            ;; rely on their shift-amount-masking semantics.
+            (size OperandSize (raw_operand_size_of_type ty))
             (_ Unit (emit (MInst.ShiftR size kind src1 src2 dst))))
         (writable_reg_to_reg dst)))
 
@@ -729,7 +739,7 @@
 (decl cmove (Type CC RegMem Reg) ConsumesFlags)
 (rule (cmove ty cc consequent alternative)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (size OperandSize (operand_size_of_type ty)))
+            (size OperandSize (operand_size_of_type_32_64 ty)))
         (ConsumesFlags.ConsumesFlags (MInst.Cmove size cc consequent alternative dst)
                                      (writable_reg_to_reg dst))))
 
@@ -1155,7 +1165,7 @@
 (rule (mul_hi ty signed src1 src2)
       (let ((dst_lo WritableReg (temp_writable_reg ty))
             (dst_hi WritableReg (temp_writable_reg ty))
-            (size OperandSize (operand_size_of_type ty))
+            (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.MulHi size
                                        signed
                                        src1
@@ -1224,6 +1234,6 @@
 (decl not (Type Reg) Reg)
 (rule (not ty src)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (size OperandSize (operand_size_of_type ty))
+            (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Not size src dst))))
         (writable_reg_to_reg dst)))

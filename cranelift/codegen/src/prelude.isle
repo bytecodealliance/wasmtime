@@ -156,6 +156,14 @@
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
+;; An extractor that maches 32- and 64-bit types only.
+(decl ty_32_or_64 (Type) Type)
+(extern extractor ty_32_or_64 ty_32_or_64)
+
+;; An extractor that maches 8- and 16-bit types only.
+(decl ty_8_or_16 (Type) Type)
+(extern extractor ty_8_or_16 ty_8_or_16)
+
 ;; An extractor that only matches 128-bit vector types.
 (decl vec128 (Type) Type)
 (extern extractor vec128 vec128)
@@ -229,6 +237,11 @@
 (extractor (has_type ty inst)
            (and (result_type ty)
                 inst))
+
+;; Return a bitmask that will mask off a count to be within `ty`'s
+;; bit-width. Used for shifts/rotates.
+(decl ty_bits_mask (Type) u64)
+(extern constructor ty_bits_mask ty_bits_mask)
 
 ;; Match a multi-lane type, extracting (# bits per lane, # lanes) from the given
 ;; type. Will only match when there is more than one lane.
