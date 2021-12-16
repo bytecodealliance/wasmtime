@@ -86,21 +86,13 @@ pub trait Context {
     fn shift_mask(&mut self, arg0: Type) -> ImmLogic;
 }
 
-<<<<<<< HEAD
-/// Internal type ProducesFlags: defined at src/prelude.isle line 259.
-=======
-/// Internal type ProducesFlags: defined at src/prelude.isle line 250.
->>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
+/// Internal type ProducesFlags: defined at src/prelude.isle line 263.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlags { inst: MInst, result: Reg },
 }
 
-<<<<<<< HEAD
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 262.
-=======
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 253.
->>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 266.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlags { inst: MInst, result: Reg },
@@ -1014,11 +1006,7 @@ pub fn constructor_with_flags<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-<<<<<<< HEAD
-            // Rule at src/prelude.isle line 272.
-=======
-            // Rule at src/prelude.isle line 263.
->>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
+            // Rule at src/prelude.isle line 276.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -1046,11 +1034,7 @@ pub fn constructor_with_flags_1<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-<<<<<<< HEAD
-            // Rule at src/prelude.isle line 280.
-=======
-            // Rule at src/prelude.isle line 271.
->>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
+            // Rule at src/prelude.isle line 284.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             return Some(pattern3_1);
@@ -1084,11 +1068,7 @@ pub fn constructor_with_flags_2<C: Context>(
                 result: pattern5_1,
             } = pattern4_0
             {
-<<<<<<< HEAD
-                // Rule at src/prelude.isle line 290.
-=======
-                // Rule at src/prelude.isle line 281.
->>>>>>> aarch64: Migrate ishl/ushr/sshr to ISLE
+                // Rule at src/prelude.isle line 294.
                 let expr0_0 = C::emit(ctx, &pattern1_0);
                 let expr1_0 = C::emit(ctx, &pattern5_0);
                 let expr2_0 = C::emit(ctx, &pattern3_0);
