@@ -1,36 +1,83 @@
 # Using `VTune` on Linux
 
-[`VTune Profiler`](https://software.intel.com/en-us/vtune-help) is a popular performance profiling tool that targets both 32-bit and 64-bit x86 architectures. The tool collects profiling data during runtime and then either through command line or gui, provides a variety of options for viewing and doing anaysis on that data. VTune Profiler is available in both commerical and free options. The free download version backed by a community forum for support, is available [`here`](https://software.intel.com/en-us/vtune/choose-download#standalone). This version is appropriate for detailed analysis of your WASM program. Note for jit support, Wasmtime only supports VTune profiling on linux platforms but other platforms are expected to be enabled in the future.
+[VTune][help] is a popular performance profiling tool that targets both 32-bit
+and 64-bit x86 architectures. The tool collects profiling data during runtime
+and then, either through the command line or GUI, provides a variety of options
+for viewing and analyzing that data. VTune Profiler is available in both
+commerical and free options. The free, downloadable version is available
+[here][download] and is backed by a community forum for support. This version is
+appropriate for detailed analysis of your Wasm program. Note that for JIT
+support, Wasmtime only supports VTune profiling on Linux platforms but other
+platforms are expected to be enabled in the future.
 
-VTune support in wasmtime is provided through the jit profiling APIs at [`https://github.com/intel/ittapi`](https://github.com/intel/ittapi). These APIs are provided for code generators (or the runtimes that use them) to report jit activities. These APIs are implemented in a shared library (built from the same [`ittapi`](https://github.com/intel/ittapi) project) which wasmtime pulls in and links to when vtune support is specified through the `vtune` cargo feature flag. This feature is not enabled by default. When the VTune collector is run, it links to this same shared library to handle profiling request related to the reported jit activities. Specifically, Wasmtime pulls in the ittapi-rs system crate which provides the shared library and Rust interface to the jit profiling APIs.
+VTune support in Wasmtime is provided through the JIT profiling APIs from the
+[`ittapi`] library. This library provides code generators (or the runtimes that
+use them) a way to report JIT activities. The APIs are implemented in a static
+library (see [`ittapi`] source) which Wasmtime links to when VTune support is
+specified through the `vtune` Cargo feature flag; this feature is not enabled by
+default. When the VTune collector is run, the `ittapi` library collects
+Wasmtime's reported JIT activities. This connection to `ittapi` is provided by
+the [`ittapi-rs`] crate.
 
-For jit profiling with VTune Profiler, first you want to make sure the `vtune` feature is enabled. After that, enabling runtime support is based on how you are using Wasmtime:
+For more information on VTune and the analysis tools it provides see its
+[documentation].
 
-* **Rust API** - you'll want to call the [`Config::profiler`] method with
+[help]: https://software.intel.com/en-us/vtune-help
+[download]: https://software.intel.com/en-us/vtune/choose-download#standalone
+[documentations]: https://software.intel.com/en-us/vtune-help
+[`ittapi`]: https://github.com/intel/ittapi
+[`ittapi-rs`]: https://crates.io/crates/ittapi-rs
+
+### Turn on VTune support
+
+For JIT profiling with VTune, first build with the `vtune` feature enabled:
+
+```sh
+$ cargo build --features=vtune
+```
+
+Then, enable runtime support based on how you use Wasmtime:
+
+* **Rust API** - call the [`Config::profiler`] method with
   `ProfilingStrategy::VTune` to enable profiling of your wasm modules.
 
-* **C API** - you'll want to call the `wasmtime_config_profiler_set` API with a
+* **C API** - call the `wasmtime_config_profiler_set` API with a
   `WASMTIME_PROFILING_STRATEGY_VTUNE` value.
 
-* **Command Line** - you'll want to pass the `--vtune` flag on the command
-  line.
+* **Command Line** - pass the `--vtune` flag on the command line.
 
-After profiling is complete, a results folder will hold profiling data that can then be read and analyzed with VTune.
 
-Also note, VTune is capable of profiling a single process or system wide. As such, and like perf, VTune is plenty capable of profiling the wasmtime runtime itself without any added support. However, APIs [`here`](https://github.com/intel/ittapi) also support an interface for marking the start and stop of code regions for easy isolatation in the VTune Profiler. Support for these APIs are expected to be added in the future.
+### Profiling Wasmtime itself
 
-Take the following example: with VTune properly installed, if you're using the CLI you'll execute with:
+Note that VTune is capable of profiling a single process or all system
+processes. Like `perf`, VTune is capable of profiling the Wasmtime runtime
+itself without any added support. However, the [`ittapi`] APIs also provide an
+interface for marking the start and stop of code regions for easy isolation in
+the VTune Profiler. Support for these APIs is expected to be added in the
+future.
+
+
+### Example: Getting Started
+
+With VTune [properly installed][download], if you are using the CLI execute:
 
 ```sh
 $ cargo build --features=vtune
 $ amplxe-cl -run-pass-thru=--no-altstack -collect hotspots target/debug/wasmtime --vtune foo.wasm
 ```
 
-This command tells the VTune collector (amplxe-cl) to collect hotspot profiling data on wasmtime that is executing foo.wasm. The --vtune flag enables VTune support in wasmtime so that the collector is also alerted to jit events that take place during runtime. The first time this is run, the result of the command is a results diretory r000hs/ which contains hotspot profiling data for wasmtime and the execution of foo.wasm. This data can then be read and displayed via the command line or via the VTune gui by importing the result.
+This command tells the VTune collector (`amplxe-cl`) to collect hot spot
+profiling data as Wasmtime is executing `foo.wasm`. The `--vtune` flag enables
+VTune support in Wasmtime so that the collector is also alerted to JIT events
+that take place during runtime. The first time this is run, the result of the
+command is a results diretory `r000hs/` which contains profiling data for
+Wasmtime and the execution of `foo.wasm`. This data can then be read and
+displayed via the command line or via the VTune GUI by importing the result.
 
-### `VTune` example
 
-Running through a familiar algorithm, first we'll start with the following wasm:
+### Example: CLI Collection
+
+Using a familiar algorithm, we'll start with the following Rust code:
 
 ```rust
 fn main() {
@@ -47,10 +94,16 @@ fn fib(n: u32) -> u32 {
 }
 ```
 
-Profiling data using vtune can be collected a number of ways and profiling data can be collected to focus
-on certain types of analysis. Below we show a command line executable option using amplxe-cl, which is
-installed and in our path, to help find hotspots in our wasm module. To collect  profiling information then,
-we'll simply execute:
+We compile the example to Wasm:
+
+```sh
+$ rustc --target wasm32-wasi fib.rs -C opt-level=z -C lto=yes
+```
+
+Then we execute the Wasmtime runtime (built with the `vtune` feature and
+executed with the `--vtune` flag to enable reporting) inside the VTune CLI
+application, `amplxe-cl`, which must already be installed and available on the
+path. To collect hot spot profiling information, we execute:
 
 ```sh
 $ rustc --target wasm32-wasi fib.rs -C opt-level=z -C lto=yes
@@ -64,7 +117,6 @@ amplxe: Executing actions 14 % Updating precomputed scalar metrics
 amplxe: Raw data has been loaded to the database, elapsed time is 0.792 seconds.
 amplxe: Executing actions 19 % Processing profile metrics and debug information
 ...
-...
 Top Hotspots
 Function                                                                                      Module          CPU Time
 --------------------------------------------------------------------------------------------  --------------  --------
@@ -74,8 +126,28 @@ cranelift_codegen::ir::instructions::InstructionData::opcode::hee6f5b6a72fc684e 
 core::ptr::slice_from_raw_parts::hc5cb6f1b39a0e7a1                                            wasmtime          0.066s
 _$LT$usize$u20$as$u20$core..slice..SliceIndex$LT$$u5b$T$u5d$$GT$$GT$::get::h70c7f142eeeee8bd  wasmtime          0.066s
 ```
-Note again, wasmtime must be built with the `vtune` feature flag enabled. From here you there are several options for further analysis. Below is an example view of the collected as seen in VTune's gui with it's many options.
+
+
+### Example: Importing Results into GUI
+
+Results directories created by `amplxe-cl` can be imported in the VTune GUI by
+clicking "Open > Result". Below is a visualization of the collected data as seen
+in VTune's GUI:
 
 ![vtune report output](assets/vtune-gui-fib.png)
 
-For more information on VTune and the analysis tools it provides see the docs [`here`](https://software.intel.com/en-us/vtune-help).
+
+### Example: GUI Collection
+
+VTune can collect data in multiple ways (see `amplxe-cl` CLI discussion above);
+another way is to use the VTune GUI directly. A standard work flow might look
+like:
+
+- Open VTune Profiler
+- "Configure Analysis" with
+  - "Application" set to `/path/to/wasmtime` (e.g., `target/debug/wasmtime`)
+  - "Application parameters" set to `--vtune /path/to/module.wasm`
+  - "Working directory" set as appropriate
+  - Enable "Hardware Event-Based Sampling," which may require some system
+    configuration, e.g. `sysctl -w kernel.perf_event_paranoid=0`
+- Start the analysis
