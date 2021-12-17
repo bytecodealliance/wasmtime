@@ -16,7 +16,6 @@
 
 use cranelift_codegen_meta as meta;
 
-use sha2::{Digest, Sha512};
 use std::env;
 use std::io::Read;
 use std::process;
@@ -163,7 +162,28 @@ impl IsleCompilation {
     /// `<generated_filename>.manifest` and use it to verify that a
     /// rebuild was done if necessary.
     fn compute_manifest(&self) -> Result<String, Box<dyn std::error::Error + 'static>> {
+        // We use the deprecated SipHasher from std::hash in order to verify
+        // that ISLE sources haven't changed since the generated source was
+        // last regenerated.
+        //
+        // We use this instead of a stronger and more usual content hash, like
+        // SHA-{160,256,512}, because it's built into the standard library and
+        // we don't want to pull in a separate crate. We try to keep Cranelift
+        // crate dependencies as intentionally small as possible. In fact, we
+        // used to use the `sha2` crate for SHA-512 and this turns out to be
+        // undesirable for downstream consumers (see #3609).
+        //
+        // Why not the recommended replacement
+        // `std::collections::hash_map::DefaultHasher`? Because we need the
+        // hash to be deterministic, both between runs (i.e., not seeded with
+        // random state) and across Rust versions.
+        //
+        // If `SipHasher` is ever actually removed from `std`, we'll need to
+        // find a new option, either a very small crate or something else
+        // that's built-in.
+        #![allow(deprecated)]
         use std::fmt::Write;
+        use std::hash::{Hasher, SipHasher};
 
         let mut manifest = String::new();
 
@@ -176,11 +196,11 @@ impl IsleCompilation {
             // to `\r\n`; canonicalize the source that we hash to
             // Unix-style (`\n`) so hashes will match.
             let content = content.replace("\r\n", "\n");
-            // One line in the manifest: <filename> <sha-512 hash>.
-            let mut hasher = Sha512::default();
-            hasher.update(content.as_bytes());
+            // One line in the manifest: <filename> <siphash>.
+            let mut hasher = SipHasher::new_with_keys(0, 0); // fixed keys for determinism
+            hasher.write(content.as_bytes());
             let filename = format!("{}", filename.display()).replace("\\", "/");
-            writeln!(&mut manifest, "{} {:x}", filename, hasher.finalize())?;
+            writeln!(&mut manifest, "{} {:x}", filename, hasher.finish())?;
         }
 
         Ok(manifest)
