@@ -35,4 +35,5 @@ skip = [
     { name = "wast" }, # old one pulled in by witx
     { name = "quick-error" }, # transitive dependencies
     { name = "textwrap" }, # `miette` and `clap` depend on different versions
+    { name = "itoa" }, # `rustix` and `criterion` depend on different versions
 ]

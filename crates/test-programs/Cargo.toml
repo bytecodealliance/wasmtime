@@ -21,7 +21,7 @@ tempfile = "3.1.0"
 os_pipe = "0.9"
 anyhow = "1.0.19"
 wat = "1.0.37"
-cap-std = "0.21.1"
+cap-std = "0.22.0"
 tokio = { version = "1.8.0", features = ["rt-multi-thread"] }
 
 [features]

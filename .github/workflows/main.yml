@@ -62,7 +62,7 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2021-07-18
+        toolchain: nightly-2021-12-15
 
     # Build C API documentation
     - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9 libclang-cpp9
@@ -180,8 +180,8 @@ jobs:
     # flags to rustc.
     - uses: ./.github/actions/install-rust
       with:
-        toolchain: nightly-2021-07-18
-    - run: cargo install cargo-fuzz --vers "^0.8"
+        toolchain: nightly-2021-12-15
+    - run: cargo install cargo-fuzz --vers "^0.11"
     # Install OCaml packages necessary for 'differential_spec' fuzz target.
     - run: sudo apt install -y ocaml-nox ocamlbuild
     - run: cargo fetch
