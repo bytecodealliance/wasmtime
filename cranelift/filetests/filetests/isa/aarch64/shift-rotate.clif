@@ -12,29 +12,31 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; check: movz x3, #128
-; nextln: sub x5, x3, x2
-; nextln: orn w4, wzr, w2
-; nextln: lsl x6, x1, #1
+; check:  mov x4, x1
+; nextln: orr x1, xzr, #128
+; nextln: sub x1, x1, x2
 ; nextln: lsr x3, x0, x2
-; nextln: lsl x6, x6, x4
-; nextln: lsr x4, x1, x2
+; nextln: lsr x5, x4, x2
+; nextln: orn w6, wzr, w2
+; nextln: lsl x7, x4, #1
+; nextln: lsl x6, x7, x6
+; nextln: orr x6, x3, x6
 ; nextln: ands xzr, x2, #64
-; nextln: orr x2, x3, x6
-; nextln: csel x3, xzr, x4, ne
-; nextln: csel x4, x4, x2, ne
-; nextln: orn w2, wzr, w5
-; nextln: lsr x6, x0, #1
-; nextln: lsl x1, x1, x5
-; nextln: lsr x2, x6, x2
-; nextln: lsl x0, x0, x5
-; nextln: ands xzr, x5, #64
-; nextln: orr x1, x1, x2
-; nextln: csel x1, x0, x1, ne
-; nextln: csel x0, xzr, x0, ne
-; nextln: orr x0, x0, x4
-; nextln: orr x1, x1, x3
+; nextln: csel x3, xzr, x5, ne
+; nextln: csel x2, x5, x6, ne
+; nextln: lsl x5, x0, x1
+; nextln: lsl x4, x4, x1
+; nextln: orn w6, wzr, w1
+; nextln: lsr x0, x0, #1
+; nextln: lsr x0, x0, x6
+; nextln: orr x0, x4, x0
+; nextln: ands xzr, x1, #64
+; nextln: csel x1, x5, x0, ne
+; nextln: csel x0, xzr, x5, ne
+; nextln: orr x1, x3, x1
+; nextln: orr x0, x2, x0
 ; nextln: ret
+
 
 function %f0(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -94,28 +96,29 @@ block0(v0: i128, v1: i128):
   return v2
 }
 
-; check: movz x3, #128
-; nextln: sub x5, x3, x2
-; nextln: orn w4, wzr, w2
-; nextln: lsr x6, x0, #1
-; nextln: lsl x3, x1, x2
-; nextln: lsr x6, x6, x4
-; nextln: lsl x4, x0, x2
+; check:  mov x4, x0
+; nextln: orr x0, xzr, #128
+; nextln: sub x0, x0, x2
+; nextln: lsl x3, x4, x2
+; nextln: lsl x5, x1, x2
+; nextln: orn w6, wzr, w2
+; nextln: lsr x7, x4, #1
+; nextln: lsr x6, x7, x6
+; nextln: orr x5, x5, x6
 ; nextln: ands xzr, x2, #64
-; nextln: orr x2, x3, x6
-; nextln: csel x3, x4, x2, ne
-; nextln: csel x4, xzr, x4, ne
-; nextln: orn w2, wzr, w5
-; nextln: lsl x6, x1, #1
-; nextln: lsr x0, x0, x5
-; nextln: lsl x2, x6, x2
-; nextln: lsr x1, x1, x5
-; nextln: ands xzr, x5, #64
-; nextln: orr x2, x0, x2
-; nextln: csel x0, xzr, x1, ne
-; nextln: csel x1, x1, x2, ne
-; nextln: orr x1, x1, x4
-; nextln: orr x0, x0, x3
+; nextln: csel x2, x3, x5, ne
+; nextln: csel x3, xzr, x3, ne
+; nextln: lsr x5, x4, x0
+; nextln: lsr x4, x1, x0
+; nextln: orn w6, wzr, w0
+; nextln: lsl x1, x1, #1
+; nextln: lsl x1, x1, x6
+; nextln: orr x1, x5, x1
+; nextln: ands xzr, x0, #64
+; nextln: csel x0, xzr, x4, ne
+; nextln: csel x1, x4, x1, ne
+; nextln: orr x1, x3, x1
+; nextln: orr x0, x2, x0
 ; nextln: mov x2, x0
 ; nextln: mov x0, x1
 ; nextln: mov x1, x2
@@ -147,8 +150,8 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  uxth w0, w0
-; nextln:  sub w1, wzr, w1
+; check:   sub w1, wzr, w1
+; nextln:  uxth w0, w0
 ; nextln:  and w1, w1, #15
 ; nextln:  sub w2, w1, #16
 ; nextln:  sub w2, wzr, w2
@@ -163,8 +166,8 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  uxtb w0, w0
-; nextln:  sub w1, wzr, w1
+; check:   sub w1, wzr, w1
+; nextln:  uxtb w0, w0
 ; nextln:  and w1, w1, #7
 ; nextln:  sub w2, w1, #8
 ; nextln:  sub w2, wzr, w2

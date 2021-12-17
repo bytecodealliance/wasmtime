@@ -24,6 +24,7 @@ use crate::{
     machinst::{ty_bits, InsnOutput, LowerCtx},
 };
 use std::boxed::Box;
+use std::convert::TryFrom;
 use std::vec::Vec;
 
 type BoxCallInfo = Box<CallInfo>;
@@ -261,5 +262,21 @@ where
 
     fn u64_into_imm_logic(&mut self, ty: Type, val: u64) -> ImmLogic {
         ImmLogic::maybe_from_u64(val, ty).unwrap()
+    }
+
+    fn negate_imm_shift(&mut self, ty: Type, mut imm: ImmShift) -> ImmShift {
+        let size = u8::try_from(ty.bits()).unwrap();
+        imm.imm = size.wrapping_sub(imm.value());
+        imm.imm &= size - 1;
+        imm
+    }
+
+    fn rotr_mask(&mut self, ty: Type) -> ImmLogic {
+        ImmLogic::maybe_from_u64((ty.bits() - 1) as u64, I32).unwrap()
+    }
+
+    fn rotr_opposite_amount(&mut self, ty: Type, val: ImmShift) -> ImmShift {
+        let amount = val.value() & u8::try_from(ty.bits() - 1).unwrap();
+        ImmShift::maybe_from_u64(u64::from(ty.bits()) - u64::from(amount)).unwrap()
     }
 }
