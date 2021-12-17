@@ -37,10 +37,10 @@ criterion = "0.3"
 cranelift-codegen-meta = { path = "meta", version = "0.79.0" }
 cranelift-isle = { path = "../isle/isle", version = "=0.79.0", optional = true }
 miette = { version = "3", features = ["fancy"], optional = true }
-sha2 = "0.9.8"
+sha2 = { version = "0.9.8", optional = true }
 
 [features]
-default = ["std", "unwind"]
+default = ["std", "unwind", "check-isle"]
 
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
@@ -57,6 +57,13 @@ testing_hooks = []
 
 # This enables unwind info generation functionality.
 unwind = ["gimli"]
+
+# The "check-isle" feature checks that ISLE-generated source is
+# up-to-date during build, according to a manifest of file hashes
+# created the last time the source was regenerated. Use the
+# "rebuild-isle" feature (which depends on this feature) to
+# additionally regenerate the source.
+check-isle = ["sha2"]
 
 # ISA targets for which we should build.
 # If no ISA targets are explicitly enabled, the ISA target for the host machine is enabled.
@@ -91,7 +98,12 @@ regalloc-snapshot = ["bincode", "regalloc/enable-serde"]
 souper-harvest = ["souper-ir", "souper-ir/stringify"]
 
 # Recompile ISLE DSL source files into their generated Rust code.
-rebuild-isle = ["cranelift-isle", "miette", "cranelift-codegen-meta/rebuild-isle"]
+rebuild-isle = [
+    "check-isle",
+    "cranelift-isle",
+    "miette",
+    "cranelift-codegen-meta/rebuild-isle",
+]
 
 # A hack to skip the ISLE-rebuild logic when testing for determinism
 # with the "Meta deterministic check" CI job.
