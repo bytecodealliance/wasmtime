@@ -2236,14 +2236,25 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         Opcode::Popcnt => {
             let ty_tmp = ty.unwrap();
             if !ty_tmp.is_vector() {
-                let (ext_spec, ty) = match ctx.input_ty(insn, 0) {
-                    types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
-                    a if a == types::I32 || a == types::I64 || a == types::I128 => (None, a),
-                    _ => unreachable!(),
-                };
+                let ty = ctx.input_ty(insn, 0);
 
                 if isa_flags.use_popcnt() {
                     match ty {
+                        types::I8 | types::I16 => {
+                            let src = RegMem::reg(extend_input_to_reg(
+                                ctx,
+                                inputs[0],
+                                ExtSpec::ZeroExtendTo32,
+                            ));
+                            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
+                            ctx.emit(Inst::unary_rm_r(
+                                OperandSize::from_ty(types::I32),
+                                UnaryRmROpcode::Popcnt,
+                                src,
+                                dst,
+                            ));
+                            return Ok(());
+                        }
                         types::I32 | types::I64 => {
                             let src = input_to_reg_mem(ctx, inputs[0]);
                             let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
@@ -2298,6 +2309,12 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         _ => {}
                     }
                 }
+
+                let (ext_spec, ty) = match ty {
+                    types::I8 | types::I16 => (Some(ExtSpec::ZeroExtendTo32), types::I32),
+                    a if a == types::I32 || a == types::I64 || a == types::I128 => (None, a),
+                    _ => unreachable!(),
+                };
 
                 let (srcs, ty): (SmallVec<[RegMem; 2]>, Type) = if let Some(ext_spec) = ext_spec {
                     (

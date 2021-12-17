@@ -888,7 +888,7 @@ block0(v0: i8, v1: i128):
 ; check:  pushq   %rbp
 ; nextln: movq    %rsp, %rbp
 ; nextln: movq    %rsi, %rcx
-; nextln: shll    %cl, %edi
+; nextln: shlb    %cl, %dil
 ; nextln: movq    %rdi, %rax
 ; nextln: movq    %rbp, %rsp
 ; nextln: popq    %rbp
