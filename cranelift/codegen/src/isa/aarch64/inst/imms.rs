@@ -583,7 +583,7 @@ impl ImmLogic {
 }
 
 /// An immediate for shift instructions.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct ImmShift {
     /// 6-bit shift amount.
     pub imm: u8,

@@ -81,7 +81,12 @@ pub fn run_filecheck(text: &str, context: &Context) -> anyhow::Result<()> {
         let (_, explain) = checker
             .explain(text, NO_VARIABLES)
             .context("filecheck explain failed")?;
-        anyhow::bail!("filecheck failed:\n{}{}", checker, explain);
+        anyhow::bail!(
+            "filecheck failed for function on line {}:\n{}{}",
+            context.details.location.line_number,
+            checker,
+            explain
+        );
     }
 }
 

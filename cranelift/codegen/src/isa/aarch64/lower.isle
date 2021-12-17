@@ -894,3 +894,145 @@
           (tst64_imm amt (u64_into_imm_logic $I64 64))
           (csel (Cond.Ne) hi_rshift maybe_lo)
           (csel (Cond.Ne) hi_sign hi_rshift))))
+
+;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; General 8/16-bit case.
+(rule (lower (has_type (fits_in_16 ty) (rotl x y)))
+      (let ((neg_shift Reg (alu_rrr (ALUOp.Sub32) (zero_reg) (put_in_reg y))))
+        (value_reg (small_rotr ty (put_in_reg_zext32 x) neg_shift))))
+
+;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
+(rule (lower (has_type (fits_in_16 ty) (rotl x (def_inst (iconst (imm_shift_from_imm64 <ty n))))))
+      (value_reg (small_rotr_imm ty (put_in_reg_zext32 x) (negate_imm_shift ty n))))
+
+;; aarch64 doesn't have a left-rotate instruction, but a left rotation of K
+;; places is effectively a right rotation of N - K places, if N is the integer's
+;; bit size. We implement left rotations with this trick.
+;;
+;; Note that when negating the shift amount here the upper bits are ignored
+;; by the rotr instruction, meaning that we'll still left-shift by the desired
+;; amount.
+
+;; General 32-bit case.
+(rule (lower (has_type $I32 (rotl x y)))
+      (let ((neg_shift Reg (alu_rrr (ALUOp.Sub32) (zero_reg) (put_in_reg y))))
+        (value_reg (alu_rrr (ALUOp.RotR32) (put_in_reg x) neg_shift))))
+
+;; General 64-bit case.
+(rule (lower (has_type $I64 (rotl x y)))
+      (let ((neg_shift Reg (alu_rrr (ALUOp.Sub64) (zero_reg) (put_in_reg y))))
+        (value_reg (alu_rrr (ALUOp.RotR64) (put_in_reg x) neg_shift))))
+
+;; Specialization for the 32-bit case when the rotation amount is an immediate.
+(rule (lower (has_type $I32 (rotl x (def_inst (iconst (imm_shift_from_imm64 <$I32 n))))))
+      (value_reg (alu_rr_imm_shift (ALUOp.RotR32) (put_in_reg x) (negate_imm_shift $I32 n))))
+
+;; Specialization for the 64-bit case when the rotation amount is an immediate.
+(rule (lower (has_type $I64 (rotl x (def_inst (iconst (imm_shift_from_imm64 <$I64 n))))))
+      (value_reg (alu_rr_imm_shift (ALUOp.RotR64) (put_in_reg x) (negate_imm_shift $I64 n))))
+
+(decl negate_imm_shift (Type ImmShift) ImmShift)
+(extern constructor negate_imm_shift negate_imm_shift)
+
+;; General 128-bit case.
+;;
+;; TODO: much better codegen is possible with a constant amount.
+(rule (lower (has_type $I128 (rotl x y)))
+      (let (
+          (val ValueRegs (put_in_regs x))
+          (amt Reg (value_regs_get (put_in_regs y) 0))
+          (neg_amt Reg (alu_rrr (ALUOp.Sub64) (imm $I64 128) amt))
+          (lshift ValueRegs (lower_shl128 val amt))
+          (rshift ValueRegs (lower_ushr128 val neg_amt))
+        )
+        (value_regs
+          (alu_rrr (ALUOp.Orr64) (value_regs_get lshift 0) (value_regs_get rshift 0))
+          (alu_rrr (ALUOp.Orr64) (value_regs_get lshift 1) (value_regs_get rshift 1)))))
+
+;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; General 8/16-bit case.
+(rule (lower (has_type (fits_in_16 ty) (rotr x y)))
+      (value_reg (small_rotr ty (put_in_reg_zext32 x) (put_in_reg y))))
+
+;; General 32-bit case.
+(rule (lower (has_type $I32 (rotr x y)))
+      (value_reg (alu_rrr (ALUOp.RotR32) (put_in_reg x) (put_in_reg y))))
+
+;; General 64-bit case.
+(rule (lower (has_type $I64 (rotr x y)))
+      (value_reg (alu_rrr (ALUOp.RotR64) (put_in_reg x) (put_in_reg y))))
+
+;; Specialization for the 8/16-bit case when the rotation amount is an immediate.
+(rule (lower (has_type (fits_in_16 ty) (rotr x (def_inst (iconst (imm_shift_from_imm64 <ty n))))))
+      (value_reg (small_rotr_imm ty (put_in_reg_zext32 x) n)))
+
+;; Specialization for the 32-bit case when the rotation amount is an immediate.
+(rule (lower (has_type $I32 (rotr x (def_inst (iconst (imm_shift_from_imm64 <$I32 n))))))
+      (value_reg (alu_rr_imm_shift (ALUOp.RotR32) (put_in_reg x) n)))
+
+;; Specialization for the 64-bit case when the rotation amount is an immediate.
+(rule (lower (has_type $I64 (rotr x (def_inst (iconst (imm_shift_from_imm64 <$I64 n))))))
+      (value_reg (alu_rr_imm_shift (ALUOp.RotR64) (put_in_reg x) n)))
+
+;; For a < 32-bit rotate-right, we synthesize this as:
+;;
+;;    rotr rd, val, amt
+;;
+;;       =>
+;;
+;;    and masked_amt, amt, <bitwidth - 1>
+;;    sub tmp_sub, masked_amt, <bitwidth>
+;;    sub neg_amt, zero, tmp_sub  ; neg
+;;    lsr val_rshift, val, masked_amt
+;;    lsl val_lshift, val, neg_amt
+;;    orr rd, val_lshift val_rshift
+(decl small_rotr (Type Reg Reg) Reg)
+(rule (small_rotr ty val amt)
+      (let (
+          (masked_amt Reg (alu_rr_imm_logic (ALUOp.And32) amt (rotr_mask ty)))
+          (tmp_sub Reg (alu_rr_imm12 (ALUOp.Sub32) masked_amt (u8_into_imm12 (ty_bits ty))))
+          (neg_amt Reg (alu_rrr (ALUOp.Sub32) (zero_reg) tmp_sub))
+          (val_rshift Reg (alu_rrr (ALUOp.Lsr32) val masked_amt))
+          (val_lshift Reg (alu_rrr (ALUOp.Lsl32) val neg_amt))
+        )
+        (alu_rrr (ALUOp.Orr32) val_lshift val_rshift)))
+
+(decl rotr_mask (Type) ImmLogic)
+(extern constructor rotr_mask rotr_mask)
+
+;; For a constant amount, we can instead do:
+;;
+;;    rotr rd, val, #amt
+;;
+;;       =>
+;;
+;;    lsr val_rshift, val, #<amt>
+;;    lsl val_lshift, val, <bitwidth - amt>
+;;    orr rd, val_lshift, val_rshift
+(decl small_rotr_imm (Type Reg ImmShift) Reg)
+(rule (small_rotr_imm ty val amt)
+      (let (
+          (val_rshift Reg (alu_rr_imm_shift (ALUOp.Lsr32) val amt))
+          (val_lshift Reg (alu_rr_imm_shift (ALUOp.Lsl32) val (rotr_opposite_amount ty amt)))
+        )
+        (alu_rrr (ALUOp.Orr32) val_lshift val_rshift)))
+
+(decl rotr_opposite_amount (Type ImmShift) ImmShift)
+(extern constructor rotr_opposite_amount rotr_opposite_amount)
+
+;; General 128-bit case.
+;;
+;; TODO: much better codegen is possible with a constant amount.
+(rule (lower (has_type $I128 (rotr x y)))
+      (let (
+          (val ValueRegs (put_in_regs x))
+          (amt Reg (value_regs_get (put_in_regs y) 0))
+          (neg_amt Reg (alu_rrr (ALUOp.Sub64) (imm $I64 128) amt))
+          (rshift ValueRegs (lower_ushr128 val amt))
+          (lshift ValueRegs (lower_shl128 val neg_amt))
+          (hi Reg (alu_rrr (ALUOp.Orr64) (value_regs_get rshift 1) (value_regs_get lshift 1)))
+          (lo Reg (alu_rrr (ALUOp.Orr64) (value_regs_get rshift 0) (value_regs_get lshift 0)))
+        )
+        (value_regs lo hi)))
