@@ -1,4 +1,11 @@
+<<<<<<< HEAD
 src/clif.isle f176ef3bba99365
 src/prelude.isle babc931e5dc5b4cf
 src/isa/aarch64/inst.isle abbd648f4a0b479a
 src/isa/aarch64/lower.isle c46d0692df0a9c0d
+=======
+src/clif.isle be1359b4b6b153f378517c1dd95cd80f4a6bed0c7b86eaba11c088fd71b7bfe80a3c868ace245b2da0bfbbd6ded262ea9576c8e0eeacbf89d03c34a17a709602
+src/prelude.isle 15c8dd937171bd0f619179e219422d43af0eb0ef9a6e88f23b2aa55776712e27342309dd3a4441876b2dfec7f16ce7fe13b3a926ace89b25cfc9577e7b1d1578
+src/isa/aarch64/inst.isle 5585f886b9edb808a6001991c299156b015e31e52bd17f4e29beddc180e5ec3830c80cf9167f59388356ccdcff8cdaec86a728e23888e5ee296f86351a2f7452
+src/isa/aarch64/lower.isle 4cfb410aab08b43fd14058a5bf238a8921c647a5177ca7f80f9fb0372687e8fa2e63dd0411eb6fc1ed8f1cc5d3ca6bf0073edc1b085e413ba99987f722863d1b
+>>>>>>> aarch64: Use smaller instruction helpers in ISLE
