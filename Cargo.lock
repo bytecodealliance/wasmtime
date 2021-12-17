@@ -544,7 +544,6 @@ dependencies = [
  "miette",
  "regalloc",
  "serde",
- "sha2",
  "smallvec",
  "souper-ir",
  "target-lexicon",
