@@ -1582,6 +1582,307 @@
         (ConsumesFlags.ConsumesFlags (MInst.CSel dst cond if_true if_false)
                                      (writable_reg_to_reg dst))))
 
+;; Helpers for generating `add` instructions.
+
+(decl add (Type Reg Reg) Reg)
+(rule (add (fits_in_32 _ty) x y) (add32 x y))
+(rule (add $I64 x y) (add64 x y))
+
+(decl add32 (Reg Reg) Reg)
+(rule (add32 x y) (alu_rrr (ALUOp.Add32) x y))
+
+(decl add64 (Reg Reg) Reg)
+(rule (add64 x y) (alu_rrr (ALUOp.Add64) x y))
+
+(decl add_imm (Type Reg Imm12) Reg)
+(rule (add_imm (fits_in_32 _ty) x y) (add32_imm x y))
+(rule (add_imm $I64 x y) (add64_imm x y))
+
+(decl add32_imm (Reg Imm12) Reg)
+(rule (add32_imm x y) (alu_rr_imm12 (ALUOp.Add32) x y))
+
+(decl add64_imm (Reg Imm12) Reg)
+(rule (add64_imm x y) (alu_rr_imm12 (ALUOp.Add64) x y))
+
+(decl add_extend (Type Reg ExtendedValue) Reg)
+(rule (add_extend (fits_in_32 _ty) x y) (add32_extend x y))
+(rule (add_extend $I64 x y) (add64_extend x y))
+
+(decl add32_extend (Reg ExtendedValue) Reg)
+(rule (add32_extend x y) (alu_rr_extend_reg (ALUOp.Add32) x y))
+
+(decl add64_extend (Reg ExtendedValue) Reg)
+(rule (add64_extend x y) (alu_rr_extend_reg (ALUOp.Add64) x y))
+
+(decl add_shift (Type Reg Reg ShiftOpAndAmt) Reg)
+(rule (add_shift (fits_in_32 _ty) x y z) (add32_shift x y z))
+(rule (add_shift $I64 x y z) (add64_shift x y z))
+
+(decl add32_shift (Reg Reg ShiftOpAndAmt) Reg)
+(rule (add32_shift x y z) (alu_rrr_shift (ALUOp.Add32) x y z))
+
+(decl add64_shift (Reg Reg ShiftOpAndAmt) Reg)
+(rule (add64_shift x y z) (alu_rrr_shift (ALUOp.Add64) x y z))
+
+(decl add_vec (Reg Reg VectorSize) Reg)
+(rule (add_vec x y size) (vec_rrr (VecALUOp.Add) x y size))
+
+;; Helpers for generating `sub` instructions.
+
+(decl sub (Type Reg Reg) Reg)
+(rule (sub (fits_in_32 _ty) x y) (sub32 x y))
+(rule (sub $I64 x y) (sub64 x y))
+
+(decl sub32 (Reg Reg) Reg)
+(rule (sub32 x y) (alu_rrr (ALUOp.Sub32) x y))
+
+(decl sub64 (Reg Reg) Reg)
+(rule (sub64 x y) (alu_rrr (ALUOp.Sub64) x y))
+
+(decl sub_imm (Type Reg Imm12) Reg)
+(rule (sub_imm (fits_in_32 _ty) x y) (sub32_imm x y))
+(rule (sub_imm $I64 x y) (sub64_imm x y))
+
+(decl sub32_imm (Reg Imm12) Reg)
+(rule (sub32_imm x y) (alu_rr_imm12 (ALUOp.Sub32) x y))
+
+(decl sub64_imm (Reg Imm12) Reg)
+(rule (sub64_imm x y) (alu_rr_imm12 (ALUOp.Sub64) x y))
+
+(decl sub_extend (Type Reg ExtendedValue) Reg)
+(rule (sub_extend (fits_in_32 _ty) x y) (sub32_extend x y))
+(rule (sub_extend $I64 x y) (sub64_extend x y))
+
+(decl sub32_extend (Reg ExtendedValue) Reg)
+(rule (sub32_extend x y) (alu_rr_extend_reg (ALUOp.Sub32) x y))
+
+(decl sub64_extend (Reg ExtendedValue) Reg)
+(rule (sub64_extend x y) (alu_rr_extend_reg (ALUOp.Sub64) x y))
+
+(decl sub_shift (Type Reg Reg ShiftOpAndAmt) Reg)
+(rule (sub_shift (fits_in_32 _ty) x y z) (sub32_shift x y z))
+(rule (sub_shift $I64 x y z) (sub64_shift x y z))
+
+(decl sub32_shift (Reg Reg ShiftOpAndAmt) Reg)
+(rule (sub32_shift x y z) (alu_rrr_shift (ALUOp.Sub32) x y z))
+
+(decl sub64_shift (Reg Reg ShiftOpAndAmt) Reg)
+(rule (sub64_shift x y z) (alu_rrr_shift (ALUOp.Sub64) x y z))
+
+(decl sub_vec (Reg Reg VectorSize) Reg)
+(rule (sub_vec x y size) (vec_rrr (VecALUOp.Sub) x y size))
+
+;; Helpers for generating `madd` instructions.
+
+(decl madd (Type Reg Reg Reg) Reg)
+(rule (madd (fits_in_32 _ty) x y z) (madd32 x y z))
+(rule (madd $I64 x y z) (madd64 x y z))
+
+(decl madd32 (Reg Reg Reg) Reg)
+(rule (madd32 x y z) (alu_rrrr (ALUOp3.MAdd32) x y z))
+
+(decl madd64 (Reg Reg Reg) Reg)
+(rule (madd64 x y z) (alu_rrrr (ALUOp3.MAdd64) x y z))
+
+;; Helpers for generating `msub` instructions.
+
+(decl msub64 (Reg Reg Reg) Reg)
+(rule (msub64 x y z) (alu_rrrr (ALUOp3.MSub64) x y z))
+
+;; Helper for generating `uqadd` instructions.
+(decl uqadd (Reg Reg VectorSize) Reg)
+(rule (uqadd x y size) (vec_rrr (VecALUOp.Uqadd) x y size))
+
+;; Helper for generating `sqadd` instructions.
+(decl sqadd (Reg Reg VectorSize) Reg)
+(rule (sqadd x y size) (vec_rrr (VecALUOp.Sqadd) x y size))
+
+;; Helper for generating `uqsub` instructions.
+(decl uqsub (Reg Reg VectorSize) Reg)
+(rule (uqsub x y size) (vec_rrr (VecALUOp.Uqsub) x y size))
+
+;; Helper for generating `sqsub` instructions.
+(decl sqsub (Reg Reg VectorSize) Reg)
+(rule (sqsub x y size) (vec_rrr (VecALUOp.Sqsub) x y size))
+
+;; Helper for generating `umulh` instructions.
+(decl umulh (Reg Reg) Reg)
+(rule (umulh x y) (alu_rrr (ALUOp.UMulH) x y))
+
+;; Helper for generating `smulh` instructions.
+(decl smulh (Reg Reg) Reg)
+(rule (smulh x y) (alu_rrr (ALUOp.SMulH) x y))
+
+;; Helper for generating `mul` instructions.
+(decl mul (Reg Reg VectorSize) Reg)
+(rule (mul x y size) (vec_rrr (VecALUOp.Mul) x y size))
+
+;; Helper for generating `neg` instructions.
+(decl neg (Reg VectorSize) Reg)
+(rule (neg x size) (vec_misc (VecMisc2.Neg) x size))
+
+;; Helper for generating `rev64` instructions.
+(decl rev64 (Reg VectorSize) Reg)
+(rule (rev64 x size) (vec_misc (VecMisc2.Rev64) x size))
+
+;; Helper for generating `xtn64` instructions.
+(decl xtn64 (Reg bool) Reg)
+(rule (xtn64 x high_half) (vec_rr_narrow (VecRRNarrowOp.Xtn64) x high_half))
+
+;; Helper for generating `addp` instructions.
+(decl addp (Reg Reg VectorSize) Reg)
+(rule (addp x y size) (vec_rrr (VecALUOp.Addp) x y size))
+
+;; Helper for generating `shll32` instructions.
+(decl shll32 (Reg bool) Reg)
+(rule (shll32 x high_half) (vec_rr_long (VecRRLongOp.Shll32) x high_half))
+
+;; Helper for generating `umlal32` instructions.
+(decl umlal32 (Reg Reg Reg bool) Reg)
+(rule (umlal32 x y z high_half) (vec_rrrr_long (VecRRRLongOp.Umlal32) x y z high_half))
+
+;; Helper for generating `smull8` instructions.
+(decl smull8 (Reg Reg bool) Reg)
+(rule (smull8 x y high_half) (vec_rrr_long (VecRRRLongOp.Smull8) x y high_half))
+
+;; Helper for generating `umull8` instructions.
+(decl umull8 (Reg Reg bool) Reg)
+(rule (umull8 x y high_half) (vec_rrr_long (VecRRRLongOp.Umull8) x y high_half))
+
+;; Helper for generating `smull16` instructions.
+(decl smull16 (Reg Reg bool) Reg)
+(rule (smull16 x y high_half) (vec_rrr_long (VecRRRLongOp.Smull16) x y high_half))
+
+;; Helper for generating `umull16` instructions.
+(decl umull16 (Reg Reg bool) Reg)
+(rule (umull16 x y high_half) (vec_rrr_long (VecRRRLongOp.Umull16) x y high_half))
+
+;; Helper for generating `smull32` instructions.
+(decl smull32 (Reg Reg bool) Reg)
+(rule (smull32 x y high_half) (vec_rrr_long (VecRRRLongOp.Smull32) x y high_half))
+
+;; Helper for generating `umull32` instructions.
+(decl umull32 (Reg Reg bool) Reg)
+(rule (umull32 x y high_half) (vec_rrr_long (VecRRRLongOp.Umull32) x y high_half))
+
+;; Helper for generating `asr` instructions.
+(decl asr64 (Reg Reg) Reg)
+(rule (asr64 x y) (alu_rrr (ALUOp.Asr64) x y))
+
+(decl asr64_imm (Reg ImmShift) Reg)
+(rule (asr64_imm x imm) (alu_rr_imm_shift (ALUOp.Asr64) x imm))
+
+;; Helper for generating `lsr` instructions.
+(decl lsr32 (Reg Reg) Reg)
+(rule (lsr32 x y) (alu_rrr (ALUOp.Lsr32) x y))
+
+(decl lsr32_imm (Reg ImmShift) Reg)
+(rule (lsr32_imm x imm) (alu_rr_imm_shift (ALUOp.Lsr32) x imm))
+
+(decl lsr64 (Reg Reg) Reg)
+(rule (lsr64 x y) (alu_rrr (ALUOp.Lsr64) x y))
+
+(decl lsr64_imm (Reg ImmShift) Reg)
+(rule (lsr64_imm x imm) (alu_rr_imm_shift (ALUOp.Lsr64) x imm))
+
+;; Helper for generating `lsl` instructions.
+(decl lsl32 (Reg Reg) Reg)
+(rule (lsl32 x y) (alu_rrr (ALUOp.Lsl32) x y))
+
+(decl lsl32_imm (Reg ImmShift) Reg)
+(rule (lsl32_imm x imm) (alu_rr_imm_shift (ALUOp.Lsl32) x imm))
+
+(decl lsl64 (Reg Reg) Reg)
+(rule (lsl64 x y) (alu_rrr (ALUOp.Lsl64) x y))
+
+(decl lsl64_imm (Reg ImmShift) Reg)
+(rule (lsl64_imm x imm) (alu_rr_imm_shift (ALUOp.Lsl64) x imm))
+
+;; Helper for generating `udiv` instructions.
+(decl udiv64 (Reg Reg) Reg)
+(rule (udiv64 x y) (alu_rrr (ALUOp.UDiv64) x y))
+
+;; Helper for generating `sdiv` instructions.
+(decl sdiv64 (Reg Reg) Reg)
+(rule (sdiv64 x y) (alu_rrr (ALUOp.SDiv64) x y))
+
+;; Helper for generating `not` instructions.
+(decl not (Reg VectorSize) Reg)
+(rule (not x size) (vec_misc (VecMisc2.Not) x size))
+
+;; Helpers for generating `orr_not` instructions.
+
+(decl orr_not (Type Reg Reg) Reg)
+(rule (orr_not (fits_in_32 _ty) x y) (orr_not32 x y))
+(rule (orr_not $I64 x y) (orr_not64 x y))
+
+(decl orr_not32 (Reg Reg) Reg)
+(rule (orr_not32 x y) (alu_rrr (ALUOp.OrrNot32) x y))
+
+(decl orr_not64 (Reg Reg) Reg)
+(rule (orr_not64 x y) (alu_rrr (ALUOp.OrrNot64) x y))
+
+(decl orr_not_shift (Type Reg Reg ShiftOpAndAmt) Reg)
+(rule (orr_not_shift (fits_in_32 _ty) x y shift) (orr_not_shift32 x y shift))
+(rule (orr_not_shift $I64 x y shift) (orr_not_shift64 x y shift))
+
+(decl orr_not_shift32 (Reg Reg ShiftOpAndAmt) Reg)
+(rule (orr_not_shift32 x y shift) (alu_rrr_shift (ALUOp.OrrNot32) x y shift))
+
+(decl orr_not_shift64 (Reg Reg ShiftOpAndAmt) Reg)
+(rule (orr_not_shift64 x y shift) (alu_rrr_shift (ALUOp.OrrNot64) x y shift))
+
+;; Helpers for generating `orr` instructions.
+
+(decl orr32 (Reg Reg) Reg)
+(rule (orr32 x y) (alu_rrr (ALUOp.Orr32) x y))
+
+(decl orr64 (Reg Reg) Reg)
+(rule (orr64 x y) (alu_rrr (ALUOp.Orr64) x y))
+
+(decl orr64_imm (Reg ImmLogic) Reg)
+(rule (orr64_imm x y) (alu_rr_imm_logic (ALUOp.Orr64) x y))
+
+(decl orr_vec (Reg Reg VectorSize) Reg)
+(rule (orr_vec x y size) (vec_rrr (VecALUOp.Orr) x y size))
+
+;; Helpers for generating `and` instructions.
+
+(decl and32_imm (Reg ImmLogic) Reg)
+(rule (and32_imm x y) (alu_rr_imm_logic (ALUOp.And32) x y))
+
+(decl and_vec (Reg Reg VectorSize) Reg)
+(rule (and_vec x y size) (vec_rrr (VecALUOp.And) x y size))
+
+;; Helpers for generating `eor` instructions.
+(decl eor_vec (Reg Reg VectorSize) Reg)
+(rule (eor_vec x y size) (vec_rrr (VecALUOp.Eor) x y size))
+
+;; Helpers for generating `bic` instructions.
+(decl bic_vec (Reg Reg VectorSize) Reg)
+(rule (bic_vec x y size) (vec_rrr (VecALUOp.Bic) x y size))
+
+;; Helpers for generating `sshl` instructions.
+(decl sshl (Reg Reg VectorSize) Reg)
+(rule (sshl x y size) (vec_rrr (VecALUOp.Sshl) x y size))
+
+;; Helpers for generating `ushl` instructions.
+(decl ushl (Reg Reg VectorSize) Reg)
+(rule (ushl x y size) (vec_rrr (VecALUOp.Ushl) x y size))
+
+;; Helpers for generating `rotr` instructions.
+
+(decl rotr32 (Reg Reg) Reg)
+(rule (rotr32 x y) (alu_rrr (ALUOp.RotR32) x y))
+
+(decl rotr32_imm (Reg ImmShift) Reg)
+(rule (rotr32_imm x y) (alu_rr_imm_shift (ALUOp.RotR32) x y))
+
+(decl rotr64 (Reg Reg) Reg)
+(rule (rotr64 x y) (alu_rrr (ALUOp.RotR64) x y))
+
+(decl rotr64_imm (Reg ImmShift) Reg)
+(rule (rotr64_imm x y) (alu_rr_imm_shift (ALUOp.RotR64) x y))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1597,7 +1898,7 @@
 
 ;; Weird logical-instruction immediate in ORI using zero register
 (rule (imm (integral_ty _ty) (imm_logic_from_u64 <$I64 n))
-      (alu_rr_imm_logic (ALUOp.Orr64) (zero_reg) n))
+      (orr64_imm (zero_reg) n))
 
 (decl load_constant64_full (u64) Reg)
 (extern constructor load_constant64_full load_constant64_full)
