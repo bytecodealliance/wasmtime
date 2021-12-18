@@ -63,10 +63,10 @@ With VTune [properly installed][download], if you are using the CLI execute:
 
 ```sh
 $ cargo build --features=vtune
-$ amplxe-cl -run-pass-thru=--no-altstack -collect hotspots target/debug/wasmtime --vtune foo.wasm
+$ vtune -run-pass-thru=--no-altstack -collect hotspots target/debug/wasmtime --vtune foo.wasm
 ```
 
-This command tells the VTune collector (`amplxe-cl`) to collect hot spot
+This command tells the VTune collector (`vtune`) to collect hot spot
 profiling data as Wasmtime is executing `foo.wasm`. The `--vtune` flag enables
 VTune support in Wasmtime so that the collector is also alerted to JIT events
 that take place during runtime. The first time this is run, the result of the
@@ -102,12 +102,12 @@ $ rustc --target wasm32-wasi fib.rs -C opt-level=z -C lto=yes
 
 Then we execute the Wasmtime runtime (built with the `vtune` feature and
 executed with the `--vtune` flag to enable reporting) inside the VTune CLI
-application, `amplxe-cl`, which must already be installed and available on the
+application, `vtune`, which must already be installed and available on the
 path. To collect hot spot profiling information, we execute:
 
 ```sh
 $ rustc --target wasm32-wasi fib.rs -C opt-level=z -C lto=yes
-$ amplxe-cl -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --vtune fib.wasm
+$ vtune -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --vtune fib.wasm
 fib(45) = 1134903170
 amplxe: Collection stopped.
 amplxe: Using result path /home/jlb6740/wasmtime/r000hs
@@ -130,16 +130,16 @@ _$LT$usize$u20$as$u20$core..slice..SliceIndex$LT$$u5b$T$u5d$$GT$$GT$::get::h70c7
 
 ### Example: Importing Results into GUI
 
-Results directories created by `amplxe-cl` can be imported in the VTune GUI by
-clicking "Open > Result". Below is a visualization of the collected data as seen
-in VTune's GUI:
+Results directories created by the `vtune` CLI can be imported in the VTune GUI
+by clicking "Open > Result". Below is a visualization of the collected data as
+seen in VTune's GUI:
 
 ![vtune report output](assets/vtune-gui-fib.png)
 
 
 ### Example: GUI Collection
 
-VTune can collect data in multiple ways (see `amplxe-cl` CLI discussion above);
+VTune can collect data in multiple ways (see `vtune` CLI discussion above);
 another way is to use the VTune GUI directly. A standard work flow might look
 like:
 
