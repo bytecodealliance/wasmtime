@@ -60,7 +60,7 @@ jobs:
       - name: Push to remote
         run: |
           git remote set-url origin https://git:${{ secrets.PERSONAL_ACCESS_TOKEN }}@github.com/${{ github.repository }}
-          git push origin main:ci/bump-version -f
+          git push origin HEAD:ci/bump-version -f
 
       - name: Make a PR
         # Note that the syntax here is kinda funky, and the general gist is that
@@ -92,7 +92,7 @@ jobs:
             --data @- << EOF
           {
             "head": "ci/bump-version",
-            "base": "main",
+            "base": "${{ github.base_ref }}",
             "title": "Release Wasmtime ${{ steps.bump.outputs.version }}",
             "body": $body,
             "maintainer_can_modify": true
