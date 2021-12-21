@@ -114,39 +114,7 @@ impl binemit::CodeSink for SizeSink {
 }
 
 fn check_precise_output(text: &str, context: &Context) -> Result<()> {
-    let actual = text
-        .lines()
-        // Massage the precise `text` into something a little more terse that
-        // drops some unnecessary qualifications of the output
-        .filter(|line| {
-            !line.starts_with("VCode_ShowWith")
-                && !line.starts_with("Block")
-                && !line.starts_with("  Entry block")
-                && !line.starts_with("  (")
-                && *line != "}}"
-        })
-        // Drop the `Inst ##:` prefix of each remaining line, if present
-        .map(|line| {
-            if line.trim().starts_with("Inst") {
-                match line.find(':') {
-                    Some(i) => line[i + 1..].trim(),
-                    None => line,
-                }
-            } else {
-                line
-            }
-        })
-        // For human-readable-ness use the filecheck-style directives of
-        // `check` and `nextln` in what the compiled code actually generates.
-        .enumerate()
-        .map(|(i, line)| {
-            if i == 0 {
-                format!("check: {}", line)
-            } else {
-                format!("nextln: {}", line)
-            }
-        })
-        .collect::<Vec<_>>();
+    let actual = text.lines().collect::<Vec<_>>();
 
     // Use the comments after the function to build the test expectation.
     let expected = context
@@ -185,61 +153,33 @@ fn check_precise_output(text: &str, context: &Context) -> Result<()> {
     )
 }
 
-fn update_test(output: &[String], context: &Context) -> Result<()> {
-    let test = std::fs::read_to_string(context.file_path)?;
-    let mut new_test = String::new();
-    let mut lines = test.lines();
+fn update_test(output: &[&str], context: &Context) -> Result<()> {
+    context
+        .file_update
+        .update_at(&context.details.location, |new_test, old_test| {
+            // blank newline after the function
+            new_test.push_str("\n");
 
-    // Push everything leading up to the start of the function
-    for _ in 0..context.details.location.line_number {
-        new_test.push_str(lines.next().unwrap());
-        new_test.push_str("\n");
-    }
+            // Splice in the test output
+            for output in output {
+                new_test.push_str("; ");
+                new_test.push_str(output);
+                new_test.push_str("\n");
+            }
 
-    // Push the whole function, leading up to the trailing `}`
-    let mut first = true;
-    while let Some(line) = lines.next() {
-        if first && !line.starts_with("function") {
-            bail!(
-                "line {} in test file `{}` did not start with `function`, \
-                 cannot automatically update test",
-                context.details.location.line_number,
-                context.file_path,
-            );
-        }
-        first = false;
-        new_test.push_str(line);
-        new_test.push_str("\n");
-        if line.starts_with("}") {
-            break;
-        }
-    }
+            // blank newline after test assertion
+            new_test.push_str("\n");
 
-    // blank newline after the function
-    new_test.push_str("\n");
-
-    // Splice in the test output
-    for output in output {
-        new_test.push_str("; ");
-        new_test.push_str(output);
-        new_test.push_str("\n");
-    }
-
-    // blank newline after test assertion
-    new_test.push_str("\n");
-
-    // Drop all remaining commented lines (presumably the old test expectation),
-    // but after we hit a real line then we push all remaining lines.
-    let mut in_next_function = false;
-    for line in lines {
-        if !in_next_function && (line.trim().is_empty() || line.starts_with(";")) {
-            continue;
-        }
-        in_next_function = true;
-        new_test.push_str(line);
-        new_test.push_str("\n");
-    }
-
-    std::fs::write(context.file_path, new_test)?;
-    Ok(())
+            // Drop all remaining commented lines (presumably the old test expectation),
+            // but after we hit a real line then we push all remaining lines.
+            let mut in_next_function = false;
+            for line in old_test {
+                if !in_next_function && (line.trim().is_empty() || line.starts_with(";")) {
+                    continue;
+                }
+                in_next_function = true;
+                new_test.push_str(line);
+                new_test.push_str("\n");
+            }
+        })
 }
