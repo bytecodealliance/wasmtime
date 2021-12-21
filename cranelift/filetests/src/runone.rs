@@ -270,7 +270,7 @@ impl FileUpdate {
         let old_line_count = old_test.lines().count();
         let new_line_count = new_test.lines().count();
         self.line_diff
-            .set(self.line_diff.get() + (new_line_count - old_line_count) as isize);
+            .set(self.line_diff.get() + (new_line_count as isize - old_line_count as isize));
 
         std::fs::write(&self.path, new_test)?;
         Ok(())
