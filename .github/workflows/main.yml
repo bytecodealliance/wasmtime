@@ -6,7 +6,7 @@ on:
     paths-ignore:
       - 'meetings/**'
   pull_request:
-    branches: [main]
+    branches: ['main', 'release-*']
     paths-ignore:
       - 'meetings/**'
 defaults:
