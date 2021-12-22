@@ -130,7 +130,7 @@ fn check_precise_output(text: &str, context: &Context) -> Result<()> {
     }
 
     // If we're supposed to automatically update the test, then do so here.
-    if env::var("BLESS").unwrap_or(String::new()) == "1" {
+    if env::var("CRANELIFT_TEST_BLESS").unwrap_or(String::new()) == "1" {
         return update_test(&actual, context);
     }
 
@@ -145,7 +145,7 @@ fn check_precise_output(text: &str, context: &Context) -> Result<()> {
          {:#?}\n\
          \n\
          This test assertion can be automatically updated by setting the\n\
-         BLESS=1 environment variable when running this test.
+         CRANELIFT_TEST_BLESS=1 environment variable when running this test.
          ",
         context.details.location.line_number,
         expected,

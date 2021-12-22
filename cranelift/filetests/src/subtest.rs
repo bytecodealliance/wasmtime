@@ -30,7 +30,8 @@ pub struct Context<'a> {
     /// Full path to the file containing the test.
     pub file_path: &'a str,
 
-    /// TODO
+    /// Context used to update the original `file_path` in-place with its test
+    /// expectations if so configured in the environment.
     pub file_update: &'a FileUpdate,
 }
 
