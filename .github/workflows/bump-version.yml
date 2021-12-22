@@ -92,7 +92,7 @@ jobs:
             --data @- << EOF
           {
             "head": "ci/bump-version",
-            "base": "${{ github.base_ref }}",
+            "base": "${{ github.ref_name }}",
             "title": "Release Wasmtime ${{ steps.bump.outputs.version }}",
             "body": $body,
             "maintainer_can_modify": true
