@@ -436,7 +436,7 @@ impl ABIMachineSpec for Arm32MachineDeps {
         unimplemented!("StructArgs not implemented for ARM32 yet");
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, _ty: Type) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
         match rc {
             RegClass::I32 => 1,
             _ => panic!("Unexpected register class!"),

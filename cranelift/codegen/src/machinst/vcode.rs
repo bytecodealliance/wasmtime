@@ -688,24 +688,21 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
         self.vreg_types.len()
     }
 
-    fn get_spillslot_size(&self, regclass: RegClass, vreg: VirtualReg) -> u32 {
-        let ty = self.vreg_type(vreg);
-        self.abi.get_spillslot_size(regclass, ty)
+    fn get_spillslot_size(&self, regclass: RegClass, _: VirtualReg) -> u32 {
+        self.abi.get_spillslot_size(regclass)
     }
 
-    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, vreg: Option<VirtualReg>) -> I {
-        let ty = vreg.map(|v| self.vreg_type(v));
-        self.abi.gen_spill(to_slot, from_reg, ty)
+    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, _: Option<VirtualReg>) -> I {
+        self.abi.gen_spill(to_slot, from_reg)
     }
 
     fn gen_reload(
         &self,
         to_reg: Writable<RealReg>,
         from_slot: SpillSlot,
-        vreg: Option<VirtualReg>,
+        _: Option<VirtualReg>,
     ) -> I {
-        let ty = vreg.map(|v| self.vreg_type(v));
-        self.abi.gen_reload(to_reg, from_slot, ty)
+        self.abi.gen_reload(to_reg, from_slot)
     }
 
     fn gen_move(&self, to_reg: Writable<RealReg>, from_reg: RealReg, vreg: VirtualReg) -> I {

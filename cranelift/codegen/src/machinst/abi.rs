@@ -161,22 +161,13 @@ pub trait ABICallee {
     fn stack_args_size(&self) -> u32;
 
     /// Get the spill-slot size.
-    fn get_spillslot_size(&self, rc: RegClass, ty: Type) -> u32;
+    fn get_spillslot_size(&self, rc: RegClass) -> u32;
 
-    /// Generate a spill. The type, if known, is given; this can be used to
-    /// generate a store instruction optimized for the particular type rather
-    /// than the RegClass (e.g., only F64 that resides in a V128 register). If
-    /// no type is given, the implementation should spill the whole register.
-    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg, ty: Option<Type>) -> Self::I;
+    /// Generate a spill.
+    fn gen_spill(&self, to_slot: SpillSlot, from_reg: RealReg) -> Self::I;
 
-    /// Generate a reload (fill). As for spills, the type may be given to allow
-    /// a more optimized load instruction to be generated.
-    fn gen_reload(
-        &self,
-        to_reg: Writable<RealReg>,
-        from_slot: SpillSlot,
-        ty: Option<Type>,
-    ) -> Self::I;
+    /// Generate a reload (fill).
+    fn gen_reload(&self, to_reg: Writable<RealReg>, from_slot: SpillSlot) -> Self::I;
 }
 
 /// Trait implemented by an object that tracks ABI-related state and can

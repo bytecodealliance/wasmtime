@@ -719,12 +719,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, ty: Type) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
         // We allocate in terms of 8-byte slots.
-        match (rc, ty) {
-            (RegClass::I64, _) => 1,
-            (RegClass::V128, types::F32) | (RegClass::V128, types::F64) => 1,
-            (RegClass::V128, _) => 2,
+        match rc {
+            RegClass::I64 => 1,
+            RegClass::V128 => 2,
             _ => panic!("Unexpected register class!"),
         }
     }
