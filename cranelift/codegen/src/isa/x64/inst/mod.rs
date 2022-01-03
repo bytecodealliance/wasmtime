@@ -3298,19 +3298,13 @@ pub struct EmitState {
 
 /// Constant state used during emissions of a sequence of instructions.
 pub struct EmitInfo {
-    flags: settings::Flags,
+    pub(super) flags: settings::Flags,
     isa_flags: x64_settings::Flags,
 }
 
 impl EmitInfo {
     pub(crate) fn new(flags: settings::Flags, isa_flags: x64_settings::Flags) -> Self {
         Self { flags, isa_flags }
-    }
-}
-
-impl MachInstEmitInfo for EmitInfo {
-    fn flags(&self) -> &Flags {
-        &self.flags
     }
 }
 
