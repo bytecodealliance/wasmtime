@@ -50,7 +50,6 @@ use crate::ir;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::machinst::{MachBackend, UnwindInfoKind};
-use crate::result::CodegenResult;
 use crate::settings;
 use crate::settings::SetResult;
 use alloc::{boxed::Box, vec::Vec};
@@ -236,18 +235,6 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// IntCC condition for Unsigned Addition Overflow (Carry).
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
-
-    /// Creates unwind information for the function.
-    ///
-    /// Returns `None` if there is no unwind information for the function.
-    #[cfg(feature = "unwind")]
-    fn create_unwind_info(
-        &self,
-        _func: &ir::Function,
-    ) -> CodegenResult<Option<unwind::UnwindInfo>> {
-        // By default, an ISA has no unwind information
-        Ok(None)
-    }
 
     /// Creates a new System V Common Information Entry for the ISA.
     ///
