@@ -66,8 +66,8 @@ jobs:
 
     # Build C API documentation
     - run: sudo apt-get update -y && sudo apt-get install -y libclang1-9 libclang-cpp9
-    - run: curl -L https://doxygen.nl/files/doxygen-1.9.1.linux.bin.tar.gz | tar xzf -
-    - run: echo "`pwd`/doxygen-1.9.1/bin" >> $GITHUB_PATH
+    - run: curl -L https://www.doxygen.nl/files/doxygen-1.9.3.linux.bin.tar.gz | tar xzf -
+    - run: echo "`pwd`/doxygen-1.9.3/bin" >> $GITHUB_PATH
     - run: cd crates/c-api && doxygen doxygen.conf
 
     # install mdbook, build the docs, and test the docs
