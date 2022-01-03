@@ -96,29 +96,8 @@ impl fmt::Display for Reloc {
 /// precedes the boundary between the sections.
 #[derive(PartialEq)]
 pub struct CodeInfo {
-    /// Number of bytes of machine code (the code starts at offset 0).
-    pub code_size: CodeOffset,
-
-    /// Number of bytes of jumptables.
-    pub jumptables_size: CodeOffset,
-
-    /// Number of bytes of rodata.
-    pub rodata_size: CodeOffset,
-
     /// Number of bytes in total.
     pub total_size: CodeOffset,
-}
-
-impl CodeInfo {
-    /// Offset of any relocatable jump tables, or equal to rodata if there are no jump tables.
-    pub fn jumptables(&self) -> CodeOffset {
-        self.code_size
-    }
-
-    /// Offset of any copyable read-only data, or equal to total_size if there are no rodata.
-    pub fn rodata(&self) -> CodeOffset {
-        self.code_size + self.jumptables_size
-    }
 }
 
 /// Abstract interface for adding bytes to the code segment.
@@ -146,12 +125,6 @@ pub trait CodeSink {
 
     /// Add trap information for the current offset.
     fn trap(&mut self, _: TrapCode, _: SourceLoc);
-
-    /// Machine code output is complete, jump table data may follow.
-    fn begin_jumptables(&mut self);
-
-    /// Jump table output is complete, raw read-only data may follow.
-    fn begin_rodata(&mut self);
 
     /// Read-only data output is complete, we're done.
     fn end_codegen(&mut self);

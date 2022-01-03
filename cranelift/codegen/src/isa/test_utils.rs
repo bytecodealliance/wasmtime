@@ -68,10 +68,6 @@ impl CodeSink for TestCodeSink {
 
     fn trap(&mut self, _code: TrapCode, _srcloc: SourceLoc) {}
 
-    fn begin_jumptables(&mut self) {}
-
-    fn begin_rodata(&mut self) {}
-
     fn end_codegen(&mut self) {}
 
     fn add_call_site(&mut self, _opcode: Opcode, _srcloc: SourceLoc) {}

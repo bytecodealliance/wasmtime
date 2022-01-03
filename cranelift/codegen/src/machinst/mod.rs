@@ -367,12 +367,8 @@ pub struct MachCompileResult {
 impl MachCompileResult {
     /// Get a `CodeInfo` describing section sizes from this compilation result.
     pub fn code_info(&self) -> CodeInfo {
-        let code_size = self.buffer.total_size();
         CodeInfo {
-            code_size,
-            jumptables_size: 0,
-            rodata_size: 0,
-            total_size: code_size,
+            total_size: self.buffer.total_size(),
         }
     }
 }

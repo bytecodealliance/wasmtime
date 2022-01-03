@@ -93,7 +93,5 @@ impl binemit::CodeSink for SizeSink {
     ) {
     }
     fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
-    fn begin_jumptables(&mut self) {}
-    fn begin_rodata(&mut self) {}
     fn end_codegen(&mut self) {}
 }

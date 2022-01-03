@@ -91,8 +91,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 print_all(
                     isa,
                     &mem,
-                    code_info.code_size,
-                    code_info.jumptables_size + code_info.rodata_size,
+                    code_info.total_size,
                     &relocs,
                     &traps,
                     &stack_maps,
