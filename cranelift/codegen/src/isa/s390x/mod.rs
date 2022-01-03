@@ -101,8 +101,8 @@ impl MachBackend for S390xBackend {
         "s390x"
     }
 
-    fn triple(&self) -> Triple {
-        self.triple.clone()
+    fn triple(&self) -> &Triple {
+        &self.triple
     }
 
     fn flags(&self) -> &shared_settings::Flags {

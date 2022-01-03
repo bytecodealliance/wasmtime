@@ -98,8 +98,8 @@ impl MachBackend for X64Backend {
         "x64"
     }
 
-    fn triple(&self) -> Triple {
-        self.triple.clone()
+    fn triple(&self) -> &Triple {
+        &self.triple
     }
 
     fn reg_universe(&self) -> &RealRegUniverse {

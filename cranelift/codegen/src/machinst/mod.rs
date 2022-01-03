@@ -390,7 +390,7 @@ pub trait MachBackend {
     fn isa_flags(&self) -> Vec<settings::Value>;
 
     /// Return triple for this backend.
-    fn triple(&self) -> Triple;
+    fn triple(&self) -> &Triple;
 
     /// Return name for this backend.
     fn name(&self) -> &'static str;
