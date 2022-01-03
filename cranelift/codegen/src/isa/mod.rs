@@ -258,10 +258,8 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         None
     }
 
-    /// Get the new-style MachBackend, if this is an adapter around one.
-    fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
-        None
-    }
+    /// Get the new-style MachBackend.
+    fn get_mach_backend(&self) -> &dyn MachBackend;
 }
 
 /// Methods implemented for free for target ISA!

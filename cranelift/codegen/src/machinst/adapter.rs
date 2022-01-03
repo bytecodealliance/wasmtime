@@ -55,8 +55,8 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.isa_flags()
     }
 
-    fn get_mach_backend(&self) -> Option<&dyn MachBackend> {
-        Some(&*self.backend)
+    fn get_mach_backend(&self) -> &dyn MachBackend {
+        &*self.backend
     }
 
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC {
