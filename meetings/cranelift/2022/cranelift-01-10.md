@@ -9,10 +9,10 @@
     1. Please help take notes.
     1. Thanks!
 1. Announcements
-    1. _Sumbit a PR to add your announcement here_
+    1. _Submit a PR to add your announcement here_
 1. Other agenda items
     1. Testing strategy; golden tests and auto-updating (PR #3612)
-    1. _Sumbit a PR to add your item here_
+    1. _Submit a PR to add your item here_
 
 ## Notes
 
