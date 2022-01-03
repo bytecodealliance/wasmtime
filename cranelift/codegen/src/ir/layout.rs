@@ -480,7 +480,7 @@ struct BlockNode {
     seq: SequenceNumber,
 }
 
-/// Iterate over blocks in layout order. See `Layout::blocks()`.
+/// Iterate over blocks in layout order. See [crate::ir::layout::Layout::blocks].
 pub struct Blocks<'f> {
     layout: &'f Layout,
     next: Option<Block>,
