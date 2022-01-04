@@ -2,6 +2,25 @@
 
 --------------------------------------------------------------------------------
 
+## 0.32.1
+
+Released 2022-01-04.
+
+### Fixed
+
+* Cranelift: remove recently-added build dependency on `sha2` to allow usage in
+  some dependency-sensitive environments, by computing ISLE manifest hashes
+  with a different hash function.
+  [#3619](https://github.com/bytecodealliance/wasmtime/pull/3619)
+
+* Cranelift: fixed 8- and 16-bit behavior of popcount (bit population count)
+  instruction. Does not affect Wasm frontend.
+  [#3617](https://github.com/bytecodealliance/wasmtime/pull/3617)
+
+* Cranelift: fixed miscompilation of 8- and 16-bit bit-rotate instructions.
+  Does not affect Wasm frontend.
+  [#3610](https://github.com/bytecodealliance/wasmtime/pull/3610)
+
 ## 0.32.0
 
 Released 2021-12-13.
