@@ -69,6 +69,15 @@ impl TargetIsa for TargetIsaAdapter {
     }
 
     #[cfg(feature = "unwind")]
+    fn emit_unwind_info(
+        &self,
+        result: &MachCompileResult,
+        kind: UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        self.backend.emit_unwind_info(result, kind)
+    }
+
+    #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         self.backend.create_systemv_cie()
     }

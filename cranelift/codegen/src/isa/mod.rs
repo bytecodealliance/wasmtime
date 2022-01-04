@@ -244,6 +244,16 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// IntCC condition for Unsigned Addition Overflow (Carry).
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
 
+    /// Creates unwind information for the function.
+    ///
+    /// Returns `None` if there is no unwind information for the function.
+    #[cfg(feature = "unwind")]
+    fn emit_unwind_info(
+        &self,
+        result: &MachCompileResult,
+        kind: UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>>;
+
     /// Creates a new System V Common Information Entry for the ISA.
     ///
     /// Returns `None` if the ISA does not support System V unwind information.
