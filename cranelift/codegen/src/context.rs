@@ -114,7 +114,7 @@ impl Context {
         relocs: &mut dyn RelocSink,
         traps: &mut dyn TrapSink,
         stack_maps: &mut dyn StackMapSink,
-    ) -> CodegenResult<CodeInfo> {
+    ) -> CodegenResult<()> {
         let info = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + info.total_size as usize, 0);
@@ -122,7 +122,7 @@ impl Context {
             self.emit_to_memory(mem.as_mut_ptr().add(old_len), relocs, traps, stack_maps)
         };
         debug_assert!(new_info == info);
-        Ok(info)
+        Ok(())
     }
 
     /// Compile the function.
