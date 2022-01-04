@@ -10,7 +10,7 @@
 name: "Push tagged release"
 on:
   push:
-    branches: [main]
+    branches: ['main', 'release-*']
 
 jobs:
   push_tag:
