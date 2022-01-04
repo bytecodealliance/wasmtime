@@ -167,8 +167,7 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
-        let backend = isa.get_mach_backend();
-        let result = backend.compile_function(&self.func, self.want_disasm)?;
+        let result = isa.compile_function(&self.func, self.want_disasm)?;
         let info = result.code_info();
         self.mach_compile_result = Some(result);
         Ok(info)

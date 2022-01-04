@@ -52,6 +52,14 @@ impl TargetIsa for TargetIsaAdapter {
         self.backend.isa_flags()
     }
 
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<MachCompileResult> {
+        self.backend.compile_function(func, want_disasm)
+    }
+
     fn get_mach_backend(&self) -> &dyn MachBackend {
         &*self.backend
     }

@@ -46,12 +46,13 @@
 pub use crate::isa::call_conv::CallConv;
 
 use crate::flowgraph;
-use crate::ir;
+use crate::ir::{self, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{MachBackend, UnwindInfoKind};
+use crate::machinst::{MachBackend, MachCompileResult, UnwindInfoKind};
 use crate::settings;
 use crate::settings::SetResult;
+use crate::CodegenResult;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
@@ -226,6 +227,13 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
+
+    /// Compile the given function.
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<MachCompileResult>;
 
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
