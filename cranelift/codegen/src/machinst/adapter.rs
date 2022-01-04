@@ -86,4 +86,8 @@ impl TargetIsa for TargetIsaAdapter {
     fn map_regalloc_reg_to_dwarf(&self, r: Reg) -> Result<u16, RegisterMappingError> {
         self.backend.map_reg_to_dwarf(r)
     }
+
+    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder> {
+        self.backend.text_section_builder(num_labeled_funcs)
+    }
 }

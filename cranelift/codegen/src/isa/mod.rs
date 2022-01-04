@@ -49,7 +49,7 @@ use crate::flowgraph;
 use crate::ir::{self, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{MachBackend, MachCompileResult, UnwindInfoKind};
+use crate::machinst::{MachBackend, MachCompileResult, TextSectionBuilder, UnwindInfoKind};
 use crate::settings;
 use crate::settings::SetResult;
 use crate::CodegenResult;
@@ -262,6 +262,17 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         // By default, an ISA cannot create a System V CIE
         None
     }
+
+    /// Returns an object that can be used to build the text section of an
+    /// executable.
+    ///
+    /// This object will internally attempt to handle as many relocations as
+    /// possible using relative calls/jumps/etc between functions.
+    ///
+    /// The `num_labeled_funcs` argument here is the number of functions which
+    /// will be "labeled" or might have calls between them, typically the number
+    /// of defined functions in the object file.
+    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
 
     /// Get the new-style MachBackend.
     fn get_mach_backend(&self) -> &dyn MachBackend;
