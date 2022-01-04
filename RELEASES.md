@@ -4,7 +4,7 @@
 
 ## 0.32.1
 
-Released 2021-12-17.
+Released 2022-01-04.
 
 ### Fixed
 
