@@ -69,7 +69,7 @@ impl Imm64 {
         Self(self.0.wrapping_neg())
     }
 
-    /// Return bits of this immediate.
+    /// Returns the value of this immediate.
     pub fn bits(&self) -> i64 {
         self.0
     }
