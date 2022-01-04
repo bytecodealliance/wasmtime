@@ -181,9 +181,6 @@ pub trait MachInst: Clone + Debug {
     /// the instruction must have a nonzero size if preferred_size is nonzero.
     fn gen_nop(preferred_size: usize) -> Self;
 
-    /// Get the register universe for this backend.
-    fn reg_universe(flags: &Flags) -> RealRegUniverse;
-
     /// Align a basic block offset (from start of function).  By default, no
     /// alignment occurs.
     fn align_basic_block(offset: CodeOffset) -> CodeOffset {
@@ -387,9 +384,6 @@ pub trait MachBackend {
 
     /// Return name for this backend.
     fn name(&self) -> &'static str;
-
-    /// Return the register universe for this backend.
-    fn reg_universe(&self) -> &RealRegUniverse;
 
     /// Machine-specific condcode info needed by TargetIsa.
     /// Condition that will be true when an IaddIfcout overflows.

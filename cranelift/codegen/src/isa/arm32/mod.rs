@@ -49,7 +49,7 @@ impl Arm32Backend {
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::Arm32ABICallee::new(func, flags)?);
-        compile::compile::<Arm32Backend>(func, self, abi, self.reg_universe(), emit_info)
+        compile::compile::<Arm32Backend>(func, self, abi, &self.reg_universe, emit_info)
     }
 }
 
@@ -98,10 +98,6 @@ impl MachBackend for Arm32Backend {
 
     fn isa_flags(&self) -> Vec<settings::Value> {
         Vec::new()
-    }
-
-    fn reg_universe(&self) -> &RealRegUniverse {
-        &self.reg_universe
     }
 
     fn unsigned_add_overflow_condition(&self) -> IntCC {

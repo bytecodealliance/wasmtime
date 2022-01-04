@@ -58,7 +58,7 @@ impl AArch64Backend {
     ) -> CodegenResult<VCode<inst::Inst>> {
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
-        compile::compile::<AArch64Backend>(func, self, abi, self.reg_universe(), emit_info)
+        compile::compile::<AArch64Backend>(func, self, abi, &self.reg_universe, emit_info)
     }
 }
 
@@ -108,10 +108,6 @@ impl MachBackend for AArch64Backend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
-    }
-
-    fn reg_universe(&self) -> &RealRegUniverse {
-        &self.reg_universe
     }
 
     fn unsigned_add_overflow_condition(&self) -> IntCC {

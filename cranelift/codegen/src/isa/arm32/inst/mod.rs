@@ -859,10 +859,6 @@ impl MachInst for Inst {
         }
     }
 
-    fn reg_universe(_flags: &settings::Flags) -> RealRegUniverse {
-        create_reg_universe()
-    }
-
     fn worst_case_size() -> CodeOffset {
         // It inst with four 32-bit instructions
         2 + 4 * 4

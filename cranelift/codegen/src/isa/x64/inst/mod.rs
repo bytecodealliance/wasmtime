@@ -7,7 +7,7 @@ use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::CallConv;
 use crate::machinst::*;
-use crate::{settings, settings::Flags, CodegenError, CodegenResult};
+use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc::{
@@ -26,7 +26,7 @@ pub mod regs;
 pub mod unwind;
 
 use args::*;
-use regs::{create_reg_universe_systemv, show_ireg_sized};
+use regs::show_ireg_sized;
 
 //=============================================================================
 // Instructions (top level): definition
@@ -3254,10 +3254,6 @@ impl MachInst for Inst {
             }
         }
         ret
-    }
-
-    fn reg_universe(flags: &Flags) -> RealRegUniverse {
-        create_reg_universe_systemv(flags)
     }
 
     fn worst_case_size() -> CodeOffset {

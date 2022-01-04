@@ -61,7 +61,7 @@ impl S390xBackend {
     ) -> CodegenResult<VCode<inst::Inst>> {
         let emit_info = EmitInfo::new(flags.clone(), self.isa_flags.clone());
         let abi = Box::new(abi::S390xABICallee::new(func, flags)?);
-        compile::compile::<S390xBackend>(func, self, abi, self.reg_universe(), emit_info)
+        compile::compile::<S390xBackend>(func, self, abi, &self.reg_universe, emit_info)
     }
 }
 
@@ -111,10 +111,6 @@ impl MachBackend for S390xBackend {
 
     fn isa_flags(&self) -> Vec<shared_settings::Value> {
         self.isa_flags.iter().collect()
-    }
-
-    fn reg_universe(&self) -> &RealRegUniverse {
-        &self.reg_universe
     }
 
     fn unsigned_add_overflow_condition(&self) -> IntCC {
