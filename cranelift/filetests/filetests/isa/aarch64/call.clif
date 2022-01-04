@@ -133,28 +133,28 @@ block0:
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  sub sp, sp, #32
+; nextln:  sub sp, sp, #48
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  str s0, [sp]
+; nextln:  str q0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  str d0, [sp, #8]
+; nextln:  str q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  str d0, [sp, #16]
+; nextln:  str q0, [sp, #32]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr s0, [sp]
+; nextln:  ldr q0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr d0, [sp, #8]
+; nextln:  ldr q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr d0, [sp, #16]
+; nextln:  ldr q0, [sp, #32]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  add sp, sp, #32
+; nextln:  add sp, sp, #48
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 
@@ -223,28 +223,28 @@ block0:
 
 ; check:  stp fp, lr, [sp, #-16]!
 ; nextln:  mov fp, sp
-; nextln:  sub sp, sp, #32
+; nextln:  sub sp, sp, #48
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  str s0, [sp]
-; nextln:  ldr x0, 8 ; b 12 ; data
-; nextln:  blr x0
-; nextln:  str d0, [sp, #8]
+; nextln:  str q0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
 ; nextln:  str q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr s0, [sp]
+; nextln:  str q0, [sp, #32]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  ldr d0, [sp, #8]
+; nextln:  ldr q0, [sp]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
 ; nextln:  ldr q0, [sp, #16]
 ; nextln:  ldr x0, 8 ; b 12 ; data
 ; nextln:  blr x0
-; nextln:  add sp, sp, #32
+; nextln:  ldr q0, [sp, #32]
+; nextln:  ldr x0, 8 ; b 12 ; data
+; nextln:  blr x0
+; nextln:  add sp, sp, #48
 ; nextln:  ldp fp, lr, [sp], #16
 ; nextln:  ret
 

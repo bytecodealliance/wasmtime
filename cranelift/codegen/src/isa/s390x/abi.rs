@@ -685,11 +685,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         unimplemented!("StructArgs not implemented for S390X yet");
     }
 
-    fn get_number_of_spillslots_for_value(rc: RegClass, ty: Type) -> u32 {
+    fn get_number_of_spillslots_for_value(rc: RegClass) -> u32 {
         // We allocate in terms of 8-byte slots.
-        match (rc, ty) {
-            (RegClass::I64, _) => 1,
-            (RegClass::F64, _) => 1,
+        match rc {
+            RegClass::I64 => 1,
+            RegClass::F64 => 1,
             _ => panic!("Unexpected register class!"),
         }
     }
