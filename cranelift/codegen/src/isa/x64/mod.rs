@@ -50,7 +50,7 @@ impl X64Backend {
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
         let abi = Box::new(abi::X64ABICallee::new(&func, flags)?);
-        compile::compile::<Self>(&func, self, abi, emit_info)
+        compile::compile::<Self>(&func, self, abi, self.reg_universe(), emit_info)
     }
 }
 

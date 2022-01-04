@@ -58,7 +58,7 @@ impl AArch64Backend {
     ) -> CodegenResult<VCode<inst::Inst>> {
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::AArch64ABICallee::new(func, flags)?);
-        compile::compile::<AArch64Backend>(func, self, abi, emit_info)
+        compile::compile::<AArch64Backend>(func, self, abi, self.reg_universe(), emit_info)
     }
 }
 
