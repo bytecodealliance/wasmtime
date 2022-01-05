@@ -158,7 +158,7 @@ rule, which avoids the action-at-a-distance bugs described earlier.
 
 For example, loads have a side effect in CLIF: they might trap. Therefore, even
 if a loaded value is never used, we will emit code that implements that
-load. But if we are compiling for x86 we can sink loads into other the operand
+load. But if we are compiling for x86 we can sink loads into the operand
 for another operation depending on how the loaded value is used. If we sink that
 load into, say, an `add` then we need to tell the lowering context *not* to
 lower the CLIF `load` instruction anymore, because its effectively already
