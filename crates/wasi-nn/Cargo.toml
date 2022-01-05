@@ -18,6 +18,7 @@ wiggle = { path = "../wiggle", version = "=0.32.0" }
 
 # These dependencies are necessary for the wasi-nn implementation:
 openvino = { version = "0.3.1", features = ["runtime-linking"] }
+tensorflow = { version = "0.17.0" }
 thiserror = "1.0"
 
 [build-dependencies]
