@@ -1,21 +1,25 @@
-use anyhow::Context;
+use anyhow::{Context, Result};
 use wat::parse_str as wat_to_wasm;
 use wizer::Wizer;
 
-fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> anyhow::Result<()> {
+fn run_wat(args: &[wasmtime::Val], expected: i32, wat: &str) -> Result<()> {
     let _ = env_logger::try_init();
     let wasm = wat_to_wasm(wat)?;
     run_wasm(args, expected, &wasm)
 }
 
-fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Result<()> {
-    let _ = env_logger::try_init();
-
+fn get_wizer() -> Wizer {
     let mut wizer = Wizer::new();
     wizer.allow_wasi(true);
     wizer.wasm_multi_memory(true);
     wizer.wasm_module_linking(true);
-    let wasm = wizer.run(&wasm)?;
+    wizer
+}
+
+fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let wasm = get_wizer().run(&wasm)?;
     log::debug!(
         "=== Wizened Wasm ==========================================================\n\
          {}\n\
@@ -45,6 +49,8 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     linker
         .define_name("dummy_func", wasmtime::Func::wrap(&mut store, || {}))?
         .define("env", "f", wasmtime::Func::wrap(&mut store, || {}))?
+        .define_name("f", wasmtime::Func::wrap(&mut store, || {}))?
+        .define("x", "f", wasmtime::Func::wrap(&mut store, || {}))?
         .define_name("dummy_instance", dummy_instance)?;
 
     wasmtime_wasi::add_to_linker(&mut linker, |wasi| wasi)?;
@@ -55,7 +61,8 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
         .get_func(&mut store, "run")
         .ok_or_else(|| anyhow::anyhow!("the test Wasm module does not export a `run` function"))?;
 
-    let actual = run.call(&mut store, args)?;
+    let mut actual = vec![wasmtime::Val::I32(0)];
+    run.call(&mut store, args, &mut actual)?;
     anyhow::ensure!(actual.len() == 1, "expected one result");
     let actual = match actual[0] {
         wasmtime::Val::I32(x) => x,
@@ -71,8 +78,30 @@ fn run_wasm(args: &[wasmtime::Val], expected: i32, wasm: &[u8]) -> anyhow::Resul
     Ok(())
 }
 
+fn fails_wizening(wat: &str) -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let wasm = wat_to_wasm(wat)?;
+
+    let mut validator = wasmparser::Validator::new();
+    validator.wasm_features(wasmparser::WasmFeatures {
+        module_linking: true,
+        multi_memory: true,
+        ..Default::default()
+    });
+    validator
+        .validate_all(&wasm)
+        .context("initial Wasm should be valid")?;
+
+    anyhow::ensure!(
+        get_wizer().run(&wasm).is_err(),
+        "Expected an error when wizening, but didn't get one"
+    );
+    Ok(())
+}
+
 #[test]
-fn basic_global() -> anyhow::Result<()> {
+fn basic_global() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -89,7 +118,7 @@ fn basic_global() -> anyhow::Result<()> {
 }
 
 #[test]
-fn basic_memory() -> anyhow::Result<()> {
+fn basic_memory() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -108,7 +137,7 @@ fn basic_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn multi_memory() -> anyhow::Result<()> {
+fn multi_memory() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -134,49 +163,37 @@ fn multi_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn reject_imported_memory() -> anyhow::Result<()> {
-    assert!(run_wat(
-        &[],
-        42,
+fn reject_imported_memory() -> Result<()> {
+    fails_wizening(
         r#"
-(module
-  (import "" "" (memory 1)))
-"#,
+            (module
+              (import "" "" (memory 1)))
+        "#,
     )
-    .is_err());
-    Ok(())
 }
 
 #[test]
-fn reject_imported_global() -> anyhow::Result<()> {
-    assert!(run_wat(
-        &[],
-        42,
+fn reject_imported_global() -> Result<()> {
+    fails_wizening(
         r#"
-(module
-  (import "" "" (global i32)))
-"#,
+            (module
+              (import "" "" (global i32)))
+        "#,
     )
-    .is_err());
-    Ok(())
 }
 
 #[test]
-fn reject_imported_table() -> anyhow::Result<()> {
-    assert!(run_wat(
-        &[],
-        42,
+fn reject_imported_table() -> Result<()> {
+    fails_wizening(
         r#"
-(module
-  (import "" "" (table)))
-"#,
+            (module
+              (import "" "" (table 0 externref)))
+        "#,
     )
-    .is_err());
-    Ok(())
 }
 
 #[test]
-fn reject_bulk_memory() -> anyhow::Result<()> {
+fn reject_bulk_memory() -> Result<()> {
     let result = run_wat(
         &[],
         42,
@@ -209,7 +226,7 @@ fn reject_bulk_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn accept_module_linking_import_memory() -> anyhow::Result<()> {
+fn accept_module_linking_import_memory() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -234,7 +251,7 @@ fn accept_module_linking_import_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn accept_module_linking_import_global() -> anyhow::Result<()> {
+fn accept_module_linking_import_global() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -259,7 +276,7 @@ fn accept_module_linking_import_global() -> anyhow::Result<()> {
 }
 
 #[test]
-fn accept_module_linking_import_table() -> anyhow::Result<()> {
+fn accept_module_linking_import_table() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -284,7 +301,7 @@ fn accept_module_linking_import_table() -> anyhow::Result<()> {
 }
 
 #[test]
-fn module_linking_actually_works() -> anyhow::Result<()> {
+fn module_linking_actually_works() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -316,7 +333,7 @@ fn module_linking_actually_works() -> anyhow::Result<()> {
 }
 
 #[test]
-fn module_linking_nested_instantiations_1() -> anyhow::Result<()> {
+fn module_linking_nested_instantiations_1() -> Result<()> {
     run_wat(
         &[],
         8,
@@ -376,7 +393,7 @@ fn module_linking_nested_instantiations_1() -> anyhow::Result<()> {
 }
 
 #[test]
-fn module_linking_nested_instantiations_0() -> anyhow::Result<()> {
+fn module_linking_nested_instantiations_0() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -422,7 +439,7 @@ fn module_linking_nested_instantiations_0() -> anyhow::Result<()> {
 
 // Test that we handle repeated and interleaved initial sections.
 #[test]
-fn multiple_initial_sections() -> anyhow::Result<()> {
+fn multiple_initial_sections() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -485,7 +502,7 @@ fn multiple_initial_sections() -> anyhow::Result<()> {
 }
 
 #[test]
-fn start_sections_in_nested_modules() -> anyhow::Result<()> {
+fn start_sections_in_nested_modules() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -522,7 +539,7 @@ fn start_sections_in_nested_modules() -> anyhow::Result<()> {
 }
 
 #[test]
-fn allow_function_imports_module_linking() -> anyhow::Result<()> {
+fn allow_function_imports_module_linking() -> Result<()> {
     // Make sure that the umbrella module passes imports through to its
     // instantiation of the root, and that the root can pass them along to its
     // nested instantiations as well.
@@ -547,7 +564,7 @@ fn allow_function_imports_module_linking() -> anyhow::Result<()> {
 }
 
 #[test]
-fn outer_module_alias() -> anyhow::Result<()> {
+fn outer_module_alias() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -582,7 +599,7 @@ fn outer_module_alias() -> anyhow::Result<()> {
 }
 
 #[test]
-fn instance_alias_without_entry_in_type_section() -> anyhow::Result<()> {
+fn instance_alias_without_entry_in_type_section() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -609,7 +626,7 @@ fn instance_alias_without_entry_in_type_section() -> anyhow::Result<()> {
 }
 
 #[test]
-fn two_level_imports_and_implicit_instance_imports() -> anyhow::Result<()> {
+fn two_level_imports_and_implicit_instance_imports() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -646,7 +663,7 @@ fn two_level_imports_and_implicit_instance_imports() -> anyhow::Result<()> {
 }
 
 #[test]
-fn implicit_instance_imports_and_other_instances() -> anyhow::Result<()> {
+fn implicit_instance_imports_and_other_instances() -> Result<()> {
     // Test how implicit instance import injection interacts with explicit
     // instance imports and explicit instantiations.
     run_wat(
@@ -708,7 +725,7 @@ fn implicit_instance_imports_and_other_instances() -> anyhow::Result<()> {
 }
 
 #[test]
-fn rust_regex() -> anyhow::Result<()> {
+fn rust_regex() -> Result<()> {
     run_wasm(
         &[wasmtime::Val::I32(13)],
         42,
@@ -717,7 +734,7 @@ fn rust_regex() -> anyhow::Result<()> {
 }
 
 #[test]
-fn data_segment_at_end_of_memory() -> anyhow::Result<()> {
+fn data_segment_at_end_of_memory() -> Result<()> {
     // Test that we properly synthesize data segments for data at the end of
     // memory.
     run_wat(
@@ -742,7 +759,7 @@ fn data_segment_at_end_of_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn too_many_data_segments_for_engines() -> anyhow::Result<()> {
+fn too_many_data_segments_for_engines() -> Result<()> {
     run_wat(
         &[],
         42,
@@ -787,7 +804,7 @@ fn too_many_data_segments_for_engines() -> anyhow::Result<()> {
 }
 
 #[test]
-fn rename_functions() -> anyhow::Result<()> {
+fn rename_functions() -> Result<()> {
     let wat = r#"
 (module
  (func (export "wizer.initialize"))
@@ -827,7 +844,7 @@ fn rename_functions() -> anyhow::Result<()> {
 }
 
 #[test]
-fn renames_and_module_linking() -> anyhow::Result<()> {
+fn renames_and_module_linking() -> Result<()> {
     let wat = r#"
 (module
   (module $A
@@ -880,19 +897,120 @@ fn wasi_reactor() -> anyhow::Result<()> {
         &[],
         42,
         r#"
-(module
-  (global $g (mut i32) i32.const 0)
-  (func (export "_initialize")
-    i32.const 6
-    global.set $g
-  )
-  (func (export "wizer.initialize")
-    global.get $g
-    i32.const 7
-    i32.mul
-    global.set $g)
-  (func (export "run") (result i32)
-    global.get $g))
+            (module
+              (global $g (mut i32) i32.const 0)
+              (func (export "_initialize")
+                i32.const 6
+                global.set $g
+              )
+              (func (export "wizer.initialize")
+                global.get $g
+                i32.const 7
+                i32.mul
+                global.set $g)
+              (func (export "run") (result i32)
+                global.get $g
+              )
+            )
+        "#,
+    )
+}
+
+#[test]
+fn call_undefined_import_function_during_init() -> Result<()> {
+    fails_wizening(
+        r#"
+            (module
+              (import "x" "f" (func $import))
+              (func (export "wizer.initialize")
+                (call $import)
+              )
+            )
+        "#,
+    )
+}
+
+#[test]
+fn allow_undefined_import_function() -> Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+            (module
+              (import "x" "f" (func $import))
+              (func (export "wizer.initialize"))
+              (func (export "run") (result i32)
+                i32.const 42
+              )
+            )
+        "#,
+    )
+}
+
+#[test]
+fn call_undefined_instance_import_function_during_init() -> Result<()> {
+    fails_wizening(
+        r#"
+            (module
+              (import "x" (instance (export "f" (func))))
+              (alias 0 "f" (func $import))
+              (func (export "wizer.initialize")
+                (call $import)
+              )
+            )
+        "#,
+    )
+}
+
+#[test]
+fn allow_undefined_instance_import_function() -> Result<()> {
+    run_wat(
+        &[],
+        42,
+        r#"
+            (module
+              (import "x" (instance (export "f" (func))))
+              (func (export "wizer.initialize"))
+              (func (export "run") (result i32)
+                i32.const 42
+              )
+            )
+        "#,
+    )
+}
+
+#[test]
+fn reject_import_instance_global() -> Result<()> {
+    fails_wizening(
+        r#"
+            (module
+              (import "x" (instance (export "g" (global i32))))
+              (func (export "wizer.initialize"))
+            )
+        "#,
+    )
+}
+
+#[test]
+fn reject_import_instance_table() -> Result<()> {
+    fails_wizening(
+        r#"
+            (module
+              (import "x" (instance (export "t" (table 0 externref))))
+              (func (export "wizer.initialize"))
+            )
+        "#,
+    )
+}
+
+#[test]
+fn reject_import_instance_memory() -> Result<()> {
+    fails_wizening(
+        r#"
+            (module
+              (import "x" (instance (export "m" (memory 0))))
+              (func (export "wizer.initialize"))
+            )
         "#,
     )
 }
