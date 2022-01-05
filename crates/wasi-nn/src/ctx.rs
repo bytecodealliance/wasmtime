@@ -21,6 +21,8 @@ impl Ctx {
     /// Make a new context from the default state.
     pub fn new() -> WasiNnResult<Self> {
         let mut backends = HashMap::new();
+
+        // Insert OpenVino backend
         backends.insert(
             // This is necessary because Wiggle's variant types do not derive
             // `Hash` and `Eq`.
@@ -38,6 +40,7 @@ impl Ctx {
 /// This struct solely wraps [Ctx] in a `RefCell`.
 pub struct WasiNnCtx {
     pub(crate) ctx: RefCell<Ctx>,
+    pub map_dir: Option<Vec<(String, String)>>,
 }
 
 impl WasiNnCtx {
@@ -45,7 +48,20 @@ impl WasiNnCtx {
     pub fn new() -> WasiNnResult<Self> {
         Ok(Self {
             ctx: RefCell::new(Ctx::new()?),
+            map_dir: None,
         })
+    }
+
+    // Save mapped paths so they can be used by backends later.
+    pub fn set_paths(&mut self, paths: &Vec<(String, String)>) {
+        if paths.len() > 0 {
+            self.map_dir = Some(Vec::<(String, String)>::new());
+            let md = self.map_dir.as_mut().unwrap();
+
+            for (guest, host) in paths.iter() {
+                md.push((guest.clone(), host.clone()));
+            }
+        }
     }
 }
 
