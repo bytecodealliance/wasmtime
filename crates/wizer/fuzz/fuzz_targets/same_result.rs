@@ -98,7 +98,10 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
             let snapshot_instance = Instance::new(&mut store, &snapshot_module, &[]).unwrap();
             let snapshot_main_func = snapshot_instance.get_func(&mut store, main_func).unwrap();
             let main_args = wizer::dummy::dummy_values(snapshot_main_func.ty(&store).params());
-            let snapshot_result = snapshot_main_func.call(&mut store, &main_args);
+            let mut snapshot_result =
+                vec![wasmtime::Val::I32(0); snapshot_main_func.ty(&store).results().len()];
+            let snapshot_call_result =
+                snapshot_main_func.call(&mut store, &main_args, &mut snapshot_result);
 
             // Instantiate the original Wasm and then call the initialization
             // and main functions back to back.
@@ -108,12 +111,13 @@ fuzz_target!(|module: wasm_smith::ConfiguredModule<WasmConfig>| {
                 .unwrap();
             init_func.call(&mut store, ()).unwrap();
             let main_func = instance.get_func(&mut store, main_func).unwrap();
-            let result = main_func.call(&mut store, &main_args);
+            let mut result = vec![wasmtime::Val::I32(0); main_func.ty(&store).results().len()];
+            let call_result = main_func.call(&mut store, &main_args, &mut result);
 
             // Check that the function return values / traps are the same.
-            match (snapshot_result, result) {
+            match (snapshot_call_result, call_result) {
                 // Both did not trap.
-                (Ok(snapshot_result), Ok(result)) => {
+                (Ok(()), Ok(())) => {
                     assert_eq!(snapshot_result.len(), result.len());
                     for (s, r) in snapshot_result.iter().zip(result.iter()) {
                         assert_val_eq(s, r);
