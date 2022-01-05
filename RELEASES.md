@@ -2,6 +2,21 @@
 
 --------------------------------------------------------------------------------
 
+## 0.33.0
+
+Released 2022-01-05.
+
+### Added
+
+* Compiled wasm modules may now optionally omit debugging information about
+  mapping addresses to source locations, resulting in smaller binaries.
+  [#3598](https://github.com/bytecodealliance/wasmtime/pull/3598)
+
+* The WebAssembly SIMD proposal is now enabled by default.
+  [#3601](https://github.com/bytecodealliance/wasmtime/pull/3601)
+
+--------------------------------------------------------------------------------
+
 ## 0.32.1
 
 Released 2022-01-04.
@@ -20,6 +35,8 @@ Released 2022-01-04.
 * Cranelift: fixed miscompilation of 8- and 16-bit bit-rotate instructions.
   Does not affect Wasm frontend.
   [#3610](https://github.com/bytecodealliance/wasmtime/pull/3610)
+
+--------------------------------------------------------------------------------
 
 ## 0.32.0
 
