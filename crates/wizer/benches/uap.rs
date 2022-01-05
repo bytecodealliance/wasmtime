@@ -19,18 +19,13 @@ fn run_iter(
     let data = memory.data_mut(&mut store);
     data[ptr..ptr + ua.len()].copy_from_slice(ua.as_bytes());
 
-    let run = instance.get_func(&mut store, "run").unwrap();
-    let result = run
-        .call(
-            &mut store,
-            &[
-                wasmtime::Val::I32(i32::try_from(ptr).unwrap()),
-                wasmtime::Val::I32(5),
-            ],
-        )
+    let run = instance
+        .get_typed_func::<(i32, i32), i32, _>(&mut store, "run")
         .unwrap();
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].i32(), Some(0));
+    let result = run
+        .call(&mut store, (i32::try_from(ptr).unwrap(), 5))
+        .unwrap();
+    assert_eq!(result, 0);
 
     let dealloc = instance
         .get_typed_func::<(u32, u32, u32), (), _>(&mut store, "dealloc")

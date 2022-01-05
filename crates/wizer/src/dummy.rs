@@ -23,7 +23,15 @@ pub fn dummy_imports(
                 }
 
                 linker
-                    .define(imp.module(), name, dummy_extern(&mut *store, imp.ty())?)
+                    .define(
+                        imp.module(),
+                        name,
+                        dummy_extern(
+                            &mut *store,
+                            imp.ty(),
+                            &format!("'{}' '{}'", imp.module(), name),
+                        )?,
+                    )
                     .unwrap();
             }
             None => match imp.ty() {
@@ -38,7 +46,11 @@ pub fn dummy_imports(
                         }
 
                         linker
-                            .define(imp.module(), ty.name(), dummy_extern(&mut *store, ty.ty())?)
+                            .define(
+                                imp.module(),
+                                ty.name(),
+                                dummy_extern(&mut *store, ty.ty(), &format!("'{}'", imp.module()))?,
+                            )
                             .unwrap();
                     }
                 }
@@ -49,7 +61,10 @@ pub fn dummy_imports(
                     }
 
                     linker
-                        .define_name(imp.module(), dummy_extern(&mut *store, other)?)
+                        .define_name(
+                            imp.module(),
+                            dummy_extern(&mut *store, other, &format!("'{}'", imp.module()))?,
+                        )
                         .unwrap();
                 }
             },
@@ -60,28 +75,40 @@ pub fn dummy_imports(
 }
 
 /// Construct a dummy `Extern` from its type signature
-pub fn dummy_extern(store: &mut crate::Store, ty: ExternType) -> Result<Extern> {
+pub fn dummy_extern(store: &mut crate::Store, ty: ExternType, name: &str) -> Result<Extern> {
     Ok(match ty {
-        ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty)),
-        ExternType::Global(global_ty) => Extern::Global(dummy_global(store, global_ty)),
-        ExternType::Table(table_ty) => Extern::Table(dummy_table(store, table_ty)),
-        ExternType::Memory(mem_ty) => Extern::Memory(dummy_memory(store, mem_ty)?),
-        ExternType::Instance(instance_ty) => Extern::Instance(dummy_instance(store, instance_ty)),
-        ExternType::Module(module_ty) => Extern::Module(dummy_module(store, module_ty)),
+        ExternType::Func(func_ty) => Extern::Func(dummy_func(store, func_ty, name)),
+        ExternType::Instance(instance_ty) => {
+            Extern::Instance(dummy_instance(store, instance_ty, name)?)
+        }
+        ExternType::Global(_) => {
+            anyhow::bail!("Error: attempted to import unknown global: {}", name)
+        }
+        ExternType::Table(_) => anyhow::bail!("Error: attempted to import unknown table: {}", name),
+        ExternType::Memory(_) => {
+            anyhow::bail!("Error: attempted to import unknown memory: {}", name)
+        }
+        ExternType::Module(_) => {
+            anyhow::bail!("Error: attempted to import unknown module: {}", name)
+        }
     })
 }
 
 /// Construct a dummy function for the given function type
-pub fn dummy_func(store: &mut crate::Store, ty: FuncType) -> Func {
-    Func::new(store, ty.clone(), move |_, _, results| {
-        for (ret_ty, result) in ty.results().zip(results) {
-            *result = dummy_value(ret_ty);
-        }
-        Ok(())
+pub fn dummy_func(store: &mut crate::Store, ty: FuncType, name: &str) -> Func {
+    let name = name.to_string();
+    Func::new(store, ty.clone(), move |_caller, _params, _results| {
+        Err(Trap::new(format!(
+            "Error: attempted to call an unknown imported function: {}\n\
+             \n\
+             You cannot call arbitrary imported functions during Wizer initialization.",
+            name,
+        )))
     })
 }
 
 /// Construct a dummy value for the given value type.
+#[cfg(fuzzing)]
 pub fn dummy_value(val_ty: ValType) -> Val {
     match val_ty {
         ValType::I32 => Val::I32(0),
@@ -100,48 +127,17 @@ pub fn dummy_values(val_tys: impl IntoIterator<Item = ValType>) -> Vec<Val> {
     val_tys.into_iter().map(dummy_value).collect()
 }
 
-/// Construct a dummy global for the given global type.
-pub fn dummy_global(store: &mut crate::Store, ty: GlobalType) -> Global {
-    let val = dummy_value(ty.content().clone());
-    Global::new(store, ty, val).unwrap()
-}
-
-/// Construct a dummy table for the given table type.
-pub fn dummy_table(store: &mut crate::Store, ty: TableType) -> Table {
-    let init_val = dummy_value(ty.element().clone());
-    Table::new(store, ty, init_val).unwrap()
-}
-
-/// Construct a dummy memory for the given memory type.
-pub fn dummy_memory(store: &mut crate::Store, ty: MemoryType) -> Result<Memory> {
-    Memory::new(store, ty)
-}
-
 /// Construct a dummy instance for the given instance type.
 ///
 /// This is done by using the expected type to generate a module on-the-fly
 /// which we the instantiate.
-pub fn dummy_instance(store: &mut crate::Store, ty: InstanceType) -> Instance {
+pub fn dummy_instance(store: &mut crate::Store, ty: InstanceType, name: &str) -> Result<Instance> {
     let mut wat = WatGenerator::new();
     for ty in ty.exports() {
-        wat.export(&ty);
+        wat.export(&ty, name)?;
     }
     let module = Module::new(store.engine(), &wat.finish()).unwrap();
-    Instance::new(store, &module, &[]).unwrap()
-}
-
-/// Construct a dummy module for the given module type.
-///
-/// This is done by using the expected type to generate a module on-the-fly.
-pub fn dummy_module(store: &mut crate::Store, ty: ModuleType) -> Module {
-    let mut wat = WatGenerator::new();
-    for ty in ty.imports() {
-        wat.import(&ty);
-    }
-    for ty in ty.exports() {
-        wat.export(&ty);
-    }
-    Module::new(store.engine(), &wat.finish()).unwrap()
+    Ok(Instance::new(store, &module, &[])?)
 }
 
 struct WatGenerator {
@@ -162,148 +158,51 @@ impl WatGenerator {
         self.dst
     }
 
-    fn import(&mut self, ty: &ImportType<'_>) {
-        write!(self.dst, "(import ").unwrap();
-        self.str(ty.module());
-        write!(self.dst, " ").unwrap();
-        if let Some(field) = ty.name() {
-            self.str(field);
-            write!(self.dst, " ").unwrap();
-        }
-        self.item_ty(&ty.ty());
-        writeln!(self.dst, ")").unwrap();
-    }
-
-    fn item_ty(&mut self, ty: &ExternType) {
-        match ty {
-            ExternType::Memory(mem) => {
-                write!(
-                    self.dst,
-                    "(memory {} {})",
-                    mem.minimum(),
-                    match mem.maximum() {
-                        Some(max) => max.to_string(),
-                        None => String::new(),
-                    }
-                )
-                .unwrap();
-            }
-            ExternType::Table(table) => {
-                write!(
-                    self.dst,
-                    "(table {} {} {})",
-                    table.minimum(),
-                    match table.maximum() {
-                        Some(max) => max.to_string(),
-                        None => String::new(),
-                    },
-                    wat_ty(&table.element()),
-                )
-                .unwrap();
-            }
-            ExternType::Global(ty) => {
-                if ty.mutability() == Mutability::Const {
-                    write!(self.dst, "(global {})", wat_ty(ty.content())).unwrap();
-                } else {
-                    write!(self.dst, "(global (mut {}))", wat_ty(ty.content())).unwrap();
-                }
-            }
-            ExternType::Func(ty) => {
-                write!(self.dst, "(func ").unwrap();
-                self.func_sig(ty);
-                write!(self.dst, ")").unwrap();
-            }
-            ExternType::Instance(ty) => {
-                writeln!(self.dst, "(instance").unwrap();
-                for ty in ty.exports() {
-                    write!(self.dst, "(export ").unwrap();
-                    self.str(ty.name());
-                    write!(self.dst, " ").unwrap();
-                    self.item_ty(&ty.ty());
-                    writeln!(self.dst, ")").unwrap();
-                }
-                write!(self.dst, ")").unwrap();
-            }
-            ExternType::Module(ty) => {
-                writeln!(self.dst, "(module").unwrap();
-                for ty in ty.imports() {
-                    self.import(&ty);
-                    writeln!(self.dst, "").unwrap();
-                }
-                for ty in ty.exports() {
-                    write!(self.dst, "(export ").unwrap();
-                    self.str(ty.name());
-                    write!(self.dst, " ").unwrap();
-                    self.item_ty(&ty.ty());
-                    writeln!(self.dst, ")").unwrap();
-                }
-                write!(self.dst, ")").unwrap();
-            }
-        }
-    }
-
-    fn export(&mut self, ty: &ExportType<'_>) {
+    fn export(&mut self, ty: &ExportType<'_>, instance_name: &str) -> Result<()> {
         let wat_name = format!("item{}", self.tmp);
         self.tmp += 1;
         let item_ty = ty.ty();
-        self.item(&wat_name, &item_ty);
+        self.item(&wat_name, &item_ty, instance_name, ty.name())?;
 
         write!(self.dst, "(export ").unwrap();
         self.str(ty.name());
         write!(self.dst, " (").unwrap();
         match item_ty {
-            ExternType::Memory(_) => write!(self.dst, "memory").unwrap(),
-            ExternType::Global(_) => write!(self.dst, "global").unwrap(),
             ExternType::Func(_) => write!(self.dst, "func").unwrap(),
             ExternType::Instance(_) => write!(self.dst, "instance").unwrap(),
-            ExternType::Table(_) => write!(self.dst, "table").unwrap(),
-            ExternType::Module(_) => write!(self.dst, "module").unwrap(),
+            ExternType::Memory(_) => anyhow::bail!(
+                "Error: attempted to import unknown memory: '{}' '{}'",
+                instance_name,
+                ty.name()
+            ),
+            ExternType::Global(_) => anyhow::bail!(
+                "Error: attempted to import unknown global: '{}' '{}'",
+                instance_name,
+                ty.name()
+            ),
+            ExternType::Table(_) => anyhow::bail!(
+                "Error: attempted to import unknown table: '{}' '{}'",
+                instance_name,
+                ty.name()
+            ),
+            ExternType::Module(_) => anyhow::bail!(
+                "Error: attempted to import unknown module: '{}' '{}'",
+                instance_name,
+                ty.name()
+            ),
         }
         writeln!(self.dst, " ${}))", wat_name).unwrap();
+        Ok(())
     }
 
-    fn item(&mut self, name: &str, ty: &ExternType) {
+    fn item(
+        &mut self,
+        name: &str,
+        ty: &ExternType,
+        instance_name: &str,
+        item_name: &str,
+    ) -> Result<()> {
         match ty {
-            ExternType::Memory(mem) => {
-                write!(
-                    self.dst,
-                    "(memory ${} {} {})\n",
-                    name,
-                    mem.minimum(),
-                    match mem.maximum() {
-                        Some(max) => max.to_string(),
-                        None => String::new(),
-                    }
-                )
-                .unwrap();
-            }
-            ExternType::Table(table) => {
-                write!(
-                    self.dst,
-                    "(table ${} {} {} {})\n",
-                    name,
-                    table.minimum(),
-                    match table.maximum() {
-                        Some(max) => max.to_string(),
-                        None => String::new(),
-                    },
-                    wat_ty(&table.element()),
-                )
-                .unwrap();
-            }
-            ExternType::Global(ty) => {
-                write!(self.dst, "(global ${} ", name).unwrap();
-                if ty.mutability() == Mutability::Var {
-                    write!(self.dst, "(mut ").unwrap();
-                }
-                write!(self.dst, "{}", wat_ty(ty.content())).unwrap();
-                if ty.mutability() == Mutability::Var {
-                    write!(self.dst, ")").unwrap();
-                }
-                write!(self.dst, " (").unwrap();
-                self.value(ty.content());
-                writeln!(self.dst, "))").unwrap();
-            }
             ExternType::Func(ty) => {
                 write!(self.dst, "(func ${} ", name).unwrap();
                 self.func_sig(ty);
@@ -313,25 +212,36 @@ impl WatGenerator {
                 }
                 writeln!(self.dst, ")").unwrap();
             }
-            ExternType::Module(ty) => {
-                writeln!(self.dst, "(module ${}", name).unwrap();
-                for ty in ty.imports() {
-                    self.import(&ty);
-                }
-                for ty in ty.exports() {
-                    self.export(&ty);
-                }
-                self.dst.push_str(")\n");
-            }
             ExternType::Instance(ty) => {
                 writeln!(self.dst, "(module ${}_module", name).unwrap();
                 for ty in ty.exports() {
-                    self.export(&ty);
+                    self.export(&ty, instance_name)?;
                 }
                 self.dst.push_str(")\n");
                 writeln!(self.dst, "(instance ${} (instantiate ${0}_module))", name).unwrap();
             }
+            ExternType::Memory(_) => anyhow::bail!(
+                "Error: attempted to import unknown memory: '{}' '{}'",
+                instance_name,
+                item_name
+            ),
+            ExternType::Global(_) => anyhow::bail!(
+                "Error: attempted to import unknown global: '{}' '{}'",
+                instance_name,
+                item_name
+            ),
+            ExternType::Table(_) => anyhow::bail!(
+                "Error: attempted to import unknown table: '{}' '{}'",
+                instance_name,
+                item_name
+            ),
+            ExternType::Module(_) => anyhow::bail!(
+                "Error: attempted to import unknown module: '{}' '{}'",
+                instance_name,
+                item_name
+            ),
         }
+        Ok(())
     }
 
     fn func_sig(&mut self, ty: &FuncType) {
@@ -414,39 +324,10 @@ mod tests {
     }
 
     #[test]
-    fn dummy_table_import() {
-        let mut store = store();
-        let table = dummy_table(&mut store, TableType::new(ValType::ExternRef, 10, None));
-        assert_eq!(table.size(&store), 10);
-        for i in 0..10 {
-            assert!(table
-                .get(&mut store, i)
-                .unwrap()
-                .unwrap_externref()
-                .is_none());
-        }
-    }
-
-    #[test]
-    fn dummy_global_import() {
-        let mut store = store();
-        let global = dummy_global(&mut store, GlobalType::new(ValType::I32, Mutability::Const));
-        assert_eq!(*global.ty(&store).content(), ValType::I32);
-        assert_eq!(global.ty(&store).mutability(), Mutability::Const);
-    }
-
-    #[test]
-    fn dummy_memory_import() {
-        let mut store = store();
-        let memory = dummy_memory(&mut store, MemoryType::new(1, None)).unwrap();
-        assert_eq!(memory.size(&store), 1);
-    }
-
-    #[test]
     fn dummy_function_import() {
         let mut store = store();
         let func_ty = FuncType::new(vec![ValType::I32], vec![ValType::I64]);
-        let func = dummy_func(&mut store, func_ty.clone());
+        let func = dummy_func(&mut store, func_ty.clone(), "f");
         assert_eq!(func.ty(&store), func_ty);
     }
 
@@ -460,160 +341,19 @@ mod tests {
         instance_ty.add_named_export("func0", FuncType::new(vec![ValType::I32], vec![]).into());
         instance_ty.add_named_export("func1", FuncType::new(vec![], vec![ValType::I64]).into());
 
-        // Globals.
-        instance_ty.add_named_export(
-            "global0",
-            GlobalType::new(ValType::I32, Mutability::Const).into(),
-        );
-        instance_ty.add_named_export(
-            "global1",
-            GlobalType::new(ValType::I64, Mutability::Var).into(),
-        );
-
-        // Tables.
-        instance_ty.add_named_export("table0", TableType::new(ValType::ExternRef, 1, None).into());
-        instance_ty.add_named_export("table1", TableType::new(ValType::ExternRef, 1, None).into());
-
-        // Memories.
-        instance_ty.add_named_export("memory0", MemoryType::new(1, None).into());
-        instance_ty.add_named_export("memory1", MemoryType::new(1, None).into());
-
-        // Modules.
-        instance_ty.add_named_export("module0", ModuleType::new().into());
-        instance_ty.add_named_export("module1", ModuleType::new().into());
-
         // Instances.
         instance_ty.add_named_export("instance0", InstanceType::new().into());
         instance_ty.add_named_export("instance1", InstanceType::new().into());
 
-        let instance = dummy_instance(&mut store, instance_ty.clone());
+        let instance = dummy_instance(&mut store, instance_ty.clone(), "instance").unwrap();
 
-        let mut expected_exports = vec![
-            "func0",
-            "func1",
-            "global0",
-            "global1",
-            "table0",
-            "table1",
-            "memory0",
-            "memory1",
-            "module0",
-            "module1",
-            "instance0",
-            "instance1",
-        ]
-        .into_iter()
-        .collect::<HashSet<_>>();
+        let mut expected_exports = vec!["func0", "func1", "instance0", "instance1"]
+            .into_iter()
+            .collect::<HashSet<_>>();
         for exp in instance.ty(&store).exports() {
             let was_expected = expected_exports.remove(exp.name());
             assert!(was_expected);
         }
         assert!(expected_exports.is_empty());
-    }
-
-    #[test]
-    fn dummy_module_import() {
-        let mut store = store();
-
-        let mut module_ty = ModuleType::new();
-
-        // Multiple exported and imported functions.
-        module_ty.add_named_export("func0", FuncType::new(vec![ValType::I32], vec![]).into());
-        module_ty.add_named_export("func1", FuncType::new(vec![], vec![ValType::I64]).into());
-        module_ty.add_named_import(
-            "func2",
-            None,
-            FuncType::new(vec![ValType::I64], vec![]).into(),
-        );
-        module_ty.add_named_import(
-            "func3",
-            None,
-            FuncType::new(vec![], vec![ValType::I32]).into(),
-        );
-
-        // Multiple exported and imported globals.
-        module_ty.add_named_export(
-            "global0",
-            GlobalType::new(ValType::I32, Mutability::Const).into(),
-        );
-        module_ty.add_named_export(
-            "global1",
-            GlobalType::new(ValType::I64, Mutability::Var).into(),
-        );
-        module_ty.add_named_import(
-            "global2",
-            None,
-            GlobalType::new(ValType::I32, Mutability::Var).into(),
-        );
-        module_ty.add_named_import(
-            "global3",
-            None,
-            GlobalType::new(ValType::I64, Mutability::Const).into(),
-        );
-
-        // Multiple exported and imported tables.
-        module_ty.add_named_export("table0", TableType::new(ValType::ExternRef, 1, None).into());
-        module_ty.add_named_export("table1", TableType::new(ValType::ExternRef, 1, None).into());
-        module_ty.add_named_import(
-            "table2",
-            None,
-            TableType::new(ValType::ExternRef, 1, None).into(),
-        );
-        module_ty.add_named_import(
-            "table3",
-            None,
-            TableType::new(ValType::ExternRef, 1, None).into(),
-        );
-
-        // Multiple exported and imported memories.
-        module_ty.add_named_export("memory0", MemoryType::new(1, None).into());
-        module_ty.add_named_export("memory1", MemoryType::new(1, None).into());
-        module_ty.add_named_import("memory2", None, MemoryType::new(1, None).into());
-        module_ty.add_named_import("memory3", None, MemoryType::new(1, None).into());
-
-        // An exported and an imported module.
-        module_ty.add_named_export("module0", ModuleType::new().into());
-        module_ty.add_named_import("module1", None, ModuleType::new().into());
-
-        // An exported and an imported instance.
-        module_ty.add_named_export("instance0", InstanceType::new().into());
-        module_ty.add_named_import("instance1", None, InstanceType::new().into());
-
-        // Create the module.
-        let module = dummy_module(&mut store, module_ty);
-
-        // Check that we have the expected exports.
-        assert!(module.get_export("func0").is_some());
-        assert!(module.get_export("func1").is_some());
-        assert!(module.get_export("global0").is_some());
-        assert!(module.get_export("global1").is_some());
-        assert!(module.get_export("table0").is_some());
-        assert!(module.get_export("table1").is_some());
-        assert!(module.get_export("memory0").is_some());
-        assert!(module.get_export("memory1").is_some());
-        assert!(module.get_export("instance0").is_some());
-        assert!(module.get_export("module0").is_some());
-
-        // Check that we have the exported imports.
-        let mut expected_imports = vec![
-            "func2",
-            "func3",
-            "global2",
-            "global3",
-            "table2",
-            "table3",
-            "memory2",
-            "memory3",
-            "instance1",
-            "module1",
-        ]
-        .into_iter()
-        .collect::<HashSet<_>>();
-        for imp in module.imports() {
-            assert!(imp.name().is_none());
-            let was_expected = expected_imports.remove(imp.module());
-            assert!(was_expected);
-        }
-        assert!(expected_imports.is_empty());
     }
 }

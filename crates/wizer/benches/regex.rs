@@ -13,18 +13,13 @@ fn run_iter(
     let ptr = data.len() - 5;
     data[ptr..].copy_from_slice(b"hello");
 
-    let run = instance.get_func(&mut store, "run").unwrap();
-    let result = run
-        .call(
-            &mut store,
-            &[
-                wasmtime::Val::I32(i32::try_from(ptr).unwrap()),
-                wasmtime::Val::I32(5),
-            ],
-        )
+    let run = instance
+        .get_typed_func::<(i32, i32), i32, _>(&mut store, "run")
         .unwrap();
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0].i32(), Some(0));
+    let result = run
+        .call(&mut store, (i32::try_from(ptr).unwrap(), 5))
+        .unwrap();
+    assert_eq!(result, 0);
 }
 
 fn bench_regex(c: &mut Criterion) {
