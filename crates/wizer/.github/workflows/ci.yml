@@ -46,6 +46,13 @@ jobs:
         name: bins-${{ matrix.build }}
         path: dist
 
+  check_fuzz:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - run: cargo install cargo-fuzz
+    - run: cargo fuzz build --dev -s none
+
   rustfmt:
     runs-on: ubuntu-latest
     steps:
