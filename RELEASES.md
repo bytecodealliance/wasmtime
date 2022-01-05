@@ -8,9 +8,8 @@ Released 2022-01-05.
 
 ### Added
 
-* Compiled wasm modules may now omit information about mapping addresses to
-  source locations, resulting in smaller binaries but a worse debugging
-  experience.
+* Compiled wasm modules may now optionally omit debugging information about
+  mapping addresses to source locations, resulting in smaller binaries.
   [#3598](https://github.com/bytecodealliance/wasmtime/pull/3598)
 
 * The WebAssembly SIMD proposal is now enabled by default.
