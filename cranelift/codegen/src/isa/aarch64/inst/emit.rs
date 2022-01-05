@@ -1765,6 +1765,50 @@ impl MachInstEmit for Inst {
                         (0b0, 0b00101, enc_size)
                     }
                     VecMisc2::Cmeq0 => (0b0, 0b01001, enc_size),
+                    VecMisc2::Cmge0 => (0b1, 0b01000, enc_size),
+                    VecMisc2::Cmgt0 => (0b0, 0b01000, enc_size),
+                    VecMisc2::Cmle0 => (0b1, 0b01001, enc_size),
+                    VecMisc2::Cmlt0 => (0b0, 0b01010, enc_size),
+                    VecMisc2::Fcmeq0 => {
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
+                        (0b0, 0b01101, enc_size)
+                    }
+                    VecMisc2::Fcmge0 => {
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
+                        (0b1, 0b01100, enc_size)
+                    }
+                    VecMisc2::Fcmgt0 => {
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
+                        (0b0, 0b01100, enc_size)
+                    }
+                    VecMisc2::Fcmle0 => {
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
+                        (0b1, 0b01101, enc_size)
+                    }
+                    VecMisc2::Fcmlt0 => {
+                        debug_assert!(
+                            size == VectorSize::Size32x2
+                                || size == VectorSize::Size32x4
+                                || size == VectorSize::Size64x2
+                        );
+                        (0b0, 0b01110, enc_size)
+                    }
                 };
                 sink.put4(enc_vec_rr_misc((q << 1) | u, size, bits_12_16, rd, rn));
             }

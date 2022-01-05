@@ -3175,6 +3175,15 @@ impl Inst {
                     VecMisc2::Frintp => ("frintp", size, ""),
                     VecMisc2::Cnt => ("cnt", size, ""),
                     VecMisc2::Cmeq0 => ("cmeq", size, ", #0"),
+                    VecMisc2::Cmge0 => ("cmge", size, ", #0"),
+                    VecMisc2::Cmgt0 => ("cmgt", size, ", #0"),
+                    VecMisc2::Cmle0 => ("cmle", size, ", #0"),
+                    VecMisc2::Cmlt0 => ("cmlt", size, ", #0"),
+                    VecMisc2::Fcmeq0 => ("fcmeq", size, ", #0.0"),
+                    VecMisc2::Fcmge0 => ("fcmge", size, ", #0.0"),
+                    VecMisc2::Fcmgt0 => ("fcmgt", size, ", #0.0"),
+                    VecMisc2::Fcmle0 => ("fcmle", size, ", #0.0"),
+                    VecMisc2::Fcmlt0 => ("fcmlt", size, ", #0.0"),
                 };
                 let rd = show_vreg_vector(rd.to_reg(), mb_rru, size);
                 let rn = show_vreg_vector(rn, mb_rru, size);

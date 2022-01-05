@@ -1158,6 +1158,24 @@
     (Cnt)
     ;; Compare bitwise equal to 0
     (Cmeq0)
+    ;; Compare signed greater than or equal to 0
+    (Cmge0)
+    ;; Compare signed greater than 0
+    (Cmgt0)
+    ;; Compare signed less than or equal to 0
+    (Cmle0)
+    ;; Compare signed less than 0
+    (Cmlt0)
+    ;; Floating point compare equal to 0
+    (Fcmeq0)
+    ;; Floating point compare greater than or equal to 0
+    (Fcmge0)
+    ;; Floating point compare greater than 0
+    (Fcmgt0)
+    ;; Floating point compare less than or equal to 0
+    (Fcmle0)
+    ;; Floating point compare less than 0
+    (Fcmlt0)
 ))
 
 ;; A vector widening operation with one argument.
@@ -1997,3 +2015,79 @@
         (value_regs
           (alu_rrr op ty x_lo y_lo)
           (alu_rrr op ty x_hi y_hi))))
+
+;; Float vector compare helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Match 32 bit float 0 value
+(decl zero_value_f32 (Ieee32) Ieee32)
+(extern extractor zero_value_f32 zero_value_f32)
+
+;; Match 64 bit float 0 value
+(decl zero_value_f64 (Ieee64) Ieee64)
+(extern extractor zero_value_f64 zero_value_f64)
+
+;; Generate comparison to zero operator from input condition code
+(decl float_cc_cmp_zero_to_vec_misc_op (FloatCC) VecMisc2)
+(extern constructor float_cc_cmp_zero_to_vec_misc_op float_cc_cmp_zero_to_vec_misc_op)
+
+(decl float_cc_cmp_zero_to_vec_misc_op_swap (FloatCC) VecMisc2)
+(extern constructor float_cc_cmp_zero_to_vec_misc_op_swap float_cc_cmp_zero_to_vec_misc_op_swap)
+
+;; Match valid generic compare to zero cases
+(decl fcmp_zero_cond (FloatCC) FloatCC)
+(extern extractor fcmp_zero_cond fcmp_zero_cond)
+
+;; Match not equal compare to zero separately as it requires two output instructions
+(decl fcmp_zero_cond_not_eq (FloatCC) FloatCC)
+(extern extractor fcmp_zero_cond_not_eq fcmp_zero_cond_not_eq)
+
+;; Helper for generating float compare to zero instructions where 2nd argument is zero
+(decl float_cmp_zero (FloatCC Reg VectorSize) Reg)
+(rule (float_cmp_zero cond rn size)
+      (vec_misc (float_cc_cmp_zero_to_vec_misc_op cond) rn size))
+
+;; Helper for generating float compare to zero instructions in case where 1st argument is zero
+(decl float_cmp_zero_swap (FloatCC Reg VectorSize) Reg)
+(rule (float_cmp_zero_swap cond rn size)
+      (vec_misc (float_cc_cmp_zero_to_vec_misc_op_swap cond) rn size))
+
+;; Helper for generating float compare equal to zero instruction
+(decl fcmeq0 (Reg VectorSize) Reg)
+(rule (fcmeq0 rn size)
+      (vec_misc (VecMisc2.Fcmeq0) rn size))
+
+;; Int vector compare helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Match integer 0 value
+(decl zero_value (Imm64) Imm64)
+(extern extractor zero_value zero_value)
+
+;; Generate comparison to zero operator from input condition code
+(decl int_cc_cmp_zero_to_vec_misc_op (IntCC) VecMisc2)
+(extern constructor int_cc_cmp_zero_to_vec_misc_op int_cc_cmp_zero_to_vec_misc_op)
+
+(decl int_cc_cmp_zero_to_vec_misc_op_swap (IntCC) VecMisc2)
+(extern constructor int_cc_cmp_zero_to_vec_misc_op_swap int_cc_cmp_zero_to_vec_misc_op_swap)
+
+;; Match valid generic compare to zero cases
+(decl icmp_zero_cond (IntCC) IntCC)
+(extern extractor icmp_zero_cond icmp_zero_cond)
+
+;; Match not equal compare to zero separately as it requires two output instructions
+(decl icmp_zero_cond_not_eq (IntCC) IntCC)
+(extern extractor icmp_zero_cond_not_eq icmp_zero_cond_not_eq)
+
+;; Helper for generating int compare to zero instructions where 2nd argument is zero
+(decl int_cmp_zero (IntCC Reg VectorSize) Reg)
+(rule (int_cmp_zero cond rn size)
+      (vec_misc (int_cc_cmp_zero_to_vec_misc_op cond) rn size))
+
+;; Helper for generating int compare to zero instructions in case where 1st argument is zero
+(decl int_cmp_zero_swap (IntCC Reg VectorSize) Reg)
+(rule (int_cmp_zero_swap cond rn size)
+      (vec_misc (int_cc_cmp_zero_to_vec_misc_op_swap cond) rn size))
+
+;; Helper for generating int compare equal to zero instruction
+(decl cmeq0 (Reg VectorSize) Reg)
+(rule (cmeq0 rn size)
+      (vec_misc (VecMisc2.Cmeq0) rn size))

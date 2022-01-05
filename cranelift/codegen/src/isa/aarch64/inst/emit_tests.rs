@@ -4520,13 +4520,112 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::VecMisc {
+            op: VecMisc2::Fcmeq0,
+            rd: writable_vreg(5),
+            rn: vreg(2),
+            size: VectorSize::Size32x4,
+        },
+        "45D8A04E",
+        "fcmeq v5.4s, v2.4s, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmge0,
+            rd: writable_vreg(3),
+            rn: vreg(1),
+            size: VectorSize::Size64x2,
+        },
+        "23C8E06E",
+        "fcmge v3.2d, v1.2d, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmgt0,
+            rd: writable_vreg(5),
+            rn: vreg(7),
+            size: VectorSize::Size32x4,
+        },
+        "E5C8A04E",
+        "fcmgt v5.4s, v7.4s, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmle0,
+            rd: writable_vreg(10),
+            rn: vreg(2),
+            size: VectorSize::Size32x4,
+        },
+        "4AD8A06E",
+        "fcmle v10.4s, v2.4s, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Fcmlt0,
+            rd: writable_vreg(12),
+            rn: vreg(12),
+            size: VectorSize::Size64x2,
+        },
+        "8CE9E04E",
+        "fcmlt v12.2d, v12.2d, #0.0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
             op: VecMisc2::Cmeq0,
+            rd: writable_vreg(22),
+            rn: vreg(27),
+            size: VectorSize::Size16x8,
+        },
+        "769B604E",
+        "cmeq v22.8h, v27.8h, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmge0,
             rd: writable_vreg(12),
             rn: vreg(27),
             size: VectorSize::Size16x8,
         },
-        "6C9B604E",
-        "cmeq v12.8h, v27.8h, #0",
+        "6C8B606E",
+        "cmge v12.8h, v27.8h, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmgt0,
+            rd: writable_vreg(12),
+            rn: vreg(27),
+            size: VectorSize::Size8x16,
+        },
+        "6C8B204E",
+        "cmgt v12.16b, v27.16b, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmle0,
+            rd: writable_vreg(1),
+            rn: vreg(27),
+            size: VectorSize::Size32x4,
+        },
+        "619BA06E",
+        "cmle v1.4s, v27.4s, #0",
+    ));
+
+    insns.push((
+        Inst::VecMisc {
+            op: VecMisc2::Cmlt0,
+            rd: writable_vreg(0),
+            rn: vreg(7),
+            size: VectorSize::Size64x2,
+        },
+        "E0A8E04E",
+        "cmlt v0.2d, v7.2d, #0",
     ));
 
     insns.push((
