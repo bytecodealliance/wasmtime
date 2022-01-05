@@ -55,12 +55,7 @@ impl<'a> MemoryCodeSink<'a> {
         Self {
             data,
             offset: 0,
-            info: CodeInfo {
-                code_size: 0,
-                jumptables_size: 0,
-                rodata_size: 0,
-                total_size: 0,
-            },
+            info: CodeInfo { total_size: 0 },
             relocs,
             traps,
         }
@@ -140,16 +135,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         self.traps.trap(ofs, srcloc, code);
     }
 
-    fn begin_jumptables(&mut self) {
-        self.info.code_size = self.offset();
-    }
-
-    fn begin_rodata(&mut self) {
-        self.info.jumptables_size = self.offset() - self.info.code_size;
-    }
-
     fn end_codegen(&mut self) {
-        self.info.rodata_size = self.offset() - (self.info.jumptables_size + self.info.code_size);
         self.info.total_size = self.offset();
     }
 

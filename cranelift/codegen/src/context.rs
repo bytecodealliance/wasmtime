@@ -114,7 +114,7 @@ impl Context {
         relocs: &mut dyn RelocSink,
         traps: &mut dyn TrapSink,
         stack_maps: &mut dyn StackMapSink,
-    ) -> CodegenResult<CodeInfo> {
+    ) -> CodegenResult<()> {
         let info = self.compile(isa)?;
         let old_len = mem.len();
         mem.resize(old_len + info.total_size as usize, 0);
@@ -122,7 +122,7 @@ impl Context {
             self.emit_to_memory(mem.as_mut_ptr().add(old_len), relocs, traps, stack_maps)
         };
         debug_assert!(new_info == info);
-        Ok(info)
+        Ok(())
     }
 
     /// Compile the function.
@@ -167,8 +167,7 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
-        // FIXME: make this non optional
-        let backend = isa.get_mach_backend().expect("only mach backends nowadays");
+        let backend = isa.get_mach_backend();
         let result = backend.compile_function(&self.func, self.want_disasm)?;
         let info = result.code_info();
         self.mach_compile_result = Some(result);
@@ -243,12 +242,10 @@ impl Context {
         &self,
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        if let Some(backend) = isa.get_mach_backend() {
-            let unwind_info_kind = isa.unwind_info_kind();
-            let result = self.mach_compile_result.as_ref().unwrap();
-            return backend.emit_unwind_info(result, unwind_info_kind);
-        }
-        isa.create_unwind_info(&self.func)
+        let backend = isa.get_mach_backend();
+        let unwind_info_kind = isa.unwind_info_kind();
+        let result = self.mach_compile_result.as_ref().unwrap();
+        backend.emit_unwind_info(result, unwind_info_kind)
     }
 
     /// Run the verifier on the function.

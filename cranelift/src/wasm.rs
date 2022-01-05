@@ -255,7 +255,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
     for (def_index, func) in dummy_environ.info.function_bodies.iter() {
         context.func = func.clone();
 
-        let mut saved_sizes = None;
+        let mut saved_size = None;
         let func_index = num_func_imports + def_index.index();
         let mut mem = vec![];
         let mut relocs = PrintRelocs::new(options.print);
@@ -266,9 +266,10 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 anyhow::bail!("{}", pretty_verifier_error(&context.func, None, errors));
             }
         } else {
-            let code_info = context
+            context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
+            let code_info = context.mach_compile_result.as_ref().unwrap().code_info();
 
             if options.print_size {
                 println!(
@@ -284,10 +285,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
 
             if options.disasm {
-                saved_sizes = Some((
-                    code_info.code_size,
-                    code_info.jumptables_size + code_info.rodata_size,
-                ));
+                saved_size = Some(code_info.total_size);
             }
         }
 
@@ -324,16 +322,8 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             vprintln!(options.verbose, "");
         }
 
-        if let Some((code_size, rodata_size)) = saved_sizes {
-            print_all(
-                isa,
-                &mem,
-                code_size,
-                rodata_size,
-                &relocs,
-                &traps,
-                &stack_maps,
-            )?;
+        if let Some(total_size) = saved_size {
+            print_all(isa, &mem, total_size, &relocs, &traps, &stack_maps)?;
         }
 
         context.clear();

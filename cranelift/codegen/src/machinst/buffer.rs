@@ -1460,8 +1460,6 @@ impl MachBufferFinalized {
             sink.put1(*byte);
         }
 
-        sink.begin_jumptables();
-        sink.begin_rodata();
         sink.end_codegen();
     }
 
@@ -2091,8 +2089,6 @@ mod test {
             fn trap(&mut self, t: TrapCode, _: SourceLoc) {
                 self.traps.push((self.offset, t));
             }
-            fn begin_jumptables(&mut self) {}
-            fn begin_rodata(&mut self) {}
             fn end_codegen(&mut self) {}
             fn add_call_site(&mut self, op: Opcode, _: SourceLoc) {
                 self.callsites.push((self.offset, op));

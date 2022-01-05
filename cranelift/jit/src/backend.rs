@@ -652,11 +652,6 @@ impl Module for JITModule {
         stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display());
-        let CodeInfo {
-            total_size: code_size,
-            ..
-        } = ctx.compile(self.isa())?;
-
         let decl = self.declarations.get_function_decl(id);
         if !decl.linkage.is_definable() {
             return Err(ModuleError::InvalidImportDefinition(decl.name.clone()));
@@ -665,6 +660,11 @@ impl Module for JITModule {
         if !self.compiled_functions[id].is_none() {
             return Err(ModuleError::DuplicateDefinition(decl.name.to_owned()));
         }
+
+        let CodeInfo {
+            total_size: code_size,
+            ..
+        } = ctx.compile(self.isa())?;
 
         let size = code_size as usize;
         let ptr = self

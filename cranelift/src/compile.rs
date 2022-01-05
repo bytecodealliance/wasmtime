@@ -78,9 +78,10 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             let mut mem = vec![];
 
             // Compile and encode the result to machine code.
-            let code_info = context
+            context
                 .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
+            let code_info = context.mach_compile_result.as_ref().unwrap().code_info();
 
             if options.print {
                 println!("{}", context.func.display());
@@ -90,8 +91,7 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
                 print_all(
                     isa,
                     &mem,
-                    code_info.code_size,
-                    code_info.jumptables_size + code_info.rodata_size,
+                    code_info.total_size,
                     &relocs,
                     &traps,
                     &stack_maps,

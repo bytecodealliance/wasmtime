@@ -14,7 +14,7 @@ use crate::{
         args::{Amode, OperandSize},
         regs, EmitInfo, EmitState, Inst, LabelUse,
     },
-    machinst::{MachBuffer, MachInstEmitInfo},
+    machinst::MachBuffer,
 };
 use regalloc::{Reg, RegClass};
 
@@ -299,7 +299,7 @@ pub(crate) fn emit_std_enc_mem(
         Amode::ImmReg { simm32, base, .. } => {
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
-            if *base == regs::rsp() && !can_trap && info.flags().enable_probestack() {
+            if *base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
                 sink.add_trap(srcloc, TrapCode::StackOverflow);
             }
 
@@ -365,7 +365,7 @@ pub(crate) fn emit_std_enc_mem(
         } => {
             // If this is an access based off of RSP, it may trap with a stack overflow if it's the
             // first touch of a new stack page.
-            if *reg_base == regs::rsp() && !can_trap && info.flags().enable_probestack() {
+            if *reg_base == regs::rsp() && !can_trap && info.flags.enable_probestack() {
                 sink.add_trap(srcloc, TrapCode::StackOverflow);
             }
 

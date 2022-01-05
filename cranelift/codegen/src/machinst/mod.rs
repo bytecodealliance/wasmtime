@@ -310,18 +310,11 @@ pub trait MachInstEmit: MachInst {
     /// Persistent state carried across `emit` invocations.
     type State: MachInstEmitState<Self>;
     /// Constant information used in `emit` invocations.
-    type Info: MachInstEmitInfo;
+    type Info;
     /// Emit the instruction.
     fn emit(&self, code: &mut MachBuffer<Self>, info: &Self::Info, state: &mut Self::State);
     /// Pretty-print the instruction.
     fn pretty_print(&self, mb_rru: Option<&RealRegUniverse>, state: &mut Self::State) -> String;
-}
-
-/// Constant information used to emit an instruction.
-pub trait MachInstEmitInfo {
-    /// Return the target-independent settings used for the compilation of this
-    /// particular function.
-    fn flags(&self) -> &Flags;
 }
 
 /// A trait describing the emission state carried between MachInsts when
@@ -367,12 +360,8 @@ pub struct MachCompileResult {
 impl MachCompileResult {
     /// Get a `CodeInfo` describing section sizes from this compilation result.
     pub fn code_info(&self) -> CodeInfo {
-        let code_size = self.buffer.total_size();
         CodeInfo {
-            code_size,
-            jumptables_size: 0,
-            rodata_size: 0,
-            total_size: code_size,
+            total_size: self.buffer.total_size(),
         }
     }
 }
@@ -394,7 +383,7 @@ pub trait MachBackend {
     fn isa_flags(&self) -> Vec<settings::Value>;
 
     /// Return triple for this backend.
-    fn triple(&self) -> Triple;
+    fn triple(&self) -> &Triple;
 
     /// Return name for this backend.
     fn name(&self) -> &'static str;

@@ -916,12 +916,6 @@ impl EmitInfo {
     }
 }
 
-impl MachInstEmitInfo for EmitInfo {
-    fn flags(&self) -> &settings::Flags {
-        &self.flags
-    }
-}
-
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
@@ -1703,7 +1697,7 @@ impl MachInstEmit for Inst {
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
-                if emit_info.flags().emit_all_ones_funcaddrs() {
+                if emit_info.flags.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
                     sink.put8(0);

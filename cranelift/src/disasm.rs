@@ -193,14 +193,12 @@ pub fn print_all(
     isa: &dyn TargetIsa,
     mem: &[u8],
     code_size: u32,
-    rodata_size: u32,
     relocs: &PrintRelocs,
     traps: &PrintTraps,
     stack_maps: &PrintStackMaps,
 ) -> Result<()> {
     print_bytes(&mem);
     print_disassembly(isa, &mem[0..code_size as usize])?;
-    print_readonly_data(&mem[code_size as usize..(code_size + rodata_size) as usize]);
     println!("\n{}\n{}\n{}", &relocs.text, &traps.text, &stack_maps.text);
     Ok(())
 }
@@ -215,28 +213,6 @@ pub fn print_bytes(mem: &[u8]) {
             print!(", ");
         }
         print!("{}", byte);
-    }
-    println!();
-}
-
-pub fn print_readonly_data(mem: &[u8]) {
-    if mem.is_empty() {
-        return;
-    }
-
-    println!("\nFollowed by {} bytes of read-only data:", mem.len());
-
-    for (i, byte) in mem.iter().enumerate() {
-        if i % 16 == 0 {
-            if i != 0 {
-                println!();
-            }
-            print!("{:4}: ", i);
-        }
-        if i % 4 == 0 {
-            print!(" ");
-        }
-        print!("{:02x} ", byte);
     }
     println!();
 }

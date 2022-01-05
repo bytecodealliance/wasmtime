@@ -1088,7 +1088,7 @@ pub(crate) fn emit(
         }
 
         Inst::Push64 { src } => {
-            if info.flags().enable_probestack() {
+            if info.flags.enable_probestack() {
                 sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
             }
 
@@ -1139,7 +1139,7 @@ pub(crate) fn emit(
         }
 
         Inst::CallKnown { dest, opcode, .. } => {
-            if info.flags().enable_probestack() {
+            if info.flags.enable_probestack() {
                 sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
             }
             if let Some(s) = state.take_stack_map() {
@@ -1157,7 +1157,7 @@ pub(crate) fn emit(
         }
 
         Inst::CallUnknown { dest, opcode, .. } => {
-            if info.flags().enable_probestack() {
+            if info.flags.enable_probestack() {
                 sink.add_trap(state.cur_srcloc(), TrapCode::StackOverflow);
             }
             let start_offset = sink.cur_offset();
@@ -2412,7 +2412,7 @@ pub(crate) fn emit(
         }
 
         Inst::LoadExtName { dst, name, offset } => {
-            if info.flags().is_pic() {
+            if info.flags.is_pic() {
                 // Generates: movq symbol@GOTPCREL(%rip), %dst
                 let enc_dst = int_reg_enc(dst.to_reg());
                 sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
@@ -2442,7 +2442,7 @@ pub(crate) fn emit(
                 sink.put1(0x48 | ((enc_dst >> 3) & 1));
                 sink.put1(0xB8 | (enc_dst & 7));
                 emit_reloc(sink, state, Reloc::Abs8, name, *offset);
-                if info.flags().emit_all_ones_funcaddrs() {
+                if info.flags.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
                     sink.put8(0);

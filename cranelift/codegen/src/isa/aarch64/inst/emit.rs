@@ -669,12 +669,6 @@ impl EmitInfo {
     }
 }
 
-impl MachInstEmitInfo for EmitInfo {
-    fn flags(&self) -> &settings::Flags {
-        &self.0
-    }
-}
-
 impl MachInstEmit for Inst {
     type State = EmitState;
     type Info = EmitInfo;
@@ -2699,7 +2693,7 @@ impl MachInstEmit for Inst {
                 inst.emit(sink, emit_info, state);
                 let srcloc = state.cur_srcloc();
                 sink.add_reloc(srcloc, Reloc::Abs8, name, offset);
-                if emit_info.flags().emit_all_ones_funcaddrs() {
+                if emit_info.0.emit_all_ones_funcaddrs() {
                     sink.put8(u64::max_value());
                 } else {
                     sink.put8(0);

@@ -16,7 +16,7 @@
 use crate::debug::{DwarfSection, DwarfSectionRelocTarget};
 use crate::{CompiledFunction, Relocation, RelocationTarget};
 use anyhow::Result;
-use cranelift_codegen::binemit::{Addend, Reloc};
+use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::LibCall;
 use cranelift_codegen::isa::{
     unwind::{systemv, UnwindInfo},
@@ -204,12 +204,9 @@ impl<'a> ObjectBuilder<'a> {
             systemv_unwind_info_id: None,
             systemv_unwind_info: Vec::new(),
             relocations: Vec::new(),
-            text: match isa.get_mach_backend() {
-                Some(backend) => backend.text_section_builder(
-                    (module.functions.len() - module.num_imported_funcs) as u32,
-                ),
-                None => Box::new(DummyBuilder::default()),
-            },
+            text: isa
+                .get_mach_backend()
+                .text_section_builder((module.functions.len() - module.num_imported_funcs) as u32),
             added_unwind_info: false,
         }
     }
@@ -625,39 +622,5 @@ impl<'a> ObjectBuilder<'a> {
                 self.write_eh_pointer_data(val, eh_pe.format(), size)
             }
         }
-    }
-}
-
-#[derive(Default)]
-struct DummyBuilder {
-    data: Vec<u8>,
-}
-
-impl TextSectionBuilder for DummyBuilder {
-    fn append(&mut self, _named: bool, func: &[u8], align: u32) -> u64 {
-        while self.data.len() % align as usize != 0 {
-            self.data.push(0);
-        }
-        let pos = self.data.len() as u64;
-        self.data.extend_from_slice(func);
-        pos
-    }
-
-    fn resolve_reloc(
-        &mut self,
-        _offset: u64,
-        _reloc: Reloc,
-        _addend: Addend,
-        _target: u32,
-    ) -> bool {
-        false
-    }
-
-    fn force_veneers(&mut self) {
-        // not implemented
-    }
-
-    fn finish(&mut self) -> Vec<u8> {
-        mem::take(&mut self.data)
     }
 }

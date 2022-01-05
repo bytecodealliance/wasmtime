@@ -98,8 +98,8 @@ impl MachBackend for AArch64Backend {
         "aarch64"
     }
 
-    fn triple(&self) -> Triple {
-        self.triple.clone()
+    fn triple(&self) -> &Triple {
+        &self.triple
     }
 
     fn flags(&self) -> &shared_settings::Flags {

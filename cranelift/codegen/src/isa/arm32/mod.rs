@@ -88,8 +88,8 @@ impl MachBackend for Arm32Backend {
         "arm32"
     }
 
-    fn triple(&self) -> Triple {
-        self.triple.clone()
+    fn triple(&self) -> &Triple {
+        &self.triple
     }
 
     fn flags(&self) -> &settings::Flags {
