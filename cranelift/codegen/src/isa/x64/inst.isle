@@ -954,6 +954,28 @@
 (rule (pandn src1 src2)
       (xmm_rm_r $F64X2 (SseOpcode.Pandn) src1 src2))
 
+(decl sse_blend_op (Type) SseOpcode)
+(rule (sse_blend_op $F32X4) (SseOpcode.Blendvps))
+(rule (sse_blend_op $F64X2) (SseOpcode.Blendvpd))
+(rule (sse_blend_op (multi_lane _bits _lanes)) (SseOpcode.Pblendvb))
+
+(decl sse_mov_op (Type) SseOpcode)
+(rule (sse_mov_op $F32X4) (SseOpcode.Movaps))
+(rule (sse_mov_op $F64X2) (SseOpcode.Movapd))
+(rule (sse_mov_op (multi_lane _bits _lanes)) (SseOpcode.Movdqa))
+
+;; Helper for creating `blendvp{d,s}` and `pblendvb` instructions.
+(decl sse_blend (Type RegMem RegMem Reg) Reg)
+(rule (sse_blend ty mask src1 src2)
+      ;; Move the mask into `xmm0`, as blend instructions implicitly operate on
+      ;; that register. (This kind of thing would normally happen inside of
+      ;; `Inst::mov_mitosis`, but has to happen here, where we still have the
+      ;; mask register, because the mask is implicit and doesn't appear in the
+      ;; `Inst` itself.)
+      (let ((mask2 WritableReg (xmm0))
+            (_ Unit (emit (MInst.XmmUnaryRmR (sse_mov_op ty) mask mask2))))
+        (xmm_rm_r ty (sse_blend_op ty) src2 src1)))
+
 ;; Helper for creating `blendvpd` instructions.
 (decl blendvpd (Reg RegMem Reg) Reg)
 (rule (blendvpd src1 src2 mask)

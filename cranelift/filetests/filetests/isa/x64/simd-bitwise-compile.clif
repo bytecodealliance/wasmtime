@@ -96,15 +96,33 @@ block0:
 ; nextln: por     %xmm1, %xmm0
 ; not:    movdqa
 
-function %vselect_i16x8() -> i16x8 {
-block0:
-    v0 = vconst.b16x8 [false true false true false true false true]
-    v1 = vconst.i16x8 [0 0 0 0 0 0 0 0]
-    v2 = vconst.i16x8 [0 0 0 0 0 0 0 0]
+
+function %vselect_i16x8(b16x8, i16x8, i16x8) -> i16x8 {
+block0(v0: b16x8, v1: i16x8, v2: i16x8):
     v3 = vselect v0, v1, v2
     return v3
 }
-; check:  pblendvb %xmm1, %xmm2
+; check: pblendvb
+; not: blendvps
+; not: blendvpd
+
+function %vselect_f32x4(b32x4, f32x4, f32x4) -> f32x4 {
+block0(v0: b32x4, v1: f32x4, v2: f32x4):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; check: blendvps
+; not: pblendvb
+; not: blendvpd
+
+function %vselect_f64x2(b64x2, f64x2, f64x2) -> f64x2 {
+block0(v0: b64x2, v1: f64x2, v2: f64x2):
+    v3 = vselect v0, v1, v2
+    return v3
+}
+; check: blendvpd
+; not: pblendvb
+; not: blendvps
 
 
 
