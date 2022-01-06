@@ -1,6 +1,7 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
 use crate::ir::Function;
+use crate::isa::TargetIsa;
 use crate::log::DeferredDisplay;
 use crate::machinst::*;
 use crate::settings;
@@ -10,7 +11,7 @@ use regalloc::{allocate_registers_with_opts, Algorithm, Options, PrettyPrint};
 
 /// Compile the given function down to VCode with allocated registers, ready
 /// for binary emission.
-pub fn compile<B: LowerBackend + MachBackend>(
+pub fn compile<B: LowerBackend + TargetIsa>(
     f: &Function,
     b: &B,
     abi: Box<dyn ABICallee<I = B::MInst>>,

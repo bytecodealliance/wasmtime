@@ -5,15 +5,15 @@ use crate::ir::Function;
 use crate::isa::s390x::settings as s390x_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, MachBackend, MachCompileResult, MachTextSectionBuilder, TargetIsaAdapter,
-    TextSectionBuilder, VCode,
+    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 
 use alloc::{boxed::Box, vec::Vec};
+use core::fmt;
 
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::{Architecture, Triple};
@@ -65,7 +65,7 @@ impl S390xBackend {
     }
 }
 
-impl MachBackend for S390xBackend {
+impl TargetIsa for S390xBackend {
     fn compile_function(
         &self,
         func: &Function,
@@ -151,12 +151,22 @@ impl MachBackend for S390xBackend {
     }
 
     #[cfg(feature = "unwind")]
-    fn map_reg_to_dwarf(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
+    fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+}
+
+impl fmt::Display for S390xBackend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MachBackend")
+            .field("name", &self.name())
+            .field("triple", &self.triple())
+            .field("flags", &format!("{}", self.flags()))
+            .finish()
     }
 }
 
@@ -169,7 +179,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         constructor: |triple, shared_flags, builder| {
             let isa_flags = s390x_settings::Flags::new(&shared_flags, builder);
             let backend = S390xBackend::new_with_flags(triple, shared_flags, isa_flags);
-            Box::new(TargetIsaAdapter::new(backend))
+            Box::new(backend)
         },
     }
 }

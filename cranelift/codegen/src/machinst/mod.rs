@@ -61,10 +61,9 @@
 //! ```
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc, StackMap};
-use crate::ir::condcodes::IntCC;
-use crate::ir::{Function, SourceLoc, StackSlot, Type, ValueLabel};
+use crate::ir::{SourceLoc, StackSlot, Type, ValueLabel};
 use crate::result::CodegenResult;
-use crate::settings::{self, Flags};
+use crate::settings::Flags;
 use crate::value_label::ValueLabelsRanges;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -76,10 +75,6 @@ use regalloc::{
 };
 use smallvec::{smallvec, SmallVec};
 use std::string::String;
-use target_lexicon::Triple;
-
-#[cfg(feature = "unwind")]
-use crate::isa::unwind::systemv::RegisterMappingError;
 
 #[macro_use]
 pub mod isle;
@@ -98,8 +93,6 @@ pub mod abi_impl;
 pub use abi_impl::*;
 pub mod buffer;
 pub use buffer::*;
-pub mod adapter;
-pub use adapter::*;
 pub mod helpers;
 pub use helpers::*;
 pub mod inst_common;
@@ -361,67 +354,6 @@ impl MachCompileResult {
             total_size: self.buffer.total_size(),
         }
     }
-}
-
-/// Top-level machine backend trait, which wraps all monomorphized code and
-/// allows a virtual call from the machine-independent `Function::compile()`.
-pub trait MachBackend {
-    /// Compile the given function.
-    fn compile_function(
-        &self,
-        func: &Function,
-        want_disasm: bool,
-    ) -> CodegenResult<MachCompileResult>;
-
-    /// Return flags for this backend.
-    fn flags(&self) -> &Flags;
-
-    /// Get the ISA-dependent flag values that were used to make this trait object.
-    fn isa_flags(&self) -> Vec<settings::Value>;
-
-    /// Return triple for this backend.
-    fn triple(&self) -> &Triple;
-
-    /// Return name for this backend.
-    fn name(&self) -> &'static str;
-
-    /// Machine-specific condcode info needed by TargetIsa.
-    /// Condition that will be true when an IaddIfcout overflows.
-    fn unsigned_add_overflow_condition(&self) -> IntCC;
-
-    /// Produces unwind info based on backend results.
-    #[cfg(feature = "unwind")]
-    fn emit_unwind_info(
-        &self,
-        _result: &MachCompileResult,
-        _kind: UnwindInfoKind,
-    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        // By default, an backend cannot produce unwind info.
-        Ok(None)
-    }
-
-    /// Creates a new System V Common Information Entry for the ISA.
-    #[cfg(feature = "unwind")]
-    fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
-        // By default, an ISA cannot create a System V CIE
-        None
-    }
-    /// Maps a regalloc::Reg to a DWARF register number.
-    #[cfg(feature = "unwind")]
-    fn map_reg_to_dwarf(&self, _: Reg) -> Result<u16, RegisterMappingError> {
-        Err(RegisterMappingError::UnsupportedArchitecture)
-    }
-
-    /// Returns an object that can be used to build the text section of an
-    /// executable.
-    ///
-    /// This object will internally attempt to handle as many relocations as
-    /// possible using relative calls/jumps/etc between functions.
-    ///
-    /// The `num_labeled_funcs` argument here is the number of functions which
-    /// will be "labeled" or might have calls between them, typically the number
-    /// of defined functions in the object file.
-    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
 }
 
 /// An object that can be used to create the text section of an executable.

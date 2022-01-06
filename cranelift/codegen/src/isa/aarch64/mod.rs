@@ -3,14 +3,14 @@
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
 use crate::isa::aarch64::settings as aarch64_settings;
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, MachBackend, MachCompileResult, MachTextSectionBuilder, TargetIsaAdapter,
-    TextSectionBuilder, VCode,
+    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
+use core::fmt;
 use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Aarch64Architecture, Architecture, Triple};
 
@@ -62,7 +62,7 @@ impl AArch64Backend {
     }
 }
 
-impl MachBackend for AArch64Backend {
+impl TargetIsa for AArch64Backend {
     fn compile_function(
         &self,
         func: &Function,
@@ -153,6 +153,16 @@ impl MachBackend for AArch64Backend {
     }
 }
 
+impl fmt::Display for AArch64Backend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MachBackend")
+            .field("name", &self.name())
+            .field("triple", &self.triple())
+            .field("flags", &format!("{}", self.flags()))
+            .finish()
+    }
+}
+
 /// Create a new `isa::Builder`.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
     assert!(triple.architecture == Architecture::Aarch64(Aarch64Architecture::Aarch64));
@@ -162,7 +172,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         constructor: |triple, shared_flags, builder| {
             let isa_flags = aarch64_settings::Flags::new(&shared_flags, builder);
             let backend = AArch64Backend::new_with_flags(triple, shared_flags, isa_flags);
-            Box::new(TargetIsaAdapter::new(backend))
+            Box::new(backend)
         },
     }
 }
