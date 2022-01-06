@@ -46,12 +46,13 @@
 pub use crate::isa::call_conv::CallConv;
 
 use crate::flowgraph;
-use crate::ir;
+use crate::ir::{self, Function};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
-use crate::machinst::{MachBackend, UnwindInfoKind};
+use crate::machinst::{MachCompileResult, TextSectionBuilder, UnwindInfoKind};
 use crate::settings;
 use crate::settings::SetResult;
+use crate::CodegenResult;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
@@ -227,6 +228,13 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Get the ISA-dependent flag values that were used to make this trait object.
     fn isa_flags(&self) -> Vec<settings::Value>;
 
+    /// Compile the given function.
+    fn compile_function(
+        &self,
+        func: &Function,
+        want_disasm: bool,
+    ) -> CodegenResult<MachCompileResult>;
+
     #[cfg(feature = "unwind")]
     /// Map a regalloc::Reg to its corresponding DWARF register.
     fn map_regalloc_reg_to_dwarf(&self, _: ::regalloc::Reg) -> Result<u16, RegisterMappingError> {
@@ -235,6 +243,16 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
 
     /// IntCC condition for Unsigned Addition Overflow (Carry).
     fn unsigned_add_overflow_condition(&self) -> ir::condcodes::IntCC;
+
+    /// Creates unwind information for the function.
+    ///
+    /// Returns `None` if there is no unwind information for the function.
+    #[cfg(feature = "unwind")]
+    fn emit_unwind_info(
+        &self,
+        result: &MachCompileResult,
+        kind: UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>>;
 
     /// Creates a new System V Common Information Entry for the ISA.
     ///
@@ -245,8 +263,16 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
         None
     }
 
-    /// Get the new-style MachBackend.
-    fn get_mach_backend(&self) -> &dyn MachBackend;
+    /// Returns an object that can be used to build the text section of an
+    /// executable.
+    ///
+    /// This object will internally attempt to handle as many relocations as
+    /// possible using relative calls/jumps/etc between functions.
+    ///
+    /// The `num_labeled_funcs` argument here is the number of functions which
+    /// will be "labeled" or might have calls between them, typically the number
+    /// of defined functions in the object file.
+    fn text_section_builder(&self, num_labeled_funcs: u32) -> Box<dyn TextSectionBuilder>;
 }
 
 /// Methods implemented for free for target ISA!

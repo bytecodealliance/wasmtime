@@ -2,15 +2,15 @@
 
 use crate::ir::condcodes::IntCC;
 use crate::ir::Function;
-use crate::isa::Builder as IsaBuilder;
+use crate::isa::{Builder as IsaBuilder, TargetIsa};
 use crate::machinst::{
-    compile, MachBackend, MachCompileResult, MachTextSectionBuilder, TargetIsaAdapter,
-    TextSectionBuilder, VCode,
+    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings;
 
 use alloc::{boxed::Box, vec::Vec};
+use core::fmt;
 use regalloc::{PrettyPrint, RealRegUniverse};
 use target_lexicon::{Architecture, ArmArchitecture, Triple};
 
@@ -49,11 +49,11 @@ impl Arm32Backend {
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone());
         let abi = Box::new(abi::Arm32ABICallee::new(func, flags)?);
-        compile::compile::<Arm32Backend>(func, self, abi, emit_info)
+        compile::compile::<Arm32Backend>(func, self, abi, &self.reg_universe, emit_info)
     }
 }
 
-impl MachBackend for Arm32Backend {
+impl TargetIsa for Arm32Backend {
     fn compile_function(
         &self,
         func: &Function,
@@ -100,8 +100,13 @@ impl MachBackend for Arm32Backend {
         Vec::new()
     }
 
-    fn reg_universe(&self) -> &RealRegUniverse {
-        &self.reg_universe
+    #[cfg(feature = "unwind")]
+    fn emit_unwind_info(
+        &self,
+        _result: &MachCompileResult,
+        _kind: crate::machinst::UnwindInfoKind,
+    ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
+        Ok(None) // FIXME implement this
     }
 
     fn unsigned_add_overflow_condition(&self) -> IntCC {
@@ -111,6 +116,16 @@ impl MachBackend for Arm32Backend {
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+}
+
+impl fmt::Display for Arm32Backend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MachBackend")
+            .field("name", &self.name())
+            .field("triple", &self.triple())
+            .field("flags", &format!("{}", self.flags()))
+            .finish()
     }
 }
 
@@ -127,7 +142,7 @@ pub fn isa_builder(triple: Triple) -> IsaBuilder {
         setup: settings::builder(),
         constructor: |triple, shared_flags, _| {
             let backend = Arm32Backend::new_with_flags(triple, shared_flags);
-            Box::new(TargetIsaAdapter::new(backend))
+            Box::new(backend)
         },
     }
 }

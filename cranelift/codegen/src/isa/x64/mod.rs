@@ -9,12 +9,12 @@ use crate::isa::unwind::systemv;
 use crate::isa::x64::{inst::regs::create_reg_universe_systemv, settings as x64_settings};
 use crate::isa::Builder as IsaBuilder;
 use crate::machinst::{
-    compile, MachBackend, MachCompileResult, MachTextSectionBuilder, TargetIsaAdapter,
-    TextSectionBuilder, VCode,
+    compile, MachCompileResult, MachTextSectionBuilder, TextSectionBuilder, VCode,
 };
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
 use alloc::{boxed::Box, vec::Vec};
+use core::fmt;
 
 use regalloc::{PrettyPrint, RealRegUniverse, Reg};
 use target_lexicon::Triple;
@@ -50,11 +50,11 @@ impl X64Backend {
         // block layout and finalizes branches. The result is ready for binary emission.
         let emit_info = EmitInfo::new(flags.clone(), self.x64_flags.clone());
         let abi = Box::new(abi::X64ABICallee::new(&func, flags)?);
-        compile::compile::<Self>(&func, self, abi, emit_info)
+        compile::compile::<Self>(&func, self, abi, &self.reg_universe, emit_info)
     }
 }
 
-impl MachBackend for X64Backend {
+impl TargetIsa for X64Backend {
     fn compile_function(
         &self,
         func: &Function,
@@ -102,10 +102,6 @@ impl MachBackend for X64Backend {
         &self.triple
     }
 
-    fn reg_universe(&self) -> &RealRegUniverse {
-        &self.reg_universe
-    }
-
     fn unsigned_add_overflow_condition(&self) -> IntCC {
         // Unsigned `<`; this corresponds to the carry flag set on x86, which
         // indicates an add has overflowed.
@@ -146,12 +142,22 @@ impl MachBackend for X64Backend {
     }
 
     #[cfg(feature = "unwind")]
-    fn map_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
+    fn map_regalloc_reg_to_dwarf(&self, reg: Reg) -> Result<u16, systemv::RegisterMappingError> {
         inst::unwind::systemv::map_reg(reg).map(|reg| reg.0)
     }
 
     fn text_section_builder(&self, num_funcs: u32) -> Box<dyn TextSectionBuilder> {
         Box::new(MachTextSectionBuilder::<inst::Inst>::new(num_funcs))
+    }
+}
+
+impl fmt::Display for X64Backend {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("MachBackend")
+            .field("name", &self.name())
+            .field("triple", &self.triple())
+            .field("flags", &format!("{}", self.flags()))
+            .finish()
     }
 }
 
@@ -171,5 +177,5 @@ fn isa_constructor(
 ) -> Box<dyn TargetIsa> {
     let isa_flags = x64_settings::Flags::new(&shared_flags, builder);
     let backend = X64Backend::new_with_flags(triple, shared_flags, isa_flags);
-    Box::new(TargetIsaAdapter::new(backend))
+    Box::new(backend)
 }

@@ -205,7 +205,6 @@ impl<'a> ObjectBuilder<'a> {
             systemv_unwind_info: Vec::new(),
             relocations: Vec::new(),
             text: isa
-                .get_mach_backend()
                 .text_section_builder((module.functions.len() - module.num_imported_funcs) as u32),
             added_unwind_info: false,
         }

@@ -167,8 +167,7 @@ impl Context {
 
         self.remove_constant_phis(isa)?;
 
-        let backend = isa.get_mach_backend();
-        let result = backend.compile_function(&self.func, self.want_disasm)?;
+        let result = isa.compile_function(&self.func, self.want_disasm)?;
         let info = result.code_info();
         self.mach_compile_result = Some(result);
         Ok(info)
@@ -242,10 +241,9 @@ impl Context {
         &self,
         isa: &dyn TargetIsa,
     ) -> CodegenResult<Option<crate::isa::unwind::UnwindInfo>> {
-        let backend = isa.get_mach_backend();
         let unwind_info_kind = isa.unwind_info_kind();
         let result = self.mach_compile_result.as_ref().unwrap();
-        backend.emit_unwind_info(result, unwind_info_kind)
+        isa.emit_unwind_info(result, unwind_info_kind)
     }
 
     /// Run the verifier on the function.
