@@ -360,18 +360,14 @@
 
 ;; SSE.
 
-(rule (lower (has_type $F32X4 (band x y)))
-      (value_reg (andps (put_in_reg x)
-                        (put_in_reg_mem y))))
+(decl sse_and (Type Reg RegMem) Reg)
+(rule (sse_and $F32X4 x y) (andps x y))
+(rule (sse_and $F64X2 x y) (andpd x y))
+(rule (sse_and (multi_lane _bits _lanes) x y) (pand x y))
 
-(rule (lower (has_type $F64X2 (band x y)))
-      (value_reg (andpd (put_in_reg x)
-                        (put_in_reg_mem y))))
-
-(rule (lower (has_type (multi_lane _bits _lanes)
+(rule (lower (has_type ty @ (multi_lane _bits _lanes)
                        (band x y)))
-      (value_reg (pand (put_in_reg x)
-                       (put_in_reg_mem y))))
+      (value_reg (sse_and ty (put_in_reg x) (put_in_reg_mem y))))
 
 ;; `{i,b}128`.
 
@@ -436,18 +432,14 @@
 
 ;; SSE.
 
-(rule (lower (has_type $F32X4 (bor x y)))
-      (value_reg (orps (put_in_reg x)
-                       (put_in_reg_mem y))))
+(decl sse_or (Type Reg RegMem) Reg)
+(rule (sse_or $F32X4 x y) (orps x y))
+(rule (sse_or $F64X2 x y) (orpd x y))
+(rule (sse_or (multi_lane _bits _lanes) x y) (por x y))
 
-(rule (lower (has_type $F64X2 (bor x y)))
-      (value_reg (orpd (put_in_reg x)
-                       (put_in_reg_mem y))))
-
-(rule (lower (has_type (multi_lane _bits _lanes)
+(rule (lower (has_type ty @ (multi_lane _bits _lanes)
                        (bor x y)))
-      (value_reg (por (put_in_reg x)
-                      (put_in_reg_mem y))))
+      (value_reg (sse_or ty (put_in_reg x) (put_in_reg_mem y))))
 
 ;; `{i,b}128`.
 
@@ -960,6 +952,11 @@
 
 ;;;; Rules for `band_not` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(decl sse_and_not (Type Reg RegMem) Reg)
+(rule (sse_and_not $F32X4 x y) (andnps x y))
+(rule (sse_and_not $F64X2 x y) (andnpd x y))
+(rule (sse_and_not (multi_lane _bits _lanes) x y) (pandn x y))
+
 ;; Note the flipping of operands below. CLIF specifies
 ;;
 ;;   band_not(x, y) = and(x, not(y))
@@ -967,15 +964,10 @@
 ;; while x86 does
 ;;
 ;;   pandn(x, y) = and(not(x), y)
-
-(rule (lower (has_type $F32X4 (band_not x y)))
-      (value_reg (andnps (put_in_reg y) (put_in_reg_mem x))))
-
-(rule (lower (has_type $F64X2 (band_not x y)))
-      (value_reg (andnpd (put_in_reg y) (put_in_reg_mem x))))
-
-(rule (lower (has_type (multi_lane _bits _lanes) (band_not x y)))
-      (value_reg (pandn (put_in_reg y) (put_in_reg_mem x))))
+(rule (lower (has_type ty (band_not x y)))
+      (value_reg (sse_and_not ty
+                              (put_in_reg y)
+                              (put_in_reg_mem x))))
 
 ;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1043,6 +1035,20 @@
 ;; all-one value
 (rule (lower (has_type ty @ (multi_lane _bits _lanes) (bnot x)))
       (value_reg (sse_xor ty (put_in_reg x) (RegMem.Reg (vector_all_ones ty)))))
+
+;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _bits _lanes)
+                       (bitselect condition
+                                  if_true
+                                  if_false)))
+      ;; a = and if_true, condition
+      ;; b = and_not condition, if_false
+      ;; or b, a
+      (let ((cond_reg Reg (put_in_reg condition))
+            (a Reg (sse_and ty (put_in_reg if_true) (RegMem.Reg cond_reg)))
+            (b Reg (sse_and_not ty cond_reg (put_in_reg_mem if_false))))
+        (value_reg (sse_or ty b (RegMem.Reg a)))))
 
 ;;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
