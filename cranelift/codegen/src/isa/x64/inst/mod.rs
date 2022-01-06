@@ -1301,36 +1301,6 @@ impl Inst {
         }
     }
 
-    /// Choose which instruction to use for computing a bitwise AND on two values.
-    pub(crate) fn and(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
-        match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Andps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Andpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Pand, from, to),
-            _ => unimplemented!("unimplemented type for Inst::and: {}", ty),
-        }
-    }
-
-    /// Choose which instruction to use for computing a bitwise AND NOT on two values.
-    pub(crate) fn and_not(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
-        match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Andnps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Andnpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Pandn, from, to),
-            _ => unimplemented!("unimplemented type for Inst::and_not: {}", ty),
-        }
-    }
-
-    /// Choose which instruction to use for computing a bitwise OR on two values.
-    pub(crate) fn or(ty: Type, from: RegMem, to: Writable<Reg>) -> Inst {
-        match ty {
-            types::F32X4 => Inst::xmm_rm_r(SseOpcode::Orps, from, to),
-            types::F64X2 => Inst::xmm_rm_r(SseOpcode::Orpd, from, to),
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::xmm_rm_r(SseOpcode::Por, from, to),
-            _ => unimplemented!("unimplemented type for Inst::or: {}", ty),
-        }
-    }
-
     /// Translate three-operand instructions into a sequence of two-operand
     /// instructions.
     ///
