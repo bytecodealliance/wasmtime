@@ -59,6 +59,7 @@ block0(v0: i8):
 
 ; check: uxtb w0, w0
 ; nextln: clz w0, w0
+; nextln: sub w0, w0, #24
 ; nextln: ret
 
 function %b(i16) -> i16 {
@@ -69,6 +70,7 @@ block0(v0: i16):
 
 ; check: uxth w0, w0
 ; nextln: clz w0, w0
+; nextln: sub w0, w0, #16
 ; nextln: ret
 
 function %b(i32) -> i32 {
@@ -110,6 +112,7 @@ block0(v0: i8):
 
 ; check: uxtb w0, w0
 ; nextln: cls w0, w0
+; nextln: sub w0, w0, #24
 ; nextln: ret
 
 function %c(i16) -> i16 {
@@ -120,6 +123,7 @@ block0(v0: i16):
 
 ; check: uxth w0, w0
 ; nextln: cls w0, w0
+; nextln: sub w0, w0, #16
 ; nextln: ret
 
 function %c(i32) -> i32 {
@@ -164,7 +168,7 @@ block0(v0: i8):
 }
 
 ; check: rbit w0, w0
-; nextln: lsr w0, w0, #24
+; nextln: orr w0, w0, #8388608
 ; nextln: clz w0, w0
 ; nextln: ret
 
@@ -175,7 +179,7 @@ block0(v0: i16):
 }
 
 ; check: rbit w0, w0
-; nextln: lsr w0, w0, #16
+; nextln: orr w0, w0, #32768
 ; nextln: clz w0, w0
 ; nextln: ret
 

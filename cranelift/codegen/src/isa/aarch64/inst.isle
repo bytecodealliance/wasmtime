@@ -1464,6 +1464,13 @@
             (_ Unit (emit (MInst.AluRRRR op dst src1 src2 src3))))
         (writable_reg_to_reg dst)))
 
+;; Helper for emitting `MInst.BitRR` instructions.
+(decl bit_rr (BitOp Reg) Reg)
+(rule (bit_rr op src)
+      (let ((dst WritableReg (temp_writable_reg $I64))
+            (_ Unit (emit (MInst.BitRR op dst src))))
+        (writable_reg_to_reg dst)))
+
 ;; Helper for emitting `adds` instructions.
 (decl add64_with_flags (Reg Reg) ProducesFlags)
 (rule (add64_with_flags src1 src2)
@@ -1484,6 +1491,11 @@
       (let ((dst WritableReg (temp_writable_reg $I64)))
         (ProducesFlags.ProducesFlags (MInst.AluRRR (ALUOp.SubS64) dst src1 src2)
                                      (writable_reg_to_reg dst))))
+
+(decl cmp64_imm (Reg Imm12) ProducesFlags)
+(rule (cmp64_imm src1 src2)
+      (ProducesFlags.ProducesFlags (MInst.AluRRImm12 (ALUOp.SubS64) (writable_zero_reg) src1 src2)
+                                   (zero_reg)))
 
 ;; Helper for emitting `sbc` instructions.
 (decl sbc64 (Reg Reg) ConsumesFlags)
@@ -1837,6 +1849,9 @@
 (decl orr32 (Reg Reg) Reg)
 (rule (orr32 x y) (alu_rrr (ALUOp.Orr32) x y))
 
+(decl orr32_imm (Reg ImmLogic) Reg)
+(rule (orr32_imm x y) (alu_rr_imm_logic (ALUOp.Orr32) x y))
+
 (decl orr64 (Reg Reg) Reg)
 (rule (orr64 x y) (alu_rrr (ALUOp.Orr64) x y))
 
@@ -1883,6 +1898,38 @@
 
 (decl rotr64_imm (Reg ImmShift) Reg)
 (rule (rotr64_imm x y) (alu_rr_imm_shift (ALUOp.RotR64) x y))
+
+;; Helpers for generating `rbit` instructions.
+
+(decl rbit32 (Reg) Reg)
+(rule (rbit32 x) (bit_rr (BitOp.RBit32) x))
+
+(decl rbit64 (Reg) Reg)
+(rule (rbit64 x) (bit_rr (BitOp.RBit64) x))
+
+;; Helpers for generating `clz` instructions.
+
+(decl clz32 (Reg) Reg)
+(rule (clz32 x) (bit_rr (BitOp.Clz32) x))
+
+(decl clz64 (Reg) Reg)
+(rule (clz64 x) (bit_rr (BitOp.Clz64) x))
+
+;; Helpers for generating `cls` instructions.
+
+(decl cls32 (Reg) Reg)
+(rule (cls32 x) (bit_rr (BitOp.Cls32) x))
+
+(decl cls64 (Reg) Reg)
+(rule (cls64 x) (bit_rr (BitOp.Cls64) x))
+
+;; Helpers for generating `eon` instructions.
+
+(decl eon32 (Reg Reg) Reg)
+(rule (eon32 x y) (alu_rrr (ALUOp.EorNot32) x y))
+
+(decl eon64 (Reg Reg) Reg)
+(rule (eon64 x y) (alu_rrr (ALUOp.EorNot64) x y))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
