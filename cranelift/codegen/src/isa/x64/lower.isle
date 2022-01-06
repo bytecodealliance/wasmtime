@@ -1050,6 +1050,15 @@
             (b Reg (sse_and_not ty cond_reg (put_in_reg_mem if_false))))
         (value_reg (sse_or ty b (RegMem.Reg a)))))
 
+;;;; Rules for `vselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type ty @ (multi_lane _bits _lanes)
+                       (vselect condition if_true if_false)))
+      (value_reg (sse_blend ty
+                            (put_in_reg_mem condition)
+                            (put_in_reg_mem if_true)
+                            (put_in_reg if_false))))
+
 ;;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (insertlane vec @ (value_type ty) val (u8_from_uimm8 idx)))

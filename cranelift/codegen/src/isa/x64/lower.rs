@@ -1515,6 +1515,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     match op {
         Opcode::Iconst
         | Opcode::Bconst
+        | Opcode::F32const
+        | Opcode::F64const
         | Opcode::Null
         | Opcode::Iadd
         | Opcode::IaddIfcout
@@ -1535,50 +1537,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Imin
         | Opcode::Umin
         | Opcode::Bnot
-        | Opcode::Bitselect => implemented_in_isle(ctx),
-
-        Opcode::Vselect => {
-            let ty = ty.unwrap();
-            let condition = put_input_in_reg(ctx, inputs[0]);
-            let condition_ty = ctx.input_ty(insn, 0);
-            let if_true = input_to_reg_mem(ctx, inputs[1]);
-            let if_false = put_input_in_reg(ctx, inputs[2]);
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-            if ty.is_vector() {
-                // `vselect` relies on the bit representation of the condition:
-                // vector boolean types are defined in Cranelift to be all 1s or
-                // all 0s. This lowering relies on that fact to use x86's
-                // variable blend instructions, which look at the _high_bit_ of
-                // the condition mask. All the bits of vector booleans will
-                // match (all 1s or all 0s), so we can just use the high bit.
-                assert!(condition_ty.lane_type().is_bool());
-
-                // Variable blend instructions expect the condition mask to be
-                // in XMM0.
-                let xmm0 = Writable::from_reg(regs::xmm0());
-                ctx.emit(Inst::gen_move(xmm0, condition, ty));
-
-                // Match up the source and destination registers for regalloc.
-                ctx.emit(Inst::gen_move(dst, if_false, ty));
-
-                // Technically PBLENDVB would work in all cases (since the bytes
-                // inside the mask will be all 1s or 0s we can blend
-                // byte-by-byte instead of word-by-word, e.g.) but
-                // type-specialized versions are included here for clarity when
-                // troubleshooting and due to slight improvements in
-                // latency/throughput on certain processor families.
-                let opcode = match condition_ty {
-                    types::B64X2 => SseOpcode::Blendvpd,
-                    types::B32X4 => SseOpcode::Blendvps,
-                    types::B16X8 | types::B8X16 => SseOpcode::Pblendvb,
-                    _ => unimplemented!("unable lower vselect for type: {}", condition_ty),
-                };
-                ctx.emit(Inst::xmm_rm_r(opcode, if_true, dst));
-            } else {
-                unimplemented!("no lowering for scalar vselect instruction")
-            }
-        }
+        | Opcode::Bitselect
+        | Opcode::Vselect => implemented_in_isle(ctx),
 
         Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
@@ -3252,22 +3212,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     FcmpCondResult::InvertedEqualOrConditions(_, _) => unreachable!(),
                 };
             };
-        }
-
-        Opcode::F64const => {
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            );
-        }
-
-        Opcode::F32const => {
-            unreachable!(
-                "implemented in ISLE: inst = `{}`, type = `{:?}`",
-                ctx.dfg().display_inst(insn),
-                ty
-            );
         }
 
         Opcode::WideningPairwiseDotProductS => {
@@ -5927,6 +5871,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 println!("Did not match fcvt input!");
             }
         }
+
         // Unimplemented opcodes below. These are not currently used by Wasm
         // lowering or other known embeddings, but should be either supported or
         // removed eventually.
