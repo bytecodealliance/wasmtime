@@ -2,6 +2,87 @@ test compile
 set enable_simd
 target x86_64 skylake
 
+function %band_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = band v0, v1
+    return v2
+}
+; check: andps
+; not: andpd
+; not: pand
+
+function %band_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = band v0, v1
+    return v2
+}
+; check: andpd
+; not: andps
+; not: pand
+
+function %band_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = band v0, v1
+    return v2
+}
+; check: pand
+; not: andps
+; not: andpd
+
+function %bor_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = bor v0, v1
+    return v2
+}
+; check: orps
+; not: orpd
+; not: por
+
+function %bor_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = bor v0, v1
+    return v2
+}
+; check: orpd
+; not: orps
+; not: por
+
+function %bor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bor v0, v1
+    return v2
+}
+; check: por
+; not: orps
+; not: orpd
+
+function %bxor_f32x4(f32x4, f32x4) -> f32x4 {
+block0(v0: f32x4, v1: f32x4):
+    v2 = bxor v0, v1
+    return v2
+}
+; check: xorps
+; not: xorpd
+; not: pxor
+
+function %bxor_f64x2(f64x2, f64x2) -> f64x2 {
+block0(v0: f64x2, v1: f64x2):
+    v2 = bxor v0, v1
+    return v2
+}
+; check: xorpd
+; not: xorps
+; not: pxor
+
+function %bxor_i32x4(i32x4, i32x4) -> i32x4 {
+block0(v0: i32x4, v1: i32x4):
+    v2 = bxor v0, v1
+    return v2
+}
+; check: pxor
+; not: xorps
+; not: xorpd
+
 function %bitselect_i16x8() -> i16x8 {
 block0:
     v0 = vconst.i16x8 [0 0 0 0 0 0 0 0]

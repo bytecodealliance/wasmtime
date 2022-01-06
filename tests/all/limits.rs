@@ -28,7 +28,7 @@ fn test_limits() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     // Test instance exports and host objects hitting the limit
-    for memory in std::array::IntoIter::new([
+    for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
         Memory::new(&mut store, MemoryType::new(0, None))?,
     ]) {
@@ -46,7 +46,7 @@ fn test_limits() -> Result<()> {
     }
 
     // Test instance exports and host objects hitting the limit
-    for table in std::array::IntoIter::new([
+    for table in IntoIterator::into_iter([
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
@@ -137,7 +137,7 @@ async fn test_limits_async() -> Result<()> {
     let instance = Instance::new_async(&mut store, &module, &[]).await?;
 
     // Test instance exports and host objects hitting the limit
-    for memory in std::array::IntoIter::new([
+    for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
         Memory::new_async(&mut store, MemoryType::new(0, None)).await?,
     ]) {
@@ -156,7 +156,7 @@ async fn test_limits_async() -> Result<()> {
     }
 
     // Test instance exports and host objects hitting the limit
-    for table in std::array::IntoIter::new([
+    for table in IntoIterator::into_iter([
         instance.get_table(&mut store, "t").unwrap(),
         Table::new_async(
             &mut store,
@@ -201,7 +201,7 @@ fn test_limits_memory_only() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     // Test instance exports and host objects hitting the limit
-    for memory in std::array::IntoIter::new([
+    for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
         Memory::new(&mut store, MemoryType::new(0, None))?,
     ]) {
@@ -219,7 +219,7 @@ fn test_limits_memory_only() -> Result<()> {
     }
 
     // Test instance exports and host objects *not* hitting the limit
-    for table in std::array::IntoIter::new([
+    for table in IntoIterator::into_iter([
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
@@ -282,7 +282,7 @@ fn test_limits_table_only() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     // Test instance exports and host objects *not* hitting the limit
-    for memory in std::array::IntoIter::new([
+    for memory in IntoIterator::into_iter([
         instance.get_memory(&mut store, "m").unwrap(),
         Memory::new(&mut store, MemoryType::new(0, None))?,
     ]) {
@@ -293,7 +293,7 @@ fn test_limits_table_only() -> Result<()> {
     }
 
     // Test instance exports and host objects hitting the limit
-    for table in std::array::IntoIter::new([
+    for table in IntoIterator::into_iter([
         instance.get_table(&mut store, "t").unwrap(),
         Table::new(
             &mut store,
