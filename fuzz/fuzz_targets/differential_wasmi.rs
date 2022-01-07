@@ -14,12 +14,6 @@ fn run(data: &[u8]) -> Result<()> {
     let mut u = Unstructured::new(data);
     let mut config: generators::Config = u.arbitrary()?;
     config.module_config.set_differential_config();
-
-    // wasmi doesn't support these features
-    config.module_config.config.simd_enabled = false;
-    config.module_config.config.bulk_memory_enabled = false;
-    config.module_config.config.reference_types_enabled = false;
-
     let mut module = config.module_config.generate(&mut u)?;
     module.ensure_termination(1000);
     oracles::differential_wasmi_execution(&module.to_bytes(), &config);

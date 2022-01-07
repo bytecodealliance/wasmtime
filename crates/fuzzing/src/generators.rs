@@ -277,6 +277,8 @@ impl ModuleConfig {
     pub fn set_spectest_compliant(&mut self) {
         self.config.memory64_enabled = false;
         self.config.simd_enabled = false;
+        self.config.bulk_memory_enabled = true;
+        self.config.reference_types_enabled = true;
         self.config.max_memories = 1;
     }
 
@@ -309,6 +311,14 @@ impl ModuleConfig {
         // NaN is canonicalized at the wasm level for differential fuzzing so we
         // can paper over NaN differences between engines.
         self.config.canonicalize_nans = true;
+
+        // When diffing against a non-wasmtime engine then disable wasm
+        // features to get selectively re-enabled against each differential
+        // engine.
+        self.config.bulk_memory_enabled = false;
+        self.config.reference_types_enabled = false;
+        self.config.simd_enabled = false;
+        self.config.memory64_enabled = false;
     }
 }
 
