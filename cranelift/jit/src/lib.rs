@@ -1,4 +1,7 @@
 //! Top-level lib.rs for `cranelift_jit`.
+//!
+//! There is an [example project](https://github.com/bytecodealliance/cranelift-jit-demo/)
+//! which shows how to use some of the features of `cranelift_jit`.
 
 #![deny(
     missing_docs,
