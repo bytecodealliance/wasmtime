@@ -102,9 +102,15 @@ impl MmapVec {
     }
 
     /// Makes the specified `range` within this `mmap` to be read/execute.
-    pub unsafe fn make_executable(&self, range: Range<usize>) -> Result<()> {
-        self.mmap
-            .make_executable(range.start + self.range.start..range.end + self.range.start)
+    pub unsafe fn make_executable(
+        &self,
+        range: Range<usize>,
+        enable_branch_protection: bool,
+    ) -> Result<()> {
+        self.mmap.make_executable(
+            range.start + self.range.start..range.end + self.range.start,
+            enable_branch_protection,
+        )
     }
 
     /// Returns the underlying file that this mmap is mapping, if present.

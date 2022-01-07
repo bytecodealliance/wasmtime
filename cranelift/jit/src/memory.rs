@@ -113,15 +113,17 @@ pub(crate) struct Memory {
     already_protected: usize,
     current: PtrLen,
     position: usize,
+    enable_branch_protection: bool,
 }
 
 impl Memory {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(enable_branch_protection: bool) -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
+            enable_branch_protection,
         }
     }
 
@@ -157,14 +159,35 @@ impl Memory {
     pub(crate) fn set_readable_and_executable(&mut self) {
         self.finish_current();
 
+        let set_region_readable_and_executable = |ptr, len| {
+            if len != 0 {
+                if self.enable_branch_protection {
+                    #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+                    if std::arch::is_aarch64_feature_detected!("bti") {
+                        let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
+
+                        unsafe {
+                            if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
+                                panic!("unable to make memory readable+executable");
+                            }
+                        }
+
+                        return;
+                    }
+                }
+
+                unsafe {
+                    region::protect(ptr, len, region::Protection::READ_EXECUTE)
+                        .expect("unable to make memory readable+executable");
+                }
+            }
+        };
+
         #[cfg(feature = "selinux-fix")]
         {
             for &PtrLen { ref map, ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 && map.is_some() {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
-                            .expect("unable to make memory readable+executable");
-                    }
+                if map.is_some() {
+                    set_region_readable_and_executable(ptr, len);
                 }
             }
         }
@@ -172,12 +195,7 @@ impl Memory {
         #[cfg(not(feature = "selinux-fix"))]
         {
             for &PtrLen { ptr, len } in &self.allocations[self.already_protected..] {
-                if len != 0 {
-                    unsafe {
-                        region::protect(ptr, len, region::Protection::READ_EXECUTE)
-                            .expect("unable to make memory readable+executable");
-                    }
-                }
+                set_region_readable_and_executable(ptr, len);
             }
         }
 

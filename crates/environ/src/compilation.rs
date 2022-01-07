@@ -263,6 +263,9 @@ pub trait Compiler: Send + Sync {
     /// Same as [`Compiler::flags`], but ISA-specific (a cranelift-ism)
     fn isa_flags(&self) -> BTreeMap<String, FlagValue>;
 
+    /// Get a flag indicating whether branch protection is enabled.
+    fn is_branch_protection_enabled(&self) -> bool;
+
     /// Returns a suitable compiler usable for component-related compliations.
     ///
     /// Note that the `ComponentCompiler` trait can also be implemented for

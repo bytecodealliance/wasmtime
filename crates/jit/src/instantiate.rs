@@ -136,6 +136,9 @@ struct Metadata {
     /// Note that even if this flag is `true` sections may be missing if they
     /// weren't found in the original wasm module itself.
     has_wasm_debuginfo: bool,
+
+    /// Whether or not branch protection is enabled.
+    is_branch_protection_enabled: bool,
 }
 
 /// Finishes compilation of the `translation` specified, producing the final
@@ -160,6 +163,7 @@ pub fn finish_compile(
     funcs: PrimaryMap<DefinedFuncIndex, FunctionInfo>,
     trampolines: Vec<Trampoline>,
     tunables: &Tunables,
+    is_branch_protection_enabled: bool,
 ) -> Result<(MmapVec, CompiledModuleInfo)> {
     let ModuleTranslation {
         mut module,
@@ -265,6 +269,7 @@ pub fn finish_compile(
             has_unparsed_debuginfo,
             code_section_offset: debuginfo.wasm_file.code_section_offset,
             has_wasm_debuginfo: tunables.parse_wasm_debuginfo,
+            is_branch_protection_enabled,
         },
     };
     bincode::serialize_into(&mut bytes, &info)?;
@@ -398,13 +403,18 @@ impl CompiledModule {
         profiler: &dyn ProfilingAgent,
         id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Self> {
+        let (remap, is_branch_protection_enabled) = if let Some(ref info) = info {
+            (false, info.meta.is_branch_protection_enabled)
+        } else {
+            (true, false)
+        };
         // Transfer ownership of `obj` to a `CodeMemory` object which will
         // manage permissions, such as the executable bit. Once it's located
         // there we also publish it for being able to execute. Note that this
         // step will also resolve pending relocations in the compiled image.
         let mut code_memory = CodeMemory::new(mmap);
         let code = code_memory
-            .publish()
+            .publish(is_branch_protection_enabled)
             .context("failed to publish code memory")?;
 
         let section = |name: &str| {
@@ -421,6 +431,19 @@ impl CompiledModule {
             None => bincode::deserialize(section(ELF_WASMTIME_INFO)?)
                 .context("failed to deserialize wasmtime module info")?,
         };
+        let is_branch_protection_enabled = info.meta.is_branch_protection_enabled;
+
+        if remap && is_branch_protection_enabled {
+            // TODO: Get the correct mapping the first time.
+            let text_offset = code.text.as_ptr() as usize - code.mmap.as_ptr() as usize;
+            let text_range = text_offset..text_offset + code.text.len();
+
+            unsafe {
+                code.mmap
+                    .make_executable(text_range, is_branch_protection_enabled)
+                    .expect("unable to make memory executable");
+            }
+        }
 
         let func_name_data = match code
             .obj

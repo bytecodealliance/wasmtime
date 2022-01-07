@@ -457,6 +457,10 @@ impl wasmtime_environ::Compiler for Compiler {
             .collect()
     }
 
+    fn is_branch_protection_enabled(&self) -> bool {
+        self.isa.is_branch_protection_enabled()
+    }
+
     #[cfg(feature = "component-model")]
     fn component_compiler(&self) -> &dyn wasmtime_environ::component::ComponentCompiler {
         self

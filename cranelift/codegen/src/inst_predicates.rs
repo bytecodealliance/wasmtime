@@ -130,7 +130,11 @@ pub fn has_memory_fence_semantics(op: Opcode) -> bool {
 }
 
 /// Visit all successors of a block with a given visitor closure.
-pub(crate) fn visit_block_succs<F: FnMut(Inst, Block)>(f: &Function, block: Block, mut visit: F) {
+pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
+    f: &Function,
+    block: Block,
+    mut visit: F,
+) {
     for inst in f.layout.block_likely_branches(block) {
         if f.dfg[inst].opcode().is_branch() {
             visit_branch_targets(f, inst, &mut visit);
@@ -138,18 +142,20 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block)>(f: &Function, block: Bloc
     }
 }
 
-fn visit_branch_targets<F: FnMut(Inst, Block)>(f: &Function, inst: Inst, visit: &mut F) {
+fn visit_branch_targets<F: FnMut(Inst, Block, bool)>(f: &Function, inst: Inst, visit: &mut F) {
     match f.dfg[inst].analyze_branch(&f.dfg.value_lists) {
         BranchInfo::NotABranch => {}
         BranchInfo::SingleDest(dest, _) => {
-            visit(inst, dest);
+            visit(inst, dest, false);
         }
         BranchInfo::Table(table, maybe_dest) => {
             if let Some(dest) = maybe_dest {
-                visit(inst, dest);
+                // The default block is reached via a direct conditional branch,
+                // so it is not part of the table.
+                visit(inst, dest, false);
             }
             for &dest in f.jump_tables[table].as_slice() {
-                visit(inst, dest);
+                visit(inst, dest, true);
             }
         }
     }

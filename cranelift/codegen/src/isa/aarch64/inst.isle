@@ -780,6 +780,11 @@
        (Pacisp
         (key APIKey))
 
+       ;; Branch target identification; equivalent to a no-op if Branch Target
+       ;; Identification (FEAT_BTI) is not supported.
+       (Bti
+        (targets BranchTargetType))
+
        ;; Marker, no-op in generated code: SP "virtual offset" is adjusted. This
        ;; controls how AMode::NominalSPOffset args are lowered.
        (VirtualSPOffsetAdj
@@ -1353,6 +1358,15 @@
   (enum
     (A)
     (B)
+))
+
+;; Branch target types
+(type BranchTargetType
+  (enum
+    (None)
+    (C)
+    (J)
+    (JC)
 ))
 
 ;; Extractors for target features ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

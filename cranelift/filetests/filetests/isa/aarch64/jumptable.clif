@@ -30,9 +30,9 @@ block5(v5: i32):
 }
 
 ; block0:
-;   emit_island 36
+;   emit_island 44
 ;   subs wzr, w0, #3
-;   b.hs label1 ; csel x1, xzr, x0, hs ; csdb ; adr x15, pc+16 ; ldrsw x1, [x15, x1, LSL 2] ; add x15, x15, x1 ; br x15 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
+;   b.hs label1 ; csel x1, xzr, x0, hs ; csdb ; adr x15, pc+16 ; ldrsw x1, [x15, x1, uxtw #2] ; add x15, x15, x1 ; br x15 ; jt_entries [Label(MachLabel(3)), Label(MachLabel(5)), Label(MachLabel(7))]
 ; block1:
 ;   movz x5, #4
 ;   b label2

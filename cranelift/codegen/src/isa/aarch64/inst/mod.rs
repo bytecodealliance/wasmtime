@@ -36,8 +36,8 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::aarch64::lower::isle::generated_code::{
-    ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, FPUOp1, FPUOp2, FPUOp3,
-    FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
+    ALUOp, ALUOp3, APIKey, AtomicRMWLoopOp, AtomicRMWOp, BitOp, BranchTargetType, FPUOp1, FPUOp2,
+    FPUOp3, FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst, MoveWideOp, VecALUModOp, VecALUOp,
     VecExtendOp, VecLanesOp, VecMisc2, VecPairOp, VecRRLongOp, VecRRNarrowOp, VecRRPairLongOp,
     VecRRRLongOp, VecShiftImmOp,
 };
@@ -1040,6 +1040,7 @@ fn aarch64_get_operands<F: Fn(VReg) -> VReg>(inst: &Inst, collector: &mut Operan
             memarg_operands(mem, collector);
         }
         &Inst::Pacisp { .. } => {}
+        &Inst::Bti { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
 
         &Inst::ElfTlsGetAddr { .. } => {
@@ -1233,6 +1234,19 @@ impl MachInst for Inst {
 
     fn ref_type_regclass(_: &settings::Flags) -> RegClass {
         RegClass::Int
+    }
+
+    fn gen_block_start(
+        is_indirect_branch_target: bool,
+        is_forward_edge_cfi_enabled: bool,
+    ) -> Option<Self> {
+        if is_indirect_branch_target && is_forward_edge_cfi_enabled {
+            Some(Inst::Bti {
+                targets: BranchTargetType::J,
+            })
+        } else {
+            None
+        }
     }
 }
 
@@ -2602,7 +2616,7 @@ impl Inst {
                         "csel {}, xzr, {}, hs ; ",
                         "csdb ; ",
                         "adr {}, pc+16 ; ",
-                        "ldrsw {}, [{}, {}, LSL 2] ; ",
+                        "ldrsw {}, [{}, {}, uxtw #2] ; ",
                         "add {}, {}, {} ; ",
                         "br {} ; ",
                         "jt_entries {:?}"
@@ -2714,6 +2728,16 @@ impl Inst {
                 };
 
                 "paci".to_string() + key + "sp"
+            }
+            &Inst::Bti { targets } => {
+                let targets = match targets {
+                    BranchTargetType::None => "",
+                    BranchTargetType::C => " c",
+                    BranchTargetType::J => " j",
+                    BranchTargetType::JC => " jc",
+                };
+
+                "bti".to_string() + targets
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;

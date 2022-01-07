@@ -820,6 +820,8 @@ impl<I: VCodeInst> VCode<I> {
             ra_edits_per_block.push((end_edit_idx - start_edit_idx) as u32);
         }
 
+        let is_forward_edge_cfi_enabled = self.abi.is_forward_edge_cfi_enabled();
+
         for (block_order_idx, &block) in final_order.iter().enumerate() {
             trace!("emitting block {:?}", block);
             let new_offset = I::align_basic_block(buffer.cur_offset());
@@ -875,6 +877,26 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 bb_starts.push(Some(cur_offset));
                 last_offset = Some(cur_offset);
+            }
+
+            let lb = self.block_order.lowered_order()[block.index()];
+            let b = if let Some(b) = lb.orig_block() {
+                b
+            } else {
+                // If there is no original block, then this must be a pure edge
+                // block. Note that the successor must have an original block.
+                let (_, succ) = self.block_order.succ_indices(block)[0];
+
+                self.block_order.lowered_order()[succ.index()]
+                    .orig_block()
+                    .expect("Edge block successor must be body block.")
+            };
+
+            if let Some(block_start) = I::gen_block_start(
+                self.block_order.is_indirect_branch_target(b),
+                is_forward_edge_cfi_enabled,
+            ) {
+                do_emit(&block_start, &[], &mut disasm, &mut buffer, &mut state);
             }
 
             for inst_or_edit in regalloc.block_insts_and_edits(&self, block) {

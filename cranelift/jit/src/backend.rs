@@ -476,6 +476,8 @@ impl JITModule {
             );
         }
 
+        let enable_branch_protection =
+            cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags());
         let mut module = Self {
             isa: builder.isa,
             hotswap_enabled: builder.hotswap_enabled,
@@ -483,9 +485,9 @@ impl JITModule {
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
             memory: MemoryHandle {
-                code: Memory::new(),
-                readonly: Memory::new(),
-                writable: Memory::new(),
+                code: Memory::new(enable_branch_protection),
+                readonly: Memory::new(false),
+                writable: Memory::new(false),
             },
             declarations: ModuleDeclarations::default(),
             function_got_entries: SecondaryMap::new(),
@@ -946,4 +948,11 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
 
         None
     }
+}
+
+fn use_bti(isa_flags: &Vec<settings::Value>) -> bool {
+    isa_flags
+        .iter()
+        .find(|&f| f.name == "use_bti")
+        .map_or(false, |f| f.as_bool().unwrap_or(false))
 }

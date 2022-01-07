@@ -40,7 +40,7 @@ pub struct Publish<'a> {
     pub obj: File<'a>,
 
     /// Reference to the entire `MmapVec` and its contents.
-    pub mmap: &'a [u8],
+    pub mmap: &'a MmapVec,
 
     /// Reference to just the text section of the object file, a subslice of
     /// `mmap`.
@@ -87,7 +87,7 @@ impl CodeMemory {
     /// After this function executes all JIT code should be ready to execute.
     /// The various parsed results of the internals of the `MmapVec` are
     /// returned through the `Publish` structure.
-    pub fn publish(&mut self) -> Result<Publish<'_>> {
+    pub fn publish(&mut self, enable_branch_protection: bool) -> Result<Publish<'_>> {
         assert!(!self.published);
         self.published = true;
 
@@ -159,7 +159,7 @@ impl CodeMemory {
             // read/execute, notably not using read/write/execute to prevent
             // modifications.
             self.mmap
-                .make_executable(text_range.clone())
+                .make_executable(text_range.clone(), enable_branch_protection)
                 .expect("unable to make memory executable");
 
             #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
