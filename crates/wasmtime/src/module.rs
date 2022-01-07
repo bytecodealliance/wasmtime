@@ -942,21 +942,11 @@ struct HashedEngineCompileEnv<'a>(&'a Engine);
 #[cfg(all(feature = "cache", compiler))]
 impl std::hash::Hash for HashedEngineCompileEnv<'_> {
     fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
-        use std::collections::BTreeMap;
-
         // Hash the compiler's state based on its target and configuration.
         let compiler = self.0.compiler();
         compiler.triple().hash(hasher);
-        compiler
-            .flags()
-            .into_iter()
-            .collect::<BTreeMap<_, _>>()
-            .hash(hasher);
-        compiler
-            .isa_flags()
-            .into_iter()
-            .collect::<BTreeMap<_, _>>()
-            .hash(hasher);
+        compiler.flags().hash(hasher);
+        compiler.isa_flags().hash(hasher);
 
         // Hash configuration state read for compilation
         let config = self.0.config();
