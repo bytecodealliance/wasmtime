@@ -287,6 +287,7 @@ impl ModuleConfig {
         self.config.allow_start_export = false;
         // Make sure there's a type available for the function.
         self.config.min_types = 1;
+        self.config.max_types = 1;
 
         // Generate one and only one function
         self.config.min_funcs = 1;
@@ -303,6 +304,7 @@ impl ModuleConfig {
 
         // Try to get the function and the memory exported
         self.config.min_exports = 2;
+        self.config.max_exports = 4;
 
         // NaN is canonicalized at the wasm level for differential fuzzing so we
         // can paper over NaN differences between engines.
