@@ -3528,7 +3528,6 @@ dependencies = [
  "cranelift-wasm",
  "libfuzzer-sys",
  "target-lexicon",
- "wasm-smith",
  "wasmtime",
  "wasmtime-fuzzing",
 ]

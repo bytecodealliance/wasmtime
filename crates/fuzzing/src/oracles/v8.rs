@@ -15,7 +15,6 @@ use wasmtime::*;
 /// from happening.
 pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
     // Wasmtime setup
-    crate::init_fuzzing();
     log_wasm(wasm);
     let (wasmtime_module, mut wasmtime_store) = super::differential_store(wasm, config);
     log::trace!("compiled module with wasmtime");
