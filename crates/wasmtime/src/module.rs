@@ -945,12 +945,8 @@ impl std::hash::Hash for HashedEngineCompileEnv<'_> {
         // Hash the compiler's state based on its target and configuration.
         let compiler = self.0.compiler();
         compiler.triple().hash(hasher);
-        compiler
-            .flags()
-            .hash(hasher);
-        compiler
-            .isa_flags()
-            .hash(hasher);
+        compiler.flags().hash(hasher);
+        compiler.isa_flags().hash(hasher);
 
         // Hash configuration state read for compilation
         let config = self.0.config();
