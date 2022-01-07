@@ -106,6 +106,15 @@ impl Config {
         // enable this codegen option.
         cfg.cranelift_nan_canonicalization(!self.module_config.config.canonicalize_nans);
 
+        // Enabling the verifier will at-least-double compilation time, which
+        // with a 20-30x slowdown in fuzzing can cause issues related to
+        // timeouts. If generated modules can have more than a small handful of
+        // functions then disable the verifier when fuzzing to try to lessen the
+        // impact of timeouts.
+        if self.module_config.config.max_funcs > 10 {
+            cfg.cranelift_debug_verifier(false);
+        }
+
         if self.wasmtime.force_jump_veneers {
             unsafe {
                 cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true")
