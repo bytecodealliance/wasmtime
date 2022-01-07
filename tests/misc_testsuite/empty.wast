@@ -44,3 +44,9 @@
   "\ff\ff\ff\ff\0f" ;; index == u32::MAX (local)
   "\00"             ;; empty string name
 )
+
+;; empty module
+(module)
+
+;; empty module with memory
+(module (memory 1))
