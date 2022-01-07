@@ -38,6 +38,12 @@
 (type ValueList (primitive ValueList))
 (type ValueRegs (primitive ValueRegs))
 
+(decl u32_add (u32 u32) u32)
+(extern constructor u32_add u32_add)
+
+(decl u8_and (u8 u8) u8)
+(extern constructor u8_and u8_and)
+
 ;;;; Registers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type Reg (primitive Reg))
@@ -146,6 +152,10 @@
 (decl ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
 
+;; Get the type of each lane in the given type.
+(decl lane_type (Type) Type)
+(extern constructor lane_type lane_type)
+
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; An extractor that only matches types that can fit in 16 bits.
@@ -242,11 +252,6 @@
            (and (result_type ty)
                 inst))
 
-;; Return a bitmask that will mask off a count to be within `ty`'s
-;; bit-width. Used for shifts/rotates.
-(decl ty_bits_mask (Type) u64)
-(extern constructor ty_bits_mask ty_bits_mask)
-
 ;; Match a multi-lane type, extracting (# bits per lane, # lanes) from the given
 ;; type. Will only match when there is more than one lane.
 (decl multi_lane (u8 u16) Type)
@@ -255,6 +260,11 @@
 ;; Match the instruction that defines the given value, if any.
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
+
+;; Extract a constant `u64` from a value defined by an `iconst`.
+(decl u64_from_iconst (u64) Value)
+(extractor (u64_from_iconst x)
+           (def_inst (iconst (u64_from_imm64 x))))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

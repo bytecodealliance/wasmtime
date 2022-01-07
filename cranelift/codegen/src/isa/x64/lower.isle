@@ -537,13 +537,7 @@
 ;; `i64` and smaller.
 
 (rule (lower (has_type (fits_in_64 ty) (ishl src amt)))
-      ;; NB: Only the low bits of `amt` matter since we logically mask the shift
-      ;; amount to the value's bit width.
-      (let ((amt_ Reg (lo_reg amt)))
-        (value_reg (shl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
-
-(rule (lower (has_type (fits_in_64 ty) (ishl src (imm8_from_value amt))))
-      (value_reg (shl ty (put_in_reg src) amt)))
+      (value_reg (shl ty (put_in_reg src) (put_masked_in_imm8_reg amt ty))))
 
 ;; `i128`.
 
@@ -582,15 +576,8 @@
 ;; `i64` and smaller.
 
 (rule (lower (has_type (fits_in_64 ty) (ushr src amt)))
-      (let ((src_ Reg (extend_to_reg src ty (ExtendKind.Zero)))
-            ;; NB: Only the low bits of `amt` matter since we logically mask the
-            ;; shift amount to the value's bit width.
-            (amt_ Reg (lo_reg amt)))
-        (value_reg (shr ty src_ (Imm8Reg.Reg amt_)))))
-
-(rule (lower (has_type (fits_in_64 ty) (ushr src (imm8_from_value amt))))
       (let ((src_ Reg (extend_to_reg src ty (ExtendKind.Zero))))
-        (value_reg (shr ty src_ amt))))
+        (value_reg (shr ty src_ (put_masked_in_imm8_reg amt ty)))))
 
 ;; `i128`.
 
@@ -623,6 +610,109 @@
       (let ((amt_ Reg (lo_reg amt)))
         (shr_i128 (put_in_regs src) amt_)))
 
+;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i64` and smaller.
+
+(rule (lower (has_type (fits_in_64 ty) (sshr src amt)))
+      (let ((src_ Reg (extend_to_reg src ty (ExtendKind.Sign))))
+        (value_reg (sar ty src_ (put_masked_in_imm8_reg amt ty)))))
+
+;; `i128`.
+
+(decl sar_i128 (ValueRegs Reg) ValueRegs)
+(rule (sar_i128 src amt)
+      ;; Unpack the low/high halves of `src`.
+      (let ((src_lo Reg (value_regs_get src 0))
+            (src_hi Reg (value_regs_get src 1))
+            ;; Do a shift of each half. NB: the low half uses an unsigned shift
+            ;; because its MSB is not a sign bit.
+            (lo_shifted Reg (shr $I64 src_lo (Imm8Reg.Reg amt)))
+            (hi_shifted Reg (sar $I64 src_hi (Imm8Reg.Reg amt)))
+            ;; `src_hi << (64 - amt)` are the bits to carry over from the low
+            ;; half to the high half.
+            (carry Reg (shl $I64 src_hi (Imm8Reg.Reg (sub $I64 (imm $I64 64) (RegMemImm.Reg amt)))))
+            ;; Nullify the carry if we are shifting by a multiple of 128.
+            (carry_ Reg (with_flags_1 (test (OperandSize.Size64) (RegMemImm.Imm 127) amt)
+                                      (cmove $I64 (CC.Z) (RegMem.Reg (imm $I64 0)) carry)))
+            ;; Add the carry into the low half.
+            (lo_shifted_ Reg (or $I64 lo_shifted (RegMemImm.Reg carry_)))
+            ;; Get all sign bits.
+            (sign_bits Reg (sar $I64 src_hi (Imm8Reg.Imm8 63))))
+        ;; Combine the two shifted halves. However, if we are shifting by >= 64
+        ;; (modulo 128), then the hi bits are all sign bits and the lo bits are
+        ;; what would otherwise be our hi bits.
+        (with_flags_2 (test (OperandSize.Size64) (RegMemImm.Imm 64) amt)
+                      (cmove $I64 (CC.Z) (RegMem.Reg lo_shifted_) hi_shifted)
+                      (cmove $I64 (CC.Z) (RegMem.Reg hi_shifted) sign_bits))))
+
+(rule (lower (has_type $I128 (sshr src amt)))
+      ;; NB: Only the low bits of `amt` matter since we logically mask the shift
+      ;; amount to the value's bit width.
+      (let ((amt_ Reg (lo_reg amt)))
+        (sar_i128 (put_in_regs src) amt_)))
+
+;; SSE.
+
+;; Since the x86 instruction set does not have an 8x16 shift instruction and the
+;; approach used for `ishl` and `ushr` cannot be easily used (the masks do not
+;; preserve the sign), we use a different approach here: separate the low and
+;; high lanes, shift them separately, and merge them into the final result.
+;;
+;; Visually, this looks like the following, where `src.i8x16 = [s0, s1, ...,
+;; s15]:
+;;
+;;   lo.i16x8 = [(s0, s0), (s1, s1), ..., (s7, s7)]
+;;   shifted_lo.i16x8 = shift each lane of `low`
+;;   hi.i16x8 = [(s8, s8), (s9, s9), ..., (s15, s15)]
+;;   shifted_hi.i16x8 = shift each lane of `high`
+;;   result = [s0'', s1'', ..., s15'']
+(rule (lower (has_type $I8X16 (sshr src amt @ (value_type amt_ty))))
+      (let ((src_ Reg (put_in_reg src))
+            ;; In order for `packsswb` later to only use the high byte of each
+            ;; 16x8 lane, we shift right an extra 8 bits, relying on `psraw` to
+            ;; fill in the upper bits appropriately.
+            (lo Reg (punpcklbw src_ (RegMem.Reg src_)))
+            (hi Reg (punpckhbw src_ (RegMem.Reg src_)))
+            (amt_ RegMemImm (sshr_i8x16_bigger_shift amt_ty (put_in_reg_mem_imm amt)))
+            (shifted_lo Reg (psraw lo amt_))
+            (shifted_hi Reg (psraw hi amt_)))
+        (value_reg (packsswb shifted_lo (RegMem.Reg shifted_hi)))))
+
+(decl sshr_i8x16_bigger_shift (Type RegMemImm) RegMemImm)
+(rule (sshr_i8x16_bigger_shift _ty (RegMemImm.Imm i))
+      (RegMemImm.Imm (u32_add i 8)))
+(rule (sshr_i8x16_bigger_shift ty (RegMemImm.Reg r))
+      (reg_mem_imm_to_xmm (RegMemImm.Reg (add ty r (RegMemImm.Imm 8)))))
+(rule (sshr_i8x16_bigger_shift ty rmi @ (RegMemImm.Mem _m))
+      (reg_mem_imm_to_xmm (RegMemImm.Reg (add ty (imm ty 8) rmi))))
+
+;; `sshr.{i16x8,i32x4}` can be a simple `psra{w,d}`, we just have to make sure
+;; that if the shift amount is in a register, it is in an XMM register.
+(rule (lower (has_type $I16X8 (sshr src amt)))
+      (value_reg (psraw (put_in_reg src)
+                        (reg_mem_imm_to_xmm (put_in_reg_mem_imm amt)))))
+(rule (lower (has_type $I32X4 (sshr src amt)))
+      (value_reg (psrad (put_in_reg src)
+                        (reg_mem_imm_to_xmm (put_in_reg_mem_imm amt)))))
+
+;; The `sshr.i64x2` CLIF instruction has no single x86 instruction in the older
+;; feature sets. Newer ones like AVX512VL + AVX512F include `vpsraq`, a 128-bit
+;; instruction that would fit here, but this backend does not currently have
+;; support for EVEX encodings. To remedy this, we extract each 64-bit lane to a
+;; GPR, shift each using a scalar instruction, and insert the shifted values
+;; back in the `dst` XMM register.
+;;
+;; (TODO: when EVEX support is available, add an alternate lowering here).
+(rule (lower (has_type $I64X2 (sshr src amt)))
+      (let ((src_ Reg (put_in_reg src))
+            (lo Reg (pextrd $I64 src_ 0))
+            (hi Reg (pextrd $I64 src_ 1))
+            (amt_ Imm8Reg (put_masked_in_imm8_reg amt $I64))
+            (shifted_lo Reg (sar $I64 lo amt_))
+            (shifted_hi Reg (sar $I64 hi amt_)))
+        (value_reg (make_i64x2_from_lanes (RegMem.Reg shifted_lo)
+                                          (RegMem.Reg shifted_hi)))))
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `i16` and `i8`: we need to extend the shift amount, or mask the
@@ -632,8 +722,11 @@
       (let ((amt_ Reg (extend_to_reg amt $I32 (ExtendKind.Zero))))
         (value_reg (m_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
 
-(rule (lower (has_type (ty_8_or_16 ty) (rotl src (imm8_from_value amt))))
-      (value_reg (m_rotl ty (put_in_reg src) (mask_imm8_const amt (ty_bits_mask ty)))))
+(rule (lower (has_type (ty_8_or_16 ty)
+                       (rotl src (u64_from_iconst amt))))
+      (value_reg (m_rotl ty
+                         (put_in_reg src)
+                         (const_to_type_masked_imm8 amt ty))))
 
 ;; `i64` and `i32`: we can rely on x86's rotate-amount masking since
 ;;  we operate on the whole register.
@@ -644,8 +737,11 @@
       (let ((amt_ Reg (lo_reg amt)))
         (value_reg (m_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
 
-(rule (lower (has_type (ty_32_or_64 ty) (rotl src (imm8_from_value amt))))
-      (value_reg (m_rotl ty (put_in_reg src) amt)))
+(rule (lower (has_type (ty_32_or_64 ty)
+                       (rotl src (u64_from_iconst amt))))
+      (value_reg (m_rotl ty
+                         (put_in_reg src)
+                         (const_to_type_masked_imm8 amt ty))))
 
 ;; `i128`.
 

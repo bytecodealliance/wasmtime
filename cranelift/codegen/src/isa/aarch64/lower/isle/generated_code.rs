@@ -20,6 +20,8 @@ pub trait Context {
     fn pack_value_array_2(&mut self, arg0: Value, arg1: Value) -> ValueArray2;
     fn unpack_value_array_3(&mut self, arg0: &ValueArray3) -> (Value, Value, Value);
     fn pack_value_array_3(&mut self, arg0: Value, arg1: Value, arg2: Value) -> ValueArray3;
+    fn u32_add(&mut self, arg0: u32, arg1: u32) -> u32;
+    fn u8_and(&mut self, arg0: u8, arg1: u8) -> u8;
     fn value_reg(&mut self, arg0: Reg) -> ValueRegs;
     fn value_regs(&mut self, arg0: Reg, arg1: Reg) -> ValueRegs;
     fn temp_writable_reg(&mut self, arg0: Type) -> WritableReg;
@@ -32,6 +34,7 @@ pub trait Context {
     fn u32_as_u64(&mut self, arg0: u32) -> u64;
     fn ty_bits(&mut self, arg0: Type) -> u8;
     fn ty_bits_u16(&mut self, arg0: Type) -> u16;
+    fn lane_type(&mut self, arg0: Type) -> Type;
     fn fits_in_16(&mut self, arg0: Type) -> Option<Type>;
     fn fits_in_32(&mut self, arg0: Type) -> Option<Type>;
     fn fits_in_64(&mut self, arg0: Type) -> Option<Type>;
@@ -52,7 +55,6 @@ pub trait Context {
     fn first_result(&mut self, arg0: Inst) -> Option<Value>;
     fn inst_data(&mut self, arg0: Inst) -> InstructionData;
     fn value_type(&mut self, arg0: Value) -> Type;
-    fn ty_bits_mask(&mut self, arg0: Type) -> u64;
     fn multi_lane(&mut self, arg0: Type) -> Option<(u8, u16)>;
     fn def_inst(&mut self, arg0: Value) -> Option<Inst>;
     fn trap_code_division_by_zero(&mut self) -> TrapCode;
@@ -89,13 +91,13 @@ pub trait Context {
     fn rotr_opposite_amount(&mut self, arg0: Type, arg1: ImmShift) -> ImmShift;
 }
 
-/// Internal type ProducesFlags: defined at src/prelude.isle line 263.
+/// Internal type ProducesFlags: defined at src/prelude.isle line 273.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlags { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 266.
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 276.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlags { inst: MInst, result: Reg },
@@ -975,7 +977,7 @@ pub enum AtomicRMWOp {
 // Generated as internal constructor for term temp_reg.
 pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 60.
+    // Rule at src/prelude.isle line 66.
     let expr0_0 = C::temp_writable_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -984,7 +986,7 @@ pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> 
 // Generated as internal constructor for term lo_reg.
 pub fn constructor_lo_reg<C: Context>(ctx: &mut C, arg0: Value) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 95.
+    // Rule at src/prelude.isle line 101.
     let expr0_0 = C::put_in_regs(ctx, pattern0_0);
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
@@ -1009,7 +1011,7 @@ pub fn constructor_with_flags<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 276.
+            // Rule at src/prelude.isle line 286.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -1037,7 +1039,7 @@ pub fn constructor_with_flags_1<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 284.
+            // Rule at src/prelude.isle line 294.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             return Some(pattern3_1);
@@ -1071,7 +1073,7 @@ pub fn constructor_with_flags_2<C: Context>(
                 result: pattern5_1,
             } = pattern4_0
             {
-                // Rule at src/prelude.isle line 294.
+                // Rule at src/prelude.isle line 304.
                 let expr0_0 = C::emit(ctx, &pattern1_0);
                 let expr1_0 = C::emit(ctx, &pattern5_0);
                 let expr2_0 = C::emit(ctx, &pattern3_0);

@@ -1173,35 +1173,32 @@ block0(v0: i128, v1: i128):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 28)
+;   (instruction range: 0 .. 25)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movq    %rdi, %r8
-;   Inst 3:   movq    %rsi, %rdi
-;   Inst 4:   movq    %rdi, %rsi
-;   Inst 5:   movq    %rdx, %rcx
-;   Inst 6:   sarq    %cl, %rsi
-;   Inst 7:   movq    %rdx, %rcx
-;   Inst 8:   shrq    %cl, %r8
-;   Inst 9:   movl    $64, %ecx
-;   Inst 10:   subq    %rdx, %rcx
-;   Inst 11:   movq    %rdi, %rax
-;   Inst 12:   shlq    %cl, %rax
-;   Inst 13:   xorq    %rcx, %rcx
-;   Inst 14:   testq   $127, %rdx
-;   Inst 15:   cmovzq  %rcx, %rax
-;   Inst 16:   orq     %r8, %rax
-;   Inst 17:   sarq    $63, %rdi
-;   Inst 18:   xorq    %rcx, %rcx
-;   Inst 19:   andq    $64, %rdx
-;   Inst 20:   cmovzq  %rsi, %rdi
-;   Inst 21:   cmovzq  %rax, %rcx
-;   Inst 22:   cmovnzq %rsi, %rcx
-;   Inst 23:   movq    %rcx, %rax
-;   Inst 24:   movq    %rdi, %rdx
-;   Inst 25:   movq    %rbp, %rsp
-;   Inst 26:   popq    %rbp
-;   Inst 27:   ret
+;   Inst 2:   movq    %rdi, %rax
+;   Inst 3:   movq    %rdx, %rcx
+;   Inst 4:   shrq    %cl, %rax
+;   Inst 5:   movq    %rsi, %rdi
+;   Inst 6:   movq    %rdx, %rcx
+;   Inst 7:   sarq    %cl, %rdi
+;   Inst 8:   movl    $64, %ecx
+;   Inst 9:   subq    %rdx, %rcx
+;   Inst 10:   movq    %rsi, %r8
+;   Inst 11:   shlq    %cl, %r8
+;   Inst 12:   xorq    %rcx, %rcx
+;   Inst 13:   testq   $127, %rdx
+;   Inst 14:   cmovzq  %rcx, %r8
+;   Inst 15:   orq     %r8, %rax
+;   Inst 16:   sarq    $63, %rsi
+;   Inst 17:   testq   $64, %rdx
+;   Inst 18:   cmovzq  %rdi, %rsi
+;   Inst 19:   cmovzq  %rax, %rdi
+;   Inst 20:   movq    %rdi, %rax
+;   Inst 21:   movq    %rsi, %rdx
+;   Inst 22:   movq    %rbp, %rsp
+;   Inst 23:   popq    %rbp
+;   Inst 24:   ret
 ; }}
 
 function %f33(i128, i128) -> i128 {

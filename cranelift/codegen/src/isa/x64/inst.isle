@@ -35,6 +35,7 @@
                        (dst WritableReg)
                        (imm u8)
                        (size OperandSize))
+            (XmmUninitializedValue (dst WritableReg))
             (CmpRmiR (size OperandSize)
                      (opcode CmpOpcode)
                      (src RegMemImm)
@@ -292,6 +293,15 @@
        (Mem (addr SyntheticAmode))
        (Imm (simm32 u32))))
 
+;; Put the given clif value into a `RegMemImm` operand.
+;;
+;; Asserts that the value fits into a single register, and doesn't require
+;; multiple registers for its representation (like `i128` for example).
+;;
+;; As a side effect, this marks the value as used.
+(decl put_in_reg_mem_imm (Value) RegMemImm)
+(extern constructor put_in_reg_mem_imm put_in_reg_mem_imm)
+
 (type RegMem extern
       (enum
        (Reg (reg Reg))
@@ -318,6 +328,18 @@
 (type Imm8Reg extern
       (enum (Imm8 (imm u8))
             (Reg (reg Reg))))
+
+;; Put the given clif value into a `Imm8Reg` operand, masked to the bit width of
+;; the given type.
+;;
+;; Asserts that the value fits into a single register, and doesn't require
+;; multiple registers for its representation (like `i128` for example).
+;;
+;; As a side effect, this marks the value as used.
+;;
+;; This is used when lowering various shifts and rotates.
+(decl put_masked_in_imm8_reg (Value Type) Imm8Reg)
+(extern constructor put_masked_in_imm8_reg put_masked_in_imm8_reg)
 
 (type CC extern
       (enum O
@@ -383,9 +405,12 @@
 (decl imm8_from_value (Imm8Reg) Value)
 (extern extractor imm8_from_value imm8_from_value)
 
-;; Mask an `Imm8Reg.Imm8`.
-(decl mask_imm8_const (Imm8Reg u64) Imm8Reg)
-(extern constructor mask_imm8_const mask_imm8_const)
+;; Mask a constant to the bit-width of the given type and package it into an
+;; `Imm8Reg.Imm8`. This is used for shifts and rotates, so that we don't try and
+;; shift/rotate more bits than the type has available, per Cranelift's
+;; semantics.
+(decl const_to_type_masked_imm8 (u64 Type) Imm8Reg)
+(extern constructor const_to_type_masked_imm8 const_to_type_masked_imm8)
 
 ;; Extract a constant `RegMemImm.Imm` from a value operand.
 (decl simm32_from_value (RegMemImm) Value)
@@ -493,6 +518,37 @@
                                          (RegMem.Reg r)
                                          wr))))
         r))
+
+;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
+(decl make_i64x2_from_lanes (RegMem RegMem) Reg)
+(rule (make_i64x2_from_lanes lo hi)
+      (let ((dst_w WritableReg (temp_writable_reg $I64X2))
+            (dst_r Reg (writable_reg_to_reg dst_w))
+            (_0 Unit (emit (MInst.XmmUninitializedValue dst_w)))
+            (_1 Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
+                                            dst_r
+                                            lo
+                                            dst_w
+                                            0
+                                            (OperandSize.Size64))))
+            (_2 Unit (emit (MInst.XmmRmRImm (SseOpcode.Pinsrd)
+                                            dst_r
+                                            hi
+                                            dst_w
+                                            1
+                                            (OperandSize.Size64)))))
+        dst_r))
+
+;; Move a `RegMemImm.Reg` operand to an XMM register, if necessary.
+(decl reg_mem_imm_to_xmm (RegMemImm) RegMemImm)
+(rule (reg_mem_imm_to_xmm rmi @ (RegMemImm.Mem _)) rmi)
+(rule (reg_mem_imm_to_xmm rmi @ (RegMemImm.Imm _)) rmi)
+(rule (reg_mem_imm_to_xmm (RegMemImm.Reg r))
+      (RegMemImm.Reg (gpr_to_xmm $I8X16
+                                 (SseOpcode.Movd)
+                                 (RegMem.Reg r)
+                                 (OperandSize.Size32))))
+
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1058,6 +1114,21 @@
 (rule (pminud src1 src2)
       (xmm_rm_r $I8X16 (SseOpcode.Pminud) src1 src2))
 
+;; Helper for creating `punpcklbw` instructions.
+(decl punpcklbw (Reg RegMem) Reg)
+(rule (punpcklbw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Punpcklbw) src1 src2))
+
+;; Helper for creating `punpckhbw` instructions.
+(decl punpckhbw (Reg RegMem) Reg)
+(rule (punpckhbw src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Punpckhbw) src1 src2))
+
+;; Helper for creating `packsswb` instructions.
+(decl packsswb (Reg RegMem) Reg)
+(rule (packsswb src1 src2)
+      (xmm_rm_r $I8X16 (SseOpcode.Packsswb) src1 src2))
+
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Reg)
 (rule (xmm_rm_r_imm op src1 src2 imm size)
@@ -1180,6 +1251,16 @@
 (rule (psrlq src1 src2)
       (xmm_rmi_reg (SseOpcode.Psrlq) src1 src2))
 
+;; Helper for creating `psraw` instructions.
+(decl psraw (Reg RegMemImm) Reg)
+(rule (psraw src1 src2)
+      (xmm_rmi_reg (SseOpcode.Psraw) src1 src2))
+
+;; Helper for creating `psrad` instructions.
+(decl psrad (Reg RegMemImm) Reg)
+(rule (psrad src1 src2)
+      (xmm_rmi_reg (SseOpcode.Psrad) src1 src2))
+
 ;; Helper for creating `MInst.MulHi` instructions.
 ;;
 ;; Returns the (lo, hi) register halves of the multiplication.
@@ -1251,6 +1332,19 @@
 (decl insertps (Reg RegMem u8) Reg)
 (rule (insertps src1 src2 lane)
       (xmm_rm_r_imm (SseOpcode.Insertps) src1 src2 lane (OperandSize.Size32)))
+
+;; Helper for creating `pextrd` instructions.
+(decl pextrd (Type Reg u8) Reg)
+(rule (pextrd ty src lane)
+      (let ((w_dst WritableReg (temp_writable_reg ty))
+            (r_dst Reg (writable_reg_to_reg w_dst))
+            (_ Unit (emit (MInst.XmmRmRImm (SseOpcode.Pextrd)
+                                           r_dst
+                                           (RegMem.Reg src)
+                                           w_dst
+                                           lane
+                                           (operand_size_of_type_32_64 (lane_type ty))))))
+        r_dst))
 
 ;; Helper for creating `not` instructions.
 (decl not (Type Reg) Reg)

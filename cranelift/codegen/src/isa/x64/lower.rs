@@ -1538,13 +1538,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Umin
         | Opcode::Bnot
         | Opcode::Bitselect
-        | Opcode::Vselect => implemented_in_isle(ctx),
+        | Opcode::Vselect
+        | Opcode::Sshr => implemented_in_isle(ctx),
 
-        Opcode::Ishl | Opcode::Ushr | Opcode::Sshr | Opcode::Rotl | Opcode::Rotr => {
+        Opcode::Ishl | Opcode::Ushr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
 
             if !dst_ty.is_vector() && dst_ty.bits() <= 64 {
+                if op != Opcode::Rotr {
+                    implemented_in_isle(ctx);
+                }
+
                 // Scalar shifts on x86 have various encodings:
                 // - shift by one bit, e.g. `SAL r/m8, 1` (not used here)
                 // - shift by an immediate amount, e.g. `SAL r/m8, imm8`
@@ -1556,10 +1561,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         Opcode::Ushr => (
                             OperandSize::Size32,
                             extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
-                        ),
-                        Opcode::Sshr => (
-                            OperandSize::Size32,
-                            extend_input_to_reg(ctx, inputs[0], ExtSpec::SignExtendTo32),
                         ),
                         Opcode::Rotl | Opcode::Rotr => (
                             OperandSize::from_ty(dst_ty),
@@ -1590,7 +1591,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let shift_kind = match op {
                     Opcode::Ishl => ShiftKind::ShiftLeft,
                     Opcode::Ushr => ShiftKind::ShiftRightLogical,
-                    Opcode::Sshr => ShiftKind::ShiftRightArithmetic,
                     Opcode::Rotl => ShiftKind::RotateLeft,
                     Opcode::Rotr => ShiftKind::RotateRight,
                     _ => unreachable!(),
@@ -1608,50 +1608,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]);
 
                 match op {
-                    Opcode::Ishl => {
-                        emit_shl_i128(ctx, src, dst, amt_src);
-                    }
-                    Opcode::Ushr => {
-                        emit_shr_i128(ctx, src, dst, amt_src, /* is_signed = */ false);
-                    }
-                    Opcode::Sshr => {
-                        emit_shr_i128(ctx, src, dst, amt_src, /* is_signed = */ true);
-                    }
-                    Opcode::Rotl => {
-                        // (mov tmp, src)
-                        // (shl.i128 tmp, amt)
-                        // (mov dst, src)
-                        // (ushr.i128 dst, 128-amt)
-                        // (or dst, tmp)
-                        let tmp = ctx.alloc_tmp(types::I128);
-                        emit_shl_i128(ctx, src, tmp, amt_src);
-                        let inv_amt = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        ctx.emit(Inst::imm(OperandSize::Size64, 128, inv_amt));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Sub,
-                            RegMemImm::reg(amt_src),
-                            inv_amt,
-                        ));
-                        emit_shr_i128(
-                            ctx,
-                            src,
-                            dst,
-                            inv_amt.to_reg(),
-                            /* is_signed = */ false,
-                        );
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Or,
-                            RegMemImm::reg(tmp.regs()[0].to_reg()),
-                            dst.regs()[0],
-                        ));
-                        ctx.emit(Inst::alu_rmi_r(
-                            OperandSize::Size64,
-                            AluRmiROpcode::Or,
-                            RegMemImm::reg(tmp.regs()[1].to_reg()),
-                            dst.regs()[1],
-                        ));
+                    Opcode::Ishl | Opcode::Ushr | Opcode::Rotl => {
+                        implemented_in_isle(ctx);
                     }
                     Opcode::Rotr => {
                         // (mov tmp, src)
@@ -1808,127 +1766,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     _ => SseOpcode::Pand,
                 };
                 ctx.emit(Inst::xmm_rm_r(sse_op, RegMem::from(mask_value), dst));
-            } else if dst_ty == types::I8X16 && op == Opcode::Sshr {
-                // Since the x86 instruction set does not have an 8x16 shift instruction and the approach used for
-                // `ishl` and `ushr` cannot be easily used (the masks do not preserve the sign), we use a different
-                // approach here: separate the low and high lanes, shift them separately, and merge them into the final
-                // result. Visually, this looks like the following, where `src.i8x16 = [s0, s1, ..., s15]:
-                //   low.i16x8 = [(s0, s0), (s1, s1), ..., (s7, s7)]
-                //   shifted_low.i16x8 = shift each lane of `low`
-                //   high.i16x8 = [(s8, s8), (s9, s9), ..., (s15, s15)]
-                //   shifted_high.i16x8 = shift each lane of `high`
-                //   dst.i8x16 = [s0'', s1'', ..., s15'']
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let shift_by_ty = ctx.input_ty(insn, 1);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                // In order for PACKSSWB later to only use the high byte of each 16x8 lane, we shift right an extra 8
-                // bits, relying on PSRAW to fill in the upper bits appropriately.
-                let bigger_shift_by = match shift_by {
-                    // When we know the shift amount at compile time, we add the extra shift amount statically.
-                    RegMemImm::Imm { simm32 } => RegMemImm::imm(simm32 + 8),
-                    // Otherwise we add instructions to add the extra shift amount and move the value into an XMM
-                    // register.
-                    RegMemImm::Reg { reg } => {
-                        let bigger_shift_by_gpr = ctx.alloc_tmp(shift_by_ty).only_reg().unwrap();
-                        ctx.emit(Inst::mov_r_r(OperandSize::Size64, reg, bigger_shift_by_gpr));
-
-                        let size = if shift_by_ty == types::I64 {
-                            OperandSize::Size64
-                        } else {
-                            OperandSize::Size32
-                        };
-                        let imm = RegMemImm::imm(8);
-                        ctx.emit(Inst::alu_rmi_r(
-                            size,
-                            AluRmiROpcode::Add,
-                            imm,
-                            bigger_shift_by_gpr,
-                        ));
-
-                        let bigger_shift_by_xmm = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                        ctx.emit(Inst::gpr_to_xmm(
-                            SseOpcode::Movd,
-                            RegMem::from(bigger_shift_by_gpr),
-                            OperandSize::Size32,
-                            bigger_shift_by_xmm,
-                        ));
-                        RegMemImm::reg(bigger_shift_by_xmm.to_reg())
-                    }
-                    RegMemImm::Mem { .. } => unimplemented!("load shift amount to XMM register"),
-                };
-
-                // Unpack and shift the lower lanes of `src` into the `dst` register.
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-                ctx.emit(Inst::xmm_rm_r(SseOpcode::Punpcklbw, RegMem::from(dst), dst));
-                ctx.emit(Inst::xmm_rmi_reg(
-                    SseOpcode::Psraw,
-                    bigger_shift_by.clone(),
-                    dst,
-                ));
-
-                // Unpack and shift the upper lanes of `src` into a temporary register, `upper_lanes`.
-                let upper_lanes = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(upper_lanes, src, dst_ty));
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Punpckhbw,
-                    RegMem::from(upper_lanes),
-                    upper_lanes,
-                ));
-                ctx.emit(Inst::xmm_rmi_reg(
-                    SseOpcode::Psraw,
-                    bigger_shift_by,
-                    upper_lanes,
-                ));
-
-                // Merge the upper and lower shifted lanes into `dst`.
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Packsswb,
-                    RegMem::from(upper_lanes),
-                    dst,
-                ));
-            } else if dst_ty == types::I64X2 && op == Opcode::Sshr {
-                // The `sshr.i8x16` CLIF instruction has no single x86 instruction in the older feature sets; newer ones
-                // like AVX512VL + AVX512F include VPSRAQ, a 128-bit instruction that would fit here, but this backend
-                // does not currently have support for EVEX encodings (TODO when EVEX support is available, add an
-                // alternate lowering here). To remedy this, we extract each 64-bit lane to a GPR, shift each using a
-                // scalar instruction, and insert the shifted values back in the `dst` XMM register.
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-
-                // Extract the upper and lower lanes into temporary GPRs.
-                let lower_lane = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                emit_extract_lane(ctx, src, lower_lane, 0, types::I64);
-                let upper_lane = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                emit_extract_lane(ctx, src, upper_lane, 1, types::I64);
-
-                // Shift each value.
-                let mut shift = |reg: Writable<Reg>| {
-                    let kind = ShiftKind::ShiftRightArithmetic;
-                    if let Some(shift_by) = ctx.get_input_as_source_or_const(insn, 1).constant {
-                        // Mask the shift amount according to Cranelift's semantics.
-                        let shift_by = (shift_by as u8) & (types::I64.bits() as u8 - 1);
-                        ctx.emit(Inst::shift_r(
-                            OperandSize::Size64,
-                            kind,
-                            Some(shift_by),
-                            reg,
-                        ));
-                    } else {
-                        let dynamic_shift_by = put_input_in_reg(ctx, inputs[1]);
-                        let w_rcx = Writable::from_reg(regs::rcx());
-                        ctx.emit(Inst::mov_r_r(OperandSize::Size64, dynamic_shift_by, w_rcx));
-                        ctx.emit(Inst::shift_r(OperandSize::Size64, kind, None, reg));
-                    };
-                };
-                shift(lower_lane);
-                shift(upper_lane);
-
-                // Insert the scalar values back into the `dst` vector.
-                emit_insert_lane(ctx, RegMem::from(lower_lane), dst, 0, types::I64);
-                emit_insert_lane(ctx, RegMem::from(upper_lane), dst, 1, types::I64);
             } else {
                 // For the remaining packed shifts not covered above, x86 has implementations that can either:
                 // - shift using an immediate
@@ -1940,13 +1777,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     types::I16X8 => match op {
                         Opcode::Ishl => SseOpcode::Psllw,
                         Opcode::Ushr => SseOpcode::Psrlw,
-                        Opcode::Sshr => SseOpcode::Psraw,
                         _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
                     },
                     types::I32X4 => match op {
                         Opcode::Ishl => SseOpcode::Pslld,
                         Opcode::Ushr => SseOpcode::Psrld,
-                        Opcode::Sshr => SseOpcode::Psrad,
                         _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
                     },
                     types::I64X2 => match op {
