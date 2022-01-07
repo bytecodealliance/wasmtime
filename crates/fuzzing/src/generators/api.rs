@@ -14,13 +14,12 @@
 //!
 //! [swarm testing]: https://www.cs.utah.edu/~regehr/papers/swarm12.pdf
 
+use crate::generators::{Config, ModuleConfig};
 use arbitrary::{Arbitrary, Unstructured};
 use std::collections::BTreeSet;
 
 #[derive(Arbitrary, Debug)]
 struct Swarm {
-    config_debug_info: bool,
-    config_interruptable: bool,
     module_new: bool,
     module_drop: bool,
     instance_new: bool,
@@ -32,37 +31,20 @@ struct Swarm {
 #[derive(Arbitrary, Debug)]
 #[allow(missing_docs)]
 pub enum ApiCall {
-    ConfigNew,
-    ConfigDebugInfo(bool),
-    ConfigInterruptable(bool),
-    EngineNew,
-    StoreNew,
-    ModuleNew {
-        id: usize,
-        wasm: super::GeneratedModule,
-    },
-    ModuleDrop {
-        id: usize,
-    },
-    InstanceNew {
-        id: usize,
-        module: usize,
-    },
-    InstanceDrop {
-        id: usize,
-    },
-    CallExportedFunc {
-        instance: usize,
-        nth: usize,
-    },
+    StoreNew(Config),
+    ModuleNew { id: usize, wasm: Vec<u8> },
+    ModuleDrop { id: usize },
+    InstanceNew { id: usize, module: usize },
+    InstanceDrop { id: usize },
+    CallExportedFunc { instance: usize, nth: usize },
 }
 use ApiCall::*;
 
-#[derive(Default)]
 struct Scope {
     id_counter: usize,
     modules: BTreeSet<usize>,
     instances: BTreeSet<usize>,
+    module_config: ModuleConfig,
 }
 
 impl Scope {
@@ -87,11 +69,16 @@ impl<'a> Arbitrary<'a> for ApiCalls {
         let swarm = Swarm::arbitrary(input)?;
         let mut calls = vec![];
 
-        arbitrary_config(input, &swarm, &mut calls)?;
-        calls.push(EngineNew);
-        calls.push(StoreNew);
+        let config = Config::arbitrary(input)?;
+        let module_config = config.module_config.clone();
+        calls.push(StoreNew(config));
 
-        let mut scope = Scope::default();
+        let mut scope = Scope {
+            id_counter: 0,
+            modules: BTreeSet::default(),
+            instances: BTreeSet::default(),
+            module_config,
+        };
 
         // Total limit on number of API calls we'll generate. This exists to
         // avoid libFuzzer timeouts.
@@ -107,10 +94,13 @@ impl<'a> Arbitrary<'a> for ApiCalls {
             if swarm.module_new {
                 choices.push(|input, scope| {
                     let id = scope.next_id();
-                    let mut wasm = super::GeneratedModule::arbitrary(input)?;
-                    wasm.module.ensure_termination(1000);
+                    let mut wasm = scope.module_config.generate(input)?;
+                    wasm.ensure_termination(1000);
                     scope.modules.insert(id);
-                    Ok(ModuleNew { id, wasm })
+                    Ok(ModuleNew {
+                        id,
+                        wasm: wasm.to_bytes(),
+                    })
                 });
             }
             if swarm.module_drop && !scope.modules.is_empty() {
@@ -156,44 +146,4 @@ impl<'a> Arbitrary<'a> for ApiCalls {
 
         Ok(ApiCalls { calls })
     }
-
-    fn size_hint(depth: usize) -> (usize, Option<usize>) {
-        arbitrary::size_hint::recursion_guard(depth, |depth| {
-            arbitrary::size_hint::or(
-                // This is the stuff we unconditionally need, which affects the
-                // minimum size.
-                arbitrary::size_hint::and(
-                    <Swarm as Arbitrary>::size_hint(depth),
-                    // `arbitrary_config` uses four bools:
-                    // 2 when `swarm.config_debug_info` is true
-                    // 2 when `swarm.config_interruptable` is true
-                    <(bool, bool, bool, bool) as Arbitrary>::size_hint(depth),
-                ),
-                // We can generate arbitrary `WasmOptTtf` instances, which have
-                // no upper bound on the number of bytes they consume. This sets
-                // the upper bound to `None`.
-                <super::GeneratedModule as Arbitrary>::size_hint(depth),
-            )
-        })
-    }
-}
-
-fn arbitrary_config(
-    input: &mut Unstructured,
-    swarm: &Swarm,
-    calls: &mut Vec<ApiCall>,
-) -> arbitrary::Result<()> {
-    calls.push(ConfigNew);
-
-    if swarm.config_debug_info && bool::arbitrary(input)? {
-        calls.push(ConfigDebugInfo(bool::arbitrary(input)?));
-    }
-
-    if swarm.config_interruptable && bool::arbitrary(input)? {
-        calls.push(ConfigInterruptable(bool::arbitrary(input)?));
-    }
-
-    // TODO: flags, features, and compilation strategy.
-
-    Ok(())
 }

@@ -3457,7 +3457,6 @@ dependencies = [
  "wasmtime-cache",
  "wasmtime-cranelift",
  "wasmtime-environ",
- "wasmtime-fuzzing",
  "wasmtime-runtime",
  "wasmtime-wasi",
  "wasmtime-wasi-crypto",
@@ -3528,7 +3527,6 @@ dependencies = [
  "cranelift-wasm",
  "libfuzzer-sys",
  "target-lexicon",
- "wasm-smith",
  "wasmtime",
  "wasmtime-fuzzing",
 ]

@@ -7,7 +7,6 @@ mod externals;
 mod fuel;
 mod func;
 mod funcref;
-mod fuzzing;
 mod gc;
 mod globals;
 mod host_funcs;

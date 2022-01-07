@@ -19,7 +19,6 @@ libfuzzer-sys = "0.4.0"
 target-lexicon = "0.12"
 wasmtime = { path = "../crates/wasmtime" }
 wasmtime-fuzzing = { path = "../crates/fuzzing" }
-wasm-smith = "0.7.0"
 
 [features]
 # Leave a stub feature with no side-effects in place for now: the OSS-Fuzz
@@ -76,20 +75,8 @@ test = false
 doc = false
 
 [[bin]]
-name = "instantiate-wasm-smith"
-path = "fuzz_targets/instantiate-wasm-smith.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "instantiate-swarm"
-path = "fuzz_targets/instantiate-swarm.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "instantiate-maybe-invalid"
-path = "fuzz_targets/instantiate-maybe-invalid.rs"
+name = "compile-maybe-invalid"
+path = "fuzz_targets/compile-maybe-invalid.rs"
 test = false
 doc = false
 

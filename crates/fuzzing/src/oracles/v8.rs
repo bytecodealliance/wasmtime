@@ -15,7 +15,6 @@ use wasmtime::*;
 /// from happening.
 pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
     // Wasmtime setup
-    crate::init_fuzzing();
     log_wasm(wasm);
     let (wasmtime_module, mut wasmtime_store) = super::differential_store(wasm, config);
     log::trace!("compiled module with wasmtime");
@@ -79,11 +78,15 @@ pub fn differential_v8_execution(wasm: &[u8], config: &crate::generators::Config
             ValType::I64 => Val::I64(0),
             ValType::F32 => Val::F32(0),
             ValType::F64 => Val::F64(0),
+            ValType::FuncRef => Val::FuncRef(None),
+            ValType::ExternRef => Val::ExternRef(None),
             _ => unimplemented!(),
         });
         v8_params.push(match param {
             ValType::I32 | ValType::F32 | ValType::F64 => v8::Number::new(&mut scope, 0.0).into(),
             ValType::I64 => v8::BigInt::new_from_i64(&mut scope, 0).into(),
+            ValType::FuncRef => v8::null(&mut scope).into(),
+            ValType::ExternRef => v8::null(&mut scope).into(),
             _ => unimplemented!(),
         });
     }
@@ -231,6 +234,19 @@ fn assert_val_match(a: &Val, b: &v8::Local<'_, v8::Value>, scope: &mut v8::Handl
                 b.to_number(scope).unwrap().value(),
             );
         }
+
+        // Externref values can only come from us, the embedder, and we only
+        // give wasm null, so these values should always be null.
+        Val::ExternRef(ref wasmtime) => {
+            assert!(wasmtime.is_none());
+            assert!(b.is_null());
+        }
+
+        // In general we can't equate function references since wasm modules can
+        // create references to internal functions via `func.ref`, so we don't
+        // equate values here.
+        Val::FuncRef(_) => {}
+
         _ => panic!("unsupported match {:?}", a),
     }
 

@@ -12,8 +12,8 @@
 
 pub mod dummy;
 
+use crate::generators;
 use anyhow::Context;
-use arbitrary::Arbitrary;
 use log::{debug, warn};
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
@@ -28,7 +28,11 @@ mod v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
 
-fn log_wasm(wasm: &[u8]) {
+/// Logs a wasm file to the filesystem to make it easy to figure out what wasm
+/// was used when debugging.
+pub fn log_wasm(wasm: &[u8]) {
+    super::init_fuzzing();
+
     if !log::log_enabled!(log::Level::Debug) {
         return;
     }
@@ -47,21 +51,9 @@ fn log_wasm(wasm: &[u8]) {
     }
 }
 
-fn create_store(engine: &Engine) -> Store<StoreLimits> {
-    let mut store = Store::new(
-        &engine,
-        StoreLimits {
-            // Limits tables/memories within a store to at most 1gb for now to
-            // exercise some larger address but not overflow various limits.
-            remaining_memory: 1 << 30,
-            oom: false,
-        },
-    );
-    store.limiter(|s| s as &mut dyn ResourceLimiter);
-    return store;
-}
-
-struct StoreLimits {
+/// The `T` in `Store<T>` for fuzzing stores, used to limit resource
+/// consumption during fuzzing.
+pub struct StoreLimits {
     /// Remaining memory, in bytes, left to allocate
     remaining_memory: usize,
     /// Whether or not an allocation request has been denied
@@ -69,6 +61,16 @@ struct StoreLimits {
 }
 
 impl StoreLimits {
+    /// Creates the default set of limits for all fuzzing stores.
+    pub fn new() -> StoreLimits {
+        StoreLimits {
+            // Limits tables/memories within a store to at most 1gb for now to
+            // exercise some larger address but not overflow various limits.
+            remaining_memory: 1 << 30,
+            oom: false,
+        }
+    }
+
     fn alloc(&mut self, amt: usize) -> bool {
         match self.remaining_memory.checked_sub(amt) {
             Some(mem) => {
@@ -111,45 +113,19 @@ pub enum Timeout {
 /// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
 /// panic or segfault or anything else that can be detected "passively".
 ///
-/// Performs initial validation, and returns early if the Wasm is invalid.
-///
-/// You can control which compiler is used via passing a `Strategy`.
-pub fn instantiate(wasm: &[u8], known_valid: bool, strategy: Strategy) {
-    // Explicitly disable module linking for now since it's a breaking change to
-    // pre-module-linking modules due to imports
-    let mut cfg = crate::fuzz_default_config(strategy).unwrap();
-    cfg.wasm_module_linking(false);
-    instantiate_with_config(wasm, known_valid, cfg, Timeout::None);
-}
-
-/// Instantiate the Wasm buffer, and implicitly fail if we have an unexpected
-/// panic or segfault or anything else that can be detected "passively".
-///
 /// The engine will be configured using provided config.
-///
-/// See also `instantiate` functions.
-pub fn instantiate_with_config(
-    wasm: &[u8],
-    known_valid: bool,
-    mut config: Config,
-    timeout: Timeout,
-) {
-    crate::init_fuzzing();
-
-    config.interruptable(match &timeout {
-        Timeout::Time(_) => true,
-        _ => false,
-    });
-    config.consume_fuel(match &timeout {
-        Timeout::Fuel(_) => true,
-        _ => false,
-    });
-    let engine = Engine::new(&config).unwrap();
-    let mut store = create_store(&engine);
+pub fn instantiate(wasm: &[u8], known_valid: bool, config: &generators::Config, timeout: Timeout) {
+    let mut store = config.to_store();
 
     let mut timeout_state = SignalOnDrop::default();
     match timeout {
-        Timeout::Fuel(fuel) => store.add_fuel(fuel).unwrap(),
+        Timeout::Fuel(fuel) => {
+            // consume the default fuel in the store ...
+            let remaining = store.consume_fuel(0).unwrap();
+            store.consume_fuel(remaining - 1).unwrap();
+            // ... then add back in how much fuel we're allowing here
+            store.add_fuel(fuel).unwrap();
+        }
         // If a timeout is requested then we spawn a helper thread to wait for
         // the requested time and then send us a signal to get interrupted. We
         // also arrange for the thread's sleep to get interrupted if we return
@@ -167,7 +143,7 @@ pub fn instantiate_with_config(
     }
 
     log_wasm(wasm);
-    let module = match Module::new(&engine, wasm) {
+    let module = match Module::new(store.engine(), wasm) {
         Ok(module) => module,
         Err(_) if !known_valid => return,
         Err(e) => panic!("failed to compile module: {:?}", e),
@@ -216,33 +192,16 @@ fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Op
     panic!("failed to instantiate {:?}", e);
 }
 
-/// Compile the Wasm buffer, and implicitly fail if we have an unexpected
-/// panic or segfault or anything else that can be detected "passively".
-///
-/// Performs initial validation, and returns early if the Wasm is invalid.
-///
-/// You can control which compiler is used via passing a `Strategy`.
-pub fn compile(wasm: &[u8], strategy: Strategy) {
-    crate::init_fuzzing();
-
-    let mut config = crate::fuzz_default_config(strategy).unwrap();
-    config.wasm_module_linking(false);
-    let engine = Engine::new(&config).unwrap();
-    log_wasm(wasm);
-    let _ = Module::new(&engine, wasm);
-}
-
 /// Instantiate the given Wasm module with each `Config` and call all of its
 /// exports. Modulo OOM, non-canonical NaNs, and usage of Wasm features that are
 /// or aren't enabled for different configs, we should get the same results when
 /// we call the exported functions for all of our different configs.
 pub fn differential_execution(
-    module: &crate::generators::GeneratedModule,
-    configs: &[crate::generators::Config],
+    wasm: &[u8],
+    module_config: &generators::ModuleConfig,
+    configs: &[generators::WasmtimeConfig],
 ) {
     use std::collections::{HashMap, HashSet};
-
-    crate::init_fuzzing();
 
     // We need at least two configs.
     if configs.len() < 2
@@ -252,32 +211,18 @@ pub fn differential_execution(
         return;
     }
 
-    let configs: Vec<_> = configs.iter().map(|c| (c.to_wasmtime(), c)).collect();
     let mut export_func_results: HashMap<String, Result<Box<[Val]>, Trap>> = Default::default();
-    let wasm = module.module.to_bytes();
     log_wasm(&wasm);
 
-    for (mut config, fuzz_config) in configs {
+    for fuzz_config in configs {
+        let fuzz_config = generators::Config {
+            module_config: module_config.clone(),
+            wasmtime: fuzz_config.clone(),
+        };
         log::debug!("fuzz config: {:?}", fuzz_config);
-        // Disable module linking since it isn't enabled by default for
-        // `GeneratedModule` but is enabled by default for our fuzz config.
-        // Since module linking is currently a breaking change this is required
-        // to accept modules that would otherwise be broken by module linking.
-        config.wasm_module_linking(false);
 
-        // We don't want different configurations with different values for nan
-        // canonicalization since that can affect results. All configs should
-        // have the same value configured for this option, so `true` is
-        // arbitrarily chosen here.
-        config.cranelift_nan_canonicalization(true);
-
-        let engine = Engine::new(&config).unwrap();
-        let mut store = create_store(&engine);
-        if fuzz_config.consume_fuel {
-            store.add_fuel(u64::max_value()).unwrap();
-        }
-
-        let module = Module::new(&engine, &wasm).unwrap();
+        let mut store = fuzz_config.to_store();
+        let module = Module::new(store.engine(), &wasm).unwrap();
 
         // TODO: we should implement tracing versions of these dummy imports
         // that record a trace of the order that imported functions were called
@@ -367,53 +312,26 @@ fn f64_equal(a: u64, b: u64) -> bool {
 }
 
 /// Invoke the given API calls.
-pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
+pub fn make_api_calls(api: generators::api::ApiCalls) {
     use crate::generators::api::ApiCall;
     use std::collections::HashMap;
 
-    crate::init_fuzzing();
-
-    let mut config: Option<Config> = None;
-    let mut engine: Option<Engine> = None;
     let mut store: Option<Store<StoreLimits>> = None;
     let mut modules: HashMap<usize, Module> = Default::default();
     let mut instances: HashMap<usize, Instance> = Default::default();
 
     for call in api.calls {
         match call {
-            ApiCall::ConfigNew => {
-                log::trace!("creating config");
-                assert!(config.is_none());
-                config = Some(crate::fuzz_default_config(wasmtime::Strategy::Cranelift).unwrap());
-            }
-
-            ApiCall::ConfigDebugInfo(b) => {
-                log::trace!("enabling debuginfo");
-                config.as_mut().unwrap().debug_info(b);
-            }
-
-            ApiCall::ConfigInterruptable(b) => {
-                log::trace!("enabling interruption");
-                config.as_mut().unwrap().interruptable(b);
-            }
-
-            ApiCall::EngineNew => {
-                log::trace!("creating engine");
-                assert!(engine.is_none());
-                engine = Some(Engine::new(config.as_ref().unwrap()).unwrap());
-            }
-
-            ApiCall::StoreNew => {
+            ApiCall::StoreNew(config) => {
                 log::trace!("creating store");
                 assert!(store.is_none());
-                store = Some(create_store(engine.as_ref().unwrap()));
+                store = Some(config.to_store());
             }
 
             ApiCall::ModuleNew { id, wasm } => {
                 log::debug!("creating module: {}", id);
-                let wasm = wasm.module.to_bytes();
                 log_wasm(&wasm);
-                let module = match Module::new(engine.as_ref().unwrap(), &wasm) {
+                let module = match Module::new(store.as_ref().unwrap().engine(), &wasm) {
                     Ok(m) => m,
                     Err(_) => continue,
                 };
@@ -486,18 +404,10 @@ pub fn make_api_calls(api: crate::generators::api::ApiCalls) {
 /// Executes the wast `test` spectest with the `config` specified.
 ///
 /// Ensures that spec tests pass regardless of the `Config`.
-pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators::SpecTest) {
-    crate::init_fuzzing();
+pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest) {
+    fuzz_config.module_config.set_spectest_compliant();
     log::debug!("running {:?} with {:?}", test.file, fuzz_config);
-    let mut config = fuzz_config.to_wasmtime();
-    config.wasm_memory64(false);
-    config.wasm_module_linking(false);
-    config.wasm_multi_memory(false);
-    let mut store = create_store(&Engine::new(&config).unwrap());
-    if fuzz_config.consume_fuel {
-        store.add_fuel(u64::max_value()).unwrap();
-    }
-    let mut wast_context = WastContext::new(store);
+    let mut wast_context = WastContext::new(fuzz_config.to_store());
     wast_context.register_spectest().unwrap();
     wast_context
         .run_buffer(test.file, test.contents.as_bytes())
@@ -505,32 +415,23 @@ pub fn spectest(fuzz_config: crate::generators::Config, test: crate::generators:
 }
 
 /// Execute a series of `table.get` and `table.set` operations.
-pub fn table_ops(
-    fuzz_config: crate::generators::Config,
-    ops: crate::generators::table_ops::TableOps,
-) {
+pub fn table_ops(fuzz_config: generators::Config, ops: generators::table_ops::TableOps) {
     let _ = env_logger::try_init();
 
     let expected_drops = Arc::new(AtomicUsize::new(ops.num_params() as usize));
     let num_dropped = Arc::new(AtomicUsize::new(0));
 
     {
-        let mut config = fuzz_config.to_wasmtime();
-        config.wasm_reference_types(true);
-        config.consume_fuel(true);
-
-        let engine = Engine::new(&config).unwrap();
-        let mut store = create_store(&engine);
-        store.add_fuel(100).unwrap();
+        let mut store = fuzz_config.to_store();
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
-        let module = match Module::new(&engine, &wasm) {
+        let module = match Module::new(store.engine(), &wasm) {
             Ok(m) => m,
             Err(_) => return,
         };
 
-        let mut linker = Linker::new(&engine);
+        let mut linker = Linker::new(store.engine());
 
         // To avoid timeouts, limit the number of explicit GCs we perform per
         // test case.
@@ -648,70 +549,6 @@ pub fn table_ops(
     }
 }
 
-/// Configuration options for wasm-smith such that generated modules always
-/// conform to certain specifications: one exported function, one exported
-/// memory.
-#[derive(Default, Debug, Arbitrary, Clone)]
-pub struct SingleFunctionModuleConfig<const SIMD: bool, const BULK: bool>;
-
-impl<const SIMD: bool, const BULK: bool> wasm_smith::Config
-    for SingleFunctionModuleConfig<SIMD, BULK>
-{
-    fn allow_start_export(&self) -> bool {
-        false
-    }
-
-    fn min_types(&self) -> usize {
-        1
-    }
-
-    fn min_funcs(&self) -> usize {
-        1
-    }
-
-    fn max_funcs(&self) -> usize {
-        1
-    }
-
-    fn min_memories(&self) -> u32 {
-        1
-    }
-
-    fn max_memories(&self) -> usize {
-        1
-    }
-
-    fn max_imports(&self) -> usize {
-        0
-    }
-
-    fn min_exports(&self) -> usize {
-        2
-    }
-
-    fn max_memory_pages(&self, _is_64: bool) -> u64 {
-        1
-    }
-
-    fn memory_max_size_required(&self) -> bool {
-        true
-    }
-
-    // NaN is canonicalized at the wasm level for differential fuzzing so we
-    // can paper over NaN differences between engines.
-    fn canonicalize_nans(&self) -> bool {
-        true
-    }
-
-    fn simd_enabled(&self) -> bool {
-        SIMD
-    }
-
-    fn bulk_memory_enabled(&self) -> bool {
-        BULK
-    }
-}
-
 /// Perform differential execution between Cranelift and wasmi, diffing the
 /// resulting memory image when execution terminates. This relies on the
 /// module-under-test to be instrumented to bound the execution time. Invoke
@@ -720,7 +557,7 @@ impl<const SIMD: bool, const BULK: bool> wasm_smith::Config
 ///
 /// May return `None` if we early-out due to a rejected fuzz config; these
 /// should be rare if modules are generated appropriately.
-pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
+pub fn differential_wasmi_execution(wasm: &[u8], config: &generators::Config) -> Option<()> {
     crate::init_fuzzing();
     log_wasm(wasm);
 
@@ -810,7 +647,7 @@ pub fn differential_wasmi_execution(wasm: &[u8], config: &crate::generators::Con
 /// specification interpreter.
 ///
 /// May return `None` if we early-out due to a rejected fuzz config.
-pub fn differential_spec_execution(wasm: &[u8], config: &crate::generators::Config) -> Option<()> {
+pub fn differential_spec_execution(wasm: &[u8], config: &generators::Config) -> Option<()> {
     crate::init_fuzzing();
     debug!("config: {:#?}", config);
     log_wasm(wasm);
@@ -887,20 +724,10 @@ pub fn differential_spec_execution(wasm: &[u8], config: &crate::generators::Conf
 
 fn differential_store(
     wasm: &[u8],
-    fuzz_config: &crate::generators::Config,
+    fuzz_config: &generators::Config,
 ) -> (Module, Store<StoreLimits>) {
-    let mut config = fuzz_config.to_wasmtime();
-    // forcibly disable NaN canonicalization because wasm-smith has already
-    // been configured to canonicalize everything at the wasm level.
-    config.cranelift_nan_canonicalization(false);
-    let engine = Engine::new(&config).unwrap();
-    let mut store = create_store(&engine);
-    if fuzz_config.consume_fuel {
-        store.add_fuel(u64::max_value()).unwrap();
-    }
-
-    let module = Module::new(&engine, &wasm).expect("Wasmtime can compile module");
-
+    let store = fuzz_config.to_store();
+    let module = Module::new(store.engine(), &wasm).expect("Wasmtime can compile module");
     (module, store)
 }
 
@@ -908,7 +735,7 @@ fn differential_store(
 /// its `Val` results.
 fn run_in_wasmtime(
     wasm: &[u8],
-    config: &crate::generators::Config,
+    config: &generators::Config,
     params: &[Val],
 ) -> anyhow::Result<Vec<Val>> {
     // Instantiate wasmtime module and instance.
