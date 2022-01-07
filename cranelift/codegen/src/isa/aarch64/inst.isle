@@ -1421,6 +1421,13 @@
             (_ Unit (emit (MInst.VecRRR op dst src1 src2 size))))
         (writable_reg_to_reg dst)))
 
+;; Helper for emitting `MInst.VecLanes` instructions.
+(decl vec_lanes (VecLanesOp Reg VectorSize) Reg)
+(rule (vec_lanes op src size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.VecLanes op dst src size))))
+        (writable_reg_to_reg dst)))
+
 ;; Helper for emitting `MInst.VecDup` instructions.
 (decl vec_dup (Reg VectorSize) Reg)
 (rule (vec_dup src size)
@@ -1541,6 +1548,21 @@
 (rule (vec_rr_long op src high_half)
       (let ((dst WritableReg (temp_writable_reg $I8X16))
             (_ Unit (emit (MInst.VecRRLong op dst src high_half))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.MovToFpu` instructions.
+(decl mov_to_fpu (Reg ScalarSize) Reg)
+(rule (mov_to_fpu x size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_ Unit (emit (MInst.MovToFpu dst x size))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.MovToVec` instructions.
+(decl mov_to_vec (Reg Reg u8 VectorSize) Reg)
+(rule (mov_to_vec src1 src2 lane size)
+      (let ((dst WritableReg (temp_writable_reg $I8X16))
+            (_1 Unit (emit (MInst.FpuMove128 dst src1)))
+            (_2 Unit (emit (MInst.MovToVec dst src2 lane size))))
         (writable_reg_to_reg dst)))
 
 ;; Helper for emitting `MInst.MovFromVec` instructions.
@@ -1745,6 +1767,10 @@
 (decl addp (Reg Reg VectorSize) Reg)
 (rule (addp x y size) (vec_rrr (VecALUOp.Addp) x y size))
 
+;; Helper for generating `addv` instructions.
+(decl addv (Reg VectorSize) Reg)
+(rule (addv x size) (vec_lanes (VecLanesOp.Addv) x size))
+
 ;; Helper for generating `shll32` instructions.
 (decl shll32 (Reg bool) Reg)
 (rule (shll32 x high_half) (vec_rr_long (VecRRLongOp.Shll32) x high_half))
@@ -1930,6 +1956,11 @@
 
 (decl eon64 (Reg Reg) Reg)
 (rule (eon64 x y) (alu_rrr (ALUOp.EorNot64) x y))
+
+;; Helpers for generating `cnt` instructions.
+
+(decl vec_cnt (Reg VectorSize) Reg)
+(rule (vec_cnt x size) (vec_misc (VecMisc2.Cnt) x size))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -1129,3 +1129,67 @@
           ))
         )
         (value_regs (add64 maybe_lo hi_cls) (imm $I64 0))))
+
+;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The implementation of `popcnt` for scalar types is done by moving the value
+;; into a vector register, using the `cnt` instruction, and then collating the
+;; result back into a normal register.
+;;
+;; The general sequence emitted here is
+;;
+;;     fmov tmp, in_lo
+;;     if ty == i128:
+;;         mov tmp.d[1], in_hi
+;;
+;;     cnt tmp.16b, tmp.16b / cnt tmp.8b, tmp.8b
+;;     addv tmp, tmp.16b / addv tmp, tmp.8b / addp tmp.8b, tmp.8b, tmp.8b / (no instruction for 8-bit inputs)
+;;
+;;     umov out_lo, tmp.b[0]
+;;     if ty == i128:
+;;         mov out_hi, 0
+
+(rule (lower (has_type $I8 (popcnt x)))
+      (let (
+          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size32)))
+          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+        )
+        (value_reg (mov_from_vec nbits 0 (VectorSize.Size8x16)))))
+
+;; Note that this uses `addp` instead of `addv` as it's usually cheaper.
+(rule (lower (has_type $I16 (popcnt x)))
+      (let (
+          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size32)))
+          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+          (added Reg (addp nbits nbits (VectorSize.Size8x8)))
+        )
+        (value_reg (mov_from_vec added 0 (VectorSize.Size8x16)))))
+
+(rule (lower (has_type $I32 (popcnt x)))
+      (let (
+          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size32)))
+          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+          (added Reg (addv nbits (VectorSize.Size8x8)))
+        )
+        (value_reg (mov_from_vec added 0 (VectorSize.Size8x16)))))
+
+(rule (lower (has_type $I64 (popcnt x)))
+      (let (
+          (tmp Reg (mov_to_fpu (put_in_reg x) (ScalarSize.Size64)))
+          (nbits Reg (vec_cnt tmp (VectorSize.Size8x8)))
+          (added Reg (addv nbits (VectorSize.Size8x8)))
+        )
+        (value_reg (mov_from_vec added 0 (VectorSize.Size8x16)))))
+
+(rule (lower (has_type $I128 (popcnt x)))
+      (let (
+          (val ValueRegs (put_in_regs x))
+          (tmp_half Reg (mov_to_fpu (value_regs_get val 0) (ScalarSize.Size64)))
+          (tmp Reg (mov_to_vec tmp_half (value_regs_get val 1) 1 (VectorSize.Size64x2)))
+          (nbits Reg (vec_cnt tmp (VectorSize.Size8x16)))
+          (added Reg (addv nbits (VectorSize.Size8x16)))
+        )
+        (value_regs (mov_from_vec added 0 (VectorSize.Size8x16)) (imm $I64 0))))
+
+(rule (lower (has_type $I8X16 (popcnt x)))
+      (value_reg (vec_cnt (put_in_reg x) (VectorSize.Size8x16))))
