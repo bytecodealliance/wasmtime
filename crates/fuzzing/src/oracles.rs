@@ -28,7 +28,9 @@ mod v8;
 
 static CNT: AtomicUsize = AtomicUsize::new(0);
 
-fn log_wasm(wasm: &[u8]) {
+/// Logs a wasm file to the filesystem to make it easy to figure out what wasm
+/// was used when debugging.
+pub fn log_wasm(wasm: &[u8]) {
     super::init_fuzzing();
 
     if !log::log_enabled!(log::Level::Debug) {

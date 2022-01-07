@@ -6,5 +6,7 @@ use wasmtime_fuzzing::wasm_smith::MaybeInvalidModule;
 
 fuzz_target!(|module: MaybeInvalidModule| {
     let engine = Engine::default();
-    drop(Module::new(&engine, &module.to_bytes()));
+    let wasm = module.to_bytes();
+    wasmtime_fuzzing::oracles::log_wasm(&wasm);
+    drop(Module::new(&engine, &wasm));
 });
