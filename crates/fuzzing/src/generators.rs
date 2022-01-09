@@ -58,7 +58,7 @@ pub struct WasmtimeConfig {
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,
-    consume_fuel: bool,
+    pub(crate) consume_fuel: bool,
     memory_config: MemoryConfig,
     force_jump_veneers: bool,
 }
