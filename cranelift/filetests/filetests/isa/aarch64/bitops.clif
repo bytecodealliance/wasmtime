@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -8,9 +8,15 @@ block0(v0: i8):
     return v1
 }
 
-; check: rbit w0, w0
-; nextln: lsr w0, w0, #24
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   rbit w0, w0
+;   Inst 1:   lsr w0, w0, #24
+;   Inst 2:   ret
+; }}
 
 function %a(i16) -> i16 {
 block0(v0: i16):
@@ -18,9 +24,15 @@ block0(v0: i16):
     return v1
 }
 
-; check: rbit w0, w0
-; nextln: lsr w0, w0, #16
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   rbit w0, w0
+;   Inst 1:   lsr w0, w0, #16
+;   Inst 2:   ret
+; }}
 
 function %a(i32) -> i32 {
 block0(v0: i32):
@@ -28,8 +40,14 @@ block0(v0: i32):
     return v1
 }
 
-; check: rbit w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   rbit w0, w0
+;   Inst 1:   ret
+; }}
 
 function %a(i64) -> i64 {
 block0(v0: i64):
@@ -37,8 +55,14 @@ block0(v0: i64):
     return v1
 }
 
-; check: rbit x0, x0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   rbit x0, x0
+;   Inst 1:   ret
+; }}
 
 function %a(i128) -> i128 {
 block0(v0: i128):
@@ -46,10 +70,16 @@ block0(v0: i128):
     return v1
 }
 
-; check: rbit x2, x0
-; nextln: rbit x0, x1
-; nextln: mov x1, x2
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   rbit x2, x0
+;   Inst 1:   rbit x0, x1
+;   Inst 2:   mov x1, x2
+;   Inst 3:   ret
+; }}
 
 function %b(i8) -> i8 {
 block0(v0: i8):
@@ -57,10 +87,16 @@ block0(v0: i8):
     return v1
 }
 
-; check: uxtb w0, w0
-; nextln: clz w0, w0
-; nextln: sub w0, w0, #24
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   clz w0, w0
+;   Inst 2:   sub w0, w0, #24
+;   Inst 3:   ret
+; }}
 
 function %b(i16) -> i16 {
 block0(v0: i16):
@@ -68,10 +104,16 @@ block0(v0: i16):
     return v1
 }
 
-; check: uxth w0, w0
-; nextln: clz w0, w0
-; nextln: sub w0, w0, #16
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   uxth w0, w0
+;   Inst 1:   clz w0, w0
+;   Inst 2:   sub w0, w0, #16
+;   Inst 3:   ret
+; }}
 
 function %b(i32) -> i32 {
 block0(v0: i32):
@@ -79,8 +121,14 @@ block0(v0: i32):
     return v1
 }
 
-; check: clz w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   clz w0, w0
+;   Inst 1:   ret
+; }}
 
 function %b(i64) -> i64 {
 block0(v0: i64):
@@ -88,8 +136,14 @@ block0(v0: i64):
     return v1
 }
 
-; check: clz x0, x0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   clz x0, x0
+;   Inst 1:   ret
+; }}
 
 function %b(i128) -> i128 {
 block0(v0: i128):
@@ -97,12 +151,18 @@ block0(v0: i128):
     return v1
 }
 
-; check: clz x1, x1
-; nextln: clz x0, x0
-; nextln: lsr x2, x1, #6
-; nextln: madd x0, x0, x2, x1
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   clz x1, x1
+;   Inst 1:   clz x0, x0
+;   Inst 2:   lsr x2, x1, #6
+;   Inst 3:   madd x0, x0, x2, x1
+;   Inst 4:   movz x1, #0
+;   Inst 5:   ret
+; }}
 
 function %c(i8) -> i8 {
 block0(v0: i8):
@@ -110,10 +170,16 @@ block0(v0: i8):
     return v1
 }
 
-; check: uxtb w0, w0
-; nextln: cls w0, w0
-; nextln: sub w0, w0, #24
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   cls w0, w0
+;   Inst 2:   sub w0, w0, #24
+;   Inst 3:   ret
+; }}
 
 function %c(i16) -> i16 {
 block0(v0: i16):
@@ -121,10 +187,16 @@ block0(v0: i16):
     return v1
 }
 
-; check: uxth w0, w0
-; nextln: cls w0, w0
-; nextln: sub w0, w0, #16
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   uxth w0, w0
+;   Inst 1:   cls w0, w0
+;   Inst 2:   sub w0, w0, #16
+;   Inst 3:   ret
+; }}
 
 function %c(i32) -> i32 {
 block0(v0: i32):
@@ -132,8 +204,14 @@ block0(v0: i32):
     return v1
 }
 
-; check: cls w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   cls w0, w0
+;   Inst 1:   ret
+; }}
 
 function %c(i64) -> i64 {
 block0(v0: i64):
@@ -141,8 +219,14 @@ block0(v0: i64):
     return v1
 }
 
-; check: cls x0, x0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   cls x0, x0
+;   Inst 1:   ret
+; }}
 
 function %c(i128) -> i128 {
 block0(v0: i128):
@@ -150,16 +234,22 @@ block0(v0: i128):
     return v1
 }
 
-; check: cls x2, x0
-; nextln: cls x3, x1
-; nextln: eon x0, x1, x0
-; nextln: lsr x0, x0, #63
-; nextln: madd x0, x2, x0, x0
-; nextln: subs xzr, x3, #63
-; nextln: csel x0, x0, xzr, eq
-; nextln: add x0, x0, x3
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   cls x2, x0
+;   Inst 1:   cls x3, x1
+;   Inst 2:   eon x0, x1, x0
+;   Inst 3:   lsr x0, x0, #63
+;   Inst 4:   madd x0, x2, x0, x0
+;   Inst 5:   subs xzr, x3, #63
+;   Inst 6:   csel x0, x0, xzr, eq
+;   Inst 7:   add x0, x0, x3
+;   Inst 8:   movz x1, #0
+;   Inst 9:   ret
+; }}
 
 function %d(i8) -> i8 {
 block0(v0: i8):
@@ -167,10 +257,16 @@ block0(v0: i8):
     return v1
 }
 
-; check: rbit w0, w0
-; nextln: orr w0, w0, #8388608
-; nextln: clz w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   rbit w0, w0
+;   Inst 1:   orr w0, w0, #8388608
+;   Inst 2:   clz w0, w0
+;   Inst 3:   ret
+; }}
 
 function %d(i16) -> i16 {
 block0(v0: i16):
@@ -178,10 +274,16 @@ block0(v0: i16):
     return v1
 }
 
-; check: rbit w0, w0
-; nextln: orr w0, w0, #32768
-; nextln: clz w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   rbit w0, w0
+;   Inst 1:   orr w0, w0, #32768
+;   Inst 2:   clz w0, w0
+;   Inst 3:   ret
+; }}
 
 function %d(i32) -> i32 {
 block0(v0: i32):
@@ -189,9 +291,15 @@ block0(v0: i32):
     return v1
 }
 
-; check: rbit w0, w0
-; nextln: clz w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   rbit w0, w0
+;   Inst 1:   clz w0, w0
+;   Inst 2:   ret
+; }}
 
 function %d(i64) -> i64 {
 block0(v0: i64):
@@ -199,9 +307,15 @@ block0(v0: i64):
     return v1
 }
 
-; check: rbit x0, x0
-; nextln: clz x0, x0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   rbit x0, x0
+;   Inst 1:   clz x0, x0
+;   Inst 2:   ret
+; }}
 
 function %d(i128) -> i128 {
 block0(v0: i128):
@@ -209,14 +323,20 @@ block0(v0: i128):
     return v1
 }
 
-; check: rbit x0, x0
-; nextln: rbit x1, x1
-; nextln: clz x0, x0
-; nextln: clz x1, x1
-; nextln: lsr x2, x0, #6
-; nextln: madd x0, x1, x2, x0
-; nextln: movz x1, #0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 8)
+;   Inst 0:   rbit x0, x0
+;   Inst 1:   rbit x1, x1
+;   Inst 2:   clz x0, x0
+;   Inst 3:   clz x1, x1
+;   Inst 4:   lsr x2, x0, #6
+;   Inst 5:   madd x0, x1, x2, x0
+;   Inst 6:   movz x1, #0
+;   Inst 7:   ret
+; }}
 
 function %d(i128) -> i128 {
 block0(v0: i128):
@@ -224,14 +344,19 @@ block0(v0: i128):
     return v1
 }
 
-; check: fmov d0, x0
-; nextln: mov v0.d[1], x1
-; nextln: cnt v0.16b, v0.16b
-; nextln: addv b0, v0.16b
-; nextln: umov w0, v0.b[0]
-; nextln: movz x1, #0
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   fmov d0, x0
+;   Inst 1:   mov v0.d[1], x1
+;   Inst 2:   cnt v0.16b, v0.16b
+;   Inst 3:   addv b0, v0.16b
+;   Inst 4:   umov w0, v0.b[0]
+;   Inst 5:   movz x1, #0
+;   Inst 6:   ret
+; }}
 
 function %d(i64) -> i64 {
 block0(v0: i64):
@@ -239,11 +364,17 @@ block0(v0: i64):
     return v1
 }
 
-; check: fmov d0, x0
-; nextln: cnt v0.8b, v0.8b
-; nextln: addv b0, v0.8b
-; nextln: umov w0, v0.b[0]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 5)
+;   Inst 0:   fmov d0, x0
+;   Inst 1:   cnt v0.8b, v0.8b
+;   Inst 2:   addv b0, v0.8b
+;   Inst 3:   umov w0, v0.b[0]
+;   Inst 4:   ret
+; }}
 
 function %d(i32) -> i32 {
 block0(v0: i32):
@@ -251,11 +382,17 @@ block0(v0: i32):
     return v1
 }
 
-; check: fmov s0, w0
-; nextln: cnt v0.8b, v0.8b
-; nextln: addv b0, v0.8b
-; nextln: umov w0, v0.b[0]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 5)
+;   Inst 0:   fmov s0, w0
+;   Inst 1:   cnt v0.8b, v0.8b
+;   Inst 2:   addv b0, v0.8b
+;   Inst 3:   umov w0, v0.b[0]
+;   Inst 4:   ret
+; }}
 
 function %d(i16) -> i16 {
 block0(v0: i16):
@@ -263,11 +400,17 @@ block0(v0: i16):
     return v1
 }
 
-; check: fmov s0, w0
-; nextln: cnt v0.8b, v0.8b
-; nextln: addp v0.8b, v0.8b, v0.8b
-; nextln: umov w0, v0.b[0]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 5)
+;   Inst 0:   fmov s0, w0
+;   Inst 1:   cnt v0.8b, v0.8b
+;   Inst 2:   addp v0.8b, v0.8b, v0.8b
+;   Inst 3:   umov w0, v0.b[0]
+;   Inst 4:   ret
+; }}
 
 function %d(i8) -> i8 {
 block0(v0: i8):
@@ -275,10 +418,16 @@ block0(v0: i8):
     return v1
 }
 
-; check: fmov s0, w0
-; nextln: cnt v0.8b, v0.8b
-; nextln: umov w0, v0.b[0]
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   fmov s0, w0
+;   Inst 1:   cnt v0.8b, v0.8b
+;   Inst 2:   umov w0, v0.b[0]
+;   Inst 3:   ret
+; }}
 
 function %bextend_b8() -> b32 {
 block0:
@@ -287,9 +436,15 @@ block0:
     return v2
 }
 
-; check: movz x0, #255
-; nextln: sxtb w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   movz x0, #255
+;   Inst 1:   sxtb w0, w0
+;   Inst 2:   ret
+; }}
 
 function %bextend_b1() -> b32 {
 block0:
@@ -298,9 +453,15 @@ block0:
     return v2
 }
 
-; check: movz x0, #1
-; nextln: sbfx w0, w0, #0, #1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   movz x0, #1
+;   Inst 1:   sbfx w0, w0, #0, #1
+;   Inst 2:   ret
+; }}
 
 function %bnot_i32(i32) -> i32 {
 block0(v0: i32):
@@ -308,8 +469,14 @@ block0(v0: i32):
     return v1
 }
 
-; check: orn w0, wzr, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orn w0, wzr, w0
+;   Inst 1:   ret
+; }}
 
 function %bnot_i64(i64) -> i64 {
 block0(v0: i64):
@@ -317,8 +484,14 @@ block0(v0: i64):
     return v1
 }
 
-; check: orn x0, xzr, x0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orn x0, xzr, x0
+;   Inst 1:   ret
+; }}
 
 function %bnot_i64_with_shift(i64) -> i64 {
 block0(v0: i64):
@@ -328,8 +501,14 @@ block0(v0: i64):
     return v3
 }
 
-; check:  orn x0, xzr, x0, LSL 3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orn x0, xzr, x0, LSL 3
+;   Inst 1:   ret
+; }}
 
 function %bnot_i128(i128) -> i128 {
 block0(v0: i128):
@@ -337,9 +516,15 @@ block0(v0: i128):
     return v1
 }
 
-; check: orn x0, xzr, x0
-; nextln: orn x1, xzr, x1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   orn x0, xzr, x0
+;   Inst 1:   orn x1, xzr, x1
+;   Inst 2:   ret
+; }}
 
 function %bnot_i8x16(i8x16) -> i8x16 {
 block0(v0: i8x16):
@@ -347,8 +532,14 @@ block0(v0: i8x16):
     return v1
 }
 
-; check: mvn v0.16b, v0.16b
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   mvn v0.16b, v0.16b
+;   Inst 1:   ret
+; }}
 
 function %band_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -356,8 +547,14 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-; check: and w0, w0, w1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   and w0, w0, w1
+;   Inst 1:   ret
+; }}
 
 function %band_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -365,8 +562,14 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; check: and x0, x0, x1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   and x0, x0, x1
+;   Inst 1:   ret
+; }}
 
 function %band_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -374,9 +577,15 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check: and x0, x0, x2
-; nextln: and x1, x1, x3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   and x0, x0, x2
+;   Inst 1:   and x1, x1, x3
+;   Inst 2:   ret
+; }}
 
 function %band_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -384,8 +593,14 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
-; check: and v0.16b, v0.16b, v1.16b
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   and v0.16b, v0.16b, v1.16b
+;   Inst 1:   ret
+; }}
 
 function %band_i64_constant(i64) -> i64 {
 block0(v0: i64):
@@ -394,8 +609,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: and x0, x0, #3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   and x0, x0, #3
+;   Inst 1:   ret
+; }}
 
 function %band_i64_constant2(i64) -> i64 {
 block0(v0: i64):
@@ -404,8 +625,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: and x0, x0, #3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   and x0, x0, #3
+;   Inst 1:   ret
+; }}
 
 function %band_i64_constant_shift(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -415,6 +642,15 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   and x0, x0, x1, LSL 3
+;   Inst 1:   ret
+; }}
+
 function %band_i64_constant_shift2(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
     v2 = iconst.i64 3
@@ -423,8 +659,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: and x0, x0, x1, LSL 3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   and x0, x0, x1, LSL 3
+;   Inst 1:   ret
+; }}
 
 function %bor_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -432,8 +674,14 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-; check: orr w0, w0, w1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orr w0, w0, w1
+;   Inst 1:   ret
+; }}
 
 function %bor_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -441,8 +689,14 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; check: orr x0, x0, x1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orr x0, x0, x1
+;   Inst 1:   ret
+; }}
 
 function %bor_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -450,9 +704,15 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check: orr x0, x0, x2
-; nextln: orr x1, x1, x3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   orr x0, x0, x2
+;   Inst 1:   orr x1, x1, x3
+;   Inst 2:   ret
+; }}
 
 function %bor_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -460,8 +720,14 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
-; check: orr v0.16b, v0.16b, v1.16b
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orr v0.16b, v0.16b, v1.16b
+;   Inst 1:   ret
+; }}
 
 function %bor_i64_constant(i64) -> i64 {
 block0(v0: i64):
@@ -470,8 +736,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: orr x0, x0, #3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orr x0, x0, #3
+;   Inst 1:   ret
+; }}
 
 function %bor_i64_constant2(i64) -> i64 {
 block0(v0: i64):
@@ -480,8 +752,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: orr x0, x0, #3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orr x0, x0, #3
+;   Inst 1:   ret
+; }}
 
 function %bor_i64_constant_shift(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -491,8 +769,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: orr x0, x0, x1, LSL 3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orr x0, x0, x1, LSL 3
+;   Inst 1:   ret
+; }}
 
 function %bor_i64_constant_shift2(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -502,8 +786,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: orr x0, x0, x1, LSL 3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orr x0, x0, x1, LSL 3
+;   Inst 1:   ret
+; }}
 
 function %bxor_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -511,8 +801,14 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-; check: eor w0, w0, w1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eor w0, w0, w1
+;   Inst 1:   ret
+; }}
 
 function %bxor_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -520,8 +816,14 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; check: eor x0, x0, x1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eor x0, x0, x1
+;   Inst 1:   ret
+; }}
 
 function %bxor_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -529,9 +831,15 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check: eor x0, x0, x2
-; nextln: eor x1, x1, x3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   eor x0, x0, x2
+;   Inst 1:   eor x1, x1, x3
+;   Inst 2:   ret
+; }}
 
 function %bxor_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -539,8 +847,14 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
-; check: eor v0.16b, v0.16b, v1.16b
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eor v0.16b, v0.16b, v1.16b
+;   Inst 1:   ret
+; }}
 
 function %bxor_i64_constant(i64) -> i64 {
 block0(v0: i64):
@@ -549,8 +863,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: eor x0, x0, #3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eor x0, x0, #3
+;   Inst 1:   ret
+; }}
 
 function %bxor_i64_constant2(i64) -> i64 {
 block0(v0: i64):
@@ -559,8 +879,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: eor x0, x0, #3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eor x0, x0, #3
+;   Inst 1:   ret
+; }}
 
 function %bxor_i64_constant_shift(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -570,8 +896,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: eor x0, x0, x1, LSL 3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eor x0, x0, x1, LSL 3
+;   Inst 1:   ret
+; }}
 
 function %bxor_i64_constant_shift2(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -581,8 +913,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: eor x0, x0, x1, LSL 3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eor x0, x0, x1, LSL 3
+;   Inst 1:   ret
+; }}
 
 function %band_not_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -590,8 +928,14 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-; check: bic w0, w0, w1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   bic w0, w0, w1
+;   Inst 1:   ret
+; }}
 
 function %band_not_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -599,8 +943,14 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; check: bic x0, x0, x1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   bic x0, x0, x1
+;   Inst 1:   ret
+; }}
 
 function %band_not_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -608,9 +958,15 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check: bic x0, x0, x2
-; nextln: bic x1, x1, x3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   bic x0, x0, x2
+;   Inst 1:   bic x1, x1, x3
+;   Inst 2:   ret
+; }}
 
 function %band_not_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):
@@ -618,8 +974,14 @@ block0(v0: i8x16, v1: i8x16):
     return v2
 }
 
-; check: bic v0.16b, v0.16b, v1.16b
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   bic v0.16b, v0.16b, v1.16b
+;   Inst 1:   ret
+; }}
 
 function %band_not_i64_constant(i64) -> i64 {
 block0(v0: i64):
@@ -628,8 +990,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: bic x0, x0, #4
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   bic x0, x0, #4
+;   Inst 1:   ret
+; }}
 
 function %band_not_i64_constant_shift(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -639,8 +1007,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: bic x0, x0, x1, LSL 4
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   bic x0, x0, x1, LSL 4
+;   Inst 1:   ret
+; }}
 
 function %bor_not_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -648,8 +1022,14 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-; check: orn w0, w0, w1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orn w0, w0, w1
+;   Inst 1:   ret
+; }}
 
 function %bor_not_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -657,8 +1037,14 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; check: orn x0, x0, x1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orn x0, x0, x1
+;   Inst 1:   ret
+; }}
 
 function %bor_not_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -666,9 +1052,15 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check: orn x0, x0, x2
-; nextln: orn x1, x1, x3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   orn x0, x0, x2
+;   Inst 1:   orn x1, x1, x3
+;   Inst 2:   ret
+; }}
 
 function %bor_not_i64_constant(i64) -> i64 {
 block0(v0: i64):
@@ -677,8 +1069,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: orn x0, x0, #4
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orn x0, x0, #4
+;   Inst 1:   ret
+; }}
 
 function %bor_not_i64_constant_shift(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -688,8 +1086,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: orn x0, x0, x1, LSL 4
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   orn x0, x0, x1, LSL 4
+;   Inst 1:   ret
+; }}
 
 function %bxor_not_i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -697,8 +1101,14 @@ block0(v0: i32, v1: i32):
     return v2
 }
 
-; check: eon w0, w0, w1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eon w0, w0, w1
+;   Inst 1:   ret
+; }}
 
 function %bxor_not_i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -706,8 +1116,14 @@ block0(v0: i64, v1: i64):
     return v2
 }
 
-; check: eon x0, x0, x1
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eon x0, x0, x1
+;   Inst 1:   ret
+; }}
 
 function %bxor_not_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -715,9 +1131,15 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check: eon x0, x0, x2
-; nextln: eon x1, x1, x3
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   eon x0, x0, x2
+;   Inst 1:   eon x1, x1, x3
+;   Inst 2:   ret
+; }}
 
 function %bxor_not_i64_constant(i64) -> i64 {
 block0(v0: i64):
@@ -726,8 +1148,14 @@ block0(v0: i64):
     return v2
 }
 
-; check: eon x0, x0, #4
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eon x0, x0, #4
+;   Inst 1:   ret
+; }}
 
 function %bxor_not_i64_constant_shift(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -737,8 +1165,14 @@ block0(v0: i64, v1: i64):
     return v4
 }
 
-; check: eon x0, x0, x1, LSL 4
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   eon x0, x0, x1, LSL 4
+;   Inst 1:   ret
+; }}
 
 function %ishl_i128_i8(i128, i8) -> i128 {
 block0(v0: i128, v1: i8):
@@ -746,17 +1180,22 @@ block0(v0: i128, v1: i8):
     return v2
 }
 
-; check:  lsl x4, x0, x2
-; nextln: lsl x3, x1, x2
-; nextln: orn w1, wzr, w2
-; nextln: lsr x0, x0, #1
-; nextln: lsr x0, x0, x1
-; nextln: orr x0, x3, x0
-; nextln: ands xzr, x2, #64
-; nextln: csel x1, x4, x0, ne
-; nextln: csel x0, xzr, x4, ne
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   lsl x4, x0, x2
+;   Inst 1:   lsl x3, x1, x2
+;   Inst 2:   orn w1, wzr, w2
+;   Inst 3:   lsr x0, x0, #1
+;   Inst 4:   lsr x0, x0, x1
+;   Inst 5:   orr x0, x3, x0
+;   Inst 6:   ands xzr, x2, #64
+;   Inst 7:   csel x1, x4, x0, ne
+;   Inst 8:   csel x0, xzr, x4, ne
+;   Inst 9:   ret
+; }}
 
 function %ishl_i128_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -764,17 +1203,22 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check:  lsl x3, x0, x2
-; nextln: lsl x1, x1, x2
-; nextln: orn w4, wzr, w2
-; nextln: lsr x0, x0, #1
-; nextln: lsr x0, x0, x4
-; nextln: orr x0, x1, x0
-; nextln: ands xzr, x2, #64
-; nextln: csel x1, x3, x0, ne
-; nextln: csel x0, xzr, x3, ne
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   lsl x3, x0, x2
+;   Inst 1:   lsl x1, x1, x2
+;   Inst 2:   orn w4, wzr, w2
+;   Inst 3:   lsr x0, x0, #1
+;   Inst 4:   lsr x0, x0, x4
+;   Inst 5:   orr x0, x1, x0
+;   Inst 6:   ands xzr, x2, #64
+;   Inst 7:   csel x1, x3, x0, ne
+;   Inst 8:   csel x0, xzr, x3, ne
+;   Inst 9:   ret
+; }}
 
 function %ushr_i128_i8(i128, i8) -> i128 {
 block0(v0: i128, v1: i8):
@@ -782,17 +1226,22 @@ block0(v0: i128, v1: i8):
     return v2
 }
 
-; check:  lsr x3, x0, x2
-; nextln: lsr x0, x1, x2
-; nextln: orn w4, wzr, w2
-; nextln: lsl x1, x1, #1
-; nextln: lsl x1, x1, x4
-; nextln: orr x3, x3, x1
-; nextln: ands xzr, x2, #64
-; nextln: csel x1, xzr, x0, ne
-; nextln: csel x0, x0, x3, ne
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   lsr x3, x0, x2
+;   Inst 1:   lsr x0, x1, x2
+;   Inst 2:   orn w4, wzr, w2
+;   Inst 3:   lsl x1, x1, #1
+;   Inst 4:   lsl x1, x1, x4
+;   Inst 5:   orr x3, x3, x1
+;   Inst 6:   ands xzr, x2, #64
+;   Inst 7:   csel x1, xzr, x0, ne
+;   Inst 8:   csel x0, x0, x3, ne
+;   Inst 9:   ret
+; }}
 
 function %ushr_i128_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -800,17 +1249,22 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check:  lsr x3, x0, x2
-; nextln: lsr x0, x1, x2
-; nextln: orn w4, wzr, w2
-; nextln: lsl x1, x1, #1
-; nextln: lsl x1, x1, x4
-; nextln: orr x3, x3, x1
-; nextln: ands xzr, x2, #64
-; nextln: csel x1, xzr, x0, ne
-; nextln: csel x0, x0, x3, ne
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   lsr x3, x0, x2
+;   Inst 1:   lsr x0, x1, x2
+;   Inst 2:   orn w4, wzr, w2
+;   Inst 3:   lsl x1, x1, #1
+;   Inst 4:   lsl x1, x1, x4
+;   Inst 5:   orr x3, x3, x1
+;   Inst 6:   ands xzr, x2, #64
+;   Inst 7:   csel x1, xzr, x0, ne
+;   Inst 8:   csel x0, x0, x3, ne
+;   Inst 9:   ret
+; }}
 
 function %sshr_i128_i8(i128, i8) -> i128 {
 block0(v0: i128, v1: i8):
@@ -818,18 +1272,23 @@ block0(v0: i128, v1: i8):
     return v2
 }
 
-; check:  lsr x3, x0, x2
-; nextln: asr x0, x1, x2
-; nextln: orn w4, wzr, w2
-; nextln: lsl x5, x1, #1
-; nextln: lsl x4, x5, x4
-; nextln: asr x1, x1, #63
-; nextln: orr x3, x3, x4
-; nextln: ands xzr, x2, #64
-; nextln: csel x1, x1, x0, ne
-; nextln: csel x0, x0, x3, ne
-; nextln: ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   lsr x3, x0, x2
+;   Inst 1:   asr x0, x1, x2
+;   Inst 2:   orn w4, wzr, w2
+;   Inst 3:   lsl x5, x1, #1
+;   Inst 4:   lsl x4, x5, x4
+;   Inst 5:   asr x1, x1, #63
+;   Inst 6:   orr x3, x3, x4
+;   Inst 7:   ands xzr, x2, #64
+;   Inst 8:   csel x1, x1, x0, ne
+;   Inst 9:   csel x0, x0, x3, ne
+;   Inst 10:   ret
+; }}
 
 function %sshr_i128_i128(i128, i128) -> i128 {
 block0(v0: i128, v1: i128):
@@ -837,14 +1296,21 @@ block0(v0: i128, v1: i128):
     return v2
 }
 
-; check:  lsr x3, x0, x2
-; nextln: asr x0, x1, x2
-; nextln: orn w4, wzr, w2
-; nextln: lsl x5, x1, #1
-; nextln: lsl x4, x5, x4
-; nextln: asr x1, x1, #63
-; nextln: orr x3, x3, x4
-; nextln: ands xzr, x2, #64
-; nextln: csel x1, x1, x0, ne
-; nextln: csel x0, x0, x3, ne
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   lsr x3, x0, x2
+;   Inst 1:   asr x0, x1, x2
+;   Inst 2:   orn w4, wzr, w2
+;   Inst 3:   lsl x5, x1, #1
+;   Inst 4:   lsl x4, x5, x4
+;   Inst 5:   asr x1, x1, #63
+;   Inst 6:   orr x3, x3, x4
+;   Inst 7:   ands xzr, x2, #64
+;   Inst 8:   csel x1, x1, x0, ne
+;   Inst 9:   csel x0, x0, x3, ne
+;   Inst 10:   ret
+; }}
+

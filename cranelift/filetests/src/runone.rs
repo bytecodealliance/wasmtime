@@ -2,18 +2,20 @@
 
 use crate::new_subtest;
 use crate::subtest::{Context, SubTest};
-use anyhow::Context as _;
+use anyhow::{bail, Context as _, Result};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::Flags;
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::{parse_test, Feature, IsaSpec, ParseOptions, TestFile};
+use cranelift_reader::{parse_test, Feature, IsaSpec, Location, ParseOptions, TestFile};
 use log::info;
 use std::borrow::Cow;
+use std::cell::Cell;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::str::Lines;
 use std::time;
 
 /// Skip the tests which define features and for which there's a feature mismatch.
@@ -113,6 +115,7 @@ pub fn run(
         Some(t) => t,
     };
 
+    let mut file_update = FileUpdate::new(&path);
     let file_path = path.to_string_lossy();
     for (func, details) in testfile.functions {
         let mut context = Context {
@@ -122,6 +125,7 @@ pub fn run(
             flags,
             isa: None,
             file_path: file_path.as_ref(),
+            file_update: &mut file_update,
         };
 
         for tuple in &tuples {
@@ -186,4 +190,89 @@ fn run_one_test<'a>(
 
     test.run(func, context).context(test.name())?;
     Ok(())
+}
+
+/// A helper struct to update a file in-place as test expectations are
+/// automatically updated.
+///
+/// This structure automatically handles multiple edits to one file. Our edits
+/// are line-based but if editing a previous portion of the file adds lines then
+/// all future edits need to know to skip over those previous lines. Note that
+/// this assumes that edits are done front-to-back.
+pub struct FileUpdate {
+    path: PathBuf,
+    line_diff: Cell<isize>,
+    last_update: Cell<usize>,
+}
+
+impl FileUpdate {
+    fn new(path: &Path) -> FileUpdate {
+        FileUpdate {
+            path: path.to_path_buf(),
+            line_diff: Cell::new(0),
+            last_update: Cell::new(0),
+        }
+    }
+
+    /// Updates the file that this structure references at the `location`
+    /// specified.
+    ///
+    /// The closure `f` is given first a buffer to push the new test into along
+    /// with a lines iterator for the old test.
+    pub fn update_at(
+        &self,
+        location: &Location,
+        f: impl FnOnce(&mut String, &mut Lines<'_>),
+    ) -> Result<()> {
+        // This is required for correctness of this update.
+        assert!(location.line_number > self.last_update.get());
+        self.last_update.set(location.line_number);
+
+        // Read the old test file and calculate thte new line number we're
+        // preserving up to based on how many lines prior to this have been
+        // removed or added.
+        let old_test = std::fs::read_to_string(&self.path)?;
+        let mut new_test = String::new();
+        let mut lines = old_test.lines();
+        let lines_to_preserve =
+            (((location.line_number - 1) as isize) + self.line_diff.get()) as usize;
+
+        // Push everything leading up to the start of the function
+        for _ in 0..lines_to_preserve {
+            new_test.push_str(lines.next().unwrap());
+            new_test.push_str("\n");
+        }
+
+        // Push the whole function, leading up to the trailing `}`
+        let mut first = true;
+        while let Some(line) = lines.next() {
+            if first && !line.starts_with("function") {
+                bail!(
+                    "line {} in test file {:?} did not start with `function`, \
+                     cannot automatically update test",
+                    location.line_number,
+                    self.path,
+                );
+            }
+            first = false;
+            new_test.push_str(line);
+            new_test.push_str("\n");
+            if line.starts_with("}") {
+                break;
+            }
+        }
+
+        // Use our custom update function to further update the test.
+        f(&mut new_test, &mut lines);
+
+        // Record the difference in line count so future updates can be adjusted
+        // accordingly, and then write the file back out to the filesystem.
+        let old_line_count = old_test.lines().count();
+        let new_line_count = new_test.lines().count();
+        self.line_diff
+            .set(self.line_diff.get() + (new_line_count as isize - old_line_count as isize));
+
+        std::fs::write(&self.path, new_test)?;
+        Ok(())
+    }
 }
