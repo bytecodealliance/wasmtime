@@ -415,14 +415,19 @@ pub fn spectest(mut fuzz_config: generators::Config, test: generators::SpecTest)
 }
 
 /// Execute a series of `table.get` and `table.set` operations.
-pub fn table_ops(fuzz_config: generators::Config, ops: generators::table_ops::TableOps) {
-    let _ = env_logger::try_init();
-
+pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops::TableOps) {
     let expected_drops = Arc::new(AtomicUsize::new(ops.num_params() as usize));
     let num_dropped = Arc::new(AtomicUsize::new(0));
 
     {
+        fuzz_config.wasmtime.consume_fuel = true;
         let mut store = fuzz_config.to_store();
+
+        // consume the default fuel in the store ...
+        let remaining = store.consume_fuel(0).unwrap();
+        store.consume_fuel(remaining - 1).unwrap();
+        // ... then add back in how much fuel we're allowing here
+        store.add_fuel(1_000).unwrap();
 
         let wasm = ops.to_wasm_binary();
         log_wasm(&wasm);
