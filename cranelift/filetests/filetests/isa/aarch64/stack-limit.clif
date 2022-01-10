@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -7,12 +7,26 @@ block0:
     return
 }
 
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
+
 function %stack_limit_leaf_zero(i64 stack_limit) {
 block0(v0: i64):
     return
 }
 
-; check:      ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
 
 function %stack_limit_gv_leaf_zero(i64 vmctx) {
     gv0 = vmctx
@@ -23,8 +37,13 @@ block0(v0: i64):
     return
 }
 
-; check:      ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
 
 function %stack_limit_call_zero(i64 stack_limit) {
     fn0 = %foo()
@@ -33,14 +52,20 @@ block0(v0: i64):
     return
 }
 
-; check:      stp fp, lr, [sp, #-16]!
-; nextln:     mov fp, sp
-; nextln:     subs xzr, sp, x0
-; nextln:     b.hs 8 ; udf
-; nextln:     ldr x0
-; nextln:     blr x0
-; nextln:     ldp fp, lr, [sp], #16
-; nextln:     ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 8)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   subs xzr, sp, x0, UXTX
+;   Inst 3:   b.hs 8 ; udf
+;   Inst 4:   ldr x0, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 111, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   Inst 5:   blr x0
+;   Inst 6:   ldp fp, lr, [sp], #16
+;   Inst 7:   ret
+; }}
 
 function %stack_limit_gv_call_zero(i64 vmctx) {
     gv0 = vmctx
@@ -53,17 +78,22 @@ block0(v0: i64):
     return
 }
 
-; check:      stp fp, lr, [sp, #-16]!
-; nextln:     mov fp, sp
-; nextln:     ldur x16, [x0]
-; nextln:     ldur x16, [x16, #4]
-; nextln:     subs xzr, sp, x16
-; nextln:     b.hs 8 ; udf
-; nextln:     ldr x0
-; nextln:     blr x0
-; nextln:     ldp fp, lr, [sp], #16
-; nextln:     ret
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   ldur x16, [x0]
+;   Inst 3:   ldur x16, [x16, #4]
+;   Inst 4:   subs xzr, sp, x16, UXTX
+;   Inst 5:   b.hs 8 ; udf
+;   Inst 6:   ldr x0, 8 ; b 12 ; data TestCase { length: 3, ascii: [102, 111, 111, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] } + 0
+;   Inst 7:   blr x0
+;   Inst 8:   ldp fp, lr, [sp], #16
+;   Inst 9:   ret
+; }}
 
 function %stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 168
@@ -71,15 +101,21 @@ block0(v0: i64):
     return
 }
 
-; check:      stp fp, lr, [sp, #-16]!
-; nextln:     mov fp, sp
-; nextln:     add x16, x0, #176
-; nextln:     subs xzr, sp, x16
-; nextln:     b.hs 8 ; udf
-; nextln:     sub sp, sp, #176
-; nextln:     add sp, sp, #176
-; nextln:     ldp fp, lr, [sp], #16
-; nextln:     ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 9)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   add x16, x0, #176
+;   Inst 3:   subs xzr, sp, x16, UXTX
+;   Inst 4:   b.hs 8 ; udf
+;   Inst 5:   sub sp, sp, #176
+;   Inst 6:   add sp, sp, #176
+;   Inst 7:   ldp fp, lr, [sp], #16
+;   Inst 8:   ret
+; }}
 
 function %huge_stack_limit(i64 stack_limit) {
     ss0 = explicit_slot 400000
@@ -87,23 +123,29 @@ block0(v0: i64):
     return
 }
 
-; check:      stp fp, lr, [sp, #-16]!
-; nextln:     mov fp, sp
-; nextln:     subs xzr, sp, x0
-; nextln:     b.hs 8 ; udf
-; nextln:     movz w17, #6784
-; nextln:     movk w17, #6, LSL #16
-; nextln:     add x16, x0, x17, UXTX
-; nextln:     subs xzr, sp, x16
-; nextln:     b.hs 8 ; udf
-; nextln:     movz w16, #6784
-; nextln:     movk w16, #6, LSL #16
-; nextln:     sub sp, sp, x16, UXTX
-; nextln:     movz w16, #6784
-; nextln:     movk w16, #6, LSL #16
-; nextln:     add sp, sp, x16, UXTX
-; nextln:     ldp fp, lr, [sp], #16
-; nextln:     ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 17)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   subs xzr, sp, x0, UXTX
+;   Inst 3:   b.hs 8 ; udf
+;   Inst 4:   movz w17, #6784
+;   Inst 5:   movk w17, #6, LSL #16
+;   Inst 6:   add x16, x0, x17, UXTX
+;   Inst 7:   subs xzr, sp, x16, UXTX
+;   Inst 8:   b.hs 8 ; udf
+;   Inst 9:   movz w16, #6784
+;   Inst 10:   movk w16, #6, LSL #16
+;   Inst 11:   sub sp, sp, x16, UXTX
+;   Inst 12:   movz w16, #6784
+;   Inst 13:   movk w16, #6, LSL #16
+;   Inst 14:   add sp, sp, x16, UXTX
+;   Inst 15:   ldp fp, lr, [sp], #16
+;   Inst 16:   ret
+; }}
 
 function %limit_preamble(i64 vmctx) {
     gv0 = vmctx
@@ -115,17 +157,23 @@ block0(v0: i64):
     return
 }
 
-; check:      stp fp, lr, [sp, #-16]!
-; nextln:     mov fp, sp
-; nextln:     ldur x16, [x0]
-; nextln:     ldur x16, [x16, #4]
-; nextln:     add x16, x16, #32
-; nextln:     subs xzr, sp, x16
-; nextln:     b.hs 8 ; udf
-; nextln:     sub sp, sp, #32
-; nextln:     add sp, sp, #32
-; nextln:     ldp fp, lr, [sp], #16
-; nextln:     ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   ldur x16, [x0]
+;   Inst 3:   ldur x16, [x16, #4]
+;   Inst 4:   add x16, x16, #32
+;   Inst 5:   subs xzr, sp, x16, UXTX
+;   Inst 6:   b.hs 8 ; udf
+;   Inst 7:   sub sp, sp, #32
+;   Inst 8:   add sp, sp, #32
+;   Inst 9:   ldp fp, lr, [sp], #16
+;   Inst 10:   ret
+; }}
 
 function %limit_preamble_huge(i64 vmctx) {
     gv0 = vmctx
@@ -137,25 +185,31 @@ block0(v0: i64):
     return
 }
 
-; check:      stp fp, lr, [sp, #-16]!
-; nextln:     mov fp, sp
-; nextln:     ldur x16, [x0]
-; nextln:     ldur x16, [x16, #4]
-; nextln:     subs xzr, sp, x16
-; nextln:     b.hs 8 ; udf
-; nextln:     movz w17, #6784
-; nextln:     movk w17, #6, LSL #16
-; nextln:     add x16, x16, x17, UXTX
-; nextln:     subs xzr, sp, x16
-; nextln:     b.hs 8 ; udf
-; nextln:     movz w16, #6784
-; nextln:     movk w16, #6, LSL #16
-; nextln:     sub sp, sp, x16, UXTX
-; nextln:     movz w16, #6784
-; nextln:     movk w16, #6, LSL #16
-; nextln:     add sp, sp, x16, UXTX
-; nextln:     ldp fp, lr, [sp], #16
-; nextln:     ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 19)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   ldur x16, [x0]
+;   Inst 3:   ldur x16, [x16, #4]
+;   Inst 4:   subs xzr, sp, x16, UXTX
+;   Inst 5:   b.hs 8 ; udf
+;   Inst 6:   movz w17, #6784
+;   Inst 7:   movk w17, #6, LSL #16
+;   Inst 8:   add x16, x16, x17, UXTX
+;   Inst 9:   subs xzr, sp, x16, UXTX
+;   Inst 10:   b.hs 8 ; udf
+;   Inst 11:   movz w16, #6784
+;   Inst 12:   movk w16, #6, LSL #16
+;   Inst 13:   sub sp, sp, x16, UXTX
+;   Inst 14:   movz w16, #6784
+;   Inst 15:   movk w16, #6, LSL #16
+;   Inst 16:   add sp, sp, x16, UXTX
+;   Inst 17:   ldp fp, lr, [sp], #16
+;   Inst 18:   ret
+; }}
 
 function %limit_preamble_huge_offset(i64 vmctx) {
     gv0 = vmctx
@@ -166,13 +220,20 @@ block0(v0: i64):
     return
 }
 
-; check:      stp fp, lr, [sp, #-16]!
-; nextln:     mov fp, sp
-; nextln:     movz w16, #6784 ; movk w16, #6, LSL #16 ; add x16, x0, x16, UXTX ; ldr x16, [x16]
-; nextln:     add x16, x16, #32
-; nextln:     subs xzr, sp, x16
-; nextln:     b.hs 8 ; udf
-; nextln:     sub sp, sp, #32
-; nextln:     add sp, sp, #32
-; nextln:     ldp fp, lr, [sp], #16
-; nextln:     ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   stp fp, lr, [sp, #-16]!
+;   Inst 1:   mov fp, sp
+;   Inst 2:   movz w16, #6784 ; movk w16, #6, LSL #16 ; add x16, x0, x16, UXTX ; ldr x16, [x16]
+;   Inst 3:   add x16, x16, #32
+;   Inst 4:   subs xzr, sp, x16, UXTX
+;   Inst 5:   b.hs 8 ; udf
+;   Inst 6:   sub sp, sp, #32
+;   Inst 7:   add sp, sp, #32
+;   Inst 8:   ldp fp, lr, [sp], #16
+;   Inst 9:   ret
+; }}
+

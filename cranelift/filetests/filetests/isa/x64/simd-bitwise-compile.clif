@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set enable_simd
 target x86_64 skylake
 
@@ -7,81 +7,171 @@ block0(v0: f32x4, v1: f32x4):
     v2 = band v0, v1
     return v2
 }
-; check: andps
-; not: andpd
-; not: pand
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   andps   %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %band_f64x2(f64x2, f64x2) -> f64x2 {
 block0(v0: f64x2, v1: f64x2):
     v2 = band v0, v1
     return v2
 }
-; check: andpd
-; not: andps
-; not: pand
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   andpd   %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %band_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = band v0, v1
     return v2
 }
-; check: pand
-; not: andps
-; not: andpd
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pand    %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %bor_f32x4(f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4):
     v2 = bor v0, v1
     return v2
 }
-; check: orps
-; not: orpd
-; not: por
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   orps    %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %bor_f64x2(f64x2, f64x2) -> f64x2 {
 block0(v0: f64x2, v1: f64x2):
     v2 = bor v0, v1
     return v2
 }
-; check: orpd
-; not: orps
-; not: por
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   orpd    %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %bor_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = bor v0, v1
     return v2
 }
-; check: por
-; not: orps
-; not: orpd
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   por     %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %bxor_f32x4(f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4):
     v2 = bxor v0, v1
     return v2
 }
-; check: xorps
-; not: xorpd
-; not: pxor
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   xorps   %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %bxor_f64x2(f64x2, f64x2) -> f64x2 {
 block0(v0: f64x2, v1: f64x2):
     v2 = bxor v0, v1
     return v2
 }
-; check: xorpd
-; not: xorps
-; not: pxor
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   xorpd   %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %bxor_i32x4(i32x4, i32x4) -> i32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = bxor v0, v1
     return v2
 }
-; check: pxor
-; not: xorps
-; not: xorpd
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 6)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pxor    %xmm1, %xmm0
+;   Inst 3:   movq    %rbp, %rsp
+;   Inst 4:   popq    %rbp
+;   Inst 5:   ret
+; }}
 
 function %bitselect_i16x8() -> i16x8 {
 block0:
@@ -91,42 +181,84 @@ block0:
     v3 = bitselect v0, v1, v2
     return v3
 }
-; check:  pand    %xmm0, %xmm1
-; nextln: pandn   %xmm2, %xmm0
-; nextln: por     %xmm1, %xmm0
-; not:    movdqa
 
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   load_const VCodeConstant(0), %xmm0
+;   Inst 3:   load_const VCodeConstant(0), %xmm1
+;   Inst 4:   load_const VCodeConstant(0), %xmm2
+;   Inst 5:   pand    %xmm0, %xmm1
+;   Inst 6:   pandn   %xmm2, %xmm0
+;   Inst 7:   por     %xmm1, %xmm0
+;   Inst 8:   movq    %rbp, %rsp
+;   Inst 9:   popq    %rbp
+;   Inst 10:   ret
+; }}
 
 function %vselect_i16x8(b16x8, i16x8, i16x8) -> i16x8 {
 block0(v0: b16x8, v1: i16x8, v2: i16x8):
     v3 = vselect v0, v1, v2
     return v3
 }
-; check: pblendvb
-; not: blendvps
-; not: blendvpd
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pblendvb %xmm1, %xmm2
+;   Inst 3:   movdqa  %xmm2, %xmm0
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %vselect_f32x4(b32x4, f32x4, f32x4) -> f32x4 {
 block0(v0: b32x4, v1: f32x4, v2: f32x4):
     v3 = vselect v0, v1, v2
     return v3
 }
-; check: blendvps
-; not: pblendvb
-; not: blendvpd
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   blendvps %xmm1, %xmm2
+;   Inst 3:   movdqa  %xmm2, %xmm0
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %vselect_f64x2(b64x2, f64x2, f64x2) -> f64x2 {
 block0(v0: b64x2, v1: f64x2, v2: f64x2):
     v3 = vselect v0, v1, v2
     return v3
 }
-; check: blendvpd
-; not: pblendvb
-; not: blendvps
 
-
-
-; 8x16 shifts: these lower to complex sequences of instructions
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   blendvpd %xmm1, %xmm2
+;   Inst 3:   movdqa  %xmm2, %xmm0
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %ishl_i8x16(i32) -> i8x16 {
 block0(v0: i32):
@@ -134,12 +266,25 @@ block0(v0: i32):
     v2 = ishl v1, v0
     return v2
 }
-; check:  movd    %edi, %xmm1
-; nextln: psllw   %xmm1, %xmm0
-; nextln: lea     const(VCodeConstant(0)), %rsi
-; nextln: shlq    $$4, %rdi
-; nextln: movdqu  0(%rsi,%rdi,1), %xmm1
-; nextln: pand    %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   load_const VCodeConstant(1), %xmm0
+;   Inst 3:   movd    %edi, %xmm1
+;   Inst 4:   psllw   %xmm1, %xmm0
+;   Inst 5:   lea     const(VCodeConstant(0)), %rsi
+;   Inst 6:   shlq    $4, %rdi
+;   Inst 7:   movdqu  0(%rsi,%rdi,1), %xmm1
+;   Inst 8:   pand    %xmm1, %xmm0
+;   Inst 9:   movq    %rbp, %rsp
+;   Inst 10:   popq    %rbp
+;   Inst 11:   ret
+; }}
 
 function %ushr_i8x16_imm() -> i8x16 {
 block0:
@@ -148,10 +293,22 @@ block0:
     v2 = ushr v1, v0
     return v2
 }
-; check:  load_const VCodeConstant(1), %xmm0
-; nextln: psrlw   $$1, %xmm0
-; nextln: movdqu  const(VCodeConstant(0)), %xmm1
-; nextln: pand    %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 9)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   load_const VCodeConstant(1), %xmm0
+;   Inst 3:   psrlw   $1, %xmm0
+;   Inst 4:   movdqu  const(VCodeConstant(0)), %xmm1
+;   Inst 5:   pand    %xmm1, %xmm0
+;   Inst 6:   movq    %rbp, %rsp
+;   Inst 7:   popq    %rbp
+;   Inst 8:   ret
+; }}
 
 function %sshr_i8x16(i32) -> i8x16 {
 block0(v0: i32):
@@ -159,42 +316,79 @@ block0(v0: i32):
     v2 = sshr v1, v0
     return v2
 }
-; check:  addl    $$8, %edi
-; nextln: movd    %edi, %xmm2
-; nextln: movdqa  %xmm0, %xmm1
-; nextln: punpcklbw %xmm1, %xmm1
-; nextln: psraw   %xmm2, %xmm1
-; nextln: punpckhbw %xmm0, %xmm0
-; nextln: psraw   %xmm2, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 15)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   load_const VCodeConstant(0), %xmm0
+;   Inst 3:   addl    $8, %edi
+;   Inst 4:   movd    %edi, %xmm2
+;   Inst 5:   movdqa  %xmm0, %xmm1
+;   Inst 6:   punpcklbw %xmm1, %xmm1
+;   Inst 7:   psraw   %xmm2, %xmm1
+;   Inst 8:   punpckhbw %xmm0, %xmm0
+;   Inst 9:   psraw   %xmm2, %xmm0
+;   Inst 10:   packsswb %xmm0, %xmm1
+;   Inst 11:   movdqa  %xmm1, %xmm0
+;   Inst 12:   movq    %rbp, %rsp
+;   Inst 13:   popq    %rbp
+;   Inst 14:   ret
+; }}
 
 function %sshr_i8x16_imm(i8x16, i32) -> i8x16 {
 block0(v0: i8x16, v1: i32):
     v2 = sshr_imm v0, 3
     return v2
 }
-; check:  movdqa  %xmm0, %xmm1
-; nextln: movdqa  %xmm1, %xmm0
-; nextln: punpcklbw %xmm0, %xmm0
-; nextln: psraw   $$11, %xmm0
-; nextln: punpckhbw %xmm1, %xmm1
-; nextln: psraw   $$11, %xmm1
-; nextln: packsswb %xmm1, %xmm0
 
-
-
-; i16x4 arithmetic shifts: x86 does not have a instruction for this
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movdqa  %xmm0, %xmm1
+;   Inst 3:   movdqa  %xmm1, %xmm0
+;   Inst 4:   punpcklbw %xmm0, %xmm0
+;   Inst 5:   psraw   $11, %xmm0
+;   Inst 6:   punpckhbw %xmm1, %xmm1
+;   Inst 7:   psraw   $11, %xmm1
+;   Inst 8:   packsswb %xmm1, %xmm0
+;   Inst 9:   movq    %rbp, %rsp
+;   Inst 10:   popq    %rbp
+;   Inst 11:   ret
+; }}
 
 function %sshr_i64x2(i64x2, i32) -> i64x2 {
 block0(v0: i64x2, v1: i32):
     v2 = sshr v0, v1
     return v2
 }
-; check:  pextrd.w $$0, %xmm0, %rsi
-; nextln: pextrd.w $$1, %xmm0, %rax
-; nextln: movq    %rdi, %rcx
-; nextln: sarq    %cl, %rsi
-; nextln: movq    %rdi, %rcx
-; nextln: sarq    %cl, %rax
-; nextln: pinsrd.w $$0, %rsi, %xmm1
-; nextln: pinsrd.w $$1, %rax, %xmm1
-; nextln: movdqa  %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 15)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movdqa  %xmm0, %xmm1
+;   Inst 3:   pextrd.w $0, %xmm0, %rsi
+;   Inst 4:   pextrd.w $1, %xmm0, %rax
+;   Inst 5:   movq    %rdi, %rcx
+;   Inst 6:   sarq    %cl, %rsi
+;   Inst 7:   movq    %rdi, %rcx
+;   Inst 8:   sarq    %cl, %rax
+;   Inst 9:   pinsrd.w $0, %rsi, %xmm1
+;   Inst 10:   pinsrd.w $1, %rax, %xmm1
+;   Inst 11:   movdqa  %xmm1, %xmm0
+;   Inst 12:   movq    %rbp, %rsp
+;   Inst 13:   popq    %rbp
+;   Inst 14:   ret
+; }}
+

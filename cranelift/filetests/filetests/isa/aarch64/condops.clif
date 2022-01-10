@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -10,8 +10,16 @@ block0(v0: i8, v1: i64, v2: i64):
   return v5
 }
 
-; check: subs wzr
-; check: csel x0, $(=x[0-9]+, x[0-9]+), eq
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   subs wzr, w0, #42
+;   Inst 2:   csel x0, x1, x2, eq
+;   Inst 3:   ret
+; }}
 
 function %g(i8) -> b1 {
 block0(v0: i8):
@@ -21,8 +29,16 @@ block0(v0: i8):
   return v5
 }
 
-; check: subs wzr
-; check: cset x0, eq
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   subs wzr, w0, #42
+;   Inst 2:   cset x0, eq
+;   Inst 3:   ret
+; }}
 
 function %h(i8, i8, i8) -> i8 {
 block0(v0: i8, v1: i8, v2: i8):
@@ -30,9 +46,16 @@ block0(v0: i8, v1: i8, v2: i8):
   return v3
 }
 
-; check: and
-; nextln: bic
-; nextln: orr
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   and x1, x1, x0
+;   Inst 1:   bic x0, x2, x0
+;   Inst 2:   orr x0, x0, x1
+;   Inst 3:   ret
+; }}
 
 function %i(b1, i8, i8) -> i8 {
 block0(v0: b1, v1: i8, v2: i8):
@@ -40,8 +63,16 @@ block0(v0: b1, v1: i8, v2: i8):
   return v3
 }
 
-; check: subs wzr
-; nextln: csel
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 4)
+;   Inst 0:   and w0, w0, #1
+;   Inst 1:   subs wzr, w0, wzr
+;   Inst 2:   csel x0, x1, x2, ne
+;   Inst 3:   ret
+; }}
 
 function %i(i32, i8, i8) -> i8 {
 block0(v0: i32, v1: i8, v2: i8):
@@ -51,9 +82,15 @@ block0(v0: i32, v1: i8, v2: i8):
   return v5
 }
 
-; check: subs wzr, w0, #42
-; nextln: csel x0, x1, x2, eq
-
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   subs wzr, w0, #42
+;   Inst 1:   csel x0, x1, x2, eq
+;   Inst 2:   ret
+; }}
 
 function %i128_select(b1, i128, i128) -> i128 {
 block0(v0: b1, v1: i128, v2: i128):
@@ -61,6 +98,15 @@ block0(v0: b1, v1: i128, v2: i128):
   return v3
 }
 
-; check: subs wzr, w0, wzr
-; nextln: csel x0, x2, x4, ne
-; nextln: csel x1, x3, x5, ne
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 5)
+;   Inst 0:   and w0, w0, #1
+;   Inst 1:   subs wzr, w0, wzr
+;   Inst 2:   csel x0, x2, x4, ne
+;   Inst 3:   csel x1, x3, x5, ne
+;   Inst 4:   ret
+; }}
+

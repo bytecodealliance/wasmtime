@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -8,8 +8,14 @@ block0(v0: i8):
   return v1
 }
 
-; check: uxtb w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_u_8_32(i8) -> i32 {
 block0(v0: i8):
@@ -17,8 +23,14 @@ block0(v0: i8):
   return v1
 }
 
-; check: uxtb w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_u_8_16(i8) -> i16 {
 block0(v0: i8):
@@ -26,8 +38,14 @@ block0(v0: i8):
   return v1
 }
 
-; check: uxtb w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_s_8_64(i8) -> i64 {
 block0(v0: i8):
@@ -35,8 +53,14 @@ block0(v0: i8):
   return v1
 }
 
-; check: sxtb x0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   sxtb x0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_s_8_32(i8) -> i32 {
 block0(v0: i8):
@@ -44,8 +68,14 @@ block0(v0: i8):
   return v1
 }
 
-; check: sxtb w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   sxtb w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_s_8_16(i8) -> i16 {
 block0(v0: i8):
@@ -53,8 +83,14 @@ block0(v0: i8):
   return v1
 }
 
-; check: sxtb w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   sxtb w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_u_16_64(i16) -> i64 {
 block0(v0: i16):
@@ -62,8 +98,14 @@ block0(v0: i16):
   return v1
 }
 
-; check: uxth w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   uxth w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_u_16_32(i16) -> i32 {
 block0(v0: i16):
@@ -71,8 +113,14 @@ block0(v0: i16):
   return v1
 }
 
-; check: uxth w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   uxth w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_s_16_64(i16) -> i64 {
 block0(v0: i16):
@@ -80,8 +128,14 @@ block0(v0: i16):
   return v1
 }
 
-; check: sxth x0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   sxth x0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_s_16_32(i16) -> i32 {
 block0(v0: i16):
@@ -89,8 +143,14 @@ block0(v0: i16):
   return v1
 }
 
-; check: sxth w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   sxth w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_u_32_64(i32) -> i64 {
 block0(v0: i32):
@@ -98,8 +158,14 @@ block0(v0: i32):
   return v1
 }
 
-; check: mov w0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   mov w0, w0
+;   Inst 1:   ret
+; }}
 
 function %f_s_32_64(i32) -> i64 {
 block0(v0: i32):
@@ -107,5 +173,12 @@ block0(v0: i32):
   return v1
 }
 
-; check: sxtw x0, w0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   sxtw x0, w0
+;   Inst 1:   ret
+; }}
+

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -7,25 +7,54 @@ block0(v0: i128):
   v1 = ireduce.i64 v0
   return v1
 }
-; check: ret
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
 
 function %ireduce_128_32(i128) -> i32 {
 block0(v0: i128):
   v1 = ireduce.i32 v0
   return v1
 }
-; check: ret
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
 
 function %ireduce_128_16(i128) -> i16 {
 block0(v0: i128):
   v1 = ireduce.i16 v0
   return v1
 }
-; check: ret
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
 
 function %ireduce_128_8(i128) -> i8 {
 block0(v0: i128):
   v1 = ireduce.i8 v0
   return v1
 }
-; check: ret
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 1)
+;   Inst 0:   ret
+; }}
+

@@ -1,29 +1,30 @@
-test compile
+test compile precise-output
 set enable_llvm_abi_extensions=true
 target x86_64
 
 function %f0(i32, i128, i128) -> i128 {
-; check:   pushq   %rbp
-; nextln:  movq    %rsp, %rbp
-
 block0(v0: i32, v1: i128, v2: i128):
-
     v3 = iconst.i32 42
     v4 = icmp.i32 eq v0, v3
-; nextln: movl    $$42, %eax
-; nextln: cmpl    %eax, %edi
-
     v5 = select.i128 v4, v1, v2
-; nextln: cmovzq  %rsi, %rcx
-; nextln: cmovzq  %rdx, %r8
-
     return v5
-; nextln: movq    %rcx, %rax
-; nextln: movq    %r8, %rdx
-
-; nextln: movq    %rbp, %rsp
-; nextln: popq    %rbp
-; nextln: ret
-
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movl    $42, %eax
+;   Inst 3:   cmpl    %eax, %edi
+;   Inst 4:   cmovzq  %rsi, %rcx
+;   Inst 5:   cmovzq  %rdx, %r8
+;   Inst 6:   movq    %rcx, %rax
+;   Inst 7:   movq    %r8, %rdx
+;   Inst 8:   movq    %rbp, %rsp
+;   Inst 9:   popq    %rbp
+;   Inst 10:   ret
+; }}
 

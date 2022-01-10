@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target x86_64
 
 function %f0(i64 sret) {
@@ -8,11 +8,18 @@ block0(v0: i64):
     return
 }
 
-; check:  pushq   %rbp
-; nextln: movq    %rsp, %rbp
-; nextln: movq    %rdi, %rax
-; nextln: movl    $$42, %esi
-; nextln: movq    %rsi, 0(%rdi)
-; nextln: movq    %rbp, %rsp
-; nextln: popq    %rbp
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 8)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movq    %rdi, %rax
+;   Inst 3:   movl    $42, %esi
+;   Inst 4:   movq    %rsi, 0(%rdi)
+;   Inst 5:   movq    %rbp, %rsp
+;   Inst 6:   popq    %rbp
+;   Inst 7:   ret
+; }}
+

@@ -1,111 +1,168 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
 function u0:0(i8) -> f32 {
 block0(v0: i8):
     v1 = fcvt_from_uint.f32 v0
-    ; check: uxtb w0, w0
-    ; check: ucvtf s0, w0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   ucvtf s0, w0
+;   Inst 2:   ret
+; }}
 
 function u0:0(i8) -> f64 {
 block0(v0: i8):
     v1 = fcvt_from_uint.f64 v0
-    ; check: uxtb w0, w0
-    ; check: ucvtf d0, w0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   uxtb w0, w0
+;   Inst 1:   ucvtf d0, w0
+;   Inst 2:   ret
+; }}
 
 function u0:0(i16) -> f32 {
 block0(v0: i16):
     v1 = fcvt_from_uint.f32 v0
-    ; check: uxth w0, w0
-    ; check: ucvtf s0, w0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   uxth w0, w0
+;   Inst 1:   ucvtf s0, w0
+;   Inst 2:   ret
+; }}
 
 function u0:0(i16) -> f64 {
 block0(v0: i16):
     v1 = fcvt_from_uint.f64 v0
-    ; check: uxth w0, w0
-    ; check: ucvtf d0, w0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   uxth w0, w0
+;   Inst 1:   ucvtf d0, w0
+;   Inst 2:   ret
+; }}
 
 function u0:0(f32) -> i8 {
 block0(v0: f32):
     v1 = fcvt_to_uint.i8 v0
-    ; check: fcmp s0, s0
-    ; check: b.vc 8 ; udf
-    ; check: movz x0, #49024, LSL #16
-    ; check: fmov d1, x0
-    ; check: fcmp s0, s1
-    ; check: b.gt 8 ; udf
-    ; check: movz x0, #17280, LSL #16
-    ; check: fmov d1, x0
-    ; check: fcmp s0, s1
-    ; check: b.mi 8 ; udf
-    ; check: fcvtzu w0, s0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp s0, s0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49024, LSL #16
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp s0, s1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #17280, LSL #16
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp s0, s1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu w0, s0
+;   Inst 11:   ret
+; }}
 
 function u0:0(f64) -> i8 {
 block0(v0: f64):
     v1 = fcvt_to_uint.i8 v0
-    ; check: fcmp d0, d0
-    ; check: b.vc 8 ; udf
-    ; check: movz x0, #49136, LSL #48
-    ; check: fmov d1, x0
-    ; check: fcmp d0, d1
-    ; check: b.gt 8 ; udf
-    ; check: movz x0, #16496, LSL #48
-    ; check: fmov d1, x0
-    ; check: fcmp d0, d1
-    ; check: b.mi 8 ; udf
-    ; check: fcvtzu w0, d0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp d0, d0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49136, LSL #48
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp d0, d1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #16496, LSL #48
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp d0, d1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu w0, d0
+;   Inst 11:   ret
+; }}
 
 function u0:0(f32) -> i16 {
 block0(v0: f32):
     v1 = fcvt_to_uint.i16 v0
-    ; check: fcmp s0, s0
-    ; check: b.vc 8 ; udf
-    ; check: movz x0, #49024, LSL #16
-    ; check: fmov d1, x0
-    ; check: fcmp s0, s1
-    ; check: b.gt 8 ; udf
-    ; check: movz x0, #18304, LSL #16
-    ; check: fmov d1, x0
-    ; check: fcmp s0, s1
-    ; check: b.mi 8 ; udf
-    ; check: fcvtzu w0, s0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp s0, s0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49024, LSL #16
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp s0, s1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #18304, LSL #16
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp s0, s1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu w0, s0
+;   Inst 11:   ret
+; }}
 
 function u0:0(f64) -> i16 {
 block0(v0: f64):
     v1 = fcvt_to_uint.i16 v0
-    ; check: fcmp d0, d0
-    ; check: b.vc 8 ; udf
-    ; check: movz x0, #49136, LSL #48
-    ; check: fmov d1, x0
-    ; check: fcmp d0, d1
-    ; check: b.gt 8 ; udf
-    ; check: movz x0, #16624, LSL #48
-    ; check: fmov d1, x0
-    ; check: fcmp d0, d1
-    ; check: b.mi 8 ; udf
-    ; check: fcvtzu w0, d0
     return v1
-    ; check: ret
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp d0, d0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49136, LSL #48
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp d0, d1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #16624, LSL #48
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp d0, d1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu w0, d0
+;   Inst 11:   ret
+; }}
+

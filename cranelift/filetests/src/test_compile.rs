@@ -121,6 +121,7 @@ fn check_precise_output(text: &str, context: &Context) -> Result<()> {
         .details
         .comments
         .iter()
+        .filter(|c| !c.text.starts_with(";;"))
         .map(|c| c.text.strip_prefix("; ").unwrap_or(c.text))
         .collect::<Vec<_>>();
 

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -10,6 +10,13 @@ block1:
   return v0, v1
 }
 
-; check:  movz x0, #1
-; nextln:  movz x1, #2
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block1)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   movz x0, #1
+;   Inst 1:   movz x1, #2
+;   Inst 2:   ret
+; }}
+
