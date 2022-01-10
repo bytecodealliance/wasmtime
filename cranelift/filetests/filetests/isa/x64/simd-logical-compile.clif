@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set enable_simd
 target x86_64 skylake
 
@@ -7,23 +7,62 @@ block0(v0: b32x4):
     v1 = bnot v0
     return v1
 }
-; check:  pcmpeqd %xmm1, %xmm1
-; nextln: pxor    %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pcmpeqd %xmm1, %xmm1
+;   Inst 3:   pxor    %xmm1, %xmm0
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %vany_true_b32x4(b32x4) -> b1 {
 block0(v0: b32x4):
     v1 = vany_true v0
     return v1
 }
-; check:  ptest   %xmm0, %xmm0
-; nextln: setnz   %sil
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 8)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   ptest   %xmm0, %xmm0
+;   Inst 3:   setnz   %sil
+;   Inst 4:   movq    %rsi, %rax
+;   Inst 5:   movq    %rbp, %rsp
+;   Inst 6:   popq    %rbp
+;   Inst 7:   ret
+; }}
 
 function %vall_true_i64x2(i64x2) -> b1 {
 block0(v0: i64x2):
     v1 = vall_true v0
     return v1
 }
-; check:  pxor    %xmm1, %xmm1
-; nextln: pcmpeqq %xmm0, %xmm1
-; nextln: ptest   %xmm1, %xmm1
-; nextln: setz    %sil
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pxor    %xmm1, %xmm1
+;   Inst 3:   pcmpeqq %xmm0, %xmm1
+;   Inst 4:   ptest   %xmm1, %xmm1
+;   Inst 5:   setz    %sil
+;   Inst 6:   movq    %rsi, %rax
+;   Inst 7:   movq    %rbp, %rsp
+;   Inst 8:   popq    %rbp
+;   Inst 9:   ret
+; }}
+

@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set unwind_info=false
 target aarch64
 
@@ -8,8 +8,14 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  fadd s0, s0, s1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fadd s0, s0, s1
+;   Inst 1:   ret
+; }}
 
 function %f2(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -17,8 +23,14 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  fadd d0, d0, d1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fadd d0, d0, d1
+;   Inst 1:   ret
+; }}
 
 function %f3(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -26,8 +38,14 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  fsub s0, s0, s1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fsub s0, s0, s1
+;   Inst 1:   ret
+; }}
 
 function %f4(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -35,8 +53,14 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  fsub d0, d0, d1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fsub d0, d0, d1
+;   Inst 1:   ret
+; }}
 
 function %f5(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -44,8 +68,14 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  fmul s0, s0, s1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmul s0, s0, s1
+;   Inst 1:   ret
+; }}
 
 function %f6(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -53,8 +83,14 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  fmul d0, d0, d1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmul d0, d0, d1
+;   Inst 1:   ret
+; }}
 
 function %f7(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -62,8 +98,14 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  fdiv s0, s0, s1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fdiv s0, s0, s1
+;   Inst 1:   ret
+; }}
 
 function %f8(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -71,8 +113,14 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  fdiv d0, d0, d1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fdiv d0, d0, d1
+;   Inst 1:   ret
+; }}
 
 function %f9(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -80,8 +128,14 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  fmin s0, s0, s1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmin s0, s0, s1
+;   Inst 1:   ret
+; }}
 
 function %f10(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -89,8 +143,14 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  fmin d0, d0, d1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmin d0, d0, d1
+;   Inst 1:   ret
+; }}
 
 function %f11(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -98,8 +158,14 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  fmax s0, s0, s1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmax s0, s0, s1
+;   Inst 1:   ret
+; }}
 
 function %f12(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -107,8 +173,14 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  fmax d0, d0, d1
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmax d0, d0, d1
+;   Inst 1:   ret
+; }}
 
 function %f13(f32) -> f32 {
 block0(v0: f32):
@@ -116,8 +188,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fsqrt s0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fsqrt s0, s0
+;   Inst 1:   ret
+; }}
 
 function %f15(f64) -> f64 {
 block0(v0: f64):
@@ -125,8 +203,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fsqrt d0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fsqrt d0, d0
+;   Inst 1:   ret
+; }}
 
 function %f16(f32) -> f32 {
 block0(v0: f32):
@@ -134,8 +218,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fabs s0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fabs s0, s0
+;   Inst 1:   ret
+; }}
 
 function %f17(f64) -> f64 {
 block0(v0: f64):
@@ -143,8 +233,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fabs d0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fabs d0, d0
+;   Inst 1:   ret
+; }}
 
 function %f18(f32) -> f32 {
 block0(v0: f32):
@@ -152,8 +248,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fneg s0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fneg s0, s0
+;   Inst 1:   ret
+; }}
 
 function %f19(f64) -> f64 {
 block0(v0: f64):
@@ -161,8 +263,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fneg d0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fneg d0, d0
+;   Inst 1:   ret
+; }}
 
 function %f20(f32) -> f64 {
 block0(v0: f32):
@@ -170,8 +278,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fcvt d0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fcvt d0, s0
+;   Inst 1:   ret
+; }}
 
 function %f21(f64) -> f32 {
 block0(v0: f64):
@@ -179,8 +293,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fcvt s0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fcvt s0, d0
+;   Inst 1:   ret
+; }}
 
 function %f22(f32) -> f32 {
 block0(v0: f32):
@@ -188,8 +308,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  frintp s0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintp s0, s0
+;   Inst 1:   ret
+; }}
 
 function %f22(f64) -> f64 {
 block0(v0: f64):
@@ -197,8 +323,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  frintp d0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintp d0, d0
+;   Inst 1:   ret
+; }}
 
 function %f23(f32) -> f32 {
 block0(v0: f32):
@@ -206,8 +338,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  frintm s0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintm s0, s0
+;   Inst 1:   ret
+; }}
 
 function %f24(f64) -> f64 {
 block0(v0: f64):
@@ -215,8 +353,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  frintm d0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintm d0, d0
+;   Inst 1:   ret
+; }}
 
 function %f25(f32) -> f32 {
 block0(v0: f32):
@@ -224,8 +368,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  frintz s0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintz s0, s0
+;   Inst 1:   ret
+; }}
 
 function %f26(f64) -> f64 {
 block0(v0: f64):
@@ -233,8 +383,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  frintz d0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintz d0, d0
+;   Inst 1:   ret
+; }}
 
 function %f27(f32) -> f32 {
 block0(v0: f32):
@@ -242,8 +398,14 @@ block0(v0: f32):
   return v1
 }
 
-; check:  frintn s0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintn s0, s0
+;   Inst 1:   ret
+; }}
 
 function %f28(f64) -> f64 {
 block0(v0: f64):
@@ -251,8 +413,14 @@ block0(v0: f64):
   return v1
 }
 
-; check:  frintn d0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   frintn d0, d0
+;   Inst 1:   ret
+; }}
 
 function %f29(f32, f32, f32) -> f32 {
 block0(v0: f32, v1: f32, v2: f32):
@@ -260,8 +428,14 @@ block0(v0: f32, v1: f32, v2: f32):
   return v3
 }
 
-; check:  fmadd s0, s0, s1, s2
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmadd s0, s0, s1, s2
+;   Inst 1:   ret
+; }}
 
 function %f30(f64, f64, f64) -> f64 {
 block0(v0: f64, v1: f64, v2: f64):
@@ -269,8 +443,14 @@ block0(v0: f64, v1: f64, v2: f64):
   return v3
 }
 
-; check:  fmadd d0, d0, d1, d2
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmadd d0, d0, d1, d2
+;   Inst 1:   ret
+; }}
 
 function %f31(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -278,9 +458,15 @@ block0(v0: f32, v1: f32):
   return v2
 }
 
-; check:  ushr v1.2s, v1.2s, #31
-; nextln:  sli v0.2s, v1.2s, #31
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   ushr v1.2s, v1.2s, #31
+;   Inst 1:   sli v0.2s, v1.2s, #31
+;   Inst 2:   ret
+; }}
 
 function %f32(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -288,9 +474,15 @@ block0(v0: f64, v1: f64):
   return v2
 }
 
-; check:  ushr d1, d1, #63
-; nextln:  sli d0, d1, #63
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   ushr d1, d1, #63
+;   Inst 1:   sli d0, d1, #63
+;   Inst 2:   ret
+; }}
 
 function %f33(f32) -> i32 {
 block0(v0: f32):
@@ -298,18 +490,24 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fcmp s0, s0
-; nextln:  b.vc 8 ; udf
-; nextln:  movz x0, #49024, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.gt 8 ; udf
-; nextln:  movz x0, #20352, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzu w0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp s0, s0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49024, LSL #16
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp s0, s1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #20352, LSL #16
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp s0, s1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu w0, s0
+;   Inst 11:   ret
+; }}
 
 function %f34(f32) -> i32 {
 block0(v0: f32):
@@ -317,18 +515,24 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fcmp s0, s0
-; nextln:  b.vc 8 ; udf
-; nextln:  movz x0, #52992, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.ge 8 ; udf
-; nextln:  movz x0, #20224, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzs w0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp s0, s0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #52992, LSL #16
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp s0, s1
+;   Inst 5:   b.ge 8 ; udf
+;   Inst 6:   movz x0, #20224, LSL #16
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp s0, s1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzs w0, s0
+;   Inst 11:   ret
+; }}
 
 function %f35(f32) -> i64 {
 block0(v0: f32):
@@ -336,18 +540,24 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fcmp s0, s0
-; nextln:  b.vc 8 ; udf
-; nextln:  movz x0, #49024, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.gt 8 ; udf
-; nextln:  movz x0, #24448, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzu x0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp s0, s0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49024, LSL #16
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp s0, s1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #24448, LSL #16
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp s0, s1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu x0, s0
+;   Inst 11:   ret
+; }}
 
 function %f36(f32) -> i64 {
 block0(v0: f32):
@@ -355,18 +565,24 @@ block0(v0: f32):
   return v1
 }
 
-; check:  fcmp s0, s0
-; nextln:  b.vc 8 ; udf
-; nextln:  movz x0, #57088, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.ge 8 ; udf
-; nextln:  movz x0, #24320, LSL #16
-; nextln:  fmov d1, x0
-; nextln:  fcmp s0, s1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzs x0, s0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp s0, s0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #57088, LSL #16
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp s0, s1
+;   Inst 5:   b.ge 8 ; udf
+;   Inst 6:   movz x0, #24320, LSL #16
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp s0, s1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzs x0, s0
+;   Inst 11:   ret
+; }}
 
 function %f37(f64) -> i32 {
 block0(v0: f64):
@@ -374,18 +590,24 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fcmp d0, d0
-; nextln:  b.vc 8 ; udf
-; nextln:  movz x0, #49136, LSL #48
-; nextln:  fmov d1, x0
-; nextln:  fcmp d0, d1
-; nextln:  b.gt 8 ; udf
-; nextln:  movz x0, #16880, LSL #48
-; nextln:  fmov d1, x0
-; nextln:  fcmp d0, d1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzu w0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp d0, d0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49136, LSL #48
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp d0, d1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #16880, LSL #48
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp d0, d1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu w0, d0
+;   Inst 11:   ret
+; }}
 
 function %f38(f64) -> i32 {
 block0(v0: f64):
@@ -393,17 +615,23 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fcmp d0, d0
-; nextln:  b.vc 8 ; udf
-; nextln:  ldr d1, pc+8 ; b 12 ; data.f64 -2147483649
-; nextln:  fcmp d0, d1
-; nextln:  b.gt 8 ; udf
-; nextln:  movz x0, #16864, LSL #48
-; nextln:  fmov d1, x0
-; nextln:  fcmp d0, d1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzs w0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   fcmp d0, d0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   ldr d1, pc+8 ; b 12 ; data.f64 -2147483649
+;   Inst 3:   fcmp d0, d1
+;   Inst 4:   b.gt 8 ; udf
+;   Inst 5:   movz x0, #16864, LSL #48
+;   Inst 6:   fmov d1, x0
+;   Inst 7:   fcmp d0, d1
+;   Inst 8:   b.mi 8 ; udf
+;   Inst 9:   fcvtzs w0, d0
+;   Inst 10:   ret
+; }}
 
 function %f39(f64) -> i64 {
 block0(v0: f64):
@@ -411,18 +639,24 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fcmp d0, d0
-; nextln:  b.vc 8 ; udf
-; nextln:  movz x0, #49136, LSL #48
-; nextln:  fmov d1, x0
-; nextln:  fcmp d0, d1
-; nextln:  b.gt 8 ; udf
-; nextln:  movz x0, #17392, LSL #48
-; nextln:  fmov d1, x0
-; nextln:  fcmp d0, d1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzu x0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp d0, d0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #49136, LSL #48
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp d0, d1
+;   Inst 5:   b.gt 8 ; udf
+;   Inst 6:   movz x0, #17392, LSL #48
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp d0, d1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzu x0, d0
+;   Inst 11:   ret
+; }}
 
 function %f40(f64) -> i64 {
 block0(v0: f64):
@@ -430,18 +664,24 @@ block0(v0: f64):
   return v1
 }
 
-; check:  fcmp d0, d0
-; nextln:  b.vc 8 ; udf
-; nextln:  movz x0, #50144, LSL #48
-; nextln:  fmov d1, x0
-; nextln:  fcmp d0, d1
-; nextln:  b.ge 8 ; udf
-; nextln:  movz x0, #17376, LSL #48
-; nextln:  fmov d1, x0
-; nextln:  fcmp d0, d1
-; nextln:  b.mi 8 ; udf
-; nextln:  fcvtzs x0, d0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 12)
+;   Inst 0:   fcmp d0, d0
+;   Inst 1:   b.vc 8 ; udf
+;   Inst 2:   movz x0, #50144, LSL #48
+;   Inst 3:   fmov d1, x0
+;   Inst 4:   fcmp d0, d1
+;   Inst 5:   b.ge 8 ; udf
+;   Inst 6:   movz x0, #17376, LSL #48
+;   Inst 7:   fmov d1, x0
+;   Inst 8:   fcmp d0, d1
+;   Inst 9:   b.mi 8 ; udf
+;   Inst 10:   fcvtzs x0, d0
+;   Inst 11:   ret
+; }}
 
 function %f41(i32) -> f32 {
 block0(v0: i32):
@@ -449,8 +689,14 @@ block0(v0: i32):
   return v1
 }
 
-; check:  ucvtf s0, w0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   ucvtf s0, w0
+;   Inst 1:   ret
+; }}
 
 function %f42(i32) -> f32 {
 block0(v0: i32):
@@ -458,8 +704,14 @@ block0(v0: i32):
   return v1
 }
 
-; check:  scvtf s0, w0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   scvtf s0, w0
+;   Inst 1:   ret
+; }}
 
 function %f43(i64) -> f32 {
 block0(v0: i64):
@@ -467,8 +719,14 @@ block0(v0: i64):
   return v1
 }
 
-; check:  ucvtf s0, x0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   ucvtf s0, x0
+;   Inst 1:   ret
+; }}
 
 function %f44(i64) -> f32 {
 block0(v0: i64):
@@ -476,8 +734,14 @@ block0(v0: i64):
   return v1
 }
 
-; check:  scvtf s0, x0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   scvtf s0, x0
+;   Inst 1:   ret
+; }}
 
 function %f45(i32) -> f64 {
 block0(v0: i32):
@@ -485,8 +749,14 @@ block0(v0: i32):
   return v1
 }
 
-; check:  ucvtf d0, w0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   ucvtf d0, w0
+;   Inst 1:   ret
+; }}
 
 function %f46(i32) -> f64 {
 block0(v0: i32):
@@ -494,8 +764,14 @@ block0(v0: i32):
   return v1
 }
 
-; check:  scvtf d0, w0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   scvtf d0, w0
+;   Inst 1:   ret
+; }}
 
 function %f47(i64) -> f64 {
 block0(v0: i64):
@@ -503,8 +779,14 @@ block0(v0: i64):
   return v1
 }
 
-; check:  ucvtf d0, x0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   ucvtf d0, x0
+;   Inst 1:   ret
+; }}
 
 function %f48(i64) -> f64 {
 block0(v0: i64):
@@ -512,8 +794,14 @@ block0(v0: i64):
   return v1
 }
 
-; check:  scvtf d0, x0
-; nextln:  ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   scvtf d0, x0
+;   Inst 1:   ret
+; }}
 
 function %f49(f32) -> i32 {
 block0(v0: f32):
@@ -521,15 +809,21 @@ block0(v0: f32):
   return v1
 }
 
-; check:  movz x0, #20352, LSL #16
-; nextln: fmov d1, x0
-; nextln: fmin s2, s0, s1
-; nextln: movi v1.2s, #0
-; nextln: fmax s2, s2, s1
-; nextln: fcmp s0, s0
-; nextln: fcsel s0, s1, s2, ne
-; nextln: fcvtzu w0, s0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 9)
+;   Inst 0:   movz x0, #20352, LSL #16
+;   Inst 1:   fmov d1, x0
+;   Inst 2:   fmin s2, s0, s1
+;   Inst 3:   movi v1.2s, #0
+;   Inst 4:   fmax s2, s2, s1
+;   Inst 5:   fcmp s0, s0
+;   Inst 6:   fcsel s0, s1, s2, ne
+;   Inst 7:   fcvtzu w0, s0
+;   Inst 8:   ret
+; }}
 
 function %f50(f32) -> i32 {
 block0(v0: f32):
@@ -537,17 +831,23 @@ block0(v0: f32):
   return v1
 }
 
-; check:  movz x0, #20224, LSL #16
-; nextln: fmov d1, x0
-; nextln: fmin s1, s0, s1
-; nextln: movz x0, #52992, LSL #16
-; nextln: fmov d2, x0
-; nextln: fmax s1, s1, s2
-; nextln: movi v2.2s, #0
-; nextln: fcmp s0, s0
-; nextln: fcsel s0, s2, s1, ne
-; nextln: fcvtzs w0, s0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   movz x0, #20224, LSL #16
+;   Inst 1:   fmov d1, x0
+;   Inst 2:   fmin s1, s0, s1
+;   Inst 3:   movz x0, #52992, LSL #16
+;   Inst 4:   fmov d2, x0
+;   Inst 5:   fmax s1, s1, s2
+;   Inst 6:   movi v2.2s, #0
+;   Inst 7:   fcmp s0, s0
+;   Inst 8:   fcsel s0, s2, s1, ne
+;   Inst 9:   fcvtzs w0, s0
+;   Inst 10:   ret
+; }}
 
 function %f51(f32) -> i64 {
 block0(v0: f32):
@@ -555,15 +855,21 @@ block0(v0: f32):
   return v1
 }
 
-; check:  movz x0, #24448, LSL #16
-; nextln: fmov d1, x0
-; nextln: fmin s2, s0, s1
-; nextln: movi v1.2s, #0
-; nextln: fmax s2, s2, s1
-; nextln: fcmp s0, s0
-; nextln: fcsel s0, s1, s2, ne
-; nextln: fcvtzu x0, s0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 9)
+;   Inst 0:   movz x0, #24448, LSL #16
+;   Inst 1:   fmov d1, x0
+;   Inst 2:   fmin s2, s0, s1
+;   Inst 3:   movi v1.2s, #0
+;   Inst 4:   fmax s2, s2, s1
+;   Inst 5:   fcmp s0, s0
+;   Inst 6:   fcsel s0, s1, s2, ne
+;   Inst 7:   fcvtzu x0, s0
+;   Inst 8:   ret
+; }}
 
 function %f52(f32) -> i64 {
 block0(v0: f32):
@@ -571,17 +877,23 @@ block0(v0: f32):
   return v1
 }
 
-; check:  movz x0, #24320, LSL #16
-; nextln: fmov d1, x0
-; nextln: fmin s1, s0, s1
-; nextln: movz x0, #57088, LSL #16
-; nextln: fmov d2, x0
-; nextln: fmax s1, s1, s2
-; nextln: movi v2.2s, #0
-; nextln: fcmp s0, s0
-; nextln: fcsel s0, s2, s1, ne
-; nextln: fcvtzs x0, s0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   movz x0, #24320, LSL #16
+;   Inst 1:   fmov d1, x0
+;   Inst 2:   fmin s1, s0, s1
+;   Inst 3:   movz x0, #57088, LSL #16
+;   Inst 4:   fmov d2, x0
+;   Inst 5:   fmax s1, s1, s2
+;   Inst 6:   movi v2.2s, #0
+;   Inst 7:   fcmp s0, s0
+;   Inst 8:   fcsel s0, s2, s1, ne
+;   Inst 9:   fcvtzs x0, s0
+;   Inst 10:   ret
+; }}
 
 function %f53(f64) -> i32 {
 block0(v0: f64):
@@ -589,14 +901,20 @@ block0(v0: f64):
   return v1
 }
 
-; check:  ldr d1, pc+8 ; b 12 ; data.f64 4294967295
-; nextln: fmin d2, d0, d1
-; nextln: movi v1.2s, #0
-; nextln: fmax d2, d2, d1
-; nextln: fcmp d0, d0
-; nextln: fcsel d0, d1, d2, ne
-; nextln: fcvtzu w0, d0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 8)
+;   Inst 0:   ldr d1, pc+8 ; b 12 ; data.f64 4294967295
+;   Inst 1:   fmin d2, d0, d1
+;   Inst 2:   movi v1.2s, #0
+;   Inst 3:   fmax d2, d2, d1
+;   Inst 4:   fcmp d0, d0
+;   Inst 5:   fcsel d0, d1, d2, ne
+;   Inst 6:   fcvtzu w0, d0
+;   Inst 7:   ret
+; }}
 
 function %f54(f64) -> i32 {
 block0(v0: f64):
@@ -604,16 +922,22 @@ block0(v0: f64):
   return v1
 }
 
-; check:  ldr d1, pc+8 ; b 12 ; data.f64 2147483647
-; nextln: fmin d1, d0, d1
-; nextln: movz x0, #49632, LSL #48
-; nextln: fmov d2, x0
-; nextln: fmax d1, d1, d2
-; nextln: movi v2.2s, #0
-; nextln: fcmp d0, d0
-; nextln: fcsel d0, d2, d1, ne
-; nextln: fcvtzs w0, d0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 10)
+;   Inst 0:   ldr d1, pc+8 ; b 12 ; data.f64 2147483647
+;   Inst 1:   fmin d1, d0, d1
+;   Inst 2:   movz x0, #49632, LSL #48
+;   Inst 3:   fmov d2, x0
+;   Inst 4:   fmax d1, d1, d2
+;   Inst 5:   movi v2.2s, #0
+;   Inst 6:   fcmp d0, d0
+;   Inst 7:   fcsel d0, d2, d1, ne
+;   Inst 8:   fcvtzs w0, d0
+;   Inst 9:   ret
+; }}
 
 function %f55(f64) -> i64 {
 block0(v0: f64):
@@ -621,15 +945,21 @@ block0(v0: f64):
   return v1
 }
 
-; check:  movz x0, #17392, LSL #48
-; nextln: fmov d1, x0
-; nextln: fmin d2, d0, d1
-; nextln: movi v1.2s, #0
-; nextln: fmax d2, d2, d1
-; nextln: fcmp d0, d0
-; nextln: fcsel d0, d1, d2, ne
-; nextln: fcvtzu x0, d0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 9)
+;   Inst 0:   movz x0, #17392, LSL #48
+;   Inst 1:   fmov d1, x0
+;   Inst 2:   fmin d2, d0, d1
+;   Inst 3:   movi v1.2s, #0
+;   Inst 4:   fmax d2, d2, d1
+;   Inst 5:   fcmp d0, d0
+;   Inst 6:   fcsel d0, d1, d2, ne
+;   Inst 7:   fcvtzu x0, d0
+;   Inst 8:   ret
+; }}
 
 function %f56(f64) -> i64 {
 block0(v0: f64):
@@ -637,14 +967,21 @@ block0(v0: f64):
   return v1
 }
 
-; check:  movz x0, #17376, LSL #48
-; nextln: fmov d1, x0
-; nextln: fmin d1, d0, d1
-; nextln: movz x0, #50144, LSL #48
-; nextln: fmov d2, x0
-; nextln: fmax d1, d1, d2
-; nextln: movi v2.2s, #0
-; nextln: fcmp d0, d0
-; nextln: fcsel d0, d2, d1, ne
-; nextln: fcvtzs x0, d0
-; nextln: ret
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 11)
+;   Inst 0:   movz x0, #17376, LSL #48
+;   Inst 1:   fmov d1, x0
+;   Inst 2:   fmin d1, d0, d1
+;   Inst 3:   movz x0, #50144, LSL #48
+;   Inst 4:   fmov d2, x0
+;   Inst 5:   fmax d1, d1, d2
+;   Inst 6:   movi v2.2s, #0
+;   Inst 7:   fcmp d0, d0
+;   Inst 8:   fcsel d0, d2, d1, ne
+;   Inst 9:   fcvtzs x0, d0
+;   Inst 10:   ret
+; }}
+

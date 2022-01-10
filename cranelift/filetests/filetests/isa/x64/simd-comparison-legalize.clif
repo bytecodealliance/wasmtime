@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 set enable_simd
 target x86_64 skylake
 
@@ -7,32 +7,81 @@ block0(v0: i32x4, v1: i32x4):
     v2 = icmp ne v0, v1
     return v2
 }
-; check:  pcmpeqd %xmm1, %xmm0
-; nextln: pcmpeqd %xmm1, %xmm1
-; nextln: pxor    %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 8)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pcmpeqd %xmm1, %xmm0
+;   Inst 3:   pcmpeqd %xmm1, %xmm1
+;   Inst 4:   pxor    %xmm1, %xmm0
+;   Inst 5:   movq    %rbp, %rsp
+;   Inst 6:   popq    %rbp
+;   Inst 7:   ret
+; }}
 
 function %icmp_ugt_i32x4(i32x4, i32x4) -> b32x4 {
 block0(v0: i32x4, v1: i32x4):
     v2 = icmp ugt v0, v1
     return v2
 }
-; check:  pmaxud  %xmm1, %xmm0
-; nextln: pcmpeqd %xmm1, %xmm0
-; nextln: pcmpeqd %xmm1, %xmm1
-; nextln: pxor    %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 9)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pmaxud  %xmm1, %xmm0
+;   Inst 3:   pcmpeqd %xmm1, %xmm0
+;   Inst 4:   pcmpeqd %xmm1, %xmm1
+;   Inst 5:   pxor    %xmm1, %xmm0
+;   Inst 6:   movq    %rbp, %rsp
+;   Inst 7:   popq    %rbp
+;   Inst 8:   ret
+; }}
 
 function %icmp_sge_i16x8(i16x8, i16x8) -> b16x8 {
 block0(v0: i16x8, v1: i16x8):
     v2 = icmp sge v0, v1
     return v2
 }
-; check:  pminsw  %xmm1, %xmm0
-; nextln: pcmpeqw %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pminsw  %xmm1, %xmm0
+;   Inst 3:   pcmpeqw %xmm1, %xmm0
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %icmp_uge_i8x16(i8x16, i8x16) -> b8x16 {
 block0(v0: i8x16, v1: i8x16):
     v2 = icmp uge v0, v1
     return v2
 }
-; check:  pminub  %xmm1, %xmm0
-; nextln: pcmpeqb %xmm1, %xmm0
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   pminub  %xmm1, %xmm0
+;   Inst 3:   pcmpeqb %xmm1, %xmm0
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
+

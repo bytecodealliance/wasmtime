@@ -1,4 +1,4 @@
-test compile
+test compile precise-output
 target x86_64
 
 function %amode_add(i64, i64) -> i64 {
@@ -6,8 +6,21 @@ block0(v0: i64, v1: i64):
     v2 = iadd v0, v1
     v3 = load.i64 v2
     return v3
-    ; check: movq    0(%rdi,%rsi,1), %rsi
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movq    0(%rdi,%rsi,1), %rsi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
 
 function %amode_add_imm(i64) -> i64 {
 block0(v0: i64):
@@ -15,20 +28,44 @@ block0(v0: i64):
     v2 = iadd v0, v1
     v3 = load.i64 v2
     return v3
-    ; check: movq    42(%rdi), %rsi
 }
 
-;; Same as above, but add operands have been reversed.
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movq    42(%rdi), %rsi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
+
 function %amode_add_imm_order(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i64 42
     v2 = iadd v1, v0
     v3 = load.i64 v2
     return v3
-    ; check: movq    42(%rdi), %rsi
 }
 
-;; Make sure that uextend(cst) are ignored when the cst will naturally sign-extend.
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movq    42(%rdi), %rsi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
+
 function %amode_add_uext_imm(i64) -> i64 {
 block0(v0: i64):
     v1 = iconst.i32 42
@@ -36,5 +73,19 @@ block0(v0: i64):
     v3 = iadd v2, v0
     v4 = load.i64 v3
     return v4
-    ; check: movq    42(%rdi), %rsi
 }
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 7)
+;   Inst 0:   pushq   %rbp
+;   Inst 1:   movq    %rsp, %rbp
+;   Inst 2:   movq    42(%rdi), %rsi
+;   Inst 3:   movq    %rsi, %rax
+;   Inst 4:   movq    %rbp, %rsp
+;   Inst 5:   popq    %rbp
+;   Inst 6:   ret
+; }}
+
