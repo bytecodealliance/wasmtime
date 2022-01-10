@@ -184,7 +184,7 @@ block0:
 
 function %f() -> i64 {
 block0:
-  v0 = iconst.i64 0xf34bf0a31212003a ; random digits
+  v0 = iconst.i64 0xf34bf0a31212003a ;; random digits
   return v0
 }
 
@@ -202,7 +202,7 @@ block0:
 
 function %f() -> i64 {
 block0:
-  v0 = iconst.i64 0x12e900001ef40000 ; random digits with 2 clear half words
+  v0 = iconst.i64 0x12e900001ef40000 ;; random digits with 2 clear half words
   return v0
 }
 
@@ -218,7 +218,7 @@ block0:
 
 function %f() -> i64 {
 block0:
-  v0 = iconst.i64 0x12e9ffff1ef4ffff ; random digits with 2 full half words
+  v0 = iconst.i64 0x12e9ffff1ef4ffff ;; random digits with 2 full half words
   return v0
 }
 

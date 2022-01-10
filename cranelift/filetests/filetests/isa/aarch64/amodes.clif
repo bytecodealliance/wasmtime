@@ -204,7 +204,7 @@ block0:
 
 function %f11(i64) -> i32 {
 block0(v0: i64):
-  v1 = iconst.i64 8388608 ; Imm12: 0x800 << 12
+  v1 = iconst.i64 8388608 ;; Imm12: 0x800 << 12
   v2 = iadd.i64 v0, v1
   v3 = load.i32 v2
   return v3

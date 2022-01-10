@@ -191,11 +191,11 @@ block0(
 ; }}
 
 function %many_ints(i64, i64, i64, i64, i64) system_v {
-    ; rdi => rcx
-    ; rsi => rdx
-    ; rdx => r8
-    ; rcx => r9
-    ; r8 => stack
+    ;; rdi => rcx
+    ;; rsi => rdx
+    ;; rdx => r8
+    ;; rcx => r9
+    ;; r8 => stack
     sig0 = (i64, i64, i64, i64, i64) windows_fastcall
 block0(v0: i64, v1:i64, v2:i64, v3:i64, v4:i64):
     call_indirect sig0, v0(v0, v1, v2, v3, v4)
