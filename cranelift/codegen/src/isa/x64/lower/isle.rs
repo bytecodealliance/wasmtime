@@ -7,19 +7,19 @@ mod generated_code;
 use super::{
     is_mergeable_load, lower_to_amode, AluRmiROpcode, Inst as MInst, OperandSize, Reg, RegMemImm,
 };
-use crate::isa::x64::inst::args::SyntheticAmode;
-use crate::isa::x64::inst::regs;
-use crate::isa::x64::settings::Flags;
-use crate::machinst::isle::*;
 use crate::{
     ir::{immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode, Value, ValueList},
-    isa::x64::inst::{
-        args::{
-            Avx512Opcode, CmpOpcode, ExtMode, FcmpImm, Imm8Reg, RegMem, ShiftKind, SseOpcode, CC,
+    isa::x64::{
+        inst::{
+            args::{
+                Amode, Avx512Opcode, CmpOpcode, ExtKind, ExtMode, FcmpImm, Imm8Reg, RegMem,
+                ShiftKind, SseOpcode, SyntheticAmode, CC,
+            },
+            regs, x64_map_regs,
         },
-        x64_map_regs,
+        settings::Flags,
     },
-    machinst::{InsnInput, InsnOutput, LowerCtx},
+    machinst::{isle::*, InsnInput, InsnOutput, LowerCtx, VCodeConstantData},
 };
 use std::convert::TryFrom;
 
@@ -248,7 +248,58 @@ where
     fn xmm0(&mut self) -> WritableReg {
         WritableReg::from_reg(regs::xmm0())
     }
+
+    #[inline]
+    fn synthetic_amode_to_reg_mem(&mut self, addr: &SyntheticAmode) -> RegMem {
+        RegMem::mem(addr.clone())
+    }
+
+    #[inline]
+    fn amode_imm_reg_reg_shift(&mut self, simm32: u32, base: Reg, index: Reg, shift: u8) -> Amode {
+        Amode::imm_reg_reg_shift(simm32, base, index, shift)
+    }
+
+    #[inline]
+    fn amode_to_synthetic_amode(&mut self, amode: &Amode) -> SyntheticAmode {
+        amode.clone().into()
+    }
+
+    fn ishl_i8x16_mask_for_const(&mut self, amt: u32) -> SyntheticAmode {
+        // When the shift amount is known, we can statically (i.e. at compile
+        // time) determine the mask to use and only emit that.
+        debug_assert!(amt < 8);
+        let mask_offset = amt as usize * 16;
+        let mask_constant = self.lower_ctx.use_constant(VCodeConstantData::WellKnown(
+            &I8X16_SHL_MASKS[mask_offset..mask_offset + 16],
+        ));
+        SyntheticAmode::ConstantOffset(mask_constant)
+    }
+
+    fn ishl_i8x16_mask_table(&mut self) -> SyntheticAmode {
+        let mask_table = self
+            .lower_ctx
+            .use_constant(VCodeConstantData::WellKnown(&I8X16_SHL_MASKS));
+        SyntheticAmode::ConstantOffset(mask_table)
+    }
 }
+
+// Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we
+// need to fix up the bits that migrate from one half of the lane to the
+// other. Each 16-byte mask is indexed by the shift amount: e.g. if we shift
+// right by 0 (no movement), we want to retain all the bits so we mask with
+// `0xff`; if we shift right by 1, we want to retain all bits except the MSB so
+// we mask with `0x7f`; etc.
+#[rustfmt::skip] // Preserve 16 bytes (i.e. one mask) per row.
+const I8X16_SHL_MASKS: [u8; 128] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+    0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc,
+    0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8,
+    0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0,
+    0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0,
+    0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0,
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+];
 
 #[inline]
 fn to_simm32(constant: i64) -> Option<RegMemImm> {
