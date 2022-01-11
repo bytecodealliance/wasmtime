@@ -1,5 +1,4 @@
 use cranelift::prelude::*;
-use cranelift_codegen::binemit::{NullStackMapSink, NullTrapSink};
 use cranelift_codegen::settings::{self, Configurable};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{default_libcall_names, Linkage, Module};
@@ -48,11 +47,7 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    let mut trap_sink = NullTrapSink {};
-    let mut stack_map_sink = NullStackMapSink {};
-    module
-        .define_function(func_a, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_a, &mut ctx).unwrap();
     module.clear_context(&mut ctx);
 
     ctx.func.signature = sig_b;
@@ -74,9 +69,7 @@ fn main() {
         bcx.seal_all_blocks();
         bcx.finalize();
     }
-    module
-        .define_function(func_b, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_b, &mut ctx).unwrap();
     module.clear_context(&mut ctx);
 
     // Perform linking.

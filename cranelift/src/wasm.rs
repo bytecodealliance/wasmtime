@@ -10,11 +10,12 @@
 use crate::disasm::{print_all, PrintRelocs, PrintStackMaps, PrintTraps};
 use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
+use cranelift_codegen::binemit::{RelocSink, StackMapSink, TrapSink};
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
-use cranelift_codegen::timing;
 use cranelift_codegen::Context;
+use cranelift_codegen::{timing, MachReloc, MachStackMap, MachTrap};
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::io::Read;
@@ -267,9 +268,36 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             }
         } else {
             context
-                .compile_and_emit(isa, &mut mem, &mut relocs, &mut traps, &mut stack_maps)
+                .compile_and_emit(isa, &mut mem)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
-            let code_info = context.mach_compile_result.as_ref().unwrap().code_info();
+            let result = context.mach_compile_result.as_ref().unwrap();
+            let code_info = result.code_info();
+            for &MachReloc {
+                offset,
+                srcloc,
+                kind,
+                ref name,
+                addend,
+            } in result.buffer.relocs()
+            {
+                relocs.reloc_external(offset, srcloc, kind, name, addend);
+            }
+            for &MachTrap {
+                offset,
+                srcloc,
+                code,
+            } in result.buffer.traps()
+            {
+                traps.trap(offset, srcloc, code);
+            }
+            for &MachStackMap {
+                offset_end,
+                ref stack_map,
+                ..
+            } in result.buffer.stack_maps()
+            {
+                stack_maps.add_stack_map(offset_end, stack_map.clone());
+            }
 
             if options.print_size {
                 println!(

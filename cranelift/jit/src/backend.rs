@@ -3,9 +3,9 @@
 use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{self, ir, settings};
+use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{
-    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMapSink, TrapSink},
+    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink},
     CodegenError,
 };
 use cranelift_entity::SecondaryMap;
@@ -648,8 +648,6 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        trap_sink: &mut dyn TrapSink,
-        stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display());
         let decl = self.declarations.get_function_decl(id);
@@ -674,7 +672,17 @@ impl Module for JITModule {
             .expect("TODO: handle OOM etc.");
 
         let mut reloc_sink = JITRelocSink::default();
-        unsafe { ctx.emit_to_memory(ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
+        unsafe { ctx.emit_to_memory(ptr) };
+        for &MachReloc {
+            offset,
+            srcloc,
+            kind,
+            ref name,
+            addend,
+        } in ctx.mach_compile_result.as_ref().unwrap().buffer.relocs()
+        {
+            reloc_sink.reloc_external(offset, srcloc, kind, name, addend);
+        }
 
         self.record_function_for_perf(ptr, size, &decl.name);
         self.compiled_functions[id] = Some(CompiledBlob {

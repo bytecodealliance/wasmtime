@@ -7,12 +7,13 @@ use crate::{
     CompiledFunction, FunctionAddressMap, Relocation, RelocationTarget,
 };
 use anyhow::{Context as _, Result};
+use cranelift_codegen::binemit::{RelocSink as _, StackMapSink as _, TrapSink as _};
 use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::settings;
-use cranelift_codegen::MachSrcLoc;
 use cranelift_codegen::{binemit, Context};
+use cranelift_codegen::{settings, MachReloc, MachTrap};
+use cranelift_codegen::{MachSrcLoc, MachStackMap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -170,14 +171,36 @@ impl wasmtime_environ::Compiler for Compiler {
         let mut trap_sink = TrapSink::new();
         let mut stack_map_sink = StackMapSink::default();
         context
-            .compile_and_emit(
-                isa,
-                &mut code_buf,
-                &mut reloc_sink,
-                &mut trap_sink,
-                &mut stack_map_sink,
-            )
+            .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+
+        let result = context.mach_compile_result.as_ref().unwrap();
+        for &MachReloc {
+            offset,
+            srcloc,
+            kind,
+            ref name,
+            addend,
+        } in result.buffer.relocs()
+        {
+            reloc_sink.reloc_external(offset, srcloc, kind, name, addend);
+        }
+        for &MachTrap {
+            offset,
+            srcloc,
+            code,
+        } in result.buffer.traps()
+        {
+            trap_sink.trap(offset, srcloc, code);
+        }
+        for &MachStackMap {
+            offset_end,
+            ref stack_map,
+            ..
+        } in result.buffer.stack_maps()
+        {
+            stack_map_sink.add_stack_map(offset_end, stack_map.clone());
+        }
 
         let unwind_info = context
             .create_unwind_info(isa)
@@ -535,17 +558,25 @@ impl Compiler {
     ) -> Result<CompiledFunction, CompileError> {
         let mut code_buf = Vec::new();
         let mut reloc_sink = TrampolineRelocSink::default();
-        let mut trap_sink = binemit::NullTrapSink {};
-        let mut stack_map_sink = binemit::NullStackMapSink {};
         context
-            .compile_and_emit(
-                isa,
-                &mut code_buf,
-                &mut reloc_sink,
-                &mut trap_sink,
-                &mut stack_map_sink,
-            )
+            .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+
+        for &MachReloc {
+            offset,
+            srcloc,
+            kind,
+            ref name,
+            addend,
+        } in context
+            .mach_compile_result
+            .as_ref()
+            .unwrap()
+            .buffer
+            .relocs()
+        {
+            reloc_sink.reloc_external(offset, srcloc, kind, name, addend);
+        }
 
         let unwind_info = context
             .create_unwind_info(isa)

@@ -3,9 +3,9 @@
 use anyhow::anyhow;
 use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{self, ir};
+use cranelift_codegen::{self, ir, MachReloc};
 use cranelift_codegen::{
-    binemit::{Addend, CodeOffset, Reloc, RelocSink, StackMapSink, TrapSink},
+    binemit::{Addend, CodeOffset, Reloc, RelocSink},
     CodegenError,
 };
 use cranelift_module::{
@@ -307,20 +307,23 @@ impl Module for ObjectModule {
         &mut self,
         func_id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        trap_sink: &mut dyn TrapSink,
-        stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", func_id, ctx.func.display());
         let mut code: Vec<u8> = Vec::new();
         let mut reloc_sink = ObjectRelocSink::default();
 
-        ctx.compile_and_emit(
-            self.isa(),
-            &mut code,
-            &mut reloc_sink,
-            trap_sink,
-            stack_map_sink,
-        )?;
+        ctx.compile_and_emit(self.isa(), &mut code)?;
+
+        for &MachReloc {
+            offset,
+            srcloc,
+            kind,
+            ref name,
+            addend,
+        } in ctx.mach_compile_result.as_ref().unwrap().buffer.relocs()
+        {
+            reloc_sink.reloc_external(offset, srcloc, kind, name, addend);
+        }
 
         self.define_function_bytes(func_id, &code, &reloc_sink.relocs)
     }
