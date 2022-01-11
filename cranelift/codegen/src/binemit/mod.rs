@@ -105,20 +105,8 @@ pub struct CodeInfo {
 /// A `CodeSink` will receive all of the machine code for a function. It also accepts relocations
 /// which are locations in the code section that need to be fixed up when linking.
 pub trait CodeSink {
-    /// Get the current position.
-    fn offset(&self) -> CodeOffset;
-
     /// Add 1 byte to the code section.
     fn put1(&mut self, _: u8);
-
-    /// Add 2 bytes to the code section.
-    fn put2(&mut self, _: u16);
-
-    /// Add 4 bytes to the code section.
-    fn put4(&mut self, _: u32);
-
-    /// Add 8 bytes to the code section.
-    fn put8(&mut self, _: u64);
 
     /// Add a relocation referencing an external symbol plus the addend at the current offset.
     fn reloc_external(&mut self, _: SourceLoc, _: Reloc, _: &ExternalName, _: Addend);

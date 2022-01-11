@@ -81,24 +81,8 @@ struct SizeSink {
 }
 
 impl binemit::CodeSink for SizeSink {
-    fn offset(&self) -> binemit::CodeOffset {
-        self.offset
-    }
-
     fn put1(&mut self, _: u8) {
         self.offset += 1;
-    }
-
-    fn put2(&mut self, _: u16) {
-        self.offset += 2;
-    }
-
-    fn put4(&mut self, _: u32) {
-        self.offset += 4;
-    }
-
-    fn put8(&mut self, _: u64) {
-        self.offset += 8;
     }
 
     fn reloc_external(

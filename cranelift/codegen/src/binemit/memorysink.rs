@@ -99,23 +99,7 @@ impl<'a> MemoryCodeSink<'a> {
 }
 
 impl<'a> CodeSink for MemoryCodeSink<'a> {
-    fn offset(&self) -> CodeOffset {
-        self.offset as CodeOffset
-    }
-
     fn put1(&mut self, x: u8) {
-        self.write(x);
-    }
-
-    fn put2(&mut self, x: u16) {
-        self.write(x);
-    }
-
-    fn put4(&mut self, x: u32) {
-        self.write(x);
-    }
-
-    fn put8(&mut self, x: u64) {
         self.write(x);
     }
 
@@ -126,17 +110,17 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
         name: &ExternalName,
         addend: Addend,
     ) {
-        let ofs = self.offset();
+        let ofs = self.offset as CodeOffset;
         self.relocs.reloc_external(ofs, srcloc, rel, name, addend);
     }
 
     fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
-        let ofs = self.offset();
+        let ofs = self.offset as CodeOffset;
         self.traps.trap(ofs, srcloc, code);
     }
 
     fn end_codegen(&mut self) {
-        self.info.total_size = self.offset();
+        self.info.total_size = self.offset as CodeOffset;
     }
 
     fn add_call_site(&mut self, opcode: Opcode, loc: SourceLoc) {
@@ -144,7 +128,7 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
             opcode.is_call(),
             "adding call site info for a non-call instruction."
         );
-        let ret_addr = self.offset();
+        let ret_addr = self.offset as CodeOffset;
         self.relocs.add_call_site(opcode, ret_addr, loc);
     }
 }
