@@ -1350,6 +1350,10 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a call-site record at the current offset.
     pub fn add_call_site(&mut self, srcloc: SourceLoc, opcode: Opcode) {
+        debug_assert!(
+            opcode.is_call(),
+            "adding call site info for a non-call instruction."
+        );
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
             srcloc,
@@ -1446,7 +1450,6 @@ impl MachBufferFinalized {
 
         let mut next_reloc = 0;
         let mut next_trap = 0;
-        let mut next_call_site = 0;
         for (idx, byte) in self.data.iter().enumerate() {
             while next_reloc < self.relocs.len()
                 && self.relocs[next_reloc].offset == idx as CodeOffset
@@ -1461,13 +1464,6 @@ impl MachBufferFinalized {
                 sink.trap(trap.code, trap.srcloc);
                 next_trap += 1;
             }
-            while next_call_site < self.call_sites.len()
-                && self.call_sites[next_call_site].ret_addr == idx as CodeOffset
-            {
-                let call_site = &self.call_sites[next_call_site];
-                sink.add_call_site(call_site.opcode, call_site.srcloc);
-                next_call_site += 1;
-            }
             sink.put1(*byte);
         }
     }
@@ -1475,6 +1471,11 @@ impl MachBufferFinalized {
     /// Get the stack map metadata for this code.
     pub fn stack_maps(&self) -> &[MachStackMap] {
         &self.stack_maps[..]
+    }
+
+    /// Get the list of call sites for this code.
+    pub fn call_sites(&self) -> &[MachCallSite] {
+        &self.call_sites[..]
     }
 }
 
@@ -1531,13 +1532,14 @@ struct MachTrap {
 }
 
 /// A call site record resulting from a compilation.
-struct MachCallSite {
+#[derive(Clone, Debug)]
+pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
-    ret_addr: CodeOffset,
+    pub ret_addr: CodeOffset,
     /// The original source location.
-    srcloc: SourceLoc,
+    pub srcloc: SourceLoc,
     /// The call's opcode.
-    opcode: Opcode,
+    pub opcode: Opcode,
 }
 
 /// A source-location mapping resulting from a compilation.
@@ -2073,7 +2075,6 @@ mod test {
         struct TestCodeSink {
             offset: CodeOffset,
             traps: Vec<(CodeOffset, TrapCode)>,
-            callsites: Vec<(CodeOffset, Opcode)>,
             relocs: Vec<(CodeOffset, Reloc)>,
         }
         impl CodeSink for TestCodeSink {
@@ -2085,9 +2086,6 @@ mod test {
             }
             fn trap(&mut self, t: TrapCode, _: SourceLoc) {
                 self.traps.push((self.offset, t));
-            }
-            fn add_call_site(&mut self, op: Opcode, _: SourceLoc) {
-                self.callsites.push((self.offset, op));
             }
         }
 
@@ -2103,7 +2101,13 @@ mod test {
                 (2, TrapCode::IntegerDivisionByZero)
             ]
         );
-        assert_eq!(sink.callsites, vec![(2, Opcode::Call),]);
+        assert_eq!(
+            buf.call_sites()
+                .iter()
+                .map(|call_site| (call_site.ret_addr, call_site.opcode))
+                .collect::<Vec<_>>(),
+            vec![(2, Opcode::Call)]
+        );
         assert_eq!(sink.relocs, vec![(2, Reloc::Abs4), (3, Reloc::Abs8)]);
     }
 }

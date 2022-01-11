@@ -11,7 +11,7 @@ pub use self::memorysink::{
     TrapSink,
 };
 pub use self::stack_map::StackMap;
-use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, SourceLoc, TrapCode};
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -113,9 +113,4 @@ pub trait CodeSink {
 
     /// Add trap information for the current offset.
     fn trap(&mut self, _: TrapCode, _: SourceLoc);
-
-    /// Add a call site for a call with the given opcode, returning at the current offset.
-    fn add_call_site(&mut self, _: Opcode, _: SourceLoc) {
-        // Default implementation doesn't need to do anything.
-    }
 }

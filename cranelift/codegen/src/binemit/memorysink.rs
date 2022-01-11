@@ -15,7 +15,7 @@
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
 use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
 use crate::binemit::stack_map::StackMap;
-use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, SourceLoc, TrapCode};
 use core::ptr::write_unaligned;
 
 /// A `CodeSink` that writes binary machine code directly into memory.
@@ -77,10 +77,6 @@ pub trait RelocSink {
         _: &ExternalName,
         _: Addend,
     );
-
-    /// Track a call site whose return address is the given CodeOffset, for the given opcode. Does
-    /// nothing in general, only useful for certain embedders (SpiderMonkey).
-    fn add_call_site(&mut self, _: Opcode, _: CodeOffset, _: SourceLoc) {}
 }
 
 /// A trait for receiving trap codes and offsets.
@@ -114,15 +110,6 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
         let ofs = self.offset as CodeOffset;
         self.traps.trap(ofs, srcloc, code);
-    }
-
-    fn add_call_site(&mut self, opcode: Opcode, loc: SourceLoc) {
-        debug_assert!(
-            opcode.is_call(),
-            "adding call site info for a non-call instruction."
-        );
-        let ret_addr = self.offset as CodeOffset;
-        self.relocs.add_call_site(opcode, ret_addr, loc);
     }
 }
 
