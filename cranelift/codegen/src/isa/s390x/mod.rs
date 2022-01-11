@@ -136,7 +136,7 @@ impl TargetIsa for S390xBackend {
                 Some(UnwindInfo::SystemV(
                     crate::isa::unwind::systemv::create_unwind_info_from_insts(
                         &result.buffer.unwind_info[..],
-                        result.buffer.data.len(),
+                        result.buffer.data().len(),
                         &mapper,
                     )?,
                 ))
@@ -225,7 +225,7 @@ mod test {
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ false)
             .unwrap();
-        let code = &result.buffer.data[..];
+        let code = result.buffer.data();
 
         // ahi %r2, 0x1234
         // br %r14
@@ -277,7 +277,7 @@ mod test {
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ false)
             .unwrap();
-        let code = &result.buffer.data[..];
+        let code = result.buffer.data();
 
         // FIXME: the branching logic should be optimized more
 

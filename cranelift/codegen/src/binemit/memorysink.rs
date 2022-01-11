@@ -13,47 +13,9 @@
 //! that a `MemoryCodeSink` will always write binary machine code to raw memory. It forwards any
 //! relocations to a `RelocSink` trait object. Relocations are less frequent than the
 //! `CodeSink::put*` methods, so the performance impact of the virtual callbacks is less severe.
-use super::{Addend, CodeInfo, CodeOffset, CodeSink, Reloc};
+use super::{Addend, CodeOffset, Reloc};
 use crate::binemit::stack_map::StackMap;
 use crate::ir::{ExternalName, SourceLoc, TrapCode};
-use core::ptr::write_unaligned;
-
-/// A `CodeSink` that writes binary machine code directly into memory.
-///
-/// A `MemoryCodeSink` object should be used when emitting a Cranelift IR function into executable
-/// memory. It writes machine code directly to a raw pointer without any bounds checking, so make
-/// sure to allocate enough memory for the whole function. The number of bytes required is returned
-/// by the `Context::compile()` function.
-///
-/// Any relocations in the function are forwarded to the `RelocSink` trait object.
-///
-/// Note that `MemoryCodeSink` writes multi-byte values in the native byte order of the host. This
-/// is not the right thing to do for cross compilation.
-pub struct MemoryCodeSink {
-    /// Pointer to start of sink's preallocated memory.
-    data: *mut u8,
-    /// Offset is isize because its major consumer needs it in that form.
-    offset: isize,
-}
-
-impl<'a> MemoryCodeSink {
-    /// Create a new memory code sink that writes a function to the memory pointed to by `data`.
-    ///
-    /// # Safety
-    ///
-    /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
-    /// memory buffer, and it can't guarantee that the `data` pointer is valid.
-    pub unsafe fn new(data: *mut u8) -> Self {
-        Self { data, offset: 0 }
-    }
-
-    /// Information about the generated code and read-only data.
-    pub fn info(&self) -> CodeInfo {
-        CodeInfo {
-            total_size: self.offset as CodeOffset,
-        }
-    }
-}
 
 /// A trait for receiving relocations for code that is emitted directly into memory.
 pub trait RelocSink {
@@ -75,15 +37,6 @@ pub trait RelocSink {
 pub trait TrapSink {
     /// Add trap information for a specific offset.
     fn trap(&mut self, _: CodeOffset, _: SourceLoc, _: TrapCode);
-}
-
-impl CodeSink for MemoryCodeSink {
-    fn put1(&mut self, x: u8) {
-        unsafe {
-            write_unaligned(self.data.offset(self.offset), x);
-            self.offset += 1;
-        }
-    }
 }
 
 /// A `RelocSink` implementation that does nothing, which is convenient when

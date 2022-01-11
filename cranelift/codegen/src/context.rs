@@ -9,7 +9,7 @@
 //! contexts concurrently. Typically, you would have one context per compilation thread and only a
 //! single ISA instance.
 
-use crate::binemit::{CodeInfo, MemoryCodeSink, RelocSink, StackMapSink, TrapSink};
+use crate::binemit::{CodeInfo, RelocSink, StackMapSink, TrapSink};
 use crate::dce::do_dce;
 use crate::dominator_tree::DominatorTree;
 use crate::flowgraph::ControlFlowGraph;
@@ -186,6 +186,7 @@ impl Context {
     /// and it can't guarantee that the `mem` pointer is valid.
     ///
     /// Returns information about the emitted code and data.
+    #[deny(unsafe_op_in_unsafe_fn)]
     pub unsafe fn emit_to_memory(
         &self,
         mem: *mut u8,
@@ -194,13 +195,15 @@ impl Context {
         stack_maps: &mut dyn StackMapSink,
     ) -> CodeInfo {
         let _tt = timing::binemit();
-        let mut sink = MemoryCodeSink::new(mem);
         let result = self
             .mach_compile_result
             .as_ref()
             .expect("only using mach backend now");
-        result.buffer.emit(&mut sink);
-        let info = sink.info();
+        let info = result.code_info();
+
+        let mem = unsafe { std::slice::from_raw_parts_mut(mem, info.total_size as usize) };
+        mem.copy_from_slice(result.buffer.data());
+
         for &MachReloc {
             offset,
             srcloc,

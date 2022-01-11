@@ -140,7 +140,7 @@
 //! Given these invariants, we argue why each optimization preserves execution
 //! semantics below (grep for "Preserves execution semantics").
 
-use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, StackMap};
+use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
@@ -233,7 +233,7 @@ pub struct MachBuffer<I: VCodeInst> {
 /// without fixups. This allows the type to be independent of the backend.
 pub struct MachBufferFinalized {
     /// The buffer contents, as raw bytes.
-    pub data: SmallVec<[u8; 1024]>,
+    data: SmallVec<[u8; 1024]>,
     /// Any relocations referring to this code. Note that only *external*
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
@@ -1435,8 +1435,8 @@ impl MachBufferFinalized {
         s
     }
 
-    /// Emit this buffer to the given CodeSink.
-    pub fn emit<CS: CodeSink>(&self, sink: &mut CS) {
+    /// Get the code bytes.
+    pub fn data(&self) -> &[u8] {
         // N.B.: we emit every section into the .text section as far as
         // the `CodeSink` is concerned; we do not bother to segregate
         // the contents into the actual program text, the jumptable and the
@@ -1448,9 +1448,7 @@ impl MachBufferFinalized {
         // add this designation and segregate the output; take care, however,
         // to add the appropriate relocations in this case.
 
-        for &byte in self.data.iter() {
-            sink.put1(byte);
-        }
+        &self.data[..]
     }
 
     /// Get the list of external relocations for this code.
@@ -2066,20 +2064,7 @@ mod test {
 
         let buf = buf.finish();
 
-        #[derive(Default)]
-        struct TestCodeSink {
-            offset: CodeOffset,
-        }
-        impl CodeSink for TestCodeSink {
-            fn put1(&mut self, _: u8) {
-                self.offset += 1;
-            }
-        }
-
-        let mut sink = TestCodeSink::default();
-        buf.emit(&mut sink);
-
-        assert_eq!(sink.offset, 4);
+        assert_eq!(buf.data(), &[1, 2, 3, 4]);
         assert_eq!(
             buf.traps()
                 .iter()

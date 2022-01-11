@@ -7,8 +7,7 @@ mod memorysink;
 mod stack_map;
 
 pub use self::memorysink::{
-    MemoryCodeSink, NullRelocSink, NullStackMapSink, NullTrapSink, RelocSink, StackMapSink,
-    TrapSink,
+    NullRelocSink, NullStackMapSink, NullTrapSink, RelocSink, StackMapSink, TrapSink,
 };
 pub use self::stack_map::StackMap;
 use core::fmt;
@@ -97,13 +96,4 @@ impl fmt::Display for Reloc {
 pub struct CodeInfo {
     /// Number of bytes in total.
     pub total_size: CodeOffset,
-}
-
-/// Abstract interface for adding bytes to the code segment.
-///
-/// A `CodeSink` will receive all of the machine code for a function. It also accepts relocations
-/// which are locations in the code section that need to be fixed up when linking.
-pub trait CodeSink {
-    /// Add 1 byte to the code section.
-    fn put1(&mut self, _: u8);
 }

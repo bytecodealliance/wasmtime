@@ -122,7 +122,7 @@ impl TargetIsa for X64Backend {
                 Some(UnwindInfo::SystemV(
                     crate::isa::unwind::systemv::create_unwind_info_from_insts(
                         &result.buffer.unwind_info[..],
-                        result.buffer.data.len(),
+                        result.buffer.data().len(),
                         &mapper,
                     )?,
                 ))
