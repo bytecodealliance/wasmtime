@@ -1,7 +1,6 @@
 use crate::ir::MemFlags;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::isa::test_utils;
 use crate::settings;
 use alloc::vec::Vec;
 
@@ -8112,12 +8111,10 @@ fn test_s390x_binemit() {
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
 
-        let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
         insn.emit(&mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish();
-        buffer.emit(&mut sink);
-        let actual_encoding = &sink.stringify();
+        let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }
 }

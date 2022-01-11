@@ -76,9 +76,6 @@ pub mod unwind;
 
 mod call_conv;
 
-#[cfg(test)]
-mod test_utils;
-
 /// Returns a builder that can create a corresponding `TargetIsa`
 /// or `Err(LookupError::SupportDisabled)` if not enabled.
 macro_rules! isa_builder {

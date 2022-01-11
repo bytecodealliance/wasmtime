@@ -1420,6 +1420,17 @@ impl MachBufferFinalized {
         self.data.len() as CodeOffset
     }
 
+    /// Return the code in this mach buffer as a hex string for testing purposes.
+    pub fn stringify_code_bytes(&self) -> String {
+        // This is pretty lame, but whatever ..
+        use std::fmt::Write;
+        let mut s = String::with_capacity(self.data.len() * 2);
+        for b in &self.data {
+            write!(&mut s, "{:02X}", b).unwrap();
+        }
+        s
+    }
+
     /// Emit this buffer to the given CodeSink.
     pub fn emit<CS: CodeSink>(&self, sink: &mut CS) {
         // N.B.: we emit every section into the .text section as far as
