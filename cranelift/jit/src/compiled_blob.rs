@@ -1,13 +1,13 @@
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::ir::ExternalName;
-use cranelift_module::RelocRecord;
+use cranelift_codegen::MachReloc;
 use std::convert::TryFrom;
 
 #[derive(Clone)]
 pub(crate) struct CompiledBlob {
     pub(crate) ptr: *mut u8,
     pub(crate) size: usize,
-    pub(crate) relocs: Vec<RelocRecord>,
+    pub(crate) relocs: Vec<MachReloc>,
 }
 
 impl CompiledBlob {
@@ -19,16 +19,17 @@ impl CompiledBlob {
     ) {
         use std::ptr::write_unaligned;
 
-        for &RelocRecord {
-            reloc,
+        for &MachReloc {
+            kind,
             offset,
+            srcloc: _,
             ref name,
             addend,
         } in &self.relocs
         {
             debug_assert!((offset as usize) < self.size);
             let at = unsafe { self.ptr.offset(isize::try_from(offset).unwrap()) };
-            match reloc {
+            match kind {
                 Reloc::Abs4 => {
                     let base = get_address(name);
                     let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };

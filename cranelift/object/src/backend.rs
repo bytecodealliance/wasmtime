@@ -5,12 +5,12 @@ use cranelift_codegen::entity::SecondaryMap;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{self, ir, MachReloc};
 use cranelift_codegen::{
-    binemit::{Addend, CodeOffset, Reloc, RelocSink},
+    binemit::{Addend, CodeOffset, Reloc},
     CodegenError,
 };
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
+    ModuleDeclarations, ModuleError, ModuleResult,
 };
 use log::info;
 use object::write::{
@@ -310,29 +310,21 @@ impl Module for ObjectModule {
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", func_id, ctx.func.display());
         let mut code: Vec<u8> = Vec::new();
-        let mut reloc_sink = ObjectRelocSink::default();
 
         ctx.compile_and_emit(self.isa(), &mut code)?;
 
-        for &MachReloc {
-            offset,
-            srcloc,
-            kind,
-            ref name,
-            addend,
-        } in ctx.mach_compile_result.as_ref().unwrap().buffer.relocs()
-        {
-            reloc_sink.reloc_external(offset, srcloc, kind, name, addend);
-        }
-
-        self.define_function_bytes(func_id, &code, &reloc_sink.relocs)
+        self.define_function_bytes(
+            func_id,
+            &code,
+            ctx.mach_compile_result.as_ref().unwrap().buffer.relocs(),
+        )
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
         bytes: &[u8],
-        relocs: &[RelocRecord],
+        relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", func_id);
         let total_size: u32 = match bytes.len().try_into() {
@@ -563,9 +555,9 @@ impl ObjectModule {
         }
     }
 
-    fn process_reloc(&self, record: &RelocRecord) -> ObjectRelocRecord {
+    fn process_reloc(&self, record: &MachReloc) -> ObjectRelocRecord {
         let mut addend = record.addend;
-        let (kind, encoding, size) = match record.reloc {
+        let (kind, encoding, size) = match record.kind {
             Reloc::Abs4 => (RelocationKind::Absolute, RelocationEncoding::Generic, 32),
             Reloc::Abs8 => (RelocationKind::Absolute, RelocationEncoding::Generic, 64),
             Reloc::X86PCRel4 => (RelocationKind::Relative, RelocationEncoding::Generic, 32),
@@ -709,27 +701,4 @@ struct ObjectRelocRecord {
     encoding: RelocationEncoding,
     size: u8,
     addend: Addend,
-}
-
-#[derive(Default)]
-struct ObjectRelocSink {
-    relocs: Vec<RelocRecord>,
-}
-
-impl RelocSink for ObjectRelocSink {
-    fn reloc_external(
-        &mut self,
-        offset: CodeOffset,
-        _srcloc: ir::SourceLoc,
-        reloc: Reloc,
-        name: &ir::ExternalName,
-        addend: Addend,
-    ) {
-        self.relocs.push(RelocRecord {
-            offset,
-            reloc,
-            addend,
-            name: name.clone(),
-        })
-    }
 }

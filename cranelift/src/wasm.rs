@@ -7,15 +7,14 @@
     allow(clippy::too_many_arguments, clippy::cognitive_complexity)
 )]
 
-use crate::disasm::{print_all, PrintRelocs, PrintStackMaps, PrintTraps};
+use crate::disasm::print_all;
 use crate::utils::parse_sets_and_triple;
 use anyhow::{Context as _, Result};
-use cranelift_codegen::binemit::{RelocSink, StackMapSink, TrapSink};
 use cranelift_codegen::ir::DisplayFunctionAnnotations;
 use cranelift_codegen::print_errors::{pretty_error, pretty_verifier_error};
 use cranelift_codegen::settings::FlagsOrIsa;
+use cranelift_codegen::timing;
 use cranelift_codegen::Context;
-use cranelift_codegen::{timing, MachReloc, MachStackMap, MachTrap};
 use cranelift_entity::EntityRef;
 use cranelift_wasm::{translate_module, DummyEnvironment, FuncIndex, ReturnMode};
 use std::io::Read;
@@ -259,45 +258,17 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         let mut saved_size = None;
         let func_index = num_func_imports + def_index.index();
         let mut mem = vec![];
-        let mut relocs = PrintRelocs::new(options.print);
-        let mut traps = PrintTraps::new(options.print);
-        let mut stack_maps = PrintStackMaps::new(options.print);
-        if options.check_translation {
+        let (relocs, traps, stack_maps) = if options.check_translation {
             if let Err(errors) = context.verify(fisa) {
                 anyhow::bail!("{}", pretty_verifier_error(&context.func, None, errors));
             }
+            (vec![], vec![], vec![])
         } else {
             context
                 .compile_and_emit(isa, &mut mem)
                 .map_err(|err| anyhow::anyhow!("{}", pretty_error(&context.func, err)))?;
             let result = context.mach_compile_result.as_ref().unwrap();
             let code_info = result.code_info();
-            for &MachReloc {
-                offset,
-                srcloc,
-                kind,
-                ref name,
-                addend,
-            } in result.buffer.relocs()
-            {
-                relocs.reloc_external(offset, srcloc, kind, name, addend);
-            }
-            for &MachTrap {
-                offset,
-                srcloc,
-                code,
-            } in result.buffer.traps()
-            {
-                traps.trap(offset, srcloc, code);
-            }
-            for &MachStackMap {
-                offset_end,
-                ref stack_map,
-                ..
-            } in result.buffer.stack_maps()
-            {
-                stack_maps.add_stack_map(offset_end, stack_map.clone());
-            }
 
             if options.print_size {
                 println!(
@@ -315,7 +286,12 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
             if options.disasm {
                 saved_size = Some(code_info.total_size);
             }
-        }
+            (
+                result.buffer.relocs().to_vec(),
+                result.buffer.traps().to_vec(),
+                result.buffer.stack_maps().to_vec(),
+            )
+        };
 
         if options.print {
             vprintln!(options.verbose, "");
@@ -351,7 +327,15 @@ fn handle_module(options: &Options, path: &Path, name: &str, fisa: FlagsOrIsa) -
         }
 
         if let Some(total_size) = saved_size {
-            print_all(isa, &mem, total_size, &relocs, &traps, &stack_maps)?;
+            print_all(
+                isa,
+                &mem,
+                total_size,
+                options.print,
+                &relocs,
+                &traps,
+                &stack_maps,
+            )?;
         }
 
         context.clear();

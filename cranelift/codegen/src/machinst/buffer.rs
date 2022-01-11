@@ -1499,6 +1499,7 @@ struct MachLabelFixup<I: VCodeInst> {
 }
 
 /// A relocation resulting from a compilation.
+#[derive(Clone, Debug)]
 pub struct MachReloc {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
@@ -1514,6 +1515,7 @@ pub struct MachReloc {
 }
 
 /// A trap record resulting from a compilation.
+#[derive(Clone, Debug)]
 pub struct MachTrap {
     /// The offset at which the trap instruction occurs, *relative to the
     /// containing section*.

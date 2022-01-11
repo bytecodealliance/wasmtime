@@ -7,8 +7,8 @@
 
 use super::HashMap;
 use crate::data_context::DataContext;
-use cranelift_codegen::binemit;
 use cranelift_codegen::entity::{entity_impl, PrimaryMap};
+use cranelift_codegen::{binemit, MachReloc};
 use cranelift_codegen::{ir, isa, CodegenError, Context};
 use std::borrow::ToOwned;
 use std::string::String;
@@ -416,19 +416,6 @@ pub struct ModuleCompiledFunction {
     pub size: binemit::CodeOffset,
 }
 
-/// A record of a relocation to perform.
-#[derive(Clone)]
-pub struct RelocRecord {
-    /// Where in the generated code this relocation is to be applied.
-    pub offset: binemit::CodeOffset,
-    /// The kind of relocation this represents.
-    pub reloc: binemit::Reloc,
-    /// What symbol we're relocating against.
-    pub name: ir::ExternalName,
-    /// The offset to add to the relocation.
-    pub addend: binemit::Addend,
-}
-
 /// A `Module` is a utility for collecting functions and data objects, and linking them together.
 pub trait Module {
     /// Return the `TargetIsa` to compile for.
@@ -567,7 +554,7 @@ pub trait Module {
         &mut self,
         func: FuncId,
         bytes: &[u8],
-        relocs: &[RelocRecord],
+        relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
@@ -662,7 +649,7 @@ impl<M: Module> Module for &mut M {
         &mut self,
         func: FuncId,
         bytes: &[u8],
-        relocs: &[RelocRecord],
+        relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
         (**self).define_function_bytes(func, bytes, relocs)
     }
