@@ -1448,17 +1448,14 @@ impl MachBufferFinalized {
         // add this designation and segregate the output; take care, however,
         // to add the appropriate relocations in this case.
 
-        let mut next_reloc = 0;
-        for (idx, byte) in self.data.iter().enumerate() {
-            while next_reloc < self.relocs.len()
-                && self.relocs[next_reloc].offset == idx as CodeOffset
-            {
-                let reloc = &self.relocs[next_reloc];
-                sink.reloc_external(reloc.srcloc, reloc.kind, &reloc.name, reloc.addend);
-                next_reloc += 1;
-            }
-            sink.put1(*byte);
+        for &byte in self.data.iter() {
+            sink.put1(byte);
         }
+    }
+
+    /// Get the list of external relocations for this code.
+    pub fn relocs(&self) -> &[MachReloc] {
+        &self.relocs[..]
     }
 
     /// Get the list of trap records for this code.
@@ -1504,18 +1501,18 @@ struct MachLabelFixup<I: VCodeInst> {
 }
 
 /// A relocation resulting from a compilation.
-struct MachReloc {
+pub struct MachReloc {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
-    offset: CodeOffset,
+    pub offset: CodeOffset,
     /// The original source location.
-    srcloc: SourceLoc,
+    pub srcloc: SourceLoc,
     /// The kind of relocation.
-    kind: Reloc,
+    pub kind: Reloc,
     /// The external symbol / name to which this relocation refers.
-    name: ExternalName,
+    pub name: ExternalName,
     /// The addend to add to the symbol value.
-    addend: i64,
+    pub addend: i64,
 }
 
 /// A trap record resulting from a compilation.
@@ -2072,14 +2069,10 @@ mod test {
         #[derive(Default)]
         struct TestCodeSink {
             offset: CodeOffset,
-            relocs: Vec<(CodeOffset, Reloc)>,
         }
         impl CodeSink for TestCodeSink {
             fn put1(&mut self, _: u8) {
                 self.offset += 1;
-            }
-            fn reloc_external(&mut self, _: SourceLoc, r: Reloc, _: &ExternalName, _: Addend) {
-                self.relocs.push((self.offset, r));
             }
         }
 
@@ -2105,6 +2098,12 @@ mod test {
                 .collect::<Vec<_>>(),
             vec![(2, Opcode::Call)]
         );
-        assert_eq!(sink.relocs, vec![(2, Reloc::Abs4), (3, Reloc::Abs8)]);
+        assert_eq!(
+            buf.relocs()
+                .iter()
+                .map(|reloc| (reloc.offset, reloc.kind))
+                .collect::<Vec<_>>(),
+            vec![(2, Reloc::Abs4), (3, Reloc::Abs8)]
+        );
     }
 }

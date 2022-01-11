@@ -84,15 +84,6 @@ impl binemit::CodeSink for SizeSink {
     fn put1(&mut self, _: u8) {
         self.offset += 1;
     }
-
-    fn reloc_external(
-        &mut self,
-        _srcloc: ir::SourceLoc,
-        _reloc: binemit::Reloc,
-        _name: &ir::ExternalName,
-        _addend: binemit::Addend,
-    ) {
-    }
 }
 
 fn check_precise_output(text: &str, context: &Context) -> Result<()> {

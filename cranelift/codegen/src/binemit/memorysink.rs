@@ -29,30 +29,22 @@ use core::ptr::write_unaligned;
 ///
 /// Note that `MemoryCodeSink` writes multi-byte values in the native byte order of the host. This
 /// is not the right thing to do for cross compilation.
-pub struct MemoryCodeSink<'a> {
+pub struct MemoryCodeSink {
     /// Pointer to start of sink's preallocated memory.
     data: *mut u8,
     /// Offset is isize because its major consumer needs it in that form.
     offset: isize,
-    relocs: &'a mut dyn RelocSink,
 }
 
-impl<'a> MemoryCodeSink<'a> {
+impl<'a> MemoryCodeSink {
     /// Create a new memory code sink that writes a function to the memory pointed to by `data`.
     ///
     /// # Safety
     ///
     /// This function is unsafe since `MemoryCodeSink` does not perform bounds checking on the
     /// memory buffer, and it can't guarantee that the `data` pointer is valid.
-    pub unsafe fn new(
-        data: *mut u8,
-        relocs: &'a mut dyn RelocSink,
-    ) -> Self {
-        Self {
-            data,
-            offset: 0,
-            relocs,
-        }
+    pub unsafe fn new(data: *mut u8) -> Self {
+        Self { data, offset: 0 }
     }
 
     /// Information about the generated code and read-only data.
@@ -85,23 +77,12 @@ pub trait TrapSink {
     fn trap(&mut self, _: CodeOffset, _: SourceLoc, _: TrapCode);
 }
 
-impl<'a> CodeSink for MemoryCodeSink<'a> {
+impl CodeSink for MemoryCodeSink {
     fn put1(&mut self, x: u8) {
         unsafe {
             write_unaligned(self.data.offset(self.offset), x);
             self.offset += 1;
         }
-    }
-
-    fn reloc_external(
-        &mut self,
-        srcloc: SourceLoc,
-        rel: Reloc,
-        name: &ExternalName,
-        addend: Addend,
-    ) {
-        let ofs = self.offset as CodeOffset;
-        self.relocs.reloc_external(ofs, srcloc, rel, name, addend);
     }
 }
 
