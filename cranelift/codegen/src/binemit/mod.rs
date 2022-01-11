@@ -11,7 +11,7 @@ pub use self::memorysink::{
     TrapSink,
 };
 pub use self::stack_map::StackMap;
-use crate::ir::{ExternalName, SourceLoc, TrapCode};
+use crate::ir::{ExternalName, SourceLoc};
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -110,7 +110,4 @@ pub trait CodeSink {
 
     /// Add a relocation referencing an external symbol plus the addend at the current offset.
     fn reloc_external(&mut self, _: SourceLoc, _: Reloc, _: &ExternalName, _: Addend);
-
-    /// Add trap information for the current offset.
-    fn trap(&mut self, _: TrapCode, _: SourceLoc);
 }

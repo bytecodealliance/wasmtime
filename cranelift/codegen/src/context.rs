@@ -18,7 +18,7 @@ use crate::isa::TargetIsa;
 use crate::legalizer::simple_legalize;
 use crate::licm::do_licm;
 use crate::loop_analysis::LoopAnalysis;
-use crate::machinst::{MachCompileResult, MachStackMap};
+use crate::machinst::{MachCompileResult, MachStackMap, MachTrap};
 use crate::nan_canonicalization::do_nan_canonicalization;
 use crate::remove_constant_phis::do_remove_constant_phis;
 use crate::result::CodegenResult;
@@ -194,16 +194,21 @@ impl Context {
         stack_maps: &mut dyn StackMapSink,
     ) -> CodeInfo {
         let _tt = timing::binemit();
-        let mut sink = MemoryCodeSink::new(mem, relocs, traps);
+        let mut sink = MemoryCodeSink::new(mem, relocs);
         let result = self
             .mach_compile_result
             .as_ref()
             .expect("only using mach backend now");
         result.buffer.emit(&mut sink);
         let info = sink.info();
-        // New backends do not emit StackMaps through the `CodeSink` because its interface
-        // requires `Value`s; instead, the `StackMap` objects are directly accessible via
-        // `result.buffer.stack_maps()`.
+        for &MachTrap {
+            offset,
+            srcloc,
+            code,
+        } in result.buffer.traps()
+        {
+            traps.trap(offset, srcloc, code);
+        }
         for &MachStackMap {
             offset_end,
             ref stack_map,

@@ -35,7 +35,6 @@ pub struct MemoryCodeSink<'a> {
     /// Offset is isize because its major consumer needs it in that form.
     offset: isize,
     relocs: &'a mut dyn RelocSink,
-    traps: &'a mut dyn TrapSink,
 }
 
 impl<'a> MemoryCodeSink<'a> {
@@ -48,13 +47,11 @@ impl<'a> MemoryCodeSink<'a> {
     pub unsafe fn new(
         data: *mut u8,
         relocs: &'a mut dyn RelocSink,
-        traps: &'a mut dyn TrapSink,
     ) -> Self {
         Self {
             data,
             offset: 0,
             relocs,
-            traps,
         }
     }
 
@@ -105,11 +102,6 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     ) {
         let ofs = self.offset as CodeOffset;
         self.relocs.reloc_external(ofs, srcloc, rel, name, addend);
-    }
-
-    fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
-        let ofs = self.offset as CodeOffset;
-        self.traps.trap(ofs, srcloc, code);
     }
 }
 

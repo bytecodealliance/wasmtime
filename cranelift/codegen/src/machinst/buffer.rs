@@ -1449,7 +1449,6 @@ impl MachBufferFinalized {
         // to add the appropriate relocations in this case.
 
         let mut next_reloc = 0;
-        let mut next_trap = 0;
         for (idx, byte) in self.data.iter().enumerate() {
             while next_reloc < self.relocs.len()
                 && self.relocs[next_reloc].offset == idx as CodeOffset
@@ -1458,14 +1457,13 @@ impl MachBufferFinalized {
                 sink.reloc_external(reloc.srcloc, reloc.kind, &reloc.name, reloc.addend);
                 next_reloc += 1;
             }
-            while next_trap < self.traps.len() && self.traps[next_trap].offset == idx as CodeOffset
-            {
-                let trap = &self.traps[next_trap];
-                sink.trap(trap.code, trap.srcloc);
-                next_trap += 1;
-            }
             sink.put1(*byte);
         }
+    }
+
+    /// Get the list of trap records for this code.
+    pub fn traps(&self) -> &[MachTrap] {
+        &self.traps[..]
     }
 
     /// Get the stack map metadata for this code.
@@ -1521,14 +1519,14 @@ struct MachReloc {
 }
 
 /// A trap record resulting from a compilation.
-struct MachTrap {
+pub struct MachTrap {
     /// The offset at which the trap instruction occurs, *relative to the
     /// containing section*.
-    offset: CodeOffset,
+    pub offset: CodeOffset,
     /// The original source location.
-    srcloc: SourceLoc,
+    pub srcloc: SourceLoc,
     /// The trap code.
-    code: TrapCode,
+    pub code: TrapCode,
 }
 
 /// A call site record resulting from a compilation.
@@ -2074,7 +2072,6 @@ mod test {
         #[derive(Default)]
         struct TestCodeSink {
             offset: CodeOffset,
-            traps: Vec<(CodeOffset, TrapCode)>,
             relocs: Vec<(CodeOffset, Reloc)>,
         }
         impl CodeSink for TestCodeSink {
@@ -2084,9 +2081,6 @@ mod test {
             fn reloc_external(&mut self, _: SourceLoc, r: Reloc, _: &ExternalName, _: Addend) {
                 self.relocs.push((self.offset, r));
             }
-            fn trap(&mut self, t: TrapCode, _: SourceLoc) {
-                self.traps.push((self.offset, t));
-            }
         }
 
         let mut sink = TestCodeSink::default();
@@ -2094,7 +2088,10 @@ mod test {
 
         assert_eq!(sink.offset, 4);
         assert_eq!(
-            sink.traps,
+            buf.traps()
+                .iter()
+                .map(|trap| (trap.offset, trap.code))
+                .collect::<Vec<_>>(),
             vec![
                 (1, TrapCode::HeapOutOfBounds),
                 (2, TrapCode::IntegerOverflow),

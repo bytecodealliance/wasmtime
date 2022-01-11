@@ -88,7 +88,7 @@ pub mod verifier;
 pub mod write;
 
 pub use crate::entity::packed_option;
-pub use crate::machinst::buffer::{MachCallSite, MachSrcLoc};
+pub use crate::machinst::buffer::{MachCallSite, MachSrcLoc, MachTrap};
 pub use crate::machinst::TextSectionBuilder;
 
 mod bitset;
