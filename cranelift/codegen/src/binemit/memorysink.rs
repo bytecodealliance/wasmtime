@@ -92,19 +92,12 @@ pub trait TrapSink {
     fn trap(&mut self, _: CodeOffset, _: SourceLoc, _: TrapCode);
 }
 
-impl<'a> MemoryCodeSink<'a> {
-    fn write<T>(&mut self, x: T) {
-        unsafe {
-            #[cfg_attr(feature = "cargo-clippy", allow(clippy::cast_ptr_alignment))]
-            write_unaligned(self.data.offset(self.offset) as *mut T, x);
-            self.offset += core::mem::size_of::<T>() as isize;
-        }
-    }
-}
-
 impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn put1(&mut self, x: u8) {
-        self.write(x);
+        unsafe {
+            write_unaligned(self.data.offset(self.offset), x);
+            self.offset += 1;
+        }
     }
 
     fn reloc_external(
