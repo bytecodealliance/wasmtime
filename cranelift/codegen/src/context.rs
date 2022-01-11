@@ -200,7 +200,7 @@ impl Context {
             .as_ref()
             .expect("only using mach backend now");
         result.buffer.emit(&mut sink);
-        let info = sink.info;
+        let info = sink.info();
         // New backends do not emit StackMaps through the `CodeSink` because its interface
         // requires `Value`s; instead, the `StackMap` objects are directly accessible via
         // `result.buffer.stack_maps()`.

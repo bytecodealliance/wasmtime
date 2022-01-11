@@ -36,8 +36,6 @@ pub struct MemoryCodeSink<'a> {
     offset: isize,
     relocs: &'a mut dyn RelocSink,
     traps: &'a mut dyn TrapSink,
-    /// Information about the generated code and read-only data.
-    pub info: CodeInfo,
 }
 
 impl<'a> MemoryCodeSink<'a> {
@@ -55,9 +53,15 @@ impl<'a> MemoryCodeSink<'a> {
         Self {
             data,
             offset: 0,
-            info: CodeInfo { total_size: 0 },
             relocs,
             traps,
+        }
+    }
+
+    /// Information about the generated code and read-only data.
+    pub fn info(&self) -> CodeInfo {
+        CodeInfo {
+            total_size: self.offset as CodeOffset,
         }
     }
 }
@@ -117,10 +121,6 @@ impl<'a> CodeSink for MemoryCodeSink<'a> {
     fn trap(&mut self, code: TrapCode, srcloc: SourceLoc) {
         let ofs = self.offset as CodeOffset;
         self.traps.trap(ofs, srcloc, code);
-    }
-
-    fn end_codegen(&mut self) {
-        self.info.total_size = self.offset as CodeOffset;
     }
 
     fn add_call_site(&mut self, opcode: Opcode, loc: SourceLoc) {

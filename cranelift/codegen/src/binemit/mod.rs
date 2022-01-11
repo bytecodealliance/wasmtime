@@ -114,9 +114,6 @@ pub trait CodeSink {
     /// Add trap information for the current offset.
     fn trap(&mut self, _: TrapCode, _: SourceLoc);
 
-    /// Read-only data output is complete, we're done.
-    fn end_codegen(&mut self);
-
     /// Add a call site for a call with the given opcode, returning at the current offset.
     fn add_call_site(&mut self, _: Opcode, _: SourceLoc) {
         // Default implementation doesn't need to do anything.

@@ -1470,8 +1470,6 @@ impl MachBufferFinalized {
             }
             sink.put1(*byte);
         }
-
-        sink.end_codegen();
     }
 
     /// Get the stack map metadata for this code.
@@ -2088,7 +2086,6 @@ mod test {
             fn trap(&mut self, t: TrapCode, _: SourceLoc) {
                 self.traps.push((self.offset, t));
             }
-            fn end_codegen(&mut self) {}
             fn add_call_site(&mut self, op: Opcode, _: SourceLoc) {
                 self.callsites.push((self.offset, op));
             }

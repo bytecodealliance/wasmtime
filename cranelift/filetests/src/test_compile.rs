@@ -94,7 +94,6 @@ impl binemit::CodeSink for SizeSink {
     ) {
     }
     fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
-    fn end_codegen(&mut self) {}
 }
 
 fn check_precise_output(text: &str, context: &Context) -> Result<()> {
