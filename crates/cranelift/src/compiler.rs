@@ -10,9 +10,9 @@ use anyhow::{Context as _, Result};
 use cranelift_codegen::ir::{self, ExternalName, InstBuilder, MemFlags};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_error;
-use cranelift_codegen::settings;
-use cranelift_codegen::MachSrcLoc;
-use cranelift_codegen::{binemit, Context};
+use cranelift_codegen::Context;
+use cranelift_codegen::{settings, MachReloc, MachTrap};
+use cranelift_codegen::{MachSrcLoc, MachStackMap};
 use cranelift_entity::{EntityRef, PrimaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_wasm::{
@@ -166,18 +166,27 @@ impl wasmtime_environ::Compiler for Compiler {
         self.save_translator(func_translator);
 
         let mut code_buf: Vec<u8> = Vec::new();
-        let mut reloc_sink = RelocSink::new();
-        let mut trap_sink = TrapSink::new();
-        let mut stack_map_sink = StackMapSink::default();
         context
-            .compile_and_emit(
-                isa,
-                &mut code_buf,
-                &mut reloc_sink,
-                &mut trap_sink,
-                &mut stack_map_sink,
-            )
+            .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+
+        let result = context.mach_compile_result.as_ref().unwrap();
+
+        let func_relocs = result
+            .buffer
+            .relocs()
+            .into_iter()
+            .map(mach_reloc_to_reloc)
+            .collect::<Vec<_>>();
+
+        let traps = result
+            .buffer
+            .traps()
+            .into_iter()
+            .map(mach_trap_to_trap)
+            .collect::<Vec<_>>();
+
+        let stack_maps = mach_stack_maps_to_stack_maps(result.buffer.stack_maps());
 
         let unwind_info = context
             .create_unwind_info(isa)
@@ -206,14 +215,14 @@ impl wasmtime_environ::Compiler for Compiler {
         let length = u32::try_from(code_buf.len()).unwrap();
         Ok(Box::new(CompiledFunction {
             body: code_buf,
-            relocations: reloc_sink.func_relocs,
+            relocations: func_relocs,
             value_labels_ranges: ranges.unwrap_or(Default::default()),
             stack_slots: context.func.stack_slots,
             unwind_info,
-            traps: trap_sink.traps,
+            traps,
             info: FunctionInfo {
                 start_srcloc: address_transform.start_srcloc,
-                stack_maps: stack_map_sink.finish(),
+                stack_maps,
                 start: 0,
                 length,
             },
@@ -534,18 +543,36 @@ impl Compiler {
         isa: &dyn TargetIsa,
     ) -> Result<CompiledFunction, CompileError> {
         let mut code_buf = Vec::new();
-        let mut reloc_sink = TrampolineRelocSink::default();
-        let mut trap_sink = binemit::NullTrapSink {};
-        let mut stack_map_sink = binemit::NullStackMapSink {};
+        let mut relocs = Vec::new();
         context
-            .compile_and_emit(
-                isa,
-                &mut code_buf,
-                &mut reloc_sink,
-                &mut trap_sink,
-                &mut stack_map_sink,
-            )
+            .compile_and_emit(isa, &mut code_buf)
             .map_err(|error| CompileError::Codegen(pretty_error(&context.func, error)))?;
+
+        for &MachReloc {
+            offset,
+            srcloc: _,
+            kind,
+            ref name,
+            addend,
+        } in context
+            .mach_compile_result
+            .as_ref()
+            .unwrap()
+            .buffer
+            .relocs()
+        {
+            let reloc_target = if let ir::ExternalName::LibCall(libcall) = *name {
+                RelocationTarget::LibCall(libcall)
+            } else {
+                panic!("unrecognized external name")
+            };
+            relocs.push(Relocation {
+                reloc: kind,
+                reloc_target,
+                offset,
+                addend,
+            });
+        }
 
         let unwind_info = context
             .create_unwind_info(isa)
@@ -554,7 +581,7 @@ impl Compiler {
         Ok(CompiledFunction {
             body: code_buf,
             unwind_info,
-            relocations: reloc_sink.relocs,
+            relocations: relocs,
             stack_slots: Default::default(),
             value_labels_ranges: Default::default(),
             info: Default::default(),
@@ -627,145 +654,77 @@ fn collect_address_maps(
     }
 }
 
-/// Implementation of a relocation sink that just saves all the information for later
-struct RelocSink {
-    /// Relocations recorded for the function.
-    func_relocs: Vec<Relocation>,
-}
-
-impl binemit::RelocSink for RelocSink {
-    fn reloc_external(
-        &mut self,
-        offset: binemit::CodeOffset,
-        _srcloc: ir::SourceLoc,
-        reloc: binemit::Reloc,
-        name: &ExternalName,
-        addend: binemit::Addend,
-    ) {
-        let reloc_target = if let ExternalName::User { namespace, index } = *name {
-            debug_assert_eq!(namespace, 0);
-            RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-        } else if let ExternalName::LibCall(libcall) = *name {
-            RelocationTarget::LibCall(libcall)
-        } else {
-            panic!("unrecognized external name")
-        };
-        self.func_relocs.push(Relocation {
-            reloc,
-            reloc_target,
-            offset,
-            addend,
-        });
+fn mach_reloc_to_reloc(reloc: &MachReloc) -> Relocation {
+    let &MachReloc {
+        offset,
+        srcloc: _,
+        kind,
+        ref name,
+        addend,
+    } = reloc;
+    let reloc_target = if let ExternalName::User { namespace, index } = *name {
+        debug_assert_eq!(namespace, 0);
+        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+    } else if let ExternalName::LibCall(libcall) = *name {
+        RelocationTarget::LibCall(libcall)
+    } else {
+        panic!("unrecognized external name")
+    };
+    Relocation {
+        reloc: kind,
+        reloc_target,
+        offset,
+        addend,
     }
 }
 
-impl RelocSink {
-    /// Return a new `RelocSink` instance.
-    fn new() -> Self {
-        Self {
-            func_relocs: Vec::new(),
-        }
+fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
+    let &MachTrap {
+        offset,
+        srcloc: _,
+        code,
+    } = trap;
+    TrapInformation {
+        code_offset: offset,
+        trap_code: match code {
+            ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
+            ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
+            ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
+            ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
+            ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
+            ir::TrapCode::BadSignature => TrapCode::BadSignature,
+            ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
+            ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
+            ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
+            ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
+            ir::TrapCode::Interrupt => TrapCode::Interrupt,
+
+            // these should never be emitted by wasmtime-cranelift
+            ir::TrapCode::User(_) => unreachable!(),
+        },
     }
 }
 
-/// Implementation of a trap sink that simply stores all trap info in-memory
-#[derive(Default)]
-struct TrapSink {
-    /// The in-memory vector of trap info
-    traps: Vec<TrapInformation>,
-}
-
-impl TrapSink {
-    /// Create a new `TrapSink`
-    fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl binemit::TrapSink for TrapSink {
-    fn trap(
-        &mut self,
-        code_offset: binemit::CodeOffset,
-        _source_loc: ir::SourceLoc,
-        trap_code: ir::TrapCode,
-    ) {
-        self.traps.push(TrapInformation {
-            code_offset,
-            trap_code: match trap_code {
-                ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
-                ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
-                ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
-                ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
-                ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
-                ir::TrapCode::BadSignature => TrapCode::BadSignature,
-                ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
-                ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
-                ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
-                ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
-                ir::TrapCode::Interrupt => TrapCode::Interrupt,
-
-                // these should never be emitted by wasmtime-cranelift
-                ir::TrapCode::User(_) => unreachable!(),
-            },
-        });
-    }
-}
-
-#[derive(Default)]
-struct StackMapSink {
-    infos: Vec<StackMapInformation>,
-}
-
-impl binemit::StackMapSink for StackMapSink {
-    fn add_stack_map(&mut self, code_offset: binemit::CodeOffset, stack_map: binemit::StackMap) {
-        // This is converting from Cranelift's representation of a stack map to
-        // Wasmtime's representation. They happen to align today but that may
-        // not always be true in the future.
+fn mach_stack_maps_to_stack_maps(mach_stack_maps: &[MachStackMap]) -> Vec<StackMapInformation> {
+    // This is converting from Cranelift's representation of a stack map to
+    // Wasmtime's representation. They happen to align today but that may
+    // not always be true in the future.
+    let mut stack_maps = Vec::new();
+    for &MachStackMap {
+        offset_end,
+        ref stack_map,
+        ..
+    } in mach_stack_maps
+    {
         let stack_map = wasmtime_environ::StackMap::new(
             stack_map.mapped_words(),
             stack_map.as_slice().iter().map(|a| a.0),
         );
-        self.infos.push(StackMapInformation {
-            code_offset,
+        stack_maps.push(StackMapInformation {
+            code_offset: offset_end,
             stack_map,
         });
     }
-}
-
-impl StackMapSink {
-    fn finish(mut self) -> Vec<StackMapInformation> {
-        self.infos.sort_unstable_by_key(|info| info.code_offset);
-        self.infos
-    }
-}
-
-/// We don't expect trampoline compilation to produce many relocations, so
-/// this `RelocSink` just asserts that it doesn't recieve most of them, but
-/// handles libcall ones.
-#[derive(Default)]
-struct TrampolineRelocSink {
-    relocs: Vec<Relocation>,
-}
-
-impl binemit::RelocSink for TrampolineRelocSink {
-    fn reloc_external(
-        &mut self,
-        offset: binemit::CodeOffset,
-        _srcloc: ir::SourceLoc,
-        reloc: binemit::Reloc,
-        name: &ir::ExternalName,
-        addend: binemit::Addend,
-    ) {
-        let reloc_target = if let ir::ExternalName::LibCall(libcall) = *name {
-            RelocationTarget::LibCall(libcall)
-        } else {
-            panic!("unrecognized external name")
-        };
-        self.relocs.push(Relocation {
-            reloc,
-            reloc_target,
-            offset,
-            addend,
-        });
-    }
+    stack_maps.sort_unstable_by_key(|info| info.code_offset);
+    stack_maps
 }

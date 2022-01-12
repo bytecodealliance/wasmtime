@@ -1,7 +1,6 @@
 use crate::ir::types::*;
 use crate::ir::TrapCode;
 use crate::isa::aarch64::inst::*;
-use crate::isa::test_utils;
 use crate::isa::CallConv;
 use crate::settings;
 
@@ -6523,12 +6522,10 @@ fn test_aarch64_binemit() {
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
 
-        let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
         insn.emit(&mut buffer, &emit_info, &mut Default::default());
         let buffer = buffer.finish();
-        buffer.emit(&mut sink);
-        let actual_encoding = &sink.stringify();
+        let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding);
     }
 }

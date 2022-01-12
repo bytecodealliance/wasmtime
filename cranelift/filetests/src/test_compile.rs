@@ -4,7 +4,7 @@
 
 use crate::subtest::{run_filecheck, Context, SubTest};
 use anyhow::{bail, Result};
-use cranelift_codegen::binemit::{self, CodeInfo};
+use cranelift_codegen::binemit::CodeInfo;
 use cranelift_codegen::ir;
 use cranelift_reader::{TestCommand, TestOption};
 use log::info;
@@ -73,44 +73,6 @@ impl SubTest for TestCompile {
             run_filecheck(&disasm, context)
         }
     }
-}
-
-/// Code sink that simply counts bytes.
-struct SizeSink {
-    offset: binemit::CodeOffset,
-}
-
-impl binemit::CodeSink for SizeSink {
-    fn offset(&self) -> binemit::CodeOffset {
-        self.offset
-    }
-
-    fn put1(&mut self, _: u8) {
-        self.offset += 1;
-    }
-
-    fn put2(&mut self, _: u16) {
-        self.offset += 2;
-    }
-
-    fn put4(&mut self, _: u32) {
-        self.offset += 4;
-    }
-
-    fn put8(&mut self, _: u64) {
-        self.offset += 8;
-    }
-
-    fn reloc_external(
-        &mut self,
-        _srcloc: ir::SourceLoc,
-        _reloc: binemit::Reloc,
-        _name: &ir::ExternalName,
-        _addend: binemit::Addend,
-    ) {
-    }
-    fn trap(&mut self, _code: ir::TrapCode, _srcloc: ir::SourceLoc) {}
-    fn end_codegen(&mut self) {}
 }
 
 fn check_precise_output(text: &str, context: &Context) -> Result<()> {

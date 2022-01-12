@@ -130,7 +130,7 @@ impl TargetIsa for AArch64Backend {
                 Some(UnwindInfo::SystemV(
                     crate::isa::unwind::systemv::create_unwind_info_from_insts(
                         &result.buffer.unwind_info[..],
-                        result.buffer.data.len(),
+                        result.buffer.data().len(),
                         &mapper,
                     )?,
                 ))
@@ -216,7 +216,7 @@ mod test {
             isa_flags,
         );
         let buffer = backend.compile_function(&mut func, false).unwrap().buffer;
-        let code = &buffer.data[..];
+        let code = buffer.data();
 
         // mov x1, #0x1234
         // add w0, w0, w1
@@ -271,7 +271,7 @@ mod test {
         let result = backend
             .compile_function(&mut func, /* want_disasm = */ false)
             .unwrap();
-        let code = &result.buffer.data[..];
+        let code = result.buffer.data();
 
         // mov	x1, #0x1234                	// #4660
         // add	w0, w0, w1

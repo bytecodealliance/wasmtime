@@ -1,4 +1,3 @@
-use cranelift_codegen::binemit::{NullStackMapSink, NullTrapSink};
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings::{self, Configurable};
@@ -56,11 +55,7 @@ fn define_simple_function(module: &mut JITModule) -> FuncId {
         bcx.ins().return_(&[]);
     }
 
-    let mut trap_sink = NullTrapSink {};
-    let mut stack_map_sink = NullStackMapSink {};
-    module
-        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     func_id
 }
@@ -205,11 +200,7 @@ fn libcall_function() {
         bcx.ins().return_(&[]);
     }
 
-    let mut trap_sink = NullTrapSink {};
-    let mut stack_map_sink = NullStackMapSink {};
-    module
-        .define_function(func_id, &mut ctx, &mut trap_sink, &mut stack_map_sink)
-        .unwrap();
+    module.define_function(func_id, &mut ctx).unwrap();
 
     module.finalize_definitions();
 }

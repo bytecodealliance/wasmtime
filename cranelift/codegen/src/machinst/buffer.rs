@@ -140,7 +140,7 @@
 //! Given these invariants, we argue why each optimization preserves execution
 //! semantics below (grep for "Preserves execution semantics").
 
-use crate::binemit::{Addend, CodeOffset, CodeSink, Reloc, StackMap};
+use crate::binemit::{Addend, CodeOffset, Reloc, StackMap};
 use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
@@ -233,7 +233,7 @@ pub struct MachBuffer<I: VCodeInst> {
 /// without fixups. This allows the type to be independent of the backend.
 pub struct MachBufferFinalized {
     /// The buffer contents, as raw bytes.
-    pub data: SmallVec<[u8; 1024]>,
+    data: SmallVec<[u8; 1024]>,
     /// Any relocations referring to this code. Note that only *external*
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
@@ -1350,6 +1350,10 @@ impl<I: VCodeInst> MachBuffer<I> {
 
     /// Add a call-site record at the current offset.
     pub fn add_call_site(&mut self, srcloc: SourceLoc, opcode: Opcode) {
+        debug_assert!(
+            opcode.is_call(),
+            "adding call site info for a non-call instruction."
+        );
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
             srcloc,
@@ -1420,8 +1424,19 @@ impl MachBufferFinalized {
         self.data.len() as CodeOffset
     }
 
-    /// Emit this buffer to the given CodeSink.
-    pub fn emit<CS: CodeSink>(&self, sink: &mut CS) {
+    /// Return the code in this mach buffer as a hex string for testing purposes.
+    pub fn stringify_code_bytes(&self) -> String {
+        // This is pretty lame, but whatever ..
+        use std::fmt::Write;
+        let mut s = String::with_capacity(self.data.len() * 2);
+        for b in &self.data {
+            write!(&mut s, "{:02X}", b).unwrap();
+        }
+        s
+    }
+
+    /// Get the code bytes.
+    pub fn data(&self) -> &[u8] {
         // N.B.: we emit every section into the .text section as far as
         // the `CodeSink` is concerned; we do not bother to segregate
         // the contents into the actual program text, the jumptable and the
@@ -1433,39 +1448,27 @@ impl MachBufferFinalized {
         // add this designation and segregate the output; take care, however,
         // to add the appropriate relocations in this case.
 
-        let mut next_reloc = 0;
-        let mut next_trap = 0;
-        let mut next_call_site = 0;
-        for (idx, byte) in self.data.iter().enumerate() {
-            while next_reloc < self.relocs.len()
-                && self.relocs[next_reloc].offset == idx as CodeOffset
-            {
-                let reloc = &self.relocs[next_reloc];
-                sink.reloc_external(reloc.srcloc, reloc.kind, &reloc.name, reloc.addend);
-                next_reloc += 1;
-            }
-            while next_trap < self.traps.len() && self.traps[next_trap].offset == idx as CodeOffset
-            {
-                let trap = &self.traps[next_trap];
-                sink.trap(trap.code, trap.srcloc);
-                next_trap += 1;
-            }
-            while next_call_site < self.call_sites.len()
-                && self.call_sites[next_call_site].ret_addr == idx as CodeOffset
-            {
-                let call_site = &self.call_sites[next_call_site];
-                sink.add_call_site(call_site.opcode, call_site.srcloc);
-                next_call_site += 1;
-            }
-            sink.put1(*byte);
-        }
+        &self.data[..]
+    }
 
-        sink.end_codegen();
+    /// Get the list of external relocations for this code.
+    pub fn relocs(&self) -> &[MachReloc] {
+        &self.relocs[..]
+    }
+
+    /// Get the list of trap records for this code.
+    pub fn traps(&self) -> &[MachTrap] {
+        &self.traps[..]
     }
 
     /// Get the stack map metadata for this code.
     pub fn stack_maps(&self) -> &[MachStackMap] {
         &self.stack_maps[..]
+    }
+
+    /// Get the list of call sites for this code.
+    pub fn call_sites(&self) -> &[MachCallSite] {
+        &self.call_sites[..]
     }
 }
 
@@ -1496,39 +1499,42 @@ struct MachLabelFixup<I: VCodeInst> {
 }
 
 /// A relocation resulting from a compilation.
-struct MachReloc {
+#[derive(Clone, Debug)]
+pub struct MachReloc {
     /// The offset at which the relocation applies, *relative to the
     /// containing section*.
-    offset: CodeOffset,
+    pub offset: CodeOffset,
     /// The original source location.
-    srcloc: SourceLoc,
+    pub srcloc: SourceLoc,
     /// The kind of relocation.
-    kind: Reloc,
+    pub kind: Reloc,
     /// The external symbol / name to which this relocation refers.
-    name: ExternalName,
+    pub name: ExternalName,
     /// The addend to add to the symbol value.
-    addend: i64,
+    pub addend: i64,
 }
 
 /// A trap record resulting from a compilation.
-struct MachTrap {
+#[derive(Clone, Debug)]
+pub struct MachTrap {
     /// The offset at which the trap instruction occurs, *relative to the
     /// containing section*.
-    offset: CodeOffset,
+    pub offset: CodeOffset,
     /// The original source location.
-    srcloc: SourceLoc,
+    pub srcloc: SourceLoc,
     /// The trap code.
-    code: TrapCode,
+    pub code: TrapCode,
 }
 
 /// A call site record resulting from a compilation.
-struct MachCallSite {
+#[derive(Clone, Debug)]
+pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
-    ret_addr: CodeOffset,
+    pub ret_addr: CodeOffset,
     /// The original source location.
-    srcloc: SourceLoc,
+    pub srcloc: SourceLoc,
     /// The call's opcode.
-    opcode: Opcode,
+    pub opcode: Opcode,
 }
 
 /// A source-location mapping resulting from a compilation.
@@ -2060,54 +2066,31 @@ mod test {
 
         let buf = buf.finish();
 
-        #[derive(Default)]
-        struct TestCodeSink {
-            offset: CodeOffset,
-            traps: Vec<(CodeOffset, TrapCode)>,
-            callsites: Vec<(CodeOffset, Opcode)>,
-            relocs: Vec<(CodeOffset, Reloc)>,
-        }
-        impl CodeSink for TestCodeSink {
-            fn offset(&self) -> CodeOffset {
-                self.offset
-            }
-            fn put1(&mut self, _: u8) {
-                self.offset += 1;
-            }
-            fn put2(&mut self, _: u16) {
-                self.offset += 2;
-            }
-            fn put4(&mut self, _: u32) {
-                self.offset += 4;
-            }
-            fn put8(&mut self, _: u64) {
-                self.offset += 8;
-            }
-            fn reloc_external(&mut self, _: SourceLoc, r: Reloc, _: &ExternalName, _: Addend) {
-                self.relocs.push((self.offset, r));
-            }
-            fn trap(&mut self, t: TrapCode, _: SourceLoc) {
-                self.traps.push((self.offset, t));
-            }
-            fn end_codegen(&mut self) {}
-            fn add_call_site(&mut self, op: Opcode, _: SourceLoc) {
-                self.callsites.push((self.offset, op));
-            }
-        }
-
-        let mut sink = TestCodeSink::default();
-        buf.emit(&mut sink);
-
-        assert_eq!(sink.offset, 4);
+        assert_eq!(buf.data(), &[1, 2, 3, 4]);
         assert_eq!(
-            sink.traps,
+            buf.traps()
+                .iter()
+                .map(|trap| (trap.offset, trap.code))
+                .collect::<Vec<_>>(),
             vec![
                 (1, TrapCode::HeapOutOfBounds),
                 (2, TrapCode::IntegerOverflow),
                 (2, TrapCode::IntegerDivisionByZero)
             ]
         );
-        assert_eq!(sink.callsites, vec![(2, Opcode::Call),]);
-        assert_eq!(sink.relocs, vec![(2, Reloc::Abs4), (3, Reloc::Abs8)]);
+        assert_eq!(
+            buf.call_sites()
+                .iter()
+                .map(|call_site| (call_site.ret_addr, call_site.opcode))
+                .collect::<Vec<_>>(),
+            vec![(2, Opcode::Call)]
+        );
+        assert_eq!(
+            buf.relocs()
+                .iter()
+                .map(|reloc| (reloc.offset, reloc.kind))
+                .collect::<Vec<_>>(),
+            vec![(2, Reloc::Abs4), (3, Reloc::Abs8)]
+        );
     }
 }

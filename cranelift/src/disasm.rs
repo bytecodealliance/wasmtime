@@ -1,85 +1,53 @@
 use anyhow::Result;
 use cfg_if::cfg_if;
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::{binemit, ir};
+use cranelift_codegen::{MachReloc, MachStackMap, MachTrap};
 use std::fmt::Write;
 
-pub struct PrintRelocs {
-    pub flag_print: bool,
-    pub text: String,
-}
-
-impl PrintRelocs {
-    pub fn new(flag_print: bool) -> Self {
-        Self {
-            flag_print,
-            text: String::new(),
-        }
+pub fn print_relocs(relocs: &[MachReloc]) -> String {
+    let mut text = String::new();
+    for &MachReloc {
+        kind,
+        offset,
+        srcloc: _,
+        ref name,
+        addend,
+    } in relocs
+    {
+        writeln!(
+            text,
+            "reloc_external: {} {} {} at {}",
+            kind, name, addend, offset
+        )
+        .unwrap();
     }
+    text
 }
 
-impl binemit::RelocSink for PrintRelocs {
-    fn reloc_external(
-        &mut self,
-        where_: binemit::CodeOffset,
-        _srcloc: ir::SourceLoc,
-        r: binemit::Reloc,
-        name: &ir::ExternalName,
-        addend: binemit::Addend,
-    ) {
-        if self.flag_print {
-            writeln!(
-                &mut self.text,
-                "reloc_external: {} {} {} at {}",
-                r, name, addend, where_
-            )
-            .unwrap();
-        }
+pub fn print_traps(traps: &[MachTrap]) -> String {
+    let mut text = String::new();
+    for &MachTrap {
+        offset,
+        srcloc: _,
+        code,
+    } in traps
+    {
+        writeln!(text, "trap: {} at {}", code, offset).unwrap();
     }
+    text
 }
 
-pub struct PrintTraps {
-    pub flag_print: bool,
-    pub text: String,
-}
-
-impl PrintTraps {
-    pub fn new(flag_print: bool) -> Self {
-        Self {
-            flag_print,
-            text: String::new(),
-        }
+pub fn print_stack_maps(traps: &[MachStackMap]) -> String {
+    let mut text = String::new();
+    for &MachStackMap {
+        offset,
+        offset_end: _,
+        stack_map: _,
+    } in traps
+    {
+        writeln!(text, "add_stack_map at {}", offset).unwrap();
     }
-}
-
-impl binemit::TrapSink for PrintTraps {
-    fn trap(&mut self, offset: binemit::CodeOffset, _srcloc: ir::SourceLoc, code: ir::TrapCode) {
-        if self.flag_print {
-            writeln!(&mut self.text, "trap: {} at {}", code, offset).unwrap();
-        }
-    }
-}
-
-pub struct PrintStackMaps {
-    pub flag_print: bool,
-    pub text: String,
-}
-
-impl PrintStackMaps {
-    pub fn new(flag_print: bool) -> Self {
-        Self {
-            flag_print,
-            text: String::new(),
-        }
-    }
-}
-
-impl binemit::StackMapSink for PrintStackMaps {
-    fn add_stack_map(&mut self, offset: binemit::CodeOffset, _: binemit::StackMap) {
-        if self.flag_print {
-            writeln!(&mut self.text, "add_stack_map at {}", offset).unwrap();
-        }
-    }
+    text
 }
 
 cfg_if! {
@@ -193,13 +161,21 @@ pub fn print_all(
     isa: &dyn TargetIsa,
     mem: &[u8],
     code_size: u32,
-    relocs: &PrintRelocs,
-    traps: &PrintTraps,
-    stack_maps: &PrintStackMaps,
+    print: bool,
+    relocs: &[MachReloc],
+    traps: &[MachTrap],
+    stack_maps: &[MachStackMap],
 ) -> Result<()> {
     print_bytes(&mem);
     print_disassembly(isa, &mem[0..code_size as usize])?;
-    println!("\n{}\n{}\n{}", &relocs.text, &traps.text, &stack_maps.text);
+    if print {
+        println!(
+            "\n{}\n{}\n{}",
+            print_relocs(relocs),
+            print_traps(traps),
+            print_stack_maps(stack_maps)
+        );
+    }
     Ok(())
 }
 

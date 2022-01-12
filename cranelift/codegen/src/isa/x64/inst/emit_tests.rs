@@ -13,7 +13,6 @@
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
-use crate::isa::test_utils;
 use crate::isa::x64;
 use alloc::vec::Vec;
 
@@ -4460,7 +4459,6 @@ fn test_x64_emit() {
         // Check the printed text is as expected.
         let actual_printing = insn.show_rru(Some(&rru));
         assert_eq!(expected_printing, actual_printing);
-        let mut sink = test_utils::TestCodeSink::new();
         let mut buffer = MachBuffer::new();
 
         insn.emit(&mut buffer, &emit_info, &mut Default::default());
@@ -4470,8 +4468,7 @@ fn test_x64_emit() {
         buffer.bind_label(label);
 
         let buffer = buffer.finish();
-        buffer.emit(&mut sink);
-        let actual_encoding = &sink.stringify();
+        let actual_encoding = &buffer.stringify_code_bytes();
         assert_eq!(expected_encoding, actual_encoding, "{}", expected_printing);
     }
 }

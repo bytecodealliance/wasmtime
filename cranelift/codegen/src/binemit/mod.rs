@@ -3,15 +3,9 @@
 //! The `binemit` module contains code for translating Cranelift's intermediate representation into
 //! binary machine code.
 
-mod memorysink;
 mod stack_map;
 
-pub use self::memorysink::{
-    MemoryCodeSink, NullRelocSink, NullStackMapSink, NullTrapSink, RelocSink, StackMapSink,
-    TrapSink,
-};
 pub use self::stack_map::StackMap;
-use crate::ir::{ExternalName, Opcode, SourceLoc, TrapCode};
 use core::fmt;
 #[cfg(feature = "enable-serde")]
 use serde::{Deserialize, Serialize};
@@ -98,39 +92,4 @@ impl fmt::Display for Reloc {
 pub struct CodeInfo {
     /// Number of bytes in total.
     pub total_size: CodeOffset,
-}
-
-/// Abstract interface for adding bytes to the code segment.
-///
-/// A `CodeSink` will receive all of the machine code for a function. It also accepts relocations
-/// which are locations in the code section that need to be fixed up when linking.
-pub trait CodeSink {
-    /// Get the current position.
-    fn offset(&self) -> CodeOffset;
-
-    /// Add 1 byte to the code section.
-    fn put1(&mut self, _: u8);
-
-    /// Add 2 bytes to the code section.
-    fn put2(&mut self, _: u16);
-
-    /// Add 4 bytes to the code section.
-    fn put4(&mut self, _: u32);
-
-    /// Add 8 bytes to the code section.
-    fn put8(&mut self, _: u64);
-
-    /// Add a relocation referencing an external symbol plus the addend at the current offset.
-    fn reloc_external(&mut self, _: SourceLoc, _: Reloc, _: &ExternalName, _: Addend);
-
-    /// Add trap information for the current offset.
-    fn trap(&mut self, _: TrapCode, _: SourceLoc);
-
-    /// Read-only data output is complete, we're done.
-    fn end_codegen(&mut self);
-
-    /// Add a call site for a call with the given opcode, returning at the current offset.
-    fn add_call_site(&mut self, _: Opcode, _: SourceLoc) {
-        // Default implementation doesn't need to do anything.
-    }
 }

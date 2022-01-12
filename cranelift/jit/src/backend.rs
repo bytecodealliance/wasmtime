@@ -3,15 +3,15 @@
 use crate::{compiled_blob::CompiledBlob, memory::Memory};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{self, ir, settings};
+use cranelift_codegen::{self, ir, settings, MachReloc};
 use cranelift_codegen::{
-    binemit::{Addend, CodeInfo, CodeOffset, Reloc, RelocSink, StackMapSink, TrapSink},
+    binemit::{CodeInfo, Reloc},
     CodegenError,
 };
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
     DataContext, DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleCompiledFunction,
-    ModuleDeclarations, ModuleError, ModuleResult, RelocRecord,
+    ModuleDeclarations, ModuleError, ModuleResult,
 };
 use log::info;
 use std::collections::HashMap;
@@ -648,8 +648,6 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         ctx: &mut cranelift_codegen::Context,
-        trap_sink: &mut dyn TrapSink,
-        stack_map_sink: &mut dyn StackMapSink,
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {}: {}", id, ctx.func.display());
         let decl = self.declarations.get_function_decl(id);
@@ -673,15 +671,17 @@ impl Module for JITModule {
             .allocate(size, EXECUTABLE_DATA_ALIGNMENT)
             .expect("TODO: handle OOM etc.");
 
-        let mut reloc_sink = JITRelocSink::default();
-        unsafe { ctx.emit_to_memory(ptr, &mut reloc_sink, trap_sink, stack_map_sink) };
+        unsafe { ctx.emit_to_memory(ptr) };
+        let relocs = ctx
+            .mach_compile_result
+            .as_ref()
+            .unwrap()
+            .buffer
+            .relocs()
+            .to_vec();
 
         self.record_function_for_perf(ptr, size, &decl.name);
-        self.compiled_functions[id] = Some(CompiledBlob {
-            ptr,
-            size,
-            relocs: reloc_sink.relocs,
-        });
+        self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });
 
         if self.isa.flags().is_pic() {
             self.pending_got_updates.push(GotUpdate {
@@ -721,7 +721,7 @@ impl Module for JITModule {
         &mut self,
         id: FuncId,
         bytes: &[u8],
-        relocs: &[RelocRecord],
+        relocs: &[MachReloc],
     ) -> ModuleResult<ModuleCompiledFunction> {
         info!("defining function {} with bytes", id);
         let total_size: u32 = match bytes.len().try_into() {
@@ -886,28 +886,5 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
         }
 
         None
-    }
-}
-
-#[derive(Default)]
-struct JITRelocSink {
-    relocs: Vec<RelocRecord>,
-}
-
-impl RelocSink for JITRelocSink {
-    fn reloc_external(
-        &mut self,
-        offset: CodeOffset,
-        _srcloc: ir::SourceLoc,
-        reloc: Reloc,
-        name: &ir::ExternalName,
-        addend: Addend,
-    ) {
-        self.relocs.push(RelocRecord {
-            offset,
-            reloc,
-            name: name.clone(),
-            addend,
-        });
     }
 }
