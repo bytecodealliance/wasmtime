@@ -24,6 +24,8 @@ serde = { version = "1.0.94", features = ["derive"] }
 addr2line = { version = "0.17.0", default-features = false }
 ittapi-rs = { version = "0.1.6", optional = true  }
 bincode = "1.2.1"
+rustc-demangle = "0.1.16"
+cpp_demangle = "0.3.2"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.8", features = ["winnt", "impl-default"] }
