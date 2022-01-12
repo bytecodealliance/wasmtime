@@ -65,7 +65,10 @@ impl ProfilingAgent for NullProfilerAgent {
 fn debug_name(module: &Module, index: DefinedFuncIndex) -> String {
     let index = module.func_index(index);
     match module.func_names.get(&index) {
-        Some(s) => s.clone(),
+        Some(s) => rustc_demangle::try_demangle(s)
+            .map(|demangle| demangle.to_string())
+            .or_else(|_| cpp_demangle::Symbol::new(s).map(|sym| sym.to_string()))
+            .unwrap_or_else(|_| s.clone()),
         None => format!("wasm::wasm-function[{}]", index.index()),
     }
 }
