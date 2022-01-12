@@ -96,11 +96,6 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
-        fn ty_bits_mask(&mut self, ty: Type) -> u64 {
-            (1 << (self.ty_bits(ty) as u64)) - 1
-        }
-
-        #[inline]
         fn ty_bits_u16(&mut self, ty: Type) -> u16 {
             ty.bits()
         }
@@ -259,6 +254,21 @@ macro_rules! isle_prelude_methods {
                 0 => None,
                 n => Some(n as u64),
             }
+        }
+
+        #[inline]
+        fn u32_add(&mut self, a: u32, b: u32) -> u32 {
+            a.wrapping_add(b)
+        }
+
+        #[inline]
+        fn u8_and(&mut self, a: u8, b: u8) -> u8 {
+            a & b
+        }
+
+        #[inline]
+        fn lane_type(&mut self, ty: Type) -> Type {
+            ty.lane_type()
         }
     };
 }

@@ -324,16 +324,16 @@ block0(v0: i32):
 ;   (instruction range: 0 .. 15)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   load_const VCodeConstant(0), %xmm0
-;   Inst 3:   addl    $8, %edi
-;   Inst 4:   movd    %edi, %xmm2
-;   Inst 5:   movdqa  %xmm0, %xmm1
-;   Inst 6:   punpcklbw %xmm1, %xmm1
-;   Inst 7:   psraw   %xmm2, %xmm1
-;   Inst 8:   punpckhbw %xmm0, %xmm0
+;   Inst 2:   load_const VCodeConstant(0), %xmm2
+;   Inst 3:   movdqa  %xmm2, %xmm0
+;   Inst 4:   punpcklbw %xmm2, %xmm0
+;   Inst 5:   movdqa  %xmm2, %xmm1
+;   Inst 6:   punpckhbw %xmm2, %xmm1
+;   Inst 7:   addl    $8, %edi
+;   Inst 8:   movd    %edi, %xmm2
 ;   Inst 9:   psraw   %xmm2, %xmm0
-;   Inst 10:   packsswb %xmm0, %xmm1
-;   Inst 11:   movdqa  %xmm1, %xmm0
+;   Inst 10:   psraw   %xmm2, %xmm1
+;   Inst 11:   packsswb %xmm1, %xmm0
 ;   Inst 12:   movq    %rbp, %rsp
 ;   Inst 13:   popq    %rbp
 ;   Inst 14:   ret
@@ -349,19 +349,20 @@ block0(v0: i8x16, v1: i32):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 12)
+;   (instruction range: 0 .. 13)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
 ;   Inst 2:   movdqa  %xmm0, %xmm1
-;   Inst 3:   movdqa  %xmm1, %xmm0
-;   Inst 4:   punpcklbw %xmm0, %xmm0
-;   Inst 5:   psraw   $11, %xmm0
-;   Inst 6:   punpckhbw %xmm1, %xmm1
-;   Inst 7:   psraw   $11, %xmm1
-;   Inst 8:   packsswb %xmm1, %xmm0
-;   Inst 9:   movq    %rbp, %rsp
-;   Inst 10:   popq    %rbp
-;   Inst 11:   ret
+;   Inst 3:   punpcklbw %xmm0, %xmm1
+;   Inst 4:   movdqa  %xmm0, %xmm2
+;   Inst 5:   punpckhbw %xmm0, %xmm2
+;   Inst 6:   psraw   $11, %xmm1
+;   Inst 7:   psraw   $11, %xmm2
+;   Inst 8:   packsswb %xmm2, %xmm1
+;   Inst 9:   movdqa  %xmm1, %xmm0
+;   Inst 10:   movq    %rbp, %rsp
+;   Inst 11:   popq    %rbp
+;   Inst 12:   ret
 ; }}
 
 function %sshr_i64x2(i64x2, i32) -> i64x2 {
@@ -374,21 +375,20 @@ block0(v0: i64x2, v1: i32):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 15)
+;   (instruction range: 0 .. 14)
 ;   Inst 0:   pushq   %rbp
 ;   Inst 1:   movq    %rsp, %rbp
-;   Inst 2:   movdqa  %xmm0, %xmm1
-;   Inst 3:   pextrd.w $0, %xmm0, %rsi
-;   Inst 4:   pextrd.w $1, %xmm0, %rax
-;   Inst 5:   movq    %rdi, %rcx
-;   Inst 6:   sarq    %cl, %rsi
-;   Inst 7:   movq    %rdi, %rcx
-;   Inst 8:   sarq    %cl, %rax
-;   Inst 9:   pinsrd.w $0, %rsi, %xmm1
-;   Inst 10:   pinsrd.w $1, %rax, %xmm1
-;   Inst 11:   movdqa  %xmm1, %xmm0
-;   Inst 12:   movq    %rbp, %rsp
-;   Inst 13:   popq    %rbp
-;   Inst 14:   ret
+;   Inst 2:   pextrd.w $0, %xmm0, %rsi
+;   Inst 3:   pextrd.w $1, %xmm0, %rax
+;   Inst 4:   movq    %rdi, %rcx
+;   Inst 5:   sarq    %cl, %rsi
+;   Inst 6:   movq    %rdi, %rcx
+;   Inst 7:   sarq    %cl, %rax
+;   Inst 8:   uninit  %xmm0
+;   Inst 9:   pinsrd.w $0, %rsi, %xmm0
+;   Inst 10:   pinsrd.w $1, %rax, %xmm0
+;   Inst 11:   movq    %rbp, %rsp
+;   Inst 12:   popq    %rbp
+;   Inst 13:   ret
 ; }}
 

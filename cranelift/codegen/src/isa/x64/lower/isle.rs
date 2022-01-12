@@ -69,6 +69,31 @@ where
         OperandSize::from_ty(ty)
     }
 
+    fn put_in_reg_mem_imm(&mut self, val: Value) -> RegMemImm {
+        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
+
+        if let Some(c) = inputs.constant {
+            if let Some(imm) = to_simm32(c as i64) {
+                return imm;
+            }
+
+            // Generate constants fresh at each use to minimize long-range
+            // register pressure.
+            let ty = self.value_type(val);
+            return RegMemImm::reg(generated_code::constructor_imm(self, ty, c).unwrap());
+        }
+
+        if let Some((src_insn, 0)) = inputs.inst {
+            if let Some((addr_input, offset)) = is_mergeable_load(self.lower_ctx, src_insn) {
+                self.lower_ctx.sink_inst(src_insn);
+                let amode = lower_to_amode(self.lower_ctx, addr_input, offset);
+                return RegMemImm::mem(amode);
+            }
+        }
+
+        RegMemImm::reg(self.put_in_reg(val))
+    }
+
     fn put_in_reg_mem(&mut self, val: Value) -> RegMem {
         let inputs = self.lower_ctx.get_value_as_source_or_const(val);
 
@@ -88,6 +113,23 @@ where
         }
 
         RegMem::reg(self.put_in_reg(val))
+    }
+
+    fn put_masked_in_imm8_reg(&mut self, val: Value, ty: Type) -> Imm8Reg {
+        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
+
+        if let Some(c) = inputs.constant {
+            let mask = 1_u64
+                .checked_shl(ty.bits() as u32)
+                .map_or(u64::MAX, |x| x - 1);
+            return Imm8Reg::Imm8 {
+                imm: (c & mask) as u8,
+            };
+        }
+
+        Imm8Reg::Reg {
+            reg: self.put_in_regs(val).regs()[0],
+        }
     }
 
     #[inline]
@@ -131,12 +173,12 @@ where
     }
 
     #[inline]
-    fn mask_imm8_const(&mut self, imm8: &Imm8Reg, mask: u64) -> Imm8Reg {
-        match imm8 {
-            &Imm8Reg::Reg { reg } => Imm8Reg::Reg { reg },
-            &Imm8Reg::Imm8 { imm } => Imm8Reg::Imm8 {
-                imm: imm & (mask as u8),
-            },
+    fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Reg {
+        let mask = 1_u64
+            .checked_shl(ty.bits() as u32)
+            .map_or(u64::MAX, |x| x - 1);
+        Imm8Reg::Imm8 {
+            imm: (c & mask) as u8,
         }
     }
 
