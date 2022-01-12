@@ -406,6 +406,7 @@ pub trait ABIMachineSpec {
     /// Generates extra unwind instructions for a new frame  for this
     /// architecture, whether the frame has a prologue sequence or not.
     fn gen_debug_frame_info(
+        _call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &Vec<settings::Value>,
     ) -> SmallInstVec<Self::I> {
@@ -1238,7 +1239,9 @@ impl<M: ABIMachineSpec> ABICallee for ABICalleeImpl<M> {
                 self.fixed_frame_storage_size,
             );
 
-            insts.extend(M::gen_debug_frame_info(&self.flags, &self.isa_flags).into_iter());
+            insts.extend(
+                M::gen_debug_frame_info(self.call_conv, &self.flags, &self.isa_flags).into_iter(),
+            );
 
             if self.setup_frame {
                 // set up frame

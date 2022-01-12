@@ -623,11 +623,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
     }
 
     fn gen_debug_frame_info(
+        call_conv: isa::CallConv,
         flags: &settings::Flags,
         _isa_flags: &Vec<settings::Value>,
     ) -> SmallInstVec<Inst> {
         let mut insts = SmallVec::new();
-        if flags.unwind_info() {
+        if flags.unwind_info() && call_conv.extends_apple_aarch64() {
             insts.push(Inst::Unwind {
                 inst: UnwindInst::Aarch64SetPointerAuth {
                     return_addresses: false,

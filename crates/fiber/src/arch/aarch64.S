@@ -7,8 +7,43 @@
 //
 // Also at this time this file is heavily based off the x86_64 file, so you'll
 // probably want to read that one as well.
+//
+// Finally, control flow integrity hardening has been applied to the code using
+// the Pointer Authentication (PAuth) and Branch Target Identification (BTI)
+// technologies from the Arm instruction set architecture:
+// * All callable functions start with either the `BTI c` or `PACIASP`/`PACIBSP`
+//   instructions
+// * Return addresses are signed and authenticated using the stack pointer
+//   value as a modifier (similarly to the salt in a HMAC operation); the
+//   `DW_CFA_AARCH64_negate_ra_state` DWARF operation (aliased with the
+//   `.cfi_window_save` assembler directive) informs an unwinder about this
 
 #include "header.h"
+
+#ifndef CFG_TARGET_OS_macos
+// We need to tell whatever loads the following code (e.g. the dynamic linker)
+// that it is compatible with BTI, so that the corresponding executable memory
+// pages have the necessary attribute set (if supported by the environment). To
+// this end, we follow the ELF for the Arm® 64-bit Architecture standard, and
+// use a special metadata section. Further details are in section 6.2 of the
+// specification:
+//
+// https://github.com/ARM-software/abi-aa/blob/2022Q1/aaelf64/aaelf64.rst#program-property
+//
+// We also set the PAuth (PAC) property, even though it is optional, for the
+// sake of completeness.
+.pushsection .note.gnu.property, "a";
+.p2align 3;
+.word 4;
+.word 16;
+.word 5;
+.asciz "GNU";
+.word 0xc0000000; // GNU_PROPERTY_AARCH64_FEATURE_1_AND
+.word 4;
+.word 3; // GNU_PROPERTY_AARCH64_FEATURE_1_BTI | GNU_PROPERTY_AARCH64_FEATURE_1_PAC
+.word 0;
+.popsection
+#endif
 
 // fn(top_of_stack(%x0): *mut u8)
 HIDDEN(wasmtime_fiber_switch)
@@ -16,9 +51,14 @@ GLOBL(wasmtime_fiber_switch)
 .p2align 2
 TYPE(wasmtime_fiber_switch)
 FUNCTION(wasmtime_fiber_switch):
+    .cfi_startproc
+#ifndef CFG_TARGET_OS_macos
+    hint #25 // paciasp
+    .cfi_window_save
+#endif
     // Save all callee-saved registers on the stack since we're assuming
     // they're clobbered as a result of the stack switch.
-    stp lr, fp, [sp, -16]!
+    stp x29, x30, [sp, -16]!
     stp x20, x19, [sp, -16]!
     stp x22, x21, [sp, -16]!
     stp x24, x23, [sp, -16]!
@@ -47,8 +87,13 @@ FUNCTION(wasmtime_fiber_switch):
     ldp x24, x23, [sp], 16
     ldp x22, x21, [sp], 16
     ldp x20, x19, [sp], 16
-    ldp lr, fp, [sp], 16
+    ldp x29, x30, [sp], 16
+#ifndef CFG_TARGET_OS_macos
+    hint #29 // autiasp
+    .cfi_window_save
+#endif
     ret
+    .cfi_endproc
 SIZE(wasmtime_fiber_switch)
 
 // fn(
@@ -61,8 +106,31 @@ GLOBL(wasmtime_fiber_init)
 .p2align 2
 TYPE(wasmtime_fiber_init)
 FUNCTION(wasmtime_fiber_init):
-    adr x8, FUNCTION(wasmtime_fiber_start)
-    stp x0, x8, [x0, -0x28] // x0 => x19, x8 => lr
+    .cfi_startproc
+    hint #34 // bti c
+    // We set up the newly initialized fiber, so that it resumes execution from
+    // wasmtime_fiber_start(). As a result, we need a signed address of this
+    // function, so there are 2 requirements:
+    // * The fiber stack pointer value that is used by the signing operation
+    //   must match the value when the pointer is authenticated inside
+    //   wasmtime_fiber_switch(), otherwise the latter would fault
+    // * We would like to use an instruction that is executed as a no-op by
+    //   processors that do not support PAuth, so that the code is backward-
+    //   compatible and there is no duplication; `PACIA1716` is a suitable
+    //   one, which has the following operand register conventions:
+    //   * X17 contains the pointer value to sign
+    //   * X16 contains the modifier value
+    //
+    // TODO: Use the PACGA instruction to authenticate the saved register state,
+    // which avoids creating signed pointers to wasmtime_fiber_start(), and
+    // provides wider coverage.
+    sub x16, x0, #16
+    adr x17, FUNCTION(wasmtime_fiber_start)
+#ifndef CFG_TARGET_OS_macos
+    hint #8 // pacia1716
+#endif
+    str x17, [x16, -0x8] // x17 => lr
+    str x0, [x16, -0x18] // x0 => x19
     stp x2, x1, [x0, -0x38] // x1 => x20, x2 => x21
 
     // `wasmtime_fiber_switch` has an 0xa0 byte stack, and we add 0x10 more for
@@ -70,6 +138,7 @@ FUNCTION(wasmtime_fiber_init):
     add x8, x0, -0xb0
     str x8, [x0, -0x10]
     ret
+    .cfi_endproc
 SIZE(wasmtime_fiber_init)
 
 .p2align 2
@@ -86,8 +155,11 @@ FUNCTION(wasmtime_fiber_start):
         0x06,            /* DW_OP_deref */ \
         0x23, 0xa0, 0x1  /* DW_OP_plus_uconst 0xa0 */
 
-    .cfi_rel_offset x29, -0x08
-    .cfi_rel_offset lr, -0x10
+    .cfi_rel_offset x29, -0x10
+#ifndef CFG_TARGET_OS_macos
+    .cfi_window_save
+#endif
+    .cfi_rel_offset x30, -0x08
     .cfi_rel_offset x19, -0x18
     .cfi_rel_offset x20, -0x20
     .cfi_rel_offset x21, -0x28
