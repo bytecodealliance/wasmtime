@@ -172,79 +172,21 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let result = context.mach_compile_result.as_ref().unwrap();
 
-        let mut func_relocs = Vec::new();
-        for &MachReloc {
-            offset,
-            srcloc: _,
-            kind,
-            ref name,
-            addend,
-        } in result.buffer.relocs()
-        {
-            let reloc_target = if let ExternalName::User { namespace, index } = *name {
-                debug_assert_eq!(namespace, 0);
-                RelocationTarget::UserFunc(FuncIndex::from_u32(index))
-            } else if let ExternalName::LibCall(libcall) = *name {
-                RelocationTarget::LibCall(libcall)
-            } else {
-                panic!("unrecognized external name")
-            };
-            func_relocs.push(Relocation {
-                reloc: kind,
-                reloc_target,
-                offset,
-                addend,
-            });
-        }
+        let func_relocs = result
+            .buffer
+            .relocs()
+            .into_iter()
+            .map(mach_reloc_to_reloc)
+            .collect::<Vec<_>>();
 
-        let mut traps = Vec::new();
-        for &MachTrap {
-            offset,
-            srcloc: _,
-            code,
-        } in result.buffer.traps()
-        {
-            traps.push(TrapInformation {
-                code_offset: offset,
-                trap_code: match code {
-                    ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
-                    ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
-                    ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
-                    ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
-                    ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
-                    ir::TrapCode::BadSignature => TrapCode::BadSignature,
-                    ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
-                    ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
-                    ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
-                    ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
-                    ir::TrapCode::Interrupt => TrapCode::Interrupt,
+        let traps = result
+            .buffer
+            .traps()
+            .into_iter()
+            .map(mach_trap_to_trap)
+            .collect::<Vec<_>>();
 
-                    // these should never be emitted by wasmtime-cranelift
-                    ir::TrapCode::User(_) => unreachable!(),
-                },
-            });
-        }
-
-        // This is converting from Cranelift's representation of a stack map to
-        // Wasmtime's representation. They happen to align today but that may
-        // not always be true in the future.
-        let mut stack_maps = Vec::new();
-        for &MachStackMap {
-            offset_end,
-            ref stack_map,
-            ..
-        } in result.buffer.stack_maps()
-        {
-            let stack_map = wasmtime_environ::StackMap::new(
-                stack_map.mapped_words(),
-                stack_map.as_slice().iter().map(|a| a.0),
-            );
-            stack_maps.push(StackMapInformation {
-                code_offset: offset_end,
-                stack_map,
-            });
-        }
-        stack_maps.sort_unstable_by_key(|info| info.code_offset);
+        let stack_maps = mach_stack_maps_to_stack_maps(result.buffer.stack_maps());
 
         let unwind_info = context
             .create_unwind_info(isa)
@@ -710,4 +652,79 @@ fn collect_address_maps(
             FilePos::new(loc.bits())
         }
     }
+}
+
+fn mach_reloc_to_reloc(reloc: &MachReloc) -> Relocation {
+    let &MachReloc {
+        offset,
+        srcloc: _,
+        kind,
+        ref name,
+        addend,
+    } = reloc;
+    let reloc_target = if let ExternalName::User { namespace, index } = *name {
+        debug_assert_eq!(namespace, 0);
+        RelocationTarget::UserFunc(FuncIndex::from_u32(index))
+    } else if let ExternalName::LibCall(libcall) = *name {
+        RelocationTarget::LibCall(libcall)
+    } else {
+        panic!("unrecognized external name")
+    };
+    Relocation {
+        reloc: kind,
+        reloc_target,
+        offset,
+        addend,
+    }
+}
+
+fn mach_trap_to_trap(trap: &MachTrap) -> TrapInformation {
+    let &MachTrap {
+        offset,
+        srcloc: _,
+        code,
+    } = trap;
+    TrapInformation {
+        code_offset: offset,
+        trap_code: match code {
+            ir::TrapCode::StackOverflow => TrapCode::StackOverflow,
+            ir::TrapCode::HeapOutOfBounds => TrapCode::HeapOutOfBounds,
+            ir::TrapCode::HeapMisaligned => TrapCode::HeapMisaligned,
+            ir::TrapCode::TableOutOfBounds => TrapCode::TableOutOfBounds,
+            ir::TrapCode::IndirectCallToNull => TrapCode::IndirectCallToNull,
+            ir::TrapCode::BadSignature => TrapCode::BadSignature,
+            ir::TrapCode::IntegerOverflow => TrapCode::IntegerOverflow,
+            ir::TrapCode::IntegerDivisionByZero => TrapCode::IntegerDivisionByZero,
+            ir::TrapCode::BadConversionToInteger => TrapCode::BadConversionToInteger,
+            ir::TrapCode::UnreachableCodeReached => TrapCode::UnreachableCodeReached,
+            ir::TrapCode::Interrupt => TrapCode::Interrupt,
+
+            // these should never be emitted by wasmtime-cranelift
+            ir::TrapCode::User(_) => unreachable!(),
+        },
+    }
+}
+
+fn mach_stack_maps_to_stack_maps(mach_stack_maps: &[MachStackMap]) -> Vec<StackMapInformation> {
+    // This is converting from Cranelift's representation of a stack map to
+    // Wasmtime's representation. They happen to align today but that may
+    // not always be true in the future.
+    let mut stack_maps = Vec::new();
+    for &MachStackMap {
+        offset_end,
+        ref stack_map,
+        ..
+    } in mach_stack_maps
+    {
+        let stack_map = wasmtime_environ::StackMap::new(
+            stack_map.mapped_words(),
+            stack_map.as_slice().iter().map(|a| a.0),
+        );
+        stack_maps.push(StackMapInformation {
+            code_offset: offset_end,
+            stack_map,
+        });
+    }
+    stack_maps.sort_unstable_by_key(|info| info.code_offset);
+    stack_maps
 }
