@@ -1268,9 +1268,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     dst,
                 ));
             } else {
-                let src = put_input_in_reg(ctx, inputs[0]);
-                ctx.emit(Inst::gen_move(dst, src, ty));
-                ctx.emit(Inst::neg(OperandSize::from_ty(ty), dst));
+                implemented_in_isle(ctx);
             }
         }
 

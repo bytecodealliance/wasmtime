@@ -72,6 +72,9 @@
             (Not (size OperandSize)
                  (src Reg)
                  (dst WritableReg))
+            (Neg (size OperandSize)
+                 (src Reg)
+                 (dst WritableReg))
             (LoadEffectiveAddress (addr SyntheticAmode)
                                   (dst WritableReg))))
 
@@ -1426,6 +1429,14 @@
       (let ((dst WritableReg (temp_writable_reg ty))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Not size src dst))))
+        (writable_reg_to_reg dst)))
+
+;; Helper for creating `neg` instructions.
+(decl neg (Type Reg) Reg)
+(rule (neg ty src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.Neg size src dst))))
         (writable_reg_to_reg dst)))
 
 (decl lea (SyntheticAmode) Reg)

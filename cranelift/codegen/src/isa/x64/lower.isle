@@ -905,6 +905,11 @@
         (or_i128 (shr_i128 src_ amt_)
                  (shl_i128 src_ (sub $I64 (imm $I64 128) (RegMemImm.Reg amt_))))))
 
+;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_64 ty) (ineg x)))
+      (value_reg (neg ty (put_in_reg x))))
+
 ;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (multi_lane 8 16)
