@@ -1,4 +1,4 @@
-use crate::CompiledModule;
+use crate::{demangling::demangle_function_name_or_index, CompiledModule};
 use std::error::Error;
 use std::fmt;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef, Module};
@@ -64,11 +64,12 @@ impl ProfilingAgent for NullProfilerAgent {
 #[allow(dead_code)]
 fn debug_name(module: &Module, index: DefinedFuncIndex) -> String {
     let index = module.func_index(index);
-    match module.func_names.get(&index) {
-        Some(s) => rustc_demangle::try_demangle(s)
-            .map(|demangle| demangle.to_string())
-            .or_else(|_| cpp_demangle::Symbol::new(s).map(|sym| sym.to_string()))
-            .unwrap_or_else(|_| s.clone()),
-        None => format!("wasm::wasm-function[{}]", index.index()),
-    }
+    let mut debug_name = String::new();
+    demangle_function_name_or_index(
+        &mut debug_name,
+        module.func_names.get(&index).map(|s| s.as_str()),
+        index.index(),
+    )
+    .unwrap();
+    debug_name
 }
