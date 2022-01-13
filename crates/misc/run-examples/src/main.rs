@@ -89,7 +89,7 @@ fn main() -> anyhow::Result<()> {
                     .arg("ole32.lib")
                     .arg("bcrypt.lib");
                 if is_dir {
-                    "main.exe".to_string()
+                    "./main.exe".to_string()
                 } else {
                     format!("./{}.exe", example)
                 }
