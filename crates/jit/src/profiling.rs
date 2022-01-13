@@ -31,7 +31,8 @@ pub trait ProfilingAgent: Send + Sync + 'static {
     /// Notify the profiler of a new module loaded into memory
     fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>);
     /// Notify the profiler that the object file provided contains
-    /// dynamically-generated trampolines which are now being loaded.
+    /// dynamically-generated trampolines (for host functions) which are now
+    /// being loaded.
     fn trampoline_load(&self, file: &object::File<'_>);
 }
 

@@ -3561,6 +3561,7 @@ dependencies = [
  "cpp_demangle",
  "gimli",
  "ittapi-rs",
+ "log",
  "object",
  "region",
  "rustc-demangle",

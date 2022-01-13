@@ -303,6 +303,8 @@ impl State {
                 self.dump_code_load_record(&name, addr, len, timestamp, pid, tid);
             }
         }
+
+        // Note: these are the trampolines into exported functions.
         for (idx, func, len) in module.trampolines() {
             let (addr, len) = (func as usize as *const u8, len);
             let timestamp = self.get_time_stamp();

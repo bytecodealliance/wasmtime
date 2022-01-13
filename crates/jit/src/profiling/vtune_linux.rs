@@ -9,10 +9,10 @@
 //! ### Profile
 //!
 //! ```ignore
-//! amplxe-cl -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --vtune test.wasm
+//! vtune -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --vtune test.wasm
 //! ```
 //!
-//! Note: `amplxe-cl` is a command-line tool for VTune which must [be
+//! Note: `vtune` is a command-line tool for VTune which must [be
 //! installed](https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler.html#standalone)
 //! for this to work.
 
@@ -20,10 +20,11 @@ use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
 use core::ptr;
 use ittapi_rs::*;
+use object::Object as _;
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::sync::{atomic, Mutex};
-use wasmtime_environ::DefinedFuncIndex;
+use wasmtime_environ::EntityRef;
 
 /// Interface for driving the ittapi for VTune support
 pub struct VTuneAgent {
@@ -32,15 +33,21 @@ pub struct VTuneAgent {
     state: Mutex<State>,
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+enum MethodKind {
+    Func { module_id: usize, func_id: usize },
+    ExportedFuncTrampoline { module_id: usize, func_id: usize },
+}
+
 /// Interface for driving vtune
 #[derive(Clone, Debug, Default)]
 struct State {
-    /// Unique identifier for the jitted function
-    method_id: HashMap<(usize, DefinedFuncIndex), u32>,
+    /// Unique identifier for the jitted code region.
+    method_id: HashMap<MethodKind, u32>,
 }
 
 impl VTuneAgent {
-    /// Intialize a VTuneAgent and write out the header
+    /// Initialize a VTuneAgent.
     pub fn new() -> Result<Self> {
         let state = State {
             method_id: HashMap::new(),
@@ -58,21 +65,20 @@ impl Drop for VTuneAgent {
 }
 
 impl State {
-    /// Return the unique method ID for use with the ittapi
-    pub fn get_method_id(&mut self, module_id: usize, func_idx: DefinedFuncIndex) -> u32 {
-        let method_id: u32;
-        unsafe {
-            method_id = iJIT_GetNewMethodID();
-        }
-        assert_eq!(
-            self.method_id.insert((module_id, func_idx), method_id),
-            None
-        );
+    /// Return the unique method ID for use with the ittapi.
+    fn get_method_id(&mut self, kind: MethodKind) -> u32 {
+        let method_id = Self::get_raw_method_id();
+        assert_eq!(self.method_id.insert(kind, method_id), None);
         method_id
     }
 
-    /// Load module
-    pub fn event_load(
+    /// Return a method ID for use with the ittapi, for code that has no unique identifier.
+    fn get_raw_method_id() -> u32 {
+        unsafe { iJIT_GetNewMethodID() }
+    }
+
+    /// Notify vtune about a newly tracked code region.
+    fn event_load(
         &mut self,
         method_id: u32,
         filename: &str,
@@ -100,7 +106,10 @@ impl State {
         };
         let jmethod_ptr = &mut jmethod as *mut _ as *mut _;
         unsafe {
-            println!("EventLoad: NotifyEvent Called {}", method_id);
+            log::trace!(
+                "NotifyEvent: method load (single method with id {})",
+                method_id
+            );
             let _ret = iJIT_NotifyEvent(
                 iJIT_jvm_event_iJVM_EVENT_TYPE_METHOD_LOAD_FINISHED,
                 jmethod_ptr as *mut ::std::os::raw::c_void,
@@ -111,7 +120,7 @@ impl State {
     /// Shutdown module
     fn event_shutdown(&mut self) -> () {
         unsafe {
-            println!("Drop was called!!!!!!\n");
+            log::trace!("NotifyEvent shutdown (whole module)");
             let _ret = iJIT_NotifyEvent(iJIT_jvm_event_iJVM_EVENT_TYPE_SHUTDOWN, ptr::null_mut());
         }
     }
@@ -121,8 +130,8 @@ impl ProfilingAgent for VTuneAgent {
     fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
         self.state.lock().unwrap().module_load(module, dbg_image);
     }
-    fn trampoline_load(&self, _file: &object::File<'_>) {
-        // TODO: needs an implementation
+    fn trampoline_load(&self, image: &object::File<'_>) {
+        self.state.lock().unwrap().trampoline_load(image);
     }
 }
 
@@ -132,20 +141,27 @@ impl State {
         static MODULE_ID: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
         let global_module_id = MODULE_ID.fetch_add(1, atomic::Ordering::SeqCst);
 
+        let default_filename = "wasm_file";
+        let module_name = module
+            .module()
+            .name
+            .as_ref()
+            .map(|s| s.as_str())
+            .unwrap_or("wasm_module");
+
         for (idx, func) in module.finished_functions() {
             let (addr, len) = unsafe { ((*func).as_ptr() as *const u8, (*func).len()) };
-            let default_filename = "wasm_file";
-            let default_module_name = String::from("wasm_module");
-            let module_name = module
-                .module()
-                .name
-                .as_ref()
-                .unwrap_or(&default_module_name);
             let method_name = super::debug_name(module.module(), idx);
-            let method_id = self.get_method_id(global_module_id, idx);
-            println!(
-                "Event Load: ({}) {:?}::{:?} Addr:{:?}\n",
-                method_id, module_name, method_name, addr
+            let method_id = self.get_method_id(MethodKind::Func {
+                module_id: global_module_id,
+                func_id: idx.index(),
+            });
+            log::trace!(
+                "new function ({}) {:?}::{:?} @ {:?}\n",
+                method_id,
+                module_name,
+                method_name,
+                addr
             );
             self.event_load(
                 method_id,
@@ -155,6 +171,69 @@ impl State {
                 addr,
                 len,
             );
+        }
+
+        // Note: these are the trampolines into exported functions.
+        for (idx, func, len) in module.trampolines() {
+            let idx = idx.index();
+            let (addr, len) = (func as usize as *const u8, len);
+            let method_name = format!("wasm::trampoline[{}]", idx,);
+            let method_id = self.get_method_id(MethodKind::ExportedFuncTrampoline {
+                module_id: global_module_id,
+                func_id: idx,
+            });
+            log::trace!(
+                "new export trampoline ({}) for function {} @ {:?}\n",
+                method_id,
+                idx,
+                addr
+            );
+            self.event_load(
+                method_id,
+                default_filename,
+                module_name,
+                &method_name,
+                addr,
+                len,
+            );
+        }
+    }
+
+    fn trampoline_load(&mut self, image: &object::File<'_>) {
+        use object::{ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
+
+        let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
+            Some(section) => match section.data() {
+                Ok(data) => data.as_ptr() as usize,
+                Err(_) => return,
+            },
+            None => return,
+        };
+
+        for sym in image.symbols() {
+            if !sym.is_definition() {
+                continue;
+            }
+            if sym.kind() != SymbolKind::Text {
+                continue;
+            }
+            let address = sym.address();
+            let size = sym.size();
+            if address == 0 || size == 0 {
+                continue;
+            }
+            if let Ok(name) = sym.name() {
+                let addr = text_base + address as usize;
+                let method_id = Self::get_raw_method_id();
+                self.event_load(
+                    method_id,
+                    "wasm_file",
+                    "wasm_module",
+                    &name,
+                    addr as *const u8,
+                    size as usize,
+                );
+            }
         }
     }
 }

@@ -86,7 +86,7 @@ members = [
 exclude = [
   'crates/wasi-common/WASI/tools/witx-cli',
   'docs/rust_wasi_markdown_parser'
-  ]
+]
 
 [features]
 default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation", "wasi-nn"]
