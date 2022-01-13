@@ -4,6 +4,7 @@
 
 (type MInst extern
       (enum (Nop (len u8))
+            (Ud2 (trap_code TrapCode))
             (AluRmiR (size OperandSize)
                      (op AluRmiROpcode)
                      (src1 Reg)
@@ -1444,3 +1445,8 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadEffectiveAddress addr dst))))
         (writable_reg_to_reg dst)))
+
+;; Helper for creating `ud2` instructions.
+(decl ud2 (TrapCode) SideEffectNoResult)
+(rule (ud2 code)
+      (SideEffectNoResult.Inst (MInst.Ud2 code)))

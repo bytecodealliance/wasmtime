@@ -1432,3 +1432,13 @@
 
 (rule (lower (has_type $I32X4 (umin x y)))
       (value_reg (pminud (put_in_reg x) (put_in_reg_mem y))))
+
+;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trap code))
+      (value_regs_none (ud2 code)))
+
+;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (resumable_trap code))
+      (value_regs_none (ud2 code)))

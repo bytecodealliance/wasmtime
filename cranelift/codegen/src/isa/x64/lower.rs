@@ -1234,7 +1234,9 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Ishl
         | Opcode::Rotl
         | Opcode::Rotr
-        | Opcode::Ineg => implemented_in_isle(ctx),
+        | Opcode::Ineg
+        | Opcode::Trap
+        | Opcode::ResumableTrap => implemented_in_isle(ctx),
 
         Opcode::Clz => {
             let orig_ty = ty.unwrap();
@@ -2367,11 +2369,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
 
         Opcode::Debugtrap => {
             ctx.emit(Inst::Hlt);
-        }
-
-        Opcode::Trap | Opcode::ResumableTrap => {
-            let trap_code = ctx.data(insn).trap_code().unwrap();
-            ctx.emit_safepoint(Inst::Ud2 { trap_code });
         }
 
         Opcode::Trapif | Opcode::Trapff => {

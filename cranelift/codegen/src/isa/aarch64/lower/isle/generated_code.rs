@@ -24,6 +24,7 @@ pub trait Context {
     fn u8_and(&mut self, arg0: u8, arg1: u8) -> u8;
     fn value_reg(&mut self, arg0: Reg) -> ValueRegs;
     fn value_regs(&mut self, arg0: Reg, arg1: Reg) -> ValueRegs;
+    fn value_regs_invalid(&mut self) -> ValueRegs;
     fn temp_writable_reg(&mut self, arg0: Type) -> WritableReg;
     fn invalid_reg(&mut self) -> Reg;
     fn put_in_reg(&mut self, arg0: Value) -> Reg;
@@ -92,13 +93,19 @@ pub trait Context {
     fn rotr_opposite_amount(&mut self, arg0: Type, arg1: ImmShift) -> ImmShift;
 }
 
-/// Internal type ProducesFlags: defined at src/prelude.isle line 277.
+/// Internal type SideEffectNoResult: defined at src/prelude.isle line 279.
+#[derive(Clone, Debug)]
+pub enum SideEffectNoResult {
+    Inst { inst: MInst },
+}
+
+/// Internal type ProducesFlags: defined at src/prelude.isle line 292.
 #[derive(Clone, Debug)]
 pub enum ProducesFlags {
     ProducesFlags { inst: MInst, result: Reg },
 }
 
-/// Internal type ConsumesFlags: defined at src/prelude.isle line 280.
+/// Internal type ConsumesFlags: defined at src/prelude.isle line 295.
 #[derive(Clone, Debug)]
 pub enum ConsumesFlags {
     ConsumesFlags { inst: MInst, result: Reg },
@@ -978,7 +985,7 @@ pub enum AtomicRMWOp {
 // Generated as internal constructor for term temp_reg.
 pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 66.
+    // Rule at src/prelude.isle line 70.
     let expr0_0 = C::temp_writable_reg(ctx, pattern0_0);
     let expr1_0 = C::writable_reg_to_reg(ctx, expr0_0);
     return Some(expr1_0);
@@ -987,11 +994,29 @@ pub fn constructor_temp_reg<C: Context>(ctx: &mut C, arg0: Type) -> Option<Reg> 
 // Generated as internal constructor for term lo_reg.
 pub fn constructor_lo_reg<C: Context>(ctx: &mut C, arg0: Value) -> Option<Reg> {
     let pattern0_0 = arg0;
-    // Rule at src/prelude.isle line 101.
+    // Rule at src/prelude.isle line 105.
     let expr0_0 = C::put_in_regs(ctx, pattern0_0);
     let expr1_0: usize = 0;
     let expr2_0 = C::value_regs_get(ctx, expr0_0, expr1_0);
     return Some(expr2_0);
+}
+
+// Generated as internal constructor for term value_regs_none.
+pub fn constructor_value_regs_none<C: Context>(
+    ctx: &mut C,
+    arg0: &SideEffectNoResult,
+) -> Option<ValueRegs> {
+    let pattern0_0 = arg0;
+    if let &SideEffectNoResult::Inst {
+        inst: ref pattern1_0,
+    } = pattern0_0
+    {
+        // Rule at src/prelude.isle line 284.
+        let expr0_0 = C::emit(ctx, &pattern1_0);
+        let expr1_0 = C::value_regs_invalid(ctx);
+        return Some(expr1_0);
+    }
+    return None;
 }
 
 // Generated as internal constructor for term with_flags.
@@ -1012,7 +1037,7 @@ pub fn constructor_with_flags<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 290.
+            // Rule at src/prelude.isle line 305.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             let expr2_0 = C::value_regs(ctx, pattern1_1, pattern3_1);
@@ -1040,7 +1065,7 @@ pub fn constructor_with_flags_1<C: Context>(
             result: pattern3_1,
         } = pattern2_0
         {
-            // Rule at src/prelude.isle line 298.
+            // Rule at src/prelude.isle line 313.
             let expr0_0 = C::emit(ctx, &pattern1_0);
             let expr1_0 = C::emit(ctx, &pattern3_0);
             return Some(pattern3_1);
@@ -1074,7 +1099,7 @@ pub fn constructor_with_flags_2<C: Context>(
                 result: pattern5_1,
             } = pattern4_0
             {
-                // Rule at src/prelude.isle line 308.
+                // Rule at src/prelude.isle line 323.
                 let expr0_0 = C::emit(ctx, &pattern1_0);
                 let expr1_0 = C::emit(ctx, &pattern5_0);
                 let expr2_0 = C::emit(ctx, &pattern3_0);
