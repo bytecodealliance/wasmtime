@@ -1541,17 +1541,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Vselect
         | Opcode::Ushr
         | Opcode::Sshr
-        | Opcode::Ishl => implemented_in_isle(ctx),
+        | Opcode::Ishl
+        | Opcode::Rotl => implemented_in_isle(ctx),
 
-        Opcode::Rotl | Opcode::Rotr => {
+        Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
 
             if !dst_ty.is_vector() && dst_ty.bits() <= 64 {
-                if op != Opcode::Rotr {
-                    implemented_in_isle(ctx);
-                }
-
                 // Scalar shifts on x86 have various encodings:
                 // - shift by one bit, e.g. `SAL r/m8, 1` (not used here)
                 // - shift by an immediate amount, e.g. `SAL r/m8, imm8`
