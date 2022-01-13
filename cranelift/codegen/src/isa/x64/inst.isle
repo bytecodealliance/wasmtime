@@ -726,7 +726,7 @@
 (decl imm (Type u64) Reg)
 
 ;; Integer immediates.
-(rule (imm ty simm64)
+(rule (imm (fits_in_64 ty) simm64)
       (let ((dst WritableReg (temp_writable_reg ty))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Imm size simm64 dst))))
@@ -751,7 +751,7 @@
         (writable_reg_to_reg dst)))
 
 ;; Special case for integer zero immediates: turn them into an `xor r, r`.
-(rule (imm ty 0)
+(rule (imm (fits_in_64 ty) 0)
       (let ((wr WritableReg (temp_writable_reg ty))
             (r Reg (writable_reg_to_reg wr))
             (size OperandSize (operand_size_of_type_32_64 ty))

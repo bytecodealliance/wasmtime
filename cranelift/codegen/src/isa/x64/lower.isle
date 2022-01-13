@@ -907,8 +907,28 @@
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; `i64` and smaller.
+
 (rule (lower (has_type (fits_in_64 ty) (ineg x)))
       (value_reg (neg ty (put_in_reg x))))
+
+;; SSE.
+
+(rule (lower (has_type $I8X16 (ineg x)))
+      (value_reg (psubb (imm $I8X16 0)
+                        (put_in_reg_mem x))))
+
+(rule (lower (has_type $I16X8 (ineg x)))
+      (value_reg (psubw (imm $I16X8 0)
+                        (put_in_reg_mem x))))
+
+(rule (lower (has_type $I32X4 (ineg x)))
+      (value_reg (psubd (imm $I32X4 0)
+                        (put_in_reg_mem x))))
+
+(rule (lower (has_type $I64X2 (ineg x)))
+      (value_reg (psubq (imm $I64X2 0)
+                        (put_in_reg_mem x))))
 
 ;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

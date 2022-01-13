@@ -1233,44 +1233,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Sshr
         | Opcode::Ishl
         | Opcode::Rotl
-        | Opcode::Rotr => implemented_in_isle(ctx),
-
-        Opcode::Ineg => {
-            let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            let ty = ty.unwrap();
-
-            if ty.is_vector() {
-                // Zero's out a register and then does a packed subtraction
-                // of the input from the register.
-
-                let src = input_to_reg_mem(ctx, inputs[0]);
-                let tmp = ctx.alloc_tmp(types::I32X4).only_reg().unwrap();
-
-                let subtract_opcode = match ty {
-                    types::I8X16 => SseOpcode::Psubb,
-                    types::I16X8 => SseOpcode::Psubw,
-                    types::I32X4 => SseOpcode::Psubd,
-                    types::I64X2 => SseOpcode::Psubq,
-                    _ => panic!("Unsupported type for Ineg instruction, found {}", ty),
-                };
-
-                // Note we must zero out a tmp instead of using the destination register since
-                // the desitnation could be an alias for the source input register
-                ctx.emit(Inst::xmm_rm_r(
-                    SseOpcode::Pxor,
-                    RegMem::reg(tmp.to_reg()),
-                    tmp,
-                ));
-                ctx.emit(Inst::xmm_rm_r(subtract_opcode, src, tmp));
-                ctx.emit(Inst::xmm_unary_rm_r(
-                    SseOpcode::Movapd,
-                    RegMem::reg(tmp.to_reg()),
-                    dst,
-                ));
-            } else {
-                implemented_in_isle(ctx);
-            }
-        }
+        | Opcode::Rotr
+        | Opcode::Ineg => implemented_in_isle(ctx),
 
         Opcode::Clz => {
             let orig_ty = ty.unwrap();
