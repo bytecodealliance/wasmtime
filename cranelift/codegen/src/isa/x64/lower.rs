@@ -1539,10 +1539,11 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Bnot
         | Opcode::Bitselect
         | Opcode::Vselect
+        | Opcode::Ushr
         | Opcode::Sshr
         | Opcode::Ishl => implemented_in_isle(ctx),
 
-        Opcode::Ushr | Opcode::Rotl | Opcode::Rotr => {
+        Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
 
@@ -1558,11 +1559,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // This implementation uses the last two encoding methods.
                 let (size, lhs) = match dst_ty {
                     types::I8 | types::I16 => match op {
-                        Opcode::Ushr => (
-                            OperandSize::Size32,
-                            extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
-                        ),
-                        Opcode::Rotl | Opcode::Rotr => (
+                        Opcode::Rotr => (
                             OperandSize::from_ty(dst_ty),
                             put_input_in_reg(ctx, inputs[0]),
                         ),
@@ -1589,8 +1586,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 let shift_kind = match op {
-                    Opcode::Ushr => ShiftKind::ShiftRightLogical,
-                    Opcode::Rotl => ShiftKind::RotateLeft,
                     Opcode::Rotr => ShiftKind::RotateRight,
                     _ => unreachable!(),
                 };
@@ -1607,9 +1602,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]);
 
                 match op {
-                    Opcode::Ushr | Opcode::Rotl => {
-                        implemented_in_isle(ctx);
-                    }
                     Opcode::Rotr => {
                         // (mov tmp, src)
                         // (ushr.i128 tmp, amt)
@@ -1642,159 +1634,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                     _ => unreachable!(),
                 }
-            } else if dst_ty == types::I8X16 && op == Opcode::Ushr {
-                // Since the x86 instruction set does not have any 8x16 shift instructions (even in higher feature sets
-                // like AVX), we lower the `ishl.i8x16` and `ushr.i8x16` to a sequence of instructions. The basic idea,
-                // whether the `shift_by` amount is an immediate or not, is to use a 16x8 shift and then mask off the
-                // incorrect bits to 0s (see below for handling signs in `sshr.i8x16`).
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-
-                // If necessary, move the shift index into the lowest bits of a vector register.
-                let shift_by_moved = match &shift_by {
-                    RegMemImm::Imm { .. } => shift_by.clone(),
-                    RegMemImm::Reg { reg } => {
-                        let tmp_shift_by = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                        ctx.emit(Inst::gpr_to_xmm(
-                            SseOpcode::Movd,
-                            RegMem::reg(*reg),
-                            OperandSize::Size32,
-                            tmp_shift_by,
-                        ));
-                        RegMemImm::reg(tmp_shift_by.to_reg())
-                    }
-                    RegMemImm::Mem { .. } => unimplemented!("load shift amount to XMM register"),
-                };
-
-                // Shift `src` using 16x8. Unfortunately, a 16x8 shift will only be correct for half of the lanes;
-                // the others must be fixed up with the mask below.
-                let shift_opcode = match op {
-                    Opcode::Ushr => SseOpcode::Psrlw,
-                    _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                };
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-                ctx.emit(Inst::xmm_rmi_reg(shift_opcode, shift_by_moved, dst));
-
-                // Choose which mask to use to fixup the shifted lanes. Since we must use a 16x8 shift, we need to fix
-                // up the bits that migrate from one half of the lane to the other. Each 16-byte mask (which rustfmt
-                // forces to multiple lines) is indexed by the shift amount: e.g. if we shift right by 0 (no movement),
-                // we want to retain all the bits so we mask with `0xff`; if we shift right by 1, we want to retain all
-                // bits except the MSB so we mask with `0x7f`; etc.
-                const USHR_MASKS: [u8; 128] = [
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
-                    0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f,
-                    0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x1f, 0x1f, 0x1f, 0x1f,
-                    0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x0f,
-                    0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f,
-                    0x0f, 0x0f, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
-                    0x07, 0x07, 0x07, 0x07, 0x07, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
-                    0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01, 0x01,
-                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                ];
-
-                let mask = match op {
-                    Opcode::Ushr => &USHR_MASKS,
-                    _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                };
-
-                // Figure out the address of the shift mask.
-                let mask_address = match shift_by {
-                    RegMemImm::Imm { simm32 } => {
-                        // When the shift amount is known, we can statically (i.e. at compile time) determine the mask to
-                        // use and only emit that.
-                        debug_assert!(simm32 < 8);
-                        let mask_offset = simm32 as usize * 16;
-                        let mask_constant = ctx.use_constant(VCodeConstantData::WellKnown(
-                            &mask[mask_offset..mask_offset + 16],
-                        ));
-                        SyntheticAmode::ConstantOffset(mask_constant)
-                    }
-                    RegMemImm::Reg { reg } => {
-                        // Otherwise, we must emit the entire mask table and dynamically (i.e. at run time) find the correct
-                        // mask offset in the table. We do this use LEA to find the base address of the mask table and then
-                        // complex addressing to offset to the right mask: `base_address + shift_by * 4`
-                        let base_mask_address = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        let mask_offset = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                        let mask_constant = ctx.use_constant(VCodeConstantData::WellKnown(mask));
-                        ctx.emit(Inst::lea(
-                            SyntheticAmode::ConstantOffset(mask_constant),
-                            base_mask_address,
-                        ));
-                        ctx.emit(Inst::gen_move(mask_offset, reg, types::I64));
-                        ctx.emit(Inst::shift_r(
-                            OperandSize::Size64,
-                            ShiftKind::ShiftLeft,
-                            Some(4),
-                            mask_offset,
-                        ));
-                        Amode::imm_reg_reg_shift(
-                            0,
-                            base_mask_address.to_reg(),
-                            mask_offset.to_reg(),
-                            0,
-                        )
-                        .into()
-                    }
-                    RegMemImm::Mem { addr: _ } => unimplemented!("load mask address"),
-                };
-
-                // Load the mask into a temporary register, `mask_value`.
-                let mask_value = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                ctx.emit(Inst::load(dst_ty, mask_address, mask_value, ExtKind::None));
-
-                // Remove the bits that would have disappeared in a true 8x16 shift. TODO in the future,
-                // this AND instruction could be coalesced with the load above.
-                let sse_op = match dst_ty {
-                    types::F32X4 => SseOpcode::Andps,
-                    types::F64X2 => SseOpcode::Andpd,
-                    _ => SseOpcode::Pand,
-                };
-                ctx.emit(Inst::xmm_rm_r(sse_op, RegMem::from(mask_value), dst));
             } else {
-                // For the remaining packed shifts not covered above, x86 has implementations that can either:
-                // - shift using an immediate
-                // - shift using a dynamic value given in the lower bits of another XMM register.
-                let src = put_input_in_reg(ctx, inputs[0]);
-                let shift_by = input_to_reg_mem_imm(ctx, inputs[1]);
-                let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-                let sse_op = match dst_ty {
-                    types::I16X8 => match op {
-                        Opcode::Ushr => SseOpcode::Psrlw,
-                        _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                    },
-                    types::I32X4 => match op {
-                        Opcode::Ushr => SseOpcode::Psrld,
-                        _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                    },
-                    types::I64X2 => match op {
-                        Opcode::Ushr => SseOpcode::Psrlq,
-                        _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
-                    },
-                    _ => unreachable!(),
-                };
-
-                // If necessary, move the shift index into the lowest bits of a vector register.
-                let shift_by = match shift_by {
-                    RegMemImm::Imm { .. } => shift_by,
-                    RegMemImm::Reg { reg } => {
-                        let tmp_shift_by = ctx.alloc_tmp(dst_ty).only_reg().unwrap();
-                        ctx.emit(Inst::gpr_to_xmm(
-                            SseOpcode::Movd,
-                            RegMem::reg(reg),
-                            OperandSize::Size32,
-                            tmp_shift_by,
-                        ));
-                        RegMemImm::reg(tmp_shift_by.to_reg())
-                    }
-                    RegMemImm::Mem { .. } => unimplemented!("load shift amount to XMM register"),
-                };
-
-                // Move the `src` to the same register as `dst`.
-                ctx.emit(Inst::gen_move(dst, src, dst_ty));
-
-                ctx.emit(Inst::xmm_rmi_reg(sse_op, shift_by, dst));
+                implemented_in_isle(ctx);
             }
         }
 
