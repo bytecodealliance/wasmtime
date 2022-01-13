@@ -1305,6 +1305,11 @@
 (rule (psllq src1 src2)
       (xmm_rmi_reg (SseOpcode.Psllq) src1 src2))
 
+;; Helper for creating `psrlw` instructions.
+(decl psrlw (Reg RegMemImm) Reg)
+(rule (psrlw src1 src2)
+      (xmm_rmi_reg (SseOpcode.Psrlw) src1 src2))
+
 ;; Helper for creating `psrld` instructions.
 (decl psrld (Reg RegMemImm) Reg)
 (rule (psrld src1 src2)
