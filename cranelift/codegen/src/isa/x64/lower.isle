@@ -865,6 +865,46 @@
         (or_i128 (shl_i128 src_ amt_)
                  (shr_i128 src_ (sub $I64 (imm $I64 128) (RegMemImm.Reg amt_))))))
 
+;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i16` and `i8`: we need to extend the shift amount, or mask the
+;; constant.
+
+(rule (lower (has_type (ty_8_or_16 ty) (rotr src amt)))
+      (let ((amt_ Reg (extend_to_reg amt $I32 (ExtendKind.Zero))))
+        (value_reg (m_rotr ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
+
+(rule (lower (has_type (ty_8_or_16 ty)
+                       (rotr src (u64_from_iconst amt))))
+      (value_reg (m_rotr ty
+                         (put_in_reg src)
+                         (const_to_type_masked_imm8 amt ty))))
+
+;; `i64` and `i32`: we can rely on x86's rotate-amount masking since
+;;  we operate on the whole register.
+
+(rule (lower (has_type (ty_32_or_64 ty) (rotr src amt)))
+      ;; NB: Only the low bits of `amt` matter since we logically mask the
+      ;; shift amount to the value's bit width.
+      (let ((amt_ Reg (lo_reg amt)))
+        (value_reg (m_rotr ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
+
+(rule (lower (has_type (ty_32_or_64 ty)
+                       (rotr src (u64_from_iconst amt))))
+      (value_reg (m_rotr ty
+                         (put_in_reg src)
+                         (const_to_type_masked_imm8 amt ty))))
+
+;; `i128`.
+
+(rule (lower (has_type $I128 (rotr src amt)))
+      (let ((src_ ValueRegs (put_in_regs src))
+            ;; NB: Only the low bits of `amt` matter since we logically mask the
+            ;; rotation amount to the value's bit width.
+            (amt_ Reg (lo_reg amt)))
+        (or_i128 (shr_i128 src_ amt_)
+                 (shl_i128 src_ (sub $I64 (imm $I64 128) (RegMemImm.Reg amt_))))))
+
 ;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (multi_lane 8 16)

@@ -811,6 +811,12 @@
 (rule (m_rotl ty src1 src2)
       (shift_r ty (ShiftKind.RotateLeft) src1 src2))
 
+;; Helper for creating `rotr` instructions (prefixed with "m_", short for "mach
+;; inst", to disambiguate this from clif's `rotr`).
+(decl m_rotr (Type Reg Imm8Reg) Reg)
+(rule (m_rotr ty src1 src2)
+      (shift_r ty (ShiftKind.RotateRight) src1 src2))
+
 ;; Helper for creating `shl` instructions.
 (decl shl (Type Reg Imm8Reg) Reg)
 (rule (shl ty src1 src2)
