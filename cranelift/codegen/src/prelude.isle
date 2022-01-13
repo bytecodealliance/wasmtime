@@ -152,6 +152,10 @@
 (decl ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)
 
+;; Get the byte width of a given type.
+(decl ty_bytes (Type) u16)
+(extern constructor ty_bytes ty_bytes)
+
 ;; Get the type of each lane in the given type.
 (decl lane_type (Type) Type)
 (extern constructor lane_type lane_type)

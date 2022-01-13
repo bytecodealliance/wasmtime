@@ -1539,9 +1539,10 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         | Opcode::Bnot
         | Opcode::Bitselect
         | Opcode::Vselect
-        | Opcode::Sshr => implemented_in_isle(ctx),
+        | Opcode::Sshr
+        | Opcode::Ishl => implemented_in_isle(ctx),
 
-        Opcode::Ishl | Opcode::Ushr | Opcode::Rotl | Opcode::Rotr => {
+        Opcode::Ushr | Opcode::Rotl | Opcode::Rotr => {
             let dst_ty = ctx.output_ty(insn, 0);
             debug_assert_eq!(ctx.input_ty(insn, 0), dst_ty);
 
@@ -1557,7 +1558,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // This implementation uses the last two encoding methods.
                 let (size, lhs) = match dst_ty {
                     types::I8 | types::I16 => match op {
-                        Opcode::Ishl => (OperandSize::Size32, put_input_in_reg(ctx, inputs[0])),
                         Opcode::Ushr => (
                             OperandSize::Size32,
                             extend_input_to_reg(ctx, inputs[0], ExtSpec::ZeroExtendTo32),
@@ -1589,7 +1589,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
 
                 let shift_kind = match op {
-                    Opcode::Ishl => ShiftKind::ShiftLeft,
                     Opcode::Ushr => ShiftKind::ShiftRightLogical,
                     Opcode::Rotl => ShiftKind::RotateLeft,
                     Opcode::Rotr => ShiftKind::RotateRight,
@@ -1608,7 +1607,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]);
 
                 match op {
-                    Opcode::Ishl | Opcode::Ushr | Opcode::Rotl => {
+                    Opcode::Ushr | Opcode::Rotl => {
                         implemented_in_isle(ctx);
                     }
                     Opcode::Rotr => {
@@ -1643,7 +1642,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     }
                     _ => unreachable!(),
                 }
-            } else if dst_ty == types::I8X16 && (op == Opcode::Ishl || op == Opcode::Ushr) {
+            } else if dst_ty == types::I8X16 && op == Opcode::Ushr {
                 // Since the x86 instruction set does not have any 8x16 shift instructions (even in higher feature sets
                 // like AVX), we lower the `ishl.i8x16` and `ushr.i8x16` to a sequence of instructions. The basic idea,
                 // whether the `shift_by` amount is an immediate or not, is to use a 16x8 shift and then mask off the
@@ -1671,7 +1670,6 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 // Shift `src` using 16x8. Unfortunately, a 16x8 shift will only be correct for half of the lanes;
                 // the others must be fixed up with the mask below.
                 let shift_opcode = match op {
-                    Opcode::Ishl => SseOpcode::Psllw,
                     Opcode::Ushr => SseOpcode::Psrlw,
                     _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
                 };
@@ -1695,20 +1693,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x01, 0x01, 0x01, 0x01, 0x01,
                     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
                 ];
-                const SHL_MASKS: [u8; 128] = [
-                    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
-                    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc,
-                    0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xf8, 0xf8, 0xf8, 0xf8,
-                    0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf0,
-                    0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0,
-                    0xf0, 0xf0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0,
-                    0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0,
-                    0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0x80, 0x80, 0x80, 0x80, 0x80,
-                    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
-                ];
+
                 let mask = match op {
-                    Opcode::Ishl => &SHL_MASKS,
                     Opcode::Ushr => &USHR_MASKS,
                     _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
                 };
@@ -1775,17 +1761,14 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 let dst = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
                 let sse_op = match dst_ty {
                     types::I16X8 => match op {
-                        Opcode::Ishl => SseOpcode::Psllw,
                         Opcode::Ushr => SseOpcode::Psrlw,
                         _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
                     },
                     types::I32X4 => match op {
-                        Opcode::Ishl => SseOpcode::Pslld,
                         Opcode::Ushr => SseOpcode::Psrld,
                         _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
                     },
                     types::I64X2 => match op {
-                        Opcode::Ishl => SseOpcode::Psllq,
                         Opcode::Ushr => SseOpcode::Psrlq,
                         _ => unimplemented!("{} is not implemented for type {}", op, dst_ty),
                     },

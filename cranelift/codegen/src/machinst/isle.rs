@@ -100,6 +100,11 @@ macro_rules! isle_prelude_methods {
             ty.bits()
         }
 
+        #[inline]
+        fn ty_bytes(&mut self, ty: Type) -> u16 {
+            u16::try_from(ty.bytes()).unwrap()
+        }
+
         fn fits_in_16(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() <= 16 {
                 Some(ty)
