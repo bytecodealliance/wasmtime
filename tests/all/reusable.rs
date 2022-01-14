@@ -28,15 +28,21 @@ fn clears_memory_on_reset(config: &Config) -> Result<()> {
             (func $read_memory (result i32)
               (i32.load offset=1024 (i32.const 0))
             )
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
     let instance = instance_pre.instantiate_reusable(&mut store)?;
 
-    let read_memory = instance.get_func(&mut store, "read_memory").unwrap().typed::<(), i32, _>(&store)?;
-    let write_memory = instance.get_func(&mut store, "write_memory").unwrap().typed::<(), (), _>(&store)?;
+    let read_memory = instance
+        .get_func(&mut store, "read_memory")
+        .unwrap()
+        .typed::<(), i32, _>(&store)?;
+    let write_memory = instance
+        .get_func(&mut store, "write_memory")
+        .unwrap()
+        .typed::<(), (), _>(&store)?;
 
     // Modify the memory and make sure it's actually modified.
     assert_eq!(read_memory.call(&mut store, ())?, 0);
@@ -92,16 +98,25 @@ fn restores_original_data_segment_on_reset(config: &Config) -> Result<()> {
             (func $read_memory (result i32)
               (i32.load offset=1024 (i32.const 0))
             )
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
     let instance = instance_pre.instantiate_reusable(&mut store)?;
 
-    let grow_memory = instance.get_func(&mut store, "grow_memory").unwrap().typed::<i32, i32, _>(&store)?;
-    let read_memory = instance.get_func(&mut store, "read_memory").unwrap().typed::<(), i32, _>(&store)?;
-    let write_memory = instance.get_func(&mut store, "write_memory").unwrap().typed::<(), (), _>(&store)?;
+    let grow_memory = instance
+        .get_func(&mut store, "grow_memory")
+        .unwrap()
+        .typed::<i32, i32, _>(&store)?;
+    let read_memory = instance
+        .get_func(&mut store, "read_memory")
+        .unwrap()
+        .typed::<(), i32, _>(&store)?;
+    let write_memory = instance
+        .get_func(&mut store, "write_memory")
+        .unwrap()
+        .typed::<(), (), _>(&store)?;
 
     // Modify the memory and make sure it's actually modified.
     assert_eq!(read_memory.call(&mut store, ())?, 65);
@@ -166,21 +181,44 @@ fn restores_memory_size_on_reset_after_grow(config: &Config) -> Result<()> {
             (func $read_memory (result i32)
               (i32.load offset=65536 (i32.const 0))
             )
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
     let instance = instance_pre.instantiate_reusable(&mut store)?;
 
-    let grow_memory = instance.get_func(&mut store, "grow_memory").unwrap().typed::<i32, i32, _>(&store)?;
-    let write_memory = instance.get_func(&mut store, "write_memory").unwrap().typed::<(), (), _>(&store)?;
-    let read_memory = instance.get_func(&mut store, "read_memory").unwrap().typed::<(), i32, _>(&store)?;
+    let grow_memory = instance
+        .get_func(&mut store, "grow_memory")
+        .unwrap()
+        .typed::<i32, i32, _>(&store)?;
+    let write_memory = instance
+        .get_func(&mut store, "write_memory")
+        .unwrap()
+        .typed::<(), (), _>(&store)?;
+    let read_memory = instance
+        .get_func(&mut store, "read_memory")
+        .unwrap()
+        .typed::<(), i32, _>(&store)?;
 
     // The memory should initially be one WASM page big.
     assert_eq!(grow_memory.call(&mut store, 0)?, 1);
-    assert_eq!(read_memory.call(&mut store, ()).unwrap_err().trap_code().unwrap(), TrapCode::MemoryOutOfBounds);
-    assert_eq!(write_memory.call(&mut store, ()).unwrap_err().trap_code().unwrap(), TrapCode::MemoryOutOfBounds);
+    assert_eq!(
+        read_memory
+            .call(&mut store, ())
+            .unwrap_err()
+            .trap_code()
+            .unwrap(),
+        TrapCode::MemoryOutOfBounds
+    );
+    assert_eq!(
+        write_memory
+            .call(&mut store, ())
+            .unwrap_err()
+            .trap_code()
+            .unwrap(),
+        TrapCode::MemoryOutOfBounds
+    );
 
     // ...then we grow it, which should make it accessible.
     assert_eq!(grow_memory.call(&mut store, 1)?, 1);
@@ -197,8 +235,22 @@ fn restores_memory_size_on_reset_after_grow(config: &Config) -> Result<()> {
 
     // Make sure that the memory size was reset, and that it isn't actually accessible.
     assert_eq!(grow_memory.call(&mut store, 0)?, 1);
-    assert_eq!(read_memory.call(&mut store, ()).unwrap_err().trap_code().unwrap(), TrapCode::MemoryOutOfBounds);
-    assert_eq!(write_memory.call(&mut store, ()).unwrap_err().trap_code().unwrap(), TrapCode::MemoryOutOfBounds);
+    assert_eq!(
+        read_memory
+            .call(&mut store, ())
+            .unwrap_err()
+            .trap_code()
+            .unwrap(),
+        TrapCode::MemoryOutOfBounds
+    );
+    assert_eq!(
+        write_memory
+            .call(&mut store, ())
+            .unwrap_err()
+            .trap_code()
+            .unwrap(),
+        TrapCode::MemoryOutOfBounds
+    );
 
     // Now we can grow it again.
     assert_eq!(grow_memory.call(&mut store, 1)?, 1);
@@ -250,14 +302,17 @@ fn restores_table_on_reset() -> Result<()> {
             (func $return_200 (result i32)
               (i32.const 200)
             )
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
     let instance = instance_pre.instantiate_reusable(&mut store)?;
 
-    let call_table = instance.get_func(&mut store, "call_table").unwrap().typed::<(), i32, _>(&store)?;
+    let call_table = instance
+        .get_func(&mut store, "call_table")
+        .unwrap()
+        .typed::<(), i32, _>(&store)?;
     let return_200 = instance.get_func(&mut store, "return_200").unwrap();
     let table = instance.get_table(&mut store, "table").unwrap();
 
@@ -305,15 +360,21 @@ fn snapshot_is_taken_after_start() -> Result<()> {
                 (i32.const 5)
               )
             )
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
     let instance = instance_pre.instantiate_reusable(&mut store)?;
 
-    let read_memory = instance.get_func(&mut store, "read_memory").unwrap().typed::<(), i32, _>(&store)?;
-    let write_memory = instance.get_func(&mut store, "write_memory").unwrap().typed::<(), (), _>(&store)?;
+    let read_memory = instance
+        .get_func(&mut store, "read_memory")
+        .unwrap()
+        .typed::<(), i32, _>(&store)?;
+    let write_memory = instance
+        .get_func(&mut store, "write_memory")
+        .unwrap()
+        .typed::<(), (), _>(&store)?;
 
     // Make sure the start function was actually run.
     assert_eq!(read_memory.call(&mut store, ())?, 5);
@@ -347,15 +408,21 @@ fn globals_are_restored_on_reset() -> Result<()> {
             (func $read_global (result i32)
               (global.get $1)
             )
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
     let instance = instance_pre.instantiate_reusable(&mut store)?;
 
-    let read_global = instance.get_func(&mut store, "read_global").unwrap().typed::<(), i32, _>(&store)?;
-    let write_global = instance.get_func(&mut store, "write_global").unwrap().typed::<(), (), _>(&store)?;
+    let read_global = instance
+        .get_func(&mut store, "read_global")
+        .unwrap()
+        .typed::<(), i32, _>(&store)?;
+    let write_global = instance
+        .get_func(&mut store, "write_global")
+        .unwrap()
+        .typed::<(), (), _>(&store)?;
 
     // Make sure the global was properly initialized.
     assert_eq!(read_global.call(&mut store, ())?, 123);
@@ -376,10 +443,7 @@ fn non_reusable_instance_cannot_be_reset() -> Result<()> {
     let engine = Engine::default();
     let linker = Linker::new(&engine);
 
-    let module = Module::new(
-        &engine,
-        r#"(module)"#
-    )?;
+    let module = Module::new(&engine, r#"(module)"#)?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
@@ -396,16 +460,13 @@ fn reusable_instances_are_not_compatible_with_instance_pooling_strategy() -> Res
     config.allocation_strategy(InstanceAllocationStrategy::Pooling {
         strategy: Default::default(),
         module_limits: Default::default(),
-        instance_limits: Default::default()
+        instance_limits: Default::default(),
     });
 
     let engine = Engine::new(&config)?;
     let linker = Linker::new(&engine);
 
-    let module = Module::new(
-        &engine,
-        r#"(module)"#
-    )?;
+    let module = Module::new(&engine, r#"(module)"#)?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
@@ -423,7 +484,7 @@ unsafe impl MemoryCreator for DummyMemoryCreator {
         _minimum: usize,
         _maximum: Option<usize>,
         _reserved_size_in_bytes: Option<usize>,
-        _guard_size_in_bytes: usize
+        _guard_size_in_bytes: usize,
     ) -> Result<Box<dyn LinearMemory>, String> {
         unimplemented!();
     }
@@ -447,14 +508,17 @@ fn reusable_instances_do_not_use_a_custom_memory_creator() -> Result<()> {
                (local.get $0)
               )
             )
-           )"#
+           )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
     let instance_pre = linker.instantiate_pre(&mut store, &module)?;
     let instance = instance_pre.instantiate_reusable(&mut store)?;
 
-    let grow_memory = instance.get_func(&mut store, "grow_memory").unwrap().typed::<i32, i32, _>(&store)?;
+    let grow_memory = instance
+        .get_func(&mut store, "grow_memory")
+        .unwrap()
+        .typed::<i32, i32, _>(&store)?;
 
     assert_eq!(grow_memory.call(&mut store, 1)?, 1);
     assert_eq!(grow_memory.call(&mut store, 1)?, 2);
@@ -473,7 +537,7 @@ fn incompatible_with_imported_memories() -> Result<()> {
         &engine,
         r#"(module
             (import "env" "memory" (memory $memoryimport 1))
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
@@ -497,7 +561,7 @@ fn incompatible_with_imported_tables() -> Result<()> {
         &engine,
         r#"(module
             (import "env" "table" (table $tableimport 1 2 funcref))
-        )"#
+        )"#,
     )?;
 
     let mut store = Store::new(&engine, ());
