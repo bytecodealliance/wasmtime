@@ -57,7 +57,7 @@
 (decl value_regs (Reg Reg) ValueRegs)
 (extern constructor value_regs value_regs)
 
-;; Construct an empty `ValueRegs` containing only invalid register sentinals.
+;; Construct an empty `ValueRegs` containing only invalid register sentinels.
 (decl value_regs_invalid () ValueRegs)
 (extern constructor value_regs_invalid value_regs_invalid)
 
