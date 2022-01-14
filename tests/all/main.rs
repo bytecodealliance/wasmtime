@@ -25,6 +25,8 @@ mod module_serialize;
 mod name;
 mod pooling_allocator;
 mod relocs;
+#[cfg(target_os = "linux")]
+mod reusable;
 mod stack_overflow;
 mod store;
 mod table;

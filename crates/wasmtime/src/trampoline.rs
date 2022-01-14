@@ -18,8 +18,8 @@ use std::any::Any;
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, GlobalIndex, MemoryIndex, Module, TableIndex};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, OnDemandInstanceAllocator, StorePtr,
-    VMFunctionImport, VMSharedSignatureIndex,
+    Imports, InstanceAllocationRequest, InstanceAllocator, MemorySource, OnDemandInstanceAllocator,
+    StorePtr, VMFunctionImport, VMSharedSignatureIndex,
 };
 
 fn create_handle(
@@ -48,6 +48,7 @@ fn create_handle(
                 host_state,
                 store: StorePtr::new(store.traitobj()),
                 wasm_data: &[],
+                memory_source: MemorySource::FromCreator,
             },
         )?;
 

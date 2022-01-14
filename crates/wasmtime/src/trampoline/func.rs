@@ -8,7 +8,7 @@ use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureIndex};
 use wasmtime_jit::{CodeMemory, MmapVec};
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle, MemorySource,
     OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMSharedSignatureIndex,
     VMTrampoline,
 };
@@ -134,6 +134,7 @@ pub unsafe fn create_raw_function(
             host_state,
             store: StorePtr::empty(),
             wasm_data: &[],
+            memory_source: MemorySource::FromCreator,
         })?,
     )
 }

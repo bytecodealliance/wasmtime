@@ -15,8 +15,8 @@ use wasmtime_environ::{
 };
 use wasmtime_jit::TypeTables;
 use wasmtime_runtime::{
-    Imports, InstanceAllocationRequest, InstantiationError, StorePtr, VMContext, VMFunctionBody,
-    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
+    Imports, InstanceAllocationRequest, InstantiationError, MemorySource, StorePtr, VMContext,
+    VMFunctionBody, VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
 };
 
 /// An instantiated WebAssembly module.
@@ -124,7 +124,12 @@ impl Instance {
         let mut store = store.as_context_mut();
         let mut i = unsafe {
             typecheck_externs(store.0, module, imports)?;
-            Instantiator::new(store.0, module, ImportSource::Externs(imports))?
+            Instantiator::new(
+                store.0,
+                module,
+                ImportSource::Externs(imports),
+                MemorySource::FromCreator,
+            )?
         };
         assert!(
             !store.0.async_support(),
@@ -165,7 +170,12 @@ impl Instance {
         let mut store = store.as_context_mut();
         let mut i = unsafe {
             typecheck_externs(store.0, module, imports)?;
-            Instantiator::new(store.0, module, ImportSource::Externs(imports))?
+            Instantiator::new(
+                store.0,
+                module,
+                ImportSource::Externs(imports),
+                MemorySource::FromCreator,
+            )?
         };
         let mut store = store.as_context_mut();
         assert!(
@@ -422,11 +432,27 @@ impl Instance {
     pub fn get_global(&self, store: impl AsContextMut, name: &str) -> Option<Global> {
         self.get_export(store, name)?.into_global()
     }
+
+    /// Resets this instance's memory and tables to their initial state
+    /// from after the instantiation.
+    ///
+    /// Can only be used on an instance created through [`InstancePre::instantiate_reusable`].
+    #[cfg(target_os = "linux")]
+    pub fn reset(&self, mut store: impl AsContextMut) -> Result<()> {
+        let store = store.as_context_mut().0;
+        let id = match &store[self.0] {
+            InstanceData::Synthetic(..) => unreachable!(),
+            InstanceData::Instantiated { id, .. } => *id,
+        };
+
+        store.instance_mut(id).restore_snapshot()
+    }
 }
 
 struct Instantiator<'a> {
     in_progress: Vec<ImportsBuilder<'a>>,
     cur: ImportsBuilder<'a>,
+    memory_source: MemorySource,
 }
 
 struct ImportsBuilder<'a> {
@@ -472,6 +498,7 @@ impl<'a> Instantiator<'a> {
         store: &StoreOpaque,
         module: &Module,
         imports: ImportSource<'a>,
+        memory_source: MemorySource,
     ) -> Result<Instantiator<'a>> {
         if !Engine::same(store.engine(), module.engine()) {
             bail!("cross-`Engine` instantiation is not currently supported");
@@ -480,6 +507,7 @@ impl<'a> Instantiator<'a> {
         Ok(Instantiator {
             in_progress: Vec::new(),
             cur: ImportsBuilder::new(module, imports),
+            memory_source,
         })
     }
 
@@ -490,6 +518,19 @@ impl<'a> Instantiator<'a> {
                     Instantiator::start_raw(store, instance, start)?;
                 }
                 if toplevel {
+                    match self.memory_source {
+                        MemorySource::FromCreator => {}
+                        #[cfg(target_os = "linux")]
+                        MemorySource::CopyOnWriteInitialize => {
+                            let id = match &store.0.store_data()[instance.0] {
+                                InstanceData::Instantiated { id, .. } => *id,
+                                InstanceData::Synthetic(_) => unreachable!(),
+                            };
+
+                            store.0.instance_mut(id).create_snapshot()?;
+                        }
+                    }
+
                     break Ok(instance);
                 }
             }
@@ -714,6 +755,7 @@ impl<'a> Instantiator<'a> {
                         host_state: Box::new(Instance(instance_to_be)),
                         store: StorePtr::new(store.traitobj()),
                         wasm_data: compiled_module.wasm_data(),
+                        memory_source: self.memory_source,
                     })?;
 
             // The instance still has lots of setup, for example
@@ -945,7 +987,42 @@ impl<T> InstancePre<T> {
     /// `store`, or if `store` has async support enabled. Additionally this
     /// function will panic if the `store` provided comes from a different
     /// [`Engine`] than the [`InstancePre`] originally came from.
-    pub fn instantiate(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance> {
+    pub fn instantiate(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        self.instantiate_impl(store, MemorySource::FromCreator)
+    }
+
+    /// Instantiates an instance which can be reset and reused with [`Instance::reset`].
+    ///
+    /// Unlike normal instantiation it will not use the [`MemoryCreator`](crate::memory::MemoryCreator) registered
+    /// through [`Config::with_host_memory`](crate::config::Config::with_host_memory)
+    ///
+    /// Incompatible with any strategy other than [`InstanceAllocationStrategy::OnDemand`](crate::config::InstanceAllocationStrategy::OnDemand)
+    /// when set through [`Config::strategy`](crate::config::Config::strategy).
+    ///
+    /// Incompatible with imported memories and tables.
+    ///
+    /// For more information about instantiation see [`InstancePre::instantiate`].
+    #[cfg(target_os = "linux")]
+    pub fn instantiate_reusable(&self, store: impl AsContextMut<Data = T>) -> Result<Instance> {
+        for import in self.module.imports() {
+            match import.ty() {
+                ExternType::Table(..) => {
+                    bail!("`instantiate_reusable` cannot be used for modules which import a table")
+                }
+                ExternType::Memory(..) => {
+                    bail!("`instantiate_reusable` cannot be used for modules which import a memory")
+                }
+                _ => {}
+            }
+        }
+        self.instantiate_impl(store, MemorySource::CopyOnWriteInitialize)
+    }
+
+    fn instantiate_impl(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        memory_source: MemorySource,
+    ) -> Result<Instance> {
         // For the unsafety here the typecheck happened at creation time of this
         // structure and then othrewise the `T` of `InstancePre<T>` connects any
         // host functions we have in our definition list to the `store` that was
@@ -957,6 +1034,7 @@ impl<T> InstancePre<T> {
                 store.0,
                 &self.module,
                 ImportSource::Definitions(&self.items),
+                memory_source,
             )?
         };
         instantiator.run(&mut store)
@@ -989,6 +1067,7 @@ impl<T> InstancePre<T> {
                 store.0,
                 &self.module,
                 ImportSource::Definitions(&self.items),
+                MemorySource::FromCreator,
             )?
         };
 

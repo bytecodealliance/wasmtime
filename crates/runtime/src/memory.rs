@@ -86,6 +86,10 @@ pub struct MmapMemory {
     // optimize loads and stores with constant offsets.
     pre_guard_size: usize,
     offset_guard_size: usize,
+
+    // The initial value of the `accessible` from when the memory was fossilized.
+    #[cfg(target_os = "linux")]
+    original_accessible: usize,
 }
 
 impl MmapMemory {
@@ -122,6 +126,7 @@ impl MmapMemory {
             .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
 
         let mut mmap = Mmap::accessible_reserved(0, request_bytes)?;
+
         if minimum > 0 {
             mmap.make_accessible(pre_guard_bytes, minimum)?;
         }
@@ -133,7 +138,34 @@ impl MmapMemory {
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
+
+            #[cfg(target_os = "linux")]
+            original_accessible: 0,
         })
+    }
+
+    #[cfg(target_os = "linux")]
+    fn create_snapshot(&mut self) -> Result<()> {
+        self.mmap
+            .create_snapshot(self.pre_guard_size, self.accessible)?;
+        self.original_accessible = self.accessible;
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn restore_snapshot(&mut self) -> Result<()> {
+        unsafe {
+            self.mmap.reset(self.pre_guard_size, self.accessible)?;
+            if self.accessible > self.original_accessible {
+                self.mmap.make_inaccessible(
+                    self.pre_guard_size + self.original_accessible,
+                    self.accessible - self.original_accessible,
+                )?;
+                self.accessible = self.original_accessible;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -159,13 +191,12 @@ impl RuntimeLinearMemory for MmapMemory {
                 .and_then(|s| s.checked_add(self.offset_guard_size))
                 .ok_or_else(|| format_err!("overflow calculating size of memory allocation"))?;
 
-            let mut new_mmap = Mmap::accessible_reserved(0, request_bytes)?;
-            new_mmap.make_accessible(self.pre_guard_size, new_size)?;
-
-            new_mmap.as_mut_slice()[self.pre_guard_size..][..self.accessible]
-                .copy_from_slice(&self.mmap.as_slice()[self.pre_guard_size..][..self.accessible]);
-
-            self.mmap = new_mmap;
+            self.mmap.reallocate(
+                self.pre_guard_size,
+                self.accessible,
+                request_bytes,
+                new_size,
+            )?;
         } else {
             // If the new size of this heap fits within the existing allocation
             // then all we need to do is to make the new pages accessible. This
@@ -219,6 +250,10 @@ pub enum Memory {
     /// A "dynamic" memory whose data is managed at runtime and lifetime is tied
     /// to this instance.
     Dynamic(Box<dyn RuntimeLinearMemory>),
+
+    /// A memory for which [`Memory::create_snapshot`] can be called.
+    #[cfg(target_os = "linux")]
+    Snapshottable(MmapMemory),
 }
 
 impl Memory {
@@ -230,6 +265,40 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
         Ok(Memory::Dynamic(creator.new_memory(plan, minimum, maximum)?))
+    }
+
+    /// Creates a new memory instance for the specified plan, with the intent to
+    /// fossilize a snapshot of it later with [`Memory::create_snapshot`].
+    #[cfg(target_os = "linux")]
+    pub fn new_snapshottable(plan: &MemoryPlan, store: &mut dyn Store) -> Result<Self> {
+        let (minimum, maximum) = Self::limit_new(plan, store)?;
+        let memory = MmapMemory::new(plan, minimum, maximum)?;
+        Ok(Memory::Snapshottable(memory))
+    }
+
+    /// Creates an internal snapshot of this memory to be restored at a later time.
+    ///
+    /// Can only be called for memories created with [`Memory::new_snapshottable`].
+    /// Should only be called once.
+    #[cfg(target_os = "linux")]
+    pub fn create_snapshot(&mut self) -> Result<()> {
+        match self {
+            Memory::Static { .. } => unreachable!(),
+            Memory::Dynamic(..) => unreachable!(),
+            Memory::Snapshottable(ref mut memory) => memory.create_snapshot(),
+        }
+    }
+
+    /// Resets this memory to its initial state from when the [`Memory::create_snapshot`] was called.
+    ///
+    /// Can be called multiple times.
+    #[cfg(target_os = "linux")]
+    pub fn restore_snapshot(&mut self) -> Result<()> {
+        match self {
+            Memory::Static { .. } => unreachable!(),
+            Memory::Dynamic(..) => unreachable!(),
+            Memory::Snapshottable(ref mut memory) => memory.restore_snapshot(),
+        }
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
@@ -347,6 +416,8 @@ impl Memory {
         match self {
             Memory::Static { size, .. } => *size,
             Memory::Dynamic(mem) => mem.byte_size(),
+            #[cfg(target_os = "linux")]
+            Memory::Snapshottable(mem) => mem.byte_size(),
         }
     }
 
@@ -360,6 +431,8 @@ impl Memory {
         match self {
             Memory::Static { base, .. } => Some(base.len()),
             Memory::Dynamic(mem) => mem.maximum_byte_size(),
+            #[cfg(target_os = "linux")]
+            Memory::Snapshottable(mem) => mem.maximum_byte_size(),
         }
     }
 
@@ -471,6 +544,13 @@ impl Memory {
                     return Ok(None);
                 }
             }
+            #[cfg(target_os = "linux")]
+            Memory::Snapshottable(mem) => {
+                if let Err(e) = mem.grow_to(new_byte_size) {
+                    store.memory_grow_failed(&e);
+                    return Ok(None);
+                }
+            }
         }
         Ok(Some(old_byte_size))
     }
@@ -483,6 +563,8 @@ impl Memory {
                 current_length: *size,
             },
             Memory::Dynamic(mem) => mem.vmmemory(),
+            #[cfg(target_os = "linux")]
+            Memory::Snapshottable(mem) => mem.vmmemory(),
         }
     }
 
@@ -507,6 +589,10 @@ impl Memory {
             Memory::Dynamic(_) => {
                 unreachable!("dynamic memories should not have guard page faults")
             }
+            #[cfg(target_os = "linux")]
+            Memory::Snapshottable(_) => {
+                unreachable!("snapshottable memories should not have guard page faults")
+            }
         }
     }
 
@@ -527,6 +613,10 @@ impl Memory {
             }
             Memory::Dynamic(_) => {
                 unreachable!("dynamic memories should not have guard page faults")
+            }
+            #[cfg(target_os = "linux")]
+            Memory::Snapshottable(_) => {
+                unreachable!("snapshottable memories should not have guard page faults")
             }
         }
 

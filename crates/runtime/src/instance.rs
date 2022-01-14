@@ -88,6 +88,17 @@ pub(crate) struct Instance {
     /// allocation, but some host-defined objects will store their state here.
     host_state: Box<dyn Any + Send + Sync>,
 
+    /// A flag which stores whether this instance is reusable.
+    ///
+    /// If this is true then [`InstanceHandle::create_snapshot`] and
+    /// [`InstanceHandle::restore_snapshot`] can be called on this instance.
+    #[cfg(target_os = "linux")]
+    is_reusable: bool,
+
+    /// The values of globals saved in [`InstanceHandle::create_snapshot`].
+    #[cfg(target_os = "linux")]
+    saved_globals: Vec<(GlobalIndex, VMGlobalDefinition)>,
+
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -842,5 +853,72 @@ impl InstanceHandle {
         InstanceHandle {
             instance: self.instance,
         }
+    }
+
+    /// Creates an internal snapshot of this instance's memory and tables
+    /// to be restored at a later time.
+    ///
+    /// Should only be called once.
+    #[cfg(target_os = "linux")]
+    pub fn create_snapshot(&mut self) -> Result<(), anyhow::Error> {
+        let instance = self.instance_mut();
+        if !instance.is_reusable {
+            anyhow::bail!("instance is not reusable");
+        }
+
+        for memory in instance.memories.values_mut() {
+            memory.create_snapshot()?;
+        }
+
+        for table in instance.tables.values_mut() {
+            table.create_snapshot()?;
+        }
+
+        for index in instance.module.globals.keys() {
+            let value = unsafe { std::ptr::read(instance.defined_or_imported_global_ptr(index)) };
+            instance.saved_globals.push((index, value));
+        }
+
+        Ok(())
+    }
+
+    /// Resets this instance's memory, tables and globals to their initial
+    /// state from when the [`InstanceHandle::create_snapshot`] was called.
+    ///
+    /// Can be called any number of times.
+    #[cfg(target_os = "linux")]
+    pub fn restore_snapshot(&mut self) -> Result<(), anyhow::Error> {
+        let instance = self.instance_mut();
+        if !instance.is_reusable {
+            anyhow::bail!("instance is not reusable");
+        }
+
+        for index in (0..instance.memories.len() as u32).map(DefinedMemoryIndex::from_u32) {
+            let memory = &mut instance.memories[index];
+            memory.restore_snapshot()?;
+
+            let vmmemory = memory.vmmemory();
+            instance.set_memory(index, vmmemory);
+        }
+
+        for index in (0..instance.tables.len() as u32).map(DefinedTableIndex::from_u32) {
+            let table = &mut instance.tables[index];
+            table.restore_snapshot()?;
+
+            let vmtable = table.vmtable();
+            instance.set_table(index, vmtable);
+        }
+
+        for (index, value) in &instance.saved_globals {
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    value,
+                    instance.defined_or_imported_global_ptr(*index),
+                    1,
+                );
+            }
+        }
+
+        Ok(())
     }
 }

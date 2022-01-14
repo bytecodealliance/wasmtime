@@ -22,6 +22,9 @@ pub struct Mmap {
     ptr: usize,
     len: usize,
     file: Option<File>,
+
+    #[cfg(target_os = "linux")]
+    memfd: Option<(rustix::io::OwnedFd, usize, usize)>,
 }
 
 impl Mmap {
@@ -35,6 +38,9 @@ impl Mmap {
             ptr: empty.as_ptr() as usize,
             len: 0,
             file: None,
+
+            #[cfg(target_os = "linux")]
+            memfd: None,
         }
     }
 
@@ -78,6 +84,9 @@ impl Mmap {
                 ptr: ptr as usize,
                 len,
                 file: Some(file),
+
+                #[cfg(target_os = "linux")]
+                memfd: None,
             })
         }
 
@@ -183,6 +192,9 @@ impl Mmap {
                 ptr: ptr as usize,
                 len: mapping_size,
                 file: None,
+
+                #[cfg(target_os = "linux")]
+                memfd: None,
             }
         } else {
             // Reserve the mapping size.
@@ -200,6 +212,9 @@ impl Mmap {
                 ptr: ptr as usize,
                 len: mapping_size,
                 file: None,
+
+                #[cfg(target_os = "linux")]
+                memfd: None,
             };
 
             if accessible_size != 0 {
@@ -323,6 +338,226 @@ impl Mmap {
             bail!("VirtualAlloc failed: {}", io::Error::last_os_error());
         }
 
+        Ok(())
+    }
+
+    /// Returns a page-aligned offset + length pair delimiting the memory pages which
+    /// are currently populated without generating any extraneous page faults.
+    #[cfg(target_os = "linux")]
+    fn populated_range(
+        &self,
+        accessible_offset: usize,
+        accessible: usize,
+    ) -> Result<(usize, usize)> {
+        // Docs: https://www.kernel.org/doc/Documentation/vm/pagemap.txt
+        use std::io::{Read, Seek};
+        const PAGE_SIZE: usize = 4096;
+
+        assert_eq!(rustix::process::page_size(), 4096);
+
+        assert_eq!(accessible_offset % 4096, 0);
+        assert_eq!(accessible % 4096, 0);
+
+        let mut page_last_index = 0;
+        let mut page_first_index = None;
+        unsafe {
+            let mut fp = std::fs::File::open("/proc/self/pagemap")
+                .context("failed to open /proc/self/pagemap")?;
+
+            let offset = (self.as_ptr() as usize + accessible_offset) / PAGE_SIZE
+                * std::mem::size_of::<u64>();
+            fp.seek(std::io::SeekFrom::Start(offset as u64))
+                .context("failed to seek inside of /proc/self/pagemap")?;
+
+            union Buffer {
+                as_u8: [u8; PAGE_SIZE],
+                as_u64: [u64; PAGE_SIZE / std::mem::size_of::<u64>()],
+            }
+
+            let mut buffer: Buffer = std::mem::zeroed();
+
+            let total_page_count = accessible / PAGE_SIZE;
+            let mut current_page_offset = 0;
+            while current_page_offset < total_page_count {
+                let page_count =
+                    std::cmp::min(buffer.as_u64.len(), total_page_count - current_page_offset);
+                fp.read(&mut buffer.as_u8[..page_count * std::mem::size_of::<u64>()])
+                    .context("failed to read from /proc/self/pagemap")?;
+
+                for relative_page_index in 0..page_count {
+                    let is_populated = (buffer.as_u64[relative_page_index] & (0b11 << 62)) != 0;
+                    if is_populated {
+                        page_last_index = current_page_offset + relative_page_index;
+                        if page_first_index.is_none() {
+                            page_first_index = Some(page_last_index);
+                        }
+                    }
+                }
+
+                current_page_offset += page_count;
+            }
+        }
+
+        if let Some(page_first_index) = page_first_index {
+            let (data_offset, data_length) = (
+                accessible_offset + page_first_index * PAGE_SIZE,
+                (page_last_index - page_first_index + 1) * PAGE_SIZE,
+            );
+            debug_assert!(self.as_slice()[accessible_offset..data_offset]
+                .iter()
+                .all(|&byte| byte == 0));
+            debug_assert!(self.as_slice()
+                [data_offset + data_length..accessible_offset + accessible]
+                .iter()
+                .all(|&byte| byte == 0));
+
+            assert!(data_offset + data_length <= self.len);
+            Ok((data_offset, data_length))
+        } else {
+            debug_assert!(
+                self.as_slice()[accessible_offset..accessible_offset + accessible]
+                    .iter()
+                    .all(|&byte| byte == 0)
+            );
+            Ok((0, 0))
+        }
+    }
+
+    /// Saves a snapshot of the current contents of the mapping in an memfd,
+    /// and replaces that part of the mapping with a copy-on-write copy.
+    ///
+    /// Can only be used once.
+    #[cfg(target_os = "linux")]
+    pub fn create_snapshot(&mut self, accessible_offset: usize, accessible: usize) -> Result<()> {
+        assert!(self.memfd.is_none());
+        assert!(accessible_offset + accessible_offset <= self.len);
+
+        // Here we narrow down the exact range of memory which is populated.
+        //
+        // We could in theory not do this, however resetting copy-on-write
+        // pages is visibly slower (since that actually copies memory) than
+        // resetting those which are not copy-on-write, so we want to only
+        // snapshot as narrow of a memory region as possible.
+        let (data_offset, data_length) = self.populated_range(accessible_offset, accessible)?;
+
+        if data_length == 0 {
+            // Memory is completely empty, so no point in doing anything.
+            return Ok(());
+        }
+
+        unsafe {
+            let memfd = rustix::fs::memfd_create("wasmtime", rustix::fs::MemfdFlags::CLOEXEC)
+                .context("memfd_create failed")?;
+
+            rustix::fs::ftruncate(&memfd, data_length as u64)
+                .context("failed to enlarge memfd: ftruncate failed")?;
+
+            // In theory we could just map the memfd in memory and do a direct copy,
+            // but simply using `write` is going to have a lower overhead.
+            use rustix::fd::AsRawFd;
+            let bytes_written = libc::write(
+                memfd.as_raw_fd(),
+                (self.ptr as *const u8)
+                    .add(data_offset)
+                    .cast::<std::os::raw::c_void>(),
+                data_length,
+            );
+            if bytes_written < 0 {
+                anyhow::bail!(
+                    "failed to copy memory contents into memfd: write failed: {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+            if bytes_written as usize != data_length {
+                anyhow::bail!("failed to copy memory contents into memfd: managed to write only {} bytes; expected {} bytes", bytes_written, data_length);
+            }
+
+            rustix::io::mmap(
+                (self.ptr as *mut u8)
+                    .add(data_offset)
+                    .cast::<std::os::raw::c_void>(),
+                data_length,
+                rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE,
+                rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
+                &memfd,
+                0,
+            )
+            .context("failed to attach the memfd: mmap failed")?;
+
+            self.memfd = Some((memfd, data_offset, data_length));
+        };
+
+        Ok(())
+    }
+
+    /// Resets the memory contents within the given range.
+    ///
+    /// The memory will be filled with its original contents from
+    /// when [`Mmap::create_snapshot`] was called, or cleared
+    /// with zeros for non-memfd mappings.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn reset(&mut self, offset: usize, length: usize) -> Result<()> {
+        rustix::io::madvise(
+            (self.ptr as *mut u8)
+                .add(offset)
+                .cast::<std::os::raw::c_void>(),
+            length,
+            rustix::io::Advice::LinuxDontNeed,
+        )?;
+
+        Ok(())
+    }
+
+    /// Makes the memory within the given range completely inaccessible.
+    #[cfg(target_os = "linux")]
+    pub unsafe fn make_inaccessible(&mut self, offset: usize, length: usize) -> Result<()> {
+        rustix::io::mprotect(
+            (self.ptr as *mut u8)
+                .add(offset)
+                .cast::<std::os::raw::c_void>(),
+            length,
+            rustix::io::MprotectFlags::empty(),
+        )?;
+        Ok(())
+    }
+
+    /// Reallocates this mapping preserving its contents.
+    pub fn reallocate(
+        &mut self,
+        accessible_offset: usize,
+        old_accessible_size: usize,
+        new_mapping_size: usize,
+        new_accessible_size: usize,
+    ) -> Result<()> {
+        let mut new_mmap = Self::accessible_reserved(0, new_mapping_size)?;
+
+        #[cfg(target_os = "linux")]
+        if let Some((ref memfd, data_offset, data_length)) = self.memfd {
+            unsafe {
+                rustix::io::mmap(
+                    (new_mmap.ptr as *mut u8)
+                        .add(data_offset)
+                        .cast::<std::os::raw::c_void>(),
+                    data_length,
+                    rustix::io::ProtFlags::empty(),
+                    rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
+                    memfd,
+                    0,
+                )
+                .context("failed to map the memfd: mmap failed")?;
+            }
+        }
+
+        new_mmap.make_accessible(accessible_offset, new_accessible_size)?;
+        new_mmap.as_mut_slice()[accessible_offset..][..old_accessible_size]
+            .copy_from_slice(&self.as_slice()[accessible_offset..][..old_accessible_size]);
+
+        #[cfg(target_os = "linux")]
+        {
+            new_mmap.memfd = self.memfd.take();
+        }
+
+        std::mem::swap(self, &mut new_mmap);
         Ok(())
     }
 

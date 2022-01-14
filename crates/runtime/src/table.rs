@@ -124,6 +124,9 @@ pub enum Table {
         ty: TableElementType,
         /// Maximum size that `elements` can grow to.
         maximum: Option<u32>,
+
+        /// Fossilized storage for this table.
+        fossilized_elements: Vec<usize>,
     },
 }
 
@@ -147,6 +150,8 @@ impl Table {
             elements,
             ty,
             maximum,
+
+            fossilized_elements: Vec::new(),
         })
     }
 
@@ -494,6 +499,38 @@ impl Table {
                         Self::set_raw(ty, &mut dst[d], elem);
                     }
                 }
+            }
+        }
+    }
+
+    /// Saves a snapshot of the current table (size and contents) to be restored
+    /// in the future using `restore_snapshot`.
+    pub fn create_snapshot(&mut self) -> Result<()> {
+        match self {
+            Table::Static { .. } => bail!("static tables cannot be snapshotted"),
+            Table::Dynamic {
+                ref mut elements,
+                ref mut fossilized_elements,
+                ..
+            } => {
+                *fossilized_elements = elements.clone();
+                Ok(())
+            }
+        }
+    }
+
+    /// Restores the table to a previously saved state.
+    pub fn restore_snapshot(&mut self) -> Result<()> {
+        match self {
+            Table::Static { .. } => bail!("static tables cannot be restored from snapshot"),
+            Table::Dynamic {
+                ref mut elements,
+                ref mut fossilized_elements,
+                ..
+            } => {
+                elements.clear();
+                elements.extend_from_slice(fossilized_elements);
+                Ok(())
             }
         }
     }

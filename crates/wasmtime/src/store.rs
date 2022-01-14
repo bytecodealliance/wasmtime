@@ -91,7 +91,7 @@ use std::ptr;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
-    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, ModuleInfo,
+    InstanceAllocationRequest, InstanceAllocator, InstanceHandle, MemorySource, ModuleInfo,
     OnDemandInstanceAllocator, SignalHandler, StorePtr, VMCallerCheckedAnyfunc, VMContext,
     VMExternRef, VMExternRefActivationsTable, VMInterrupts, VMSharedSignatureIndex, VMTrampoline,
 };
@@ -409,6 +409,7 @@ impl<T> Store<T> {
                     module: Arc::new(wasmtime_environ::Module::default()),
                     store: StorePtr::empty(),
                     wasm_data: &[],
+                    memory_source: MemorySource::FromCreator,
                 })
                 .expect("failed to allocate default callee")
         };
