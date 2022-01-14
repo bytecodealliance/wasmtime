@@ -57,6 +57,10 @@
 (decl value_regs (Reg Reg) ValueRegs)
 (extern constructor value_regs value_regs)
 
+;; Construct an empty `ValueRegs` containing only invalid register sentinels.
+(decl value_regs_invalid () ValueRegs)
+(extern constructor value_regs_invalid value_regs_invalid)
+
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
 (extern constructor temp_writable_reg temp_writable_reg)
@@ -269,6 +273,17 @@
 (decl u64_from_iconst (u64) Value)
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
+
+;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
+
+(type SideEffectNoResult (enum (Inst (inst MInst))))
+
+;; Create an empty `ValueRegs`, but do emit the given side-effectful
+;; instruction.
+(decl value_regs_none (SideEffectNoResult) ValueRegs)
+(rule (value_regs_none (SideEffectNoResult.Inst inst))
+      (let ((_ Unit (emit inst)))
+        (value_regs_invalid)))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

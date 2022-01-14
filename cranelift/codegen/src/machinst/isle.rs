@@ -49,6 +49,11 @@ macro_rules! isle_prelude_methods {
         }
 
         #[inline]
+        fn value_regs_invalid(&mut self) -> ValueRegs {
+            ValueRegs::invalid()
+        }
+
+        #[inline]
         fn temp_writable_reg(&mut self, ty: Type) -> WritableReg {
             let value_regs = self.lower_ctx.alloc_tmp(ty);
             value_regs.only_reg().unwrap()

@@ -326,37 +326,37 @@
 
 ;; And two registers.
 (rule (lower (has_type (fits_in_64 ty) (band x y)))
-      (value_reg (m_and ty
-                        (put_in_reg x)
-                        (RegMemImm.Reg (put_in_reg y)))))
+      (value_reg (x64_and ty
+                          (put_in_reg x)
+                          (RegMemImm.Reg (put_in_reg y)))))
 
 ;; And with a memory operand.
 
 (rule (lower (has_type (fits_in_64 ty)
                        (band x (sinkable_load y))))
-      (value_reg (m_and ty
-                        (put_in_reg x)
-                        (sink_load y))))
+      (value_reg (x64_and ty
+                          (put_in_reg x)
+                          (sink_load y))))
 
 (rule (lower (has_type (fits_in_64 ty)
                        (band (sinkable_load x) y)))
-      (value_reg (m_and ty
-                        (put_in_reg y)
-                        (sink_load x))))
+      (value_reg (x64_and ty
+                          (put_in_reg y)
+                          (sink_load x))))
 
 ;; And with an immediate.
 
 (rule (lower (has_type (fits_in_64 ty)
                        (band x (simm32_from_value y))))
-      (value_reg (m_and ty
-                        (put_in_reg x)
-                        y)))
+      (value_reg (x64_and ty
+                          (put_in_reg x)
+                          y)))
 
 (rule (lower (has_type (fits_in_64 ty)
                        (band (simm32_from_value x) y)))
-      (value_reg (m_and ty
-                        (put_in_reg y)
-                        x)))
+      (value_reg (x64_and ty
+                          (put_in_reg y)
+                          x)))
 
 ;; SSE.
 
@@ -378,8 +378,8 @@
             (y_regs ValueRegs (put_in_regs y))
             (y_lo Reg (value_regs_get y_regs 0))
             (y_hi Reg (value_regs_get y_regs 1)))
-        (value_regs (m_and $I64 x_lo (RegMemImm.Reg y_lo))
-                    (m_and $I64 x_hi (RegMemImm.Reg y_hi)))))
+        (value_regs (x64_and $I64 x_lo (RegMemImm.Reg y_lo))
+                    (x64_and $I64 x_hi (RegMemImm.Reg y_hi)))))
 
 (rule (lower (has_type $B128 (band x y)))
       ;; Booleans are always `0` or `1`, so we only need to do the `and` on the
@@ -389,7 +389,7 @@
             (x_lo Reg (value_regs_get x_regs 0))
             (x_hi Reg (value_regs_get x_regs 1))
             (y_lo Reg (lo_reg y)))
-        (value_regs (m_and $I64 x_lo (RegMemImm.Reg y_lo))
+        (value_regs (x64_and $I64 x_lo (RegMemImm.Reg y_lo))
                     x_hi)))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -832,13 +832,13 @@
 
 (rule (lower (has_type (ty_8_or_16 ty) (rotl src amt)))
       (let ((amt_ Reg (extend_to_reg amt $I32 (ExtendKind.Zero))))
-        (value_reg (m_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
+        (value_reg (x64_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
 
 (rule (lower (has_type (ty_8_or_16 ty)
                        (rotl src (u64_from_iconst amt))))
-      (value_reg (m_rotl ty
-                         (put_in_reg src)
-                         (const_to_type_masked_imm8 amt ty))))
+      (value_reg (x64_rotl ty
+                           (put_in_reg src)
+                           (const_to_type_masked_imm8 amt ty))))
 
 ;; `i64` and `i32`: we can rely on x86's rotate-amount masking since
 ;;  we operate on the whole register.
@@ -847,13 +847,13 @@
       ;; NB: Only the low bits of `amt` matter since we logically mask the
       ;; shift amount to the value's bit width.
       (let ((amt_ Reg (lo_reg amt)))
-        (value_reg (m_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
+        (value_reg (x64_rotl ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
 
 (rule (lower (has_type (ty_32_or_64 ty)
                        (rotl src (u64_from_iconst amt))))
-      (value_reg (m_rotl ty
-                         (put_in_reg src)
-                         (const_to_type_masked_imm8 amt ty))))
+      (value_reg (x64_rotl ty
+                           (put_in_reg src)
+                           (const_to_type_masked_imm8 amt ty))))
 
 ;; `i128`.
 
@@ -864,6 +864,71 @@
             (amt_ Reg (lo_reg amt)))
         (or_i128 (shl_i128 src_ amt_)
                  (shr_i128 src_ (sub $I64 (imm $I64 128) (RegMemImm.Reg amt_))))))
+
+;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i16` and `i8`: we need to extend the shift amount, or mask the
+;; constant.
+
+(rule (lower (has_type (ty_8_or_16 ty) (rotr src amt)))
+      (let ((amt_ Reg (extend_to_reg amt $I32 (ExtendKind.Zero))))
+        (value_reg (x64_rotr ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
+
+(rule (lower (has_type (ty_8_or_16 ty)
+                       (rotr src (u64_from_iconst amt))))
+      (value_reg (x64_rotr ty
+                           (put_in_reg src)
+                           (const_to_type_masked_imm8 amt ty))))
+
+;; `i64` and `i32`: we can rely on x86's rotate-amount masking since
+;;  we operate on the whole register.
+
+(rule (lower (has_type (ty_32_or_64 ty) (rotr src amt)))
+      ;; NB: Only the low bits of `amt` matter since we logically mask the
+      ;; shift amount to the value's bit width.
+      (let ((amt_ Reg (lo_reg amt)))
+        (value_reg (x64_rotr ty (put_in_reg src) (Imm8Reg.Reg amt_)))))
+
+(rule (lower (has_type (ty_32_or_64 ty)
+                       (rotr src (u64_from_iconst amt))))
+      (value_reg (x64_rotr ty
+                           (put_in_reg src)
+                           (const_to_type_masked_imm8 amt ty))))
+
+;; `i128`.
+
+(rule (lower (has_type $I128 (rotr src amt)))
+      (let ((src_ ValueRegs (put_in_regs src))
+            ;; NB: Only the low bits of `amt` matter since we logically mask the
+            ;; rotation amount to the value's bit width.
+            (amt_ Reg (lo_reg amt)))
+        (or_i128 (shr_i128 src_ amt_)
+                 (shl_i128 src_ (sub $I64 (imm $I64 128) (RegMemImm.Reg amt_))))))
+
+;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i64` and smaller.
+
+(rule (lower (has_type (fits_in_64 ty) (ineg x)))
+      (value_reg (neg ty (put_in_reg x))))
+
+;; SSE.
+
+(rule (lower (has_type $I8X16 (ineg x)))
+      (value_reg (psubb (imm $I8X16 0)
+                        (put_in_reg_mem x))))
+
+(rule (lower (has_type $I16X8 (ineg x)))
+      (value_reg (psubw (imm $I16X8 0)
+                        (put_in_reg_mem x))))
+
+(rule (lower (has_type $I32X4 (ineg x)))
+      (value_reg (psubd (imm $I32X4 0)
+                        (put_in_reg_mem x))))
+
+(rule (lower (has_type $I64X2 (ineg x)))
+      (value_reg (psubq (imm $I64X2 0)
+                        (put_in_reg_mem x))))
 
 ;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1367,3 +1432,13 @@
 
 (rule (lower (has_type $I32X4 (umin x y)))
       (value_reg (pminud (put_in_reg x) (put_in_reg_mem y))))
+
+;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (trap code))
+      (value_regs_none (ud2 code)))
+
+;;;; Rules for `resumable_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (resumable_trap code))
+      (value_regs_none (ud2 code)))

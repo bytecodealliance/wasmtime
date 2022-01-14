@@ -668,15 +668,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn neg(size: OperandSize, src: Writable<Reg>) -> Inst {
-        debug_assert_eq!(src.to_reg().get_class(), RegClass::I64);
-        Inst::Neg {
-            size,
-            src: src.to_reg(),
-            dst: src,
-        }
-    }
-
     pub(crate) fn div(size: OperandSize, signed: bool, divisor: RegMem) -> Inst {
         divisor.assert_regclass_is(RegClass::I64);
         Inst::Div {

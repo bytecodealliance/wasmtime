@@ -16,6 +16,17 @@ use super::*;
 use crate::isa::x64;
 use alloc::vec::Vec;
 
+impl Inst {
+    fn neg(size: OperandSize, src: Writable<Reg>) -> Inst {
+        debug_assert_eq!(src.to_reg().get_class(), RegClass::I64);
+        Inst::Neg {
+            size,
+            src: src.to_reg(),
+            dst: src,
+        }
+    }
+}
+
 #[test]
 fn test_x64_emit() {
     let rax = regs::rax();

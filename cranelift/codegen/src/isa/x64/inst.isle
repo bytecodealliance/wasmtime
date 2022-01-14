@@ -4,6 +4,7 @@
 
 (type MInst extern
       (enum (Nop (len u8))
+            (Ud2 (trap_code TrapCode))
             (AluRmiR (size OperandSize)
                      (op AluRmiROpcode)
                      (src1 Reg)
@@ -72,9 +73,11 @@
             (Not (size OperandSize)
                  (src Reg)
                  (dst WritableReg))
+            (Neg (size OperandSize)
+                 (src Reg)
+                 (dst WritableReg))
             (LoadEffectiveAddress (addr SyntheticAmode)
-                                  (dst WritableReg))
-))
+                                  (dst WritableReg))))
 
 (type OperandSize extern
       (enum Size8
@@ -534,9 +537,9 @@
       (let ((wr WritableReg (temp_writable_reg ty))
             (r Reg (writable_reg_to_reg wr))
             (_ Unit (emit (MInst.XmmRmR (sse_cmp_op $I32X4)
-                                         r
-                                         (RegMem.Reg r)
-                                         wr))))
+                                        r
+                                        (RegMem.Reg r)
+                                        wr))))
         r))
 
 ;; Helper for creating an SSE register holding an `i64x2` from two `i64` values.
@@ -697,8 +700,8 @@
 ;;
 ;; Use `m_` prefix (short for "mach inst") to disambiguate with the ISLE-builtin
 ;; `and` operator.
-(decl m_and (Type Reg RegMemImm) Reg)
-(rule (m_and ty src1 src2)
+(decl x64_and (Type Reg RegMemImm) Reg)
+(rule (x64_and ty src1 src2)
       (alu_rmi_r ty
                  (AluRmiROpcode.And)
                  src1
@@ -724,7 +727,7 @@
 (decl imm (Type u64) Reg)
 
 ;; Integer immediates.
-(rule (imm ty simm64)
+(rule (imm (fits_in_64 ty) simm64)
       (let ((dst WritableReg (temp_writable_reg ty))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.Imm size simm64 dst))))
@@ -749,7 +752,7 @@
         (writable_reg_to_reg dst)))
 
 ;; Special case for integer zero immediates: turn them into an `xor r, r`.
-(rule (imm ty 0)
+(rule (imm (fits_in_64 ty) 0)
       (let ((wr WritableReg (temp_writable_reg ty))
             (r Reg (writable_reg_to_reg wr))
             (size OperandSize (operand_size_of_type_32_64 ty))
@@ -766,9 +769,9 @@
       (let ((wr WritableReg (temp_writable_reg ty))
             (r Reg (writable_reg_to_reg wr))
             (_ Unit (emit (MInst.XmmRmR (sse_xor_op ty)
-                                         r
-                                         (RegMem.Reg r)
-                                         wr))))
+                                        r
+                                        (RegMem.Reg r)
+                                        wr))))
         r))
 
 ;; Special case for `f32` zero immediates to use `xorps`.
@@ -807,9 +810,15 @@
 
 ;; Helper for creating `rotl` instructions (prefixed with "m_", short for "mach
 ;; inst", to disambiguate this from clif's `rotl`).
-(decl m_rotl (Type Reg Imm8Reg) Reg)
-(rule (m_rotl ty src1 src2)
+(decl x64_rotl (Type Reg Imm8Reg) Reg)
+(rule (x64_rotl ty src1 src2)
       (shift_r ty (ShiftKind.RotateLeft) src1 src2))
+
+;; Helper for creating `rotr` instructions (prefixed with "m_", short for "mach
+;; inst", to disambiguate this from clif's `rotr`).
+(decl x64_rotr (Type Reg Imm8Reg) Reg)
+(rule (x64_rotr ty src1 src2)
+      (shift_r ty (ShiftKind.RotateRight) src1 src2))
 
 ;; Helper for creating `shl` instructions.
 (decl shl (Type Reg Imm8Reg) Reg)
@@ -1423,8 +1432,21 @@
             (_ Unit (emit (MInst.Not size src dst))))
         (writable_reg_to_reg dst)))
 
+;; Helper for creating `neg` instructions.
+(decl neg (Type Reg) Reg)
+(rule (neg ty src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (size OperandSize (operand_size_of_type_32_64 ty))
+            (_ Unit (emit (MInst.Neg size src dst))))
+        (writable_reg_to_reg dst)))
+
 (decl lea (SyntheticAmode) Reg)
 (rule (lea addr)
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadEffectiveAddress addr dst))))
         (writable_reg_to_reg dst)))
+
+;; Helper for creating `ud2` instructions.
+(decl ud2 (TrapCode) SideEffectNoResult)
+(rule (ud2 code)
+      (SideEffectNoResult.Inst (MInst.Ud2 code)))
