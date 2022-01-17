@@ -22,6 +22,6 @@ pub fn demangle_function_name_or_index(
 ) -> std::fmt::Result {
     match name {
         Some(name) => demangle_function_name(writer, name),
-        None => write!(writer, "<wasm-function {}>", func_id),
+        None => write!(writer, "<wasm function {}>", func_id),
     }
 }
