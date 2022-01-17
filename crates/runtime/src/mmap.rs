@@ -407,7 +407,7 @@ impl Mmap {
             assert!(data_offset + data_length <= self.len);
             Ok((data_offset, data_length))
         } else {
-            Ok((0, 0))
+            Ok((accessible_offset, 0))
         }
     }
 
@@ -700,6 +700,7 @@ fn test_populated_range() -> Result<()> {
 
     let mut mmap = Mmap::with_at_least(pages(16))?;
     assert_eq!(mmap.populated_range(0, pages(16))?, (0, 0));
+    assert_eq!(mmap.populated_range(pages(1), pages(15))?, (pages(1), 0));
 
     mmap.as_mut_slice()[last_byte_of_page(1)] = 1;
     assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(1)));
