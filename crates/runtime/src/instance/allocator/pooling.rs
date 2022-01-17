@@ -422,7 +422,7 @@ impl InstancePool {
     ) -> Result<InstanceHandle, InstantiationError> {
         #[cfg(target_os = "linux")]
         match req.memory_source {
-            super::MemorySource::FromCreatorx => {}
+            super::MemorySource::FromCreator => {}
             super::MemorySource::CopyOnWriteInitialize => {
                 return Err(InstantiationError::IncompatibleAllocationStrategy);
             }
