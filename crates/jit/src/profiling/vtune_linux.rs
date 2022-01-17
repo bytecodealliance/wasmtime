@@ -20,7 +20,6 @@ use crate::{CompiledModule, ProfilingAgent};
 use anyhow::Result;
 use core::ptr;
 use ittapi_rs::*;
-use object::Object as _;
 use std::ffi::CString;
 use std::sync::{atomic, Mutex};
 use wasmtime_environ::EntityRef;
@@ -109,8 +108,11 @@ impl ProfilingAgent for VTuneAgent {
     fn module_load(&self, module: &CompiledModule, dbg_image: Option<&[u8]>) {
         self.state.lock().unwrap().module_load(module, dbg_image);
     }
-    fn trampoline_load(&self, image: &object::File<'_>) {
-        self.state.lock().unwrap().trampoline_load(image);
+    fn load_single_trampoline(&self, name: &str, addr: *const u8, size: usize, pid: u32, tid: u32) {
+        self.state
+            .lock()
+            .unwrap()
+            .load_single_trampoline(name, addr, size, pid, tid);
     }
 }
 
@@ -157,40 +159,15 @@ impl State {
         }
     }
 
-    fn trampoline_load(&mut self, image: &object::File<'_>) {
-        use object::{ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
-
-        let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
-            Some(section) => match section.data() {
-                Ok(data) => data.as_ptr() as usize,
-                Err(_) => return,
-            },
-            None => return,
-        };
-
-        for sym in image.symbols() {
-            if !sym.is_definition() {
-                continue;
-            }
-            if sym.kind() != SymbolKind::Text {
-                continue;
-            }
-            let address = sym.address();
-            let size = sym.size();
-            if address == 0 || size == 0 {
-                continue;
-            }
-            if let Ok(name) = sym.name() {
-                let addr = text_base + address as usize;
-                let method_id = self.get_method_id();
-                self.event_load(
-                    method_id,
-                    "wasm trampoline for Func::new",
-                    &name,
-                    addr as *const u8,
-                    size as usize,
-                );
-            }
-        }
+    fn load_single_trampoline(
+        &mut self,
+        name: &str,
+        addr: *const u8,
+        size: usize,
+        _pid: u32,
+        _tid: u32,
+    ) {
+        let method_id = self.get_method_id();
+        self.event_load(method_id, "wasm trampoline for Func::new", name, addr, size);
     }
 }
