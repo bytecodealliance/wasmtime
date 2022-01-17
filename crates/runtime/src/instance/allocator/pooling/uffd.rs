@@ -32,6 +32,7 @@
 
 use super::{InstancePool, MemoryPool};
 use crate::instance::Instance;
+use crate::MemorySource;
 use anyhow::{bail, Context, Result};
 use rustix::io::{madvise, Advice};
 use std::thread;
@@ -582,6 +583,7 @@ mod test {
                                 host_state: Box::new(()),
                                 store: StorePtr::new(&mut mock_store),
                                 wasm_data: &[],
+                                memory_source: MemorySource::FromCreator,
                             },
                         )
                         .expect("instance should allocate"),
