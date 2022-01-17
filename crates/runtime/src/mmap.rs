@@ -353,10 +353,10 @@ impl Mmap {
         use std::io::{Read, Seek};
         const PAGE_SIZE: usize = 4096;
 
-        assert_eq!(rustix::process::page_size(), 4096);
+        assert_eq!(rustix::process::page_size(), PAGE_SIZE);
 
-        assert_eq!(accessible_offset % 4096, 0);
-        assert_eq!(accessible % 4096, 0);
+        assert_eq!(accessible_offset % PAGE_SIZE, 0);
+        assert_eq!(accessible % PAGE_SIZE, 0);
 
         let mut page_last_index = 0;
         let mut page_first_index = None;

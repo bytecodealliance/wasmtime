@@ -666,7 +666,7 @@ impl OnDemandInstanceAllocator {
         &self,
         module: &Module,
         store: &mut StorePtr,
-        memory_source: &MemorySource,
+        memory_source: MemorySource,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -726,7 +726,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module, &mut req.store, &req.memory_source)?;
+        let memories = self.create_memories(&req.module, &mut req.store, req.memory_source)?;
         let tables = Self::create_tables(&req.module, &mut req.store)?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
