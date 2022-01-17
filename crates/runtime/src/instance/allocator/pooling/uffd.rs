@@ -32,7 +32,6 @@
 
 use super::{InstancePool, MemoryPool};
 use crate::instance::Instance;
-use crate::MemorySource;
 use anyhow::{bail, Context, Result};
 use rustix::io::{madvise, Advice};
 use std::thread;
@@ -436,7 +435,7 @@ impl Drop for PageFaultHandler {
 mod test {
     use super::*;
     use crate::{
-        Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
+        Imports, InstanceAllocationRequest, InstanceLimits, MemorySource, ModuleLimits,
         PoolingAllocationStrategy, Store, StorePtr, VMSharedSignatureIndex,
     };
     use std::sync::Arc;
