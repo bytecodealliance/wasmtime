@@ -9,7 +9,7 @@
 
 use super::{
     initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, InstantiationError, MemorySource,
+    InstanceHandle, InstantiationError,
 };
 use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
@@ -422,8 +422,8 @@ impl InstancePool {
     ) -> Result<InstanceHandle, InstantiationError> {
         #[cfg(target_os = "linux")]
         match req.memory_source {
-            MemorySource::FromCreator => {}
-            MemorySource::CopyOnWriteInitialize => {
+            super::MemorySource::FromCreatorx => {}
+            super::MemorySource::CopyOnWriteInitialize => {
                 return Err(InstantiationError::IncompatibleAllocationStrategy);
             }
         }
