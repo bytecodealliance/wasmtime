@@ -403,22 +403,10 @@ impl Mmap {
                 accessible_offset + page_first_index * PAGE_SIZE,
                 (page_last_index - page_first_index + 1) * PAGE_SIZE,
             );
-            debug_assert!(self.as_slice()[accessible_offset..data_offset]
-                .iter()
-                .all(|&byte| byte == 0));
-            debug_assert!(self.as_slice()
-                [data_offset + data_length..accessible_offset + accessible]
-                .iter()
-                .all(|&byte| byte == 0));
 
             assert!(data_offset + data_length <= self.len);
             Ok((data_offset, data_length))
         } else {
-            debug_assert!(
-                self.as_slice()[accessible_offset..accessible_offset + accessible]
-                    .iter()
-                    .all(|&byte| byte == 0)
-            );
             Ok((0, 0))
         }
     }
@@ -439,6 +427,16 @@ impl Mmap {
         // resetting those which are not copy-on-write, so we want to only
         // snapshot as narrow of a memory region as possible.
         let (data_offset, data_length) = self.populated_range(accessible_offset, accessible)?;
+
+        debug_assert!(self.as_slice()[accessible_offset..data_offset]
+            .iter()
+            .all(|&byte| byte == 0));
+
+        debug_assert!(
+            self.as_slice()[data_offset + data_length..accessible_offset + accessible]
+                .iter()
+                .all(|&byte| byte == 0)
+        );
 
         if data_length == 0 {
             // Memory is completely empty, so no point in doing anything.
@@ -684,4 +682,40 @@ impl Drop for Mmap {
 fn _assert() {
     fn _assert_send_sync<T: Send + Sync>() {}
     _assert_send_sync::<Mmap>();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn test_populated_range() -> Result<()> {
+    // A few helper functions to make the test easier to read.
+    fn pages(count: usize) -> usize {
+        count * 4096
+    }
+    fn first_byte_of_page(count: usize) -> usize {
+        count * 4096
+    }
+    fn last_byte_of_page(count: usize) -> usize {
+        count * 4096 + 4095
+    }
+
+    let mut mmap = Mmap::with_at_least(pages(16))?;
+    assert_eq!(mmap.populated_range(0, pages(16))?, (0, 0));
+
+    mmap.as_mut_slice()[last_byte_of_page(1)] = 1;
+    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(1)));
+
+    mmap.as_mut_slice()[first_byte_of_page(1)] = 1;
+    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(1)));
+
+    mmap.as_mut_slice()[last_byte_of_page(3)] = 1;
+    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(3)));
+
+    mmap.as_mut_slice()[first_byte_of_page(1)] = 1;
+    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(3)));
+
+    assert_eq!(
+        mmap.populated_range(pages(2), pages(14))?,
+        (pages(3), pages(1))
+    );
+    Ok(())
 }
