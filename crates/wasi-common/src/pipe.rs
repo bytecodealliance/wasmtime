@@ -180,6 +180,9 @@ impl<R: Read + Any + Send + Sync> WasiFile for ReadPipe<R> {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
     }
+    fn isatty(&self) -> bool {
+        false
+    }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
@@ -335,6 +338,9 @@ impl<W: Write + Any + Send + Sync> WasiFile for WritePipe<W> {
     }
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(0)
+    }
+    fn isatty(&self) -> bool {
+        false
     }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
