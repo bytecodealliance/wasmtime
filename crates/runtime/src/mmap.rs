@@ -685,9 +685,12 @@ fn _assert() {
 }
 
 #[cfg(target_os = "linux")]
-#[test]
-fn test_populated_range() -> Result<()> {
-    // A few helper functions to make the test easier to read.
+#[cfg(test)]
+mod tests {
+    use super::Mmap;
+    use anyhow::Result;
+
+    // A few helper functions to make the tests easier to read.
     fn pages(count: usize) -> usize {
         count * 4096
     }
@@ -698,25 +701,46 @@ fn test_populated_range() -> Result<()> {
         count * 4096 + 4095
     }
 
-    let mut mmap = Mmap::with_at_least(pages(16))?;
-    assert_eq!(mmap.populated_range(0, pages(16))?, (0, 0));
-    assert_eq!(mmap.populated_range(pages(1), pages(15))?, (pages(1), 0));
+    #[test]
+    fn create_snapshot_and_reset() -> Result<()> {
+        let mut mmap = Mmap::accessible_reserved(0, pages(4))?;
+        mmap.make_accessible(pages(1), pages(3))?;
+        mmap.as_mut_slice()[first_byte_of_page(1)] = 1;
+        mmap.create_snapshot(pages(1), pages(2))?;
 
-    mmap.as_mut_slice()[last_byte_of_page(1)] = 1;
-    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(1)));
+        mmap.as_mut_slice()[first_byte_of_page(1)] = 10;
+        mmap.as_mut_slice()[first_byte_of_page(2)] = 100;
+        unsafe {
+            mmap.reset(pages(1), pages(3))?;
+        }
 
-    mmap.as_mut_slice()[first_byte_of_page(1)] = 1;
-    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(1)));
+        assert_eq!(mmap.as_slice()[first_byte_of_page(1)], 1);
+        assert_eq!(mmap.as_slice()[first_byte_of_page(2)], 0);
+        Ok(())
+    }
 
-    mmap.as_mut_slice()[last_byte_of_page(3)] = 1;
-    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(3)));
+    #[test]
+    fn populated_range() -> Result<()> {
+        let mut mmap = Mmap::with_at_least(pages(16))?;
+        assert_eq!(mmap.populated_range(0, pages(16))?, (0, 0));
+        assert_eq!(mmap.populated_range(pages(1), pages(15))?, (pages(1), 0));
 
-    mmap.as_mut_slice()[first_byte_of_page(1)] = 1;
-    assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(3)));
+        mmap.as_mut_slice()[last_byte_of_page(1)] = 1;
+        assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(1)));
 
-    assert_eq!(
-        mmap.populated_range(pages(2), pages(14))?,
-        (pages(3), pages(1))
-    );
-    Ok(())
+        mmap.as_mut_slice()[first_byte_of_page(1)] = 1;
+        assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(1)));
+
+        mmap.as_mut_slice()[last_byte_of_page(3)] = 1;
+        assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(3)));
+
+        mmap.as_mut_slice()[first_byte_of_page(1)] = 1;
+        assert_eq!(mmap.populated_range(0, pages(16))?, (pages(1), pages(3)));
+
+        assert_eq!(
+            mmap.populated_range(pages(2), pages(14))?,
+            (pages(3), pages(1))
+        );
+        Ok(())
+    }
 }
