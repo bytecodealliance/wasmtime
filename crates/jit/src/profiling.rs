@@ -1,6 +1,4 @@
 use crate::{demangling::demangle_function_name_or_index, CompiledModule};
-use std::error::Error;
-use std::fmt;
 use wasmtime_environ::{DefinedFuncIndex, EntityRef, Module};
 
 cfg_if::cfg_if! {
@@ -39,23 +37,6 @@ pub trait ProfilingAgent: Send + Sync + 'static {
 /// Default agent for unsupported profiling build.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NullProfilerAgent;
-
-#[derive(Debug)]
-struct NullProfilerAgentError;
-
-impl fmt::Display for NullProfilerAgentError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "A profiler agent is not supported by this build")
-    }
-}
-
-// This is important for other errors to wrap this one.
-impl Error for NullProfilerAgentError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        // Generic error, underlying cause isn't tracked.
-        None
-    }
-}
 
 impl ProfilingAgent for NullProfilerAgent {
     fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) {}
