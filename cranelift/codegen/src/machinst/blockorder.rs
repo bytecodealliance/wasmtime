@@ -378,11 +378,24 @@ impl BlockLoweringOrder {
 
         postorder.reverse();
         let mut rpo = postorder;
+
+        // Step 3: sink any cold blocks to the end of the
+        // function. Put the "deferred last" block truly at the end;
+        // this is a correctness requirement (for fallthrough
+        // returns).
+        rpo.sort_by_key(|block| {
+            block
+                .0
+                .orig_block()
+                .map(|block| f.layout.is_cold(block))
+                .unwrap_or(false)
+        });
+
         if let Some(d) = deferred_last {
             rpo.push(d);
         }
 
-        // Step 3: now that we have RPO, build the BlockIndex/BB fwd/rev maps.
+        // Step 4: now that we have RPO, build the BlockIndex/BB fwd/rev maps.
         let mut lowered_order = vec![];
         let mut lowered_succ_ranges = vec![];
         let mut lb_to_bindex = FxHashMap::default();
