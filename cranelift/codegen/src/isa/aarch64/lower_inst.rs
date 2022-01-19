@@ -53,16 +53,11 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
     match op {
         Opcode::Iconst | Opcode::Bconst | Opcode::Null => implemented_in_isle(ctx),
 
-        Opcode::F32const => {
-            let value = f32::from_bits(ctx.get_constant(insn).unwrap() as u32);
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_constant_f32(ctx, rd, value);
-        }
-        Opcode::F64const => {
-            let value = f64::from_bits(ctx.get_constant(insn).unwrap());
-            let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
-            lower_constant_f64(ctx, rd, value);
-        }
+        Opcode::F32const | Opcode::F64const => unreachable!(
+            "Should never see constant ops at top level lowering entry
+            point, as constants are rematerialized at use-sites"
+        ),
+
         Opcode::Iadd => implemented_in_isle(ctx),
         Opcode::Isub => implemented_in_isle(ctx),
         Opcode::UaddSat | Opcode::SaddSat | Opcode::UsubSat | Opcode::SsubSat => {

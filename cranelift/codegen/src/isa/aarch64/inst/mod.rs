@@ -239,29 +239,35 @@ impl Inst {
     /// Create instructions that load a 32-bit floating-point constant.
     pub fn load_fp_constant32<F: FnMut(Type) -> Writable<Reg>>(
         rd: Writable<Reg>,
-        value: u32,
+        const_data: u32,
         mut alloc_tmp: F,
     ) -> SmallVec<[Inst; 4]> {
         // Note that we must make sure that all bits outside the lowest 32 are set to 0
         // because this function is also used to load wider constants (that have zeros
         // in their most significant bits).
-        if value == 0 {
+        if const_data == 0 {
             smallvec![Inst::VecDupImm {
                 rd,
                 imm: ASIMDMovModImm::zero(ScalarSize::Size32),
                 invert: false,
-                size: VectorSize::Size32x2
+                size: VectorSize::Size32x2,
+            }]
+        } else if let Some(imm) =
+            ASIMDFPModImm::maybe_from_u64(const_data.into(), ScalarSize::Size32)
+        {
+            smallvec![Inst::FpuMoveFPImm {
+                rd,
+                imm,
+                size: ScalarSize::Size32,
             }]
         } else {
-            // TODO: use FMOV immediate form when `value` has sufficiently few mantissa/exponent
-            // bits.
             let tmp = alloc_tmp(I32);
-            let mut insts = Inst::load_constant(tmp, value as u64);
+            let mut insts = Inst::load_constant(tmp, const_data as u64);
 
             insts.push(Inst::MovToFpu {
                 rd,
                 rn: tmp.to_reg(),
-                size: ScalarSize::Size64,
+                size: ScalarSize::Size32,
             });
 
             insts
@@ -277,11 +283,23 @@ impl Inst {
         // Note that we must make sure that all bits outside the lowest 64 are set to 0
         // because this function is also used to load wider constants (that have zeros
         // in their most significant bits).
-        if let Ok(const_data) = u32::try_from(const_data) {
+        // TODO: Treat as half of a 128 bit vector and consider replicated patterns.
+        // Scalar MOVI might also be an option.
+        if const_data == 0 {
+            smallvec![Inst::VecDupImm {
+                rd,
+                imm: ASIMDMovModImm::zero(ScalarSize::Size32),
+                invert: false,
+                size: VectorSize::Size32x2,
+            }]
+        } else if let Some(imm) = ASIMDFPModImm::maybe_from_u64(const_data, ScalarSize::Size64) {
+            smallvec![Inst::FpuMoveFPImm {
+                rd,
+                imm,
+                size: ScalarSize::Size64,
+            }]
+        } else if let Ok(const_data) = u32::try_from(const_data) {
             Inst::load_fp_constant32(rd, const_data, alloc_tmp)
-        // TODO: use FMOV immediate form when `const_data` has sufficiently few mantissa/exponent
-        // bits.  Also, treat it as half of a 128-bit vector and consider replicated
-        // patterns. Scalar MOVI might also be an option.
         } else if const_data & (u32::MAX as u64) == 0 {
             let tmp = alloc_tmp(I64);
             let mut insts = Inst::load_constant(tmp, const_data);
@@ -878,6 +896,9 @@ fn aarch64_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::MovToFpu { rd, rn, .. } => {
             collector.add_def(rd);
             collector.add_use(rn);
+        }
+        &Inst::FpuMoveFPImm { rd, .. } => {
+            collector.add_def(rd);
         }
         &Inst::MovToVec { rd, rn, .. } => {
             collector.add_mod(rd);
@@ -1653,6 +1674,9 @@ pub fn aarch64_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         } => {
             mapper.map_def(rd);
             mapper.map_use(rn);
+        }
+        &mut Inst::FpuMoveFPImm { ref mut rd, .. } => {
+            mapper.map_def(rd);
         }
         &mut Inst::MovToVec {
             ref mut rd,
@@ -2692,6 +2716,12 @@ impl Inst {
                 let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
                 let rn = show_ireg_sized(rn, mb_rru, operand_size);
                 format!("fmov {}, {}", rd, rn)
+            }
+            &Inst::FpuMoveFPImm { rd, imm, size } => {
+                let imm = imm.show_rru(mb_rru);
+                let rd = show_vreg_scalar(rd.to_reg(), mb_rru, size);
+
+                format!("fmov {}, {}", rd, imm)
             }
             &Inst::MovToVec { rd, rn, idx, size } => {
                 let rd = show_vreg_element(rd.to_reg(), mb_rru, idx, size);

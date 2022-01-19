@@ -292,3 +292,124 @@ block0:
 ;   Inst 1:   ret
 ; }}
 
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x1.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmov d0, #1
+;   Inst 1:   ret
+; }}
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x5.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmov s0, #5
+;   Inst 1:   ret
+; }}
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x32.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   movz x0, #16457, LSL #48
+;   Inst 1:   fmov d0, x0
+;   Inst 2:   ret
+; }}
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x32.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 3)
+;   Inst 0:   movz x0, #16968, LSL #16
+;   Inst 1:   fmov s0, w0
+;   Inst 2:   ret
+; }}
+
+function %f() -> f64 {
+block0:
+  v0 = f64const 0x0.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   movi v0.2s, #0
+;   Inst 1:   ret
+; }}
+
+function %f() -> f32 {
+block0:
+  v0 = f32const 0x0.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   movi v0.2s, #0
+;   Inst 1:   ret
+; }}
+
+function %f() -> f64 {
+block0:
+  v0 = f64const -0x10.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmov d0, #-16
+;   Inst 1:   ret
+; }}
+
+function %f() -> f32 {
+block0:
+  v0 = f32const -0x10.0
+  return v0
+}
+
+; VCode_ShowWithRRU {{
+;   Entry block: 0
+; Block 0:
+;   (original IR block: block0)
+;   (instruction range: 0 .. 2)
+;   Inst 0:   fmov s0, #-16
+;   Inst 1:   ret
+; }}

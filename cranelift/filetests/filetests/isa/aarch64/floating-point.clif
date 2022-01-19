@@ -494,19 +494,18 @@ block0(v0: f32):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 12)
+;   (instruction range: 0 .. 11)
 ;   Inst 0:   fcmp s0, s0
 ;   Inst 1:   b.vc 8 ; udf
-;   Inst 2:   movz x0, #49024, LSL #16
-;   Inst 3:   fmov d1, x0
-;   Inst 4:   fcmp s0, s1
-;   Inst 5:   b.gt 8 ; udf
-;   Inst 6:   movz x0, #20352, LSL #16
-;   Inst 7:   fmov d1, x0
-;   Inst 8:   fcmp s0, s1
-;   Inst 9:   b.mi 8 ; udf
-;   Inst 10:   fcvtzu w0, s0
-;   Inst 11:   ret
+;   Inst 2:   fmov s1, #-1
+;   Inst 3:   fcmp s0, s1
+;   Inst 4:   b.gt 8 ; udf
+;   Inst 5:   movz x0, #20352, LSL #16
+;   Inst 6:   fmov s1, w0
+;   Inst 7:   fcmp s0, s1
+;   Inst 8:   b.mi 8 ; udf
+;   Inst 9:   fcvtzu w0, s0
+;   Inst 10:   ret
 ; }}
 
 function %f34(f32) -> i32 {
@@ -523,11 +522,11 @@ block0(v0: f32):
 ;   Inst 0:   fcmp s0, s0
 ;   Inst 1:   b.vc 8 ; udf
 ;   Inst 2:   movz x0, #52992, LSL #16
-;   Inst 3:   fmov d1, x0
+;   Inst 3:   fmov s1, w0
 ;   Inst 4:   fcmp s0, s1
 ;   Inst 5:   b.ge 8 ; udf
 ;   Inst 6:   movz x0, #20224, LSL #16
-;   Inst 7:   fmov d1, x0
+;   Inst 7:   fmov s1, w0
 ;   Inst 8:   fcmp s0, s1
 ;   Inst 9:   b.mi 8 ; udf
 ;   Inst 10:   fcvtzs w0, s0
@@ -544,19 +543,18 @@ block0(v0: f32):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 12)
+;   (instruction range: 0 .. 11)
 ;   Inst 0:   fcmp s0, s0
 ;   Inst 1:   b.vc 8 ; udf
-;   Inst 2:   movz x0, #49024, LSL #16
-;   Inst 3:   fmov d1, x0
-;   Inst 4:   fcmp s0, s1
-;   Inst 5:   b.gt 8 ; udf
-;   Inst 6:   movz x0, #24448, LSL #16
-;   Inst 7:   fmov d1, x0
-;   Inst 8:   fcmp s0, s1
-;   Inst 9:   b.mi 8 ; udf
-;   Inst 10:   fcvtzu x0, s0
-;   Inst 11:   ret
+;   Inst 2:   fmov s1, #-1
+;   Inst 3:   fcmp s0, s1
+;   Inst 4:   b.gt 8 ; udf
+;   Inst 5:   movz x0, #24448, LSL #16
+;   Inst 6:   fmov s1, w0
+;   Inst 7:   fcmp s0, s1
+;   Inst 8:   b.mi 8 ; udf
+;   Inst 9:   fcvtzu x0, s0
+;   Inst 10:   ret
 ; }}
 
 function %f36(f32) -> i64 {
@@ -573,11 +571,11 @@ block0(v0: f32):
 ;   Inst 0:   fcmp s0, s0
 ;   Inst 1:   b.vc 8 ; udf
 ;   Inst 2:   movz x0, #57088, LSL #16
-;   Inst 3:   fmov d1, x0
+;   Inst 3:   fmov s1, w0
 ;   Inst 4:   fcmp s0, s1
 ;   Inst 5:   b.ge 8 ; udf
 ;   Inst 6:   movz x0, #24320, LSL #16
-;   Inst 7:   fmov d1, x0
+;   Inst 7:   fmov s1, w0
 ;   Inst 8:   fcmp s0, s1
 ;   Inst 9:   b.mi 8 ; udf
 ;   Inst 10:   fcvtzs x0, s0
@@ -594,19 +592,18 @@ block0(v0: f64):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 12)
+;   (instruction range: 0 .. 11)
 ;   Inst 0:   fcmp d0, d0
 ;   Inst 1:   b.vc 8 ; udf
-;   Inst 2:   movz x0, #49136, LSL #48
-;   Inst 3:   fmov d1, x0
-;   Inst 4:   fcmp d0, d1
-;   Inst 5:   b.gt 8 ; udf
-;   Inst 6:   movz x0, #16880, LSL #48
-;   Inst 7:   fmov d1, x0
-;   Inst 8:   fcmp d0, d1
-;   Inst 9:   b.mi 8 ; udf
-;   Inst 10:   fcvtzu w0, d0
-;   Inst 11:   ret
+;   Inst 2:   fmov d1, #-1
+;   Inst 3:   fcmp d0, d1
+;   Inst 4:   b.gt 8 ; udf
+;   Inst 5:   movz x0, #16880, LSL #48
+;   Inst 6:   fmov d1, x0
+;   Inst 7:   fcmp d0, d1
+;   Inst 8:   b.mi 8 ; udf
+;   Inst 9:   fcvtzu w0, d0
+;   Inst 10:   ret
 ; }}
 
 function %f38(f64) -> i32 {
@@ -643,19 +640,18 @@ block0(v0: f64):
 ;   Entry block: 0
 ; Block 0:
 ;   (original IR block: block0)
-;   (instruction range: 0 .. 12)
+;   (instruction range: 0 .. 11)
 ;   Inst 0:   fcmp d0, d0
 ;   Inst 1:   b.vc 8 ; udf
-;   Inst 2:   movz x0, #49136, LSL #48
-;   Inst 3:   fmov d1, x0
-;   Inst 4:   fcmp d0, d1
-;   Inst 5:   b.gt 8 ; udf
-;   Inst 6:   movz x0, #17392, LSL #48
-;   Inst 7:   fmov d1, x0
-;   Inst 8:   fcmp d0, d1
-;   Inst 9:   b.mi 8 ; udf
-;   Inst 10:   fcvtzu x0, d0
-;   Inst 11:   ret
+;   Inst 2:   fmov d1, #-1
+;   Inst 3:   fcmp d0, d1
+;   Inst 4:   b.gt 8 ; udf
+;   Inst 5:   movz x0, #17392, LSL #48
+;   Inst 6:   fmov d1, x0
+;   Inst 7:   fcmp d0, d1
+;   Inst 8:   b.mi 8 ; udf
+;   Inst 9:   fcvtzu x0, d0
+;   Inst 10:   ret
 ; }}
 
 function %f40(f64) -> i64 {
@@ -815,7 +811,7 @@ block0(v0: f32):
 ;   (original IR block: block0)
 ;   (instruction range: 0 .. 9)
 ;   Inst 0:   movz x0, #20352, LSL #16
-;   Inst 1:   fmov d1, x0
+;   Inst 1:   fmov s1, w0
 ;   Inst 2:   fmin s2, s0, s1
 ;   Inst 3:   movi v1.2s, #0
 ;   Inst 4:   fmax s2, s2, s1
@@ -837,10 +833,10 @@ block0(v0: f32):
 ;   (original IR block: block0)
 ;   (instruction range: 0 .. 11)
 ;   Inst 0:   movz x0, #20224, LSL #16
-;   Inst 1:   fmov d1, x0
+;   Inst 1:   fmov s1, w0
 ;   Inst 2:   fmin s1, s0, s1
 ;   Inst 3:   movz x0, #52992, LSL #16
-;   Inst 4:   fmov d2, x0
+;   Inst 4:   fmov s2, w0
 ;   Inst 5:   fmax s1, s1, s2
 ;   Inst 6:   movi v2.2s, #0
 ;   Inst 7:   fcmp s0, s0
@@ -861,7 +857,7 @@ block0(v0: f32):
 ;   (original IR block: block0)
 ;   (instruction range: 0 .. 9)
 ;   Inst 0:   movz x0, #24448, LSL #16
-;   Inst 1:   fmov d1, x0
+;   Inst 1:   fmov s1, w0
 ;   Inst 2:   fmin s2, s0, s1
 ;   Inst 3:   movi v1.2s, #0
 ;   Inst 4:   fmax s2, s2, s1
@@ -883,10 +879,10 @@ block0(v0: f32):
 ;   (original IR block: block0)
 ;   (instruction range: 0 .. 11)
 ;   Inst 0:   movz x0, #24320, LSL #16
-;   Inst 1:   fmov d1, x0
+;   Inst 1:   fmov s1, w0
 ;   Inst 2:   fmin s1, s0, s1
 ;   Inst 3:   movz x0, #57088, LSL #16
-;   Inst 4:   fmov d2, x0
+;   Inst 4:   fmov s2, w0
 ;   Inst 5:   fmax s1, s1, s2
 ;   Inst 6:   movi v2.2s, #0
 ;   Inst 7:   fcmp s0, s0
