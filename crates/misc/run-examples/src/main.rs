@@ -73,8 +73,8 @@ fn main() -> anyhow::Result<()> {
                 format!("examples/{}.{}", example, extension)
             };
 
-            if extension == &"cc" && !std::path::Path::new(&file).exists() {
-                // cc files are optional so we can skip them.
+            if !std::path::Path::new(&file).exists() {
+                // C and C++ files are optional so we can skip them.
                 continue;
             }
 

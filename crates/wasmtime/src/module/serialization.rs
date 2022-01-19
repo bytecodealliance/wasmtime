@@ -596,6 +596,7 @@ impl<'a> SerializedModule<'a> {
             parse_wasm_debuginfo,
             interruptable,
             consume_fuel,
+            epoch_interruption,
             static_memory_bound_is_maximum,
             guard_before_linear_memory,
 
@@ -636,6 +637,11 @@ impl<'a> SerializedModule<'a> {
         )?;
         Self::check_bool(interruptable, other.interruptable, "interruption support")?;
         Self::check_bool(consume_fuel, other.consume_fuel, "fuel support")?;
+        Self::check_bool(
+            epoch_interruption,
+            other.epoch_interruption,
+            "epoch interruption",
+        )?;
         Self::check_bool(
             static_memory_bound_is_maximum,
             other.static_memory_bound_is_maximum,

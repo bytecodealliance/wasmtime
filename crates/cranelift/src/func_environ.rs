@@ -137,6 +137,19 @@ pub struct FuncEnvironment<'module_environment> {
     /// so if we load it up front we can continue to use it throughout.
     vminterrupts_ptr: cranelift_frontend::Variable,
 
+    /// A cached epoch deadline value, when performing epoch-based
+    /// interruption. Loaded from `VMInterrupts` and reloaded after
+    /// any yield.
+    epoch_deadline_var: cranelift_frontend::Variable,
+
+    /// A cached pointer to the per-Engine epoch counter, when
+    /// performing epoch-based interruption. Initialized in the
+    /// function prologue. We prefer to use a variable here rather
+    /// than reload on each check because it's better to let the
+    /// regalloc keep it in a register if able; if not, it can always
+    /// spill, and this isn't any worse than reloading each time.
+    epoch_ptr_var: cranelift_frontend::Variable,
+
     fuel_consumed: i64,
 }
 
@@ -166,6 +179,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
             tunables,
             fuel_var: Variable::new(0),
+            epoch_deadline_var: Variable::new(0),
+            epoch_ptr_var: Variable::new(0),
             vminterrupts_ptr: Variable::new(0),
 
             // Start with at least one fuel being consumed because even empty
@@ -558,6 +573,125 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.switch_to_block(continuation_block);
     }
 
+    fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
+        builder.declare_var(self.epoch_deadline_var, ir::types::I64);
+        self.epoch_load_deadline_into_var(builder);
+        builder.declare_var(self.epoch_ptr_var, self.pointer_type());
+        let epoch_ptr = self.epoch_ptr(builder);
+        builder.def_var(self.epoch_ptr_var, epoch_ptr);
+
+        // We must check for an epoch change when entering a
+        // function. Why? Why aren't checks at loops sufficient to
+        // bound runtime to O(|static program size|)?
+        //
+        // The reason is that one can construct a "zip-bomb-like"
+        // program with exponential-in-program-size runtime, with no
+        // backedges (loops), by building a tree of function calls: f0
+        // calls f1 ten tims, f1 calls f2 ten times, etc. E.g., nine
+        // levels of this yields a billion function calls with no
+        // backedges. So we can't do checks only at backedges.
+        //
+        // In this "call-tree" scenario, and in fact in any program
+        // that uses calls as a sort of control flow to try to evade
+        // backedge checks, a check at every function entry is
+        // sufficient. Then, combined with checks at every backedge
+        // (loop) the longest runtime between checks is bounded by the
+        // straightline length of any function body.
+        self.epoch_check(builder);
+    }
+
+    fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
+        let vmctx = self.vmctx(builder.func);
+        let pointer_type = self.pointer_type();
+        let base = builder.ins().global_value(pointer_type, vmctx);
+        let offset = i32::try_from(self.offsets.vmctx_epoch_ptr()).unwrap();
+        let epoch_ptr = builder
+            .ins()
+            .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+        epoch_ptr
+    }
+
+    fn epoch_load_current(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
+        let addr = builder.use_var(self.epoch_ptr_var);
+        builder.ins().load(
+            ir::types::I64,
+            ir::MemFlags::trusted(),
+            addr,
+            ir::immediates::Offset32::new(0),
+        )
+    }
+
+    fn epoch_load_deadline_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let interrupts = builder.use_var(self.vminterrupts_ptr);
+        let deadline = builder.ins().load(
+            ir::types::I64,
+            ir::MemFlags::trusted(),
+            interrupts,
+            ir::immediates::Offset32::new(self.offsets.vminterupts_epoch_deadline() as i32),
+        );
+        builder.def_var(self.epoch_deadline_var, deadline);
+    }
+
+    fn epoch_check(&mut self, builder: &mut FunctionBuilder<'_>) {
+        let new_epoch_block = builder.create_block();
+        let new_epoch_doublecheck_block = builder.create_block();
+        let continuation_block = builder.create_block();
+        builder.set_cold_block(new_epoch_block);
+        builder.set_cold_block(new_epoch_doublecheck_block);
+
+        let epoch_deadline = builder.use_var(self.epoch_deadline_var);
+        // Load new epoch and check against cached deadline. The
+        // deadline may be out of date if it was updated (within
+        // another yield) during some function that we called; this is
+        // fine, as we'll reload it and check again before yielding in
+        // the cold path.
+        let cur_epoch_value = self.epoch_load_current(builder);
+        let cmp = builder.ins().ifcmp(cur_epoch_value, epoch_deadline);
+        builder
+            .ins()
+            .brif(IntCC::UnsignedGreaterThanOrEqual, cmp, new_epoch_block, &[]);
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(new_epoch_block);
+
+        // In the "new epoch block", we've noticed that the epoch has
+        // exceeded our cached deadline. However the real deadline may
+        // have been moved in the meantime. We keep the cached value
+        // in a register to speed the checks in the common case
+        // (between epoch ticks) but we want to do a precise check
+        // here, on the cold path, by reloading the latest value
+        // first.
+        builder.switch_to_block(new_epoch_block);
+        self.epoch_load_deadline_into_var(builder);
+        let fresh_epoch_deadline = builder.use_var(self.epoch_deadline_var);
+        let fresh_cmp = builder.ins().ifcmp(cur_epoch_value, fresh_epoch_deadline);
+        builder.ins().brif(
+            IntCC::UnsignedGreaterThanOrEqual,
+            fresh_cmp,
+            new_epoch_doublecheck_block,
+            &[],
+        );
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(new_epoch_doublecheck_block);
+
+        builder.switch_to_block(new_epoch_doublecheck_block);
+        let new_epoch_sig = self.builtin_function_signatures.new_epoch(builder.func);
+        let (vmctx, new_epoch) = self.translate_load_builtin_function_address(
+            &mut builder.cursor(),
+            BuiltinFunctionIndex::new_epoch(),
+        );
+        // new_epoch() returns the new deadline, so we don't have to
+        // reload it.
+        let call = builder
+            .ins()
+            .call_indirect(new_epoch_sig, new_epoch, &[vmctx]);
+        let new_deadline = *builder.func.dfg.inst_results(call).first().unwrap();
+        builder.def_var(self.epoch_deadline_var, new_deadline);
+        builder.ins().jump(continuation_block, &[]);
+        builder.seal_block(continuation_block);
+
+        builder.switch_to_block(continuation_block);
+    }
+
     fn memory_index_type(&self, index: MemoryIndex) -> ir::Type {
         if self.module.memory_plans[index].memory.memory64 {
             I64
@@ -633,6 +767,8 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     fn after_locals(&mut self, num_locals: usize) {
         self.vminterrupts_ptr = Variable::new(num_locals);
         self.fuel_var = Variable::new(num_locals + 1);
+        self.epoch_deadline_var = Variable::new(num_locals + 2);
+        self.epoch_ptr_var = Variable::new(num_locals + 3);
     }
 
     fn make_table(&mut self, func: &mut ir::Function, index: TableIndex) -> WasmResult<ir::Table> {
@@ -1787,6 +1923,12 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
             self.fuel_check(builder);
         }
 
+        // If we are performing epoch-based interruption, check to see
+        // if the epoch counter has changed.
+        if self.tunables.epoch_interruption {
+            self.epoch_check(builder);
+        }
+
         Ok(())
     }
 
@@ -1821,12 +1963,19 @@ impl<'module_environment> cranelift_wasm::FuncEnvironment for FuncEnvironment<'m
     ) -> WasmResult<()> {
         // If the `vminterrupts_ptr` variable will get used then we initialize
         // it here.
-        if self.tunables.consume_fuel || self.tunables.interruptable {
+        if self.tunables.consume_fuel
+            || self.tunables.interruptable
+            || self.tunables.epoch_interruption
+        {
             self.declare_vminterrupts_ptr(builder);
         }
         // Additionally we initialize `fuel_var` if it will get used.
         if self.tunables.consume_fuel {
             self.fuel_function_entry(builder);
+        }
+        // Initialize `epoch_var` with the current epoch.
+        if self.tunables.epoch_interruption {
+            self.epoch_function_entry(builder);
         }
         Ok(())
     }

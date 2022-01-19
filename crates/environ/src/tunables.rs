@@ -36,6 +36,9 @@ pub struct Tunables {
     /// will be consumed every time a wasm instruction is executed.
     pub consume_fuel: bool,
 
+    /// Whether or not we use epoch-based interruption.
+    pub epoch_interruption: bool,
+
     /// Whether or not to treat the static memory bound as the maximum for unbounded heaps.
     pub static_memory_bound_is_maximum: bool,
 
@@ -88,6 +91,7 @@ impl Default for Tunables {
             parse_wasm_debuginfo: true,
             interruptable: false,
             consume_fuel: false,
+            epoch_interruption: false,
             static_memory_bound_is_maximum: false,
             guard_before_linear_memory: true,
             generate_address_map: true,

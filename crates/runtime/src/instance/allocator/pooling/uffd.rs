@@ -438,6 +438,7 @@ mod test {
         Imports, InstanceAllocationRequest, InstanceLimits, ModuleLimits,
         PoolingAllocationStrategy, Store, StorePtr, VMSharedSignatureIndex,
     };
+    use std::sync::atomic::AtomicU64;
     use std::sync::Arc;
     use wasmtime_environ::{Memory, MemoryPlan, MemoryStyle, Module, PrimaryMap, Tunables};
 
@@ -545,6 +546,12 @@ mod test {
                 fn table_grow_failed(&mut self, _error: &anyhow::Error) {}
                 fn out_of_gas(&mut self) -> Result<(), anyhow::Error> {
                     Ok(())
+                }
+                fn epoch_ptr(&self) -> *const AtomicU64 {
+                    std::ptr::null()
+                }
+                fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
+                    Ok(0)
                 }
             }
             struct MockModuleInfo;

@@ -73,6 +73,7 @@ pub struct VMOffsets<P> {
 
     // precalculated offsets of various member fields
     interrupts: u32,
+    epoch_ptr: u32,
     externref_activations_table: u32,
     store: u32,
     signature_ids: u32,
@@ -174,6 +175,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             num_defined_memories: fields.num_defined_memories,
             num_defined_globals: fields.num_defined_globals,
             interrupts: 0,
+            epoch_ptr: 0,
             externref_activations_table: 0,
             store: 0,
             signature_ids: 0,
@@ -190,8 +192,12 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         };
 
         ret.interrupts = 0;
-        ret.externref_activations_table = ret
+        ret.epoch_ptr = ret
             .interrupts
+            .checked_add(u32::from(ret.ptr.size()))
+            .unwrap();
+        ret.externref_activations_table = ret
+            .epoch_ptr
             .checked_add(u32::from(ret.ptr.size()))
             .unwrap();
         ret.store = ret
@@ -469,6 +475,12 @@ impl<P: PtrSize> VMOffsets<P> {
     pub fn vminterrupts_fuel_consumed(&self) -> u8 {
         self.pointer_size()
     }
+
+    /// Return the offset of the `epoch_deadline` field of `VMInterrupts`
+    #[inline]
+    pub fn vminterupts_epoch_deadline(&self) -> u8 {
+        self.pointer_size() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
+    }
 }
 
 /// Offsets for `VMCallerCheckedAnyfunc`.
@@ -506,6 +518,13 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_interrupts(&self) -> u32 {
         self.interrupts
+    }
+
+    /// Return the offset to the `*const AtomicU64` epoch-counter
+    /// pointer.
+    #[inline]
+    pub fn vmctx_epoch_ptr(&self) -> u32 {
+        self.epoch_ptr
     }
 
     /// The offset of the `*mut VMExternRefActivationsTable` member.

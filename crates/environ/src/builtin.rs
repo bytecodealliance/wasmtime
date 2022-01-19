@@ -45,6 +45,8 @@ macro_rules! foreach_builtin_function {
             memory_atomic_wait64(vmctx, i32, pointer, i64, i64) -> (i32);
             /// Invoked when fuel has run out while executing a function.
             out_of_gas(vmctx) -> ();
+            /// Invoked when we reach a new epoch.
+            new_epoch(vmctx) -> (i64);
         }
     };
 }

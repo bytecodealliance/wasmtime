@@ -463,6 +463,7 @@ fn initialize_instance(
 unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationRequest) {
     if let Some(store) = req.store.as_raw() {
         *instance.interrupts() = (*store).vminterrupts();
+        *instance.epoch_ptr() = (*store).epoch_ptr();
         *instance.externref_activations_table() = (*store).externref_activations_table().0;
         instance.set_store(store);
     }
