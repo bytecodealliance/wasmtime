@@ -229,6 +229,14 @@ impl<'a> FunctionBuilder<'a> {
         block
     }
 
+    /// Mark a block as "cold".
+    ///
+    /// This will try to move it out of the ordinary path of execution
+    /// when lowered to machine code.
+    pub fn set_cold_block(&mut self, block: Block) {
+        self.func.layout.set_cold(block);
+    }
+
     /// Insert `block` in the layout *after* the existing block `after`.
     pub fn insert_block_after(&mut self, block: Block, after: Block) {
         self.func.layout.insert_block_after(block, after);
