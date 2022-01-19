@@ -22,6 +22,7 @@
 
 mod code_memory;
 mod debug;
+mod demangling;
 mod instantiate;
 mod link;
 mod mmap_vec;
@@ -34,6 +35,7 @@ pub use crate::instantiate::{
     SymbolizeContext, TypeTables,
 };
 pub use crate::mmap_vec::MmapVec;
+pub use demangling::*;
 pub use profiling::*;
 
 /// Version number of this crate.

@@ -6,7 +6,7 @@ use std::any::Any;
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::Arc;
 use wasmtime_environ::{EntityIndex, Module, ModuleType, PrimaryMap, SignatureIndex};
-use wasmtime_jit::{CodeMemory, MmapVec};
+use wasmtime_jit::{CodeMemory, MmapVec, ProfilingAgent};
 use wasmtime_runtime::{
     Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     OnDemandInstanceAllocator, StorePtr, VMContext, VMFunctionBody, VMSharedSignatureIndex,
@@ -67,6 +67,39 @@ unsafe extern "C" fn stub_fn<F>(
 }
 
 #[cfg(compiler)]
+fn register_trampolines(profiler: &dyn ProfilingAgent, image: &object::File<'_>) {
+    use object::{Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
+    let pid = std::process::id();
+    let tid = pid;
+
+    let text_base = match image.sections().find(|s| s.kind() == SectionKind::Text) {
+        Some(section) => match section.data() {
+            Ok(data) => data.as_ptr() as usize,
+            Err(_) => return,
+        },
+        None => return,
+    };
+
+    for sym in image.symbols() {
+        if !sym.is_definition() {
+            continue;
+        }
+        if sym.kind() != SymbolKind::Text {
+            continue;
+        }
+        let address = sym.address();
+        let size = sym.size();
+        if address == 0 || size == 0 {
+            continue;
+        }
+        if let Ok(name) = sym.name() {
+            let addr = text_base + address as usize;
+            profiler.load_single_trampoline(name, addr as *const u8, size as usize, pid, tid);
+        }
+    }
+}
+
+#[cfg(compiler)]
 pub fn create_function<F>(
     ft: &FuncType,
     func: F,
@@ -87,7 +120,8 @@ where
     // also take care of unwind table registration.
     let mut code_memory = CodeMemory::new(obj);
     let code = code_memory.publish()?;
-    engine.config().profiler.trampoline_load(&code.obj);
+
+    register_trampolines(engine.config().profiler.as_ref(), &code.obj);
 
     // Extract the host/wasm trampolines from the results of compilation since
     // we know their start/length.

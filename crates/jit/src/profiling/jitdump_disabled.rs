@@ -20,5 +20,13 @@ impl JitDumpAgent {
 
 impl ProfilingAgent for JitDumpAgent {
     fn module_load(&self, _module: &CompiledModule, _dbg_image: Option<&[u8]>) {}
-    fn trampoline_load(&self, _file: &object::File<'_>) {}
+    fn load_single_trampoline(
+        &self,
+        _name: &str,
+        _addr: *const u8,
+        _size: usize,
+        __pid: u32,
+        _tid: u32,
+    ) {
+    }
 }
