@@ -97,6 +97,29 @@ pub(crate) struct Instance {
 
 #[allow(clippy::cast_ptr_alignment)]
 impl Instance {
+    /// Helper for allocators; not a public API.
+    pub(crate) fn create_raw(
+        module: &Arc<Module>,
+        wasm_data: &'static [u8],
+        memories: PrimaryMap<DefinedMemoryIndex, Memory>,
+        tables: PrimaryMap<DefinedTableIndex, Table>,
+        host_state: Box<dyn Any + Send + Sync>,
+    ) -> Instance {
+        Instance {
+            module: module.clone(),
+            offsets: VMOffsets::new(HostPtr, &module),
+            memories,
+            tables,
+            dropped_elements: EntitySet::with_capacity(module.passive_elements.len()),
+            dropped_data: EntitySet::with_capacity(module.passive_data_map.len()),
+            host_state,
+            wasm_data,
+            vmctx: VMContext {
+                _marker: std::marker::PhantomPinned,
+            },
+        }
+    }
+
     /// Helper function to access various locations offset from our `*mut
     /// VMContext` object.
     unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *mut T {

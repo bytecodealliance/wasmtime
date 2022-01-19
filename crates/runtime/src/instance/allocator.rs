@@ -4,27 +4,36 @@ use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
 use crate::vmcontext::{
-    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMContext, VMGlobalDefinition,
-    VMSharedSignatureIndex,
+    VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMGlobalDefinition, VMSharedSignatureIndex,
 };
+use crate::ModuleMemFds;
 use crate::Store;
 use anyhow::Result;
 use std::alloc;
 use std::any::Any;
 use std::convert::TryFrom;
-use std::marker;
 use std::ptr::{self, NonNull};
 use std::slice;
 use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, EntitySet, FunctionInfo,
-    GlobalInit, HostPtr, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
-    SignatureIndex, TableInitializer, TrapCode, VMOffsets, WasmType, WASM_PAGE_SIZE,
+    DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, FunctionInfo, GlobalInit,
+    MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap, SignatureIndex,
+    TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
 mod pooling;
+
+#[cfg(feature = "memfd-allocator")]
+mod memfd;
+#[cfg(feature = "memfd-allocator")]
+pub use self::memfd::MemFdSlot;
+
+#[cfg(not(feature = "memfd-allocator"))]
+mod memfd_disabled;
+#[cfg(not(feature = "memfd-allocator"))]
+pub use self::memfd_disabled::MemFdSlot;
 
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
@@ -38,6 +47,9 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// The base address of where JIT functions are located.
     pub image_base: usize,
+
+    /// If using MemFD-based memories, the backing MemFDs.
+    pub memfds: Option<Arc<ModuleMemFds>>,
 
     /// Descriptors about each compiled function, such as the offset from
     /// `image_base`.
@@ -376,9 +388,23 @@ fn check_memory_init_bounds(
 
 fn initialize_memories(
     instance: &mut Instance,
+    module: &Module,
     initializers: &[MemoryInitializer],
 ) -> Result<(), InstantiationError> {
     for init in initializers {
+        // Check whether this is a MemFD memory; if so, we can skip
+        // all initializers.
+        let memory = init.memory_index;
+        if let Some(defined_index) = module.defined_memory_index(memory) {
+            // We can only skip if there is actually a MemFD image. In
+            // some situations the MemFD image creation code will bail
+            // (e.g. due to an out of bounds data segment) and so we
+            // need to fall back on the usual initialization below.
+            if instance.memories[defined_index].is_memfd_with_image() {
+                continue;
+            }
+        }
+
         instance
             .memory_init_segment(
                 init.memory_index,
@@ -432,6 +458,14 @@ fn initialize_instance(
     match &module.memory_initialization {
         MemoryInitialization::Paged { map, out_of_bounds } => {
             for (index, pages) in map {
+                // We can only skip if there is actually a MemFD image. In
+                // some situations the MemFD image creation code will bail
+                // (e.g. due to an out of bounds data segment) and so we
+                // need to fall back on the usual initialization below.
+                if instance.memories[index].is_memfd_with_image() {
+                    continue;
+                }
+
                 let memory = instance.memory(index);
                 let slice =
                     unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
@@ -453,7 +487,7 @@ fn initialize_instance(
             }
         }
         MemoryInitialization::Segmented(initializers) => {
-            initialize_memories(instance, initializers)?;
+            initialize_memories(instance, module, initializers)?;
         }
     }
 
@@ -691,19 +725,8 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
         let mut handle = {
-            let instance = Instance {
-                module: req.module.clone(),
-                offsets: VMOffsets::new(HostPtr, &req.module),
-                memories,
-                tables,
-                dropped_elements: EntitySet::with_capacity(req.module.passive_elements.len()),
-                dropped_data: EntitySet::with_capacity(req.module.passive_data_map.len()),
-                host_state,
-                wasm_data: &*req.wasm_data,
-                vmctx: VMContext {
-                    _marker: marker::PhantomPinned,
-                },
-            };
+            let instance =
+                Instance::create_raw(&req.module, &*req.wasm_data, memories, tables, host_state);
             let layout = instance.alloc_layout();
             let instance_ptr = alloc::alloc(layout) as *mut Instance;
             if instance_ptr.is_null() {

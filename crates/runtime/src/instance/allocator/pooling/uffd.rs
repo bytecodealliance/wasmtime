@@ -577,6 +577,7 @@ mod test {
                             PoolingAllocationStrategy::Random,
                             InstanceAllocationRequest {
                                 module: module.clone(),
+                                memfds: None,
                                 image_base: 0,
                                 functions,
                                 imports: Imports {

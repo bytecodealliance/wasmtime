@@ -51,9 +51,17 @@ pub unsafe fn platform_init() {
         register(&mut PREV_SIGFPE, libc::SIGFPE);
     }
 
-    // On ARM, handle Unaligned Accesses.
-    // On Darwin, guard page accesses are raised as SIGBUS.
-    if cfg!(target_arch = "arm") || cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
+    // Sometimes we need to handle SIGBUS too:
+    // - On ARM, handle Unaligned Accesses.
+    // - On Darwin, guard page accesses are raised as SIGBUS.
+    // - With the MemFD allocator, heap growth is controlled by
+    //   ftruncate'ing an mmap'd file, and so out-of-bounds accesses
+    //   are raised as SIGBUS.
+    if cfg!(target_arch = "arm")
+        || cfg!(target_os = "macos")
+        || cfg!(target_os = "freebsd")
+        || cfg!(feature = "memfd-allocator")
+    {
         register(&mut PREV_SIGBUS, libc::SIGBUS);
     }
 }

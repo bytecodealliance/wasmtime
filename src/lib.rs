@@ -100,6 +100,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use wasmtime::{Config, ProfilingStrategy};
+#[cfg(feature = "pooling-allocator")]
+use wasmtime::{InstanceLimits, ModuleLimits, PoolingAllocationStrategy};
 
 fn pick_profiling_strategy(jitdump: bool, vtune: bool) -> Result<ProfilingStrategy> {
     Ok(match (jitdump, vtune) {
@@ -250,6 +252,12 @@ struct CommonOptions {
     /// the data segments specified in the original wasm module.
     #[structopt(long)]
     paged_memory_initialization: bool,
+
+    /// Enables the pooling allocator, in place of the on-demand
+    /// allocator.
+    #[cfg(feature = "pooling-allocator")]
+    #[structopt(long)]
+    pooling_allocator: bool,
 }
 
 impl CommonOptions {
@@ -324,6 +332,23 @@ impl CommonOptions {
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
         config.paged_memory_initialization(self.paged_memory_initialization);
+
+        #[cfg(feature = "pooling-allocator")]
+        {
+            if self.pooling_allocator {
+                let mut module_limits = ModuleLimits::default();
+                module_limits.functions = 50000;
+                module_limits.types = 10000;
+                module_limits.globals = 1000;
+                module_limits.memory_pages = 2048;
+                let instance_limits = InstanceLimits::default();
+                config.allocation_strategy(wasmtime::InstanceAllocationStrategy::Pooling {
+                    strategy: PoolingAllocationStrategy::NextAvailable,
+                    module_limits,
+                    instance_limits,
+                });
+            }
+        }
 
         Ok(config)
     }

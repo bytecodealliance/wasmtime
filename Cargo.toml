@@ -95,6 +95,8 @@ vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
+pooling-allocator = ["wasmtime/pooling-allocator"]
+memfd-allocator = ["pooling-allocator", "wasmtime/memfd-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
 

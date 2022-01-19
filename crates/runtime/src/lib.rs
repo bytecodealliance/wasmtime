@@ -19,6 +19,7 @@
         clippy::use_self
     )
 )]
+#![cfg_attr(feature = "memfd-allocator", allow(dead_code))]
 
 use std::sync::atomic::AtomicU64;
 
@@ -62,6 +63,49 @@ pub use crate::vmcontext::{
     VMGlobalImport, VMInterrupts, VMInvokeArgument, VMMemoryDefinition, VMMemoryImport,
     VMSharedSignatureIndex, VMTableDefinition, VMTableImport, VMTrampoline, ValRaw,
 };
+
+mod module_id;
+pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
+
+#[cfg(feature = "memfd-allocator")]
+mod memfd;
+
+/// When memfd support is not included, provide a shim type and
+/// constructor instead so that higher-level code does not need
+/// feature-conditional compilation.
+#[cfg(not(feature = "memfd-allocator"))]
+#[allow(dead_code)]
+mod memfd {
+    use anyhow::Result;
+    use std::sync::Arc;
+    use wasmtime_environ::{DefinedMemoryIndex, Module};
+
+    /// A shim for the memfd image container when memfd support is not
+    /// included.
+    pub enum ModuleMemFds {}
+
+    /// A shim for an individual memory image.
+    #[allow(dead_code)]
+    pub enum MemoryMemFd {}
+
+    impl ModuleMemFds {
+        /// Construct a new set of memfd images. This variant is used
+        /// when memfd support is not included; it always returns no
+        /// images.
+        pub fn new(_: &Module, _: &[u8]) -> Result<Option<Arc<ModuleMemFds>>> {
+            Ok(None)
+        }
+
+        /// Get the memfd image for a particular memory.
+        pub(crate) fn get_memory_image(&self, _: DefinedMemoryIndex) -> Option<&Arc<MemoryMemFd>> {
+            // Should be unreachable because the `Self` type is
+            // uninhabitable.
+            match *self {}
+        }
+    }
+}
+
+pub use crate::memfd::ModuleMemFds;
 
 /// Version number of this crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
