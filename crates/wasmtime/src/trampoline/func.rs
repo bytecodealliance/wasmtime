@@ -161,6 +161,8 @@ pub unsafe fn create_raw_function(
     Ok(
         OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
             module: Arc::new(module),
+            #[cfg(feature = "memfd-allocator")]
+            memfds: None,
             functions: &functions,
             image_base: (*func).as_ptr() as usize,
             imports: Imports::default(),

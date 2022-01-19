@@ -1,5 +1,7 @@
 use crate::imports::Imports;
 use crate::instance::{Instance, InstanceHandle, RuntimeMemoryCreator};
+#[cfg(feature = "memfd-allocator")]
+use crate::memfd::ModuleMemFds;
 use crate::memory::{DefaultMemoryCreator, Memory};
 use crate::table::Table;
 use crate::traphandlers::Trap;
@@ -26,6 +28,9 @@ use wasmtime_environ::{
 #[cfg(feature = "pooling-allocator")]
 mod pooling;
 
+#[cfg(feature = "memfd-allocator")]
+pub use self::pooling::MemFdSlot;
+
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
     InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
@@ -38,6 +43,10 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// The base address of where JIT functions are located.
     pub image_base: usize,
+
+    /// If using MemFD-based memories, the backing MemFDs.
+    #[cfg(feature = "memfd-allocator")]
+    pub memfds: Option<Arc<ModuleMemFds>>,
 
     /// Descriptors about each compiled function, such as the offset from
     /// `image_base`.
@@ -376,9 +385,23 @@ fn check_memory_init_bounds(
 
 fn initialize_memories(
     instance: &mut Instance,
+    module: &Module,
     initializers: &[MemoryInitializer],
 ) -> Result<(), InstantiationError> {
     for init in initializers {
+        // Check whether this is a MemFD memory; if so, we can skip
+        // all initializers.
+        let memory = init.memory_index;
+        if let Some(defined_index) = module.defined_memory_index(memory) {
+            // We can only skip if there is actually a MemFD image. In
+            // some situations the MemFD image creation code will bail
+            // (e.g. due to an out of bounds data segment) and so we
+            // need to fall back on the usual initialization below.
+            if instance.memories[defined_index].is_memfd_with_image() {
+                continue;
+            }
+        }
+
         instance
             .memory_init_segment(
                 init.memory_index,
@@ -432,6 +455,14 @@ fn initialize_instance(
     match &module.memory_initialization {
         MemoryInitialization::Paged { map, out_of_bounds } => {
             for (index, pages) in map {
+                // We can only skip if there is actually a MemFD image. In
+                // some situations the MemFD image creation code will bail
+                // (e.g. due to an out of bounds data segment) and so we
+                // need to fall back on the usual initialization below.
+                if instance.memories[index].is_memfd_with_image() {
+                    continue;
+                }
+
                 let memory = instance.memory(index);
                 let slice =
                     unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
@@ -453,7 +484,7 @@ fn initialize_instance(
             }
         }
         MemoryInitialization::Segmented(initializers) => {
-            initialize_memories(instance, initializers)?;
+            initialize_memories(instance, module, initializers)?;
         }
     }
 

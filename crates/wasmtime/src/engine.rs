@@ -7,7 +7,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_runtime::{debug_builtins, InstanceAllocator};
+#[cfg(feature = "memfd-allocator")]
+use wasmtime_runtime::MemFdRegistry;
+use wasmtime_runtime::{debug_builtins, CompiledModuleIdAllocator, InstanceAllocator};
 
 /// An `Engine` which is a global context for compilation and management of wasm
 /// modules.
@@ -43,6 +45,9 @@ struct EngineInner {
     allocator: Box<dyn InstanceAllocator>,
     signatures: SignatureRegistry,
     epoch: AtomicU64,
+    unique_id_allocator: CompiledModuleIdAllocator,
+    #[cfg(feature = "memfd-allocator")]
+    memfd_registry: MemFdRegistry,
 }
 
 impl Engine {
@@ -68,6 +73,9 @@ impl Engine {
                 allocator,
                 signatures: registry,
                 epoch: AtomicU64::new(0),
+                unique_id_allocator: CompiledModuleIdAllocator::new(),
+                #[cfg(feature = "memfd-allocator")]
+                memfd_registry: MemFdRegistry::new(),
             }),
         })
     }
@@ -151,6 +159,15 @@ impl Engine {
     /// memory.
     pub fn increment_epoch(&self) {
         self.inner.epoch.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub(crate) fn unique_id_allocator(&self) -> &CompiledModuleIdAllocator {
+        &self.inner.unique_id_allocator
+    }
+
+    #[cfg(feature = "memfd-allocator")]
+    pub(crate) fn memfd_registry(&self) -> &MemFdRegistry {
+        &self.inner.memfd_registry
     }
 
     /// Ahead-of-time (AOT) compiles a WebAssembly module.

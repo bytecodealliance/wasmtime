@@ -11,13 +11,23 @@ use super::{
     initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, InstantiationError,
 };
+#[cfg(feature = "memfd-allocator")]
+use crate::memfd::{MemoryMemFd, ModuleMemFds};
 use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
 use anyhow::{anyhow, bail, Context, Result};
+#[cfg(feature = "memfd-allocator")]
+use libc::c_void;
 use rand::Rng;
+#[cfg(feature = "memfd-allocator")]
+use rustix::fd::AsRawFd;
 use std::convert::TryFrom;
+#[cfg(feature = "memfd-allocator")]
+use std::fs::File;
 use std::marker;
 use std::mem;
 use std::sync::{Arc, Mutex};
+#[cfg(feature = "memfd-allocator")]
+use wasmtime_environ::DefinedMemoryIndex;
 use wasmtime_environ::{
     EntitySet, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets, VMOffsetsFields,
     WASM_PAGE_SIZE,
@@ -285,6 +295,7 @@ struct InstancePool {
     memories: MemoryPool,
     tables: TablePool,
     empty_module: Arc<Module>,
+    module_limits: ModuleLimits,
 }
 
 impl InstancePool {
@@ -333,12 +344,8 @@ impl InstancePool {
             memories: MemoryPool::new(module_limits, instance_limits, tunables)?,
             tables: TablePool::new(module_limits, instance_limits)?,
             empty_module: Arc::new(Module::default()),
+            module_limits: module_limits.clone(),
         };
-
-        // Use a default module to initialize the instances to start
-        for i in 0..instance_limits.count as usize {
-            pool.initialize(module_limits, i);
-        }
 
         Ok(pool)
     }
@@ -348,7 +355,7 @@ impl InstancePool {
         &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
     }
 
-    fn initialize(&self, limits: &ModuleLimits, index: usize) {
+    fn initialize(&self, index: usize) {
         unsafe {
             let instance = self.instance(index);
 
@@ -358,8 +365,8 @@ impl InstancePool {
                 Instance {
                     module: self.empty_module.clone(),
                     offsets: VMOffsets::new(HostPtr, &self.empty_module),
-                    memories: PrimaryMap::with_capacity(limits.memories as usize),
-                    tables: PrimaryMap::with_capacity(limits.tables as usize),
+                    memories: PrimaryMap::with_capacity(self.module_limits.memories as usize),
+                    tables: PrimaryMap::with_capacity(self.module_limits.tables as usize),
                     dropped_elements: EntitySet::new(),
                     dropped_data: EntitySet::new(),
                     host_state: Box::new(()),
@@ -377,6 +384,12 @@ impl InstancePool {
         index: usize,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
+        // Instances are uninitialized memory at first; we need to
+        // write an empty but initialized `Instance` struct into the
+        // chosen slot before we do anything else with it. (This is
+        // paired with a `drop_in_place` in deallocate below.)
+        self.initialize(index);
+
         let instance = self.instance(index);
 
         instance.module = req.module.clone();
@@ -390,11 +403,25 @@ impl InstancePool {
             instance.set_store(store);
         }
 
-        Self::set_instance_memories(
-            instance,
-            self.memories.get(index),
-            self.memories.max_wasm_pages,
-        )?;
+        #[cfg(not(feature = "memfd-allocator"))]
+        {
+            Self::set_instance_memories(
+                instance,
+                self.memories.get(index),
+                self.memories.max_wasm_pages,
+            )?;
+        }
+
+        #[cfg(feature = "memfd-allocator")]
+        {
+            Self::map_instance_memfd_memories(
+                index,
+                instance,
+                &req.memfds,
+                &self.memories,
+                self.memories.max_wasm_pages,
+            )?;
+        }
 
         Self::set_instance_tables(
             instance,
@@ -448,9 +475,27 @@ impl InstancePool {
         let instance = unsafe { &mut *handle.instance };
 
         // Decommit any linear memories that were used
-        for (memory, base) in instance.memories.values_mut().zip(self.memories.get(index)) {
+        for (_mem_idx, (memory, base)) in instance
+            .memories
+            .values_mut()
+            .zip(self.memories.get(index))
+            .enumerate()
+        {
             let mut memory = mem::take(memory);
             debug_assert!(memory.is_static());
+
+            #[cfg(feature = "memfd-allocator")]
+            {
+                if let Memory::Static {
+                    memfd_slot: Some(mut memfd_slot),
+                    ..
+                } = memory
+                {
+                    let _ = memfd_slot.clear_and_remain_ready();
+                    self.memories.return_memfd_slot(index, _mem_idx, memfd_slot);
+                    continue;
+                }
+            }
 
             // Reset any faulted guard pages as the physical memory may be reused for another instance in the future
             #[cfg(all(feature = "uffd", target_os = "linux"))]
@@ -481,26 +526,20 @@ impl InstancePool {
             decommit_table_pages(base, size).expect("failed to decommit table pages");
         }
 
-        instance.tables.clear();
-        instance.dropped_elements.clear();
-
-        // Drop all `global` values which need a destructor, such as externref
-        // values which now need their reference count dropped.
-        instance.drop_globals();
-
-        // Drop any host state
-        instance.host_state = Box::new(());
-
-        // And finally reset the module/offsets back to their original. This
-        // should put everything back in a relatively pristine state for each
-        // fresh allocation later on.
-        instance.module = self.empty_module.clone();
-        instance.offsets = VMOffsets::new(HostPtr, &self.empty_module);
-        instance.wasm_data = &[];
+        // We've now done all of the pooling-allocator-specific
+        // teardown, so we can drop the Instance and let destructors
+        // take care of any other fields (host state, globals, etc.).
+        unsafe {
+            std::ptr::drop_in_place(instance as *mut _);
+        }
+        // The instance is now uninitialized memory and cannot be
+        // touched again until we write a fresh Instance in-place with
+        // std::ptr::write in allocate() above.
 
         self.free_list.lock().unwrap().push(index);
     }
 
+    #[cfg_attr(feature = "memfd-allocator", allow(dead_code))]
     fn set_instance_memories(
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
@@ -528,6 +567,47 @@ impl InstancePool {
         }
 
         debug_assert!(instance.dropped_data.is_empty());
+
+        Ok(())
+    }
+
+    #[cfg(feature = "memfd-allocator")]
+    fn map_instance_memfd_memories(
+        instance_idx: usize,
+        instance: &mut Instance,
+        maybe_memfds: &Option<Arc<ModuleMemFds>>,
+        memories: &MemoryPool,
+        max_wasm_pages: u64,
+    ) -> Result<(), InstantiationError> {
+        let module = instance.module.as_ref();
+
+        debug_assert!(instance.memories.is_empty());
+
+        for (defined_index, plan) in (&module.memory_plans.values().as_slice()
+            [module.num_imported_memories..])
+            .iter()
+            .enumerate()
+        {
+            let memory_index = module.num_imported_memories + defined_index;
+            let mut slot = memories.take_memfd_slot(instance_idx, memory_index)?;
+            let defined_index = DefinedMemoryIndex::from_u32(defined_index as u32);
+            let image = maybe_memfds
+                .as_ref()
+                .and_then(|memfds| memfds.get_memory_image(defined_index));
+            let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
+            slot.instantiate(initial_size as usize, image)?;
+
+            let memory = unsafe {
+                std::slice::from_raw_parts_mut(
+                    slot.base as _,
+                    (max_wasm_pages as usize) * (WASM_PAGE_SIZE as usize),
+                )
+            };
+            instance.memories.push(
+                Memory::new_memfd(plan, memory, slot, unsafe { &mut *instance.store() })
+                    .map_err(InstantiationError::Resource)?,
+            );
+        }
 
         Ok(())
     }
@@ -566,17 +646,6 @@ impl InstancePool {
     }
 }
 
-impl Drop for InstancePool {
-    fn drop(&mut self) {
-        unsafe {
-            for i in 0..self.max_instances {
-                let ptr = self.mapping.as_mut_ptr().add(i * self.instance_size) as *mut Instance;
-                std::ptr::drop_in_place(ptr);
-            }
-        }
-    }
-}
-
 /// Represents a pool of WebAssembly linear memories.
 ///
 /// A linear memory is divided into accessible pages and guard pages.
@@ -589,6 +658,11 @@ impl Drop for InstancePool {
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
+    // If using the memfd allocation scheme, the MemFd slots. We
+    // dynamically transfer ownership of a slot to a Memory when in
+    // use.
+    #[cfg(feature = "memfd-allocator")]
+    memfd_slots: Vec<Mutex<Option<MemFdSlot>>>,
     // The size, in bytes, of each linear memory's reservation plus the guard
     // region allocated for it.
     memory_size: usize,
@@ -599,6 +673,210 @@ struct MemoryPool {
     max_memories: usize,
     max_instances: usize,
     max_wasm_pages: u64,
+}
+
+/// A single slot handled by the memfd instance-heap mechanism.
+///
+/// The mmap scheme is:
+///
+/// base ==> (points here)
+/// - (image.offset bytes)   anonymous zero memory, pre-image
+/// - (image.len bytes)      CoW mapping of memfd heap image
+/// - (up to extension_offset)  anonymous zeor memory, post-image
+/// - (up to static_size)    heap expansion region; CoW mapping of per-slot memfd
+#[cfg(feature = "memfd-allocator")]
+#[derive(Debug)]
+pub struct MemFdSlot {
+    /// The base of the actual heap memory. Bytes at this address are
+    /// what is seen by the Wasm guest code.
+    base: usize,
+    /// The maximum static memory size, plus post-guard.
+    static_size: usize,
+    /// The memfd image that backs this memory. May be `None`, in
+    /// which case the memory is all zeroes.
+    pub(crate) image: Option<Arc<MemoryMemFd>>,
+    /// The offset at which the "extension file", which is used to
+    /// allow for efficient heap growth, is mapped. This is always
+    /// immediately after the end of the initial memory size.
+    extension_offset: usize,
+    /// The anonymous memfd, owned by this slot, which we mmap in the
+    /// area where the heap may grow during runtime. We use the
+    /// ftruncate() syscall (invoked via `File::set_len()`) to set its
+    /// size. We never write any data to it -- we CoW-map it so we can
+    /// throw away dirty data on termination. Instead, we just use its
+    /// size as a "watermark" that delineates the boundary between
+    /// safe-to-access memory and SIGBUS-causing memory. (This works
+    /// because one can mmap a file beyond its end, and is good
+    /// because ftruncate does not take the process-wide lock that
+    /// mmap and mprotect do.)
+    extension_file: File,
+    /// Whether this slot may have "dirty" pages (pages written by an
+    /// instantiation). Set by `instantiate()` and cleared by
+    /// `clear_and_remain_ready()`, and used in assertions to ensure
+    /// those methods are called properly.
+    dirty: bool,
+}
+
+#[cfg(feature = "memfd-allocator")]
+impl MemFdSlot {
+    fn create(base_addr: *mut c_void, static_size: usize) -> Result<Self, InstantiationError> {
+        let base = base_addr as usize;
+
+        // Create a MemFD for the memory growth first -- this covers
+        // extended heap beyond the initial image.
+        let extension_memfd = memfd::MemfdOptions::new()
+            .create("wasm-anonymous-heap")
+            .map_err(|e| InstantiationError::Resource(e.into()))?;
+        let extension_file = extension_memfd.into_file();
+        extension_file
+            .set_len(0)
+            .map_err(|e| InstantiationError::Resource(e.into()))?;
+
+        Ok(MemFdSlot {
+            base,
+            static_size,
+            image: None,
+            extension_file,
+            extension_offset: 0,
+            dirty: false,
+        })
+    }
+
+    pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
+        assert!(size_bytes >= self.extension_offset);
+        // This is all that is needed to make the new memory
+        // accessible; we don't need to mprotect anything. (The
+        // mapping itself is always R+W for the max possible heap
+        // size, and only the anonymous-backing file length catches
+        // out-of-bounds accesses.)
+        self.extension_file
+            .set_len((size_bytes - self.extension_offset) as u64)?;
+        Ok(())
+    }
+
+    fn instantiate(
+        &mut self,
+        initial_size_bytes: usize,
+        maybe_image: Option<&Arc<MemoryMemFd>>,
+    ) -> Result<(), InstantiationError> {
+        assert!(!self.dirty);
+
+        if let &Some(ref existing_image) = &self.image {
+            // Fast-path: previously instantiated with the same image,
+            // so the mappings are already correct; there is no need
+            // to mmap anything. Given that we asserted not-dirty
+            // above, any dirty pages will have already been thrown
+            // away by madvise() during the previous termination.
+            if let Some(image) = maybe_image {
+                if existing_image.fd.as_file().as_raw_fd() == image.fd.as_file().as_raw_fd() {
+                    self.dirty = true;
+                    return Ok(());
+                }
+            }
+        }
+
+        // Otherwise, we need to redo (i) the anonymous-mmap backing
+        // for the initial heap size, (ii) the extension-file backing,
+        // and (iii) the initial-heap-image mapping if present.
+
+        // Security/audit note: we map all of these MAP_PRIVATE, so
+        // all instance data is local to the mapping, not propagated
+        // to the backing fd. We throw away this CoW overlay with
+        // madvise() below, from base up to extension_offset (which is
+        // at least initial_size_bytes, and extended when the
+        // extension file is, so it covers all three mappings) when
+        // terminating the instance.
+
+        // Anonymous mapping behind the initial heap size: this gives
+        // zeroes for any "holes" in the initial heap image. Anonymous
+        // mmap memory is faster to fault in than a CoW of a file,
+        // even a file with zero holes, because the kernel's CoW path
+        // unconditionally copies *something* (even if just a page of
+        // zeroes). Anonymous zero pages are fast: the kernel
+        // pre-zeroes them, and even if it runs out of those, a memset
+        // is half as expensive as a memcpy (only writes, no reads).
+        if initial_size_bytes > 0 {
+            unsafe {
+                let ptr = rustix::io::mmap_anonymous(
+                    self.base as *mut c_void,
+                    initial_size_bytes,
+                    rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE,
+                    rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
+                )
+                .map_err(|e| InstantiationError::Resource(e.into()))?;
+                assert_eq!(ptr as usize, self.base);
+            }
+        }
+
+        // An "extension file": this allows us to grow the heap by
+        // doing just an ftruncate(), without changing any
+        // mappings. This is important to avoid the process-wide mmap
+        // lock on Linux.
+        self.extension_offset = initial_size_bytes;
+        let extension_map_len = self.static_size - initial_size_bytes;
+        if extension_map_len > 0 {
+            unsafe {
+                let fd = rustix::fd::BorrowedFd::borrow_raw_fd(self.extension_file.as_raw_fd());
+                let ptr = rustix::io::mmap(
+                    (self.base + initial_size_bytes) as *mut c_void,
+                    extension_map_len,
+                    rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE,
+                    rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
+                    &fd,
+                    0,
+                )
+                .map_err(|e| InstantiationError::Resource(e.into()))?;
+                assert_eq!(ptr as usize, self.base + initial_size_bytes);
+            }
+        }
+
+        // Finally, the initial memory image.
+        if let Some(image) = maybe_image {
+            if image.len > 0 {
+                let image = image.clone();
+
+                unsafe {
+                    let fd = rustix::fd::BorrowedFd::borrow_raw_fd(image.fd.as_file().as_raw_fd());
+                    let ptr = rustix::io::mmap(
+                        (self.base + image.offset) as *mut c_void,
+                        image.len,
+                        rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE,
+                        rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
+                        &fd,
+                        image.offset as u64,
+                    )
+                    .map_err(|e| InstantiationError::Resource(e.into()))?;
+                    assert_eq!(ptr as usize, self.base + image.offset);
+                }
+
+                self.image = Some(image);
+            }
+        }
+
+        self.dirty = true;
+        Ok(())
+    }
+
+    fn clear_and_remain_ready(&mut self) -> Result<()> {
+        assert!(self.dirty);
+        // madvise the image range; that's it! This will throw away
+        // dirty pages, which are CoW-private pages on top of the
+        // initial heap image memfd.
+        unsafe {
+            rustix::io::madvise(
+                self.base as *mut c_void,
+                self.extension_offset,
+                rustix::io::Advice::LinuxDontNeed,
+            )?;
+        }
+
+        // truncate the extension file down to zero bytes to reset heap length.
+        self.extension_file
+            .set_len(0)
+            .map_err(|e| InstantiationError::Resource(e.into()))?;
+        self.dirty = false;
+        Ok(())
+    }
 }
 
 impl MemoryPool {
@@ -673,8 +951,15 @@ impl MemoryPool {
         let mapping = Mmap::accessible_reserved(0, allocation_size)
             .context("failed to create memory pool mapping")?;
 
+        #[cfg(feature = "memfd-allocator")]
+        let memfd_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
+            .take(max_instances * max_memories)
+            .collect();
+
         let pool = Self {
             mapping,
+            #[cfg(feature = "memfd-allocator")]
+            memfd_slots,
             memory_size,
             initial_memory_offset,
             max_memories,
@@ -689,17 +974,43 @@ impl MemoryPool {
         Ok(pool)
     }
 
-    fn get(&self, instance_index: usize) -> impl Iterator<Item = *mut u8> {
+    fn get_base(&self, instance_index: usize, memory_index: usize) -> *mut u8 {
         debug_assert!(instance_index < self.max_instances);
+        debug_assert!(memory_index < self.max_memories);
+        let idx = instance_index * self.max_memories + memory_index;
+        let offset = self.initial_memory_offset + idx * self.memory_size;
+        unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
+    }
 
-        let base: *mut u8 = unsafe {
-            self.mapping.as_mut_ptr().add(
-                self.initial_memory_offset + instance_index * self.memory_size * self.max_memories,
-            ) as _
-        };
+    fn get<'a>(&'a self, instance_index: usize) -> impl Iterator<Item = *mut u8> + 'a {
+        (0..self.max_memories).map(move |i| self.get_base(instance_index, i))
+    }
 
-        let size = self.memory_size;
-        (0..self.max_memories).map(move |i| unsafe { base.add(i * size) })
+    /// Take ownership of the given memfd slot. Must be returned via
+    /// `return_memfd_slot` when the instance is done using it.
+    #[cfg(feature = "memfd-allocator")]
+    fn take_memfd_slot(
+        &self,
+        instance_index: usize,
+        memory_index: usize,
+    ) -> Result<MemFdSlot, InstantiationError> {
+        let idx = instance_index * self.max_memories + memory_index;
+        let maybe_slot = self.memfd_slots[idx].lock().unwrap().take();
+
+        maybe_slot.map(|slot| Ok(slot)).unwrap_or_else(|| {
+            MemFdSlot::create(
+                self.get_base(instance_index, memory_index) as *mut c_void,
+                self.memory_size,
+            )
+        })
+    }
+
+    /// Return ownership of the given memfd slot.
+    #[cfg(feature = "memfd-allocator")]
+    fn return_memfd_slot(&self, instance_index: usize, memory_index: usize, slot: MemFdSlot) {
+        assert!(!slot.dirty);
+        let idx = instance_index * self.max_memories + memory_index;
+        *self.memfd_slots[idx].lock().unwrap() = Some(slot);
     }
 }
 
@@ -1413,6 +1724,8 @@ mod test {
                             host_state: Box::new(()),
                             store: StorePtr::empty(),
                             wasm_data: &[],
+                            #[cfg(feature = "memfd-allocator")]
+                            memfds: None,
                         },
                     )
                     .expect("allocation should succeed"),
@@ -1437,6 +1750,8 @@ mod test {
                 host_state: Box::new(()),
                 store: StorePtr::empty(),
                 wasm_data: &[],
+                #[cfg(feature = "memfd-allocator")]
+                memfds: None,
             },
         ) {
             Err(InstantiationError::Limit(3)) => {}

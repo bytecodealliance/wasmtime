@@ -336,7 +336,12 @@ impl Module {
         };
 
         let modules = engine.run_maybe_parallel(artifacts, |(a, b)| {
-            CompiledModule::from_artifacts(a, b, &*engine.config().profiler)
+            CompiledModule::from_artifacts(
+                a,
+                b,
+                &*engine.config().profiler,
+                engine.unique_id_allocator(),
+            )
         })?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
@@ -922,6 +927,20 @@ impl Module {
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
     pub fn engine(&self) -> &Engine {
         &self.inner.engine
+    }
+}
+
+#[cfg(feature = "memfd-allocator")]
+impl Drop for ModuleInner {
+    fn drop(&mut self) {
+        // Try to unregister from the MemFdRegistry, if we can. Any
+        // entries in the registry holding memfd images for this
+        // module will have been created lazily, on first
+        // instantiation, so they may not exist at all. However, if
+        // they do, we want to ensure that we do not hold them beyond
+        // when this module is dropped, because they will be useless
+        // afterward.
+        self.engine.memfd_registry().remove(self.module.unique_id());
     }
 }
 

@@ -690,6 +690,15 @@ impl<'a> Instantiator<'a> {
         // properly referenced while in use by the store.
         store.modules_mut().register(&self.cur.module);
 
+        // If using MemFD-based heaps, lazily create the MemFD backing
+        // image(s) on first use.
+        #[cfg(feature = "memfd-allocator")]
+        let memfds = store.engine().memfd_registry().get_or_create(
+            compiled_module.unique_id(),
+            &self.cur.module.env_module(),
+            compiled_module.wasm_data(),
+        )?;
+
         unsafe {
             // The first thing we do is issue an instance allocation request
             // to the instance allocator. This, on success, will give us an
@@ -707,6 +716,8 @@ impl<'a> Instantiator<'a> {
                     .allocator()
                     .allocate(InstanceAllocationRequest {
                         module: compiled_module.module().clone(),
+                        #[cfg(feature = "memfd-allocator")]
+                        memfds: Some(memfds),
                         image_base: compiled_module.code().as_ptr() as usize,
                         functions: compiled_module.functions(),
                         imports: self.cur.build(),

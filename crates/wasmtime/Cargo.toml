@@ -89,3 +89,5 @@ all-arch = ["wasmtime-cranelift/all-arch"]
 # It is useful for applications that do not bind their own exception ports and
 # need portable signal handling.
 posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
+
+memfd-allocator = ["wasmtime-runtime/memfd-allocator", "pooling-allocator"]

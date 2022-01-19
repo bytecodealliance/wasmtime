@@ -274,7 +274,12 @@ impl<'a> SerializedModule<'a> {
     pub fn into_module(self, engine: &Engine) -> Result<Module> {
         let (main_module, modules, types, upvars) = self.into_parts(engine)?;
         let modules = engine.run_maybe_parallel(modules, |(i, m)| {
-            CompiledModule::from_artifacts(i, m, &*engine.config().profiler)
+            CompiledModule::from_artifacts(
+                i,
+                m,
+                &*engine.config().profiler,
+                engine.unique_id_allocator(),
+            )
         })?;
 
         Module::from_parts(engine, modules, main_module, Arc::new(types), &upvars)
