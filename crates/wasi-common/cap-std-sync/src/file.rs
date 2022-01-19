@@ -122,7 +122,7 @@ impl WasiFile for File {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         {
             rustix::io::isatty(&self.0)
         }

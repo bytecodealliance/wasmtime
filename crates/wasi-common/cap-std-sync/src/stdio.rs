@@ -109,7 +109,7 @@ impl WasiFile for Stdin {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        #[cfg(not(windows))]
+        #[cfg(unix)]
         {
             rustix::io::isatty(&self.0)
         }
@@ -229,7 +229,7 @@ macro_rules! wasi_file_write_impl {
                 Ok(0)
             }
             fn isatty(&self) -> bool {
-                #[cfg(not(windows))]
+                #[cfg(unix)]
                 {
                     rustix::io::isatty(&self.0)
                 }
