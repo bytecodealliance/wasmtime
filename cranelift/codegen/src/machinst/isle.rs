@@ -259,6 +259,18 @@ macro_rules! isle_prelude_methods {
             TrapCode::IntegerOverflow
         }
 
+        fn trap_code_bad_conversion_to_integer(&mut self) -> TrapCode {
+            TrapCode::BadConversionToInteger
+        }
+
+        fn avoid_div_traps(&mut self, _: Type) -> Option<()> {
+            if self.flags.avoid_div_traps() {
+                Some(())
+            } else {
+                None
+            }
+        }
+
         fn nonzero_u64_from_imm64(&mut self, val: Imm64) -> Option<u64> {
             match val.bits() {
                 0 => None,
@@ -285,12 +297,13 @@ macro_rules! isle_prelude_methods {
 
 /// This structure is used to implement the ISLE-generated `Context` trait and
 /// internally has a temporary reference to a machinst `LowerCtx`.
-pub(crate) struct IsleContext<'a, C: LowerCtx, F, const N: usize>
+pub(crate) struct IsleContext<'a, C: LowerCtx, F, I, const N: usize>
 where
     [C::I; N]: smallvec::Array,
 {
     pub lower_ctx: &'a mut C,
-    pub isa_flags: &'a F,
+    pub flags: &'a F,
+    pub isa_flags: &'a I,
     pub emitted_insts: SmallVec<[C::I; N]>,
 }
 
@@ -299,12 +312,13 @@ where
 /// The `isle_lower` argument here is an ISLE-generated function for `lower` and
 /// then this function otherwise handles register mapping and such around the
 /// lowering.
-pub(crate) fn lower_common<C, F, const N: usize>(
+pub(crate) fn lower_common<C, F, I, const N: usize>(
     lower_ctx: &mut C,
-    isa_flags: &F,
+    flags: &F,
+    isa_flags: &I,
     outputs: &[InsnOutput],
     inst: Inst,
-    isle_lower: fn(&mut IsleContext<'_, C, F, N>, Inst) -> Option<ValueRegs>,
+    isle_lower: fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<ValueRegs>,
     map_regs: fn(&mut C::I, &RegRenamer),
 ) -> Result<(), ()>
 where
@@ -315,6 +329,7 @@ where
     // internal heap allocations.
     let mut isle_ctx = IsleContext {
         lower_ctx,
+        flags,
         isa_flags,
         emitted_insts: SmallVec::new(),
     };

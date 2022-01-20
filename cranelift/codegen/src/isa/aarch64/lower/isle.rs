@@ -10,8 +10,9 @@ use super::{
     Inst as MInst, JTSequenceInfo, MachLabel, MoveWideConst, NarrowValueMode, Opcode, OperandSize,
     PairAMode, Reg, ScalarSize, ShiftOpAndAmt, UImm5, VectorSize, NZCV,
 };
-use crate::isa::aarch64::settings::Flags;
+use crate::isa::aarch64::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
+use crate::settings::Flags;
 use crate::{
     binemit::CodeOffset,
     ir::{
@@ -36,7 +37,8 @@ type BoxExternalName = Box<ExternalName>;
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
-    isa_flags: &Flags,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
 ) -> Result<(), ()>
@@ -45,6 +47,7 @@ where
 {
     lower_common(
         lower_ctx,
+        flags,
         isa_flags,
         outputs,
         inst,
@@ -63,7 +66,7 @@ pub struct SinkableAtomicLoad {
     atomic_addr: Value,
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, 6>
+impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
 {

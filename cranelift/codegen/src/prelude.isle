@@ -132,6 +132,9 @@
 (extern const $I64 Type)
 (extern const $I128 Type)
 
+(extern const $R32 Type)
+(extern const $R64 Type)
+
 (extern const $F32 Type)
 (extern const $F64 Type)
 
@@ -338,3 +341,12 @@
 
 (decl trap_code_integer_overflow () TrapCode)
 (extern constructor trap_code_integer_overflow trap_code_integer_overflow)
+
+(decl trap_code_bad_conversion_to_integer () TrapCode)
+(extern constructor trap_code_bad_conversion_to_integer trap_code_bad_conversion_to_integer)
+
+;;;; Helpers for accessing compilation flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl avoid_div_traps () Type)
+(extern extractor avoid_div_traps avoid_div_traps)
+
