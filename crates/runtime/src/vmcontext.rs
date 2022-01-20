@@ -631,6 +631,7 @@ impl VMBuiltinFunctionsArray {
         ptrs[BuiltinFunctionIndex::memory_atomic_wait64().index() as usize] =
             wasmtime_memory_atomic_wait64 as usize;
         ptrs[BuiltinFunctionIndex::out_of_gas().index() as usize] = wasmtime_out_of_gas as usize;
+        ptrs[BuiltinFunctionIndex::new_epoch().index() as usize] = wasmtime_new_epoch as usize;
 
         if cfg!(debug_assertions) {
             for i in 0..ptrs.len() {
@@ -694,12 +695,18 @@ pub struct VMInterrupts {
     /// turning positive a wasm trap will be generated. This field is only
     /// modified if wasm is configured to consume fuel.
     pub fuel_consumed: UnsafeCell<i64>,
+
+    /// Deadline epoch for interruption: if epoch-based interruption
+    /// is enabled and the global (per engine) epoch counter is
+    /// observed to reach or exceed this value, the guest code will
+    /// yield if running asynchronously.
+    pub epoch_deadline: UnsafeCell<u64>,
 }
 
-// The `VMInterrupts` type is a pod-type with no destructor, and we only access
-// `stack_limit` from other threads, so add in these trait impls which are
-// otherwise not available due to the `fuel_consumed` variable in
-// `VMInterrupts`.
+// The `VMInterrupts` type is a pod-type with no destructor, and we
+// only access `stack_limit` from other threads, so add in these trait
+// impls which are otherwise not available due to the `fuel_consumed`
+// and `epoch_deadline` variables in `VMInterrupts`.
 //
 // Note that users of `fuel_consumed` understand that the unsafety encompasses
 // ensuring that it's only mutated/accessed from one thread dynamically.
@@ -719,6 +726,7 @@ impl Default for VMInterrupts {
         VMInterrupts {
             stack_limit: AtomicUsize::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
+            epoch_deadline: UnsafeCell::new(0),
         }
     }
 }

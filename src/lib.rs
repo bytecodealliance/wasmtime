@@ -236,6 +236,12 @@ struct CommonOptions {
     #[structopt(long)]
     consume_fuel: bool,
 
+    /// Executing wasm code will yield when a global epoch counter
+    /// changes, allowing for async operation without blocking the
+    /// executor.
+    #[structopt(long)]
+    epoch_interruption: bool,
+
     /// Disables the on-by-default address map from native code to wasm code.
     #[structopt(long)]
     disable_address_map: bool,
@@ -315,6 +321,7 @@ impl CommonOptions {
         }
 
         config.consume_fuel(self.consume_fuel);
+        config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
         config.paged_memory_initialization(self.paged_memory_initialization);
 

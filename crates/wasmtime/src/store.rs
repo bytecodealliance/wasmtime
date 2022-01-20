@@ -88,6 +88,7 @@ use std::mem::{self, ManuallyDrop};
 use std::ops::{Deref, DerefMut};
 use std::pin::Pin;
 use std::ptr;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use wasmtime_runtime::{
@@ -272,6 +273,7 @@ pub struct StoreOpaque {
     #[cfg(feature = "async")]
     async_state: AsyncState,
     out_of_gas_behavior: OutOfGas,
+    epoch_deadline_behavior: EpochDeadline,
     store_data: StoreData,
     default_callee: InstanceHandle,
 
@@ -379,6 +381,18 @@ enum OutOfGas {
     },
 }
 
+/// What to do when the engine epoch reaches the deadline for a Store
+/// during execution of a function using that store.
+#[derive(Copy, Clone)]
+enum EpochDeadline {
+    /// Return early with a trap.
+    Trap,
+    /// Extend the deadline by the specified number of ticks after
+    /// yielding to the async executor loop.
+    #[cfg(feature = "async")]
+    YieldAndExtendDeadline { delta: u64 },
+}
+
 impl<T> Store<T> {
     /// Creates a new [`Store`] to be associated with the given [`Engine`] and
     /// `data` provided.
@@ -435,6 +449,7 @@ impl<T> Store<T> {
                     current_poll_cx: UnsafeCell::new(ptr::null_mut()),
                 },
                 out_of_gas_behavior: OutOfGas::Trap,
+                epoch_deadline_behavior: EpochDeadline::Trap,
                 store_data: StoreData::new(),
                 default_callee,
                 hostcall_val_storage: Vec::new(),
@@ -809,6 +824,86 @@ impl<T> Store<T> {
         self.inner
             .out_of_fuel_async_yield(injection_count, fuel_to_inject)
     }
+
+    /// Sets the epoch deadline to a certain number of ticks in the future.
+    ///
+    /// When the Wasm guest code is compiled with epoch-interruption
+    /// instrumentation
+    /// ([`Config::epoch_interruption()`](crate::Config::epoch_interruption)),
+    /// and when the `Engine`'s epoch is incremented
+    /// ([`Engine::increment_epoch()`](crate::Engine::increment_epoch))
+    /// past a deadline, execution can be configured to either trap or
+    /// yield and then continue.
+    ///
+    /// This deadline is always set relative to the current epoch:
+    /// `delta_beyond_current` ticks in the future. The deadline can
+    /// be set explicitly via this method, or refilled automatically
+    /// on a yield if configured via
+    /// [`epoch_deadline_async_yield_and_update()`](Store::epoch_deadline_async_yield_and_update). After
+    /// this method is invoked, the deadline is reached when
+    /// [`Engine::increment_epoch()`] has been invoked at least
+    /// `ticks_beyond_current` times.
+    ///
+    /// See documentation on
+    /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
+    /// for an introduction to epoch-based interruption.
+    pub fn set_epoch_deadline(&mut self, ticks_beyond_current: u64) {
+        self.inner.set_epoch_deadline(ticks_beyond_current);
+    }
+
+    /// Configures epoch-deadline expiration to trap.
+    ///
+    /// When epoch-interruption-instrumented code is executed on this
+    /// store and the epoch deadline is reached before completion,
+    /// with the store configured in this way, execution will
+    /// terminate with a trap as soon as an epoch check in the
+    /// instrumented code is reached.
+    ///
+    /// This behavior is the default if the store is not otherwise
+    /// configured via
+    /// [`epoch_deadline_trap()`](Store::epoch_deadline_trap) or
+    /// [`epoch_deadline_async_yield_and_update()`](Store::epoch_deadline_async_yield_and_update).
+    ///
+    /// This setting is intended to allow for coarse-grained
+    /// interruption, but not a deterministic deadline of a fixed,
+    /// finite interval. For deterministic interruption, see the
+    /// "fuel" mechanism instead.
+    ///
+    /// See documentation on
+    /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
+    /// for an introduction to epoch-based interruption.
+    pub fn epoch_deadline_trap(&mut self) {
+        self.inner.epoch_deadline_trap();
+    }
+
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    /// Configures epoch-deadline expiration to yield to the async
+    /// caller and the update the deadline.
+    ///
+    /// When epoch-interruption-instrumented code is executed on this
+    /// store and the epoch deadline is reached before completion,
+    /// with the store configured in this way, execution will yield
+    /// (the future will return `Pending` but re-awake itself for
+    /// later execution) and, upon resuming, the store will be
+    /// configured with an epoch deadline equal to the current epoch
+    /// plus `delta` ticks.
+    ///
+    /// This setting is intended to allow for cooperative timeslicing
+    /// of multiple CPU-bound Wasm guests in different stores, all
+    /// executing under the control of an async executor. To drive
+    /// this, stores should be configured to "yield and update"
+    /// automatically with this function, and some external driver (a
+    /// thread that wakes up periodically, or a timer
+    /// signal/interrupt) should call
+    /// [`Engine::increment_epoch()`](crate::Engine::increment_epoch).
+    ///
+    /// See documentation on
+    /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
+    /// for an introduction to epoch-based interruption.
+    #[cfg(feature = "async")]
+    pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
+        self.inner.epoch_deadline_async_yield_and_update(delta);
+    }
 }
 
 impl<'a, T> StoreContext<'a, T> {
@@ -912,6 +1007,31 @@ impl<'a, T> StoreContextMut<'a, T> {
     pub fn out_of_fuel_async_yield(&mut self, injection_count: u64, fuel_to_inject: u64) {
         self.0
             .out_of_fuel_async_yield(injection_count, fuel_to_inject)
+    }
+
+    /// Sets the epoch deadline to a certain number of ticks in the future.
+    ///
+    /// For more information see [`Store::set_epoch_deadline`].
+    pub fn set_epoch_deadline(&mut self, ticks_beyond_current: u64) {
+        self.0.set_epoch_deadline(ticks_beyond_current);
+    }
+
+    /// Configures epoch-deadline expiration to trap.
+    ///
+    /// For more information see [`Store::epoch_deadline_trap`].
+    pub fn epoch_deadline_trap(&mut self) {
+        self.0.epoch_deadline_trap();
+    }
+
+    #[cfg_attr(nightlydoc, doc(cfg(feature = "async")))]
+    /// Configures epoch-deadline expiration to yield to the async
+    /// caller and the update the deadline.
+    ///
+    /// For more information see
+    /// [`Store::epoch_deadline_async_yield_and_update`].
+    #[cfg(feature = "async")]
+    pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
+        self.0.epoch_deadline_async_yield_and_update(delta);
     }
 }
 
@@ -1093,13 +1213,12 @@ impl StoreOpaque {
         };
     }
 
-    /// Yields execution to the caller on out-of-gas
+    /// Yields execution to the caller on out-of-gas or epoch interruption.
     ///
     /// This only works on async futures and stores, and assumes that we're
-    /// executing on a fiber. This will yield execution back to the caller once
-    /// and when we come back we'll continue with `fuel_to_inject` more fuel.
+    /// executing on a fiber. This will yield execution back to the caller once.
     #[cfg(feature = "async")]
-    fn out_of_gas_yield(&mut self, fuel_to_inject: u64) -> Result<(), Trap> {
+    fn async_yield_impl(&mut self) -> Result<(), Trap> {
         // Small future that yields once and then returns ()
         #[derive(Default)]
         struct Yield {
@@ -1124,19 +1243,15 @@ impl StoreOpaque {
         }
 
         let mut future = Yield::default();
-        let result = unsafe { self.async_cx().block_on(Pin::new_unchecked(&mut future)) };
-        match result {
-            // If this finished successfully then we were resumed normally via a
-            // `poll`, so inject some more fuel and keep going.
-            Ok(()) => {
-                self.add_fuel(fuel_to_inject).unwrap();
-                Ok(())
-            }
-            // If the future was dropped while we were yielded, then we need to
-            // clean up this fiber. Do so by raising a trap which will abort all
-            // wasm and get caught on the other side to clean things up.
-            Err(trap) => Err(trap),
-        }
+
+        // When control returns, we have a `Result<(), Trap>` passed
+        // in from the host fiber. If this finished successfully then
+        // we were resumed normally via a `poll`, so keep going.  If
+        // the future was dropped while we were yielded, then we need
+        // to clean up this fiber. Do so by raising a trap which will
+        // abort all wasm and get caught on the other side to clean
+        // things up.
+        unsafe { self.async_cx().block_on(Pin::new_unchecked(&mut future)) }
     }
 
     fn add_fuel(&mut self, fuel: u64) -> Result<()> {
@@ -1185,6 +1300,22 @@ impl StoreOpaque {
             }
             _ => bail!("not enough fuel remaining in store"),
         }
+    }
+
+    fn epoch_deadline_trap(&mut self) {
+        self.epoch_deadline_behavior = EpochDeadline::Trap;
+    }
+
+    fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
+        assert!(
+            self.async_support(),
+            "cannot use `epoch_deadline_async_yield_and_update` without enabling async support in the config"
+        );
+        #[cfg(feature = "async")]
+        {
+            self.epoch_deadline_behavior = EpochDeadline::YieldAndExtendDeadline { delta };
+        }
+        drop(delta); // suppress warning in non-async build
     }
 
     #[inline]
@@ -1535,6 +1666,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         <StoreOpaque>::vminterrupts(self)
     }
 
+    fn epoch_ptr(&self) -> *const AtomicU64 {
+        self.engine.epoch_counter() as *const _
+    }
+
     fn externref_activations_table(
         &mut self,
     ) -> (
@@ -1651,7 +1786,10 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
                 }
                 *injection_count -= 1;
                 let fuel = *fuel_to_inject;
-                self.out_of_gas_yield(fuel)?;
+                self.async_yield_impl()?;
+                if fuel > 0 {
+                    self.add_fuel(fuel).unwrap();
+                }
                 Ok(())
             }
             #[cfg(not(feature = "async"))]
@@ -1668,6 +1806,59 @@ unsafe impl<T> wasmtime_runtime::Store for StoreInner<T> {
         }
 
         impl std::error::Error for OutOfGasError {}
+    }
+
+    fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
+        return match &self.epoch_deadline_behavior {
+            &EpochDeadline::Trap => Err(anyhow::Error::new(EpochDeadlineError)),
+            #[cfg(feature = "async")]
+            &EpochDeadline::YieldAndExtendDeadline { delta } => {
+                // Do the async yield. May return a trap if future was
+                // canceled while we're yielded.
+                self.async_yield_impl()?;
+                // Set a new deadline.
+                self.set_epoch_deadline(delta);
+
+                // Return the new epoch deadline so the Wasm code
+                // doesn't have to reload it.
+                Ok(self.get_epoch_deadline())
+            }
+        };
+
+        #[derive(Debug)]
+        struct EpochDeadlineError;
+
+        impl fmt::Display for EpochDeadlineError {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str("epoch deadline reached during execution")
+            }
+        }
+
+        impl std::error::Error for EpochDeadlineError {}
+    }
+}
+
+impl<T> StoreInner<T> {
+    pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
+        // Set a new deadline based on the "epoch deadline delta".
+        //
+        // Safety: this is safe because the epoch deadline in the
+        // `VMInterrupts` is accessed only here and by Wasm guest code
+        // running in this store, and we have a `&mut self` here.
+        //
+        // Also, note that when this update is performed while Wasm is
+        // on the stack, the Wasm will reload the new value once we
+        // return into it.
+        let epoch_deadline = unsafe { (*self.vminterrupts()).epoch_deadline.get_mut() };
+        *epoch_deadline = self.engine().current_epoch() + delta;
+    }
+
+    fn get_epoch_deadline(&self) -> u64 {
+        // Safety: this is safe because, as above, it is only invoked
+        // from within `new_epoch` which is called from guest Wasm
+        // code, which will have an exclusive borrow on the Store.
+        let epoch_deadline = unsafe { (*self.vminterrupts()).epoch_deadline.get_mut() };
+        *epoch_deadline
     }
 }
 

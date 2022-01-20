@@ -3,6 +3,7 @@ mod call_hook;
 mod cli_tests;
 mod custom_signal_handler;
 mod debug;
+mod epoch_interruption;
 mod externals;
 mod fuel;
 mod func;

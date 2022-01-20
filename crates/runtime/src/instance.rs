@@ -21,6 +21,7 @@ use std::convert::TryFrom;
 use std::hash::Hash;
 use std::ops::Range;
 use std::ptr::NonNull;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 use wasmtime_environ::{
@@ -201,6 +202,11 @@ impl Instance {
     /// Return a pointer to the interrupts structure
     pub fn interrupts(&self) -> *mut *const VMInterrupts {
         unsafe { self.vmctx_plus_offset(self.offsets.vmctx_interrupts()) }
+    }
+
+    /// Return a pointer to the global epoch counter used by this instance.
+    pub fn epoch_ptr(&self) -> *mut *const AtomicU64 {
+        unsafe { self.vmctx_plus_offset(self.offsets.vmctx_epoch_ptr()) }
     }
 
     /// Return a pointer to the `VMExternRefActivationsTable`.

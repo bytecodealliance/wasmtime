@@ -557,3 +557,11 @@ pub unsafe extern "C" fn wasmtime_out_of_gas(vmctx: *mut VMContext) {
         Err(err) => crate::traphandlers::raise_user_trap(err),
     }
 }
+
+/// Hook for when an instance observes that the epoch has changed.
+pub unsafe extern "C" fn wasmtime_new_epoch(vmctx: *mut VMContext) -> u64 {
+    match (*(*vmctx).instance().store()).new_epoch() {
+        Ok(new_deadline) => new_deadline,
+        Err(err) => crate::traphandlers::raise_user_trap(err),
+    }
+}

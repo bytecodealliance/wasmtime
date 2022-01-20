@@ -20,6 +20,8 @@
     )
 )]
 
+use std::sync::atomic::AtomicU64;
+
 use anyhow::Error;
 
 mod export;
@@ -84,6 +86,11 @@ pub unsafe trait Store {
     /// in the `VMContext`.
     fn vminterrupts(&self) -> *mut VMInterrupts;
 
+    /// Returns a pointer to the global epoch counter.
+    ///
+    /// Used to configure the `VMContext` on initialization.
+    fn epoch_ptr(&self) -> *const AtomicU64;
+
     /// Returns the externref management structures necessary for this store.
     ///
     /// The first element returned is the table in which externrefs are stored
@@ -119,4 +126,8 @@ pub unsafe trait Store {
     /// is returned that's raised as a trap. Otherwise wasm execution will
     /// continue as normal.
     fn out_of_gas(&mut self) -> Result<(), Error>;
+    /// Callback invoked whenever an instance observes a new epoch
+    /// number. Cannot fail; cooperative epoch-based yielding is
+    /// completely semantically transparent. Returns the new deadline.
+    fn new_epoch(&mut self) -> Result<u64, Error>;
 }
