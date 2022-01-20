@@ -220,6 +220,8 @@ fn get_isle_compilations(crate_dir: &std::path::Path) -> Result<IsleCompilations
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("x64"));
     let src_isa_aarch64 =
         make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("aarch64"));
+    let src_isa_s390x =
+        make_isle_source_path_relative(&cur_dir, crate_dir.join("src").join("isa").join("s390x"));
 
     // This is a set of ISLE compilation units.
     //
@@ -256,6 +258,19 @@ fn get_isle_compilations(crate_dir: &std::path::Path) -> Result<IsleCompilations
                     prelude_isle.clone(),
                     src_isa_aarch64.join("inst.isle"),
                     src_isa_aarch64.join("lower.isle"),
+                ],
+            },
+            // The s390x instruction selector.
+            IsleCompilation {
+                output: src_isa_s390x
+                    .join("lower")
+                    .join("isle")
+                    .join("generated_code.rs"),
+                inputs: vec![
+                    clif_isle.clone(),
+                    prelude_isle.clone(),
+                    src_isa_s390x.join("inst.isle"),
+                    src_isa_s390x.join("lower.isle"),
                 ],
             },
         ],
