@@ -470,11 +470,24 @@ impl<I: VCodeInst> VCode<I> {
         let mut inst_ends = vec![0; self.insts.len()];
         let mut label_insn_iix = vec![0; self.num_blocks()];
 
+        // Construct the final order we emit code in: cold blocks at the end.
+        let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
+        let mut cold_blocks: SmallVec<[BlockIndex; 16]> = smallvec![];
+        for block in 0..self.num_blocks() {
+            let block = block as BlockIndex;
+            if self.block_order.is_cold(block) {
+                cold_blocks.push(block);
+            } else {
+                final_order.push(block);
+            }
+        }
+        final_order.extend(cold_blocks);
+
+        // Emit blocks.
         let mut safepoint_idx = 0;
         let mut cur_srcloc = None;
         let mut last_offset = None;
-        for block in 0..self.num_blocks() {
-            let block = block as BlockIndex;
+        for block in final_order {
             let new_offset = I::align_basic_block(buffer.cur_offset());
             while new_offset > buffer.cur_offset() {
                 // Pad with NOPs up to the aligned block offset.
