@@ -1,4 +1,4 @@
-use crate::ir::MemFlags;
+use crate::ir::{MemFlags, TrapCode};
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use crate::settings;
@@ -2062,352 +2062,352 @@ fn test_s390x_binemit() {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000801D",
-        "rll %r4, %r5, -524288",
+        "EB450000001D",
+        "rll %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F1D",
-        "rll %r4, %r5, 524287",
+        "EB45003F001D",
+        "rll %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000801D",
-        "rll %r4, %r5, -524288(%r6)",
+        "EB456000001D",
+        "rll %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F1D",
-        "rll %r4, %r5, 524287(%r6)",
+        "EB45603F001D",
+        "rll %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000801C",
-        "rllg %r4, %r5, -524288",
+        "EB450000001C",
+        "rllg %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F1C",
-        "rllg %r4, %r5, 524287",
+        "EB45003F001C",
+        "rllg %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000801C",
-        "rllg %r4, %r5, -524288(%r6)",
+        "EB456000001C",
+        "rllg %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::RotL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F1C",
-        "rllg %r4, %r5, 524287(%r6)",
+        "EB45603F001C",
+        "rllg %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB45000080DF",
-        "sllk %r4, %r5, -524288",
+        "EB45000000DF",
+        "sllk %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7FDF",
-        "sllk %r4, %r5, 524287",
+        "EB45003F00DF",
+        "sllk %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB45600080DF",
-        "sllk %r4, %r5, -524288(%r6)",
+        "EB45600000DF",
+        "sllk %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7FDF",
-        "sllk %r4, %r5, 524287(%r6)",
+        "EB45603F00DF",
+        "sllk %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000800D",
-        "sllg %r4, %r5, -524288",
+        "EB450000000D",
+        "sllg %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F0D",
-        "sllg %r4, %r5, 524287",
+        "EB45003F000D",
+        "sllg %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000800D",
-        "sllg %r4, %r5, -524288(%r6)",
+        "EB456000000D",
+        "sllg %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShL64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F0D",
-        "sllg %r4, %r5, 524287(%r6)",
+        "EB45603F000D",
+        "sllg %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB45000080DE",
-        "srlk %r4, %r5, -524288",
+        "EB45000000DE",
+        "srlk %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7FDE",
-        "srlk %r4, %r5, 524287",
+        "EB45003F00DE",
+        "srlk %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB45600080DE",
-        "srlk %r4, %r5, -524288(%r6)",
+        "EB45600000DE",
+        "srlk %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7FDE",
-        "srlk %r4, %r5, 524287(%r6)",
+        "EB45603F00DE",
+        "srlk %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000800C",
-        "srlg %r4, %r5, -524288",
+        "EB450000000C",
+        "srlg %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F0C",
-        "srlg %r4, %r5, 524287",
+        "EB45003F000C",
+        "srlg %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000800C",
-        "srlg %r4, %r5, -524288(%r6)",
+        "EB456000000C",
+        "srlg %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::LShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F0C",
-        "srlg %r4, %r5, 524287(%r6)",
+        "EB45603F000C",
+        "srlg %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB45000080DC",
-        "srak %r4, %r5, -524288",
+        "EB45000000DC",
+        "srak %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7FDC",
-        "srak %r4, %r5, 524287",
+        "EB45003F00DC",
+        "srak %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB45600080DC",
-        "srak %r4, %r5, -524288(%r6)",
+        "EB45600000DC",
+        "srak %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR32,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7FDC",
-        "srak %r4, %r5, 524287(%r6)",
+        "EB45603F00DC",
+        "srak %r4, %r5, 63(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: None,
+            shift_imm: 0,
+            shift_reg: zero_reg(),
         },
-        "EB450000800A",
-        "srag %r4, %r5, -524288",
+        "EB450000000A",
+        "srag %r4, %r5, 0",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: None,
+            shift_imm: 63,
+            shift_reg: zero_reg(),
         },
-        "EB450FFF7F0A",
-        "srag %r4, %r5, 524287",
+        "EB45003F000A",
+        "srag %r4, %r5, 63",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(-524288).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 0,
+            shift_reg: gpr(6),
         },
-        "EB456000800A",
-        "srag %r4, %r5, -524288(%r6)",
+        "EB456000000A",
+        "srag %r4, %r5, 0(%r6)",
     ));
     insns.push((
         Inst::ShiftRR {
             shift_op: ShiftOp::AShR64,
             rd: writable_gpr(4),
             rn: gpr(5),
-            shift_imm: SImm20::maybe_from_i64(524287).unwrap(),
-            shift_reg: Some(gpr(6)),
+            shift_imm: 63,
+            shift_reg: gpr(6),
         },
-        "EB456FFF7F0A",
-        "srag %r4, %r5, 524287(%r6)",
+        "EB45603F000A",
+        "srag %r4, %r5, 63(%r6)",
     ));
 
     insns.push((
@@ -5718,8 +5718,12 @@ fn test_s390x_binemit() {
         Inst::LoadMultiple64 {
             rt: writable_gpr(8),
             rt2: writable_gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(-524288).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CF0008004",
         "lmg %r8, %r12, -524288(%r15)",
@@ -5728,8 +5732,12 @@ fn test_s390x_binemit() {
         Inst::LoadMultiple64 {
             rt: writable_gpr(8),
             rt2: writable_gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(524287).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CFFFF7F04",
         "lmg %r8, %r12, 524287(%r15)",
@@ -5739,8 +5747,12 @@ fn test_s390x_binemit() {
         Inst::StoreMultiple64 {
             rt: gpr(8),
             rt2: gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(-524288).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(-524288).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CF0008024",
         "stmg %r8, %r12, -524288(%r15)",
@@ -5749,8 +5761,12 @@ fn test_s390x_binemit() {
         Inst::StoreMultiple64 {
             rt: gpr(8),
             rt2: gpr(12),
-            addr_reg: gpr(15),
-            addr_off: SImm20::maybe_from_i64(524287).unwrap(),
+            mem: MemArg::BXD20 {
+                base: gpr(15),
+                index: zero_reg(),
+                disp: SImm20::maybe_from_i64(524287).unwrap(),
+                flags: MemFlags::trusted(),
+            },
         },
         "EB8CFFFF7F24",
         "stmg %r8, %r12, 524287(%r15)",
@@ -7964,7 +7980,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::LoadFpuConst32 {
             rd: writable_fpr(8),
-            const_data: 1.0,
+            const_data: 1.0_f32.to_bits(),
         },
         "A71500043F80000078801000",
         "bras %r1, 8 ; data.f32 1 ; le %f8, 0(%r1)",
@@ -7972,7 +7988,7 @@ fn test_s390x_binemit() {
     insns.push((
         Inst::LoadFpuConst64 {
             rd: writable_fpr(8),
-            const_data: 1.0,
+            const_data: 1.0_f64.to_bits(),
         },
         "A71500063FF000000000000068801000",
         "bras %r1, 12 ; data.f64 1 ; ld %f8, 0(%r1)",
