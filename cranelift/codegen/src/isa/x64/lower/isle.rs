@@ -17,9 +17,10 @@ use crate::{
             },
             regs, x64_map_regs,
         },
-        settings::Flags,
+        settings::Flags as IsaFlags,
     },
     machinst::{isle::*, InsnInput, InsnOutput, LowerCtx, VCodeConstantData},
+    settings::Flags,
 };
 use std::convert::TryFrom;
 
@@ -32,7 +33,8 @@ pub struct SinkableLoad {
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
     lower_ctx: &mut C,
-    isa_flags: &Flags,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
     outputs: &[InsnOutput],
     inst: Inst,
 ) -> Result<(), ()>
@@ -41,6 +43,7 @@ where
 {
     lower_common(
         lower_ctx,
+        flags,
         isa_flags,
         outputs,
         inst,
@@ -49,7 +52,7 @@ where
     )
 }
 
-impl<C> generated_code::Context for IsleContext<'_, C, Flags, 6>
+impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
 {

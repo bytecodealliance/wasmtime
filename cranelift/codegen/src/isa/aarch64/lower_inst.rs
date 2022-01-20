@@ -38,7 +38,7 @@ pub(crate) fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = super::lower::isle::lower(ctx, isa_flags, &outputs, insn) {
+    if let Ok(()) = super::lower::isle::lower(ctx, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 

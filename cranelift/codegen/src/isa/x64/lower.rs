@@ -1190,7 +1190,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
         None
     };
 
-    if let Ok(()) = isle::lower(ctx, isa_flags, &outputs, insn) {
+    if let Ok(()) = isle::lower(ctx, flags, isa_flags, &outputs, insn) {
         return Ok(());
     }
 
