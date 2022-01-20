@@ -371,8 +371,8 @@ pub enum Inst {
         shift_op: ShiftOp,
         rd: Writable<Reg>,
         rn: Reg,
-        shift_imm: SImm20,
-        shift_reg: Option<Reg>,
+        shift_imm: u8,
+        shift_reg: Reg,
     },
 
     /// An unary operation with a register source and a register destination.
@@ -604,15 +604,13 @@ pub enum Inst {
     LoadMultiple64 {
         rt: Writable<Reg>,
         rt2: Writable<Reg>,
-        addr_reg: Reg,
-        addr_off: SImm20,
+        mem: MemArg,
     },
     /// A store-multiple instruction.
     StoreMultiple64 {
         rt: Reg,
         rt2: Reg,
-        addr_reg: Reg,
-        addr_off: SImm20,
+        mem: MemArg,
     },
 
     /// A 32-bit move instruction.
@@ -820,12 +818,12 @@ pub enum Inst {
 
     LoadFpuConst32 {
         rd: Writable<Reg>,
-        const_data: f32,
+        const_data: u32,
     },
 
     LoadFpuConst64 {
         rd: Writable<Reg>,
-        const_data: f64,
+        const_data: u64,
     },
 
     /// Conversion: FP -> integer.
@@ -1206,7 +1204,7 @@ impl Inst {
         // TODO: use LZER to load 0.0
         Inst::LoadFpuConst32 {
             rd,
-            const_data: value,
+            const_data: value.to_bits(),
         }
     }
 
@@ -1215,7 +1213,7 @@ impl Inst {
         // TODO: use LZDR to load 0.0
         Inst::LoadFpuConst64 {
             rd,
-            const_data: value,
+            const_data: value.to_bits(),
         }
     }
 
@@ -1334,8 +1332,8 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         } => {
             collector.add_def(rd);
             collector.add_use(rn);
-            if let Some(reg) = shift_reg {
-                collector.add_use(reg);
+            if shift_reg != zero_reg() {
+                collector.add_use(shift_reg);
             }
         }
         &Inst::UnaryRR { rd, rn, .. } => {
@@ -1422,24 +1420,24 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             memarg_regs(mem, collector);
         }
         &Inst::LoadMultiple64 {
-            rt, rt2, addr_reg, ..
+            rt, rt2, ref mem, ..
         } => {
             let first_regnum = rt.to_reg().get_hw_encoding();
             let last_regnum = rt2.to_reg().get_hw_encoding();
             for regnum in first_regnum..last_regnum + 1 {
                 collector.add_def(writable_gpr(regnum));
             }
-            collector.add_use(addr_reg);
+            memarg_regs(mem, collector);
         }
         &Inst::StoreMultiple64 {
-            rt, rt2, addr_reg, ..
+            rt, rt2, ref mem, ..
         } => {
             let first_regnum = rt.get_hw_encoding();
             let last_regnum = rt2.get_hw_encoding();
             for regnum in first_regnum..last_regnum + 1 {
                 collector.add_use(gpr(regnum));
             }
-            collector.add_use(addr_reg);
+            memarg_regs(mem, collector);
         }
         &Inst::Mov64 { rd, rm } => {
             collector.add_def(rd);
@@ -1734,8 +1732,8 @@ fn s390x_map_regs<RUM: RegUsageMapper>(inst: &mut Inst, mapper: &RUM) {
         } => {
             map_def(mapper, rd);
             map_use(mapper, rn);
-            if let Some(reg) = shift_reg {
-                map_use(mapper, reg);
+            if *shift_reg != zero_reg() {
+                map_use(mapper, shift_reg);
             }
         }
         &mut Inst::UnaryRR {
@@ -2825,7 +2823,7 @@ impl Inst {
                 rd,
                 rn,
                 shift_imm,
-                ref shift_reg,
+                shift_reg,
             } => {
                 let op = match shift_op {
                     ShiftOp::RotL32 => "rll",
@@ -2839,10 +2837,10 @@ impl Inst {
                 };
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rn = rn.show_rru(mb_rru);
-                let shift_imm = shift_imm.show_rru(mb_rru);
-                let shift_reg = match shift_reg {
-                    Some(reg) => format!("({})", reg.show_rru(mb_rru)),
-                    None => "".to_string(),
+                let shift_reg = if shift_reg != zero_reg() {
+                    format!("({})", shift_reg.show_rru(mb_rru))
+                } else {
+                    "".to_string()
                 };
                 format!("{} {}, {}, {}{}", op, rd, rn, shift_imm, shift_reg)
             }
@@ -3188,29 +3186,21 @@ impl Inst {
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}, 0", mem_str, op, rd, mem)
             }
-            &Inst::LoadMultiple64 {
-                rt,
-                rt2,
-                addr_reg,
-                addr_off,
-            } => {
+            &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
+                let (mem_str, mem) =
+                    mem_finalize_for_show(mem, mb_rru, state, false, true, false, false);
                 let rt = rt.show_rru(mb_rru);
                 let rt2 = rt2.show_rru(mb_rru);
-                let addr_reg = addr_reg.show_rru(mb_rru);
-                let addr_off = addr_off.show_rru(mb_rru);
-                format!("lmg {}, {}, {}({})", rt, rt2, addr_off, addr_reg)
+                let mem = mem.show_rru(mb_rru);
+                format!("{}lmg {}, {}, {}", mem_str, rt, rt2, mem)
             }
-            &Inst::StoreMultiple64 {
-                rt,
-                rt2,
-                addr_reg,
-                addr_off,
-            } => {
+            &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
+                let (mem_str, mem) =
+                    mem_finalize_for_show(mem, mb_rru, state, false, true, false, false);
                 let rt = rt.show_rru(mb_rru);
                 let rt2 = rt2.show_rru(mb_rru);
-                let addr_reg = addr_reg.show_rru(mb_rru);
-                let addr_off = addr_off.show_rru(mb_rru);
-                format!("stmg {}, {}, {}({})", rt, rt2, addr_off, addr_reg)
+                let mem = mem.show_rru(mb_rru);
+                format!("{}stmg {}, {}, {}", mem_str, rt, rt2, mem)
             }
             &Inst::Mov64 { rd, rm } => {
                 let rd = rd.to_reg().show_rru(mb_rru);
@@ -3398,7 +3388,10 @@ impl Inst {
                 let tmp = writable_spilltmp_reg().to_reg().show_rru(mb_rru);
                 format!(
                     "bras {}, 8 ; data.f32 {} ; le {}, 0({})",
-                    tmp, const_data, rd, tmp
+                    tmp,
+                    f32::from_bits(const_data),
+                    rd,
+                    tmp
                 )
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
@@ -3406,7 +3399,10 @@ impl Inst {
                 let tmp = writable_spilltmp_reg().to_reg().show_rru(mb_rru);
                 format!(
                     "bras {}, 12 ; data.f64 {} ; ld {}, 0({})",
-                    tmp, const_data, rd, tmp
+                    tmp,
+                    f64::from_bits(const_data),
+                    rd,
+                    tmp
                 )
             }
             &Inst::FpuToInt { op, rd, rn } => {

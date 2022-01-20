@@ -600,8 +600,8 @@ fn lower_bitcast<C: LowerCtx<I = Inst>>(
                 shift_op: ShiftOp::LShL64,
                 rd: tmp,
                 rn,
-                shift_imm: SImm20::maybe_from_i64(32).unwrap(),
-                shift_reg: None,
+                shift_imm: 32,
+                shift_reg: zero_reg(),
             });
             ctx.emit(Inst::MovToFpr {
                 rd,
@@ -615,8 +615,8 @@ fn lower_bitcast<C: LowerCtx<I = Inst>>(
                 shift_op: ShiftOp::LShR64,
                 rd,
                 rn: tmp.to_reg(),
-                shift_imm: SImm20::maybe_from_i64(32).unwrap(),
-                shift_reg: None,
+                shift_imm: 32,
+                shift_reg: zero_reg(),
             });
         }
         _ => unreachable!("invalid bitcast from {:?} to {:?}", input_ty, output_ty),
@@ -720,7 +720,7 @@ fn lower_icmp_to_flags<C: LowerCtx<I = Inst>>(
                     }
                     _ => {
                         let reg_ty = choose_32_64(ty, types::I32, types::I64);
-                        let rm = extend_memory_to_reg(ctx, mem, ty, reg_ty, false);
+                        let rm = extend_memory_to_reg(ctx, mem, types::I16, reg_ty, false);
                         return ctx.emit(Inst::CmpRR { op, rn, rm });
                     }
                 }
@@ -1109,8 +1109,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op,
                         rd,
                         rn: rd.to_reg(),
-                        shift_imm: SImm20::maybe_from_i64(32).unwrap(),
-                        shift_reg: None,
+                        shift_imm: 32,
+                        shift_reg: zero_reg(),
                     });
                 }
                 types::I16 | types::I8 => {
@@ -1141,8 +1141,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op,
                         rd,
                         rn: rd.to_reg(),
-                        shift_imm: SImm20::maybe_from_i64(shift_amt).unwrap(),
-                        shift_reg: None,
+                        shift_imm: shift_amt,
+                        shift_reg: zero_reg(),
                     });
                 }
                 _ => {
@@ -1330,9 +1330,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
             let rd = get_output_reg(ctx, outputs[0]).only_reg().unwrap();
             let rn = put_input_in_reg(ctx, inputs[0], narrow_mode);
             if let Some(imm) = input_matches_const(ctx, inputs[1]) {
-                let imm = imm & if size < 64 { 31 } else { 63 };
-                let shift_imm = SImm20::maybe_from_i64(imm as i64).unwrap();
-                let shift_reg = None;
+                let shift_imm = (imm & (size as u64 - 1)) as u8;
+                let shift_reg = zero_reg();
                 ctx.emit(Inst::ShiftRR {
                     shift_op,
                     rd,
@@ -1342,18 +1341,18 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 });
             } else {
                 let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
-                let shift_imm = SImm20::zero();
+                let shift_imm = 0;
                 let shift_reg = if size < 64 {
                     let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
                     ctx.emit(Inst::gen_move(tmp, rm, types::I64));
                     ctx.emit(Inst::AluRUImm16Shifted {
                         alu_op: ALUOp::And64,
                         rd: tmp,
-                        imm: UImm16Shifted::maybe_from_u64(31).unwrap(),
+                        imm: UImm16Shifted::maybe_from_u64(size as u64 - 1).unwrap(),
                     });
-                    Some(tmp.to_reg())
+                    tmp.to_reg()
                 } else {
-                    Some(rm)
+                    rm
                 };
                 ctx.emit(Inst::ShiftRR {
                     shift_op,
@@ -1422,8 +1421,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op,
                         rd,
                         rn,
-                        shift_imm: SImm20::maybe_from_i64(shiftcount as i64).unwrap(),
-                        shift_reg: None,
+                        shift_imm: shiftcount as u8,
+                        shift_reg: zero_reg(),
                     });
                 } else {
                     let rm = put_input_in_reg(ctx, inputs[1], NarrowValueMode::None);
@@ -1446,8 +1445,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op,
                         rd,
                         rn,
-                        shift_imm: SImm20::zero(),
-                        shift_reg: Some(rm),
+                        shift_imm: 0,
+                        shift_reg: rm,
                     });
                 }
             } else {
@@ -1466,8 +1465,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op: ShiftOp::LShL32,
                         rd: tmp1,
                         rn,
-                        shift_imm: SImm20::maybe_from_i64(lshl_count as i64).unwrap(),
-                        shift_reg: None,
+                        shift_imm: lshl_count as u8,
+                        shift_reg: zero_reg(),
                     });
 
                     let tmp2 = ctx.alloc_tmp(types::I32).only_reg().unwrap();
@@ -1475,8 +1474,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op: ShiftOp::LShR32,
                         rd: tmp2,
                         rn,
-                        shift_imm: SImm20::maybe_from_i64(lshr_count as i64).unwrap(),
-                        shift_reg: None,
+                        shift_imm: lshr_count as u8,
+                        shift_reg: zero_reg(),
                     });
 
                     ctx.emit(Inst::AluRRR {
@@ -1514,16 +1513,16 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op: ShiftOp::LShL32,
                         rd: lshl,
                         rn,
-                        shift_imm: SImm20::zero(),
-                        shift_reg: Some(lshl.to_reg()),
+                        shift_imm: 0,
+                        shift_reg: lshl.to_reg(),
                     });
 
                     ctx.emit(Inst::ShiftRR {
                         shift_op: ShiftOp::LShR32,
                         rd: lshr,
                         rn,
-                        shift_imm: SImm20::zero(),
-                        shift_reg: Some(lshr.to_reg()),
+                        shift_imm: 0,
+                        shift_reg: lshr.to_reg(),
                     });
 
                     ctx.emit(Inst::AluRRR {
@@ -1708,15 +1707,15 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     shift_op: shl_op,
                     rd,
                     rn,
-                    shift_imm: SImm20::maybe_from_i64(count.into()).unwrap(),
-                    shift_reg: None,
+                    shift_imm: count,
+                    shift_reg: zero_reg(),
                 });
                 ctx.emit(Inst::ShiftRR {
                     shift_op: shr_op,
                     rd,
                     rn: rd.to_reg(),
-                    shift_imm: SImm20::maybe_from_i64(count.into()).unwrap(),
-                    shift_reg: None,
+                    shift_imm: count,
+                    shift_reg: zero_reg(),
                 });
             } else {
                 // Case 2: 8-or-more-bit to N-bit extension: just sign-extend. A
@@ -1825,8 +1824,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 shift_op: ShiftOp::AShR64,
                 rd: tmp,
                 rn,
-                shift_imm: SImm20::maybe_from_i64(63).unwrap(),
-                shift_reg: None,
+                shift_imm: 63,
+                shift_reg: zero_reg(),
             });
             ctx.emit(Inst::AluRRR {
                 alu_op: ALUOp::Xor64,
@@ -1835,7 +1834,7 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                 rm: rn,
             });
 
-            ctx.emit(Inst::Flogr { rn });
+            ctx.emit(Inst::Flogr { rn: tmp.to_reg() });
             ctx.emit(Inst::gen_move(rd, gpr(0), ty));
 
             if ty_bits_size < 64 {
@@ -1937,8 +1936,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                         shift_op: choose_32_64(ty, ShiftOp::LShL32, ShiftOp::LShL64),
                         rd: tmp,
                         rn: rd.to_reg(),
-                        shift_imm: SImm20::maybe_from_i64(shift.into()).unwrap(),
-                        shift_reg: None,
+                        shift_imm: shift,
+                        shift_reg: zero_reg(),
                     });
                     ctx.emit(Inst::AluRR {
                         alu_op: choose_32_64(ty, ALUOp::Add32, ALUOp::Add64),
@@ -1951,8 +1950,8 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     shift_op: choose_32_64(ty, ShiftOp::LShR32, ShiftOp::LShR64),
                     rd,
                     rn: rd.to_reg(),
-                    shift_imm: SImm20::maybe_from_i64(shift.into()).unwrap(),
-                    shift_reg: None,
+                    shift_imm: shift,
+                    shift_reg: zero_reg(),
                 });
             }
         }

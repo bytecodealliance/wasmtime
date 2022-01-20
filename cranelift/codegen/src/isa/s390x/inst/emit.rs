@@ -1188,13 +1188,9 @@ impl MachInstEmit for Inst {
                     ShiftOp::AShR32 => 0xebdc, // SRAK  (SRA ?)
                     ShiftOp::AShR64 => 0xeb0a, // SRAG
                 };
-                let shift_reg = match shift_reg {
-                    Some(reg) => reg,
-                    None => zero_reg(),
-                };
                 put(
                     sink,
-                    &enc_rsy(opcode, rd.to_reg(), rn, shift_reg, shift_imm.bits()),
+                    &enc_rsy(opcode, rd.to_reg(), rn, shift_reg, shift_imm.into()),
                 );
             }
 
@@ -1574,25 +1570,35 @@ impl MachInstEmit for Inst {
                 }
             }
 
-            &Inst::LoadMultiple64 {
-                rt,
-                rt2,
-                addr_reg,
-                addr_off,
-            } => {
+            &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let opcode = 0xeb04; // LMG
                 let rt = rt.to_reg();
                 let rt2 = rt2.to_reg();
-                put(sink, &enc_rsy(opcode, rt, rt2, addr_reg, addr_off.bits()));
+                mem_rs_emit(
+                    rt,
+                    rt2,
+                    &mem,
+                    None,
+                    Some(opcode),
+                    true,
+                    sink,
+                    emit_info,
+                    state,
+                );
             }
-            &Inst::StoreMultiple64 {
-                rt,
-                rt2,
-                addr_reg,
-                addr_off,
-            } => {
+            &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
                 let opcode = 0xeb24; // STMG
-                put(sink, &enc_rsy(opcode, rt, rt2, addr_reg, addr_off.bits()));
+                mem_rs_emit(
+                    rt,
+                    rt2,
+                    &mem,
+                    None,
+                    Some(opcode),
+                    true,
+                    sink,
+                    emit_info,
+                    state,
+                );
             }
 
             &Inst::LoadAddr { rd, ref mem } => {
@@ -1741,7 +1747,7 @@ impl MachInstEmit for Inst {
                 let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 8));
-                sink.put4(const_data.to_bits().swap_bytes());
+                sink.put4(const_data.swap_bytes());
                 let inst = Inst::FpuLoad32 {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
@@ -1752,7 +1758,7 @@ impl MachInstEmit for Inst {
                 let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
                 put(sink, &enc_ri_b(opcode, reg, 12));
-                sink.put8(const_data.to_bits().swap_bytes());
+                sink.put8(const_data.swap_bytes());
                 let inst = Inst::FpuLoad64 {
                     rd,
                     mem: MemArg::reg(reg, MemFlags::trusted()),
@@ -2009,8 +2015,8 @@ impl MachInstEmit for Inst {
                     shift_op: ShiftOp::LShL64,
                     rd: rtmp2,
                     rn: ridx,
-                    shift_imm: SImm20::maybe_from_i64(2).unwrap(),
-                    shift_reg: None,
+                    shift_imm: 2,
+                    shift_reg: zero_reg(),
                 };
                 inst.emit(sink, emit_info, state);
 

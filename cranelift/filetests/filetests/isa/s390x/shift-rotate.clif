@@ -251,10 +251,8 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; FIXME: check shift count ?
-
 ; check:  llhr %r2, %r2
-; nextln: nill %r3, 31
+; nextln: nill %r3, 15
 ; nextln: srlk %r2, %r2, 0(%r3)
 ; nextln: br %r14
 
@@ -276,7 +274,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; check:  llcr %r2, %r2
-; nextln: nill %r3, 31
+; nextln: nill %r3, 7
 ; nextln: srlk %r2, %r2, 0(%r3)
 ; nextln: br %r14
 
@@ -339,7 +337,7 @@ block0(v0: i16, v1: i16):
   return v2
 }
 
-; check:  nill %r3, 31
+; check:  nill %r3, 15
 ; nextln: sllk %r2, %r2, 0(%r3)
 ; nextln: br %r14
 
@@ -359,7 +357,7 @@ block0(v0: i8, v1: i8):
   return v2
 }
 
-; check:  nill %r3, 31
+; check:  nill %r3, 7
 ; nextln: sllk %r2, %r2, 0(%r3)
 ; nextln: br %r14
 
@@ -422,7 +420,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; check:  lhr %r2, %r2
-; nextln: nill %r3, 31
+; nextln: nill %r3, 15
 ; nextln: srak %r2, %r2, 0(%r3)
 ; nextln: br %r14
 
@@ -444,7 +442,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; check:  lbr %r2, %r2
-; nextln: nill %r3, 31
+; nextln: nill %r3, 7
 ; nextln: srak %r2, %r2, 0(%r3)
 ; nextln: br %r14
 

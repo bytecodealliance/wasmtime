@@ -93,7 +93,7 @@ block0(v0: i64):
 }
 
 ; check:  srag %r3, %r2, 63
-; nextln: xgr %r3, %r2
+; nextln: xgrk %r2, %r3, %r2
 ; nextln: flogr %r0, %r2
 ; nextln: lgr %r2, %r0
 ; nextln: br %r14
@@ -106,7 +106,7 @@ block0(v0: i32):
 
 ; check:  lgfr %r2, %r2
 ; nextln: srag %r3, %r2, 63
-; nextln: xgr %r3, %r2
+; nextln: xgrk %r2, %r3, %r2
 ; nextln: flogr %r0, %r2
 ; nextln: lr %r2, %r0
 ; nextln: ahi %r2, -32
@@ -120,7 +120,7 @@ block0(v0: i16):
 
 ; check:  lghr %r2, %r2
 ; nextln: srag %r3, %r2, 63
-; nextln: xgr %r3, %r2
+; nextln: xgrk %r2, %r3, %r2
 ; nextln: flogr %r0, %r2
 ; nextln: lr %r2, %r0
 ; nextln: ahi %r2, -48
@@ -134,7 +134,7 @@ block0(v0: i8):
 
 ; check:  lgbr %r2, %r2
 ; nextln: srag %r3, %r2, 63
-; nextln: xgr %r3, %r2
+; nextln: xgrk %r2, %r3, %r2
 ; nextln: flogr %r0, %r2
 ; nextln: lr %r2, %r0
 ; nextln: ahi %r2, -56
