@@ -447,6 +447,11 @@ impl Context {
         self.function.layout.append_block(block);
         Ok(block)
     }
+
+    /// Set a block as cold.
+    fn set_cold_block(&mut self, block: Block) {
+        self.function.layout.set_cold(block);
+    }
 }
 
 impl<'a> Parser<'a> {
@@ -1856,7 +1861,8 @@ impl<'a> Parser<'a> {
     // Parse a basic block, add contents to `ctx`.
     //
     // extended-basic-block ::= * block-header { instruction }
-    // block-header           ::= Block(block) [block-params] ":"
+    // block-header         ::= Block(block) [block-params] [block-flags] ":"
+    // block-flags          ::= [Cold]
     //
     fn parse_basic_block(&mut self, ctx: &mut Context) -> ParseResult<()> {
         // Collect comments for the next block.
@@ -1869,11 +1875,15 @@ impl<'a> Parser<'a> {
             return Err(self.error("too many blocks"));
         }
 
-        if !self.optional(Token::Colon) {
-            // block-header ::= Block(block) [ * block-params ] ":"
+        if self.token() == Some(Token::LPar) {
             self.parse_block_params(ctx, block)?;
-            self.match_token(Token::Colon, "expected ':' after block parameters")?;
         }
+
+        if self.optional(Token::Cold) {
+            ctx.set_cold_block(block);
+        }
+
+        self.match_token(Token::Colon, "expected ':' after block parameters")?;
 
         // Collect any trailing comments.
         self.token();
@@ -3727,5 +3737,24 @@ mod tests {
             parse("[0 1 2 3]", I32X4).to_string(),
             "0x00000003000000020000000100000000"
         );
+    }
+
+    #[test]
+    fn parse_cold_blocks() {
+        let code = "function %test() {
+        block0 cold:
+            return
+        block1(v0: i32) cold:
+            return
+        block2(v1: i32):
+            return
+        }";
+
+        let mut parser = Parser::new(code);
+        let func = parser.parse_function().unwrap().0;
+        assert_eq!(func.layout.blocks().count(), 3);
+        assert!(func.layout.is_cold(Block::from_u32(0)));
+        assert!(func.layout.is_cold(Block::from_u32(1)));
+        assert!(!func.layout.is_cold(Block::from_u32(2)));
     }
 }
