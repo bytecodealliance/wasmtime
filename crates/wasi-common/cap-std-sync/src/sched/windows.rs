@@ -9,9 +9,8 @@
 // taken the time to improve it. See bug #2880.
 
 use anyhow::Context;
-use io_lifetimes::AsHandle;
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 use std::ops::Deref;
-use std::os::windows::io::{AsRawHandle, RawHandle};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -33,7 +32,7 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
 pub async fn poll_oneoff_<'a>(
     poll: &mut Poll<'a>,
     file_is_stdin: impl Fn(&dyn WasiFile) -> bool,
-    file_to_handle: impl Fn(&dyn WasiFile) -> Option<RawHandle>,
+    file_to_handle: impl Fn(&dyn WasiFile) -> Option<RawHandleOrSocket>,
 ) -> Result<(), Error> {
     if poll.is_empty() {
         return Ok(());
@@ -140,35 +139,43 @@ pub fn wasi_file_is_stdin(f: &dyn WasiFile) -> bool {
     f.as_any().is::<crate::stdio::Stdin>()
 }
 
-pub fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
+pub fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandleOrSocket> {
     let a = f.as_any();
     if a.is::<crate::file::File>() {
         Some(
             a.downcast_ref::<crate::file::File>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
+        )
+    } else if a.is::<crate::net::TcpStream>() {
+        Some(
+            a.downcast_ref::<crate::net::TcpStream>()
+                .unwrap()
+                .as_raw_handle_or_socket(),
+        )
+    } else if a.is::<crate::net::TcpListener>() {
+        Some(
+            a.downcast_ref::<crate::net::TcpListener>()
+                .unwrap()
+                .as_raw_handle_or_socket(),
         )
     } else if a.is::<crate::stdio::Stdin>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdin>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
         )
     } else if a.is::<crate::stdio::Stdout>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdout>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
         )
     } else if a.is::<crate::stdio::Stderr>() {
         Some(
             a.downcast_ref::<crate::stdio::Stderr>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
         )
     } else {
         None

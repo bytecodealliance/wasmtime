@@ -36,17 +36,20 @@
 pub mod clocks;
 pub mod dir;
 pub mod file;
+pub mod net;
 pub mod sched;
 pub mod stdio;
 
 pub use cap_std::ambient_authority;
 pub use cap_std::fs::Dir;
+pub use cap_std::net::TcpListener;
 pub use clocks::clocks_ctx;
 pub use sched::sched_ctx;
 
+use crate::net::Socket;
 use cap_rand::RngCore;
 use std::path::Path;
-use wasi_common::{table::Table, Error, WasiCtx, WasiFile};
+use wasi_common::{file::FileCaps, table::Table, Error, WasiCtx, WasiFile};
 
 pub struct WasiCtxBuilder(WasiCtx);
 
@@ -118,6 +121,18 @@ impl WasiCtxBuilder {
     pub fn preopened_dir(mut self, dir: Dir, guest_path: impl AsRef<Path>) -> Result<Self, Error> {
         let dir = Box::new(crate::dir::Dir::from_cap_std(dir));
         self.0.push_preopened_dir(dir, guest_path)?;
+        Ok(self)
+    }
+    pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
+        let socket: Socket = socket.into();
+        let file: Box<dyn WasiFile> = socket.into();
+
+        let caps = FileCaps::FDSTAT_SET_FLAGS
+            | FileCaps::FILESTAT_GET
+            | FileCaps::READ
+            | FileCaps::POLL_READWRITE;
+
+        self.0.insert_file(fd, file, caps);
         Ok(self)
     }
     pub fn build(self) -> WasiCtx {

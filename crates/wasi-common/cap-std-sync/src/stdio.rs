@@ -8,6 +8,8 @@ use std::io;
 use std::io::{Read, Write};
 use system_interface::io::ReadReady;
 
+#[cfg(windows)]
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
 #[cfg(windows)]
@@ -124,11 +126,22 @@ impl WasiFile for Stdin {
     async fn writable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
+
+    async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+        Err(Error::badf())
+    }
 }
 #[cfg(windows)]
 impl AsHandle for Stdin {
     fn as_handle(&self) -> BorrowedHandle<'_> {
         self.0.as_handle()
+    }
+}
+#[cfg(windows)]
+impl AsRawHandleOrSocket for Stdin {
+    #[inline]
+    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+        self.0.as_raw_handle_or_socket()
     }
 }
 #[cfg(unix)]
@@ -244,6 +257,9 @@ macro_rules! wasi_file_write_impl {
             async fn writable(&self) -> Result<(), Error> {
                 Err(Error::badf())
             }
+            async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+                Err(Error::badf())
+            }
         }
         #[cfg(windows)]
         impl AsHandle for $ty {
@@ -255,6 +271,13 @@ macro_rules! wasi_file_write_impl {
         impl AsFd for $ty {
             fn as_fd(&self) -> BorrowedFd<'_> {
                 self.0.as_fd()
+            }
+        }
+        #[cfg(windows)]
+        impl AsRawHandleOrSocket for $ty {
+            #[inline]
+            fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+                self.0.as_raw_handle_or_socket()
             }
         }
     };

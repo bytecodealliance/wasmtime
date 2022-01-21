@@ -1,6 +1,5 @@
 use crate::block_on_dummy_executor;
-use io_lifetimes::AsHandle;
-use std::os::windows::io::{AsRawHandle, RawHandle};
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
 use wasi_cap_std_sync::sched::windows::poll_oneoff_;
 use wasi_common::{file::WasiFile, sched::Poll, Error};
 
@@ -16,35 +15,43 @@ pub fn wasi_file_is_stdin(f: &dyn WasiFile) -> bool {
     f.as_any().is::<crate::stdio::Stdin>()
 }
 
-fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandle> {
+fn wasi_file_raw_handle(f: &dyn WasiFile) -> Option<RawHandleOrSocket> {
     let a = f.as_any();
     if a.is::<crate::file::File>() {
         Some(
             a.downcast_ref::<crate::file::File>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
+        )
+    } else if a.is::<crate::net::TcpListener>() {
+        Some(
+            a.downcast_ref::<crate::net::TcpListener>()
+                .unwrap()
+                .as_raw_handle_or_socket(),
+        )
+    } else if a.is::<crate::net::TcpStream>() {
+        Some(
+            a.downcast_ref::<crate::net::TcpStream>()
+                .unwrap()
+                .as_raw_handle_or_socket(),
         )
     } else if a.is::<crate::stdio::Stdin>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdin>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
         )
     } else if a.is::<crate::stdio::Stdout>() {
         Some(
             a.downcast_ref::<crate::stdio::Stdout>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
         )
     } else if a.is::<crate::stdio::Stderr>() {
         Some(
             a.downcast_ref::<crate::stdio::Stderr>()
                 .unwrap()
-                .as_handle()
-                .as_raw_handle(),
+                .as_raw_handle_or_socket(),
         )
     } else {
         None

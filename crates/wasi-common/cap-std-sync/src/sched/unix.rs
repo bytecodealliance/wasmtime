@@ -90,6 +90,18 @@ fn wasi_file_fd(f: &dyn WasiFile) -> Option<BorrowedFd<'_>> {
     let a = f.as_any();
     if a.is::<crate::file::File>() {
         Some(a.downcast_ref::<crate::file::File>().unwrap().as_fd())
+    } else if a.is::<crate::net::TcpStream>() {
+        Some(a.downcast_ref::<crate::net::TcpStream>().unwrap().as_fd())
+    } else if a.is::<crate::net::TcpListener>() {
+        Some(a.downcast_ref::<crate::net::TcpListener>().unwrap().as_fd())
+    } else if a.is::<crate::net::UnixStream>() {
+        Some(a.downcast_ref::<crate::net::UnixStream>().unwrap().as_fd())
+    } else if a.is::<crate::net::UnixListener>() {
+        Some(
+            a.downcast_ref::<crate::net::UnixListener>()
+                .unwrap()
+                .as_fd(),
+        )
     } else if a.is::<crate::stdio::Stdin>() {
         Some(a.downcast_ref::<crate::stdio::Stdin>().unwrap().as_fd())
     } else if a.is::<crate::stdio::Stdout>() {

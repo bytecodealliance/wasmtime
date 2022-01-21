@@ -5,6 +5,7 @@ use std::any::Any;
 #[wiggle::async_trait]
 pub trait WasiFile: Send + Sync {
     fn as_any(&self) -> &dyn Any;
+    async fn sock_accept(&mut self, fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error>;
     async fn datasync(&self) -> Result<(), Error>; // write op
     async fn sync(&self) -> Result<(), Error>; // file op
     async fn get_filetype(&self) -> Result<FileType, Error>; // file op
