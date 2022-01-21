@@ -25,6 +25,9 @@ impl WasiFile for File {
     fn as_any(&self) -> &dyn Any {
         self
     }
+    async fn sock_accept(&mut self, _fdflags: FdFlags) -> Result<Box<dyn WasiFile>, Error> {
+        Err(Error::badf())
+    }
     async fn datasync(&self) -> Result<(), Error> {
         self.0.sync_data()?;
         Ok(())
@@ -171,8 +174,19 @@ impl AsHandle for File {
     }
 }
 
+#[cfg(windows)]
+use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
+#[cfg(windows)]
+impl AsRawHandleOrSocket for File {
+    #[inline]
+    fn as_raw_handle_or_socket(&self) -> RawHandleOrSocket {
+        self.0.as_raw_handle_or_socket()
+    }
+}
+
 #[cfg(unix)]
 use io_lifetimes::{AsFd, BorrowedFd};
+
 #[cfg(unix)]
 impl AsFd for File {
     fn as_fd(&self) -> BorrowedFd<'_> {

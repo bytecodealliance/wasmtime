@@ -30,6 +30,9 @@ pub use anyhow::{Context, Error};
 /// the crate. Not all values are represented presently.
 #[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
+    /// Errno::WouldBlk: Would block
+    #[error("WouldBlk: Would block")]
+    WouldBlk,
     /// Errno::Noent: No such file or directory
     #[error("Noent: No such file or directory")]
     Noent,

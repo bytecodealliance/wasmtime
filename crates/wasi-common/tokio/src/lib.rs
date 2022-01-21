@@ -2,6 +2,7 @@
 
 mod dir;
 mod file;
+pub mod net;
 pub mod sched;
 pub mod stdio;
 
@@ -12,6 +13,9 @@ use wasi_common::{Error, Table, WasiCtx, WasiFile};
 
 pub use dir::Dir;
 pub use file::File;
+pub use net::*;
+use wasi_cap_std_sync::net::Socket;
+use wasi_common::file::FileCaps;
 
 use crate::sched::sched_ctx;
 
@@ -91,6 +95,19 @@ impl WasiCtxBuilder {
         self.0.push_preopened_dir(dir, guest_path)?;
         Ok(self)
     }
+    pub fn preopened_socket(mut self, fd: u32, socket: impl Into<Socket>) -> Result<Self, Error> {
+        let socket: Socket = socket.into();
+        let file: Box<dyn WasiFile> = socket.into();
+
+        let caps = FileCaps::FDSTAT_SET_FLAGS
+            | FileCaps::FILESTAT_GET
+            | FileCaps::READ
+            | FileCaps::POLL_READWRITE;
+
+        self.0.insert_file(fd, file, caps);
+        Ok(self)
+    }
+
     pub fn build(self) -> WasiCtx {
         self.0
     }

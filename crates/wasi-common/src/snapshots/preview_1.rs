@@ -70,6 +70,7 @@ impl From<ErrorKind> for types::Errno {
     fn from(e: ErrorKind) -> types::Errno {
         use types::Errno;
         match e {
+            ErrorKind::WouldBlk => Errno::Again,
             ErrorKind::Noent => Errno::Noent,
             ErrorKind::TooBig => Errno::TooBig,
             ErrorKind::Badf => Errno::Badf,
@@ -114,6 +115,7 @@ impl TryFrom<std::io::Error> for types::Errno {
         fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
             use rustix::io::Error;
             match Error::from_io_error(err) {
+                Some(Error::AGAIN) => Some(types::Errno::Again),
                 Some(Error::PIPE) => Some(types::Errno::Pipe),
                 Some(Error::PERM) => Some(types::Errno::Perm),
                 Some(Error::NOENT) => Some(types::Errno::Noent),
@@ -147,6 +149,7 @@ impl TryFrom<std::io::Error> for types::Errno {
         fn raw_error_code(err: &std::io::Error) -> Option<types::Errno> {
             use winapi::shared::winerror;
             match err.raw_os_error().map(|code| code as u32) {
+                Some(winerror::WSAEWOULDBLOCK) => Some(types::Errno::Again),
                 Some(winerror::ERROR_BAD_ENVIRONMENT) => Some(types::Errno::TooBig),
                 Some(winerror::ERROR_FILE_NOT_FOUND) => Some(types::Errno::Noent),
                 Some(winerror::ERROR_PATH_NOT_FOUND) => Some(types::Errno::Noent),
@@ -1146,6 +1149,27 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         let mut buf = buf.as_array(buf_len).as_slice_mut()?;
         self.random.try_fill_bytes(buf.deref_mut())?;
         Ok(())
+    }
+
+    async fn sock_accept(
+        &mut self,
+        fd: types::Fd,
+        flags: types::Fdflags,
+    ) -> Result<types::Fd, Error> {
+        let table = self.table();
+        let f = table
+            .get_file_mut(u32::from(fd))?
+            .get_cap_mut(FileCaps::READ)?;
+
+        let file = f.sock_accept(FdFlags::from(flags)).await?;
+        let file_caps = FileCaps::READ
+            | FileCaps::WRITE
+            | FileCaps::FDSTAT_SET_FLAGS
+            | FileCaps::POLL_READWRITE
+            | FileCaps::FILESTAT_GET;
+
+        let fd = table.push(Box::new(FileEntry::new(file_caps, file)))?;
+        Ok(types::Fd::from(fd))
     }
 
     async fn sock_recv<'a>(
