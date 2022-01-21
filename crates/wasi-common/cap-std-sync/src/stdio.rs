@@ -113,7 +113,7 @@ impl WasiFile for Stdin {
         {
             rustix::io::isatty(&self.0)
         }
-        #[cfg(windows)]
+        #[cfg(not(unix))]
         {
             atty::is(atty::Stream::Stdin)
         }
@@ -233,7 +233,7 @@ macro_rules! wasi_file_write_impl {
                 {
                     rustix::io::isatty(&self.0)
                 }
-                #[cfg(windows)]
+                #[cfg(not(unix))]
                 {
                     atty::is(atty::Stream::$ident)
                 }
