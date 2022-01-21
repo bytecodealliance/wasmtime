@@ -54,8 +54,7 @@ block0(v0: i32):
 
 ; check:  llgfr %r2, %r2
 ; nextln: flogr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: ahi %r2, -32
+; nextln: ahik %r2, %r0, -32
 ; nextln: br %r14
 
 function %clz_i16(i16) -> i16 {
@@ -66,8 +65,7 @@ block0(v0: i16):
 
 ; check:  llghr %r2, %r2
 ; nextln: flogr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: ahi %r2, -48
+; nextln: ahik %r2, %r0, -48
 ; nextln: br %r14
 
 function %clz_i8(i8) -> i8 {
@@ -78,8 +76,7 @@ block0(v0: i8):
 
 ; check:  llgcr %r2, %r2
 ; nextln: flogr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: ahi %r2, -56
+; nextln: ahik %r2, %r0, -56
 ; nextln: br %r14
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -93,7 +90,7 @@ block0(v0: i64):
 }
 
 ; check:  srag %r3, %r2, 63
-; nextln: xgrk %r2, %r3, %r2
+; nextln: xgr %r2, %r3
 ; nextln: flogr %r0, %r2
 ; nextln: lgr %r2, %r0
 ; nextln: br %r14
@@ -106,10 +103,9 @@ block0(v0: i32):
 
 ; check:  lgfr %r2, %r2
 ; nextln: srag %r3, %r2, 63
-; nextln: xgrk %r2, %r3, %r2
+; nextln: xgr %r2, %r3
 ; nextln: flogr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: ahi %r2, -32
+; nextln: ahik %r2, %r0, -32
 ; nextln: br %r14
 
 function %cls_i16(i16) -> i16 {
@@ -120,10 +116,9 @@ block0(v0: i16):
 
 ; check:  lghr %r2, %r2
 ; nextln: srag %r3, %r2, 63
-; nextln: xgrk %r2, %r3, %r2
+; nextln: xgr %r2, %r3
 ; nextln: flogr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: ahi %r2, -48
+; nextln: ahik %r2, %r0, -48
 ; nextln: br %r14
 
 function %cls_i8(i8) -> i8 {
@@ -134,10 +129,9 @@ block0(v0: i8):
 
 ; check:  lgbr %r2, %r2
 ; nextln: srag %r3, %r2, 63
-; nextln: xgrk %r2, %r3, %r2
+; nextln: xgr %r2, %r3
 ; nextln: flogr %r0, %r2
-; nextln: lr %r2, %r0
-; nextln: ahi %r2, -56
+; nextln: ahik %r2, %r0, -56
 ; nextln: br %r14
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -151,7 +145,7 @@ block0(v0: i64):
 }
 
 ; check:  lcgr %r3, %r2
-; nextln: ngrk %r2, %r3, %r2
+; nextln: ngr %r2, %r3
 ; nextln: flogr %r0, %r2
 ; nextln: locghie %r0, -1
 ; nextln: lghi %r2, 63
@@ -166,7 +160,7 @@ block0(v0: i32):
 
 ; check:  oihl %r2, 1
 ; nextln: lcgr %r3, %r2
-; nextln: ngrk %r2, %r3, %r2
+; nextln: ngr %r2, %r3
 ; nextln: flogr %r0, %r2
 ; nextln: lhi %r2, 63
 ; nextln: sr %r2, %r0
@@ -180,7 +174,7 @@ block0(v0: i16):
 
 ; check:  oilh %r2, 1
 ; nextln: lcgr %r3, %r2
-; nextln: ngrk %r2, %r3, %r2
+; nextln: ngr %r2, %r3
 ; nextln: flogr %r0, %r2
 ; nextln: lhi %r2, 63
 ; nextln: sr %r2, %r0
@@ -194,7 +188,7 @@ block0(v0: i8):
 
 ; check:  oill %r2, 256
 ; nextln: lcgr %r3, %r2
-; nextln: ngrk %r2, %r3, %r2
+; nextln: ngr %r2, %r3
 ; nextln: flogr %r0, %r2
 ; nextln: lhi %r2, 63
 ; nextln: sr %r2, %r0

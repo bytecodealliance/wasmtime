@@ -52,13 +52,12 @@ block0(v0: i16, v1: i16):
 }
 
 ; check:  llhr %r2, %r2
-; nextln: lr %r3, %r4
-; nextln: lcr %r4, %r4
+; nextln: lcr %r4, %r3
 ; nextln: nill %r3, 15
 ; nextln: nill %r4, 15
-; nextln: sllk %r3, %r2, 0(%r3)
-; nextln: srlk %r2, %r2, 0(%r4)
-; nextln: ork %r2, %r3, %r2
+; nextln: sllk %r4, %r2, 0(%r4)
+; nextln: srlk %r2, %r2, 0(%r3)
+; nextln: ork %r2, %r4, %r2
 ; nextln: br %r14
 
 function %rotr_i16_imm(i16) -> i16 {
@@ -81,13 +80,12 @@ block0(v0: i8, v1: i8):
 }
 
 ; check:  llcr %r2, %r2
-; nextln: lr %r3, %r4
-; nextln: lcr %r4, %r4
+; nextln: lcr %r4, %r3
 ; nextln: nill %r3, 7
 ; nextln: nill %r4, 7
-; nextln: sllk %r3, %r2, 0(%r3)
-; nextln: srlk %r2, %r2, 0(%r4)
-; nextln: ork %r2, %r3, %r2
+; nextln: sllk %r4, %r2, 0(%r4)
+; nextln: srlk %r2, %r2, 0(%r3)
+; nextln: ork %r2, %r4, %r2
 ; nextln: br %r14
 
 function %rotr_i8_imm(i8) -> i8 {
@@ -152,10 +150,9 @@ block0(v0: i16, v1: i16):
 }
 
 ; check:  llhr %r2, %r2
-; nextln: lr %r4, %r3
-; nextln: lcr %r3, %r3
-; nextln: nill %r4, 15
+; nextln: lcr %r4, %r3
 ; nextln: nill %r3, 15
+; nextln: nill %r4, 15
 ; nextln: sllk %r3, %r2, 0(%r3)
 ; nextln: srlk %r2, %r2, 0(%r4)
 ; nextln: ork %r2, %r3, %r2
@@ -181,10 +178,9 @@ block0(v0: i8, v1: i8):
 }
 
 ; check:  llcr %r2, %r2
-; nextln: lr %r4, %r3
-; nextln: lcr %r3, %r3
-; nextln: nill %r4, 7
+; nextln: lcr %r4, %r3
 ; nextln: nill %r3, 7
+; nextln: nill %r4, 7
 ; nextln: sllk %r3, %r2, 0(%r3)
 ; nextln: srlk %r2, %r2, 0(%r4)
 ; nextln: ork %r2, %r3, %r2
