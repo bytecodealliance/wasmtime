@@ -871,15 +871,10 @@
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
-(type VecMachLabel (primitive VecMachLabel))
 (type CondBrKind (primitive CondBrKind))
 (type BranchTarget (primitive BranchTarget))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
-(type BoxExternalName (primitive BoxExternalName))
 (type CodeOffset (primitive CodeOffset))
-(type ExternalName (primitive ExternalName))
-(type ValueLabel (primitive ValueLabel))
-(type UnwindInst (primitive UnwindInst))
 
 (type ExtendOp extern
   (enum

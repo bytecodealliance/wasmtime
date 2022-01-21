@@ -1,14 +1,25 @@
 use crate::ir::{Inst, Value};
 use crate::machinst::{get_output_reg, InsnOutput, LowerCtx, MachInst, RegRenamer};
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
+
+pub use super::MachLabel;
+pub use crate::ir::ExternalName;
+pub use crate::isa::unwind::UnwindInst;
 
 pub type Unit = ();
 pub type ValueSlice<'a> = &'a [Value];
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 pub type WritableReg = Writable<Reg>;
+pub type OptionWritableReg = Option<WritableReg>;
+pub type VecReg = Vec<Reg>;
+pub type VecWritableReg = Vec<WritableReg>;
 pub type ValueRegs = crate::machinst::ValueRegs<Reg>;
+pub type VecMachLabel = Vec<MachLabel>;
+pub type BoxExternalName = Box<ExternalName>;
 
 /// Helper macro to define methods in `prelude.isle` within `impl Context for
 /// ...` for each backend. These methods are shared amongst all backends.

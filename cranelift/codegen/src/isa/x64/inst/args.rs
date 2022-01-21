@@ -13,6 +13,309 @@ use smallvec::{smallvec, SmallVec};
 use std::fmt;
 use std::string::String;
 
+/// An extenstion trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
+pub trait ToWritableReg {
+    fn to_writable_reg(&self) -> Writable<Reg>;
+}
+
+/// An extension trait for converting `Writable<Reg>` to `Writable{Xmm,Gpr}`.
+pub trait FromWritableReg: Sized {
+    fn from_writable_reg(w: Writable<Reg>) -> Option<Self>;
+}
+
+/// An extension trait for mapping register uses on `{Xmm,Gpr}`.
+pub trait MapUseExt {
+    fn map_use<RM>(&mut self, mapper: &RM)
+    where
+        RM: RegMapper;
+}
+
+/// An extension trait for mapping register mods and defs on
+/// `Writable{Xmm,Gpr}`.
+pub trait MapDefModExt {
+    fn map_def<RM>(&mut self, mapper: &RM)
+    where
+        RM: RegMapper;
+
+    fn map_mod<RM>(&mut self, mapper: &RM)
+    where
+        RM: RegMapper;
+}
+
+/// A macro for defining a newtype of `Reg` that enforces some invariant about
+/// the wrapped `Reg` (such as that it is of a particular register class).
+macro_rules! newtype_of_reg {
+    (
+        $newtype_reg:ident,
+        $newtype_writable_reg:ident,
+        $newtype_reg_mem:ident,
+        $newtype_reg_mem_imm:ident,
+        |$check_reg:ident| $check:expr
+    ) => {
+        /// A newtype wrapper around `Reg`.
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        pub struct $newtype_reg(Reg);
+
+        impl PartialEq<Reg> for $newtype_reg {
+            fn eq(&self, other: &Reg) -> bool {
+                self.0 == *other
+            }
+        }
+
+        impl From<$newtype_reg> for Reg {
+            fn from(r: $newtype_reg) -> Self {
+                r.0
+            }
+        }
+
+        impl PrettyPrint for $newtype_reg {
+            fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+                self.0.show_rru(mb_rru)
+            }
+        }
+
+        impl $newtype_reg {
+            /// Create this newtype from the given register, or return `None` if the register
+            /// is not a valid instance of this newtype.
+            pub fn new($check_reg: Reg) -> Option<Self> {
+                if $check {
+                    Some(Self($check_reg))
+                } else {
+                    None
+                }
+            }
+
+            /// Get this newtype's underlying `Reg`.
+            pub fn to_reg(self) -> Reg {
+                self.0
+            }
+        }
+
+        // Convenience impl so that people working with this newtype can use it
+        // "just like" a plain `Reg`.
+        //
+        // NB: We cannot implement `DerefMut` because that would let people do
+        // nasty stuff like `*my_gpr.deref_mut() = some_xmm_reg`, breaking the
+        // invariants that `Gpr` provides.
+        impl std::ops::Deref for $newtype_reg {
+            type Target = Reg;
+
+            fn deref(&self) -> &Reg {
+                &self.0
+            }
+        }
+
+        impl MapUseExt for $newtype_reg {
+            fn map_use<RM>(&mut self, mapper: &RM)
+            where
+                RM: RegMapper,
+            {
+                let mut reg = self.0;
+                mapper.map_use(&mut reg);
+                debug_assert!({
+                    let $check_reg = reg;
+                    $check
+                });
+                *self = $newtype_reg(reg);
+            }
+        }
+
+        pub type $newtype_writable_reg = Writable<$newtype_reg>;
+
+        impl ToWritableReg for $newtype_writable_reg {
+            fn to_writable_reg(&self) -> Writable<Reg> {
+                Writable::from_reg(self.to_reg().to_reg())
+            }
+        }
+
+        impl FromWritableReg for $newtype_writable_reg {
+            fn from_writable_reg(w: Writable<Reg>) -> Option<Self> {
+                Some(Writable::from_reg($newtype_reg::new(w.to_reg())?))
+            }
+        }
+
+        impl MapDefModExt for $newtype_writable_reg {
+            fn map_def<RM>(&mut self, mapper: &RM)
+            where
+                RM: RegMapper,
+            {
+                let mut reg = self.to_writable_reg();
+                mapper.map_def(&mut reg);
+                debug_assert!({
+                    let $check_reg = reg.to_reg();
+                    $check
+                });
+                *self = Writable::from_reg($newtype_reg(reg.to_reg()));
+            }
+
+            fn map_mod<RM>(&mut self, mapper: &RM)
+            where
+                RM: RegMapper,
+            {
+                let mut reg = self.to_writable_reg();
+                mapper.map_mod(&mut reg);
+                debug_assert!({
+                    let $check_reg = reg.to_reg();
+                    $check
+                });
+                *self = Writable::from_reg($newtype_reg(reg.to_reg()));
+            }
+        }
+
+        /// A newtype wrapper around `RegMem` for general-purpose registers.
+        #[derive(Clone, Debug)]
+        pub struct $newtype_reg_mem(RegMem);
+
+        impl From<$newtype_reg_mem> for RegMem {
+            fn from(rm: $newtype_reg_mem) -> Self {
+                rm.0
+            }
+        }
+
+        impl From<$newtype_reg> for $newtype_reg_mem {
+            fn from(r: $newtype_reg) -> Self {
+                $newtype_reg_mem(RegMem::reg(r.into()))
+            }
+        }
+
+        impl $newtype_reg_mem {
+            /// Construct a `RegMem` newtype from the given `RegMem`, or return
+            /// `None` if the `RegMem` is not a valid instance of this `RegMem`
+            /// newtype.
+            pub fn new(rm: RegMem) -> Option<Self> {
+                match rm {
+                    RegMem::Mem { addr: _ } => Some(Self(rm)),
+                    RegMem::Reg { reg: $check_reg } if $check => Some(Self(rm)),
+                    RegMem::Reg { reg: _ } => None,
+                }
+            }
+
+            /// Convert this newtype into its underlying `RegMem`.
+            pub fn to_reg_mem(self) -> RegMem {
+                self.0
+            }
+
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn map_uses<RM>(&mut self, mapper: &RM)
+            where
+                RM: RegMapper,
+            {
+                self.0.map_uses(mapper);
+                debug_assert!(match self.0 {
+                    RegMem::Reg { reg: $check_reg } => $check,
+                    _ => true,
+                });
+            }
+
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn map_as_def<RM>(&mut self, mapper: &RM)
+            where
+                RM: RegMapper,
+            {
+                self.0.map_as_def(mapper);
+                debug_assert!(match self.0 {
+                    RegMem::Reg { reg: $check_reg } => $check,
+                    _ => true,
+                });
+            }
+        }
+
+        impl PrettyPrint for $newtype_reg_mem {
+            fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+                self.0.show_rru(mb_rru)
+            }
+        }
+
+        impl PrettyPrintSized for $newtype_reg_mem {
+            fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
+                self.0.show_rru_sized(mb_rru, size)
+            }
+        }
+
+        /// A newtype wrapper around `RegMemImm`.
+        #[derive(Clone, Debug)]
+        pub struct $newtype_reg_mem_imm(RegMemImm);
+
+        impl From<$newtype_reg_mem_imm> for RegMemImm {
+            fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
+                rmi.0
+            }
+        }
+
+        impl From<$newtype_reg> for $newtype_reg_mem_imm {
+            fn from(r: $newtype_reg) -> Self {
+                $newtype_reg_mem_imm(RegMemImm::reg(r.into()))
+            }
+        }
+
+        impl $newtype_reg_mem_imm {
+            /// Construct this newtype from the given `RegMemImm`, or return
+            /// `None` if the `RegMemImm` is not a valid instance of this
+            /// newtype.
+            pub fn new(rmi: RegMemImm) -> Option<Self> {
+                match rmi {
+                    RegMemImm::Imm { .. } => Some(Self(rmi)),
+                    RegMemImm::Mem { addr: _ } => Some(Self(rmi)),
+                    RegMemImm::Reg { reg: $check_reg } if $check => Some(Self(rmi)),
+                    RegMemImm::Reg { reg: _ } => None,
+                }
+            }
+
+            /// Convert this newtype into its underlying `RegMemImm`.
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn to_reg_mem_imm(self) -> RegMemImm {
+                self.0
+            }
+
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn map_uses<RM>(&mut self, mapper: &RM)
+            where
+                RM: RegMapper,
+            {
+                self.0.map_uses(mapper);
+                debug_assert!(match self.0 {
+                    RegMemImm::Reg { reg: $check_reg } => $check,
+                    _ => true,
+                });
+            }
+
+            #[allow(dead_code)] // Used by some newtypes and not others.
+            pub fn map_as_def<RM>(&mut self, mapper: &RM)
+            where
+                RM: RegMapper,
+            {
+                self.0.map_as_def(mapper);
+                debug_assert!(match self.0 {
+                    RegMemImm::Reg { reg: $check_reg } => $check,
+                    _ => true,
+                });
+            }
+        }
+
+        impl PrettyPrint for $newtype_reg_mem_imm {
+            fn show_rru(&self, mb_rru: Option<&RealRegUniverse>) -> String {
+                self.0.show_rru(mb_rru)
+            }
+        }
+
+        impl PrettyPrintSized for $newtype_reg_mem_imm {
+            fn show_rru_sized(&self, mb_rru: Option<&RealRegUniverse>, size: u8) -> String {
+                self.0.show_rru_sized(mb_rru, size)
+            }
+        }
+    };
+}
+
+// Define a newtype of `Reg` for general-purpose registers.
+newtype_of_reg!(Gpr, WritableGpr, GprMem, GprMemImm, |reg| {
+    reg.get_class() == RegClass::I64
+});
+
+// Define a newtype of `Reg` for XMM registers.
+newtype_of_reg!(Xmm, WritableXmm, XmmMem, XmmMemImm, |reg| {
+    reg.get_class() == RegClass::V128
+});
+
 /// A possible addressing mode (amode) that can be used in instructions.
 /// These denote a 64-bit value only.
 #[derive(Clone, Debug)]
@@ -27,8 +330,8 @@ pub enum Amode {
     /// sign-extend-32-to-64(Immediate) + Register1 + (Register2 << Shift)
     ImmRegRegShift {
         simm32: u32,
-        base: Reg,
-        index: Reg,
+        base: Gpr,
+        index: Gpr,
         shift: u8, /* 0 .. 3 only */
         flags: MemFlags,
     },
@@ -48,7 +351,7 @@ impl Amode {
         }
     }
 
-    pub(crate) fn imm_reg_reg_shift(simm32: u32, base: Reg, index: Reg, shift: u8) -> Self {
+    pub(crate) fn imm_reg_reg_shift(simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Self {
         debug_assert!(base.get_class() == RegClass::I64);
         debug_assert!(index.get_class() == RegClass::I64);
         debug_assert!(shift <= 3);
@@ -96,8 +399,8 @@ impl Amode {
                 collector.add_use(*base);
             }
             Amode::ImmRegRegShift { base, index, .. } => {
-                collector.add_use(*base);
-                collector.add_use(*index);
+                collector.add_use(base.to_reg());
+                collector.add_use(index.to_reg());
             }
             Amode::RipRelative { .. } => {
                 // RIP isn't involved in regalloc.
@@ -225,7 +528,7 @@ impl PrettyPrint for SyntheticAmode {
 /// denote an 8, 16, 32 or 64 bit value.  For the Immediate form, in the 8- and 16-bit case, only
 /// the lower 8 or 16 bits of `simm32` is relevant.  In the 64-bit case, the value denoted by
 /// `simm32` is its sign-extension out to 64 bits.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RegMemImm {
     Reg { reg: Reg },
     Mem { addr: SyntheticAmode },

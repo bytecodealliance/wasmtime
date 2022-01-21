@@ -48,6 +48,9 @@
 
 (type Reg (primitive Reg))
 (type WritableReg (primitive WritableReg))
+(type OptionWritableReg (primitive OptionWritableReg))
+(type VecReg extern (enum))
+(type VecWritableReg extern (enum))
 
 ;; Construct a `ValueRegs` of one register.
 (decl value_reg (Reg) ValueRegs)
@@ -105,6 +108,15 @@
 (rule (lo_reg val)
       (let ((regs ValueRegs (put_in_regs val)))
         (value_regs_get regs 0)))
+
+;;;; Common Mach Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(type MachLabel (primitive MachLabel))
+(type VecMachLabel extern (enum))
+(type ValueLabel (primitive ValueLabel))
+(type UnwindInst (primitive UnwindInst))
+(type ExternalName (primitive ExternalName))
+(type BoxExternalName (primitive BoxExternalName))
 
 ;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -368,4 +380,3 @@
 
 (decl avoid_div_traps () Type)
 (extern extractor avoid_div_traps avoid_div_traps)
-
