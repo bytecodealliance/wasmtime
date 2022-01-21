@@ -213,14 +213,24 @@ impl Config {
     /// arbitrarily long in the worst case, likely blocking all other
     /// asynchronous tasks.
     ///
-    /// To remedy this situation you have a two possible ways to solve this:
+    /// To remedy this situation you have a a few possible ways to solve this:
     ///
-    /// * First you can spawn futures into a thread pool. By doing this in a
-    ///   thread pool you are relaxing the requirement that `Future::poll` must
-    ///   be fast because your future is executing on a separate thread. This
-    ///   strategy, however, would likely still require some form of
-    ///   cancellation via [`crate::Store::interrupt_handle`] to ensure wasm
-    ///   doesn't take *too* long to execute.
+    /// * The most efficient solution is to enable
+    ///   [`Config::epoch_interruption`] in conjunction with
+    ///   [`crate::Store::epoch_deadline_async_yield_and_update`]. Coupled with
+    ///   periodic calls to [`crate::Engine::increment_epoch`] this will cause
+    ///   executing WebAssembly to periodically yield back according to the
+    ///   epoch configuration settings. This enables `Future::poll` to take at
+    ///   most a certain amount of time according to epoch configuration
+    ///   setttings and when increments happen. The benefit of this approach is
+    ///   that the instrumentation in compiled code is quite lightweight, but a
+    ///   downside can be that the scheduling is somewhat nondeterministic since
+    ///   increments are usually timer-based which are not always deterministic.
+    ///
+    ///   Note that to prevent infinite execution of wasm it's recommended to
+    ///   place a timeout on the entire future representing executing wasm code
+    ///   and the preriodic yields with epochs should ensure that when the
+    ///   timeout is reached it's appropriately recognized.
     ///
     /// * Alternatively you can enable the
     ///   [`Config::consume_fuel`](crate::Config::consume_fuel) method as well
@@ -230,12 +240,28 @@ impl Config {
     ///   fuel wasm futures will return `Poll::Pending` from their `poll`
     ///   method, and will get automatically re-polled later. This enables the
     ///   `Future::poll` method to take roughly a fixed amount of time since
-    ///   fuel is guaranteed to get consumed while wasm is executing. Note that
-    ///   to prevent infinite execution of wasm you'll need to use either
-    ///   [`crate::Store::interrupt_handle`] or a normal timeout on futures
-    ///   (which will get triggered due to periodic `poll`s).
+    ///   fuel is guaranteed to get consumed while wasm is executing. Unlike
+    ///   epoch-based preemption this is deterministic since wasm always
+    ///   consumes a fixed amount of fuel per-operation. The downside of this
+    ///   approach, however, is that the compiled code instrumentation is
+    ///   significantly more expensive than epoch checks.
     ///
-    /// In either case special care needs to be taken when integrating
+    ///   Note that to prevent infinite execution of wasm it's recommended to
+    ///   place a timeout on the entire future representing executing wasm code
+    ///   and the preriodic yields with epochs should ensure that when the
+    ///   timeout is reached it's appropriately recognized.
+    ///
+    /// * Finally you can spawn futures into a thread pool. By doing this in a
+    ///   thread pool you are relaxing the requirement that `Future::poll` must
+    ///   be fast because your future is executing on a separate thread. This
+    ///   strategy, however, would likely still require some form of
+    ///   cancellation via [`Config::epoch_interruption`] or
+    ///   [`crate::Store::interrupt_handle`] to ensure wasm doesn't take *too*
+    ///   long to execute. This solution is generally not recommended for its
+    ///   complexity and instead one of the previous solutions should likely be
+    ///   used.
+    ///
+    /// In all cases special care needs to be taken when integrating
     /// asynchronous wasm into your application. You should carefully plan where
     /// WebAssembly will execute and what compute resources will be allotted to
     /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
