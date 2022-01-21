@@ -387,16 +387,13 @@ impl CompiledModule {
     #[inline]
     pub fn finished_functions(
         &self,
-    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *mut [VMFunctionBody])> + '_ {
+    ) -> impl ExactSizeIterator<Item = (DefinedFuncIndex, *const [VMFunctionBody])> + '_ {
         let code = self.code();
         self.funcs.iter().map(move |(i, info)| {
             let func = &code[info.start as usize..][..info.length as usize];
             (
                 i,
-                std::ptr::slice_from_raw_parts_mut(
-                    func.as_ptr() as *mut VMFunctionBody,
-                    func.len(),
-                ),
+                std::ptr::slice_from_raw_parts(func.as_ptr().cast::<VMFunctionBody>(), func.len()),
             )
         })
     }
@@ -423,7 +420,7 @@ impl CompiledModule {
     /// memory with the stack maps associated with those bytes.
     pub fn stack_maps(
         &self,
-    ) -> impl Iterator<Item = (*mut [VMFunctionBody], &[StackMapInformation])> {
+    ) -> impl Iterator<Item = (*const [VMFunctionBody], &[StackMapInformation])> {
         self.finished_functions()
             .map(|(_, f)| f)
             .zip(self.funcs.values().map(|f| f.stack_maps.as_slice()))

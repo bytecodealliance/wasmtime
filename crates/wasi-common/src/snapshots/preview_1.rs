@@ -1553,7 +1553,7 @@ fn dirent_bytes(dirent: types::Dirent) -> Vec<u8> {
         .expect("Dirent is smaller than 2^32");
     let mut bytes = Vec::with_capacity(size);
     bytes.resize(size, 0);
-    let ptr = bytes.as_mut_ptr() as *mut types::Dirent;
+    let ptr = bytes.as_mut_ptr().cast::<types::Dirent>();
     let guest_dirent = types::Dirent {
         d_ino: dirent.d_ino.to_le(),
         d_namlen: dirent.d_namlen.to_le(),

@@ -874,7 +874,7 @@ fn lookup_with_dlsym(name: &str) -> Option<*const u8> {
             // try to find the searched symbol in the currently running executable
             ptr::null_mut(),
             // try to find the searched symbol in local c runtime
-            winapi::um::libloaderapi::GetModuleHandleA(MSVCRT_DLL.as_ptr() as *const i8),
+            winapi::um::libloaderapi::GetModuleHandleA(MSVCRT_DLL.as_ptr().cast::<i8>()),
         ];
 
         for handle in &handles {

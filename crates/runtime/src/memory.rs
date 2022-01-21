@@ -476,10 +476,10 @@ impl Memory {
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
-    pub fn vmmemory(&self) -> VMMemoryDefinition {
+    pub fn vmmemory(&mut self) -> VMMemoryDefinition {
         match self {
             Memory::Static { base, size, .. } => VMMemoryDefinition {
-                base: base.as_ptr() as *mut _,
+                base: base.as_mut_ptr().cast(),
                 current_length: *size,
             },
             Memory::Dynamic(mem) => mem.vmmemory(),

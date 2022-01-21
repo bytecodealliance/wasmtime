@@ -422,7 +422,7 @@ impl VMExternRef {
     /// or `PartialEq` implementation of the pointed-to values.
     #[inline]
     pub fn eq(a: &Self, b: &Self) -> bool {
-        ptr::eq(a.0.as_ptr() as *const _, b.0.as_ptr() as *const _)
+        ptr::eq(a.0.as_ptr(), b.0.as_ptr())
     }
 
     /// Hash a given `VMExternRef`.
@@ -434,7 +434,7 @@ impl VMExternRef {
     where
         H: Hasher,
     {
-        ptr::hash(externref.0.as_ptr() as *const _, hasher);
+        ptr::hash(externref.0.as_ptr(), hasher);
     }
 
     /// Compare two `VMExternRef`s.
@@ -566,8 +566,8 @@ impl VMExternRefActivationsTable {
 
     /// Create a new `VMExternRefActivationsTable`.
     pub fn new() -> Self {
-        let chunk = Self::new_chunk(Self::CHUNK_SIZE);
-        let next = chunk.as_ptr() as *mut TableElem;
+        let mut chunk = Self::new_chunk(Self::CHUNK_SIZE);
+        let next = chunk.as_mut_ptr().cast::<TableElem>();
         let end = unsafe { next.add(chunk.len()) };
 
         VMExternRefActivationsTable {
@@ -703,7 +703,7 @@ impl VMExternRefActivationsTable {
         precise_stack_roots: &mut HashSet<VMExternRefWithTraits>,
         root: NonNull<VMExternData>,
     ) {
-        let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr() as *mut _) };
+        let root = unsafe { VMExternRef::clone_from_raw(root.as_ptr().cast()) };
         precise_stack_roots.insert(VMExternRefWithTraits(root));
     }
 
@@ -730,7 +730,7 @@ impl VMExternRefActivationsTable {
 
         // Reset our `next` finger to the start of the bump allocation chunk.
         unsafe {
-            let next = self.alloc.chunk.as_ptr() as *mut TableElem;
+            let next = self.alloc.chunk.as_mut_ptr().cast::<TableElem>();
             debug_assert!(!next.is_null());
             *self.alloc.next.get() = NonNull::new_unchecked(next);
         }

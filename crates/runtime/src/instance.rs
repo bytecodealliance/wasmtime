@@ -100,7 +100,7 @@ impl Instance {
     /// Helper function to access various locations offset from our `*mut
     /// VMContext` object.
     unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *mut T {
-        (self.vmctx_ptr() as *mut u8)
+        (self.vmctx_ptr().cast::<u8>())
             .add(usize::try_from(offset).unwrap())
             .cast()
     }
@@ -420,7 +420,8 @@ impl Instance {
 
         // Keep the `VMContext` pointers used by compiled Wasm code up to
         // date.
-        self.set_table(table_index, self.tables[table_index].vmtable());
+        let element = self.tables[table_index].vmtable();
+        self.set_table(table_index, element);
 
         result
     }
