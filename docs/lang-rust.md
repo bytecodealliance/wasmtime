@@ -43,7 +43,7 @@ dependency in `Cargo.toml`:
 
 ```toml
 [dependencies]
-wasmtime = "0.18.0"
+wasmtime = "0.33.0"
 ```
 
 Next up let's write the code that we need to execute this wasm file. The
@@ -164,7 +164,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // First we create our simple "double" function which will only multiply its
     // input by two and return it.
-    linker.func_wrap("", "double", |param: i32| param * 2);
+    linker.func_wrap("", "double", |param: i32| param * 2)?;
 
     // Next we define a `log` function. Note that we're using a
     // Wasmtime-provided `Caller` argument to access the state on the `Store`,
@@ -172,7 +172,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     linker.func_wrap("", "log", |mut caller: Caller<'_, Log>, param: u32| {
         println!("log: {}", param);
         caller.data_mut().integers_logged.push(param);
-    });
+    })?;
 
     // As above, instantiation always happens within a `Store`. This means to
     // actually instantiate with our `Linker` we'll need to create a store. Note
