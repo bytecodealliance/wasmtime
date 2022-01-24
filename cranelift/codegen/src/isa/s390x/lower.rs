@@ -12,7 +12,6 @@ use crate::machinst::*;
 use crate::settings::Flags;
 use crate::CodegenResult;
 use alloc::boxed::Box;
-use alloc::vec::Vec;
 use core::convert::TryFrom;
 use regalloc::{Reg, Writable};
 use smallvec::SmallVec;
@@ -1018,8 +1017,8 @@ fn lower_branch<C: LowerCtx<I = Inst>>(
         let op1 = ctx.data(branches[1]).opcode();
 
         assert!(op1 == Opcode::Jump);
-        let taken = BranchTarget::Label(targets[0]);
-        let not_taken = BranchTarget::Label(targets[1]);
+        let taken = targets[0];
+        let not_taken = targets[1];
 
         match op0 {
             Opcode::Brz | Opcode::Brnz => {
@@ -1068,9 +1067,7 @@ fn lower_branch<C: LowerCtx<I = Inst>>(
         match op {
             Opcode::Jump => {
                 assert!(branches.len() == 1);
-                ctx.emit(Inst::Jump {
-                    dest: BranchTarget::Label(targets[0]),
-                });
+                ctx.emit(Inst::Jump { dest: targets[0] });
             }
 
             Opcode::BrTable => {
@@ -1087,19 +1084,35 @@ fn lower_branch<C: LowerCtx<I = Inst>>(
                     NarrowValueMode::ZeroExtend64,
                 );
 
-                // Temp registers needed by the compound instruction.
-                let rtmp1 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                let rtmp2 = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                // Bounds-check index and branch to default.
+                // This is an internal branch that is not a terminator insn.
+                // Instead, the default target is listed a potential target
+                // in the final JTSequence, which is the block terminator.
+                ctx.emit(Inst::CmpRUImm32 {
+                    op: CmpOp::CmpL64,
+                    rn: ridx,
+                    imm: jt_size as u32,
+                });
+                ctx.emit(Inst::OneWayCondBr {
+                    target: targets[0],
+                    cond: Cond::from_intcc(IntCC::UnsignedGreaterThanOrEqual),
+                });
+
+                // Compute index scaled by entry size.
+                let rtmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+                ctx.emit(Inst::ShiftRR {
+                    shift_op: ShiftOp::LShL64,
+                    rd: rtmp,
+                    rn: ridx,
+                    shift_imm: 2,
+                    shift_reg: zero_reg(),
+                });
 
                 // Emit the compound instruction that does:
                 //
-                // clgfi %rIdx, <jt-size>
-                // jghe <default-target>
-                // sllg %rTmp2, %rIdx, 2
-                // larl %rTmp1, <jt-base>
-                // lgf %rTmp2, 0(%rTmp2, %rTmp1)
-                // agrk %rTmp1, %rTmp1, %rTmp2
-                // br %rA
+                // larl %r1, <jt-base>
+                // agf %r1, 0(%r1, %rTmp)
+                // br %r1
                 // [jt entries]
                 //
                 // This must be *one* instruction in the vcode because
@@ -1109,22 +1122,9 @@ fn lower_branch<C: LowerCtx<I = Inst>>(
                 // (The alternative is to introduce a relocation pass
                 // for inlined jumptables, which is much worse, IMHO.)
 
-                let default_target = BranchTarget::Label(targets[0]);
-                let jt_targets: Vec<BranchTarget> = targets
-                    .iter()
-                    .skip(1)
-                    .map(|bix| BranchTarget::Label(*bix))
-                    .collect();
-                let targets_for_term: Vec<MachLabel> = targets.to_vec();
                 ctx.emit(Inst::JTSequence {
-                    ridx,
-                    rtmp1,
-                    rtmp2,
-                    info: Box::new(JTSequenceInfo {
-                        default_target,
-                        targets: jt_targets,
-                        targets_for_term,
-                    }),
+                    ridx: rtmp.to_reg(),
+                    targets: targets.to_vec(),
                 });
             }
 

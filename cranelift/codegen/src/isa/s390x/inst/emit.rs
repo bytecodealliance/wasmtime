@@ -1,7 +1,6 @@
 //! S390x ISA: binary code emission.
 
 use crate::binemit::{Reloc, StackMap};
-use crate::ir::condcodes::IntCC;
 use crate::ir::MemFlags;
 use crate::ir::{SourceLoc, TrapCode};
 use crate::isa::s390x::inst::*;
@@ -153,14 +152,9 @@ pub fn mem_emit(
                 &enc_rxy(opcode_rxy.unwrap(), rd, base, index, disp.bits()),
             );
         }
-        &MemArg::Label { ref target } => {
-            if let Some(l) = target.as_label() {
-                sink.use_label_at_offset(sink.cur_offset(), l, LabelUse::BranchRIL);
-            }
-            put(
-                sink,
-                &enc_ril_b(opcode_ril.unwrap(), rd, target.as_ril_offset_or_zero()),
-            );
+        &MemArg::Label { target } => {
+            sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+            put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
         &MemArg::Symbol {
             ref name, offset, ..
@@ -1904,60 +1898,43 @@ impl MachInstEmit for Inst {
             &Inst::EpiloguePlaceholder => {
                 // Noop; this is just a placeholder for epilogues.
             }
-            &Inst::Jump { ref dest } => {
+            &Inst::Jump { dest } => {
                 let off = sink.cur_offset();
                 // Indicate that the jump uses a label, if so, so that a fixup can occur later.
-                if let Some(l) = dest.as_label() {
-                    sink.use_label_at_offset(off, l, LabelUse::BranchRIL);
-                    sink.add_uncond_branch(off, off + 6, l);
-                }
+                sink.use_label_at_offset(off, dest, LabelUse::BranchRIL);
+                sink.add_uncond_branch(off, off + 6, dest);
                 // Emit the jump itself.
                 let opcode = 0xc04; // BCRL
-                put(sink, &enc_ril_c(opcode, 15, dest.as_ril_offset_or_zero()));
+                put(sink, &enc_ril_c(opcode, 15, 0));
             }
             &Inst::IndirectBr { rn, .. } => {
                 let opcode = 0x07; // BCR
                 put(sink, &enc_rr(opcode, gpr(15), rn));
             }
             &Inst::CondBr {
-                ref taken,
-                ref not_taken,
+                taken,
+                not_taken,
                 cond,
             } => {
                 let opcode = 0xc04; // BCRL
 
                 // Conditional part first.
                 let cond_off = sink.cur_offset();
-                if let Some(l) = taken.as_label() {
-                    sink.use_label_at_offset(cond_off, l, LabelUse::BranchRIL);
-                    let inverted = &enc_ril_c(opcode, cond.invert().bits(), 0);
-                    sink.add_cond_branch(cond_off, cond_off + 6, l, inverted);
-                }
-                put(
-                    sink,
-                    &enc_ril_c(opcode, cond.bits(), taken.as_ril_offset_or_zero()),
-                );
+                sink.use_label_at_offset(cond_off, taken, LabelUse::BranchRIL);
+                let inverted = &enc_ril_c(opcode, cond.invert().bits(), 0);
+                sink.add_cond_branch(cond_off, cond_off + 6, taken, inverted);
+                put(sink, &enc_ril_c(opcode, cond.bits(), 0));
 
                 // Unconditional part next.
                 let uncond_off = sink.cur_offset();
-                if let Some(l) = not_taken.as_label() {
-                    sink.use_label_at_offset(uncond_off, l, LabelUse::BranchRIL);
-                    sink.add_uncond_branch(uncond_off, uncond_off + 6, l);
-                }
-                put(
-                    sink,
-                    &enc_ril_c(opcode, 15, not_taken.as_ril_offset_or_zero()),
-                );
+                sink.use_label_at_offset(uncond_off, not_taken, LabelUse::BranchRIL);
+                sink.add_uncond_branch(uncond_off, uncond_off + 6, not_taken);
+                put(sink, &enc_ril_c(opcode, 15, 0));
             }
-            &Inst::OneWayCondBr { ref target, cond } => {
+            &Inst::OneWayCondBr { target, cond } => {
                 let opcode = 0xc04; // BCRL
-                if let Some(l) = target.as_label() {
-                    sink.use_label_at_offset(sink.cur_offset(), l, LabelUse::BranchRIL);
-                }
-                put(
-                    sink,
-                    &enc_ril_c(opcode, cond.bits(), target.as_ril_offset_or_zero()),
-                );
+                sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+                put(sink, &enc_ril_c(opcode, cond.bits(), 0));
             }
             &Inst::Nop0 => {}
             &Inst::Nop2 => {
@@ -1984,86 +1961,49 @@ impl MachInstEmit for Inst {
                 let srcloc = state.cur_srcloc();
                 put_with_trap(sink, &enc_e(0x0000), srcloc, trap_code);
             }
-            &Inst::JTSequence {
-                ridx,
-                rtmp1,
-                rtmp2,
-                ref info,
-                ..
-            } => {
+            &Inst::JTSequence { ridx, ref targets } => {
                 let table_label = sink.get_label();
 
                 // This sequence is *one* instruction in the vcode, and is expanded only here at
                 // emission time, because we cannot allow the regalloc to insert spills/reloads in
                 // the middle; we depend on hardcoded PC-rel addressing below.
 
-                // Bounds-check index and branch to default.
-                let inst = Inst::CmpRUImm32 {
-                    op: CmpOp::CmpL64,
-                    rn: ridx,
-                    imm: info.targets.len() as u32,
-                };
-                inst.emit(sink, emit_info, state);
-                let inst = Inst::OneWayCondBr {
-                    target: info.default_target,
-                    cond: Cond::from_intcc(IntCC::UnsignedGreaterThanOrEqual),
-                };
-                inst.emit(sink, emit_info, state);
-
-                // Set rtmp2 to index scaled by entry size.
-                let inst = Inst::ShiftRR {
-                    shift_op: ShiftOp::LShL64,
-                    rd: rtmp2,
-                    rn: ridx,
-                    shift_imm: 2,
-                    shift_reg: zero_reg(),
-                };
-                inst.emit(sink, emit_info, state);
-
-                // Set rtmp1 to address of jump table.
+                // Set temp register to address of jump table.
+                let rtmp = writable_spilltmp_reg();
                 let inst = Inst::LoadAddr {
-                    rd: rtmp1,
+                    rd: rtmp,
                     mem: MemArg::Label {
-                        target: BranchTarget::Label(table_label),
+                        target: table_label,
                     },
                 };
                 inst.emit(sink, emit_info, state);
 
-                // Set rtmp2 to value loaded out of jump table.
-                let inst = Inst::Load64SExt32 {
-                    rd: rtmp2,
-                    mem: MemArg::reg_plus_reg(rtmp1.to_reg(), rtmp2.to_reg(), MemFlags::trusted()),
-                };
-                inst.emit(sink, emit_info, state);
-
-                // Set rtmp1 to target address (rtmp1 + rtmp2).
-                let inst = Inst::AluRRR {
-                    alu_op: ALUOp::Add64,
-                    rd: rtmp1,
-                    rn: rtmp1.to_reg(),
-                    rm: rtmp2.to_reg(),
+                // Set temp to target address by adding the value of the jump table entry.
+                let inst = Inst::AluRX {
+                    alu_op: ALUOp::Add64Ext32,
+                    rd: rtmp,
+                    mem: MemArg::reg_plus_reg(rtmp.to_reg(), ridx, MemFlags::trusted()),
                 };
                 inst.emit(sink, emit_info, state);
 
                 // Branch to computed address. (`targets` here is only used for successor queries
                 // and is not needed for emission.)
                 let inst = Inst::IndirectBr {
-                    rn: rtmp1.to_reg(),
+                    rn: rtmp.to_reg(),
                     targets: vec![],
                 };
                 inst.emit(sink, emit_info, state);
 
                 // Emit jump table (table of 32-bit offsets).
+                // The first entry is the default target, which is not emitted
+                // into the jump table, so we skip it here.  It is only in the
+                // list so MachTerminator will see the potential target.
                 sink.bind_label(table_label);
                 let jt_off = sink.cur_offset();
-                for &target in info.targets.iter() {
+                for &target in targets.iter().skip(1) {
                     let word_off = sink.cur_offset();
                     let off_into_table = word_off - jt_off;
-                    sink.use_label_at_offset(
-                        word_off,
-                        target.as_label().unwrap(),
-                        LabelUse::PCRel32,
-                    );
+                    sink.use_label_at_offset(word_off, target, LabelUse::PCRel32);
                     sink.put4(off_into_table.swap_bytes());
                 }
 

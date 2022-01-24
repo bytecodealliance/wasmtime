@@ -589,15 +589,15 @@
 
     ;; An unconditional branch.
     (Jump
-      (dest BranchTarget))
+      (dest MachLabel))
 
     ;; A conditional branch. Contains two targets; at emission time, both are emitted, but
     ;; the MachBuffer knows to truncate the trailing branch if fallthrough. We optimize the
     ;; choice of taken/not_taken (inverting the branch polarity as needed) based on the
     ;; fallthrough at the time of lowering.
     (CondBr
-      (taken BranchTarget)
-      (not_taken BranchTarget)
+      (taken MachLabel)
+      (not_taken MachLabel)
       (cond Cond))
 
     ;; A conditional trap execute a `Trap` if the condition is true. This is
@@ -624,7 +624,7 @@
     ;;
     ;; See, e.g., the lowering of `trapif` (conditional trap) for an example.
     (OneWayCondBr
-      (target BranchTarget)
+      (target MachLabel)
       (cond Cond))
 
     ;; An indirect branch through a register, augmented with set of all
@@ -644,10 +644,8 @@
     ;; Jump-table sequence, as one compound instruction (see note in lower.rs
     ;; for rationale).
     (JTSequence
-      (info BoxJTSequenceInfo)
       (ridx Reg)
-      (rtmp1 WritableReg)
-      (rtmp2 WritableReg))
+      (targets VecMachLabel))
 
     ;; Load an inline symbol reference with RelocDistance::Far.
     (LoadExtNameFar
@@ -680,8 +678,8 @@
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type MachLabel (primitive MachLabel))
 (type VecMachLabel (primitive VecMachLabel))
-(type BranchTarget (primitive BranchTarget))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type BoxExternalName (primitive BoxExternalName))
 (type ValueLabel (primitive ValueLabel))
