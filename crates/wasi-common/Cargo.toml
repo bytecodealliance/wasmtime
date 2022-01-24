@@ -22,12 +22,12 @@ anyhow = "1.0"
 thiserror = "1.0"
 wiggle = { path = "../wiggle", default-features = false, version = "=0.33.0" }
 tracing = "0.1.19"
-cap-std = "0.22.0"
-cap-rand = "0.22.0"
+cap-std = "0.24.0"
+cap-rand = "0.24.0"
 bitflags = "1.2"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.31.0"
+rustix = "0.33.0"
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"

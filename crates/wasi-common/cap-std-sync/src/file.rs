@@ -1,5 +1,6 @@
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
+use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::io;
@@ -125,14 +126,7 @@ impl WasiFile for File {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        #[cfg(unix)]
-        {
-            rustix::io::isatty(&self.0)
-        }
-        #[cfg(windows)]
-        {
-            false
-        }
+        self.0.is_terminal()
     }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
