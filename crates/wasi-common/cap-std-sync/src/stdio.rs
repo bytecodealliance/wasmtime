@@ -1,6 +1,7 @@
 use crate::file::convert_systimespec;
 use fs_set_times::SetTimes;
 use io_lifetimes::AsFilelike;
+use is_terminal::IsTerminal;
 use std::any::Any;
 use std::convert::TryInto;
 use std::fs::File;
@@ -111,14 +112,7 @@ impl WasiFile for Stdin {
         Ok(self.0.num_ready_bytes()?)
     }
     fn isatty(&self) -> bool {
-        #[cfg(unix)]
-        {
-            rustix::io::isatty(&self.0)
-        }
-        #[cfg(not(unix))]
-        {
-            atty::is(atty::Stream::Stdin)
-        }
+        self.0.is_terminal()
     }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
@@ -242,14 +236,7 @@ macro_rules! wasi_file_write_impl {
                 Ok(0)
             }
             fn isatty(&self) -> bool {
-                #[cfg(unix)]
-                {
-                    rustix::io::isatty(&self.0)
-                }
-                #[cfg(not(unix))]
-                {
-                    atty::is(atty::Stream::$ident)
-                }
+                self.0.is_terminal()
             }
             async fn readable(&self) -> Result<(), Error> {
                 Err(Error::badf())

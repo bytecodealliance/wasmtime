@@ -30,7 +30,7 @@ anyhow = "1.0.38"
 mach = "0.3.2"
 
 [target.'cfg(unix)'.dependencies]
-rustix = "0.31.0"
+rustix = "0.33.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3.7", features = ["winbase", "memoryapi", "errhandlingapi", "handleapi"] }
