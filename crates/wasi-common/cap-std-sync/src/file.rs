@@ -121,6 +121,16 @@ impl WasiFile for File {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
+    fn isatty(&self) -> bool {
+        #[cfg(unix)]
+        {
+            rustix::io::isatty(&self.0)
+        }
+        #[cfg(windows)]
+        {
+            false
+        }
+    }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }

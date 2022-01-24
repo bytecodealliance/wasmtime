@@ -30,6 +30,7 @@ rustix = "0.31.0"
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3"
 lazy_static = "1.4"
+atty = "0.2.14"
 
 [dev-dependencies]
 tempfile = "3.1.0"

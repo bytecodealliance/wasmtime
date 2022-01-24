@@ -35,7 +35,11 @@ impl WasiFile for Stdin {
         Ok(())
     }
     async fn get_filetype(&self) -> Result<FileType, Error> {
-        Ok(FileType::Unknown)
+        if self.isatty() {
+            Ok(FileType::CharacterDevice)
+        } else {
+            Ok(FileType::Unknown)
+        }
     }
     async fn get_fdflags(&self) -> Result<FdFlags, Error> {
         Ok(FdFlags::empty())
@@ -104,6 +108,16 @@ impl WasiFile for Stdin {
     async fn num_ready_bytes(&self) -> Result<u64, Error> {
         Ok(self.0.num_ready_bytes()?)
     }
+    fn isatty(&self) -> bool {
+        #[cfg(unix)]
+        {
+            rustix::io::isatty(&self.0)
+        }
+        #[cfg(not(unix))]
+        {
+            atty::is(atty::Stream::Stdin)
+        }
+    }
     async fn readable(&self) -> Result<(), Error> {
         Err(Error::badf())
     }
@@ -125,7 +139,7 @@ impl AsFd for Stdin {
 }
 
 macro_rules! wasi_file_write_impl {
-    ($ty:ty) => {
+    ($ty:ty, $ident:ident) => {
         #[async_trait::async_trait]
         impl WasiFile for $ty {
             fn as_any(&self) -> &dyn Any {
@@ -138,7 +152,11 @@ macro_rules! wasi_file_write_impl {
                 Ok(())
             }
             async fn get_filetype(&self) -> Result<FileType, Error> {
-                Ok(FileType::Unknown)
+                if self.isatty() {
+                    Ok(FileType::CharacterDevice)
+                } else {
+                    Ok(FileType::Unknown)
+                }
             }
             async fn get_fdflags(&self) -> Result<FdFlags, Error> {
                 Ok(FdFlags::APPEND)
@@ -210,6 +228,16 @@ macro_rules! wasi_file_write_impl {
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 Ok(0)
             }
+            fn isatty(&self) -> bool {
+                #[cfg(unix)]
+                {
+                    rustix::io::isatty(&self.0)
+                }
+                #[cfg(not(unix))]
+                {
+                    atty::is(atty::Stream::$ident)
+                }
+            }
             async fn readable(&self) -> Result<(), Error> {
                 Err(Error::badf())
             }
@@ -237,11 +265,11 @@ pub struct Stdout(std::io::Stdout);
 pub fn stdout() -> Stdout {
     Stdout(std::io::stdout())
 }
-wasi_file_write_impl!(Stdout);
+wasi_file_write_impl!(Stdout, Stdout);
 
 pub struct Stderr(std::io::Stderr);
 
 pub fn stderr() -> Stderr {
     Stderr(std::io::stderr())
 }
-wasi_file_write_impl!(Stderr);
+wasi_file_write_impl!(Stderr, Stderr);

@@ -3129,6 +3129,7 @@ version = "0.33.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "atty",
  "cap-fs-ext",
  "cap-rand",
  "cap-std",

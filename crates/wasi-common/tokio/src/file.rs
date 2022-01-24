@@ -112,6 +112,9 @@ macro_rules! wasi_file_impl {
             async fn num_ready_bytes(&self) -> Result<u64, Error> {
                 block_on_dummy_executor(|| self.0.num_ready_bytes())
             }
+            fn isatty(&self) -> bool {
+                self.0.isatty()
+            }
 
             #[cfg(not(windows))]
             async fn readable(&self) -> Result<(), Error> {
