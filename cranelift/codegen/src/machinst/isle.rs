@@ -312,18 +312,19 @@ where
 /// The `isle_lower` argument here is an ISLE-generated function for `lower` and
 /// then this function otherwise handles register mapping and such around the
 /// lowering.
-pub(crate) fn lower_common<C, F, I, const N: usize>(
+pub(crate) fn lower_common<C, F, I, IF, const N: usize>(
     lower_ctx: &mut C,
     flags: &F,
     isa_flags: &I,
     outputs: &[InsnOutput],
     inst: Inst,
-    isle_lower: fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<ValueRegs>,
+    isle_lower: IF,
     map_regs: fn(&mut C::I, &RegRenamer),
 ) -> Result<(), ()>
 where
     C: LowerCtx,
     [(C::I, bool); N]: smallvec::Array<Item = (C::I, bool)>,
+    IF: Fn(&mut IsleContext<'_, C, F, I, N>, Inst) -> Option<ValueRegs>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.

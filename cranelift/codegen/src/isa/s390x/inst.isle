@@ -679,7 +679,6 @@
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type MachLabel (primitive MachLabel))
-(type VecMachLabel (primitive VecMachLabel))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type BoxExternalName (primitive BoxExternalName))
 (type ValueLabel (primitive ValueLabel))
@@ -1040,6 +1039,19 @@
 (extern extractor unsigned unsigned)
 
 
+;; Helpers for machine label vectors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; VecMachLabel needs to be passed by reference, so it cannot be
+;; declared as primitive type.  Declare as extern enum instead.
+(type VecMachLabel extern (enum))
+
+(decl vec_length_minus1 (VecMachLabel) u32)
+(extern constructor vec_length_minus1 vec_length_minus1)
+
+(decl vec_element (VecMachLabel u8) MachLabel)
+(extern constructor vec_element vec_element)
+
+
 ;; Helpers for memory arguments ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Accessors for `RelocDistance`.
@@ -1284,6 +1296,8 @@
 ;; implementation detail by helpers that preserve the SSA facade themselves.
 (decl emit (MInst) Unit)
 (extern constructor emit emit)
+(decl emit_safepoint (MInst) Unit)
+(extern constructor emit_safepoint emit_safepoint)
 
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl alu_rrr (Type ALUOp Reg Reg) Reg)
@@ -1694,6 +1708,26 @@
       (let ((dst WritableReg (temp_writable_reg $I64))
             (_ Unit (emit (MInst.LoadAddr dst mem))))
         (writable_reg_to_reg dst)))
+
+;; Helper for emitting `MInst.Jump` instructions.
+(decl jump_impl (MachLabel) SideEffectNoResult)
+(rule (jump_impl target)
+      (SideEffectNoResult.Inst (MInst.Jump target)))
+
+;; Helper for emitting `MInst.CondBr` instructions.
+(decl cond_br (MachLabel MachLabel Cond) SideEffectNoResult)
+(rule (cond_br taken not_taken cond)
+      (SideEffectNoResult.Inst (MInst.CondBr taken not_taken cond)))
+
+;; Helper for emitting `MInst.OneWayCondBr` instructions.
+(decl oneway_cond_br (MachLabel Cond) SideEffectNoResult)
+(rule (oneway_cond_br dest cond)
+      (SideEffectNoResult.Inst (MInst.OneWayCondBr dest cond)))
+
+;; Helper for emitting `MInst.JTSequence` instructions.
+(decl jt_sequence (Reg VecMachLabel) SideEffectNoResult)
+(rule (jt_sequence ridx targets)
+      (SideEffectNoResult.Inst (MInst.JTSequence ridx targets)))
 
 ;; Emit a `ProducesFlags` instruction when the flags are not actually needed.
 (decl drop_flags (ProducesFlags) Reg)
@@ -2149,6 +2183,23 @@
                                                 src imm cond trap_code))))
         (invalid_reg)))
 
+(decl trap_impl (TrapCode) SideEffectNoResult)
+(rule (trap_impl trap_code)
+      (SideEffectNoResult.Inst (MInst.Trap trap_code)))
+
+(decl trap_if_impl (Cond TrapCode) SideEffectNoResult)
+(rule (trap_if_impl cond trap_code)
+      (SideEffectNoResult.Inst (MInst.TrapIf cond trap_code)))
+
+(decl debugtrap_impl () SideEffectNoResult)
+(rule (debugtrap_impl)
+      (SideEffectNoResult.Inst (MInst.Debugtrap)))
+
+(decl safepoint (SideEffectNoResult) ValueRegs)
+(rule (safepoint (SideEffectNoResult.Inst inst))
+      (let ((_ Unit (emit_safepoint inst)))
+        (value_regs_invalid)))
+
 
 ;; Helpers for handling boolean conditions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2200,6 +2251,24 @@
 (rule (lower_bool $B16 cond) (select_bool_imm $B16 cond -1 0))
 (rule (lower_bool $B32 cond) (select_bool_imm $B32 cond -1 0))
 (rule (lower_bool $B64 cond) (select_bool_imm $B64 cond -1 0))
+
+;; Emit a conditional branch based on a boolean condition.
+(decl cond_br_bool (ProducesBool MachLabel MachLabel) SideEffectNoResult)
+(rule (cond_br_bool (ProducesBool.ProducesBool producer cond) taken not_taken)
+      (let ((_ Unit (emit_producer producer)))
+        (cond_br taken not_taken cond)))
+
+;; Emit a one-way conditional branch based on a boolean condition.
+(decl oneway_cond_br_bool (ProducesBool MachLabel) SideEffectNoResult)
+(rule (oneway_cond_br_bool (ProducesBool.ProducesBool producer cond) dest)
+      (let ((_ Unit (emit_producer producer)))
+        (oneway_cond_br dest cond)))
+
+;; Emit a conditional trap based on a boolean condition.
+(decl trap_if_bool (ProducesBool TrapCode) SideEffectNoResult)
+(rule (trap_if_bool (ProducesBool.ProducesBool producer cond) trap_code)
+      (let ((_ Unit (emit_producer producer)))
+        (trap_if_impl cond trap_code)))
 
 
 ;; Helpers for generating `clz` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

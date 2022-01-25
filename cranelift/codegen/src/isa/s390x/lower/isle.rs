@@ -51,6 +51,28 @@ where
     )
 }
 
+/// The main entry point for branch lowering with ISLE.
+pub(crate) fn lower_branch<C>(
+    lower_ctx: &mut C,
+    flags: &Flags,
+    isa_flags: &IsaFlags,
+    branch: Inst,
+    targets: &[MachLabel],
+) -> Result<(), ()>
+where
+    C: LowerCtx<I = MInst>,
+{
+    lower_common(
+        lower_ctx,
+        flags,
+        isa_flags,
+        &[],
+        branch,
+        |cx, insn| generated_code::constructor_lower_branch(cx, insn, &targets.to_vec()),
+        s390x_map_regs,
+    )
+}
+
 impl<C> generated_code::Context for IsleContext<'_, C, Flags, IsaFlags, 6>
 where
     C: LowerCtx<I = MInst>,
@@ -370,6 +392,16 @@ where
     }
 
     #[inline]
+    fn vec_length_minus1(&mut self, vec: &VecMachLabel) -> u32 {
+        u32::try_from(vec.len()).unwrap() - 1
+    }
+
+    #[inline]
+    fn vec_element(&mut self, vec: &VecMachLabel, index: u8) -> MachLabel {
+        vec[usize::from(index)]
+    }
+
+    #[inline]
     fn reloc_distance_near(&mut self, dist: &RelocDistance) -> Option<()> {
         if *dist == RelocDistance::Near {
             Some(())
@@ -470,5 +502,10 @@ where
     #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
         self.emitted_insts.push((inst.clone(), false));
+    }
+
+    #[inline]
+    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
+        self.emitted_insts.push((inst.clone(), true));
     }
 }
