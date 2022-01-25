@@ -152,17 +152,14 @@ where
                         let imm =
                             MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
                                 .unwrap();
-                        self.emitted_insts
-                            .push((MInst::MovN { rd, imm, size }, false));
+                        self.emit(&MInst::MovN { rd, imm, size });
                     } else {
                         let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        self.emitted_insts
-                            .push((MInst::MovZ { rd, imm, size }, false));
+                        self.emit(&MInst::MovZ { rd, imm, size });
                     }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                    self.emitted_insts
-                        .push((MInst::MovK { rd, imm, size }, false));
+                    self.emit(&MInst::MovK { rd, imm, size });
                 }
             }
         }
