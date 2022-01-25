@@ -299,12 +299,12 @@ macro_rules! isle_prelude_methods {
 /// internally has a temporary reference to a machinst `LowerCtx`.
 pub(crate) struct IsleContext<'a, C: LowerCtx, F, I, const N: usize>
 where
-    [C::I; N]: smallvec::Array,
+    [(C::I, bool); N]: smallvec::Array,
 {
     pub lower_ctx: &'a mut C,
     pub flags: &'a F,
     pub isa_flags: &'a I,
-    pub emitted_insts: SmallVec<[C::I; N]>,
+    pub emitted_insts: SmallVec<[(C::I, bool); N]>,
 }
 
 /// Shared lowering code amongst all backends for doing ISLE-based lowering.
@@ -323,7 +323,7 @@ pub(crate) fn lower_common<C, F, I, const N: usize>(
 ) -> Result<(), ()>
 where
     C: LowerCtx,
-    [C::I; N]: smallvec::Array<Item = C::I>,
+    [(C::I, bool); N]: smallvec::Array<Item = (C::I, bool)>,
 {
     // TODO: reuse the ISLE context across lowerings so we can reuse its
     // internal heap allocations.
@@ -367,7 +367,7 @@ where
             renamer.add_rename(*temp, dst.to_reg(), *ty);
         }
     }
-    for inst in isle_ctx.emitted_insts.iter_mut() {
+    for (inst, _) in isle_ctx.emitted_insts.iter_mut() {
         map_regs(inst, &renamer);
     }
 
@@ -387,8 +387,12 @@ where
     // Once everything is remapped we forward all emitted instructions to the
     // `lower_ctx`. Note that this happens after the synthetic mov's above in
     // case any of these instruction use those movs.
-    for inst in isle_ctx.emitted_insts {
-        lower_ctx.emit(inst);
+    for (inst, is_safepoint) in isle_ctx.emitted_insts {
+        if is_safepoint {
+            lower_ctx.emit_safepoint(inst);
+        } else {
+            lower_ctx.emit(inst);
+        }
     }
 
     Ok(())

@@ -470,6 +470,6 @@ where
 
     #[inline]
     fn emit(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push(inst.clone());
+        self.emitted_insts.push((inst.clone(), false));
     }
 }
