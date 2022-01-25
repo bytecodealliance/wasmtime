@@ -152,14 +152,17 @@ where
                         let imm =
                             MoveWideConst::maybe_with_shift(((!imm16) & 0xffff) as u16, i * 16)
                                 .unwrap();
-                        self.emitted_insts.push(MInst::MovN { rd, imm, size });
+                        self.emitted_insts
+                            .push((MInst::MovN { rd, imm, size }, false));
                     } else {
                         let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                        self.emitted_insts.push(MInst::MovZ { rd, imm, size });
+                        self.emitted_insts
+                            .push((MInst::MovZ { rd, imm, size }, false));
                     }
                 } else {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, i * 16).unwrap();
-                    self.emitted_insts.push(MInst::MovK { rd, imm, size });
+                    self.emitted_insts
+                        .push((MInst::MovK { rd, imm, size }, false));
                 }
             }
         }
@@ -200,7 +203,7 @@ where
     }
 
     fn emit(&mut self, inst: &MInst) -> Unit {
-        self.emitted_insts.push(inst.clone());
+        self.emitted_insts.push((inst.clone(), false));
     }
 
     fn cond_br_zero(&mut self, reg: Reg) -> CondBrKind {

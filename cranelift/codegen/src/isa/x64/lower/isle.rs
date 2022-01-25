@@ -227,7 +227,7 @@ where
 
     fn emit(&mut self, inst: &MInst) -> Unit {
         for inst in inst.clone().mov_mitosis() {
-            self.emitted_insts.push(inst);
+            self.emitted_insts.push((inst, false));
         }
     }
 
