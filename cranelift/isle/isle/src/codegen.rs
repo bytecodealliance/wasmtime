@@ -138,6 +138,7 @@ impl<'a> Codegen<'a> {
                 &Type::Enum {
                     name,
                     is_extern,
+                    is_nodebug,
                     ref variants,
                     pos,
                     ..
@@ -150,11 +151,20 @@ impl<'a> Codegen<'a> {
                         pos.pretty_print_line(&self.typeenv.filenames[..])
                     )
                     .unwrap();
+
+                    // Generate the `derive`s.
+                    let debug_derive = if is_nodebug { "" } else { ", Debug" };
                     if variants.iter().all(|v| v.fields.is_empty()) {
-                        writeln!(code, "#[derive(Copy, Clone, Debug, PartialEq, Eq)]").unwrap();
+                        writeln!(
+                            code,
+                            "#[derive(Copy, Clone, PartialEq, Eq{})]",
+                            debug_derive
+                        )
+                        .unwrap();
                     } else {
-                        writeln!(code, "#[derive(Clone, Debug)]").unwrap();
+                        writeln!(code, "#[derive(Clone{})]", debug_derive).unwrap();
                     }
+
                     writeln!(code, "pub enum {} {{", name).unwrap();
                     for variant in variants {
                         let name = &self.typeenv.syms[variant.name.index()];

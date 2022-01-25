@@ -109,6 +109,10 @@ pub enum Type {
         /// If so, ISLE will not emit a definition for it. If not, then it will
         /// emit a Rust definition for it.
         is_extern: bool,
+        /// Whether this type should *not* derive `Debug`.
+        ///
+        /// Incompatible with `is_extern`.
+        is_nodebug: bool,
         /// The different variants for this enum.
         variants: Vec<Variant>,
         /// The ISLE source position where this `enum` is defined.
@@ -607,7 +611,7 @@ impl TypeEnv {
                     let ty = match tyenv.type_map.get(&ty) {
                         Some(ty) => *ty,
                         None => {
-                            tyenv.report_error(pos, "Unknown type for constant".into());
+                            tyenv.report_error(pos, "Unknown type for constant");
                             continue;
                         }
                     };
@@ -635,9 +639,22 @@ impl TypeEnv {
         let name = self.intern(&ty.name).unwrap();
         match &ty.ty {
             &ast::TypeValue::Primitive(ref id, ..) => {
+                if ty.is_nodebug {
+                    self.report_error(ty.pos, "primitive types cannot be marked `nodebug`");
+                    return None;
+                }
+                if ty.is_extern {
+                    self.report_error(ty.pos, "primitive types cannot be marked `extern`");
+                    return None;
+                }
                 Some(Type::Primitive(tid, self.intern_mut(id), ty.pos))
             }
             &ast::TypeValue::Enum(ref ty_variants, ..) => {
+                if ty.is_extern && ty.is_nodebug {
+                    self.report_error(ty.pos, "external types cannot be marked `nodebug`");
+                    return None;
+                }
+
                 let mut variants = vec![];
                 for variant in ty_variants {
                     let combined_ident =
@@ -696,6 +713,7 @@ impl TypeEnv {
                     name,
                     id: tid,
                     is_extern: ty.is_extern,
+                    is_nodebug: ty.is_nodebug,
                     variants,
                     pos: ty.pos,
                 })
@@ -703,9 +721,9 @@ impl TypeEnv {
         }
     }
 
-    fn error(&self, pos: Pos, msg: String) -> Error {
+    fn error(&self, pos: Pos, msg: impl Into<String>) -> Error {
         let e = Error::TypeError {
-            msg,
+            msg: msg.into(),
             src: Source::new(
                 self.filenames[pos.file].clone(),
                 self.file_texts[pos.file].clone(),
@@ -716,7 +734,7 @@ impl TypeEnv {
         e
     }
 
-    fn report_error(&mut self, pos: Pos, msg: String) {
+    fn report_error(&mut self, pos: Pos, msg: impl Into<String>) {
         let err = self.error(pos, msg);
         self.errors.push(err);
     }
@@ -987,8 +1005,7 @@ impl TermEnv {
                         tyenv.report_error(
                             ext.pos,
                             "Extractor macro body defined on term of incorrect kind; cannot be an \
-                             enum variant"
-                                .into(),
+                             enum variant",
                         );
                         continue;
                     }
@@ -1329,10 +1346,7 @@ impl TermEnv {
                 let ty = match expected_ty {
                     Some(t) => t,
                     None => {
-                        tyenv.report_error(
-                            pos,
-                            "Need an implied type for an integer constant".into(),
-                        );
+                        tyenv.report_error(pos, "Need an implied type for an integer constant");
                         return None;
                     }
                 };
@@ -1353,12 +1367,12 @@ impl TermEnv {
                 let const_ty = match tyenv.const_types.get(&val) {
                     Some(ty) => *ty,
                     None => {
-                        tyenv.report_error(pos, "Unknown constant".into());
+                        tyenv.report_error(pos, "Unknown constant");
                         return None;
                     }
                 };
                 if expected_ty.is_some() && expected_ty != Some(const_ty) {
-                    tyenv.report_error(pos, "Type mismatch for constant".into());
+                    tyenv.report_error(pos, "Type mismatch for constant");
                 }
                 Some((Pattern::ConstPrim(const_ty, val), const_ty))
             }
@@ -1366,7 +1380,7 @@ impl TermEnv {
                 let ty = match expected_ty {
                     Some(t) => t,
                     None => {
-                        tyenv.report_error(pos, "Need an implied type for a wildcard".into());
+                        tyenv.report_error(pos, "Need an implied type for a wildcard");
                         return None;
                     }
                 };
@@ -1775,7 +1789,7 @@ impl TermEnv {
                 let const_ty = match tyenv.const_types.get(&val) {
                     Some(ty) => *ty,
                     None => {
-                        tyenv.report_error(pos, "Unknown constant".into());
+                        tyenv.report_error(pos, "Unknown constant");
                         return None;
                     }
                 };
@@ -1920,6 +1934,7 @@ mod test {
                 name: sym_a,
                 id: TypeId(1),
                 is_extern: true,
+                is_nodebug: false,
                 variants: vec![
                     Variant {
                         name: sym_b,
