@@ -5,8 +5,8 @@ pub mod generated_code;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    BranchTarget, CallIndInfo, CallInfo, Cond, Inst as MInst, JTSequenceInfo, MachLabel, MemArg,
-    MemFlags, Opcode, Reg, UImm16Shifted, UImm32Shifted,
+    CallIndInfo, CallInfo, Cond, Inst as MInst, MachLabel, MemArg, MemFlags, Opcode, Reg,
+    UImm16Shifted, UImm32Shifted,
 };
 use crate::isa::s390x::settings::Flags as IsaFlags;
 use crate::machinst::isle::*;
@@ -27,7 +27,6 @@ use std::vec::Vec;
 type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type VecMachLabel = Vec<MachLabel>;
-type BoxJTSequenceInfo = Box<JTSequenceInfo>;
 type BoxExternalName = Box<ExternalName>;
 
 /// The main entry point for lowering with ISLE.

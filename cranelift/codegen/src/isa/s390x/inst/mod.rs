@@ -58,15 +58,6 @@ pub struct CallIndInfo {
     pub opcode: Opcode,
 }
 
-/// Additional information for JTSequence instructions, left out of line to lower the size of the Inst
-/// enum.
-#[derive(Clone, Debug)]
-pub struct JTSequenceInfo {
-    pub default_target: BranchTarget,
-    pub targets: Vec<BranchTarget>,
-    pub targets_for_term: Vec<MachLabel>, // needed for MachTerminator.
-}
-
 #[test]
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
@@ -686,12 +677,8 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
         &Inst::Debugtrap => {}
         &Inst::Trap { .. } => {}
         &Inst::TrapIf { .. } => {}
-        &Inst::JTSequence {
-            ridx, rtmp1, rtmp2, ..
-        } => {
+        &Inst::JTSequence { ridx, .. } => {
             collector.add_use(ridx);
-            collector.add_def(rtmp1);
-            collector.add_def(rtmp2);
         }
         &Inst::LoadExtNameFar { rd, .. } => {
             collector.add_def(rd);
@@ -1408,15 +1395,8 @@ pub fn s390x_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
         &mut Inst::CondBr { .. } | &mut Inst::OneWayCondBr { .. } => {}
         &mut Inst::Debugtrap | &mut Inst::Trap { .. } | &mut Inst::TrapIf { .. } => {}
         &mut Inst::Nop0 | &mut Inst::Nop2 => {}
-        &mut Inst::JTSequence {
-            ref mut ridx,
-            ref mut rtmp1,
-            ref mut rtmp2,
-            ..
-        } => {
+        &mut Inst::JTSequence { ref mut ridx, .. } => {
             mapper.map_use(ridx);
-            mapper.map_def(rtmp1);
-            mapper.map_def(rtmp2);
         }
         &mut Inst::LoadExtNameFar { ref mut rd, .. } => {
             mapper.map_def(rd);
@@ -1471,18 +1451,16 @@ impl MachInst for Inst {
     fn is_term<'a>(&'a self) -> MachTerminator<'a> {
         match self {
             &Inst::Ret { .. } | &Inst::EpiloguePlaceholder => MachTerminator::Ret,
-            &Inst::Jump { dest } => MachTerminator::Uncond(dest.as_label().unwrap()),
+            &Inst::Jump { dest } => MachTerminator::Uncond(dest),
             &Inst::CondBr {
                 taken, not_taken, ..
-            } => MachTerminator::Cond(taken.as_label().unwrap(), not_taken.as_label().unwrap()),
+            } => MachTerminator::Cond(taken, not_taken),
             &Inst::OneWayCondBr { .. } => {
                 // Explicitly invisible to CFG processing.
                 MachTerminator::None
             }
             &Inst::IndirectBr { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
-            &Inst::JTSequence { ref info, .. } => {
-                MachTerminator::Indirect(&info.targets_for_term[..])
-            }
+            &Inst::JTSequence { ref targets, .. } => MachTerminator::Indirect(&targets[..]),
             _ => MachTerminator::None,
         }
     }
@@ -1589,9 +1567,7 @@ impl MachInst for Inst {
     }
 
     fn gen_jump(target: MachLabel) -> Inst {
-        Inst::Jump {
-            dest: BranchTarget::Label(target),
-        }
+        Inst::Jump { dest: target }
     }
 
     fn worst_case_size() -> CodeOffset {
@@ -2592,8 +2568,8 @@ impl Inst {
                 format!("br {}", link)
             }
             &Inst::EpiloguePlaceholder => "epilogue placeholder".to_string(),
-            &Inst::Jump { ref dest } => {
-                let dest = dest.show_rru(mb_rru);
+            &Inst::Jump { dest } => {
+                let dest = dest.to_string();
                 format!("jg {}", dest)
             }
             &Inst::IndirectBr { rn, .. } => {
@@ -2601,17 +2577,17 @@ impl Inst {
                 format!("br {}", rn)
             }
             &Inst::CondBr {
-                ref taken,
-                ref not_taken,
+                taken,
+                not_taken,
                 cond,
             } => {
-                let taken = taken.show_rru(mb_rru);
-                let not_taken = not_taken.show_rru(mb_rru);
+                let taken = taken.to_string();
+                let not_taken = not_taken.to_string();
                 let cond = cond.show_rru(mb_rru);
                 format!("jg{} {} ; jg {}", cond, taken, not_taken)
             }
-            &Inst::OneWayCondBr { ref target, cond } => {
-                let target = target.show_rru(mb_rru);
+            &Inst::OneWayCondBr { target, cond } => {
+                let target = target.to_string();
                 let cond = cond.show_rru(mb_rru);
                 format!("jg{} {}", cond, target)
             }
@@ -2621,42 +2597,25 @@ impl Inst {
                 let cond = cond.invert().show_rru(mb_rru);
                 format!("j{} 6 ; trap", cond)
             }
-            &Inst::JTSequence {
-                ref info,
-                ridx,
-                rtmp1,
-                rtmp2,
-                ..
-            } => {
+            &Inst::JTSequence { ridx, ref targets } => {
                 let ridx = ridx.show_rru(mb_rru);
-                let rtmp1 = rtmp1.show_rru(mb_rru);
-                let rtmp2 = rtmp2.show_rru(mb_rru);
-                let default_target = info.default_target.show_rru(mb_rru);
+                let rtmp = writable_spilltmp_reg().to_reg().show_rru(mb_rru);
+                // The first entry is the default target, which is not emitted
+                // into the jump table, so we skip it here.  It is only in the
+                // list so MachTerminator will see the potential target.
+                let jt_entries: String = targets
+                    .iter()
+                    .skip(1)
+                    .map(|label| format!(" {}", label.to_string()))
+                    .collect();
                 format!(
                     concat!(
-                        "clgfi {}, {} ; ",
-                        "jghe {} ; ",
-                        "sllg {}, {}, 2 ; ",
-                        "larl {}, 18 ; ",
-                        "lgf {}, 0({}, {}) ; ",
-                        "agrk {}, {}, {} ; ",
+                        "larl {}, 14 ; ",
+                        "agf {}, 0({}, {}) ; ",
                         "br {} ; ",
-                        "jt_entries {:?}"
+                        "jt_entries{}"
                     ),
-                    ridx,
-                    info.targets.len(),
-                    default_target,
-                    rtmp2,
-                    ridx,
-                    rtmp1,
-                    rtmp2,
-                    rtmp2,
-                    rtmp1,
-                    rtmp1,
-                    rtmp1,
-                    rtmp2,
-                    rtmp1,
-                    info.targets
+                    rtmp, rtmp, rtmp, ridx, rtmp, jt_entries,
                 )
             }
             &Inst::LoadExtNameFar {
