@@ -41,6 +41,15 @@ pub(crate) type Store = wasmtime::Store<Option<WasiCtx>>;
 /// context.
 pub(crate) type Linker = wasmtime::Linker<Option<WasiCtx>>;
 
+#[cfg(feature = "structopt")]
+fn parse_map_dirs(s: &str) -> anyhow::Result<(PathBuf, PathBuf)> {
+    let parts: Vec<&str> = s.split("::").collect();
+    if parts.len() != 2 {
+        anyhow::bail!("must contain exactly one double colon ('::')");
+    }
+    Ok((parts[0].into(), parts[1].into()))
+}
+
 /// Wizer: the WebAssembly pre-initializer!
 ///
 /// Don't wait for your Wasm module to initialize itself, pre-initialize it!
@@ -143,6 +152,20 @@ pub struct Wizer {
     )]
     dirs: Vec<PathBuf>,
 
+    /// When using WASI during initialization, which guest directories should be
+    /// mapped to a host directory?
+    ///
+    /// The `--mapdir` option differs from `--dir` in that it allows giving a
+    /// custom guest name to the directory that is different from its name in
+    /// the host.
+    ///
+    /// None are mapped by default.
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(long = "mapdir", value_name = "GUEST_DIR::HOST_DIR", parse(try_from_str = parse_map_dirs))
+    )]
+    map_dirs: Vec<(PathBuf, PathBuf)>,
+
     /// Enable or disable Wasm multi-memory proposal.
     ///
     /// Enabled by default.
@@ -213,6 +236,7 @@ impl Wizer {
             inherit_stdio: None,
             inherit_env: None,
             dirs: vec![],
+            map_dirs: vec![],
             wasm_multi_memory: None,
             wasm_multi_value: None,
             wasm_module_linking: None,
@@ -276,6 +300,22 @@ impl Wizer {
     /// None are available by default.
     pub fn dir(&mut self, directory: impl Into<PathBuf>) -> &mut Self {
         self.dirs.push(directory.into());
+        self
+    }
+
+    /// When using WASI during initialization, which guest directories should be
+    /// mapped to a host directory?
+    ///
+    /// The `map_dir` method differs from `dir` in that it allows giving a custom
+    /// guest name to the directory that is different from its name in the host.
+    ///
+    /// None are mapped by default.
+    pub fn map_dir(
+        &mut self,
+        guest_dir: impl Into<PathBuf>,
+        host_dir: impl Into<PathBuf>,
+    ) -> &mut Self {
+        self.map_dirs.push((guest_dir.into(), host_dir.into()));
         self
     }
 
@@ -544,6 +584,19 @@ impl Wizer {
             )
             .with_context(|| format!("failed to open directory: {}", dir.display()))?;
             ctx = ctx.preopened_dir(preopened, dir)?;
+        }
+        for (guest_dir, host_dir) in &self.map_dirs {
+            log::debug!(
+                "Preopening directory: {}::{}",
+                guest_dir.display(),
+                host_dir.display()
+            );
+            let preopened = wasmtime_wasi::sync::Dir::open_ambient_dir(
+                host_dir,
+                wasmtime_wasi::sync::ambient_authority(),
+            )
+            .with_context(|| format!("failed to open directory: {}", host_dir.display()))?;
+            ctx = ctx.preopened_dir(preopened, guest_dir)?;
         }
         Ok(Some(ctx.build()))
     }
