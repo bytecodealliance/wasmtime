@@ -303,8 +303,11 @@ impl Wizer {
         self
     }
 
-    /// When using WASI during initialization, which file guest system directories
-    /// should be mapped as a host directory?
+    /// When using WASI during initialization, which guest directories should be
+    /// mapped to a host directory?
+    ///
+    /// The `map_dir` method differs from `dir` in that it allows giving a custom
+    /// guest name to the directory that is different from its name in the host.
     ///
     /// None are mapped by default.
     pub fn map_dir(
