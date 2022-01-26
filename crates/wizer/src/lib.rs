@@ -152,8 +152,12 @@ pub struct Wizer {
     )]
     dirs: Vec<PathBuf>,
 
-    /// When using WASI during initialization, which file guest system directories
-    /// should be mapped as a host directory?
+    /// When using WASI during initialization, which guest directories should be
+    /// mapped to a host directory?
+    ///
+    /// The `--mapdir` option differs from `--dir` in that it allows giving a
+    /// custom guest name to the directory that is different from its name in
+    /// the host.
     ///
     /// None are mapped by default.
     #[cfg_attr(
