@@ -700,6 +700,12 @@ impl Func {
     }
 
     /// Gets a reference to the `FuncType` for this function.
+    ///
+    /// Note that this returns both a reference to the type of this function as
+    /// well as a reference back to the store itself. This enables using the
+    /// `StoreOpaque` while the `FuncType` is also being used (from the
+    /// perspective of the borrow-checker) because otherwise the signature would
+    /// consider `StoreOpaque` borrowed mutable while `FuncType` is in use.
     fn ty_ref<'a>(&self, store: &'a mut StoreOpaque) -> (&'a FuncType, &'a StoreOpaque) {
         // If we haven't loaded our type into the store yet then do so lazily at
         // this time.
