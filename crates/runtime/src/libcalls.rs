@@ -402,6 +402,13 @@ pub unsafe extern "C" fn wasmtime_activations_table_insert_with_gc(
     let externref = VMExternRef::clone_from_raw(externref);
     let instance = (*vmctx).instance();
     let (activations_table, module_info_lookup) = (*instance.store()).externref_activations_table();
+
+    // Invariant: all `externref`s on the stack have an entry in the activations
+    // table. So we need to ensure that this `externref` is in the table
+    // *before* we GC, even though `insert_with_gc` will ensure that it is in
+    // the table *after* the GC.
+    activations_table.insert_without_gc(externref.clone());
+
     activations_table.insert_with_gc(externref, module_info_lookup);
 }
 
