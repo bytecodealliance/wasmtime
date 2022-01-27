@@ -1,0 +1,151 @@
+# This is a workflow triggered by PR or triggered manually
+# Runs quick performance tests and reports the comparison against HEAD
+# Test should take less than 10 minutes to run on current self-hosted devices
+name: "Performance Testing"
+
+# Controls when the action will run.
+# Workflow runs when manually triggered using the UI or API.
+on:
+  push:
+  pull_request:
+    branches: [ main ]
+
+# Env variables
+env:
+  SG_COMMIT: 649509c
+
+jobs:
+  Performance_x86-64:
+    name: Performance x86-64
+    runs-on: [self-hosted, linux, x64]
+    # Inputs the workflow accepts.
+    steps:
+      - run: echo "This job is now running on a ${{ runner.os }} self-hosted server."
+
+      - name: Setup Rust Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Build sightglass commit ${{env.SG_COMMIT}}"
+        run: |
+          cd ../ && ls -l && rm -rf ./sightglass
+          git clone https://github.com/bytecodealliance/sightglass.git && cd ./sightglass
+          git checkout ${{env.SG_COMMIT}}
+          cargo build --release
+
+      - name: Checkout ${{ github.ref }} from ${{ github.repository }}
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+          path: wasmtime_commit
+
+      - name: Build ${{ github.ref }}
+        working-directory: ./wasmtime_commit
+        run: |
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_commit.so
+
+      - name: Checkout Main
+        uses: actions/checkout@v2
+        with:
+          ref: 'main'
+          submodules: true
+          path: wasmtime_main
+
+      - name: Build Main
+        working-directory: ./wasmtime_main
+        run: |
+          cargo build --release -p wasmtime-bench-api
+          cp target/release/libwasmtime_bench_api.so /tmp/wasmtime_main.so
+
+      - name: Run performance tests
+        working-directory: ../sightglass
+        run: |
+          cargo run -- \
+          benchmark \
+          --processes 1 \
+          --iterations-per-process 2 \
+          --engine /tmp/wasmtime_main.so \
+          --engine /tmp/wasmtime_commit.so \
+          --output-format csv \
+          --output-file /tmp/results.csv \
+          --raw \
+          -- benchmarks-next/blake3-scalar/benchmark.wasm
+          ./target/release/sightglass-cli summarize --input-format csv  --output-format csv -f /tmp/results.csv > /tmp/results_summarized.csv
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Post Process Perf Results
+        run: |
+          pip3 install pandas
+          pip3 install numpy
+          grep -v "cycles" /tmp/results_summarized.csv > /tmp/results_cycles_summarized.csv
+          sed -i 's/\/tmp\/wasmtime_commit.so/patch/g' /tmp/results_cycles_summarized.csv
+          sed -i 's/\/tmp\/wasmtime_main.so/main/g' /tmp/results_cycles_summarized.csv
+          python3 -c "import pandas as pd; pp = pd.read_csv('/tmp/results_cycles_summarized.csv', usecols=['arch','engine','phase', 'mean'], header=0); pp_sorted = pp.sort_values('phase', ascending=True); print(pp_sorted.to_string(index=False));" > /tmp/results_cycles_summarized_pp_sorted.csv
+          sed -i 's/^/ /' /tmp/results_cycles_summarized_pp_sorted.csv
+          sed -i 's/ \+/|/g' /tmp/results_cycles_summarized_pp_sorted.csv
+          sed -i -z 's/\n/|\n/g' /tmp/results_cycles_summarized_pp_sorted.csv
+          sed -i '2 i\ |-|-|-|-|' /tmp/results_cycles_summarized_pp_sorted.csv
+          sed -i '1 i\ Performance results in clockticks (lower is better):\n' /tmp/results_cycles_summarized_pp_sorted.csv
+
+          #python3 -c "import pandas as pd; pp = pd.read_csv('/tmp/results_cycles_summarized.csv', usecols=['arch','engine','phase', 'mean'], header=0); pp_sorted = pp;  print(pp_sorted.to_string(index=False)); pp_sorted.insert(4, '%Change (1-Head/Patch)',[ 1 -pp_sorted.loc[0][3]/pp_sorted.loc[3][3], 0, 1-pp_sorted.loc[1][3]/pp_sorted.loc[4][3],0, 1-pp_sorted.loc[2][3]/pp_sorted.loc[5][3] ,0], True); print(pp_sorted)"  > /tmp/results_cycles_summarized_pp_sorted2.csv
+          python3 -c "import pandas as pd; pp = pd.read_csv('/tmp/results_cycles_summarized.csv', usecols=['arch','engine','phase', 'mean'], header=0); pp_sorted = pp; pp_sorted.insert(4, '%Change_(1-Head/Patch)',[ 1 -pp_sorted.loc[0][3]/pp_sorted.loc[3][3], 1-pp_sorted.loc[1][3]/pp_sorted.loc[4][3], 1-pp_sorted.loc[2][3]/pp_sorted.loc[5][3],0,0,0], True); pp_sorted.drop('mean', axis=1, inplace=True);  print(pp_sorted.to_string(index=False))"  > /tmp/results_cycles_summarized_pp_sorted2.csv
+          sed -i 's/^/ /' /tmp/results_cycles_summarized_pp_sorted2.csv
+          sed -i 's/ \+/|/g' /tmp/results_cycles_summarized_pp_sorted2.csv
+          sed -i -z 's/\n/|\n/g' /tmp/results_cycles_summarized_pp_sorted2.csv
+          sed -i '2 i\ |-|-|-|-|' /tmp/results_cycles_summarized_pp_sorted2.csv
+          sed -i '/main/d' /tmp/results_cycles_summarized_pp_sorted2.csv
+          sed -i '1 i\ Performance results based on clockticks comparison with main HEAD (higher %change shows improvement):\n' /tmp/results_cycles_summarized_pp_sorted2.csv
+
+     # - id: get-comment-body
+     #   name: Get Result
+     #   run: |
+     #     body="$(cat /tmp/results_cycles_summarized_pp_sorted.csv)"
+     #     body="${body//'%'/'%25'}"
+     #     body="${body//$'\n'/'%0A'}"
+     #     body="${body//$'\r'/'%0D'}"
+     #     echo "::set-output name=body::$body"
+
+      - name: Find PR
+        uses: jwalton/gh-find-current-pr@v1
+        id: findPr
+        with:
+          # Can be "open", "closed", or "all".  Defaults to "open".
+          state: open
+
+      - run: echo ${{ steps.findPr.outputs.pr }}
+      - run: echo ${{ steps.fc.outputs.comment-id }}
+       # echo "${{ steps.findPr.outputs.pr }}"
+       # echo "${{ steps.fc.outputs.comment-id }}"
+
+     # - name: Publish Results
+     #   uses: peter-evans/create-or-update-comment@v1
+     #   with:
+     #     issue-number: ${{ steps.findPr.outputs.pr }}
+     #     reactions: rocket
+     #     body: ${{ steps.get-comment-body.outputs.body }}
+
+      - id: get-comment-body2
+        name: Get Result 2
+        run: |
+          body2="$(cat /tmp/results_cycles_summarized_pp_sorted2.csv)"
+          body2="${body2//'%'/'%25'}"
+          body2="${body2//$'\n'/'%0A'}"
+          body2="${body2//$'\r'/'%0D'}"
+          echo "::set-output name=body2::$body2"
+
+      - name: Publish Results 2
+        uses: peter-evans/create-or-update-comment@v1
+        with:
+          issue-number: ${{ steps.findPr.outputs.pr }}
+          reactions: rocket
+          body: ${{ steps.get-comment-body2.outputs.body2 }}
+
+ # Performance_Aarch64:
+ #   name: Performance Aarch64
+ #   runs-on: [self-hosted, linux, x86-64]
