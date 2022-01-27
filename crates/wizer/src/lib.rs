@@ -143,9 +143,11 @@ pub struct Wizer {
     )]
     inherit_env: Option<bool>,
 
-    /// After initialization, should `init_func` be removed from the module?
+    /// After initialization, should the Wasm module still export the
+    /// initialization function?
     ///
-    /// This is false by default.
+    /// This is `false` by default, meaning that the initialization function is
+    /// no longer exported from the Wasm module.
     #[cfg_attr(
         feature = "structopt",
         structopt(long = "keep-init-func", value_name = "true|false")
@@ -305,9 +307,11 @@ impl Wizer {
         self
     }
 
-    /// After initialization, should `init_func` be removed from the module?
+    /// After initialization, should the Wasm module still export the
+    /// initialization function?
     ///
-    /// Defaults to `false`.
+    /// This is `false` by default, meaning that the initialization function is
+    /// no longer exported from the Wasm module.
     pub fn keep_init_func(&mut self, keep: bool) -> &mut Self {
         self.keep_init_func = Some(keep);
         self
