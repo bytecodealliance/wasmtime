@@ -39,6 +39,14 @@ pub enum InstanceAllocationStrategy {
     Pooling {
         /// The allocation strategy to use.
         strategy: PoolingAllocationStrategy,
+        /// Whether or not to use a Linux-specific feature of "userfaultfd" to
+        /// lazily initialize linear memories instead of immediately
+        /// initializating linear memories on instantiation.
+        ///
+        /// Note that this flag is enabled by default via
+        /// [`InstanceAllocationStrategy::pooling`] if the `uffd` crate feature
+        /// is enabled and the target os is Linux.
+        uffd: bool,
         /// The module limits to use.
         module_limits: ModuleLimits,
         /// The instance limits to use.
@@ -54,6 +62,15 @@ impl InstanceAllocationStrategy {
             strategy: PoolingAllocationStrategy::default(),
             module_limits: ModuleLimits::default(),
             instance_limits: InstanceLimits::default(),
+            uffd: cfg!(feature = "uffd") && cfg!(target_os = "linux"),
+        }
+    }
+
+    pub(crate) fn uffd_enabled(&self) -> bool {
+        match self {
+            #[cfg(feature = "pooling-allocator")]
+            InstanceAllocationStrategy::Pooling { uffd, .. } => *uffd,
+            _ => false,
         }
     }
 }
@@ -103,7 +120,6 @@ pub struct Config {
     pub(crate) async_support: bool,
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
-    pub(crate) paged_memory_initialization: bool,
 }
 
 impl Config {
@@ -127,8 +143,6 @@ impl Config {
             async_support: false,
             module_version: ModuleVersionStrategy::default(),
             parallel_compilation: true,
-            // Default to paged memory initialization when using uffd on linux
-            paged_memory_initialization: cfg!(all(target_os = "linux", feature = "uffd")),
         };
         #[cfg(compiler)]
         {
@@ -837,30 +851,20 @@ impl Config {
     /// [`Config::static_memory_maximum_size`] and
     /// [`Config::static_memory_guard_size`] options will be used to configure
     /// the virtual memory allocations of linear memories.
-    pub fn allocation_strategy(&mut self, strategy: InstanceAllocationStrategy) -> &mut Self {
+    pub fn allocation_strategy(
+        &mut self,
+        strategy: InstanceAllocationStrategy,
+    ) -> Result<&mut Self> {
+        if strategy.uffd_enabled() {
+            if !cfg!(feature = "uffd") {
+                bail!("uffd requested at runtime but support is not compiled in");
+            }
+            if !cfg!(target_os = "linux") {
+                bail!("uffd can only be enabled on Linux");
+            }
+        }
         self.allocation_strategy = strategy;
-        self
-    }
-
-    /// Sets whether or not an attempt is made to initialize linear memories by page.
-    ///
-    /// This setting is `false` by default and Wasmtime initializes linear memories
-    /// by copying individual data segments from the compiled module.
-    ///
-    /// Setting this to `true` will cause compilation to attempt to organize the
-    /// data segments into WebAssembly pages and linear memories are initialized by
-    /// copying each page rather than individual data segments.
-    ///
-    /// Modules that import a memory or have data segments that use a global base
-    /// will continue to be initialized by copying each data segment individually.
-    ///
-    /// When combined with the `uffd` feature on Linux, this will allow Wasmtime
-    /// to delay initialization of a linear memory page until it is accessed
-    /// for the first time during WebAssembly execution; this may improve
-    /// instantiation performance as a result.
-    pub fn paged_memory_initialization(&mut self, value: bool) -> &mut Self {
-        self.paged_memory_initialization = value;
-        self
+        Ok(self)
     }
 
     /// Configures the maximum size, in bytes, where a linear memory is
@@ -1196,6 +1200,10 @@ impl Config {
             )?)),
         }
     }
+
+    pub(crate) fn uffd_enabled(&self) -> bool {
+        self.allocation_strategy.uffd_enabled()
+    }
 }
 
 #[cfg(compiler)]
@@ -1238,7 +1246,6 @@ impl Clone for Config {
             async_stack_size: self.async_stack_size,
             module_version: self.module_version.clone(),
             parallel_compilation: self.parallel_compilation,
-            paged_memory_initialization: self.paged_memory_initialization,
         }
     }
 }

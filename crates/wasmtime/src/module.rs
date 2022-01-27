@@ -403,9 +403,12 @@ impl Module {
                     .compiler()
                     .emit_obj(&translation, &types, funcs, tunables, &mut obj)?;
 
-            // If configured, attempt to use paged memory initialization
-            // instead of the default mode of memory initialization
-            if engine.config().paged_memory_initialization {
+            // If uffd is configured, attempt to use paged memory
+            // initialization instead of the default mode of memory
+            // initialization. This organization of memory initialization is the
+            // benefit of uffd which allows skipping memory initialization
+            // entirely on module instantiation.
+            if engine.config().uffd_enabled() {
                 translation.try_paged_init();
             }
 

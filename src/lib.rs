@@ -245,11 +245,6 @@ struct CommonOptions {
     /// Disables the on-by-default address map from native code to wasm code.
     #[structopt(long)]
     disable_address_map: bool,
-
-    /// Switches memory initialization to happen in a paged fashion instead of
-    /// the data segments specified in the original wasm module.
-    #[structopt(long)]
-    paged_memory_initialization: bool,
 }
 
 impl CommonOptions {
@@ -323,7 +318,6 @@ impl CommonOptions {
         config.consume_fuel(self.consume_fuel);
         config.epoch_interruption(self.epoch_interruption);
         config.generate_address_map(!self.disable_address_map);
-        config.paged_memory_initialization(self.paged_memory_initialization);
 
         Ok(config)
     }
