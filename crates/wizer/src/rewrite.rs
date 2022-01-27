@@ -422,7 +422,10 @@ impl Wizer {
         let mut aliases = wasm_encoder::AliasSection::new();
         let mut exports = wasm_encoder::ExportSection::new();
         for exp in cx.root().exports(cx) {
-            if exp.field == self.init_func || (has_wasi_initialize && exp.field == "_initialize") {
+            if !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC)
+                && (exp.field == self.init_func
+                    || (has_wasi_initialize && exp.field == "_initialize"))
+            {
                 continue;
             }
 
