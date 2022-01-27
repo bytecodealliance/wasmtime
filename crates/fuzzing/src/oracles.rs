@@ -540,6 +540,9 @@ pub fn table_ops(mut fuzz_config: generators::Config, ops: generators::table_ops
             .map(|_| Val::ExternRef(Some(ExternRef::new(CountDrops(num_dropped.clone())))))
             .collect();
         let _ = run.call(&mut store, &args, &mut []);
+
+        // Do a final GC after running the Wasm.
+        store.gc();
     }
 
     assert_eq!(num_dropped.load(SeqCst), expected_drops.load(SeqCst));
