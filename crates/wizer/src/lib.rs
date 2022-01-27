@@ -29,6 +29,7 @@ use wasmtime_wasi::WasiCtx;
 
 const DEFAULT_INHERIT_STDIO: bool = true;
 const DEFAULT_INHERIT_ENV: bool = false;
+const DEFAULT_KEEP_INIT_FUNC: bool = false;
 const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 const DEFAULT_WASM_MODULE_LINKING: bool = false;
@@ -142,6 +143,17 @@ pub struct Wizer {
     )]
     inherit_env: Option<bool>,
 
+    /// After initialization, should the Wasm module still export the
+    /// initialization function?
+    ///
+    /// This is `false` by default, meaning that the initialization function is
+    /// no longer exported from the Wasm module.
+    #[cfg_attr(
+        feature = "structopt",
+        structopt(long = "keep-init-func", value_name = "true|false")
+    )]
+    keep_init_func: Option<bool>,
+
     /// When using WASI during initialization, which file system directories
     /// should be made available?
     ///
@@ -235,6 +247,7 @@ impl Wizer {
             allow_wasi: false,
             inherit_stdio: None,
             inherit_env: None,
+            keep_init_func: None,
             dirs: vec![],
             map_dirs: vec![],
             wasm_multi_memory: None,
@@ -291,6 +304,16 @@ impl Wizer {
     /// Defaults to `false`.
     pub fn inherit_env(&mut self, inherit: bool) -> &mut Self {
         self.inherit_env = Some(inherit);
+        self
+    }
+
+    /// After initialization, should the Wasm module still export the
+    /// initialization function?
+    ///
+    /// This is `false` by default, meaning that the initialization function is
+    /// no longer exported from the Wasm module.
+    pub fn keep_init_func(&mut self, keep: bool) -> &mut Self {
+        self.keep_init_func = Some(keep);
         self
     }
 

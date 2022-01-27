@@ -8,7 +8,7 @@ use crate::{
         Module, ModuleContext,
     },
     snapshot::Snapshot,
-    translate, FuncRenames, Wizer,
+    translate, FuncRenames, Wizer, DEFAULT_KEEP_INIT_FUNC,
 };
 use renumbering::Renumbering;
 use std::{convert::TryFrom, iter};
@@ -137,8 +137,9 @@ impl Wizer {
                 s if s.id == SectionId::Export.into() => {
                     let mut exports = wasm_encoder::ExportSection::new();
                     for export in module.exports(cx) {
-                        if export.field == self.init_func
-                            || (has_wasi_initialize && export.field == "_initialize")
+                        if !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC)
+                            && (export.field == self.init_func
+                                || (has_wasi_initialize && export.field == "_initialize"))
                         {
                             continue;
                         }
@@ -421,7 +422,10 @@ impl Wizer {
         let mut aliases = wasm_encoder::AliasSection::new();
         let mut exports = wasm_encoder::ExportSection::new();
         for exp in cx.root().exports(cx) {
-            if exp.field == self.init_func || (has_wasi_initialize && exp.field == "_initialize") {
+            if !self.keep_init_func.unwrap_or(DEFAULT_KEEP_INIT_FUNC)
+                && (exp.field == self.init_func
+                    || (has_wasi_initialize && exp.field == "_initialize"))
+            {
                 continue;
             }
 
