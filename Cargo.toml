@@ -52,7 +52,7 @@ more-asserts = "0.2.1"
 tempfile = "3.1.0"
 test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { path = "crates/runtime" }
-tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
+tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread", "sync"] }
 tracing-subscriber = "0.3.1"
 wast = "38.0.0"
 criterion = "0.3.4"
@@ -118,6 +118,10 @@ debug = false # FIXME(#1813)
 
 [[bench]]
 name = "instantiation"
+harness = false
+
+[[bench]]
+name = "server"
 harness = false
 
 [[bench]]
