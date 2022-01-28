@@ -362,6 +362,7 @@ fn test_pooling_allocator_initial_limits_exceeded() -> Result<()> {
             count: 1,
             ..Default::default()
         },
+        backend: PoolingBackend::default(),
     });
 
     let engine = Engine::new(&config)?;
@@ -735,6 +736,7 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
         instance_limits: InstanceLimits {
             ..Default::default()
         },
+        backend: PoolingBackend::default(),
     });
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);
@@ -847,6 +849,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
         instance_limits: InstanceLimits {
             ..Default::default()
         },
+        backend: PoolingBackend::default(),
     });
     let engine = Engine::new(&config).unwrap();
     let linker = Linker::new(&engine);

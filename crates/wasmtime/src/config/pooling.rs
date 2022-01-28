@@ -271,3 +271,45 @@ impl Into<wasmtime_runtime::PoolingAllocationStrategy> for PoolingAllocationStra
         }
     }
 }
+
+/// The "backend", or implementation strategy, to be used in providing
+/// virtual memory for the pooling allocator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoolingBackend {
+    /// Use conventional POSIX memory-mapping syscalls, `mmap()` and
+    /// `mprotect()`. Should work on any Unix-like system.
+    Mmap,
+    /// Use userfaultfd. Supported only on Linux.
+    #[cfg(feature = "uffd")]
+    Uffd,
+    /// Use memfd. Supported only on Linux.
+    #[cfg(feature = "memfd-allocator")]
+    MemFd,
+}
+
+impl Default for PoolingBackend {
+    fn default() -> Self {
+        match wasmtime_runtime::PoolingBackend::default() {
+            wasmtime_runtime::PoolingBackend::Mmap => PoolingBackend::Mmap,
+            #[cfg(feature = "uffd")]
+            wasmtime_runtime::PoolingBackend::Uffd => PoolingBackend::Uffd,
+            #[cfg(feature = "memfd-allocator")]
+            wasmtime_runtime::PoolingBackend::MemFd => PoolingBackend::MemFd,
+        }
+    }
+}
+
+// This exists so we can convert between the public Wasmtime API and the runtime representation
+// without having to export runtime types from the Wasmtime API.
+#[doc(hidden)]
+impl Into<wasmtime_runtime::PoolingBackend> for PoolingBackend {
+    fn into(self) -> wasmtime_runtime::PoolingBackend {
+        match self {
+            Self::Mmap => wasmtime_runtime::PoolingBackend::Mmap,
+            #[cfg(feature = "uffd")]
+            Self::Uffd => wasmtime_runtime::PoolingBackend::Uffd,
+            #[cfg(feature = "memfd-allocator")]
+            Self::MemFd => wasmtime_runtime::PoolingBackend::MemFd,
+        }
+    }
+}

@@ -198,6 +198,7 @@ fn guards_present_pooling() -> Result<()> {
             ..ModuleLimits::default()
         },
         instance_limits: InstanceLimits { count: 2 },
+        backend: PoolingBackend::default(),
     });
     let engine = Engine::new(&config)?;
 

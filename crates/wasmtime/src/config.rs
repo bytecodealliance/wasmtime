@@ -43,6 +43,8 @@ pub enum InstanceAllocationStrategy {
         module_limits: ModuleLimits,
         /// The instance limits to use.
         instance_limits: InstanceLimits,
+        /// The backend (memory allocation strategy) to use.
+        backend: PoolingBackend,
     },
 }
 
@@ -54,6 +56,7 @@ impl InstanceAllocationStrategy {
             strategy: PoolingAllocationStrategy::default(),
             module_limits: ModuleLimits::default(),
             instance_limits: InstanceLimits::default(),
+            backend: PoolingBackend::default(),
         }
     }
 }
@@ -1161,10 +1164,12 @@ impl Config {
                 strategy,
                 module_limits,
                 instance_limits,
+                backend,
             } => Ok(Box::new(wasmtime_runtime::PoolingInstanceAllocator::new(
                 strategy.into(),
                 module_limits.into(),
                 instance_limits.into(),
+                backend.into(),
                 stack_size,
                 &self.tunables,
             )?)),

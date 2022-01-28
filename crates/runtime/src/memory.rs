@@ -6,7 +6,7 @@
 use crate::instance::MemFdSlot;
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
-use crate::Store;
+use crate::{PoolingBackend, Store};
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use more_asserts::{assert_ge, assert_le};
@@ -210,12 +210,17 @@ pub enum Memory {
         /// A callback which makes portions of `base` accessible for when memory
         /// is grown. Otherwise it's expected that accesses to `base` will
         /// fault.
-        make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
+        make_accessible: Option<fn(PoolingBackend, *mut u8, usize) -> Result<()>>,
 
         /// The MemFdSlot, if any, for this memory. Owned here and
         /// returned to the pooling allocator when termination occurs.
         #[cfg(feature = "memfd-allocator")]
         memfd_slot: Option<MemFdSlot>,
+
+        /// The memory "backend": this determines how virtual memory
+        /// features are used, and is needed to pass to
+        /// `make_accessible`.
+        backend: PoolingBackend,
 
         /// Stores the pages in the linear memory that have faulted as guard pages when using the `uffd` feature.
         /// These pages need their protection level reset before the memory can grow.
@@ -246,7 +251,8 @@ impl Memory {
     pub fn new_static(
         plan: &MemoryPlan,
         base: &'static mut [u8],
-        make_accessible: fn(*mut u8, usize) -> Result<()>,
+        make_accessible: fn(PoolingBackend, *mut u8, usize) -> Result<()>,
+        backend: PoolingBackend,
         store: &mut dyn Store,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
@@ -257,13 +263,14 @@ impl Memory {
         };
 
         if minimum > 0 {
-            make_accessible(base.as_mut_ptr(), minimum)?;
+            make_accessible(backend, base.as_mut_ptr(), minimum)?;
         }
 
         Ok(Memory::Static {
             base,
             size: minimum,
             make_accessible: Some(make_accessible),
+            backend,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             guard_page_faults: Vec::new(),
             #[cfg(feature = "memfd-allocator")]
@@ -289,8 +296,11 @@ impl Memory {
         Ok(Memory::Static {
             base,
             size: minimum,
+            backend: PoolingBackend::MemFd,
             make_accessible: None,
             memfd_slot: Some(memfd_slot),
+            #[cfg(feature = "uffd")]
+            guard_page_faults: vec![],
         })
     }
 
@@ -491,7 +501,11 @@ impl Memory {
 
         #[cfg(all(feature = "uffd", target_os = "linux"))]
         {
-            if self.is_static() {
+            if let Memory::Static {
+                backend: PoolingBackend::Uffd,
+                ..
+            } = self
+            {
                 // Reset any faulted guard pages before growing the memory.
                 if let Err(e) = self.reset_guard_pages() {
                     store.memory_grow_failed(&e);
@@ -524,6 +538,7 @@ impl Memory {
                 base,
                 size,
                 make_accessible,
+                backend,
                 ..
             } => {
                 let make_accessible = make_accessible
@@ -537,6 +552,7 @@ impl Memory {
 
                 // Operating system can fail to make memory accessible
                 if let Err(e) = make_accessible(
+                    *backend,
                     base.as_mut_ptr().add(old_byte_size),
                     new_byte_size - old_byte_size,
                 ) {
@@ -620,7 +636,8 @@ impl Default for Memory {
         Memory::Static {
             base: &mut [],
             size: 0,
-            make_accessible: Some(|_, _| unreachable!()),
+            backend: PoolingBackend::Mmap,
+            make_accessible: Some(|_, _, _| unreachable!()),
             #[cfg(feature = "memfd-allocator")]
             memfd_slot: None,
             #[cfg(all(feature = "uffd", target_os = "linux"))]

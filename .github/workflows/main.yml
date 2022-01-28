@@ -316,8 +316,24 @@ jobs:
         cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
         cargo test --features uffd -p wasmtime-cli pooling_allocator
         cargo test --features uffd -p wasmtime-cli wast::Cranelift
+        cargo test --features memfd-allocator -p wasmtime-runtime instance::allocator::pooling
         cargo test --features memfd-allocator -p wasmtime-cli pooling_allocator
         cargo test --features memfd-allocator -p wasmtime-cli wast::Cranelift
+        cargo test --features memfd-allocator,wasmtime-runtime/default-mmap-backend -p wasmtime-runtime instance::allocator::pooling
+        cargo test --features memfd-allocator,wasmtime-runtime/default-mmap-backend -p wasmtime-cli pooling_allocator
+        cargo test --features memfd-allocator,wasmtime-runtime/default-mmap-backend -p wasmtime-cli wast::Cranelift
+        cargo test --features uffd,wasmtime-runtime/default-mmap-backend -p wasmtime-runtime instance::allocator::pooling
+        cargo test --features uffd,wasmtime-runtime/default-mmap-backend -p wasmtime-cli pooling_allocator
+        cargo test --features uffd,wasmtime-runtime/default-mmap-backend -p wasmtime-cli wast::Cranelift
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-mmap-backend -p wasmtime-runtime instance::allocator::pooling
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-mmap-backend -p wasmtime-cli pooling_allocator
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-mmap-backend -p wasmtime-cli wast::Cranelift
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-uffd-backend -p wasmtime-runtime instance::allocator::pooling
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-uffd-backend -p wasmtime-cli pooling_allocator
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-uffd-backend -p wasmtime-cli wast::Cranelift
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-memfd-backend -p wasmtime-runtime instance::allocator::pooling
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-memfd-backend -p wasmtime-cli pooling_allocator
+        cargo test --features uffd,memfd-allocator,wasmtime-runtime/default-memfd-backend -p wasmtime-cli wast::Cranelift
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''
       env:
         RUST_BACKTRACE: 1

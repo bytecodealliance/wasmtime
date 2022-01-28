@@ -71,6 +71,7 @@ fn linear_memory_limits() -> Result<()> {
                 ..ModuleLimits::default()
             },
             instance_limits: InstanceLimits::default(),
+            backend: PoolingBackend::default(),
         },
     ))?)?;
     return Ok(());

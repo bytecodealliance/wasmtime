@@ -62,3 +62,12 @@ uffd = ["userfaultfd", "pooling-allocator"]
 posix-signals-on-macos = []
 
 memfd-allocator = ["pooling-allocator", "memfd"]
+
+# For testing only: make the uffd backend the default.
+default-uffd-backend = ["uffd"]
+
+# For testing only: make the memfd backend the default.
+default-memfd-backend = ["memfd-allocator"]
+
+# For testing only: make the mmap backend the default.
+default-mmap-backend = []

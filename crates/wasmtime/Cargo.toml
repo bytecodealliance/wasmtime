@@ -90,4 +90,5 @@ all-arch = ["wasmtime-cranelift/all-arch"]
 # need portable signal handling.
 posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
 
+# Enables use of memfd and CoW for efficient instance memories on Linux.
 memfd-allocator = ["wasmtime-runtime/memfd-allocator", "pooling-allocator"]

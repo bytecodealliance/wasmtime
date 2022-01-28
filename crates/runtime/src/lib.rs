@@ -48,7 +48,8 @@ pub use crate::instance::{
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::instance::{
-    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingBackend,
+    PoolingInstanceAllocator,
 };
 pub use crate::jit_int::GdbJitImageRegistration;
 pub use crate::memory::{DefaultMemoryCreator, Memory, RuntimeLinearMemory, RuntimeMemoryCreator};

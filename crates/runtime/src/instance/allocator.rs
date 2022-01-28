@@ -33,7 +33,8 @@ pub use self::pooling::MemFdSlot;
 
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
-    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
+    InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingBackend,
+    PoolingInstanceAllocator,
 };
 
 /// Represents a request for a new runtime instance.

@@ -1,3 +1,4 @@
+use crate::PoolingBackend;
 use anyhow::{bail, Result};
 use winapi::um::memoryapi::{VirtualAlloc, VirtualFree};
 use winapi::um::winnt::{MEM_COMMIT, MEM_DECOMMIT, PAGE_READWRITE};
@@ -30,18 +31,18 @@ pub fn decommit(addr: *mut u8, len: usize) -> Result<()> {
     Ok(())
 }
 
-pub fn commit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn commit_memory_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     commit(addr, len)
 }
 
-pub fn decommit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_memory_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
 
-pub fn commit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn commit_table_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     commit(addr, len)
 }
 
-pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_table_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }

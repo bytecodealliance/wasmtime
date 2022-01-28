@@ -32,6 +32,7 @@
 
 use super::{InstancePool, MemoryPool};
 use crate::instance::Instance;
+use crate::PoolingBackend;
 use anyhow::{bail, Context, Result};
 use rustix::io::{madvise, Advice};
 use std::thread;
@@ -57,32 +58,32 @@ fn decommit(addr: *mut u8, len: usize) -> Result<()> {
     Ok(())
 }
 
-pub fn commit_memory_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+pub fn commit_memory_pages(_backend: PoolingBackend, _addr: *mut u8, _len: usize) -> Result<()> {
     // A no-op as memory pages remain READ|WRITE with uffd
     Ok(())
 }
 
-pub fn decommit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_memory_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
 
-pub fn commit_table_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+pub fn commit_table_pages(_backend: PoolingBackend, _addr: *mut u8, _len: usize) -> Result<()> {
     // A no-op as table pages remain READ|WRITE
     Ok(())
 }
 
-pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_table_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
 
 #[cfg(feature = "async")]
-pub fn commit_stack_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+pub fn commit_stack_pages(_backend: PoolingBackend, _addr: *mut u8, _len: usize) -> Result<()> {
     // A no-op as stack pages remain READ|WRITE
     Ok(())
 }
 
 #[cfg(feature = "async")]
-pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_stack_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len)
 }
 
@@ -466,8 +467,13 @@ mod test {
             ..Tunables::default()
         };
 
-        let instances = InstancePool::new(&module_limits, &instance_limits, &tunables)
-            .expect("should allocate");
+        let instances = InstancePool::new(
+            &module_limits,
+            &instance_limits,
+            PoolingBackend::Uffd,
+            &tunables,
+        )
+        .expect("should allocate");
 
         let locator = FaultLocator::new(&instances);
 
@@ -589,6 +595,8 @@ mod test {
                                 host_state: Box::new(()),
                                 store: StorePtr::new(&mut mock_store),
                                 wasm_data: &[],
+                                #[cfg(feature = "memfd-allocator")]
+                                memfds: None,
                             },
                         )
                         .expect("instance should allocate"),

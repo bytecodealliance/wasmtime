@@ -37,13 +37,74 @@ cfg_if::cfg_if! {
     if #[cfg(windows)] {
         mod windows;
         use windows as imp;
-    } else if #[cfg(all(feature = "uffd", target_os = "linux"))] {
-        mod uffd;
-        use uffd as imp;
-        use imp::initialize_memory_pool;
     } else if #[cfg(target_os = "linux")] {
-        mod linux;
-        use linux as imp;
+        #[cfg(feature = "uffd")]
+        pub(crate) mod uffd;
+        pub(crate) mod linux;
+
+        mod imp {
+            use anyhow::Result;
+            use crate::PoolingBackend;
+
+            pub fn commit_memory_pages(backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
+                match backend {
+                    PoolingBackend::Mmap => super::linux::commit_memory_pages(backend, addr, len),
+                    #[cfg(feature = "memfd-allocator")]
+                    PoolingBackend::MemFd => super::linux::commit_memory_pages(backend, addr, len),
+                    #[cfg(feature = "uffd")]
+                    PoolingBackend::Uffd => super::uffd::commit_memory_pages(backend, addr, len),
+                }
+            }
+            pub fn decommit_memory_pages(backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
+                match backend {
+                    PoolingBackend::Mmap => super::linux::decommit_memory_pages(backend, addr, len),
+                    #[cfg(feature = "memfd-allocator")]
+                    PoolingBackend::MemFd => super::linux::decommit_memory_pages(backend, addr, len),
+                    #[cfg(feature = "uffd")]
+                    PoolingBackend::Uffd => super::uffd::decommit_memory_pages(backend, addr, len),
+                }
+            }
+            pub fn commit_table_pages(backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
+                match backend {
+                    PoolingBackend::Mmap => super::linux::commit_table_pages(backend, addr, len),
+                    #[cfg(feature = "memfd-allocator")]
+                    PoolingBackend::MemFd => super::linux::commit_table_pages(backend, addr, len),
+                    #[cfg(feature = "uffd")]
+                    PoolingBackend::Uffd => super::uffd::commit_table_pages(backend, addr, len),
+                }
+            }
+            pub fn decommit_table_pages(backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
+                match backend {
+                    PoolingBackend::Mmap => super::linux::decommit_table_pages(backend, addr, len),
+                    #[cfg(feature = "memfd-allocator")]
+                    PoolingBackend::MemFd => super::linux::decommit_table_pages(backend, addr, len),
+                    #[cfg(feature = "uffd")]
+                    PoolingBackend::Uffd => super::uffd::decommit_table_pages(backend, addr, len),
+                }
+            }
+
+            #[cfg(feature = "async")]
+            pub fn commit_stack_pages(backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
+                match backend {
+                    PoolingBackend::Mmap => super::linux::commit_stack_pages(backend, addr, len),
+                    #[cfg(feature = "memfd-allocator")]
+                    PoolingBackend::MemFd => super::linux::commit_stack_pages(backend, addr, len),
+                    #[cfg(feature = "uffd")]
+                    PoolingBackend::Uffd => super::uffd::commit_stack_pages(backend, addr, len),
+                }
+            }
+
+            #[cfg(feature = "async")]
+            pub fn decommit_stack_pages(backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
+                match backend {
+                    PoolingBackend::Mmap => super::linux::decommit_stack_pages(backend, addr, len),
+                    #[cfg(feature = "memfd-allocator")]
+                    PoolingBackend::MemFd => super::linux::decommit_stack_pages(backend, addr, len),
+                    #[cfg(feature = "uffd")]
+                    PoolingBackend::Uffd => super::uffd::decommit_stack_pages(backend, addr, len),
+                }
+            }
+        }
     } else {
         mod unix;
         use unix as imp;
@@ -62,6 +123,49 @@ fn round_up_to_pow2(n: usize, to: usize) -> usize {
     debug_assert!(to > 0);
     debug_assert!(to.is_power_of_two());
     (n + to - 1) & !(to - 1)
+}
+
+/// The "backend", or implementation strategy, to be used in providing
+/// virtual memory for the pooling allocator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PoolingBackend {
+    /// Use conventional POSIX memory-mapping syscalls, `mmap()` and
+    /// `mprotect()`. Should work on any Unix-like system.
+    Mmap,
+    /// Use userfaultfd. Supported only on Linux.
+    #[cfg(feature = "uffd")]
+    Uffd,
+    /// Use memfd. Supported only on Linux.
+    #[cfg(feature = "memfd-allocator")]
+    MemFd,
+}
+
+impl std::default::Default for PoolingBackend {
+    fn default() -> Self {
+        cfg_if::cfg_if! {
+            // This may look a bit complex, but the intent is to allow
+            // for testability of dynamic selection of non-default
+            // backends.
+            //
+            // The basic logic is: if `default-*-backend` is set, then
+            // that is the default backend, as long as it is
+            // available. Otherwise, the default is the first
+            // available of: uffd, memfd, mmap.
+            if #[cfg(feature = "default-mmap-backend")] {
+                PoolingBackend::Mmap
+            } else if #[cfg(all(feature = "uffd", feature = "default-uffd-backend"))] {
+                PoolingBackend::Uffd
+            } else if #[cfg(all(feature = "memfd-allocator", feature = "default-memfd-backend"))] {
+                PoolingBackend::MemFd
+            } else if #[cfg(feature = "uffd")] {
+                PoolingBackend::Uffd
+            } else if #[cfg(feature = "memfd-allocator")] {
+                PoolingBackend::MemFd
+            } else {
+                PoolingBackend::Mmap
+            }
+        }
+    }
 }
 
 /// Represents the limits placed on a module for compiling with the pooling instance allocator.
@@ -296,12 +400,14 @@ struct InstancePool {
     tables: TablePool,
     empty_module: Arc<Module>,
     module_limits: ModuleLimits,
+    backend: PoolingBackend,
 }
 
 impl InstancePool {
     fn new(
         module_limits: &ModuleLimits,
         instance_limits: &InstanceLimits,
+        backend: PoolingBackend,
         tunables: &Tunables,
     ) -> Result<Self> {
         let page_size = region::page::size();
@@ -340,8 +446,9 @@ impl InstancePool {
             mapping,
             instance_size,
             max_instances,
+            backend,
             free_list: Mutex::new((0..max_instances).collect()),
-            memories: MemoryPool::new(module_limits, instance_limits, tunables)?,
+            memories: MemoryPool::new(module_limits, instance_limits, backend, tunables)?,
             tables: TablePool::new(module_limits, instance_limits)?,
             empty_module: Arc::new(Module::default()),
             module_limits: module_limits.clone(),
@@ -403,30 +510,41 @@ impl InstancePool {
             instance.set_store(store);
         }
 
-        #[cfg(not(feature = "memfd-allocator"))]
-        {
-            Self::set_instance_memories(
-                instance,
-                self.memories.get(index),
-                self.memories.max_wasm_pages,
-            )?;
-        }
-
-        #[cfg(feature = "memfd-allocator")]
-        {
-            Self::map_instance_memfd_memories(
-                index,
-                instance,
-                &req.memfds,
-                &self.memories,
-                self.memories.max_wasm_pages,
-            )?;
+        match self.backend {
+            PoolingBackend::Mmap => {
+                Self::set_instance_memories(
+                    instance,
+                    self.memories.get(index),
+                    self.memories.max_wasm_pages,
+                    self.backend,
+                )?;
+            }
+            #[cfg(feature = "uffd")]
+            PoolingBackend::Uffd => {
+                Self::set_instance_memories(
+                    instance,
+                    self.memories.get(index),
+                    self.memories.max_wasm_pages,
+                    self.backend,
+                )?;
+            }
+            #[cfg(feature = "memfd-allocator")]
+            PoolingBackend::MemFd => {
+                Self::map_instance_memfd_memories(
+                    index,
+                    instance,
+                    &req.memfds,
+                    &self.memories,
+                    self.memories.max_wasm_pages,
+                )?;
+            }
         }
 
         Self::set_instance_tables(
             instance,
             self.tables.get(index).map(|x| x as *mut usize),
             self.tables.max_elements,
+            self.backend,
         )?;
 
         initialize_vmcontext(instance, req);
@@ -481,32 +599,52 @@ impl InstancePool {
             .zip(self.memories.get(index))
             .enumerate()
         {
-            let mut memory = mem::take(memory);
+            let memory = mem::take(memory);
             debug_assert!(memory.is_static());
 
-            #[cfg(feature = "memfd-allocator")]
-            {
-                if let Memory::Static {
-                    memfd_slot: Some(mut memfd_slot),
-                    ..
-                } = memory
-                {
+            match (self.backend, memory) {
+                #[cfg(feature = "memfd-allocator")]
+                (
+                    PoolingBackend::MemFd,
+                    Memory::Static {
+                        memfd_slot: Some(mut memfd_slot),
+                        ..
+                    },
+                ) => {
                     let _ = memfd_slot.clear_and_remain_ready();
                     self.memories.return_memfd_slot(index, _mem_idx, memfd_slot);
-                    continue;
+                }
+
+                #[cfg(feature = "memfd-allocator")]
+                (PoolingBackend::MemFd, memory) => {
+                    let size = memory.byte_size();
+                    drop(memory);
+                    decommit_memory_pages(self.backend, base, size)
+                        .expect("failed to decommit linear memory pages");
+                }
+
+                #[cfg(all(feature = "uffd"))]
+                (PoolingBackend::Uffd, mut memory) => {
+                    // Reset any faulted guard pages as the physical
+                    // memory may be reused for another instance in
+                    // the future.
+                    memory
+                        .reset_guard_pages()
+                        .expect("failed to reset guard pages");
+
+                    let size = memory.byte_size();
+                    drop(memory);
+                    decommit_memory_pages(self.backend, base, size)
+                        .expect("failed to decommit linear memory pages");
+                }
+
+                (PoolingBackend::Mmap, memory) => {
+                    let size = memory.byte_size();
+                    drop(memory);
+                    decommit_memory_pages(self.backend, base, size)
+                        .expect("failed to decommit linear memory pages");
                 }
             }
-
-            // Reset any faulted guard pages as the physical memory may be reused for another instance in the future
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            memory
-                .reset_guard_pages()
-                .expect("failed to reset guard pages");
-            drop(&mut memory); // require mutable on all platforms, not just uffd
-
-            let size = memory.byte_size();
-            drop(memory);
-            decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
         }
 
         instance.memories.clear();
@@ -523,7 +661,7 @@ impl InstancePool {
             );
 
             drop(table);
-            decommit_table_pages(base, size).expect("failed to decommit table pages");
+            decommit_table_pages(self.backend, base, size).expect("failed to decommit table pages");
         }
 
         // We've now done all of the pooling-allocator-specific
@@ -539,11 +677,11 @@ impl InstancePool {
         self.free_list.lock().unwrap().push(index);
     }
 
-    #[cfg_attr(feature = "memfd-allocator", allow(dead_code))]
     fn set_instance_memories(
         instance: &mut Instance,
         mut memories: impl Iterator<Item = *mut u8>,
         max_pages: u64,
+        backend: PoolingBackend,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -559,7 +697,7 @@ impl InstancePool {
                 )
             };
             instance.memories.push(
-                Memory::new_static(plan, memory, commit_memory_pages, unsafe {
+                Memory::new_static(plan, memory, commit_memory_pages, backend, unsafe {
                     &mut *instance.store()
                 })
                 .map_err(InstantiationError::Resource)?,
@@ -616,6 +754,7 @@ impl InstancePool {
         instance: &mut Instance,
         mut tables: impl Iterator<Item = *mut usize>,
         max_elements: u32,
+        backend: PoolingBackend,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
@@ -625,6 +764,7 @@ impl InstancePool {
             let base = tables.next().unwrap();
 
             commit_table_pages(
+                backend,
                 base as *mut u8,
                 max_elements as usize * mem::size_of::<*mut u8>(),
             )
@@ -658,6 +798,7 @@ impl InstancePool {
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
+    _backend: PoolingBackend,
     // If using the memfd allocation scheme, the MemFd slots. We
     // dynamically transfer ownership of a slot to a Memory when in
     // use.
@@ -883,6 +1024,7 @@ impl MemoryPool {
     fn new(
         module_limits: &ModuleLimits,
         instance_limits: &InstanceLimits,
+        backend: PoolingBackend,
         tunables: &Tunables,
     ) -> Result<Self> {
         // The maximum module memory page count cannot exceed 65536 pages
@@ -951,6 +1093,9 @@ impl MemoryPool {
         let mapping = Mmap::accessible_reserved(0, allocation_size)
             .context("failed to create memory pool mapping")?;
 
+        // We always create the storage for memfd slots when memfd
+        // support is compiled in, though we may dynamically choose
+        // not to use them if the backend is not "memfd".
         #[cfg(feature = "memfd-allocator")]
         let memfd_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
             .take(max_instances * max_memories)
@@ -965,11 +1110,16 @@ impl MemoryPool {
             max_memories,
             max_instances,
             max_wasm_pages: module_limits.memory_pages,
+            _backend: backend,
         };
 
-        // uffd support requires some special setup for the memory pool
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        initialize_memory_pool(&pool)?;
+        // uffd support requires some special setup for the memory pool.
+        #[cfg(feature = "uffd")]
+        {
+            if backend == PoolingBackend::Uffd {
+                uffd::initialize_memory_pool(&pool)?;
+            }
+        }
 
         Ok(pool)
     }
@@ -1096,11 +1246,16 @@ struct StackPool {
     max_instances: usize,
     page_size: usize,
     free_list: Mutex<Vec<usize>>,
+    backend: PoolingBackend,
 }
 
 #[cfg(all(feature = "async", unix))]
 impl StackPool {
-    fn new(instance_limits: &InstanceLimits, stack_size: usize) -> Result<Self> {
+    fn new(
+        backend: PoolingBackend,
+        instance_limits: &InstanceLimits,
+        stack_size: usize,
+    ) -> Result<Self> {
         let page_size = region::page::size();
 
         // Add a page to the stack size for the guard page when using fiber stacks
@@ -1139,6 +1294,7 @@ impl StackPool {
             max_instances,
             page_size,
             free_list: Mutex::new((0..max_instances).collect()),
+            backend,
         })
     }
 
@@ -1170,7 +1326,7 @@ impl StackPool {
                 .as_mut_ptr()
                 .add((index * self.stack_size) + self.page_size);
 
-            commit_stack_pages(bottom_of_stack, size_without_guard)
+            commit_stack_pages(self.backend, bottom_of_stack, size_without_guard)
                 .map_err(FiberStackError::Resource)?;
 
             wasmtime_fiber::FiberStack::from_top_ptr(bottom_of_stack.add(size_without_guard))
@@ -1200,7 +1356,7 @@ impl StackPool {
         let index = (start_of_stack - base) / self.stack_size;
         debug_assert!(index < self.max_instances);
 
-        decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
+        decommit_stack_pages(self.backend, bottom_of_stack as _, stack_size).unwrap();
 
         self.free_list.lock().unwrap().push(index);
     }
@@ -1215,14 +1371,15 @@ impl StackPool {
 pub struct PoolingInstanceAllocator {
     strategy: PoolingAllocationStrategy,
     module_limits: ModuleLimits,
+    backend: PoolingBackend,
     // This is manually drop so that the pools unmap their memory before the page fault handler drops.
     instances: mem::ManuallyDrop<InstancePool>,
     #[cfg(all(feature = "async", unix))]
     stacks: StackPool,
     #[cfg(all(feature = "async", windows))]
     stack_size: usize,
-    #[cfg(all(feature = "uffd", target_os = "linux"))]
-    _fault_handler: imp::PageFaultHandler,
+    #[cfg(all(feature = "uffd"))]
+    _fault_handler: Option<uffd::PageFaultHandler>,
 }
 
 impl PoolingInstanceAllocator {
@@ -1231,6 +1388,7 @@ impl PoolingInstanceAllocator {
         strategy: PoolingAllocationStrategy,
         module_limits: ModuleLimits,
         instance_limits: InstanceLimits,
+        backend: PoolingBackend,
         stack_size: usize,
         tunables: &Tunables,
     ) -> Result<Self> {
@@ -1238,22 +1396,26 @@ impl PoolingInstanceAllocator {
             bail!("the instance count limit cannot be zero");
         }
 
-        let instances = InstancePool::new(&module_limits, &instance_limits, tunables)?;
+        let instances = InstancePool::new(&module_limits, &instance_limits, backend, tunables)?;
 
-        #[cfg(all(feature = "uffd", target_os = "linux"))]
-        let _fault_handler = imp::PageFaultHandler::new(&instances)?;
+        #[cfg(all(feature = "uffd"))]
+        let _fault_handler = match backend {
+            PoolingBackend::Uffd => Some(uffd::PageFaultHandler::new(&instances)?),
+            _ => None,
+        };
 
         drop(stack_size); // suppress unused warnings w/o async feature
 
         Ok(Self {
             strategy,
             module_limits,
+            backend,
             instances: mem::ManuallyDrop::new(instances),
             #[cfg(all(feature = "async", unix))]
-            stacks: StackPool::new(&instance_limits, stack_size)?,
+            stacks: StackPool::new(backend, &instance_limits, stack_size)?,
             #[cfg(all(feature = "async", windows))]
             stack_size,
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
+            #[cfg(all(feature = "uffd"))]
             _fault_handler,
         })
     }
@@ -1296,10 +1458,11 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
     ) -> Result<(), InstantiationError> {
         let instance = handle.instance_mut();
 
-        cfg_if::cfg_if! {
-            if #[cfg(all(feature = "uffd", target_os = "linux"))] {
+        match self.backend {
+            #[cfg(all(feature = "uffd"))]
+            PoolingBackend::Uffd => {
                 match &module.memory_initialization {
-                    wasmtime_environ::MemoryInitialization::Paged{ out_of_bounds, .. } => {
+                    wasmtime_environ::MemoryInitialization::Paged { out_of_bounds, .. } => {
                         if !is_bulk_memory {
                             super::check_init_bounds(instance, module)?;
                         }
@@ -1317,12 +1480,13 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                         }
 
                         Ok(())
-                    },
-                    _ => initialize_instance(instance, module, is_bulk_memory)
+                    }
+                    _ => initialize_instance(instance, module, is_bulk_memory),
                 }
-            } else {
-                initialize_instance(instance, module, is_bulk_memory)
             }
+            PoolingBackend::Mmap => initialize_instance(instance, module, is_bulk_memory),
+            #[cfg(feature = "memfd-allocator")]
+            PoolingBackend::MemFd => initialize_instance(instance, module, is_bulk_memory),
         }
     }
 
@@ -1688,6 +1852,7 @@ mod test {
         let instances = InstancePool::new(
             &module_limits,
             &instance_limits,
+            PoolingBackend::Mmap,
             &Tunables {
                 static_memory_bound: 1,
                 ..Tunables::default()
@@ -1785,6 +1950,7 @@ mod test {
                 memory_pages: 1,
             },
             &InstanceLimits { count: 5 },
+            PoolingBackend::Mmap,
             &Tunables {
                 static_memory_bound: 1,
                 static_memory_offset_guard_size: 0,
@@ -1864,7 +2030,7 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_pool() -> Result<()> {
-        let pool = StackPool::new(&InstanceLimits { count: 10 }, 1)?;
+        let pool = StackPool::new(PoolingBackend::Mmap, &InstanceLimits { count: 10 }, 1)?;
 
         let native_page_size = region::page::size();
         assert_eq!(pool.stack_size, 2 * native_page_size);
@@ -1922,6 +2088,7 @@ mod test {
                     count: 0,
                     ..Default::default()
                 },
+                PoolingBackend::Mmap,
                 4096,
                 &Tunables::default(),
             )
@@ -1941,6 +2108,7 @@ mod test {
                     ..Default::default()
                 },
                 InstanceLimits { count: 1 },
+                PoolingBackend::Mmap,
                 4096,
                 &Tunables {
                     static_memory_bound: 1,
@@ -1963,6 +2131,7 @@ mod test {
                     ..Default::default()
                 },
                 InstanceLimits { count: 1 },
+                PoolingBackend::Mmap,
                 4096,
                 &Tunables {
                     static_memory_bound: 1,
@@ -1998,6 +2167,7 @@ mod test {
                 ..Default::default()
             },
             InstanceLimits { count: 1 },
+            PoolingBackend::Mmap,
             4096,
             &Tunables::default(),
         )?;

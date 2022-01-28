@@ -1,3 +1,4 @@
+use crate::PoolingBackend;
 use anyhow::{Context, Result};
 
 fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
@@ -26,7 +27,7 @@ fn decommit(addr: *mut u8, len: usize, protect: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn commit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn commit_memory_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     if len == 0 {
         return Ok(());
     }
@@ -38,26 +39,26 @@ pub fn commit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
     }
 }
 
-pub fn decommit_memory_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_memory_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len, true)
 }
 
-pub fn commit_table_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+pub fn commit_table_pages(_backend: PoolingBackend, _addr: *mut u8, _len: usize) -> Result<()> {
     // A no-op as table pages remain READ|WRITE
     Ok(())
 }
 
-pub fn decommit_table_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_table_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len, false)
 }
 
 #[cfg(feature = "async")]
-pub fn commit_stack_pages(_addr: *mut u8, _len: usize) -> Result<()> {
+pub fn commit_stack_pages(_backend: PoolingBackend, _addr: *mut u8, _len: usize) -> Result<()> {
     // A no-op as stack pages remain READ|WRITE
     Ok(())
 }
 
 #[cfg(feature = "async")]
-pub fn decommit_stack_pages(addr: *mut u8, len: usize) -> Result<()> {
+pub fn decommit_stack_pages(_backend: PoolingBackend, addr: *mut u8, len: usize) -> Result<()> {
     decommit(addr, len, false)
 }
