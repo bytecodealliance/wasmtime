@@ -281,10 +281,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let mut mem_flags = ir::MemFlags::trusted();
         mem_flags.set_readonly();
 
+        // Load the base of the array of builtin functions
+        let array_offset = i32::try_from(self.offsets.vmctx_builtin_functions()).unwrap();
+        let array_addr = pos.ins().load(pointer_type, mem_flags, base, array_offset);
+
         // Load the callee address.
-        let body_offset =
-            i32::try_from(self.offsets.vmctx_builtin_function(callee_func_idx)).unwrap();
-        let func_addr = pos.ins().load(pointer_type, mem_flags, base, body_offset);
+        let body_offset = i32::try_from(callee_func_idx.index() * pointer_type.bytes()).unwrap();
+        let func_addr = pos
+            .ins()
+            .load(pointer_type, mem_flags, array_addr, body_offset);
 
         (base, func_addr)
     }

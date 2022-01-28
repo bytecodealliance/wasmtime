@@ -9,7 +9,6 @@ use std::marker;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::u32;
-use wasmtime_environ::BuiltinFunctionIndex;
 
 /// An imported function.
 #[derive(Debug, Copy, Clone)]
@@ -594,65 +593,42 @@ mod test_vmcaller_checked_anyfunc {
     }
 }
 
-/// An array that stores addresses of builtin functions. We translate code
-/// to use indirect calls. This way, we don't have to patch the code.
-#[repr(C)]
-pub struct VMBuiltinFunctionsArray {
-    ptrs: [usize; Self::len()],
-}
-
-impl VMBuiltinFunctionsArray {
-    pub const fn len() -> usize {
-        BuiltinFunctionIndex::builtin_functions_total_number() as usize
-    }
-
-    pub fn initialized() -> Self {
-        use crate::libcalls::*;
-
-        let mut ptrs = [0; Self::len()];
-
-        ptrs[BuiltinFunctionIndex::memory32_grow().index() as usize] =
-            wasmtime_memory32_grow as usize;
-        ptrs[BuiltinFunctionIndex::table_copy().index() as usize] = wasmtime_table_copy as usize;
-        ptrs[BuiltinFunctionIndex::table_grow_funcref().index() as usize] =
-            wasmtime_table_grow as usize;
-        ptrs[BuiltinFunctionIndex::table_grow_externref().index() as usize] =
-            wasmtime_table_grow as usize;
-        ptrs[BuiltinFunctionIndex::table_init().index() as usize] = wasmtime_table_init as usize;
-        ptrs[BuiltinFunctionIndex::elem_drop().index() as usize] = wasmtime_elem_drop as usize;
-        ptrs[BuiltinFunctionIndex::memory_copy().index() as usize] = wasmtime_memory_copy as usize;
-        ptrs[BuiltinFunctionIndex::memory_fill().index() as usize] = wasmtime_memory_fill as usize;
-        ptrs[BuiltinFunctionIndex::memory_init().index() as usize] = wasmtime_memory_init as usize;
-        ptrs[BuiltinFunctionIndex::data_drop().index() as usize] = wasmtime_data_drop as usize;
-        ptrs[BuiltinFunctionIndex::drop_externref().index() as usize] =
-            wasmtime_drop_externref as usize;
-        ptrs[BuiltinFunctionIndex::activations_table_insert_with_gc().index() as usize] =
-            wasmtime_activations_table_insert_with_gc as usize;
-        ptrs[BuiltinFunctionIndex::externref_global_get().index() as usize] =
-            wasmtime_externref_global_get as usize;
-        ptrs[BuiltinFunctionIndex::externref_global_set().index() as usize] =
-            wasmtime_externref_global_set as usize;
-        ptrs[BuiltinFunctionIndex::table_fill_externref().index() as usize] =
-            wasmtime_table_fill as usize;
-        ptrs[BuiltinFunctionIndex::table_fill_funcref().index() as usize] =
-            wasmtime_table_fill as usize;
-        ptrs[BuiltinFunctionIndex::memory_atomic_notify().index() as usize] =
-            wasmtime_memory_atomic_notify as usize;
-        ptrs[BuiltinFunctionIndex::memory_atomic_wait32().index() as usize] =
-            wasmtime_memory_atomic_wait32 as usize;
-        ptrs[BuiltinFunctionIndex::memory_atomic_wait64().index() as usize] =
-            wasmtime_memory_atomic_wait64 as usize;
-        ptrs[BuiltinFunctionIndex::out_of_gas().index() as usize] = wasmtime_out_of_gas as usize;
-        ptrs[BuiltinFunctionIndex::new_epoch().index() as usize] = wasmtime_new_epoch as usize;
-
-        if cfg!(debug_assertions) {
-            for i in 0..ptrs.len() {
-                debug_assert!(ptrs[i] != 0, "index {} is not initialized", i);
-            }
+macro_rules! define_builtin_array {
+    (
+        $(
+            $( #[$attr:meta] )*
+            $name:ident( $( $param:ident ),* ) -> ( $( $result:ident ),* );
+        )*
+    ) => {
+        /// An array that stores addresses of builtin functions. We translate code
+        /// to use indirect calls. This way, we don't have to patch the code.
+        #[repr(C)]
+        #[allow(unused_parens)]
+        pub struct VMBuiltinFunctionsArray {
+            $(
+                $name: unsafe extern "C" fn(
+                    $(define_builtin_array!(@ty $param)),*
+                ) -> (
+                    $(define_builtin_array!(@ty $result)),*
+                ),
+            )*
         }
-        Self { ptrs }
-    }
+
+        impl VMBuiltinFunctionsArray {
+            pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
+                $($name: crate::libcalls::$name,)*
+            };
+        }
+    };
+
+    (@ty i32) => (u32);
+    (@ty i64) => (u64);
+    (@ty reference) => (*mut u8);
+    (@ty pointer) => (*mut u8);
+    (@ty vmctx) => (*mut VMContext);
 }
+
+wasmtime_environ::foreach_builtin_function!(define_builtin_array);
 
 /// The storage for a WebAssembly invocation argument
 ///
