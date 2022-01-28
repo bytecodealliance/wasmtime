@@ -185,14 +185,14 @@ pub extern "C" fn wasmtime_f64_nearest(x: f64) -> f64 {
 }
 
 /// Implementation of memory.grow for locally-defined 32-bit memories.
-pub unsafe extern "C" fn wasmtime_memory32_grow(
+pub unsafe extern "C" fn memory32_grow(
     vmctx: *mut VMContext,
     delta: u64,
     memory_index: u32,
-) -> usize {
+) -> *mut u8 {
     // Memory grow can invoke user code provided in a ResourceLimiter{,Async},
     // so we need to catch a possible panic
-    match std::panic::catch_unwind(|| {
+    let ret = match std::panic::catch_unwind(|| {
         let instance = (*vmctx).instance_mut();
         let memory_index = MemoryIndex::from_u32(memory_index);
         instance.memory_grow(memory_index, delta)
@@ -201,11 +201,12 @@ pub unsafe extern "C" fn wasmtime_memory32_grow(
         Ok(Ok(None)) => usize::max_value(),
         Ok(Err(err)) => crate::traphandlers::raise_user_trap(err),
         Err(p) => resume_panic(p),
-    }
+    };
+    ret as *mut u8
 }
 
 /// Implementation of `table.grow`.
-pub unsafe extern "C" fn wasmtime_table_grow(
+pub unsafe extern "C" fn table_grow(
     vmctx: *mut VMContext,
     table_index: u32,
     delta: u32,
@@ -238,8 +239,11 @@ pub unsafe extern "C" fn wasmtime_table_grow(
     }
 }
 
+pub use table_grow as table_grow_funcref;
+pub use table_grow as table_grow_externref;
+
 /// Implementation of `table.fill`.
-pub unsafe extern "C" fn wasmtime_table_fill(
+pub unsafe extern "C" fn table_fill(
     vmctx: *mut VMContext,
     table_index: u32,
     dst: u32,
@@ -272,8 +276,11 @@ pub unsafe extern "C" fn wasmtime_table_fill(
     }
 }
 
+pub use table_fill as table_fill_funcref;
+pub use table_fill as table_fill_externref;
+
 /// Implementation of `table.copy`.
-pub unsafe extern "C" fn wasmtime_table_copy(
+pub unsafe extern "C" fn table_copy(
     vmctx: *mut VMContext,
     dst_table_index: u32,
     src_table_index: u32,
@@ -295,7 +302,7 @@ pub unsafe extern "C" fn wasmtime_table_copy(
 }
 
 /// Implementation of `table.init`.
-pub unsafe extern "C" fn wasmtime_table_init(
+pub unsafe extern "C" fn table_init(
     vmctx: *mut VMContext,
     table_index: u32,
     elem_index: u32,
@@ -315,14 +322,14 @@ pub unsafe extern "C" fn wasmtime_table_init(
 }
 
 /// Implementation of `elem.drop`.
-pub unsafe extern "C" fn wasmtime_elem_drop(vmctx: *mut VMContext, elem_index: u32) {
+pub unsafe extern "C" fn elem_drop(vmctx: *mut VMContext, elem_index: u32) {
     let elem_index = ElemIndex::from_u32(elem_index);
     let instance = (*vmctx).instance_mut();
     instance.elem_drop(elem_index);
 }
 
 /// Implementation of `memory.copy` for locally defined memories.
-pub unsafe extern "C" fn wasmtime_memory_copy(
+pub unsafe extern "C" fn memory_copy(
     vmctx: *mut VMContext,
     dst_index: u32,
     dst: u64,
@@ -342,7 +349,7 @@ pub unsafe extern "C" fn wasmtime_memory_copy(
 }
 
 /// Implementation of `memory.fill` for locally defined memories.
-pub unsafe extern "C" fn wasmtime_memory_fill(
+pub unsafe extern "C" fn memory_fill(
     vmctx: *mut VMContext,
     memory_index: u32,
     dst: u64,
@@ -360,7 +367,7 @@ pub unsafe extern "C" fn wasmtime_memory_fill(
 }
 
 /// Implementation of `memory.init`.
-pub unsafe extern "C" fn wasmtime_memory_init(
+pub unsafe extern "C" fn memory_init(
     vmctx: *mut VMContext,
     memory_index: u32,
     data_index: u32,
@@ -380,14 +387,14 @@ pub unsafe extern "C" fn wasmtime_memory_init(
 }
 
 /// Implementation of `data.drop`.
-pub unsafe extern "C" fn wasmtime_data_drop(vmctx: *mut VMContext, data_index: u32) {
+pub unsafe extern "C" fn data_drop(vmctx: *mut VMContext, data_index: u32) {
     let data_index = DataIndex::from_u32(data_index);
     let instance = (*vmctx).instance_mut();
     instance.data_drop(data_index)
 }
 
 /// Drop a `VMExternRef`.
-pub unsafe extern "C" fn wasmtime_drop_externref(externref: *mut u8) {
+pub unsafe extern "C" fn drop_externref(externref: *mut u8) {
     let externref = externref as *mut crate::externref::VMExternData;
     let externref = NonNull::new(externref).unwrap();
     crate::externref::VMExternData::drop_and_dealloc(externref);
@@ -395,7 +402,7 @@ pub unsafe extern "C" fn wasmtime_drop_externref(externref: *mut u8) {
 
 /// Do a GC and insert the given `externref` into the
 /// `VMExternRefActivationsTable`.
-pub unsafe extern "C" fn wasmtime_activations_table_insert_with_gc(
+pub unsafe extern "C" fn activations_table_insert_with_gc(
     vmctx: *mut VMContext,
     externref: *mut u8,
 ) {
@@ -416,10 +423,7 @@ pub unsafe extern "C" fn wasmtime_activations_table_insert_with_gc(
 }
 
 /// Perform a Wasm `global.get` for `externref` globals.
-pub unsafe extern "C" fn wasmtime_externref_global_get(
-    vmctx: *mut VMContext,
-    index: u32,
-) -> *mut u8 {
+pub unsafe extern "C" fn externref_global_get(vmctx: *mut VMContext, index: u32) -> *mut u8 {
     let index = GlobalIndex::from_u32(index);
     let instance = (*vmctx).instance();
     let global = instance.defined_or_imported_global_ptr(index);
@@ -436,7 +440,7 @@ pub unsafe extern "C" fn wasmtime_externref_global_get(
 }
 
 /// Perform a Wasm `global.set` for `externref` globals.
-pub unsafe extern "C" fn wasmtime_externref_global_set(
+pub unsafe extern "C" fn externref_global_set(
     vmctx: *mut VMContext,
     index: u32,
     externref: *mut u8,
@@ -460,13 +464,14 @@ pub unsafe extern "C" fn wasmtime_externref_global_set(
 }
 
 /// Implementation of `memory.atomic.notify` for locally defined memories.
-pub unsafe extern "C" fn wasmtime_memory_atomic_notify(
+pub unsafe extern "C" fn memory_atomic_notify(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: usize,
+    addr: *mut u8,
     _count: u32,
 ) -> u32 {
     let result = {
+        let addr = addr as usize;
         let memory = MemoryIndex::from_u32(memory_index);
         let instance = (*vmctx).instance();
         // this should never overflow since addr + 4 either hits a guard page
@@ -475,7 +480,7 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_notify(
         let addr_to_check = addr.checked_add(4).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
             Err(Trap::User(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn wasmtime_memory_atomic_notify) unsupported",
+                "unimplemented: wasm atomics (fn memory_atomic_notify) unsupported",
             )))
         })
     };
@@ -486,14 +491,15 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_notify(
 }
 
 /// Implementation of `memory.atomic.wait32` for locally defined memories.
-pub unsafe extern "C" fn wasmtime_memory_atomic_wait32(
+pub unsafe extern "C" fn memory_atomic_wait32(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: usize,
+    addr: *mut u8,
     _expected: u32,
     _timeout: u64,
 ) -> u32 {
     let result = {
+        let addr = addr as usize;
         let memory = MemoryIndex::from_u32(memory_index);
         let instance = (*vmctx).instance();
         // see wasmtime_memory_atomic_notify for why this shouldn't overflow
@@ -501,7 +507,7 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_wait32(
         let addr_to_check = addr.checked_add(4).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
             Err(Trap::User(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn wasmtime_memory_atomic_wait32) unsupported",
+                "unimplemented: wasm atomics (fn memory_atomic_wait32) unsupported",
             )))
         })
     };
@@ -512,14 +518,15 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_wait32(
 }
 
 /// Implementation of `memory.atomic.wait64` for locally defined memories.
-pub unsafe extern "C" fn wasmtime_memory_atomic_wait64(
+pub unsafe extern "C" fn memory_atomic_wait64(
     vmctx: *mut VMContext,
     memory_index: u32,
-    addr: usize,
+    addr: *mut u8,
     _expected: u64,
     _timeout: u64,
 ) -> u32 {
     let result = {
+        let addr = addr as usize;
         let memory = MemoryIndex::from_u32(memory_index);
         let instance = (*vmctx).instance();
         // see wasmtime_memory_atomic_notify for why this shouldn't overflow
@@ -527,7 +534,7 @@ pub unsafe extern "C" fn wasmtime_memory_atomic_wait64(
         let addr_to_check = addr.checked_add(8).unwrap();
         validate_atomic_addr(instance, memory, addr_to_check).and_then(|()| {
             Err(Trap::User(anyhow::anyhow!(
-                "unimplemented: wasm atomics (fn wasmtime_memory_atomic_wait64) unsupported",
+                "unimplemented: wasm atomics (fn memory_atomic_wait64) unsupported",
             )))
         })
     };
@@ -561,7 +568,7 @@ unsafe fn validate_atomic_addr(
 }
 
 /// Hook for when an instance runs out of fuel.
-pub unsafe extern "C" fn wasmtime_out_of_gas(vmctx: *mut VMContext) {
+pub unsafe extern "C" fn out_of_gas(vmctx: *mut VMContext) {
     match (*(*vmctx).instance().store()).out_of_gas() {
         Ok(()) => {}
         Err(err) => crate::traphandlers::raise_user_trap(err),
@@ -569,7 +576,7 @@ pub unsafe extern "C" fn wasmtime_out_of_gas(vmctx: *mut VMContext) {
 }
 
 /// Hook for when an instance observes that the epoch has changed.
-pub unsafe extern "C" fn wasmtime_new_epoch(vmctx: *mut VMContext) -> u64 {
+pub unsafe extern "C" fn new_epoch(vmctx: *mut VMContext) -> u64 {
     match (*(*vmctx).instance().store()).new_epoch() {
         Ok(new_deadline) => new_deadline,
         Err(err) => crate::traphandlers::raise_user_trap(err),

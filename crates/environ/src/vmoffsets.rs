@@ -16,12 +16,12 @@
 //      memories: [VMMemoryDefinition; module.num_defined_memories],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      anyfuncs: [VMCallerCheckedAnyfunc; module.num_imported_functions + module.num_defined_functions],
-//      builtins: VMBuiltinFunctionsArray,
+//      builtins: *mut VMBuiltinFunctionsArray,
 // }
 
 use crate::{
-    BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex,
-    GlobalIndex, MemoryIndex, Module, TableIndex, TypeIndex,
+    DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, FuncIndex, GlobalIndex, MemoryIndex,
+    Module, TableIndex, TypeIndex,
 };
 use more_asserts::assert_lt;
 use std::convert::TryFrom;
@@ -287,11 +287,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             .unwrap();
         ret.size = ret
             .builtin_functions
-            .checked_add(
-                BuiltinFunctionIndex::builtin_functions_total_number()
-                    .checked_mul(u32::from(ret.pointer_size()))
-                    .unwrap(),
-            )
+            .checked_add(u32::from(ret.pointer_size()))
             .unwrap();
 
         return ret;
@@ -597,7 +593,7 @@ impl<P: PtrSize> VMOffsets<P> {
 
     /// The offset of the builtin functions array.
     #[inline]
-    pub fn vmctx_builtin_functions_begin(&self) -> u32 {
+    pub fn vmctx_builtin_functions(&self) -> u32 {
         self.builtin_functions
     }
 
@@ -738,12 +734,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmglobal_import_from(&self, index: GlobalIndex) -> u32 {
         self.vmctx_vmglobal_import(index) + u32::from(self.vmglobal_import_from())
-    }
-
-    /// Return the offset to builtin function in `VMBuiltinFunctionsArray` index `index`.
-    #[inline]
-    pub fn vmctx_builtin_function(&self, index: BuiltinFunctionIndex) -> u32 {
-        self.vmctx_builtin_functions_begin() + index.index() * u32::from(self.pointer_size())
     }
 }
 
