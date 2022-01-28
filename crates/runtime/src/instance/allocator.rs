@@ -482,7 +482,7 @@ unsafe fn initialize_vmcontext(instance: &mut Instance, req: InstanceAllocationR
 
     // Initialize the built-in functions
     *instance.vmctx_plus_offset(instance.offsets.vmctx_builtin_functions()) =
-        VMBuiltinFunctionsArray::new();
+        &VMBuiltinFunctionsArray::INIT;
 
     // Initialize the imports
     debug_assert_eq!(req.imports.functions.len(), module.num_imported_funcs);

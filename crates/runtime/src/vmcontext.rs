@@ -615,13 +615,9 @@ macro_rules! define_builtin_array {
         }
 
         impl VMBuiltinFunctionsArray {
-            pub fn new() -> &'static Self {
-                static INIT: VMBuiltinFunctionsArray =
-                VMBuiltinFunctionsArray {
-                    $($name: crate::libcalls::$name,)*
-                };
-                &INIT
-            }
+            pub const INIT: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray {
+                $($name: crate::libcalls::$name,)*
+            };
         }
     };
 
