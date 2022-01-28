@@ -463,7 +463,7 @@ impl Deref for VMExternRef {
 ///
 /// We use this so that we can morally put `VMExternRef`s inside of `HashSet`s
 /// even though they don't implement `Eq` and `Hash` to avoid foot guns.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct VMExternRefWithTraits(VMExternRef);
 
 impl Hash for VMExternRefWithTraits {
@@ -940,7 +940,9 @@ pub unsafe fn gc(
                         debug_assert!(
                             r.is_null() || activations_table_set.contains(&r),
                             "every on-stack externref inside a Wasm frame should \
-                            have an entry in the VMExternRefActivationsTable"
+                            have an entry in the VMExternRefActivationsTable; \
+                            {:?} is not in the table",
+                            r
                         );
                         if let Some(r) = NonNull::new(r) {
                             VMExternRefActivationsTable::insert_precise_stack_root(
