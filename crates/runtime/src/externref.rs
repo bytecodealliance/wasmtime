@@ -566,8 +566,13 @@ impl VMExternRefActivationsTable {
 
     /// Create a new `VMExternRefActivationsTable`.
     pub fn new() -> Self {
-        let mut chunk = Self::new_chunk(Self::CHUNK_SIZE);
-        let next = chunk.as_mut_ptr().cast::<TableElem>();
+        // Start with an empty chunk in case this activations table isn't used.
+        // This means that there's no space in the bump-allocation area which
+        // will force any path trying to use this to the slow gc path. The first
+        // time this happens, though, the slow gc path will allocate a new chunk
+        // for actual fast-bumping.
+        let mut chunk: Box<[TableElem]> = Box::new([]);
+        let next = chunk.as_mut_ptr();
         let end = unsafe { next.add(chunk.len()) };
 
         VMExternRefActivationsTable {
@@ -576,8 +581,8 @@ impl VMExternRefActivationsTable {
                 end: NonNull::new(end).unwrap(),
                 chunk,
             },
-            over_approximated_stack_roots: HashSet::with_capacity(Self::CHUNK_SIZE),
-            precise_stack_roots: HashSet::with_capacity(Self::CHUNK_SIZE),
+            over_approximated_stack_roots: HashSet::new(),
+            precise_stack_roots: HashSet::new(),
             stack_canary: None,
             #[cfg(debug_assertions)]
             gc_okay: true,
@@ -728,9 +733,18 @@ impl VMExternRefActivationsTable {
             "after sweeping the bump chunk, all slots should be `None`"
         );
 
+        // If this is the first instance of gc then the initial chunk is empty,
+        // so we lazily allocate space for fast bump-allocation in the future.
+        if self.alloc.chunk.is_empty() {
+            self.alloc.chunk = Self::new_chunk(Self::CHUNK_SIZE);
+            self.alloc.end =
+                NonNull::new(unsafe { self.alloc.chunk.as_mut_ptr().add(self.alloc.chunk.len()) })
+                    .unwrap();
+        }
+
         // Reset our `next` finger to the start of the bump allocation chunk.
         unsafe {
-            let next = self.alloc.chunk.as_mut_ptr().cast::<TableElem>();
+            let next = self.alloc.chunk.as_mut_ptr();
             debug_assert!(!next.is_null());
             *self.alloc.next.get() = NonNull::new_unchecked(next);
         }
