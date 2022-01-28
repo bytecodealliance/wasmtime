@@ -718,7 +718,7 @@ impl Func {
     }
 
     pub(crate) fn sig_index(&self, data: &StoreData) -> VMSharedSignatureIndex {
-        unsafe { data[self.0].export().anyfunc.as_ref().type_index }
+        data[self.0].sig_index()
     }
 
     /// Invokes this function with the `params` given and writes returned values
@@ -2083,18 +2083,18 @@ impl HostFunc {
     /// Can only be inserted into stores with a matching `T` relative to when
     /// this `HostFunc` was first created.
     pub unsafe fn to_func(self: &Arc<Self>, store: &mut StoreOpaque) -> Func {
-        self.register_trampoline(store);
+        self.validate_store(store);
         let me = self.clone();
         Func::from_func_kind(FuncKind::SharedHost(me), store)
     }
 
     /// Same as [`HostFunc::to_func`], different ownership.
     unsafe fn into_func(self, store: &mut StoreOpaque) -> Func {
-        self.register_trampoline(store);
+        self.validate_store(store);
         Func::from_func_kind(FuncKind::Host(self), store)
     }
 
-    unsafe fn register_trampoline(&self, store: &mut StoreOpaque) {
+    fn validate_store(&self, store: &mut StoreOpaque) {
         // This assert is required to ensure that we can indeed safely insert
         // `self` into the `store` provided, otherwise the type information we
         // have listed won't be correct. This is possible to hit with the public
@@ -2103,8 +2103,6 @@ impl HostFunc {
             Engine::same(&self.engine, store.engine()),
             "cannot use a store with a different engine than a linker was created with",
         );
-        let idx = self.export.anyfunc.as_ref().type_index;
-        store.register_host_trampoline(idx, self.trampoline);
     }
 
     pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
@@ -2128,7 +2126,7 @@ impl Drop for HostFunc {
 
 impl FuncData {
     #[inline]
-    fn trampoline(&self) -> VMTrampoline {
+    pub(crate) fn trampoline(&self) -> VMTrampoline {
         match &self.kind {
             FuncKind::StoreOwned { trampoline, .. } => *trampoline,
             FuncKind::SharedHost(host) => host.trampoline,
@@ -2139,6 +2137,10 @@ impl FuncData {
     #[inline]
     fn export(&self) -> &ExportFunction {
         self.kind.export()
+    }
+
+    pub(crate) fn sig_index(&self) -> VMSharedSignatureIndex {
+        unsafe { self.export().anyfunc.as_ref().type_index }
     }
 }
 
