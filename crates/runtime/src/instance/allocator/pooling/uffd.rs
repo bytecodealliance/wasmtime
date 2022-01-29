@@ -466,8 +466,13 @@ mod test {
             ..Tunables::default()
         };
 
-        let instances = InstancePool::new(&module_limits, &instance_limits, &tunables)
-            .expect("should allocate");
+        let instances = InstancePool::new(
+            PoolingAllocationStrategy::Random,
+            &module_limits,
+            &instance_limits,
+            &tunables,
+        )
+        .expect("should allocate");
 
         let locator = FaultLocator::new(&instances);
 
@@ -573,25 +578,23 @@ mod test {
             for _ in 0..instances.max_instances {
                 handles.push(
                     instances
-                        .allocate(
-                            PoolingAllocationStrategy::Random,
-                            InstanceAllocationRequest {
-                                module: module.clone(),
-                                memfds: None,
-                                image_base: 0,
-                                functions,
-                                imports: Imports {
-                                    functions: &[],
-                                    tables: &[],
-                                    memories: &[],
-                                    globals: &[],
-                                },
-                                shared_signatures: VMSharedSignatureIndex::default().into(),
-                                host_state: Box::new(()),
-                                store: StorePtr::new(&mut mock_store),
-                                wasm_data: &[],
+                        .allocate(InstanceAllocationRequest {
+                            module: module.clone(),
+                            memfds: None,
+                            unique_id: None,
+                            image_base: 0,
+                            functions,
+                            imports: Imports {
+                                functions: &[],
+                                tables: &[],
+                                memories: &[],
+                                globals: &[],
                             },
-                        )
+                            shared_signatures: VMSharedSignatureIndex::default().into(),
+                            host_state: Box::new(()),
+                            store: StorePtr::new(&mut mock_store),
+                            wasm_data: &[],
+                        })
                         .expect("instance should allocate"),
                 );
             }

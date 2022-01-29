@@ -7,7 +7,7 @@ use crate::vmcontext::{
     VMBuiltinFunctionsArray, VMCallerCheckedAnyfunc, VMGlobalDefinition, VMSharedSignatureIndex,
 };
 use crate::ModuleMemFds;
-use crate::Store;
+use crate::{CompiledModuleId, Store};
 use anyhow::Result;
 use std::alloc;
 use std::any::Any;
@@ -34,6 +34,9 @@ pub use self::pooling::{
 pub struct InstanceAllocationRequest<'a> {
     /// The module being instantiated.
     pub module: Arc<Module>,
+
+    /// The unique ID of the module being allocated within this engine.
+    pub unique_id: Option<CompiledModuleId>,
 
     /// The base address of where JIT functions are located.
     pub image_base: usize,
@@ -728,8 +731,14 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
 
         let mut handle = {
-            let instance =
-                Instance::create_raw(&req.module, &*req.wasm_data, memories, tables, host_state);
+            let instance = Instance::create_raw(
+                &req.module,
+                req.unique_id,
+                &*req.wasm_data,
+                memories,
+                tables,
+                host_state,
+            );
             let layout = instance.alloc_layout();
             let instance_ptr = alloc::alloc(layout) as *mut Instance;
             if instance_ptr.is_null() {

@@ -11,7 +11,7 @@ use crate::vmcontext::{
     VMCallerCheckedAnyfunc, VMContext, VMFunctionImport, VMGlobalDefinition, VMGlobalImport,
     VMInterrupts, VMMemoryDefinition, VMMemoryImport, VMTableDefinition, VMTableImport,
 };
-use crate::{ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
+use crate::{CompiledModuleId, ExportFunction, ExportGlobal, ExportMemory, ExportTable, Store};
 use anyhow::Error;
 use memoffset::offset_of;
 use more_asserts::assert_lt;
@@ -53,6 +53,9 @@ pub use allocator::*;
 pub(crate) struct Instance {
     /// The `Module` this `Instance` was instantiated from.
     module: Arc<Module>,
+
+    /// The unique ID for the `Module` this `Instance` was instantiated from.
+    unique_id: Option<CompiledModuleId>,
 
     /// Offsets in the `vmctx` region, precomputed from the `module` above.
     offsets: VMOffsets<HostPtr>,
@@ -100,6 +103,7 @@ impl Instance {
     /// Helper for allocators; not a public API.
     pub(crate) fn create_raw(
         module: &Arc<Module>,
+        unique_id: Option<CompiledModuleId>,
         wasm_data: &'static [u8],
         memories: PrimaryMap<DefinedMemoryIndex, Memory>,
         tables: PrimaryMap<DefinedTableIndex, Table>,
@@ -107,6 +111,7 @@ impl Instance {
     ) -> Instance {
         Instance {
             module: module.clone(),
+            unique_id,
             offsets: VMOffsets::new(HostPtr, &module),
             memories,
             tables,

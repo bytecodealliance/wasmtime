@@ -1,11 +1,14 @@
 //! Unique IDs for modules in the runtime.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    num::NonZeroU64,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 /// A unique identifier (within an engine or similar) for a compiled
 /// module.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct CompiledModuleId(u64);
+pub struct CompiledModuleId(NonZeroU64);
 
 /// An allocator for compiled module IDs.
 pub struct CompiledModuleIdAllocator {
@@ -22,7 +25,19 @@ impl CompiledModuleIdAllocator {
 
     /// Allocate a new ID.
     pub fn alloc(&self) -> CompiledModuleId {
+        // Note: why is `Relaxed` OK here?
+        //
+        // The only requirement we have is that IDs are unique. We
+        // don't care how one module's ID compares to another, i.e.,
+        // what order they come in. `Relaxed` means that this
+        // `fetch_add` operation does not have any particular
+        // synchronization (ordering) with respect to any other memory
+        // access in the program. However, `fetch_add` is always
+        // atomic with respect to other accesses to this variable
+        // (`self.next`). So we will always hand out separate, unique
+        // IDs correctly, just in some possibly arbitrary order (which
+        // is fine).
         let id = self.next.fetch_add(1, Ordering::Relaxed);
-        CompiledModuleId(id)
+        CompiledModuleId(NonZeroU64::new(id).unwrap())
     }
 }

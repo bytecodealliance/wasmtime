@@ -41,6 +41,7 @@ fn create_handle(
         let handle = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0).allocate(
             InstanceAllocationRequest {
                 module: Arc::new(module),
+                unique_id: None,
                 memfds: None,
                 functions,
                 image_base: 0,
