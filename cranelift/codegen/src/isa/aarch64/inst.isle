@@ -1371,13 +1371,6 @@
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Emit an instruction.
-;;
-;; This is low-level and side-effectful; it should only be used as an
-;; implementation detail by helpers that preserve the SSA facade themselves.
-(decl emit (MInst) Unit)
-(extern constructor emit emit)
-
 ;; Helper for creating the zero register.
 (decl zero_reg () Reg)
 (extern constructor zero_reg zero_reg)

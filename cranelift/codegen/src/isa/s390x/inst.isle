@@ -1290,15 +1290,6 @@
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Emit an instruction.
-;;
-;; This is low-level and side-effectful; it should only be used as an
-;; implementation detail by helpers that preserve the SSA facade themselves.
-(decl emit (MInst) Unit)
-(extern constructor emit emit)
-(decl emit_safepoint (MInst) Unit)
-(extern constructor emit_safepoint emit_safepoint)
-
 ;; Helper for emitting `MInst.AluRRR` instructions.
 (decl alu_rrr (Type ALUOp Reg Reg) Reg)
 (rule (alu_rrr ty op src1 src2)
@@ -2194,11 +2185,6 @@
 (decl debugtrap_impl () SideEffectNoResult)
 (rule (debugtrap_impl)
       (SideEffectNoResult.Inst (MInst.Debugtrap)))
-
-(decl safepoint (SideEffectNoResult) ValueRegs)
-(rule (safepoint (SideEffectNoResult.Inst inst))
-      (let ((_ Unit (emit_safepoint inst)))
-        (value_regs_invalid)))
 
 
 ;; Helpers for handling boolean conditions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

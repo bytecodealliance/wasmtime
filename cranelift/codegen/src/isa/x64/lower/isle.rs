@@ -231,6 +231,10 @@ where
         }
     }
 
+    fn emit_safepoint(&mut self, _inst: &MInst) -> Unit {
+        unimplemented!();
+    }
+
     #[inline]
     fn nonzero_u64_fits_in_u32(&mut self, x: u64) -> Option<u64> {
         if x != 0 && x < u64::from(u32::MAX) {
