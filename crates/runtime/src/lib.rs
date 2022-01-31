@@ -70,6 +70,8 @@ pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 #[cfg(feature = "memfd-allocator")]
 mod memfd;
 
+pub use crate::memfd::MemoryMemFd;
+
 /// When memfd support is not included, provide a shim type and
 /// constructor instead so that higher-level code does not need
 /// feature-conditional compilation.

@@ -30,17 +30,20 @@ impl ModuleMemFds {
 
 /// One backing image for one memory.
 #[derive(Debug)]
-pub(crate) struct MemoryMemFd {
-    pub(crate) fd: Memfd,
+pub struct MemoryMemFd {
+    /// The actual memfd image: an anonymous file in memory which we
+    /// use as the backing content for a copy-on-write (CoW) mapping
+    /// in the memory region.
+    pub fd: Memfd,
     /// Length of image. Note that initial memory size may be larger;
     /// leading and trailing zeroes are truncated (handled by
     /// anonymous backing memfd).
-    pub(crate) len: usize,
+    pub len: usize,
     /// Image starts this many bytes into heap space. Note that the
     /// memfd's offsets are always equal to the heap offsets, so we
     /// map at an offset into the fd as well. (This simplifies
     /// construction.)
-    pub(crate) offset: usize,
+    pub offset: usize,
 }
 
 fn unsupported_initializer(segment: &MemoryInitializer, plan: &MemoryPlan) -> bool {

@@ -392,15 +392,15 @@ fn initialize_memories(
     initializers: &[MemoryInitializer],
 ) -> Result<(), InstantiationError> {
     for init in initializers {
-        // Check whether this is a MemFD memory; if so, we can skip
-        // all initializers.
+        // Check whether we can skip all initializers (due to, e.g.,
+        // memfd).
         let memory = init.memory_index;
         if let Some(defined_index) = module.defined_memory_index(memory) {
             // We can only skip if there is actually a MemFD image. In
             // some situations the MemFD image creation code will bail
             // (e.g. due to an out of bounds data segment) and so we
             // need to fall back on the usual initialization below.
-            if instance.memories[defined_index].is_memfd_with_image() {
+            if !instance.memories[defined_index].needs_init() {
                 continue;
             }
         }
@@ -458,11 +458,10 @@ fn initialize_instance(
     match &module.memory_initialization {
         MemoryInitialization::Paged { map, out_of_bounds } => {
             for (index, pages) in map {
-                // We can only skip if there is actually a MemFD image. In
-                // some situations the MemFD image creation code will bail
-                // (e.g. due to an out of bounds data segment) and so we
-                // need to fall back on the usual initialization below.
-                if instance.memories[index].is_memfd_with_image() {
+                // Check whether the memory actually needs
+                // initialization. It may not if we're using a CoW
+                // mechanism like memfd.
+                if !instance.memories[index].needs_init() {
                     continue;
                 }
 
@@ -682,6 +681,7 @@ impl OnDemandInstanceAllocator {
         &self,
         module: &Module,
         store: &mut StorePtr,
+        memfds: &Option<Arc<ModuleMemFds>>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -690,13 +690,26 @@ impl OnDemandInstanceAllocator {
         let num_imports = module.num_imported_memories;
         let mut memories: PrimaryMap<DefinedMemoryIndex, _> =
             PrimaryMap::with_capacity(module.memory_plans.len() - num_imports);
-        for plan in &module.memory_plans.values().as_slice()[num_imports..] {
+        for (memory_idx, plan) in module.memory_plans.iter().skip(num_imports) {
+            // Create a MemFdSlot if there is an image for this memory.
+            let defined_memory_idx = module
+                .defined_memory_index(memory_idx)
+                .expect("Skipped imports, should never be None");
+            let memfd_image = memfds
+                .as_ref()
+                .and_then(|memfds| memfds.get_memory_image(defined_memory_idx));
+
             memories.push(
-                Memory::new_dynamic(plan, creator, unsafe {
-                    store
-                        .get()
-                        .expect("if module has memory plans, store is not empty")
-                })
+                Memory::new_dynamic(
+                    plan,
+                    creator,
+                    unsafe {
+                        store
+                            .get()
+                            .expect("if module has memory plans, store is not empty")
+                    },
+                    memfd_image,
+                )
                 .map_err(InstantiationError::Resource)?,
             );
         }
@@ -719,7 +732,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module, &mut req.store)?;
+        let memories = self.create_memories(&req.module, &mut req.store, &req.memfds)?;
         let tables = Self::create_tables(&req.module, &mut req.store)?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
