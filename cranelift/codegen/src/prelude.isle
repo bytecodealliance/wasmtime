@@ -277,6 +277,19 @@
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
 
+;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Emit an instruction.
+;;
+;; This is low-level and side-effectful; it should only be used as an
+;; implementation detail by helpers that preserve the SSA facade themselves.
+
+(decl emit (MInst) Unit)
+(extern constructor emit emit)
+
+(decl emit_safepoint (MInst) Unit)
+(extern constructor emit_safepoint emit_safepoint)
+
 ;;;; Helpers for Side-Effectful Instructions Without Results ;;;;;;;;;;;;;;;;;;;
 
 (type SideEffectNoResult (enum (Inst (inst MInst))))
@@ -286,6 +299,12 @@
 (decl value_regs_none (SideEffectNoResult) ValueRegs)
 (rule (value_regs_none (SideEffectNoResult.Inst inst))
       (let ((_ Unit (emit inst)))
+        (value_regs_invalid)))
+
+;; Similarly, but emit the side-effectful instruction as a safepoint.
+(decl safepoint (SideEffectNoResult) ValueRegs)
+(rule (safepoint (SideEffectNoResult.Inst inst))
+      (let ((_ Unit (emit_safepoint inst)))
         (value_regs_invalid)))
 
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

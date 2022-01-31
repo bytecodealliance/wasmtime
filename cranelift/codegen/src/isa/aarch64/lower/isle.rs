@@ -203,6 +203,10 @@ where
         self.emitted_insts.push((inst.clone(), false));
     }
 
+    fn emit_safepoint(&mut self, inst: &MInst) -> Unit {
+        self.emitted_insts.push((inst.clone(), true));
+    }
+
     fn cond_br_zero(&mut self, reg: Reg) -> CondBrKind {
         CondBrKind::Zero(reg)
     }

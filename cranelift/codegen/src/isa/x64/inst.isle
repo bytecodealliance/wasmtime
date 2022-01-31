@@ -613,13 +613,6 @@
 ;; maintain the invariant that each temporary register they allocate and define
 ;; only gets defined the once.
 
-;; Emit an instruction.
-;;
-;; This is low-level and side-effectful; it should only be used as an
-;; implementation detail by helpers that preserve the SSA facade themselves.
-(decl emit (MInst) Unit)
-(extern constructor emit emit)
-
 ;; Helper for emitting `MInst.AluRmiR` instructions.
 (decl alu_rmi_r (Type AluRmiROpcode Reg RegMemImm) Reg)
 (rule (alu_rmi_r ty opcode src1 src2)
