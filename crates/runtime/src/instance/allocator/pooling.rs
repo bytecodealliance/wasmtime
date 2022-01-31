@@ -529,7 +529,7 @@ impl InstancePool {
 
             if let Some(memfds) = maybe_memfds {
                 let image = memfds.get_memory_image(defined_index);
-                let mut slot = memories.take_memfd_slot(instance_idx, memory_index)?;
+                let mut slot = memories.take_memfd_slot(instance_idx, memory_index);
                 let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
 
                 // If instantiation fails, we can propagate the error
@@ -745,15 +745,11 @@ impl MemoryPool {
 
     /// Take ownership of the given memfd slot. Must be returned via
     /// `return_memfd_slot` when the instance is done using it.
-    fn take_memfd_slot(
-        &self,
-        instance_index: usize,
-        memory_index: MemoryIndex,
-    ) -> Result<MemFdSlot, InstantiationError> {
+    fn take_memfd_slot(&self, instance_index: usize, memory_index: MemoryIndex) -> MemFdSlot {
         let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
         let maybe_slot = self.memfd_slots[idx].lock().unwrap().take();
 
-        maybe_slot.map(|slot| Ok(slot)).unwrap_or_else(|| {
+        maybe_slot.unwrap_or_else(|| {
             MemFdSlot::create(
                 self.get_base(instance_index, memory_index) as *mut c_void,
                 self.memory_size,

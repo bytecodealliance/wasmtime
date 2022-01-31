@@ -19,7 +19,7 @@ pub struct MemFdSlot;
 #[cfg(not(feature = "memfd-allocator"))]
 #[allow(dead_code)]
 impl MemFdSlot {
-    pub(crate) fn create(_: *mut libc::c_void, _: usize) -> Result<Self, InstantiationError> {
+    pub(crate) fn create(_: *mut libc::c_void, _: usize) -> Self {
         panic!("create() on invalid MemFdSlot");
     }
 
