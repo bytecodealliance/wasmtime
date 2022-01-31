@@ -25,7 +25,7 @@ use wasmtime_environ::{
 };
 
 mod index_allocator;
-use index_allocator::PoolingAllocationState;
+use index_allocator::{PoolingAllocationState, SlotId};
 
 cfg_if::cfg_if! {
     if #[cfg(windows)] {
@@ -404,7 +404,7 @@ impl InstancePool {
             if alloc.is_empty() {
                 return Err(InstantiationError::Limit(self.max_instances as u32));
             }
-            alloc.alloc(req.unique_id)
+            alloc.alloc(req.unique_id).index()
         };
 
         unsafe {
@@ -430,7 +430,6 @@ impl InstancePool {
         debug_assert!(index < self.max_instances);
 
         let instance = unsafe { &mut *handle.instance };
-        let unique_id = instance.unique_id;
 
         // Decommit any linear memories that were used
         for ((def_mem_idx, memory), base) in
@@ -500,7 +499,7 @@ impl InstancePool {
         // touched again until we write a fresh Instance in-place with
         // std::ptr::write in allocate() above.
 
-        self.index_allocator.lock().unwrap().free(index, unique_id);
+        self.index_allocator.lock().unwrap().free(SlotId(index));
     }
 
     fn set_instance_memories(
@@ -928,7 +927,7 @@ impl StackPool {
             if alloc.is_empty() {
                 return Err(FiberStackError::Limit(self.max_instances as u32));
             }
-            alloc.alloc(None)
+            alloc.alloc(None).index()
         };
 
         debug_assert!(index < self.max_instances);
@@ -974,7 +973,7 @@ impl StackPool {
 
         decommit_stack_pages(bottom_of_stack as _, stack_size).unwrap();
 
-        self.index_allocator.lock().unwrap().free(index, None);
+        self.index_allocator.lock().unwrap().free(SlotId(index));
     }
 }
 
@@ -1457,7 +1456,7 @@ mod test {
 
         assert_eq!(
             instances.index_allocator.lock().unwrap().testing_freelist(),
-            &[0, 1, 2]
+            &[SlotId(0), SlotId(1), SlotId(2)]
         );
 
         let mut handles = Vec::new();
@@ -1520,7 +1519,7 @@ mod test {
 
         assert_eq!(
             instances.index_allocator.lock().unwrap().testing_freelist(),
-            &[2, 1, 0]
+            &[SlotId(2), SlotId(1), SlotId(0)]
         );
 
         Ok(())
@@ -1632,7 +1631,18 @@ mod test {
 
         assert_eq!(
             pool.index_allocator.lock().unwrap().testing_freelist(),
-            &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+            &[
+                SlotId(0),
+                SlotId(1),
+                SlotId(2),
+                SlotId(3),
+                SlotId(4),
+                SlotId(5),
+                SlotId(6),
+                SlotId(7),
+                SlotId(8),
+                SlotId(9)
+            ],
         );
 
         let base = pool.mapping.as_ptr() as usize;
@@ -1660,7 +1670,18 @@ mod test {
 
         assert_eq!(
             pool.index_allocator.lock().unwrap().testing_freelist(),
-            &[9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+            &[
+                SlotId(9),
+                SlotId(8),
+                SlotId(7),
+                SlotId(6),
+                SlotId(5),
+                SlotId(4),
+                SlotId(3),
+                SlotId(2),
+                SlotId(1),
+                SlotId(0)
+            ],
         );
 
         Ok(())
