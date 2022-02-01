@@ -136,7 +136,6 @@ jobs:
     - run: cargo check -p wasmtime --no-default-features --features async
     - run: cargo check -p wasmtime --no-default-features --features uffd
     - run: cargo check -p wasmtime --no-default-features --features pooling-allocator
-    - run: cargo check -p wasmtime --no-default-features --features memfd-allocator
     - run: cargo check -p wasmtime --no-default-features --features cranelift
     - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache
 
@@ -316,8 +315,6 @@ jobs:
         cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
         cargo test --features uffd -p wasmtime-cli pooling_allocator
         cargo test --features uffd -p wasmtime-cli wast::Cranelift
-        cargo test --features memfd-allocator -p wasmtime-cli pooling_allocator
-        cargo test --features memfd-allocator -p wasmtime-cli wast::Cranelift
       if: matrix.os == 'ubuntu-latest' && matrix.target == ''
       env:
         RUST_BACKTRACE: 1

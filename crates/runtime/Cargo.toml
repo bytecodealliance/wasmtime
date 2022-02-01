@@ -25,6 +25,7 @@ backtrace = "0.3.61"
 lazy_static = "1.3.0"
 rand = "0.8.3"
 anyhow = "1.0.38"
+memfd = { version = "0.4.1", optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mach = "0.3.2"
@@ -37,7 +38,6 @@ winapi = { version = "0.3.7", features = ["winbase", "memoryapi", "errhandlingap
 
 [target.'cfg(target_os = "linux")'.dependencies]
 userfaultfd = { version = "0.4.1", optional = true }
-memfd = { version = "0.4.1", optional = true }
 
 [build-dependencies]
 cc = "1.0"
@@ -60,5 +60,3 @@ uffd = ["userfaultfd", "pooling-allocator"]
 # It is useful for applications that do not bind their own exception ports and
 # need portable signal handling.
 posix-signals-on-macos = []
-
-memfd-allocator = ["pooling-allocator", "memfd"]

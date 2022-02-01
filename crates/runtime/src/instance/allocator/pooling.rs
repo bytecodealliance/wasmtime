@@ -703,7 +703,7 @@ impl MemoryPool {
         let mapping = Mmap::accessible_reserved(0, allocation_size)
             .context("failed to create memory pool mapping")?;
 
-        let num_memfd_slots = if cfg!(feature = "memfd-allocator") {
+        let num_memfd_slots = if cfg!(memfd) {
             max_instances * max_memories
         } else {
             0

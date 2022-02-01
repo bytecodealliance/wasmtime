@@ -21,7 +21,7 @@ path = "src/bin/wasmtime.rs"
 doc = false
 
 [dependencies]
-wasmtime = { path = "crates/wasmtime", version = "0.33.0", default-features = false, features = ['cache', 'cranelift'] }
+wasmtime = { path = "crates/wasmtime", version = "0.33.0", default-features = false, features = ['cache', 'cranelift', 'pooling-allocator', 'memfd'] }
 wasmtime-cache = { path = "crates/cache", version = "=0.33.0" }
 wasmtime-cranelift = { path = "crates/cranelift", version = "=0.33.0" }
 wasmtime-environ = { path = "crates/environ", version = "=0.33.0" }
@@ -96,7 +96,6 @@ wasi-crypto = ["wasmtime-wasi-crypto"]
 wasi-nn = ["wasmtime-wasi-nn"]
 uffd = ["wasmtime/uffd"]
 pooling-allocator = ["wasmtime/pooling-allocator"]
-memfd-allocator = ["pooling-allocator", "wasmtime/memfd-allocator"]
 all-arch = ["wasmtime/all-arch"]
 posix-signals-on-macos = ["wasmtime/posix-signals-on-macos"]
 

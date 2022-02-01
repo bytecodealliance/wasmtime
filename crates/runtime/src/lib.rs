@@ -19,7 +19,7 @@
         clippy::use_self
     )
 )]
-#![cfg_attr(feature = "memfd-allocator", allow(dead_code))]
+#![cfg_attr(memfd, allow(dead_code))]
 
 use std::sync::atomic::AtomicU64;
 
@@ -67,14 +67,14 @@ pub use crate::vmcontext::{
 mod module_id;
 pub use module_id::{CompiledModuleId, CompiledModuleIdAllocator};
 
-#[cfg(feature = "memfd-allocator")]
+#[cfg(memfd)]
 mod memfd;
-#[cfg(feature = "memfd-allocator")]
+#[cfg(memfd)]
 pub use crate::memfd::{MemFdSlot, MemoryMemFd, ModuleMemFds};
 
-#[cfg(not(feature = "memfd-allocator"))]
+#[cfg(not(memfd))]
 mod memfd_disabled;
-#[cfg(not(feature = "memfd-allocator"))]
+#[cfg(not(memfd))]
 pub use crate::memfd_disabled::{MemFdSlot, MemoryMemFd, ModuleMemFds};
 
 /// Version number of this crate.

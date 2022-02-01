@@ -37,11 +37,9 @@ impl ModuleMemFds {
 /// To allow MemFdSlot to be unconditionally passed around in various
 /// places (e.g. a `Memory`), we define a zero-sized type when memfd is
 /// not included in the build.
-#[cfg(not(feature = "memfd-allocator"))]
 #[derive(Debug)]
 pub struct MemFdSlot;
 
-#[cfg(not(feature = "memfd-allocator"))]
 #[allow(dead_code)]
 impl MemFdSlot {
     pub(crate) fn create(_: *mut libc::c_void, _: usize) -> Self {
