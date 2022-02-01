@@ -7,11 +7,11 @@
 //! Using the pooling instance allocator can speed up module instantiation
 //! when modules can be constrained based on configurable limits.
 
-use super::MemFdSlot;
 use super::{
     initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, InstantiationError,
 };
+use crate::MemFdSlot;
 use crate::{instance::Instance, Memory, Mmap, ModuleMemFds, Table};
 use anyhow::{anyhow, bail, Context, Result};
 use libc::c_void;
@@ -762,6 +762,22 @@ impl MemoryPool {
         assert!(!slot.is_dirty());
         let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
         *self.memfd_slots[idx].lock().unwrap() = Some(slot);
+    }
+}
+
+impl Drop for MemoryPool {
+    fn drop(&mut self) {
+        // Clear the `clear_no_drop` flag (i.e., ask to *not* clear on
+        // drop) for all MemFdSlots, and then drop them here. This is
+        // valid because the one `Mmap` that covers the whole region
+        // can just do its one munmap.
+        for memfd in std::mem::take(&mut self.memfd_slots) {
+            if let Some(memfd_slot) = memfd.lock().unwrap().as_mut() {
+                unsafe {
+                    memfd_slot.no_clear_on_drop();
+                }
+            }
+        }
     }
 }
 

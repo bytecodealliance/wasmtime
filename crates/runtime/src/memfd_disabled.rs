@@ -5,6 +5,31 @@
 use crate::InstantiationError;
 use anyhow::Result;
 use std::sync::Arc;
+use wasmtime_environ::{DefinedMemoryIndex, Module};
+
+/// A shim for the memfd image container when memfd support is not
+/// included.
+pub enum ModuleMemFds {}
+
+/// A shim for an individual memory image.
+#[allow(dead_code)]
+pub enum MemoryMemFd {}
+
+impl ModuleMemFds {
+    /// Construct a new set of memfd images. This variant is used
+    /// when memfd support is not included; it always returns no
+    /// images.
+    pub fn new(_: &Module, _: &[u8]) -> Result<Option<Arc<ModuleMemFds>>> {
+        Ok(None)
+    }
+
+    /// Get the memfd image for a particular memory.
+    pub(crate) fn get_memory_image(&self, _: DefinedMemoryIndex) -> Option<&Arc<MemoryMemFd>> {
+        // Should be unreachable because the `Self` type is
+        // uninhabitable.
+        match *self {}
+    }
+}
 
 /// A placeholder for MemFdSlot when we have not included the pooling
 /// allocator.
@@ -26,10 +51,12 @@ impl MemFdSlot {
     pub(crate) fn instantiate(
         &mut self,
         _: usize,
-        _: Option<&Arc<crate::memfd::MemoryMemFd>>,
+        _: Option<&Arc<MemoryMemFd>>,
     ) -> Result<Self, InstantiationError> {
         panic!("instantiate() on invalid MemFdSlot");
     }
+
+    pub(crate) unsafe fn no_clear_on_drop(&mut self) {}
 
     pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
         Ok(())

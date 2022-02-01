@@ -25,16 +25,6 @@ use wasmtime_environ::{
 #[cfg(feature = "pooling-allocator")]
 mod pooling;
 
-#[cfg(feature = "memfd-allocator")]
-mod memfd;
-#[cfg(feature = "memfd-allocator")]
-pub use self::memfd::MemFdSlot;
-
-#[cfg(not(feature = "memfd-allocator"))]
-mod memfd_disabled;
-#[cfg(not(feature = "memfd-allocator"))]
-pub use self::memfd_disabled::MemFdSlot;
-
 #[cfg(feature = "pooling-allocator")]
 pub use self::pooling::{
     InstanceLimits, ModuleLimits, PoolingAllocationStrategy, PoolingInstanceAllocator,
