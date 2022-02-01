@@ -97,7 +97,10 @@ impl WasmFuncType {
     #[inline]
     pub fn new(params: Box<[WasmType]>, returns: Box<[WasmType]>) -> Self {
         let externref_params_count = params.iter().filter(|p| **p == WasmType::ExternRef).count();
-        let externref_returns_count = params.iter().filter(|r| **r == WasmType::ExternRef).count();
+        let externref_returns_count = returns
+            .iter()
+            .filter(|r| **r == WasmType::ExternRef)
+            .count();
         WasmFuncType {
             params,
             externref_params_count,
