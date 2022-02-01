@@ -1165,15 +1165,16 @@ impl StoreOpaque {
     }
 
     /// Looks up the corresponding `VMTrampoline` which can be used to enter
-    /// wasm  given an anyfunc function pointer.
+    /// wasm given an anyfunc function pointer.
     ///
-    /// This is a somewhat complicated implementation at this time unfortnately.
+    /// This is a somewhat complicated implementation at this time, unfortnately.
     /// Trampolines are a sort of side-channel of information which is
     /// specifically juggled by the `wasmtime` crate in a careful fashion. The
     /// sources for trampolines are:
     ///
     /// * Compiled modules - each compiled module has a trampoline for all
-    ///   signatures of functions that escape the module (e.g. exports)
+    ///   signatures of functions that escape the module (e.g. exports and
+    ///   `ref.func`-able functions)
     /// * `Func::new` - host-defined functions with a dynamic signature get an
     ///   on-the-fly-compiled trampoline (e.g. JIT-compiled as part of the
     ///   `Func::new` call).
@@ -1200,12 +1201,13 @@ impl StoreOpaque {
     /// store-owned trampoline. The actual population of this map, however, is
     /// deferred to this function itself.
     ///
-    /// In the theory that wasm functions are the primary lookups then we don't
-    /// want to make insertion of a host function into the store more expensive
-    /// than it otherwise has to be. We could update the `host_trampolines`
-    /// whenever a host function is inserted into the store, but this is a
-    /// relatively expensive hash map insertion. Instead the work is deferred
-    /// here.
+    /// Most of the time we are looking up a Wasm function's trampoline when
+    /// calling this function, and we don't want to make insertion of a host
+    /// function into the store more expensive than it has to be. We could
+    /// update the `host_trampolines` whenever a host function is inserted into
+    /// the store, but this is a relatively expensive hash map insertion.
+    /// Instead the work is deferred until we actually look up that trampoline
+    /// in this method.
     ///
     /// This all means that if the lookup of the trampoline fails within
     /// `self.host_trampolines` we lazily populate `self.host_trampolines` by
@@ -1219,7 +1221,7 @@ impl StoreOpaque {
             return trampoline;
         }
 
-        // Next cosult the list of store-local host trampolines. This is
+        // Next consult the list of store-local host trampolines. This is
         // primarily populated by functions created by `Func::new` or similar
         // creation functions, host-defined functions.
         if let Some(trampoline) = self.host_trampolines.get(&anyfunc.type_index) {
@@ -1227,7 +1229,7 @@ impl StoreOpaque {
         }
 
         // If no trampoline was found then it means that it hasn't been loaded
-        // into the `host_trampolines`. Skip over all the ones we've looked at
+        // into `host_trampolines` yet. Skip over all the ones we've looked at
         // so far and start inserting into `self.host_trampolines`, returning
         // the actual trampoline once found.
         for f in self
@@ -1236,7 +1238,8 @@ impl StoreOpaque {
             .skip(self.host_func_trampolines_registered)
         {
             self.host_func_trampolines_registered += 1;
-            self.host_trampolines.insert(f.sig_index(), f.trampoline());
+            let old_entry = self.host_trampolines.insert(f.sig_index(), f.trampoline());
+            debug_assert!(old_entry.is_none());
             if f.sig_index() == anyfunc.type_index {
                 return f.trampoline();
             }
