@@ -21,6 +21,7 @@ use crate::{
     machinst::{InsnOutput, LowerCtx, RelocDistance},
 };
 use std::boxed::Box;
+use std::cell::Cell;
 use std::convert::TryFrom;
 use std::vec::Vec;
 
@@ -28,6 +29,8 @@ type BoxCallInfo = Box<CallInfo>;
 type BoxCallIndInfo = Box<CallIndInfo>;
 type VecMachLabel = Vec<MachLabel>;
 type BoxExternalName = Box<ExternalName>;
+type VecMInst = Vec<MInst>;
+type VecMInstBuilder = Cell<Vec<MInst>>;
 
 /// The main entry point for lowering with ISLE.
 pub(crate) fn lower<C>(
@@ -483,6 +486,41 @@ where
     ) -> MInst {
         let offset = u32::try_from(i32::from(offset)).unwrap();
         self.lower_ctx.abi().stackslot_addr(stack_slot, offset, dst)
+    }
+
+    #[inline]
+    fn inst_builder_new(&mut self) -> VecMInstBuilder {
+        Cell::new(Vec::<MInst>::new())
+    }
+
+    #[inline]
+    fn inst_builder_push(&mut self, builder: &VecMInstBuilder, inst: &MInst) -> Unit {
+        let mut vec = builder.take();
+        vec.push(inst.clone());
+        builder.set(vec);
+    }
+
+    #[inline]
+    fn inst_builder_finish(&mut self, builder: &VecMInstBuilder) -> Vec<MInst> {
+        builder.take()
+    }
+
+    #[inline]
+    fn real_reg(&mut self, reg: WritableReg) -> Option<WritableReg> {
+        if reg.to_reg().is_real() {
+            Some(reg)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn same_reg(&mut self, src: Reg, dst: WritableReg) -> Option<()> {
+        if dst.to_reg() == src {
+            Some(())
+        } else {
+            None
+        }
     }
 
     #[inline]

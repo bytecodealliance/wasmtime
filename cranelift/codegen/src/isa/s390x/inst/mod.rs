@@ -35,7 +35,7 @@ mod emit_tests;
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
     ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuToIntOp, IntToFpuOp, MInst as Inst,
-    ShiftOp, UnaryOp,
+    RxSBGOp, ShiftOp, UnaryOp,
 };
 
 /// Additional information for (direct) Call instructions, left out of line to lower the size of
@@ -93,6 +93,8 @@ impl Inst {
             | Inst::AluRUImm16Shifted { .. }
             | Inst::AluRUImm32Shifted { .. }
             | Inst::ShiftRR { .. }
+            | Inst::RxSBG { .. }
+            | Inst::RxSBGTest { .. }
             | Inst::SMulWide { .. }
             | Inst::UMulWide { .. }
             | Inst::SDivMod32 { .. }
@@ -191,6 +193,8 @@ impl Inst {
             | Inst::JTSequence { .. }
             | Inst::LoadExtNameFar { .. }
             | Inst::LoadAddr { .. }
+            | Inst::Loop { .. }
+            | Inst::CondBreak { .. }
             | Inst::VirtualSPOffsetAdj { .. }
             | Inst::ValueLabelMarker { .. }
             | Inst::Unwind { .. } => InstructionSet::Base,
@@ -436,6 +440,14 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             if shift_reg != zero_reg() {
                 collector.add_use(shift_reg);
             }
+        }
+        &Inst::RxSBG { rd, rn, .. } => {
+            collector.add_mod(rd);
+            collector.add_use(rn);
+        }
+        &Inst::RxSBGTest { rd, rn, .. } => {
+            collector.add_use(rd);
+            collector.add_use(rn);
         }
         &Inst::UnaryRR { rd, rn, .. } => {
             collector.add_def(rd);
@@ -687,6 +699,12 @@ fn s390x_get_regs(inst: &Inst, collector: &mut RegUsageCollector) {
             collector.add_def(rd);
             memarg_regs(mem, collector);
         }
+        &Inst::Loop { ref body, .. } => {
+            for inst in body.iter() {
+                s390x_get_regs(inst, collector);
+            }
+        }
+        &Inst::CondBreak { .. } => {}
         &Inst::VirtualSPOffsetAdj { .. } => {}
         &Inst::ValueLabelMarker { reg, .. } => {
             collector.add_use(reg);
@@ -811,6 +829,22 @@ pub fn s390x_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             if *shift_reg != zero_reg() {
                 mapper.map_use(shift_reg);
             }
+        }
+        &mut Inst::RxSBG {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            mapper.map_mod(rd);
+            mapper.map_use(rn);
+        }
+        &mut Inst::RxSBGTest {
+            ref mut rd,
+            ref mut rn,
+            ..
+        } => {
+            mapper.map_use(rd);
+            mapper.map_use(rn);
         }
         &mut Inst::UnaryRR {
             ref mut rd,
@@ -1408,6 +1442,12 @@ pub fn s390x_map_regs<RM: RegMapper>(inst: &mut Inst, mapper: &RM) {
             mapper.map_def(rd);
             map_mem(mapper, mem);
         }
+        &mut Inst::Loop { ref mut body, .. } => {
+            for inst in body.iter_mut() {
+                s390x_map_regs(inst, mapper);
+            }
+        }
+        &mut Inst::CondBreak { .. } => {}
         &mut Inst::VirtualSPOffsetAdj { .. } => {}
         &mut Inst::ValueLabelMarker { ref mut reg, .. } => {
             mapper.map_use(reg);
@@ -1909,6 +1949,58 @@ impl Inst {
                 };
                 format!("{} {}, {}, {}{}", op, rd, rn, shift_imm, shift_reg)
             }
+            &Inst::RxSBG {
+                op,
+                rd,
+                rn,
+                start_bit,
+                end_bit,
+                rotate_amt,
+            } => {
+                let op = match op {
+                    RxSBGOp::Insert => "risbgn",
+                    RxSBGOp::And => "rnsbg",
+                    RxSBGOp::Or => "rosbg",
+                    RxSBGOp::Xor => "rxsbg",
+                };
+                let rd = rd.to_reg().show_rru(mb_rru);
+                let rn = rn.show_rru(mb_rru);
+                format!(
+                    "{} {}, {}, {}, {}, {}",
+                    op,
+                    rd,
+                    rn,
+                    start_bit,
+                    end_bit,
+                    (rotate_amt as u8) & 63
+                )
+            }
+            &Inst::RxSBGTest {
+                op,
+                rd,
+                rn,
+                start_bit,
+                end_bit,
+                rotate_amt,
+            } => {
+                let op = match op {
+                    RxSBGOp::And => "rnsbg",
+                    RxSBGOp::Or => "rosbg",
+                    RxSBGOp::Xor => "rxsbg",
+                    _ => unreachable!(),
+                };
+                let rd = rd.show_rru(mb_rru);
+                let rn = rn.show_rru(mb_rru);
+                format!(
+                    "{} {}, {}, {}, {}, {}",
+                    op,
+                    rd,
+                    rn,
+                    start_bit | 0x80,
+                    end_bit,
+                    (rotate_amt as u8) & 63
+                )
+            }
             &Inst::UnaryRR { op, rd, rn } => {
                 let (op, extra) = match op {
                     UnaryOp::Abs32 => ("lpr", ""),
@@ -1919,6 +2011,8 @@ impl Inst {
                     UnaryOp::Neg64Ext32 => ("lcgfr", ""),
                     UnaryOp::PopcntByte => ("popcnt", ""),
                     UnaryOp::PopcntReg => ("popcnt", ", 8"),
+                    UnaryOp::BSwap32 => ("lrvr", ""),
+                    UnaryOp::BSwap64 => ("lrvgr", ""),
                 };
                 let rd = rd.to_reg().show_rru(mb_rru);
                 let rn = rn.show_rru(mb_rru);
@@ -2643,6 +2737,19 @@ impl Inst {
                 let rd = rd.show_rru(mb_rru);
                 let mem = mem.show_rru(mb_rru);
                 format!("{}{} {}, {}", mem_str, op, rd, mem)
+            }
+            &Inst::Loop { ref body, cond } => {
+                let body = body
+                    .into_iter()
+                    .map(|inst| inst.show_rru(mb_rru))
+                    .collect::<Vec<_>>()
+                    .join(" ; ");
+                let cond = cond.show_rru(mb_rru);
+                format!("0: {} ; jg{} 0b ; 1:", body, cond)
+            }
+            &Inst::CondBreak { cond } => {
+                let cond = cond.show_rru(mb_rru);
+                format!("jg{} 1f", cond)
             }
             &Inst::VirtualSPOffsetAdj { offset } => {
                 state.virtual_sp_offset += offset;

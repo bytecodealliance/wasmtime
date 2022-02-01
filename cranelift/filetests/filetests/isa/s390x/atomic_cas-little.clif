@@ -7,38 +7,47 @@ target s390x
 
 function %atomic_cas_i64(i64, i64, i64) -> i64 {
 block0(v0: i64, v1: i64, v2: i64):
-  v3 = atomic_cas.i64 v2, v0, v1
+  v3 = atomic_cas.i64 little v2, v0, v1
   return v3
 }
 
-; check:  csg %r2, %r3, 0(%r4)
+; check:  lrvgr %r2, %r2
+; nextln: lrvgr %r3, %r3
+; nextln: csg %r2, %r3, 0(%r4)
+; nextln: lrvgr %r2, %r2
 ; nextln: br %r14
 
 function %atomic_cas_i32(i32, i32, i64) -> i32 {
 block0(v0: i32, v1: i32, v2: i64):
-  v3 = atomic_cas.i32 v2, v0, v1
+  v3 = atomic_cas.i32 little v2, v0, v1
   return v3
 }
 
-; check:  cs %r2, %r3, 0(%r4)
+; check:  lrvr %r2, %r2
+; nextln: lrvr %r3, %r3
+; nextln: cs %r2, %r3, 0(%r4)
+; nextln: lrvr %r2, %r2
 ; nextln: br %r14
 
 function %atomic_cas_i16(i64, i16, i16, i64) -> i16 {
 block0(v0: i64, v1: i16, v2: i16, v3: i64):
-  v4 = atomic_cas.i16 v3, v1, v2
+  v4 = atomic_cas.i16 little v3, v1, v2
   return v4
 }
 
 ; check:  sllk %r2, %r5, 3
 ; nextln: nill %r5, 65532
+; nextln: lrvr %r3, %r3
+; nextln: lrvr %r4, %r4
 ; nextln: l %r0, 0(%r5)
-; nextln: 0: rll %r1, %r0, 0(%r2) ; rxsbg %r1, %r3, 160, 48, 16 ; jglh 1f ; risbgn %r1, %r4, 32, 48, 16 ; rll %r1, %r1, 0(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
-; nextln: rll %r2, %r0, 16(%r2)
+; nextln: 0: rll %r1, %r0, 16(%r2) ; rxsbg %r1, %r3, 176, 64, 48 ; jglh 1f ; risbgn %r1, %r4, 48, 64, 48 ; rll %r1, %r1, 16(%r2) ; cs %r0, %r1, 0(%r5) ; jglh 0b ; 1:
+; nextln: rll %r2, %r0, 0(%r2)
+; nextln: lrvr %r2, %r2
 ; nextln: br %r14
 
 function %atomic_cas_i8(i64, i8, i8, i64) -> i8 {
 block0(v0: i64, v1: i8, v2: i8, v3: i64):
-  v4 = atomic_cas.i8 v3, v1, v2
+  v4 = atomic_cas.i8 little v3, v1, v2
   return v4
 }
 

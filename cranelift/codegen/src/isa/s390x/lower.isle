@@ -1497,11 +1497,19 @@
 
 ;;;; Rules for `atomic_rmw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Atomic operations that do not require a compare-and-swap loop.
+
 ;; Atomic AND for 32/64-bit big-endian types, using a single instruction.
 (rule (lower (has_type (ty_32_or_64 ty)
                 (atomic_rmw flags @ (bigendian) (AtomicRmwOp.And) addr src)))
       (value_reg (atomic_rmw_and ty (put_in_reg src)
                                  (lower_address flags addr (zero_offset)))))
+
+;; Atomic AND for 32/64-bit big-endian types, using byte-swapped input/output.
+(rule (lower (has_type (ty_32_or_64 ty)
+               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.And) addr src)))
+      (value_reg (bswap_reg ty (atomic_rmw_and ty (bswap_reg ty (put_in_reg src))
+                                 (lower_address flags addr (zero_offset))))))
 
 ;; Atomic OR for 32/64-bit big-endian types, using a single instruction.
 (rule (lower (has_type (ty_32_or_64 ty)
@@ -1509,11 +1517,23 @@
       (value_reg (atomic_rmw_or ty (put_in_reg src)
                                 (lower_address flags addr (zero_offset)))))
 
+;; Atomic OR for 32/64-bit little-endian types, using byte-swapped input/output.
+(rule (lower (has_type (ty_32_or_64 ty)
+               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Or) addr src)))
+      (value_reg (bswap_reg ty (atomic_rmw_or ty (bswap_reg ty (put_in_reg src))
+                                 (lower_address flags addr (zero_offset))))))
+
 ;; Atomic XOR for 32/64-bit big-endian types, using a single instruction.
 (rule (lower (has_type (ty_32_or_64 ty)
                (atomic_rmw flags @ (bigendian) (AtomicRmwOp.Xor) addr src)))
       (value_reg (atomic_rmw_xor ty (put_in_reg src)
                                  (lower_address flags addr (zero_offset)))))
+
+;; Atomic XOR for 32/64-bit little-endian types, using byte-swapped input/output.
+(rule (lower (has_type (ty_32_or_64 ty)
+               (atomic_rmw flags @ (littleendian) (AtomicRmwOp.Xor) addr src)))
+      (value_reg (bswap_reg ty (atomic_rmw_xor ty (bswap_reg ty (put_in_reg src))
+                                 (lower_address flags addr (zero_offset))))))
 
 ;; Atomic ADD for 32/64-bit big-endian types, using a single instruction.
 (rule (lower (has_type (ty_32_or_64 ty)
@@ -1528,17 +1548,278 @@
                                  (lower_address flags addr (zero_offset)))))
 
 
+;; Atomic operations that require a compare-and-swap loop.
+
+;; Operations for 32/64-bit types can use a fullword compare-and-swap loop.
+(rule (lower (has_type (ty_32_or_64 ty) (atomic_rmw flags op addr src)))
+      (let ((src_reg Reg (put_in_reg src))
+            (addr_reg Reg (put_in_reg addr))
+            ;; Create body of compare-and-swap loop.
+            (ib VecMInstBuilder (inst_builder_new))
+            (val0 Reg (writable_reg_to_reg (casloop_val_reg)))
+            (val1 Reg (atomic_rmw_body ib ty flags op
+                        (casloop_tmp_reg) val0 src_reg)))
+        ;; Emit compare-and-swap loop and extract final result.
+        (value_reg (casloop ib ty flags addr_reg val1))))
+
+;; Operations for 8/16-bit types must operate on the surrounding aligned word.
+(rule (lower (has_type (ty_8_or_16 ty) (atomic_rmw flags op addr src)))
+      (let ((src_reg Reg (put_in_reg src))
+            (addr_reg Reg (put_in_reg addr))
+            ;; Prepare access to surrounding aligned word.
+            (bitshift Reg (casloop_bitshift addr_reg))
+            (aligned_addr Reg (casloop_aligned_addr addr_reg))
+            ;; Create body of compare-and-swap loop.
+            (ib VecMInstBuilder (inst_builder_new))
+            (val0 Reg (writable_reg_to_reg (casloop_val_reg)))
+            (val1 Reg (casloop_rotate_in ib ty flags bitshift val0))
+            (val2 Reg (atomic_rmw_body ib ty flags op
+                        (casloop_tmp_reg) val1 src_reg))
+            (val3 Reg (casloop_rotate_out ib ty flags bitshift val2)))
+        ;; Emit compare-and-swap loop and extract final result.
+        (value_reg (casloop_subword ib ty flags aligned_addr bitshift val3))))
+
+;; Loop bodies for atomic read-modify-write operations.
+(decl atomic_rmw_body (VecMInstBuilder Type MemFlags AtomicRmwOp
+                       WritableReg Reg Reg) Reg)
+
+;; Loop bodies for 32-/64-bit atomic XCHG operations.
+;; Simply use the source (possibly byte-swapped) as new target value.
+(rule (atomic_rmw_body ib (ty_32_or_64 ty) (bigendian)
+                       (AtomicRmwOp.Xchg) tmp val src)
+      src)
+(rule (atomic_rmw_body ib (ty_32_or_64 ty) (littleendian)
+                       (AtomicRmwOp.Xchg) tmp val src)
+      (bswap_reg ty src))
+
+;; Loop bodies for 32-/64-bit atomic NAND operations.
+;; On z15 this can use the NN(G)RK instruction.  On z14, perform an And
+;; operation and invert the result.  In the little-endian case, we can
+;; simply byte-swap the source operand.
+(rule (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (bigendian)
+                       (AtomicRmwOp.Nand) tmp val src)
+      (push_alu_reg ib (aluop_and_not ty) tmp val src))
+(rule (atomic_rmw_body ib (and (mie2_enabled) (ty_32_or_64 ty)) (littleendian)
+                       (AtomicRmwOp.Nand) tmp val src)
+      (push_alu_reg ib (aluop_and_not ty) tmp val (bswap_reg ty src)))
+(rule (atomic_rmw_body ib (and (mie2_disabled) (ty_32_or_64 ty)) (bigendian)
+                       (AtomicRmwOp.Nand) tmp val src)
+      (push_not_reg ib ty tmp
+        (push_alu_reg ib (aluop_and ty) tmp val src)))
+(rule (atomic_rmw_body ib (and (mie2_disabled) (ty_32_or_64 ty)) (littleendian)
+                       (AtomicRmwOp.Nand) tmp val src)
+      (push_not_reg ib ty tmp
+        (push_alu_reg ib (aluop_and ty) tmp val (bswap_reg ty src))))
+
+;; Loop bodies for 8-/16-bit atomic bit operations.
+;; These use the "rotate-then-<op>-selected bits" family of instructions.
+;; For the Nand operation, we again perform And and invert the result.
+(rule (atomic_rmw_body ib (ty_8_or_16 ty) flags (AtomicRmwOp.Xchg) tmp val src)
+      (atomic_rmw_body_rxsbg ib ty flags (RxSBGOp.Insert) tmp val src))
+(rule (atomic_rmw_body ib (ty_8_or_16 ty) flags (AtomicRmwOp.And) tmp val src)
+      (atomic_rmw_body_rxsbg ib ty flags (RxSBGOp.And) tmp val src))
+(rule (atomic_rmw_body ib (ty_8_or_16 ty) flags (AtomicRmwOp.Or) tmp val src)
+      (atomic_rmw_body_rxsbg ib ty flags (RxSBGOp.Or) tmp val src))
+(rule (atomic_rmw_body ib (ty_8_or_16 ty) flags (AtomicRmwOp.Xor) tmp val src)
+      (atomic_rmw_body_rxsbg ib ty flags (RxSBGOp.Xor) tmp val src))
+(rule (atomic_rmw_body ib (ty_8_or_16 ty) flags (AtomicRmwOp.Nand) tmp val src)
+      (atomic_rmw_body_invert ib ty flags tmp
+        (atomic_rmw_body_rxsbg ib ty flags (RxSBGOp.And) tmp val src)))
+
+;; RxSBG subword operation.
+(decl atomic_rmw_body_rxsbg (VecMInstBuilder Type MemFlags RxSBGOp
+                             WritableReg Reg Reg) Reg)
+;; 8-bit case: use the low byte of "src" and the high byte of "val".
+(rule (atomic_rmw_body_rxsbg ib $I8 _ op tmp val src)
+      (push_rxsbg ib op tmp val src 32 40 24))
+;; 16-bit big-endian case: use the low two bytes of "src" and the
+;; high two bytes of "val".
+(rule (atomic_rmw_body_rxsbg ib $I16 (bigendian) op tmp val src)
+      (push_rxsbg ib op tmp val src 32 48 16))
+;; 16-bit little-endian case: use the low two bytes of "src", byte-swapped
+;; so they end up in the high two bytes, and the low two bytes of "val".
+(rule (atomic_rmw_body_rxsbg ib $I16 (littleendian) op tmp val src)
+      (push_rxsbg ib op tmp val (bswap_reg $I32 src) 48 64 -16))
+
+;; Invert a subword.
+(decl atomic_rmw_body_invert (VecMInstBuilder Type MemFlags WritableReg Reg) Reg)
+;; 8-bit case: invert the high byte.
+(rule (atomic_rmw_body_invert ib $I8 _ tmp val)
+      (push_xor_uimm32shifted ib $I32 tmp val (uimm32shifted 0xff000000 0)))
+;; 16-bit big-endian case: invert the two high bytes.
+(rule (atomic_rmw_body_invert ib $I16 (bigendian) tmp val)
+      (push_xor_uimm32shifted ib $I32 tmp val (uimm32shifted 0xffff0000 0)))
+;; 16-bit little-endian case: invert the two low bytes.
+(rule (atomic_rmw_body_invert ib $I16 (littleendian) tmp val)
+      (push_xor_uimm32shifted ib $I32 tmp val (uimm32shifted 0xffff 0)))
+
+;; Loop bodies for atomic ADD/SUB operations.
+(rule (atomic_rmw_body ib ty flags (AtomicRmwOp.Add) tmp val src)
+      (atomic_rmw_body_addsub ib ty flags (aluop_add (ty_ext32 ty)) tmp val src))
+(rule (atomic_rmw_body ib ty flags (AtomicRmwOp.Sub) tmp val src)
+      (atomic_rmw_body_addsub ib ty flags (aluop_sub (ty_ext32 ty)) tmp val src))
+
+;; Addition or subtraction operation.
+(decl atomic_rmw_body_addsub (VecMInstBuilder Type MemFlags ALUOp
+                              WritableReg Reg Reg) Reg)
+;; 32/64-bit big-endian case: just a regular add/sub operation.
+(rule (atomic_rmw_body_addsub ib (ty_32_or_64 ty) (bigendian) op tmp val src)
+      (push_alu_reg ib op tmp val src))
+;; 32/64-bit little-endian case: byte-swap the value loaded from memory before
+;; and after performing the operation in native endianness.
+(rule (atomic_rmw_body_addsub ib (ty_32_or_64 ty) (littleendian) op tmp val src)
+      (let ((val_swapped Reg (push_bswap_reg ib ty tmp val))
+            (res_swapped Reg (push_alu_reg ib op tmp val_swapped src)))
+        (push_bswap_reg ib ty tmp res_swapped)))
+;; 8-bit case: perform a 32-bit addition of the source value shifted by 24 bits
+;; to the memory value, which contains the target in its high byte.
+(rule (atomic_rmw_body_addsub ib $I8 _ op tmp val src)
+      (let ((src_shifted Reg (lshl_imm $I32 src 24)))
+        (push_alu_reg ib op tmp val src_shifted)))
+;; 16-bit big-endian case: similar, just shift the source by 16 bits.
+(rule (atomic_rmw_body_addsub ib $I16 (bigendian) op tmp val src)
+      (let ((src_shifted Reg (lshl_imm $I32 src 16)))
+        (push_alu_reg ib op tmp val src_shifted)))
+;; 16-bit little-endian case: the same, but in addition we need to byte-swap
+;; the memory value before and after the operation.  Since the value was placed
+;; in the low two bytes by our standard rotation, we can use a 32-bit byte-swap
+;; and the native-endian value will end up in the high bytes where we need it
+;; to perform the operation.
+(rule (atomic_rmw_body_addsub ib $I16 (littleendian) op tmp val src)
+      (let ((src_shifted Reg (lshl_imm $I32 src 16))
+            (val_swapped Reg (push_bswap_reg ib $I32 tmp val))
+            (res_swapped Reg (push_alu_reg ib op tmp val_swapped src_shifted)))
+        (push_bswap_reg ib $I32 tmp res_swapped)))
+
+;; Loop bodies for atomic MIN/MAX operations.
+(rule (atomic_rmw_body ib ty flags (AtomicRmwOp.Smin) tmp val src)
+      (atomic_rmw_body_minmax ib ty flags (cmpop_cmps (ty_ext32 ty))
+        (intcc_as_cond (IntCC.SignedLessThan)) tmp val src))
+(rule (atomic_rmw_body ib ty flags (AtomicRmwOp.Smax) tmp val src)
+      (atomic_rmw_body_minmax ib ty flags (cmpop_cmps (ty_ext32 ty))
+        (intcc_as_cond (IntCC.SignedGreaterThan)) tmp val src))
+(rule (atomic_rmw_body ib ty flags (AtomicRmwOp.Umin) tmp val src)
+      (atomic_rmw_body_minmax ib ty flags (cmpop_cmpu (ty_ext32 ty))
+        (intcc_as_cond (IntCC.UnsignedLessThan)) tmp val src))
+(rule (atomic_rmw_body ib ty flags (AtomicRmwOp.Umax) tmp val src)
+      (atomic_rmw_body_minmax ib ty flags (cmpop_cmpu (ty_ext32 ty))
+        (intcc_as_cond (IntCC.UnsignedGreaterThan)) tmp val src))
+
+;; Minimum or maximum operation.
+(decl atomic_rmw_body_minmax (VecMInstBuilder Type MemFlags CmpOp Cond
+                              WritableReg Reg Reg) Reg)
+;; 32/64-bit big-endian case: just a comparison followed by a conditional
+;; break out of the loop if the memory value does not need to change.
+;; If it does need to change, the new value is simply the source operand.
+(rule (atomic_rmw_body_minmax ib (ty_32_or_64 ty) (bigendian)
+                              op cond tmp val src)
+      (let ((_ Reg (push_break_if ib (cmp_rr op src val) (invert_cond cond))))
+        src))
+;; 32/64-bit little-endian case: similar, but we need to byte-swap the
+;; memory value before the comparison.  If we need to store the new value,
+;; it also needs to be byte-swapped.
+(rule (atomic_rmw_body_minmax ib (ty_32_or_64 ty) (littleendian)
+                              op cond tmp val src)
+      (let ((val_swapped Reg (push_bswap_reg ib ty tmp val))
+            (_ Reg (push_break_if ib (cmp_rr op src val_swapped)
+                                     (invert_cond cond))))
+        (push_bswap_reg ib ty tmp src)))
+;; 8-bit case: compare the memory value (which contains the target in the
+;; high byte) with the source operand shifted by 24 bits.  Note that in
+;; the case where the high bytes are equal, the comparison may succeed
+;; or fail depending on the unrelated low bits of the memory value, and
+;; so we either may or may not perform the update.  But it would be an
+;; update with the same value in any case, so this does not matter.
+(rule (atomic_rmw_body_minmax ib $I8 _ op cond tmp val src)
+      (let ((src_shifted Reg (lshl_imm $I32 src 24))
+            (_ Reg (push_break_if ib (cmp_rr op src_shifted val)
+                                     (invert_cond cond))))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src_shifted 32 40 0)))
+;; 16-bit big-endian case: similar, just shift the source by 16 bits.
+(rule (atomic_rmw_body_minmax ib $I16 (bigendian) op cond tmp val src)
+      (let ((src_shifted Reg (lshl_imm $I32 src 16))
+            (_ Reg (push_break_if ib (cmp_rr op src_shifted val)
+                                     (invert_cond cond))))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src_shifted 32 48 0)))
+;; 16-bit little-endian case: similar, but in addition byte-swap the
+;; memory value before and after the operation, like for _addsub_.
+(rule (atomic_rmw_body_minmax ib $I16 (littleendian) op cond tmp val src)
+      (let ((src_shifted Reg (lshl_imm $I32 src 16))
+            (val_swapped Reg (push_bswap_reg ib $I32 tmp val))
+            (_ Reg (push_break_if ib (cmp_rr op src_shifted val_swapped)
+                                     (invert_cond cond)))
+            (res_swapped Reg (push_rxsbg ib (RxSBGOp.Insert)
+                                tmp val_swapped src_shifted 32 48 0)))
+        (push_bswap_reg ib $I32 tmp res_swapped)))
+
+
 ;;;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; 32-bit big-endian atomic compare-and-swap instruction.
-(rule (lower (has_type $I32 (atomic_cas flags @ (bigendian) addr old new)))
-      (value_reg (atomic_cas32 (put_in_reg old) (put_in_reg new)
-                               (lower_address flags addr (zero_offset)))))
+;; 32/64-bit big-endian atomic compare-and-swap instruction.
+(rule (lower (has_type (ty_32_or_64 ty)
+               (atomic_cas flags @ (bigendian) addr src1 src2)))
+      (value_reg (atomic_cas_impl ty (put_in_reg src1) (put_in_reg src2)
+                                 (lower_address flags addr (zero_offset)))))
 
-;; 64-bit big-endian atomic compare-and-swap instruction.
-(rule (lower (has_type $I64 (atomic_cas flags @ (bigendian) addr old new)))
-      (value_reg (atomic_cas64 (put_in_reg old) (put_in_reg new)
-                               (lower_address flags addr (zero_offset)))))
+;; 32/64-bit little-endian atomic compare-and-swap instruction.
+;; Implemented by byte-swapping old/new inputs and the output.
+(rule (lower (has_type (ty_32_or_64 ty)
+               (atomic_cas flags @ (littleendian) addr src1 src2)))
+      (value_reg (bswap_reg ty (atomic_cas_impl ty (bswap_reg ty (put_in_reg src1))
+                                                   (bswap_reg ty (put_in_reg src2))
+                            (lower_address flags addr (zero_offset))))))
+
+;; 8/16-bit atomic compare-and-swap implemented via loop.
+(rule (lower (has_type (ty_8_or_16 ty) (atomic_cas flags addr src1 src2)))
+      (let ((src1_reg Reg (put_in_reg src1))
+            (src2_reg Reg (put_in_reg src2))
+            (addr_reg Reg (put_in_reg addr))
+            ;; Prepare access to the surrounding aligned word.
+            (bitshift Reg (casloop_bitshift addr_reg))
+            (aligned_addr Reg (casloop_aligned_addr addr_reg))
+            ;; Create body of compare-and-swap loop.
+            (ib VecMInstBuilder (inst_builder_new))
+            (val0 Reg (writable_reg_to_reg (casloop_val_reg)))
+            (val1 Reg (casloop_rotate_in ib ty flags bitshift val0))
+            (val2 Reg (atomic_cas_body ib ty flags
+                        (casloop_tmp_reg) val1 src1_reg src2_reg))
+            (val3 Reg (casloop_rotate_out ib ty flags bitshift val2)))
+        ;; Emit compare-and-swap loop and extract final result.
+        (value_reg (casloop_subword ib ty flags aligned_addr bitshift val3))))
+
+;; Emit loop body instructions to perform a subword compare-and-swap.
+(decl atomic_cas_body (VecMInstBuilder Type MemFlags
+                       WritableReg Reg Reg Reg) Reg)
+
+;; 8-bit case: "val" contains the value loaded from memory in the high byte.
+;; Compare with the comparison value in the low byte of "src1".  If unequal,
+;; break out of the loop, otherwise replace the target byte in "val" with
+;; the low byte of "src2".
+(rule (atomic_cas_body ib $I8 _ tmp val src1 src2)
+      (let ((_ Reg (push_break_if ib (rxsbg_test (RxSBGOp.Xor) val src1 32 40 24)
+                                     (intcc_as_cond (IntCC.NotEqual)))))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2 32 40 24)))
+
+;; 16-bit big-endian case: Same as above, except with values in the high
+;; two bytes of "val" and low two bytes of "src1" and "src2".
+(rule (atomic_cas_body ib $I16 (bigendian) tmp val src1 src2)
+      (let ((_ Reg (push_break_if ib (rxsbg_test (RxSBGOp.Xor) val src1 32 48 16)
+                                     (intcc_as_cond (IntCC.NotEqual)))))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2 32 48 16)))
+
+;; 16-bit little-endian case: "val" here contains a little-endian value in the
+;; *low* two bytes.  "src1" and "src2" contain native (i.e. big-endian) values
+;; in their low two bytes.  Perform the operation in little-endian mode by
+;; byte-swapping "src1" and "src" ahead of the loop.  Note that this is a
+;; 32-bit operation so the little-endian 16-bit values end up in the *high*
+;; two bytes of the swapped values.
+(rule (atomic_cas_body ib $I16 (littleendian) tmp val src1 src2)
+      (let ((src1_swapped Reg (bswap_reg $I32 src1))
+            (src2_swapped Reg (bswap_reg $I32 src2))
+            (_ Reg (push_break_if ib
+                     (rxsbg_test (RxSBGOp.Xor) val src1_swapped 48 64 -16)
+                     (intcc_as_cond (IntCC.NotEqual)))))
+        (push_rxsbg ib (RxSBGOp.Insert) tmp val src2_swapped 48 64 -16)))
 
 
 ;;;; Rules for `atomic_load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
