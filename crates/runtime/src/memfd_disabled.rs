@@ -54,7 +54,7 @@ impl MemFdSlot {
         panic!("instantiate() on invalid MemFdSlot");
     }
 
-    pub(crate) unsafe fn no_clear_on_drop(&mut self) {}
+    pub(crate) fn no_clear_on_drop(&mut self) {}
 
     pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
         Ok(())

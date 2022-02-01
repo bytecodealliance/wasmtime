@@ -42,11 +42,15 @@ pub struct MemoryMemFd {
     /// Length of image. Note that initial memory size may be larger;
     /// leading and trailing zeroes are truncated (handled by
     /// anonymous backing memfd).
+    ///
+    /// Must be a multiple of the system page size.
     pub len: usize,
     /// Image starts this many bytes into heap space. Note that the
     /// memfd's offsets are always equal to the heap offsets, so we
     /// map at an offset into the fd as well. (This simplifies
     /// construction.)
+    ///
+    /// Must be a multiple of the system page size.
     pub offset: usize,
 }
 
@@ -231,6 +235,9 @@ impl ModuleMemFds {
             memfd.add_seal(memfd::FileSeal::SealWrite)?;
             memfd.add_seal(memfd::FileSeal::SealSeal)?;
 
+            assert_eq!(offset % page_size, 0);
+            assert_eq!(len % page_size, 0);
+
             memories.push(Some(Arc::new(MemoryMemFd {
                 fd: memfd,
                 offset: usize::try_from(offset).unwrap(),
@@ -294,6 +301,8 @@ pub struct MemFdSlot {
 }
 
 impl MemFdSlot {
+    /// Create a new MemFdSlot. Assumes that there is an anonymous
+    /// mmap backing in the given range to start.
     pub(crate) fn create(base_addr: *mut c_void, static_size: usize) -> Self {
         let base = base_addr as usize;
         MemFdSlot {
@@ -311,7 +320,7 @@ impl MemFdSlot {
     /// address space when dropped. This should be used only when the
     /// caller will clear or reuse the address space in some other
     /// way.
-    pub(crate) unsafe fn no_clear_on_drop(&mut self) {
+    pub(crate) fn no_clear_on_drop(&mut self) {
         self.clear_on_drop = false;
     }
 
@@ -384,8 +393,22 @@ impl MemFdSlot {
         // zeroes). Anonymous zero pages are fast: the kernel
         // pre-zeroes them, and even if it runs out of those, a memset
         // is half as expensive as a memcpy (only writes, no reads).
-        self.map_anon_memory(rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE)
-            .map_err(|e| InstantiationError::Resource(e.into()))?;
+        //
+        // We map these inaccessible at first then mprotect() the
+        // whole of the initial heap size to R+W below.
+        //
+        // Special case: we can skip if the last instantiation had no
+        // image. This means that the whole slot is filled with an
+        // anonymous mmap backing (and it will have already been
+        // cleared by the madvise). This also lets us skip an mmap the
+        // first time a MemFdSlot is used, because we require the
+        // caller to give us a fixed address in an
+        // already-mmaped-with-anon-memory region. This is important
+        // for the on-demand allocator.
+        if self.image.is_some() {
+            self.map_anon_memory(rustix::io::ProtFlags::empty())
+                .map_err(|e| InstantiationError::Resource(e.into()))?;
+        }
 
         // The initial memory image, if given. If not, we just get a
         // memory filled with zeroes.
@@ -410,11 +433,15 @@ impl MemFdSlot {
             }
         }
 
-        // mprotect above `initial_size_bytes`.
+        // mprotect the initial `initial_size_bytes` to be accessible.
         self.initial_size = initial_size_bytes;
         self.cur_size = initial_size_bytes;
-        self.protect_past_initial_size()
-            .map_err(|e| InstantiationError::Resource(e.into()))?;
+        self.set_protection(
+            0,
+            initial_size_bytes,
+            rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+        )
+        .map_err(|e| InstantiationError::Resource(e.into()))?;
 
         self.dirty = true;
         Ok(())
@@ -433,22 +460,27 @@ impl MemFdSlot {
             )?;
         }
 
-        // mprotect the region beyond the initial heap size back to PROT_NONE.
-        self.protect_past_initial_size()?;
+        // mprotect the initial heap region beyond the initial heap size back to PROT_NONE.
+        self.set_protection(
+            self.initial_size,
+            self.static_size - self.initial_size,
+            rustix::io::MprotectFlags::empty(),
+        )?;
         self.dirty = false;
         Ok(())
     }
 
-    fn protect_past_initial_size(&self) -> Result<()> {
-        let mprotect_start = self.base + self.initial_size;
-        let mprotect_len = self.static_size - self.initial_size;
-        if mprotect_len > 0 {
+    fn set_protection(
+        &self,
+        start: usize,
+        len: usize,
+        flags: rustix::io::MprotectFlags,
+    ) -> Result<()> {
+        assert!(start.checked_add(len).unwrap() <= self.static_size);
+        let mprotect_start = self.base.checked_add(start).unwrap();
+        if len > 0 {
             unsafe {
-                rustix::io::mprotect(
-                    mprotect_start as *mut _,
-                    mprotect_len,
-                    rustix::io::MprotectFlags::empty(),
-                )?;
+                rustix::io::mprotect(mprotect_start as *mut _, len, flags)?;
             }
         }
 

@@ -162,13 +162,11 @@ impl MmapMemory {
                 let len = request_bytes - pre_guard_bytes;
                 let mut memfd_slot = MemFdSlot::create(base as *mut _, len);
                 memfd_slot.instantiate(minimum, Some(image))?;
-                unsafe {
-                    // On drop, we will unmap our mmap'd range that
-                    // this memfd_slot was mapped on top of, so there
-                    // is no need for the memfd_slot to wipe it with
-                    // an anonymous mapping first.
-                    memfd_slot.no_clear_on_drop();
-                }
+                // On drop, we will unmap our mmap'd range that this
+                // memfd_slot was mapped on top of, so there is no
+                // need for the memfd_slot to wipe it with an
+                // anonymous mapping first.
+                memfd_slot.no_clear_on_drop();
                 Some(memfd_slot)
             }
             None => None,

@@ -771,11 +771,9 @@ impl Drop for MemoryPool {
         // drop) for all MemFdSlots, and then drop them here. This is
         // valid because the one `Mmap` that covers the whole region
         // can just do its one munmap.
-        for memfd in std::mem::take(&mut self.memfd_slots) {
-            if let Some(memfd_slot) = memfd.lock().unwrap().as_mut() {
-                unsafe {
-                    memfd_slot.no_clear_on_drop();
-                }
+        for mut memfd in std::mem::take(&mut self.memfd_slots) {
+            if let Some(memfd_slot) = memfd.get_mut().unwrap() {
+                memfd_slot.no_clear_on_drop();
             }
         }
     }
