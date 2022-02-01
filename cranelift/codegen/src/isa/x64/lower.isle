@@ -1414,7 +1414,31 @@
 (rule (vec_insert_lane $F64X2 vec val 1)
       (movlhps vec (reg_mem_to_xmm_mem val)))
 
-;;;; Rules for `imax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `imin`, `imax`, `umin`, `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; `i64` and smaller.
+
+(decl cmp_and_choose (Type CC Value Value) ValueRegs)
+(rule (cmp_and_choose (fits_in_64 ty) cc x y)
+      (let ((x_reg Reg (put_in_reg x))
+            (y_reg Reg (put_in_reg y))
+            (size OperandSize (raw_operand_size_of_type ty)))
+           (value_reg (with_flags_1 (cmp size (RegMemImm.Reg x_reg) y_reg)
+                                    (cmove ty cc (RegMem.Reg y_reg) x_reg)))))
+
+(rule (lower (has_type (fits_in_64 ty) (umin x y)))
+      (cmp_and_choose ty (CC.B) x y))
+
+(rule (lower (has_type (fits_in_64 ty) (umax x y)))
+      (cmp_and_choose ty (CC.NB) x y))
+
+(rule (lower (has_type (fits_in_64 ty) (imin x y)))
+      (cmp_and_choose ty (CC.L) x y))
+
+(rule (lower (has_type (fits_in_64 ty) (imax x y)))
+      (cmp_and_choose ty (CC.NL) x y))
+
+;; SSE `imax`.
 
 (rule (lower (has_type $I8X16 (imax x y)))
       (value_xmm (pmaxsb (put_in_xmm x) (put_in_xmm_mem y))))
@@ -1425,7 +1449,7 @@
 (rule (lower (has_type $I32X4 (imax x y)))
       (value_xmm (pmaxsd (put_in_xmm x) (put_in_xmm_mem y))))
 
-;;;; Rules for `imin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SSE `imin`.
 
 (rule (lower (has_type $I8X16 (imin x y)))
       (value_xmm (pminsb (put_in_xmm x) (put_in_xmm_mem y))))
@@ -1436,7 +1460,7 @@
 (rule (lower (has_type $I32X4 (imin x y)))
       (value_xmm (pminsd (put_in_xmm x) (put_in_xmm_mem y))))
 
-;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SSE `umax`.
 
 (rule (lower (has_type $I8X16 (umax x y)))
       (value_xmm (pmaxub (put_in_xmm x) (put_in_xmm_mem y))))
@@ -1447,7 +1471,7 @@
 (rule (lower (has_type $I32X4 (umax x y)))
       (value_xmm (pmaxud (put_in_xmm x) (put_in_xmm_mem y))))
 
-;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; SSE `umin`.
 
 (rule (lower (has_type $I8X16 (umin x y)))
       (value_xmm (pminub (put_in_xmm x) (put_in_xmm_mem y))))
