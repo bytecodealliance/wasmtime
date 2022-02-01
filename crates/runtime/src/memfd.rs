@@ -316,7 +316,12 @@ impl MemFdSlot {
     }
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
-        assert!(size_bytes > self.cur_size);
+        assert!(
+            size_bytes > self.cur_size,
+            "size_bytes = {} cur_size = {}",
+            size_bytes,
+            self.cur_size
+        );
         // mprotect the relevant region.
         let start = self.base + self.cur_size;
         let len = size_bytes - self.cur_size;
@@ -327,6 +332,7 @@ impl MemFdSlot {
                 rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
             )?;
         }
+        self.cur_size = size_bytes;
 
         Ok(())
     }
@@ -355,6 +361,7 @@ impl MemFdSlot {
                     == maybe_image.as_ref().unwrap().fd.as_file().as_raw_fd())
         {
             self.dirty = true;
+            self.cur_size = initial_size_bytes;
             return Ok(());
         }
 
@@ -405,6 +412,7 @@ impl MemFdSlot {
 
         // mprotect above `initial_size_bytes`.
         self.initial_size = initial_size_bytes;
+        self.cur_size = initial_size_bytes;
         self.protect_past_initial_size()
             .map_err(|e| InstantiationError::Resource(e.into()))?;
 
