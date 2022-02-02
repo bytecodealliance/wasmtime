@@ -81,6 +81,16 @@ fn unsupported_initializer(segment: &MemoryInitializer, plan: &MemoryPlan) -> bo
     false
 }
 
+fn create_memfd() -> Result<Memfd> {
+    // Create the memfd. It needs a name, but the
+    // documentation for `memfd_create()` says that names can
+    // be duplicated with no issues.
+    MemfdOptions::new()
+        .allow_sealing(true)
+        .create("wasm-memory-image")
+        .map_err(|e| e.into())
+}
+
 impl ModuleMemFds {
     /// Create a new `ModuleMemFds` for the given module. This can be
     /// passed in as part of a `InstanceAllocationRequest` to speed up
@@ -103,15 +113,6 @@ impl ModuleMemFds {
             excluded_memories.push(false);
         }
 
-        fn create_memfd() -> Result<Memfd> {
-            // Create the memfd. It needs a name, but the
-            // documentation for `memfd_create()` says that names can
-            // be duplicated with no issues.
-            MemfdOptions::new()
-                .allow_sealing(true)
-                .create("wasm-memory-image")
-                .map_err(|e| e.into())
-        }
         let round_up_page = |len: u64| (len + page_size - 1) & !(page_size - 1);
 
         match &module.memory_initialization {
@@ -439,8 +440,6 @@ impl MemFdSlot {
         if let Some(image) = maybe_image {
             assert!(image.offset.checked_add(image.len).unwrap() <= initial_size_bytes);
             if image.len > 0 {
-                let image = image.clone();
-
                 unsafe {
                     let ptr = rustix::io::mmap(
                         (self.base + image.offset) as *mut c_void,
@@ -453,10 +452,10 @@ impl MemFdSlot {
                     .map_err(|e| InstantiationError::Resource(e.into()))?;
                     assert_eq!(ptr as usize, self.base + image.offset);
                 }
-
-                self.image = Some(image);
             }
         }
+
+        self.image = maybe_image.cloned();
 
         // mprotect the initial `initial_size_bytes` to be accessible.
         self.initial_size = initial_size_bytes;
@@ -571,5 +570,111 @@ impl Drop for MemFdSlot {
         if self.clear_on_drop {
             let _ = self.reset_with_anon_memory();
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
+
+    use super::create_memfd;
+    use super::MemFdSlot;
+    use super::MemoryMemFd;
+    use crate::mmap::Mmap;
+    use anyhow::Result;
+    use rustix::fs::FileExt;
+
+    fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryMemFd> {
+        let page_size = region::page::size();
+        let memfd = create_memfd()?;
+        // Offset and length have to be page-aligned.
+        assert_eq!(offset & (page_size - 1), 0);
+        let image_len = offset + data.len();
+        let image_len = (image_len + page_size - 1) & !(page_size - 1);
+        memfd.as_file().set_len(image_len as u64)?;
+        memfd.as_file().write_at(data, offset as u64)?;
+        Ok(MemoryMemFd {
+            fd: memfd,
+            len: image_len,
+            offset,
+        })
+    }
+
+    #[test]
+    fn instantiate_no_image() {
+        // 4 MiB mmap'd area, not accessible
+        let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
+        // Create a MemFdSlot on top of it
+        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 4 << 20);
+        memfd.no_clear_on_drop();
+        assert!(!memfd.is_dirty());
+        // instantiate with 64 KiB initial size
+        memfd.instantiate(64 << 10, None).unwrap();
+        assert!(memfd.is_dirty());
+        // We should be able to access this 64 KiB (try both ends) and
+        // it should consist of zeroes.
+        let slice = mmap.as_mut_slice();
+        assert_eq!(0, slice[0]);
+        assert_eq!(0, slice[65535]);
+        slice[1024] = 42;
+        assert_eq!(42, slice[1024]);
+        // grow the heap
+        memfd.set_heap_limit(128 << 10).unwrap();
+        let slice = mmap.as_slice();
+        assert_eq!(42, slice[1024]);
+        assert_eq!(0, slice[131071]);
+        // instantiate again; we should see zeroes, even as the
+        // reuse-anon-mmap-opt kicks in
+        memfd.clear_and_remain_ready().unwrap();
+        assert!(!memfd.is_dirty());
+        memfd.instantiate(64 << 10, None).unwrap();
+        let slice = mmap.as_slice();
+        assert_eq!(0, slice[1024]);
+    }
+
+    #[test]
+    fn instantiate_image() {
+        // 4 MiB mmap'd area, not accessible
+        let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
+        // Create a MemFdSlot on top of it
+        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 4 << 20);
+        memfd.no_clear_on_drop();
+        // Create an image with some data.
+        let image = Arc::new(create_memfd_with_data(4096, &[1, 2, 3, 4]).unwrap());
+        // Instantiate with this image
+        memfd.instantiate(64 << 10, Some(&image)).unwrap();
+        assert!(memfd.has_image());
+        let slice = mmap.as_mut_slice();
+        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        slice[4096] = 5;
+        // Clear and re-instantiate same image
+        memfd.clear_and_remain_ready().unwrap();
+        memfd.instantiate(64 << 10, Some(&image)).unwrap();
+        let slice = mmap.as_slice();
+        // Should not see mutation from above
+        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        // Clear and re-instantiate no image
+        memfd.clear_and_remain_ready().unwrap();
+        memfd.instantiate(64 << 10, None).unwrap();
+        assert!(!memfd.has_image());
+        let slice = mmap.as_slice();
+        assert_eq!(&[0, 0, 0, 0], &slice[4096..4100]);
+        // Clear and re-instantiate image again
+        memfd.clear_and_remain_ready().unwrap();
+        memfd.instantiate(64 << 10, Some(&image)).unwrap();
+        let slice = mmap.as_slice();
+        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
+        // Create another image with different data.
+        let image2 = Arc::new(create_memfd_with_data(4096, &[10, 11, 12, 13]).unwrap());
+        memfd.clear_and_remain_ready().unwrap();
+        memfd.instantiate(128 << 10, Some(&image2)).unwrap();
+        let slice = mmap.as_slice();
+        assert_eq!(&[10, 11, 12, 13], &slice[4096..4100]);
+        // Instantiate the original image again; we should notice it's
+        // a different image and not reuse the mappings.
+        memfd.clear_and_remain_ready().unwrap();
+        memfd.instantiate(64 << 10, Some(&image)).unwrap();
+        let slice = mmap.as_slice();
+        assert_eq!(&[1, 2, 3, 4], &slice[4096..4100]);
     }
 }
