@@ -418,6 +418,7 @@ impl<T> Store<T> {
         // part of `Func::call` to guarantee that the `callee: *mut VMContext`
         // is never null.
         let default_callee = unsafe {
+            let module = Arc::new(wasmtime_environ::Module::default());
             OnDemandInstanceAllocator::default()
                 .allocate(InstanceAllocationRequest {
                     host_state: Box::new(()),
@@ -425,7 +426,7 @@ impl<T> Store<T> {
                     functions,
                     shared_signatures: None.into(),
                     imports: Default::default(),
-                    module: Arc::new(wasmtime_environ::Module::default()),
+                    module: &module,
                     unique_id: None,
                     memfds: None,
                     store: StorePtr::empty(),

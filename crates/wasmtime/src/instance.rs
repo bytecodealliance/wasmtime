@@ -706,9 +706,9 @@ impl<'a> Instantiator<'a> {
                     .engine()
                     .allocator()
                     .allocate(InstanceAllocationRequest {
-                        module: compiled_module.module().clone(),
+                        module: compiled_module.module(),
                         unique_id: Some(compiled_module.unique_id()),
-                        memfds: self.cur.module.memfds().clone(),
+                        memfds: self.cur.module.memfds(),
                         image_base: compiled_module.code().as_ptr() as usize,
                         functions: compiled_module.functions(),
                         imports: self.cur.build(),

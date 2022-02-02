@@ -33,7 +33,7 @@ pub use self::pooling::{
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
     /// The module being instantiated.
-    pub module: Arc<Module>,
+    pub module: &'a Arc<Module>,
 
     /// The unique ID of the module being allocated within this engine.
     pub unique_id: Option<CompiledModuleId>,
@@ -42,7 +42,7 @@ pub struct InstanceAllocationRequest<'a> {
     pub image_base: usize,
 
     /// If using MemFD-based memories, the backing MemFDs.
-    pub memfds: Option<Arc<ModuleMemFds>>,
+    pub memfds: Option<&'a Arc<ModuleMemFds>>,
 
     /// Descriptors about each compiled function, such as the offset from
     /// `image_base`.
@@ -672,7 +672,7 @@ impl OnDemandInstanceAllocator {
         &self,
         module: &Module,
         store: &mut StorePtr,
-        memfds: &Option<Arc<ModuleMemFds>>,
+        memfds: Option<&Arc<ModuleMemFds>>,
     ) -> Result<PrimaryMap<DefinedMemoryIndex, Memory>, InstantiationError> {
         let creator = self
             .mem_creator
@@ -686,9 +686,7 @@ impl OnDemandInstanceAllocator {
             let defined_memory_idx = module
                 .defined_memory_index(memory_idx)
                 .expect("Skipped imports, should never be None");
-            let memfd_image = memfds
-                .as_ref()
-                .and_then(|memfds| memfds.get_memory_image(defined_memory_idx));
+            let memfd_image = memfds.and_then(|memfds| memfds.get_memory_image(defined_memory_idx));
 
             memories.push(
                 Memory::new_dynamic(
@@ -723,7 +721,7 @@ unsafe impl InstanceAllocator for OnDemandInstanceAllocator {
         &self,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let memories = self.create_memories(&req.module, &mut req.store, &req.memfds)?;
+        let memories = self.create_memories(&req.module, &mut req.store, req.memfds)?;
         let tables = Self::create_tables(&req.module, &mut req.store)?;
 
         let host_state = std::mem::replace(&mut req.host_state, Box::new(()));

@@ -38,9 +38,10 @@ fn create_handle(
         // Use the on-demand allocator when creating handles associated with host objects
         // The configured instance allocator should only be used when creating module instances
         // as we don't want host objects to count towards instance limits.
+        let module = Arc::new(module);
         let handle = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0).allocate(
             InstanceAllocationRequest {
-                module: Arc::new(module),
+                module: &module,
                 unique_id: None,
                 memfds: None,
                 functions,
