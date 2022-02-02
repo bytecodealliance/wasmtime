@@ -38,11 +38,11 @@ impl ModuleMemFds {
 /// places (e.g. a `Memory`), we define a zero-sized type when memfd is
 /// not included in the build.
 #[derive(Debug)]
-pub struct MemFdSlot;
+pub enum MemFdSlot {}
 
 #[allow(dead_code)]
 impl MemFdSlot {
-    pub(crate) fn create(_: *mut libc::c_void, _: usize) -> Self {
+    pub(crate) fn create(_: *mut libc::c_void, _: usize, _: usize) -> Self {
         panic!("create() on invalid MemFdSlot");
     }
 
@@ -51,24 +51,26 @@ impl MemFdSlot {
         _: usize,
         _: Option<&Arc<MemoryMemFd>>,
     ) -> Result<Self, InstantiationError> {
-        panic!("instantiate() on invalid MemFdSlot");
+        match *self {}
     }
 
-    pub(crate) fn no_clear_on_drop(&mut self) {}
+    pub(crate) fn no_clear_on_drop(&mut self) {
+        match *self {}
+    }
 
     pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
-        Ok(())
+        match *self {}
     }
 
     pub(crate) fn has_image(&self) -> bool {
-        false
+        match *self {}
     }
 
     pub(crate) fn is_dirty(&self) -> bool {
-        false
+        match *self {}
     }
 
     pub(crate) fn set_heap_limit(&mut self, _: usize) -> Result<()> {
-        panic!("set_heap_limit on invalid MemFdSlot");
+        match *self {}
     }
 }
