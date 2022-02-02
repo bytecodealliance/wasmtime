@@ -402,21 +402,30 @@ impl MemFdSlot {
         //
         // We map these inaccessible at first then mprotect() the
         // whole of the initial heap size to R+W below.
-        //
-        // Special case: we can skip if the last instantiation had no
-        // image. This means that the whole slot is filled with an
-        // anonymous mmap backing (and it will have already been
-        // cleared by the madvise). We may however need to
-        // mprotect(NONE) the space above `initial_size_bytes` if the
-        // last use of this slot left it larger. This also lets us
-        // skip an mmap the first time a MemFdSlot is used, because we
-        // require the caller to give us a fixed address in an
-        // already-mmaped-with-anon-memory region. This is important
-        // for the on-demand allocator.
         if self.image.is_some() {
-            self.map_anon_memory(rustix::io::ProtFlags::empty())
+            self.reset_with_anon_memory()
                 .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else if initial_size_bytes < self.initial_size {
+            // Special case: we can skip if the last instantiation had
+            // no image. This means that the whole slot is filled with
+            // an anonymous mmap backing (and it will have already
+            // been cleared by the madvise). We may however need to
+            // mprotect(NONE) the space above `initial_size_bytes` if
+            // the last use of this slot left it larger. This also
+            // lets us skip an mmap the first time a MemFdSlot is
+            // used, because we require the caller to give us a fixed
+            // address in an already-mmaped-with-anon-memory
+            // region. This is important for the on-demand allocator.
+            //
+            // So we come in with:
+            // - anon-zero memory, R+W,  [0, self.initial_size)
+            // - anon-zero memory, none, [self.initial_size, self.static_size)
+            // and we want:
+            // - anon-zero memory, R+W,  [0, initial_size_bytes)
+            // - anon-zero memory, none, [initial_size_bytes, self.static_size)
+            //
+            // so given initial_size_bytes < self.initial_size we
+            // mprotect(NONE) the zone from the first to the second.
             self.set_protection(
                 initial_size_bytes,
                 self.initial_size,
@@ -428,6 +437,7 @@ impl MemFdSlot {
         // The initial memory image, if given. If not, we just get a
         // memory filled with zeroes.
         if let Some(image) = maybe_image {
+            assert!(image.offset.checked_add(image.len).unwrap() <= initial_size_bytes);
             if image.len > 0 {
                 let image = image.clone();
 
@@ -510,15 +520,14 @@ impl MemFdSlot {
         self.dirty
     }
 
-    /// Map anonymous zeroed memory across the whole slot, with the
-    /// given protections. Used both during instantiate and during
-    /// drop.
-    fn map_anon_memory(&self, prot: rustix::io::ProtFlags) -> Result<()> {
+    /// Map anonymous zeroed memory across the whole slot,
+    /// inaccessible. Used both during instantiate and during drop.
+    fn reset_with_anon_memory(&self) -> Result<()> {
         unsafe {
             let ptr = rustix::io::mmap_anonymous(
                 self.base as *mut c_void,
                 self.static_size,
-                prot,
+                rustix::io::ProtFlags::empty(),
                 rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
             )?;
             assert_eq!(ptr as usize, self.base);
@@ -560,7 +569,7 @@ impl Drop for MemFdSlot {
         // this MemFdSlot has indicated that it will clean up in some
         // other way.
         if self.clear_on_drop {
-            let _ = self.map_anon_memory(rustix::io::ProtFlags::empty());
+            let _ = self.reset_with_anon_memory();
         }
     }
 }
