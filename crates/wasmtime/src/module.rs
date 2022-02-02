@@ -4,6 +4,7 @@ use crate::{
 };
 use crate::{Engine, ModuleType};
 use anyhow::{bail, Context, Result};
+use once_cell::sync::OnceCell;
 use std::fs;
 use std::mem;
 use std::path::Path;
@@ -108,8 +109,11 @@ struct ModuleInner {
     types: Arc<TypeTables>,
     /// Registered shared signature for the module.
     signatures: Arc<SignatureCollection>,
-    /// a set of memfd images for memories, if any.
-    memfds: Option<Arc<ModuleMemFds>>,
+    /// A set of memfd images for memories, if any. Note that module
+    /// instantiation (hence the need for lazy init) may happen for the
+    /// same module concurrently in multiple Stores, so we use a
+    /// OnceCell.
+    memfds: OnceCell<Option<Arc<ModuleMemFds>>>,
 }
 
 impl Module {
@@ -531,8 +535,6 @@ impl Module {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let memfds = ModuleMemFds::new(module.module(), module.wasm_data())?;
-
         return Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
@@ -541,7 +543,7 @@ impl Module {
                 artifact_upvars: modules,
                 module_upvars,
                 signatures,
-                memfds,
+                memfds: OnceCell::new(),
             }),
         });
 
@@ -555,13 +557,12 @@ impl Module {
             signatures: &Arc<SignatureCollection>,
         ) -> Result<Module> {
             let module = artifacts[module_index].clone();
-            let memfds = ModuleMemFds::new(module.module(), module.wasm_data())?;
             Ok(Module {
                 inner: Arc::new(ModuleInner {
                     engine: engine.clone(),
                     types: types.clone(),
                     module,
-                    memfds,
+                    memfds: OnceCell::new(),
                     artifact_upvars: artifact_upvars
                         .iter()
                         .map(|i| artifacts[*i].clone())
@@ -682,13 +683,12 @@ impl Module {
         modules: &PrimaryMap<ModuleIndex, Module>,
     ) -> Result<Module> {
         let module = self.inner.artifact_upvars[artifact_index].clone();
-        let memfds = ModuleMemFds::new(module.module(), module.wasm_data())?;
         Ok(Module {
             inner: Arc::new(ModuleInner {
                 types: self.inner.types.clone(),
                 engine: self.inner.engine.clone(),
                 module,
-                memfds,
+                memfds: OnceCell::new(),
                 artifact_upvars: artifact_upvars
                     .iter()
                     .map(|i| self.inner.artifact_upvars[*i].clone())
@@ -723,8 +723,14 @@ impl Module {
         &self.inner.signatures
     }
 
-    pub(crate) fn memfds(&self) -> Option<&Arc<ModuleMemFds>> {
-        self.inner.memfds.as_ref()
+    pub(crate) fn memfds(&self) -> Result<Option<&Arc<ModuleMemFds>>> {
+        Ok(self
+            .inner
+            .memfds
+            .get_or_try_init(|| {
+                ModuleMemFds::new(self.inner.module.module(), self.inner.module.wasm_data())
+            })?
+            .as_ref())
     }
 
     /// Looks up the module upvar value at the `index` specified.
