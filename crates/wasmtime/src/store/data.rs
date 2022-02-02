@@ -99,6 +99,10 @@ impl StoreData {
         }
         true
     }
+
+    pub(crate) fn funcs(&self) -> impl Iterator<Item = &crate::func::FuncData> {
+        self.funcs.iter()
+    }
 }
 
 impl<T> Index<Stored<T>> for StoreData

@@ -259,7 +259,12 @@ pub struct StoreOpaque {
     signal_handler: Option<Box<SignalHandler<'static>>>,
     externref_activations_table: VMExternRefActivationsTable,
     modules: ModuleRegistry,
+
+    // See documentation on `StoreOpaque::lookup_trampoline` for what these
+    // fields are doing.
     host_trampolines: HashMap<VMSharedSignatureIndex, VMTrampoline>,
+    host_func_trampolines_registered: usize,
+
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
     instance_limit: usize,
@@ -436,6 +441,7 @@ impl<T> Store<T> {
                 externref_activations_table: VMExternRefActivationsTable::new(),
                 modules: ModuleRegistry::default(),
                 host_trampolines: HashMap::default(),
+                host_func_trampolines_registered: 0,
                 instance_count: 0,
                 instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
                 memory_count: 0,
@@ -1106,14 +1112,6 @@ impl StoreOpaque {
         &mut self.store_data
     }
 
-    pub fn register_host_trampoline(
-        &mut self,
-        idx: VMSharedSignatureIndex,
-        trampoline: VMTrampoline,
-    ) {
-        self.host_trampolines.insert(idx, trampoline);
-    }
-
     pub fn interrupt_handle(&self) -> Result<InterruptHandle> {
         if self.engine.config().tunables.interruptable {
             Ok(InterruptHandle {
@@ -1166,17 +1164,89 @@ impl StoreOpaque {
         unsafe { wasmtime_runtime::gc(&self.modules, &mut self.externref_activations_table) }
     }
 
-    pub fn lookup_trampoline(&self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
-        // Look up the trampoline with the store's trampolines (from `Func`).
-        if let Some(trampoline) = self.host_trampolines.get(&anyfunc.type_index) {
-            return *trampoline;
-        }
-
-        // Look up the trampoline with the registered modules
+    /// Looks up the corresponding `VMTrampoline` which can be used to enter
+    /// wasm given an anyfunc function pointer.
+    ///
+    /// This is a somewhat complicated implementation at this time, unfortnately.
+    /// Trampolines are a sort of side-channel of information which is
+    /// specifically juggled by the `wasmtime` crate in a careful fashion. The
+    /// sources for trampolines are:
+    ///
+    /// * Compiled modules - each compiled module has a trampoline for all
+    ///   signatures of functions that escape the module (e.g. exports and
+    ///   `ref.func`-able functions)
+    /// * `Func::new` - host-defined functions with a dynamic signature get an
+    ///   on-the-fly-compiled trampoline (e.g. JIT-compiled as part of the
+    ///   `Func::new` call).
+    /// * `Func::wrap` - host-defined functions where the trampoline is
+    ///   monomorphized in Rust and compiled by LLVM.
+    ///
+    /// The purpose of this function is that given some wasm function pointer we
+    /// need to find the trampoline for it. For compiled wasm modules this is
+    /// pretty easy, the code pointer of the function pointer will point us
+    /// at a wasm module which has a table of trampolines-by-type that we can
+    /// lookup.
+    ///
+    /// If this lookup fails, however, then we're trying to get the trampoline
+    /// for a wasm function pointer defined by the host. The trampoline isn't
+    /// actually stored in the wasm function pointer itself so we need
+    /// side-channels of information. To achieve this a lazy scheme is
+    /// implemented here based on the assumption that most trampoline lookups
+    /// happen for wasm-defined functions, not host-defined functions.
+    ///
+    /// The `Store` already has a list of all functions in
+    /// `self.store_data().funcs`, it's just not indexed in a nice fashion by
+    /// type index or similar. To solve this there's an internal map in each
+    /// store, `host_trampolines`, which maps from a type index to the
+    /// store-owned trampoline. The actual population of this map, however, is
+    /// deferred to this function itself.
+    ///
+    /// Most of the time we are looking up a Wasm function's trampoline when
+    /// calling this function, and we don't want to make insertion of a host
+    /// function into the store more expensive than it has to be. We could
+    /// update the `host_trampolines` whenever a host function is inserted into
+    /// the store, but this is a relatively expensive hash map insertion.
+    /// Instead the work is deferred until we actually look up that trampoline
+    /// in this method.
+    ///
+    /// This all means that if the lookup of the trampoline fails within
+    /// `self.host_trampolines` we lazily populate `self.host_trampolines` by
+    /// iterating over `self.store_data().funcs`, inserting trampolines as we
+    /// go. If we find the right trampoline then it's returned.
+    pub fn lookup_trampoline(&mut self, anyfunc: &VMCallerCheckedAnyfunc) -> VMTrampoline {
+        // First try to see if the `anyfunc` belongs to any module. Each module
+        // has its own map of trampolines-per-type-index and the code pointer in
+        // the `anyfunc` will enable us to quickly find a module.
         if let Some(trampoline) = self.modules.lookup_trampoline(anyfunc) {
             return trampoline;
         }
 
+        // Next consult the list of store-local host trampolines. This is
+        // primarily populated by functions created by `Func::new` or similar
+        // creation functions, host-defined functions.
+        if let Some(trampoline) = self.host_trampolines.get(&anyfunc.type_index) {
+            return *trampoline;
+        }
+
+        // If no trampoline was found then it means that it hasn't been loaded
+        // into `host_trampolines` yet. Skip over all the ones we've looked at
+        // so far and start inserting into `self.host_trampolines`, returning
+        // the actual trampoline once found.
+        for f in self
+            .store_data
+            .funcs()
+            .skip(self.host_func_trampolines_registered)
+        {
+            self.host_func_trampolines_registered += 1;
+            self.host_trampolines.insert(f.sig_index(), f.trampoline());
+            if f.sig_index() == anyfunc.type_index {
+                return f.trampoline();
+            }
+        }
+
+        // If reached this is a bug in Wasmtime. Lookup of a trampoline should
+        // only happen for wasm functions or host functions, all of which should
+        // be indexed by the above.
         panic!("trampoline missing")
     }
 
