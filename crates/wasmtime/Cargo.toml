@@ -90,4 +90,10 @@ all-arch = ["wasmtime-cranelift/all-arch"]
 # need portable signal handling.
 posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
 
+# Enables, on Linux, the usage of memfd mappings to enable instantiation to use
+# copy-on-write to initialize linear memory for wasm modules which have
+# compatible linear memories.
+#
+# Enabling this feature has no effect on non-Linux platforms or when the `uffd`
+# feature is enabled.
 memfd = ["wasmtime-runtime/memfd"]
