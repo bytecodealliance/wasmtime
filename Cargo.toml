@@ -89,7 +89,14 @@ exclude = [
 ]
 
 [features]
-default = ["jitdump", "wasmtime/wat", "wasmtime/parallel-compilation", "wasi-nn", "memfd"]
+default = [
+  "jitdump",
+  "wasmtime/wat",
+  "wasmtime/parallel-compilation",
+  "wasi-nn",
+  "memfd",
+  "pooling-allocator",
+]
 jitdump = ["wasmtime/jitdump"]
 vtune = ["wasmtime/vtune"]
 wasi-crypto = ["wasmtime-wasi-crypto"]
