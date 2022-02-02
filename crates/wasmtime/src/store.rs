@@ -426,6 +426,7 @@ impl<T> Store<T> {
                     shared_signatures: None.into(),
                     imports: Default::default(),
                     module: Arc::new(wasmtime_environ::Module::default()),
+                    unique_id: None,
                     memfds: None,
                     store: StorePtr::empty(),
                     wasm_data: &[],
