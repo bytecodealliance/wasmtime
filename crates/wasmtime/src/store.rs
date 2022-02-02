@@ -1238,8 +1238,7 @@ impl StoreOpaque {
             .skip(self.host_func_trampolines_registered)
         {
             self.host_func_trampolines_registered += 1;
-            let old_entry = self.host_trampolines.insert(f.sig_index(), f.trampoline());
-            debug_assert!(old_entry.is_none());
+            self.host_trampolines.insert(f.sig_index(), f.trampoline());
             if f.sig_index() == anyfunc.type_index {
                 return f.trampoline();
             }
