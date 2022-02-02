@@ -310,7 +310,7 @@ jobs:
       env:
         RUST_BACKTRACE: 1
 
-    # Test uffd functionality on Linux
+    # Test Linux-specific functionality
     - run: |
         cargo test --features uffd -p wasmtime-runtime instance::allocator::pooling
         cargo test --features uffd -p wasmtime-cli pooling_allocator

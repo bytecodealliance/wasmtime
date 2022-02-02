@@ -50,7 +50,7 @@ wasi-cap-std-sync = { path = "../wasi-common/cap-std-sync" }
 maintenance = { status = "actively-developed" }
 
 [features]
-default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelift', 'pooling-allocator']
+default = ['async', 'cache', 'wat', 'jitdump', 'parallel-compilation', 'cranelift', 'pooling-allocator', 'memfd']
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
 # with the Cranelift compiler. Cranelift is the default compilation backend of
@@ -89,3 +89,5 @@ all-arch = ["wasmtime-cranelift/all-arch"]
 # It is useful for applications that do not bind their own exception ports and
 # need portable signal handling.
 posix-signals-on-macos = ["wasmtime-runtime/posix-signals-on-macos"]
+
+memfd = ["wasmtime-runtime/memfd"]

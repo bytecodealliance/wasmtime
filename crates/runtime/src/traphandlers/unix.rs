@@ -51,8 +51,9 @@ pub unsafe fn platform_init() {
         register(&mut PREV_SIGFPE, libc::SIGFPE);
     }
 
-    // On ARM, handle Unaligned Accesses.
-    // On Darwin, guard page accesses are raised as SIGBUS.
+    // Sometimes we need to handle SIGBUS too:
+    // - On ARM, handle Unaligned Accesses.
+    // - On Darwin, guard page accesses are raised as SIGBUS.
     if cfg!(target_arch = "arm") || cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
         register(&mut PREV_SIGBUS, libc::SIGBUS);
     }

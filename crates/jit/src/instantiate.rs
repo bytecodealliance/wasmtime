@@ -19,7 +19,10 @@ use wasmtime_environ::{
     StackMapInformation, Trampoline, Tunables, WasmFuncType, ELF_WASMTIME_ADDRMAP,
     ELF_WASMTIME_TRAPS,
 };
-use wasmtime_runtime::{GdbJitImageRegistration, InstantiationError, VMFunctionBody, VMTrampoline};
+use wasmtime_runtime::{
+    CompiledModuleId, CompiledModuleIdAllocator, GdbJitImageRegistration, InstantiationError,
+    VMFunctionBody, VMTrampoline,
+};
 
 /// This is the name of the section in the final ELF image which contains
 /// concatenated data segments from the original wasm module.
@@ -248,6 +251,8 @@ pub struct CompiledModule {
     code: Range<usize>,
     code_memory: CodeMemory,
     dbg_jit_registration: Option<GdbJitImageRegistration>,
+    /// A unique ID used to register this module with the engine.
+    unique_id: CompiledModuleId,
 }
 
 impl CompiledModule {
@@ -271,6 +276,7 @@ impl CompiledModule {
         mmap: MmapVec,
         info: Option<CompiledModuleInfo>,
         profiler: &dyn ProfilingAgent,
+        id_allocator: &CompiledModuleIdAllocator,
     ) -> Result<Arc<Self>> {
         // Transfer ownership of `obj` to a `CodeMemory` object which will
         // manage permissions, such as the executable bit. Once it's located
@@ -312,6 +318,7 @@ impl CompiledModule {
             dbg_jit_registration: None,
             code_memory,
             meta: info.meta,
+            unique_id: id_allocator.alloc(),
         };
         ret.register_debug_and_profiling(profiler)?;
 
@@ -331,6 +338,12 @@ impl CompiledModule {
             profiler.module_load(self, None);
         }
         Ok(())
+    }
+
+    /// Get this module's unique ID. It is unique with respect to a
+    /// single allocator (which is ordinarily held on a Wasm engine).
+    pub fn unique_id(&self) -> CompiledModuleId {
+        self.unique_id
     }
 
     /// Returns the underlying memory which contains the compiled module's

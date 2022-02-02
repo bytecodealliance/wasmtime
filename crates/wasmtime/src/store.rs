@@ -426,11 +426,13 @@ impl<T> Store<T> {
                     shared_signatures: None.into(),
                     imports: Default::default(),
                     module: Arc::new(wasmtime_environ::Module::default()),
+                    memfds: None,
                     store: StorePtr::empty(),
                     wasm_data: &[],
                 })
                 .expect("failed to allocate default callee")
         };
+
         let mut inner = Box::new(StoreInner {
             inner: StoreOpaque {
                 _marker: marker::PhantomPinned,

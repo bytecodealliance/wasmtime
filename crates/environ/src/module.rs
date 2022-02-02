@@ -95,6 +95,19 @@ impl MemoryPlan {
             },
         }
     }
+
+    /// Determine whether a data segment (memory initializer) is
+    /// possibly out-of-bounds. Returns `true` if the initializer has a
+    /// dynamic location and this question cannot be resolved
+    /// pre-instantiation; hence, this method's result should not be
+    /// used to signal an error, only to exit optimized/simple fastpaths.
+    pub fn initializer_possibly_out_of_bounds(&self, init: &MemoryInitializer) -> bool {
+        match init.end() {
+            // Not statically known, so possibly out of bounds (we can't guarantee in-bounds).
+            None => true,
+            Some(end) => end > self.memory.minimum * (WASM_PAGE_SIZE as u64),
+        }
+    }
 }
 
 /// A WebAssembly linear memory initializer.
@@ -111,6 +124,16 @@ pub struct MemoryInitializer {
     /// This range indexes into a separately stored data section which will be
     /// provided with the compiled module's code as well.
     pub data: Range<u32>,
+}
+
+impl MemoryInitializer {
+    /// If this initializer has a definite, static, non-overflowed end address, return it.
+    pub fn end(&self) -> Option<u64> {
+        if self.base.is_some() {
+            return None;
+        }
+        self.offset.checked_add(self.data.len() as u64)
+    }
 }
 
 /// The type of WebAssembly linear memory initialization to use for a module.

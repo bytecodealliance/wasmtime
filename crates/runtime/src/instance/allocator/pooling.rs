@@ -11,15 +11,17 @@ use super::{
     initialize_instance, initialize_vmcontext, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, InstantiationError,
 };
-use crate::{instance::Instance, Memory, Mmap, Table, VMContext};
+use crate::MemFdSlot;
+use crate::{instance::Instance, Memory, Mmap, ModuleMemFds, Table};
 use anyhow::{anyhow, bail, Context, Result};
+use libc::c_void;
 use rand::Rng;
 use std::convert::TryFrom;
-use std::marker;
 use std::mem;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
 use wasmtime_environ::{
-    EntitySet, HostPtr, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets, VMOffsetsFields,
+    HostPtr, MemoryIndex, MemoryStyle, Module, PrimaryMap, Tunables, VMOffsets, VMOffsetsFields,
     WASM_PAGE_SIZE,
 };
 
@@ -284,7 +286,6 @@ struct InstancePool {
     free_list: Mutex<Vec<usize>>,
     memories: MemoryPool,
     tables: TablePool,
-    empty_module: Arc<Module>,
 }
 
 impl InstancePool {
@@ -332,13 +333,7 @@ impl InstancePool {
             free_list: Mutex::new((0..max_instances).collect()),
             memories: MemoryPool::new(module_limits, instance_limits, tunables)?,
             tables: TablePool::new(module_limits, instance_limits)?,
-            empty_module: Arc::new(Module::default()),
         };
-
-        // Use a default module to initialize the instances to start
-        for i in 0..instance_limits.count as usize {
-            pool.initialize(module_limits, i);
-        }
 
         Ok(pool)
     }
@@ -348,41 +343,26 @@ impl InstancePool {
         &mut *(self.mapping.as_mut_ptr().add(index * self.instance_size) as *mut Instance)
     }
 
-    fn initialize(&self, limits: &ModuleLimits, index: usize) {
-        unsafe {
-            let instance = self.instance(index);
-
-            // Write a default instance with preallocated memory/table map storage to the ptr
-            std::ptr::write(
-                instance as _,
-                Instance {
-                    module: self.empty_module.clone(),
-                    offsets: VMOffsets::new(HostPtr, &self.empty_module),
-                    memories: PrimaryMap::with_capacity(limits.memories as usize),
-                    tables: PrimaryMap::with_capacity(limits.tables as usize),
-                    dropped_elements: EntitySet::new(),
-                    dropped_data: EntitySet::new(),
-                    host_state: Box::new(()),
-                    wasm_data: &[],
-                    vmctx: VMContext {
-                        _marker: marker::PhantomPinned,
-                    },
-                },
-            );
-        }
-    }
-
     unsafe fn setup_instance(
         &self,
         index: usize,
         mut req: InstanceAllocationRequest,
     ) -> Result<InstanceHandle, InstantiationError> {
-        let instance = self.instance(index);
+        let host_state = std::mem::replace(&mut req.host_state, Box::new(()));
+        let instance_data = Instance::create_raw(
+            &req.module,
+            &*req.wasm_data,
+            PrimaryMap::default(),
+            PrimaryMap::default(),
+            host_state,
+        );
 
-        instance.module = req.module.clone();
-        instance.offsets = VMOffsets::new(HostPtr, instance.module.as_ref());
-        instance.host_state = std::mem::replace(&mut req.host_state, Box::new(()));
-        instance.wasm_data = &*req.wasm_data;
+        // Instances are uninitialized memory at first; we need to
+        // write an empty but initialized `Instance` struct into the
+        // chosen slot before we do anything else with it. (This is
+        // paired with a `drop_in_place` in deallocate below.)
+        let instance = self.instance(index);
+        std::ptr::write(instance as _, instance_data);
 
         // set_instance_memories and _tables will need the store before we can completely
         // initialize the vmcontext.
@@ -391,8 +371,10 @@ impl InstancePool {
         }
 
         Self::set_instance_memories(
+            index,
             instance,
-            self.memories.get(index),
+            &self.memories,
+            &req.memfds,
             self.memories.max_wasm_pages,
         )?;
 
@@ -448,20 +430,44 @@ impl InstancePool {
         let instance = unsafe { &mut *handle.instance };
 
         // Decommit any linear memories that were used
-        for (memory, base) in instance.memories.values_mut().zip(self.memories.get(index)) {
+        for ((def_mem_idx, memory), base) in
+            instance.memories.iter_mut().zip(self.memories.get(index))
+        {
             let mut memory = mem::take(memory);
             debug_assert!(memory.is_static());
 
-            // Reset any faulted guard pages as the physical memory may be reused for another instance in the future
-            #[cfg(all(feature = "uffd", target_os = "linux"))]
-            memory
-                .reset_guard_pages()
-                .expect("failed to reset guard pages");
-            drop(&mut memory); // require mutable on all platforms, not just uffd
+            match memory {
+                Memory::Static {
+                    memfd_slot: Some(mut memfd_slot),
+                    ..
+                } => {
+                    let mem_idx = instance.module.memory_index(def_mem_idx);
+                    // If there was any error clearing the memfd, just
+                    // drop it here, and let the drop handler for the
+                    // MemFdSlot unmap in a way that retains the
+                    // address space reservation.
+                    if memfd_slot.clear_and_remain_ready().is_ok() {
+                        self.memories.return_memfd_slot(index, mem_idx, memfd_slot);
+                    }
+                }
 
-            let size = memory.byte_size();
-            drop(memory);
-            decommit_memory_pages(base, size).expect("failed to decommit linear memory pages");
+                _ => {
+                    // Reset any faulted guard pages as the physical
+                    // memory may be reused for another instance in
+                    // the future.
+                    #[cfg(all(feature = "uffd", target_os = "linux"))]
+                    memory
+                        .reset_guard_pages()
+                        .expect("failed to reset guard pages");
+                    // require mutable on all platforms, not just uffd
+                    drop(&mut memory);
+
+                    let size = memory.byte_size();
+                    drop(memory);
+                    decommit_memory_pages(base, size)
+                        .expect("failed to decommit linear memory pages");
+                }
+            }
         }
 
         instance.memories.clear();
@@ -481,50 +487,81 @@ impl InstancePool {
             decommit_table_pages(base, size).expect("failed to decommit table pages");
         }
 
-        instance.tables.clear();
-        instance.dropped_elements.clear();
-
-        // Drop all `global` values which need a destructor, such as externref
-        // values which now need their reference count dropped.
-        instance.drop_globals();
-
-        // Drop any host state
-        instance.host_state = Box::new(());
-
-        // And finally reset the module/offsets back to their original. This
-        // should put everything back in a relatively pristine state for each
-        // fresh allocation later on.
-        instance.module = self.empty_module.clone();
-        instance.offsets = VMOffsets::new(HostPtr, &self.empty_module);
-        instance.wasm_data = &[];
+        // We've now done all of the pooling-allocator-specific
+        // teardown, so we can drop the Instance and let destructors
+        // take care of any other fields (host state, globals, etc.).
+        unsafe {
+            std::ptr::drop_in_place(instance as *mut _);
+        }
+        // The instance is now uninitialized memory and cannot be
+        // touched again until we write a fresh Instance in-place with
+        // std::ptr::write in allocate() above.
 
         self.free_list.lock().unwrap().push(index);
     }
 
     fn set_instance_memories(
+        instance_idx: usize,
         instance: &mut Instance,
-        mut memories: impl Iterator<Item = *mut u8>,
+        memories: &MemoryPool,
+        maybe_memfds: &Option<Arc<ModuleMemFds>>,
         max_pages: u64,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
 
         debug_assert!(instance.memories.is_empty());
 
-        for plan in
-            (&module.memory_plans.values().as_slice()[module.num_imported_memories..]).iter()
+        for (memory_index, plan) in module
+            .memory_plans
+            .iter()
+            .skip(module.num_imported_memories)
         {
+            let defined_index = module
+                .defined_memory_index(memory_index)
+                .expect("should be a defined memory since we skipped imported ones");
+
             let memory = unsafe {
                 std::slice::from_raw_parts_mut(
-                    memories.next().unwrap(),
+                    memories.get_base(instance_idx, memory_index),
                     (max_pages as usize) * (WASM_PAGE_SIZE as usize),
                 )
             };
-            instance.memories.push(
-                Memory::new_static(plan, memory, commit_memory_pages, unsafe {
-                    &mut *instance.store()
-                })
-                .map_err(InstantiationError::Resource)?,
-            );
+
+            if let Some(memfds) = maybe_memfds {
+                let image = memfds.get_memory_image(defined_index);
+                let mut slot = memories.take_memfd_slot(instance_idx, memory_index);
+                let initial_size = plan.memory.minimum * WASM_PAGE_SIZE as u64;
+
+                // If instantiation fails, we can propagate the error
+                // upward and drop the slot. This will cause the Drop
+                // handler to attempt to map the range with PROT_NONE
+                // memory, to reserve the space while releasing any
+                // stale mappings. The next use of this slot will then
+                // create a new MemFdSlot that will try to map over
+                // this, returning errors as well if the mapping
+                // errors persist. The unmap-on-drop is best effort;
+                // if it fails, then we can still soundly continue
+                // using the rest of the pool and allowing the rest of
+                // the process to continue, because we never perform a
+                // mmap that would leave an open space for someone
+                // else to come in and map something.
+                slot.instantiate(initial_size as usize, image)
+                    .map_err(|e| InstantiationError::Resource(e.into()))?;
+
+                instance.memories.push(
+                    Memory::new_static(plan, memory, None, Some(slot), unsafe {
+                        &mut *instance.store()
+                    })
+                    .map_err(InstantiationError::Resource)?,
+                );
+            } else {
+                instance.memories.push(
+                    Memory::new_static(plan, memory, Some(commit_memory_pages), None, unsafe {
+                        &mut *instance.store()
+                    })
+                    .map_err(InstantiationError::Resource)?,
+                );
+            }
         }
 
         debug_assert!(instance.dropped_data.is_empty());
@@ -566,17 +603,6 @@ impl InstancePool {
     }
 }
 
-impl Drop for InstancePool {
-    fn drop(&mut self) {
-        unsafe {
-            for i in 0..self.max_instances {
-                let ptr = self.mapping.as_mut_ptr().add(i * self.instance_size) as *mut Instance;
-                std::ptr::drop_in_place(ptr);
-            }
-        }
-    }
-}
-
 /// Represents a pool of WebAssembly linear memories.
 ///
 /// A linear memory is divided into accessible pages and guard pages.
@@ -589,6 +615,10 @@ impl Drop for InstancePool {
 #[derive(Debug)]
 struct MemoryPool {
     mapping: Mmap,
+    // If using the memfd allocation scheme, the MemFd slots. We
+    // dynamically transfer ownership of a slot to a Memory when in
+    // use.
+    memfd_slots: Vec<Mutex<Option<MemFdSlot>>>,
     // The size, in bytes, of each linear memory's reservation plus the guard
     // region allocated for it.
     memory_size: usize,
@@ -673,8 +703,18 @@ impl MemoryPool {
         let mapping = Mmap::accessible_reserved(0, allocation_size)
             .context("failed to create memory pool mapping")?;
 
+        let num_memfd_slots = if cfg!(memfd) {
+            max_instances * max_memories
+        } else {
+            0
+        };
+        let memfd_slots: Vec<_> = std::iter::repeat_with(|| Mutex::new(None))
+            .take(num_memfd_slots)
+            .collect();
+
         let pool = Self {
             mapping,
+            memfd_slots,
             memory_size,
             initial_memory_offset,
             max_memories,
@@ -689,17 +729,53 @@ impl MemoryPool {
         Ok(pool)
     }
 
-    fn get(&self, instance_index: usize) -> impl Iterator<Item = *mut u8> {
+    fn get_base(&self, instance_index: usize, memory_index: MemoryIndex) -> *mut u8 {
         debug_assert!(instance_index < self.max_instances);
+        let memory_index = memory_index.as_u32() as usize;
+        debug_assert!(memory_index < self.max_memories);
+        let idx = instance_index * self.max_memories + memory_index;
+        let offset = self.initial_memory_offset + idx * self.memory_size;
+        unsafe { self.mapping.as_mut_ptr().offset(offset as isize) }
+    }
 
-        let base: *mut u8 = unsafe {
-            self.mapping.as_mut_ptr().add(
-                self.initial_memory_offset + instance_index * self.memory_size * self.max_memories,
-            ) as _
-        };
+    fn get<'a>(&'a self, instance_index: usize) -> impl Iterator<Item = *mut u8> + 'a {
+        (0..self.max_memories)
+            .map(move |i| self.get_base(instance_index, MemoryIndex::from_u32(i as u32)))
+    }
 
-        let size = self.memory_size;
-        (0..self.max_memories).map(move |i| unsafe { base.add(i * size) })
+    /// Take ownership of the given memfd slot. Must be returned via
+    /// `return_memfd_slot` when the instance is done using it.
+    fn take_memfd_slot(&self, instance_index: usize, memory_index: MemoryIndex) -> MemFdSlot {
+        let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
+        let maybe_slot = self.memfd_slots[idx].lock().unwrap().take();
+
+        maybe_slot.unwrap_or_else(|| {
+            MemFdSlot::create(
+                self.get_base(instance_index, memory_index) as *mut c_void,
+                self.memory_size,
+            )
+        })
+    }
+
+    /// Return ownership of the given memfd slot.
+    fn return_memfd_slot(&self, instance_index: usize, memory_index: MemoryIndex, slot: MemFdSlot) {
+        assert!(!slot.is_dirty());
+        let idx = instance_index * self.max_memories + (memory_index.as_u32() as usize);
+        *self.memfd_slots[idx].lock().unwrap() = Some(slot);
+    }
+}
+
+impl Drop for MemoryPool {
+    fn drop(&mut self) {
+        // Clear the `clear_no_drop` flag (i.e., ask to *not* clear on
+        // drop) for all MemFdSlots, and then drop them here. This is
+        // valid because the one `Mmap` that covers the whole region
+        // can just do its one munmap.
+        for mut memfd in std::mem::take(&mut self.memfd_slots) {
+            if let Some(memfd_slot) = memfd.get_mut().unwrap() {
+                memfd_slot.no_clear_on_drop();
+            }
+        }
     }
 }
 
@@ -1413,6 +1489,7 @@ mod test {
                             host_state: Box::new(()),
                             store: StorePtr::empty(),
                             wasm_data: &[],
+                            memfds: None,
                         },
                     )
                     .expect("allocation should succeed"),
@@ -1437,6 +1514,7 @@ mod test {
                 host_state: Box::new(()),
                 store: StorePtr::empty(),
                 wasm_data: &[],
+                memfds: None,
             },
         ) {
             Err(InstantiationError::Limit(3)) => {}

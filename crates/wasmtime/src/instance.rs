@@ -651,7 +651,7 @@ impl<'a> Instantiator<'a> {
                     artifacts,
                     modules,
                     &self.cur.modules,
-                );
+                )?;
                 self.cur.modules.push(submodule);
             }
 
@@ -707,6 +707,7 @@ impl<'a> Instantiator<'a> {
                     .allocator()
                     .allocate(InstanceAllocationRequest {
                         module: compiled_module.module().clone(),
+                        memfds: self.cur.module.memfds().clone(),
                         image_base: compiled_module.code().as_ptr() as usize,
                         functions: compiled_module.functions(),
                         imports: self.cur.build(),

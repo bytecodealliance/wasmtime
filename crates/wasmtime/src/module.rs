@@ -11,6 +11,7 @@ use std::sync::Arc;
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{ModuleEnvironment, ModuleIndex, PrimaryMap};
 use wasmtime_jit::{CompiledModule, CompiledModuleInfo, MmapVec, TypeTables};
+use wasmtime_runtime::ModuleMemFds;
 
 mod registry;
 mod serialization;
@@ -107,6 +108,8 @@ struct ModuleInner {
     types: Arc<TypeTables>,
     /// Registered shared signature for the module.
     signatures: Arc<SignatureCollection>,
+    /// a set of memfd images for memories, if any.
+    memfds: Option<Arc<ModuleMemFds>>,
 }
 
 impl Module {
@@ -336,7 +339,12 @@ impl Module {
         };
 
         let modules = engine.run_maybe_parallel(artifacts, |(a, b)| {
-            CompiledModule::from_artifacts(a, b, &*engine.config().profiler)
+            CompiledModule::from_artifacts(
+                a,
+                b,
+                &*engine.config().profiler,
+                engine.unique_id_allocator(),
+            )
         })?;
 
         Self::from_parts(engine, modules, main_module, Arc::new(types), &[])
@@ -523,6 +531,8 @@ impl Module {
             })
             .collect::<Result<Vec<_>>>()?;
 
+        let memfds = ModuleMemFds::new(module.module(), module.wasm_data())?;
+
         return Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
@@ -531,6 +541,7 @@ impl Module {
                 artifact_upvars: modules,
                 module_upvars,
                 signatures,
+                memfds,
             }),
         });
 
@@ -543,11 +554,14 @@ impl Module {
             module_upvars: &[serialization::SerializedModuleUpvar],
             signatures: &Arc<SignatureCollection>,
         ) -> Result<Module> {
+            let module = artifacts[module_index].clone();
+            let memfds = ModuleMemFds::new(module.module(), module.wasm_data())?;
             Ok(Module {
                 inner: Arc::new(ModuleInner {
                     engine: engine.clone(),
                     types: types.clone(),
-                    module: artifacts[module_index].clone(),
+                    module,
+                    memfds,
                     artifact_upvars: artifact_upvars
                         .iter()
                         .map(|i| artifacts[*i].clone())
@@ -666,12 +680,15 @@ impl Module {
         artifact_upvars: &[usize],
         module_upvars: &[wasmtime_environ::ModuleUpvar],
         modules: &PrimaryMap<ModuleIndex, Module>,
-    ) -> Module {
-        Module {
+    ) -> Result<Module> {
+        let module = self.inner.artifact_upvars[artifact_index].clone();
+        let memfds = ModuleMemFds::new(module.module(), module.wasm_data())?;
+        Ok(Module {
             inner: Arc::new(ModuleInner {
                 types: self.inner.types.clone(),
                 engine: self.inner.engine.clone(),
-                module: self.inner.artifact_upvars[artifact_index].clone(),
+                module,
+                memfds,
                 artifact_upvars: artifact_upvars
                     .iter()
                     .map(|i| self.inner.artifact_upvars[*i].clone())
@@ -687,7 +704,7 @@ impl Module {
                     .collect(),
                 signatures: self.inner.signatures.clone(),
             }),
-        }
+        })
     }
 
     pub(crate) fn compiled_module(&self) -> &Arc<CompiledModule> {
@@ -704,6 +721,10 @@ impl Module {
 
     pub(crate) fn signatures(&self) -> &Arc<SignatureCollection> {
         &self.inner.signatures
+    }
+
+    pub(crate) fn memfds(&self) -> &Option<Arc<ModuleMemFds>> {
+        &self.inner.memfds
     }
 
     /// Looks up the module upvar value at the `index` specified.

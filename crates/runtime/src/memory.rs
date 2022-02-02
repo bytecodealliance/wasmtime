@@ -4,11 +4,14 @@
 
 use crate::mmap::Mmap;
 use crate::vmcontext::VMMemoryDefinition;
+use crate::MemFdSlot;
+use crate::MemoryMemFd;
 use crate::Store;
 use anyhow::Error;
 use anyhow::{bail, format_err, Result};
 use more_asserts::{assert_ge, assert_le};
 use std::convert::TryFrom;
+use std::sync::Arc;
 use wasmtime_environ::{MemoryPlan, MemoryStyle, WASM32_MAX_PAGES, WASM64_MAX_PAGES};
 
 const WASM_PAGE_SIZE: usize = wasmtime_environ::WASM_PAGE_SIZE as usize;
@@ -22,6 +25,8 @@ pub trait RuntimeMemoryCreator: Send + Sync {
         plan: &MemoryPlan,
         minimum: usize,
         maximum: Option<usize>,
+        // Optionally, a memfd image for CoW backing.
+        memfd_image: Option<&Arc<MemoryMemFd>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>>;
 }
 
@@ -35,8 +40,14 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
         plan: &MemoryPlan,
         minimum: usize,
         maximum: Option<usize>,
+        memfd_image: Option<&Arc<MemoryMemFd>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        Ok(Box::new(MmapMemory::new(plan, minimum, maximum)?))
+        Ok(Box::new(MmapMemory::new(
+            plan,
+            minimum,
+            maximum,
+            memfd_image,
+        )?))
     }
 }
 
@@ -58,6 +69,11 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm
     /// code.
     fn vmmemory(&self) -> VMMemoryDefinition;
+
+    /// Does this memory need initialization? It may not if it already
+    /// has initial contents courtesy of the `MemoryMemFd` passed to
+    /// `RuntimeMemoryCreator::new_memory()`.
+    fn needs_init(&self) -> bool;
 }
 
 /// A linear memory instance.
@@ -86,11 +102,24 @@ pub struct MmapMemory {
     // optimize loads and stores with constant offsets.
     pre_guard_size: usize,
     offset_guard_size: usize,
+
+    // A MemFd CoW mapping that provides the initial content of this
+    // MmapMemory, if mapped.
+    //
+    // N.B.: this comes after the `mmap` field above because it must
+    // be destructed first. It puts a placeholder mapping in place on
+    // drop, then the `mmap` above completely unmaps the region.
+    memfd: Option<MemFdSlot>,
 }
 
 impl MmapMemory {
     /// Create a new linear memory instance with specified minimum and maximum number of wasm pages.
-    pub fn new(plan: &MemoryPlan, minimum: usize, mut maximum: Option<usize>) -> Result<Self> {
+    pub fn new(
+        plan: &MemoryPlan,
+        minimum: usize,
+        mut maximum: Option<usize>,
+        memfd_image: Option<&Arc<MemoryMemFd>>,
+    ) -> Result<Self> {
         // It's a programmer error for these two configuration values to exceed
         // the host available address space, so panic if such a configuration is
         // found (mostly an issue for hypothetical 32-bit hosts).
@@ -126,6 +155,23 @@ impl MmapMemory {
             mmap.make_accessible(pre_guard_bytes, minimum)?;
         }
 
+        // If a memfd image was specified, try to create the MemFdSlot on top of our mmap.
+        let memfd = match memfd_image {
+            Some(image) => {
+                let base = unsafe { mmap.as_mut_ptr().offset(pre_guard_bytes as isize) };
+                let len = request_bytes - pre_guard_bytes;
+                let mut memfd_slot = MemFdSlot::create(base as *mut _, len);
+                memfd_slot.instantiate(minimum, Some(image))?;
+                // On drop, we will unmap our mmap'd range that this
+                // memfd_slot was mapped on top of, so there is no
+                // need for the memfd_slot to wipe it with an
+                // anonymous mapping first.
+                memfd_slot.no_clear_on_drop();
+                Some(memfd_slot)
+            }
+            None => None,
+        };
+
         Ok(Self {
             mmap,
             accessible: minimum,
@@ -133,6 +179,7 @@ impl MmapMemory {
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
+            memfd,
         })
     }
 }
@@ -165,7 +212,19 @@ impl RuntimeLinearMemory for MmapMemory {
             new_mmap.as_mut_slice()[self.pre_guard_size..][..self.accessible]
                 .copy_from_slice(&self.mmap.as_slice()[self.pre_guard_size..][..self.accessible]);
 
+            // Now drop the MemFdSlot, if any. We've lost the CoW
+            // advantages by explicitly copying all data, but we have
+            // preserved all of its content; so we no longer need the
+            // memfd mapping. We need to do this before we
+            // (implicitly) drop the `mmap` field by overwriting it
+            // below.
+            let _ = self.memfd.take();
+
             self.mmap = new_mmap;
+        } else if let Some(memfd) = self.memfd.as_mut() {
+            // MemFdSlot has its own growth mechanisms; defer to its
+            // implementation.
+            memfd.set_heap_limit(new_size)?;
         } else {
             // If the new size of this heap fits within the existing allocation
             // then all we need to do is to make the new pages accessible. This
@@ -191,6 +250,12 @@ impl RuntimeLinearMemory for MmapMemory {
             current_length: self.accessible,
         }
     }
+
+    fn needs_init(&self) -> bool {
+        // If we're using a memfd CoW mapping, then no initialization
+        // is needed.
+        self.memfd.is_none()
+    }
 }
 
 /// Representation of a runtime wasm linear memory.
@@ -208,7 +273,11 @@ pub enum Memory {
         /// A callback which makes portions of `base` accessible for when memory
         /// is grown. Otherwise it's expected that accesses to `base` will
         /// fault.
-        make_accessible: fn(*mut u8, usize) -> Result<()>,
+        make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
+
+        /// The MemFdSlot, if any, for this memory. Owned here and
+        /// returned to the pooling allocator when termination occurs.
+        memfd_slot: Option<MemFdSlot>,
 
         /// Stores the pages in the linear memory that have faulted as guard pages when using the `uffd` feature.
         /// These pages need their protection level reset before the memory can grow.
@@ -227,16 +296,23 @@ impl Memory {
         plan: &MemoryPlan,
         creator: &dyn RuntimeMemoryCreator,
         store: &mut dyn Store,
+        memfd_image: Option<&Arc<MemoryMemFd>>,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
-        Ok(Memory::Dynamic(creator.new_memory(plan, minimum, maximum)?))
+        Ok(Memory::Dynamic(creator.new_memory(
+            plan,
+            minimum,
+            maximum,
+            memfd_image,
+        )?))
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
     pub fn new_static(
         plan: &MemoryPlan,
         base: &'static mut [u8],
-        make_accessible: fn(*mut u8, usize) -> Result<()>,
+        make_accessible: Option<fn(*mut u8, usize) -> Result<()>>,
+        memfd_slot: Option<MemFdSlot>,
         store: &mut dyn Store,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(plan, store)?;
@@ -246,14 +322,17 @@ impl Memory {
             _ => base,
         };
 
-        if minimum > 0 {
-            make_accessible(base.as_mut_ptr(), minimum)?;
+        if let Some(make_accessible) = make_accessible {
+            if minimum > 0 {
+                make_accessible(base.as_mut_ptr(), minimum)?;
+            }
         }
 
         Ok(Memory::Static {
             base,
             size: minimum,
             make_accessible,
+            memfd_slot,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             guard_page_faults: Vec::new(),
         })
@@ -373,6 +452,20 @@ impl Memory {
         }
     }
 
+    /// Returns whether or not this memory needs initialization. It
+    /// may not if it already has initial content thanks to a CoW
+    /// mechanism like memfd.
+    pub(crate) fn needs_init(&self) -> bool {
+        match self {
+            Memory::Static {
+                memfd_slot: Some(ref slot),
+                ..
+            } => !slot.has_image(),
+            Memory::Dynamic(mem) => mem.needs_init(),
+            _ => true,
+        }
+    }
+
     /// Grow memory by the specified amount of wasm pages.
     ///
     /// Returns `None` if memory can't be grown by the specified amount
@@ -446,9 +539,30 @@ impl Memory {
             Memory::Static {
                 base,
                 size,
+                memfd_slot: Some(ref mut memfd_slot),
+                ..
+            } => {
+                // Never exceed static memory size
+                if new_byte_size > base.len() {
+                    store.memory_grow_failed(&format_err!("static memory size exceeded"));
+                    return Ok(None);
+                }
+
+                if let Err(e) = memfd_slot.set_heap_limit(new_byte_size) {
+                    store.memory_grow_failed(&e);
+                    return Ok(None);
+                }
+                *size = new_byte_size;
+            }
+            Memory::Static {
+                base,
+                size,
                 make_accessible,
                 ..
             } => {
+                let make_accessible = make_accessible
+                    .expect("make_accessible must be Some if this is not a MemFD memory");
+
                 // Never exceed static memory size
                 if new_byte_size > base.len() {
                     store.memory_grow_failed(&format_err!("static memory size exceeded"));
@@ -540,7 +654,8 @@ impl Default for Memory {
         Memory::Static {
             base: &mut [],
             size: 0,
-            make_accessible: |_, _| unreachable!(),
+            make_accessible: Some(|_, _| unreachable!()),
+            memfd_slot: None,
             #[cfg(all(feature = "uffd", target_os = "linux"))]
             guard_page_faults: Vec::new(),
         }
