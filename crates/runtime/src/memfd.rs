@@ -439,10 +439,9 @@ impl MemFdSlot {
             // anything else.
         }
 
-        // The memory image, at this point, should be of have
-        // `initial_size_bytes` of zeros starting at `self.base` followed by
-        // inaccessible memory to `self.static_size`. Update sizing fields to
-        // reflect this.
+        // The memory image, at this point, should have `initial_size_bytes` of
+        // zeros starting at `self.base` followed by inaccessible memory to
+        // `self.static_size`. Update sizing fields to reflect this.
         self.initial_size = initial_size_bytes;
         self.cur_size = initial_size_bytes;
 
