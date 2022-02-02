@@ -14,7 +14,7 @@ env_logger = "0.8.1"
 log = "0.4.8"
 rayon = "1.2.1"
 wasmparser = "0.82"
-wasmprinter = "0.2.31"
+wasmprinter = "0.2.32"
 wasmtime = { path = "../wasmtime" }
 wasmtime-wast = { path = "../wast" }
 wasm-encoder = "0.6.0"
