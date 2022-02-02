@@ -19,6 +19,7 @@
         clippy::use_self
     )
 )]
+#![cfg_attr(not(memfd), allow(unused_variables, unreachable_code))]
 
 use std::sync::atomic::AtomicU64;
 

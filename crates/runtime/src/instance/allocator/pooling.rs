@@ -754,6 +754,7 @@ impl MemoryPool {
         maybe_slot.unwrap_or_else(|| {
             MemFdSlot::create(
                 self.get_base(instance_index, memory_index) as *mut c_void,
+                0,
                 self.memory_size,
             )
         })

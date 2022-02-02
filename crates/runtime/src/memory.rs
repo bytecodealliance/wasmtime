@@ -158,9 +158,8 @@ impl MmapMemory {
         // If a memfd image was specified, try to create the MemFdSlot on top of our mmap.
         let memfd = match memfd_image {
             Some(image) => {
-                let base = unsafe { mmap.as_mut_ptr().offset(pre_guard_bytes as isize) };
-                let len = request_bytes - pre_guard_bytes;
-                let mut memfd_slot = MemFdSlot::create(base as *mut _, len);
+                let base = unsafe { mmap.as_mut_ptr().add(pre_guard_bytes) };
+                let mut memfd_slot = MemFdSlot::create(base.cast(), minimum, alloc_bytes);
                 memfd_slot.instantiate(minimum, Some(image))?;
                 // On drop, we will unmap our mmap'd range that this
                 // memfd_slot was mapped on top of, so there is no

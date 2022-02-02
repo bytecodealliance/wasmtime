@@ -310,13 +310,13 @@ pub struct MemFdSlot {
 impl MemFdSlot {
     /// Create a new MemFdSlot. Assumes that there is an anonymous
     /// mmap backing in the given range to start.
-    pub(crate) fn create(base_addr: *mut c_void, static_size: usize) -> Self {
+    pub(crate) fn create(base_addr: *mut c_void, initial_size: usize, static_size: usize) -> Self {
         let base = base_addr as usize;
         MemFdSlot {
             base,
             static_size,
-            initial_size: 0,
-            cur_size: 0,
+            initial_size,
+            cur_size: initial_size,
             image: None,
             dirty: false,
             clear_on_drop: true,
@@ -332,22 +332,11 @@ impl MemFdSlot {
     }
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
-        assert!(
-            size_bytes > self.cur_size,
-            "size_bytes = {} cur_size = {}",
-            size_bytes,
-            self.cur_size
-        );
         // mprotect the relevant region.
-        let start = self.base + self.cur_size;
-        let len = size_bytes - self.cur_size;
-        unsafe {
-            rustix::io::mprotect(
-                start as *mut _,
-                len,
-                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
-            )?;
-        }
+        self.set_protection(
+            self.cur_size..size_bytes,
+            rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+        )?;
         self.cur_size = size_bytes;
 
         Ok(())
@@ -359,13 +348,14 @@ impl MemFdSlot {
         maybe_image: Option<&Arc<MemoryMemFd>>,
     ) -> Result<(), InstantiationError> {
         assert!(!self.dirty);
+        assert_eq!(self.cur_size, self.initial_size);
 
         // Fast-path: previously instantiated with the same image, or
         // no image but the same initial size, so the mappings are
         // already correct; there is no need to mmap anything. Given
         // that we asserted not-dirty above, any dirty pages will have
         // already been thrown away by madvise() during the previous
-        // termination.  The `clear_and_remain_ready()` path also
+        // termination. The `clear_and_remain_ready()` path also
         // mprotects memory above the initial heap size back to
         // PROT_NONE, so we don't need to do that here.
         if (self.image.is_none()
@@ -377,46 +367,45 @@ impl MemFdSlot {
                     == maybe_image.as_ref().unwrap().fd.as_file().as_raw_fd())
         {
             self.dirty = true;
-            self.cur_size = initial_size_bytes;
             return Ok(());
         }
-
-        // Otherwise, we need to redo (i) the anonymous-mmap backing
-        // for the whole slot, (ii) the initial-heap-image mapping if
-        // present, and (iii) the mprotect(PROT_NONE) above the
-        // initial heap size.
-
+        // Otherwise, we need to transition from the previous state to the
+        // state now requested. An attempt is made here to minimize syscalls to
+        // the kernel to ideally reduce the overhead of this as it's fairly
+        // performance sensitive with memories. Note that the "previous state"
+        // is assumed to be post-initialization (e.g. after an mmap on-demand
+        // memory was created) or after `clear_and_remain_ready` was called
+        // which notably means that `madvise` has reset all the memory back to
+        // its original state.
+        //
         // Security/audit note: we map all of these MAP_PRIVATE, so
         // all instance data is local to the mapping, not propagated
         // to the backing fd. We throw away this CoW overlay with
         // madvise() below, from base up to static_size (which is the
         // whole slot) when terminating the instance.
 
-        // Anonymous mapping behind the initial heap size: this gives
-        // zeroes for any "holes" in the initial heap image. Anonymous
-        // mmap memory is faster to fault in than a CoW of a file,
-        // even a file with zero holes, because the kernel's CoW path
-        // unconditionally copies *something* (even if just a page of
-        // zeroes). Anonymous zero pages are fast: the kernel
-        // pre-zeroes them, and even if it runs out of those, a memset
-        // is half as expensive as a memcpy (only writes, no reads).
-        //
-        // We map these inaccessible at first then mprotect() the
-        // whole of the initial heap size to R+W below.
         if self.image.is_some() {
+            // In this case the state of memory at this time is that the memory
+            // from `0..self.initial_size` is reset back to its original state,
+            // but this memory contians a CoW image that is different from the
+            // one specified here. To reset state we first reset the mapping
+            // of memory to anonymous PROT_NONE memory, and then afterwards the
+            // heap is made visible with an mprotect.
             self.reset_with_anon_memory()
                 .map_err(|e| InstantiationError::Resource(e.into()))?;
+            self.set_protection(
+                0..initial_size_bytes,
+                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+            )
+            .map_err(|e| InstantiationError::Resource(e.into()))?;
         } else if initial_size_bytes < self.initial_size {
-            // Special case: we can skip if the last instantiation had
-            // no image. This means that the whole slot is filled with
-            // an anonymous mmap backing (and it will have already
-            // been cleared by the madvise). We may however need to
-            // mprotect(NONE) the space above `initial_size_bytes` if
-            // the last use of this slot left it larger. This also
-            // lets us skip an mmap the first time a MemFdSlot is
-            // used, because we require the caller to give us a fixed
-            // address in an already-mmaped-with-anon-memory
-            // region. This is important for the on-demand allocator.
+            // In this case the previous module had now CoW image which means
+            // that the memory at `0..self.initial_size` is all zeros and
+            // read-write, everything afterwards being PROT_NONE.
+            //
+            // Our requested heap size is smaller than the previous heap size
+            // so all that's needed now is to shrink the heap further to
+            // `initial_size_bytes`.
             //
             // So we come in with:
             // - anon-zero memory, R+W,  [0, self.initial_size)
@@ -432,7 +421,29 @@ impl MemFdSlot {
                 rustix::io::MprotectFlags::empty(),
             )
             .map_err(|e| InstantiationError::Resource(e.into()))?;
+        } else if initial_size_bytes > self.initial_size {
+            // In this case, like the previous one, the previous module had no
+            // CoW image but had a smaller heap than desired for this module.
+            // That means that here `mprotect` is used to make the new pages
+            // read/write, and since they're all reset from before they'll be
+            // made visible as zeros.
+            self.set_protection(
+                self.initial_size..initial_size_bytes,
+                rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
+            )
+            .map_err(|e| InstantiationError::Resource(e.into()))?;
+        } else {
+            // The final case here is that the previous module has no CoW image
+            // so the previous heap is all zeros. The previous heap is the exact
+            // same size as the requested heap, so no syscalls are needed to do
+            // anything else.
         }
+
+        // The memory image, at this point, should have `initial_size_bytes` of
+        // zeros starting at `self.base` followed by inaccessible memory to
+        // `self.static_size`. Update sizing fields to reflect this.
+        self.initial_size = initial_size_bytes;
+        self.cur_size = initial_size_bytes;
 
         // The initial memory image, if given. If not, we just get a
         // memory filled with zeroes.
@@ -455,17 +466,8 @@ impl MemFdSlot {
         }
 
         self.image = maybe_image.cloned();
-
-        // mprotect the initial `initial_size_bytes` to be accessible.
-        self.initial_size = initial_size_bytes;
-        self.cur_size = initial_size_bytes;
-        self.set_protection(
-            0..initial_size_bytes,
-            rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
-        )
-        .map_err(|e| InstantiationError::Resource(e.into()))?;
-
         self.dirty = true;
+
         Ok(())
     }
 
@@ -477,21 +479,23 @@ impl MemFdSlot {
         unsafe {
             rustix::io::madvise(
                 self.base as *mut c_void,
-                self.static_size,
+                self.cur_size,
                 rustix::io::Advice::LinuxDontNeed,
             )?;
         }
 
         // mprotect the initial heap region beyond the initial heap size back to PROT_NONE.
         self.set_protection(
-            self.initial_size..self.static_size,
+            self.initial_size..self.cur_size,
             rustix::io::MprotectFlags::empty(),
         )?;
+        self.cur_size = self.initial_size;
         self.dirty = false;
         Ok(())
     }
 
     fn set_protection(&self, range: Range<usize>, flags: rustix::io::MprotectFlags) -> Result<()> {
+        assert!(range.start <= range.end);
         assert!(range.end <= self.static_size);
         let mprotect_start = self.base.checked_add(range.start).unwrap();
         if range.len() > 0 {
@@ -601,7 +605,7 @@ mod test {
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemFdSlot on top of it
-        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 4 << 20);
+        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
         assert!(!memfd.is_dirty());
         // instantiate with 64 KiB initial size
@@ -637,7 +641,7 @@ mod test {
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemFdSlot on top of it
-        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 4 << 20);
+        let mut memfd = MemFdSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
         // Create an image with some data.
         let image = Arc::new(create_memfd_with_data(4096, &[1, 2, 3, 4]).unwrap());
