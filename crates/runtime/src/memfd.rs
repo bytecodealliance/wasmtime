@@ -292,6 +292,12 @@ pub struct MemFdSlot {
     /// instantiation). Set by `instantiate()` and cleared by
     /// `clear_and_remain_ready()`, and used in assertions to ensure
     /// those methods are called properly.
+    ///
+    /// Invariant: if !dirty, then this memory slot contains a clean
+    /// CoW mapping of `image`, if `Some(..)`, and anonymous-zero
+    /// memory beyond the image up to `static_size`. The addresses
+    /// from offset 0 to `initial_size` are accessible R+W and the
+    /// rest of the slot is inaccessible.
     dirty: bool,
     /// Whether this MemFdSlot is responsible for mapping anonymous
     /// memory (to hold the reservation while overwriting mappings
@@ -400,14 +406,23 @@ impl MemFdSlot {
         // Special case: we can skip if the last instantiation had no
         // image. This means that the whole slot is filled with an
         // anonymous mmap backing (and it will have already been
-        // cleared by the madvise). This also lets us skip an mmap the
-        // first time a MemFdSlot is used, because we require the
-        // caller to give us a fixed address in an
+        // cleared by the madvise). We may however need to
+        // mprotect(NONE) the space above `initial_size_bytes` if the
+        // last use of this slot left it larger. This also lets us
+        // skip an mmap the first time a MemFdSlot is used, because we
+        // require the caller to give us a fixed address in an
         // already-mmaped-with-anon-memory region. This is important
         // for the on-demand allocator.
         if self.image.is_some() {
             self.map_anon_memory(rustix::io::ProtFlags::empty())
                 .map_err(|e| InstantiationError::Resource(e.into()))?;
+        } else if initial_size_bytes < self.initial_size {
+            self.set_protection(
+                initial_size_bytes,
+                self.initial_size,
+                rustix::io::MprotectFlags::empty(),
+            )
+            .map_err(|e| InstantiationError::Resource(e.into()))?;
         }
 
         // The initial memory image, if given. If not, we just get a
