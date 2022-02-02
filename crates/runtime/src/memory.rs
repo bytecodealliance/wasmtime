@@ -157,7 +157,6 @@ impl MmapMemory {
 
         // If a memfd image was specified, try to create the MemFdSlot on top of our mmap.
         let memfd = match memfd_image {
-            #[cfg_attr(not(memfd), allow(unused_variables, unreachable_code))]
             Some(image) => {
                 let base = unsafe { mmap.as_mut_ptr().add(pre_guard_bytes) };
                 let mut memfd_slot = MemFdSlot::create(base.cast(), minimum, alloc_bytes);
