@@ -118,7 +118,7 @@
       i32.const 1
       i32.const 0
       i32.const 4
-      memory.init $d $m1
+      memory.init $m1 $d
       i32.const 1
       i32.load)
 
@@ -126,7 +126,7 @@
       i32.const 1
       i32.const 4
       i32.const 4
-      memory.init $d $m2
+      memory.init $m2 $d
       i32.const 1
       i32.load (memory $m2))
 

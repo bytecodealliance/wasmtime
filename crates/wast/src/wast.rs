@@ -4,6 +4,7 @@ use std::fmt::{Display, LowerHex};
 use std::path::Path;
 use std::str;
 use wasmtime::*;
+use wast::lexer::Lexer;
 use wast::Wat;
 use wast::{
     parser::{self, ParseBuffer},
@@ -215,8 +216,10 @@ impl<T> WastContext<T> {
             err
         };
 
-        let buf = wast::parser::ParseBuffer::new(wast).map_err(adjust_wast)?;
-        let ast = wast::parser::parse::<wast::Wast>(&buf).map_err(adjust_wast)?;
+        let mut lexer = Lexer::new(wast);
+        lexer.allow_confusing_unicode(filename.ends_with("names.wast"));
+        let buf = ParseBuffer::new_with_lexer(lexer).map_err(adjust_wast)?;
+        let ast = parser::parse::<wast::Wast>(&buf).map_err(adjust_wast)?;
 
         for directive in ast.directives {
             let sp = directive.span();

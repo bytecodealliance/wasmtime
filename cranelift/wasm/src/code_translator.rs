@@ -2013,6 +2013,25 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         Operator::ReturnCall { .. } | Operator::ReturnCallIndirect { .. } => {
             return Err(wasm_unsupported!("proposed tail-call operator {:?}", op));
         }
+        Operator::I8x16SwizzleRelaxed
+        | Operator::I32x4TruncSatF32x4SRelaxed
+        | Operator::I32x4TruncSatF32x4URelaxed
+        | Operator::I32x4TruncSatF64x2SZeroRelaxed
+        | Operator::I32x4TruncSatF64x2UZeroRelaxed
+        | Operator::F32x4FmaRelaxed
+        | Operator::F32x4FmsRelaxed
+        | Operator::F64x2FmaRelaxed
+        | Operator::F64x2FmsRelaxed
+        | Operator::I8x16LaneSelect
+        | Operator::I16x8LaneSelect
+        | Operator::I32x4LaneSelect
+        | Operator::I64x2LaneSelect
+        | Operator::F32x4MinRelaxed
+        | Operator::F64x2MinRelaxed
+        | Operator::F32x4MaxRelaxed
+        | Operator::F64x2MaxRelaxed => {
+            return Err(wasm_unsupported!("proposed relaxed-simd operator {:?}", op));
+        }
     };
     Ok(())
 }
