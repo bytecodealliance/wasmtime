@@ -7,8 +7,8 @@ use libc::c_void;
 use memfd::{Memfd, MemfdOptions};
 use rustix::fd::AsRawFd;
 use rustix::fs::FileExt;
-use std::convert::TryFrom;
 use std::sync::Arc;
+use std::{convert::TryFrom, ops::Range};
 use wasmtime_environ::{
     DefinedMemoryIndex, MemoryInitialization, MemoryInitializer, MemoryPlan, Module, PrimaryMap,
 };
@@ -428,8 +428,7 @@ impl MemFdSlot {
             // so given initial_size_bytes < self.initial_size we
             // mprotect(NONE) the zone from the first to the second.
             self.set_protection(
-                initial_size_bytes,
-                self.initial_size,
+                initial_size_bytes..self.initial_size,
                 rustix::io::MprotectFlags::empty(),
             )
             .map_err(|e| InstantiationError::Resource(e.into()))?;
@@ -461,8 +460,7 @@ impl MemFdSlot {
         self.initial_size = initial_size_bytes;
         self.cur_size = initial_size_bytes;
         self.set_protection(
-            0,
-            initial_size_bytes,
+            0..initial_size_bytes,
             rustix::io::MprotectFlags::READ | rustix::io::MprotectFlags::WRITE,
         )
         .map_err(|e| InstantiationError::Resource(e.into()))?;
@@ -486,25 +484,19 @@ impl MemFdSlot {
 
         // mprotect the initial heap region beyond the initial heap size back to PROT_NONE.
         self.set_protection(
-            self.initial_size,
-            self.static_size - self.initial_size,
+            self.initial_size..self.static_size,
             rustix::io::MprotectFlags::empty(),
         )?;
         self.dirty = false;
         Ok(())
     }
 
-    fn set_protection(
-        &self,
-        start: usize,
-        len: usize,
-        flags: rustix::io::MprotectFlags,
-    ) -> Result<()> {
-        assert!(start.checked_add(len).unwrap() <= self.static_size);
-        let mprotect_start = self.base.checked_add(start).unwrap();
-        if len > 0 {
+    fn set_protection(&self, range: Range<usize>, flags: rustix::io::MprotectFlags) -> Result<()> {
+        assert!(range.end <= self.static_size);
+        let mprotect_start = self.base.checked_add(range.start).unwrap();
+        if range.len() > 0 {
             unsafe {
-                rustix::io::mprotect(mprotect_start as *mut _, len, flags)?;
+                rustix::io::mprotect(mprotect_start as *mut _, range.len(), flags)?;
             }
         }
 
