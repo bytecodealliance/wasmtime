@@ -579,7 +579,7 @@ mod test {
                 handles.push(
                     instances
                         .allocate(InstanceAllocationRequest {
-                            module: module.clone(),
+                            module: &module,
                             memfds: None,
                             unique_id: None,
                             image_base: 0,
