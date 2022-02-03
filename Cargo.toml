@@ -37,7 +37,7 @@ file-per-thread-logger = "0.1.1"
 libc = "0.2.60"
 rayon = "1.5.0"
 humantime = "2.0.0"
-wasmparser = "0.81.0"
+wasmparser = "0.82.0"
 lazy_static = "1.4.0"
 
 [target.'cfg(unix)'.dependencies]
@@ -54,13 +54,13 @@ test-programs = { path = "crates/test-programs" }
 wasmtime-runtime = { path = "crates/runtime" }
 tokio = { version = "1.8.0", features = ["rt", "time", "macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.1"
-wast = "38.0.0"
+wast = "39.0.0"
 criterion = "0.3.4"
 num_cpus = "1.13.0"
 winapi = { version = "0.3.9", features = ['memoryapi'] }
 memchr = "2.4"
 async-trait = "0.1"
-wat = "1.0.40"
+wat = "1.0.41"
 
 [build-dependencies]
 anyhow = "1.0.19"

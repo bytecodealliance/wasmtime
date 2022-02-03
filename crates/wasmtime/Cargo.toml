@@ -20,7 +20,7 @@ wasmtime-cache = { path = "../cache", version = "=0.33.0", optional = true }
 wasmtime-fiber = { path = "../fiber", version = "=0.33.0", optional = true }
 wasmtime-cranelift = { path = "../cranelift", version = "=0.33.0", optional = true }
 target-lexicon = { version = "0.12.0", default-features = false }
-wasmparser = "0.81"
+wasmparser = "0.82"
 anyhow = "1.0.19"
 region = "2.2.0"
 libc = "0.2"

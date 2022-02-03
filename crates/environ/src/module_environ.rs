@@ -516,7 +516,12 @@ impl<'data> ModuleEnvironment<'data> {
                 self.result.module.table_initializers.reserve_exact(cnt);
 
                 for (index, entry) in elements.into_iter().enumerate() {
-                    let wasmparser::Element { kind, items, ty: _ } = entry?;
+                    let wasmparser::Element {
+                        kind,
+                        items,
+                        ty: _,
+                        range: _,
+                    } = entry?;
 
                     // Build up a list of `FuncIndex` corresponding to all the
                     // entries listed in this segment. Note that it's not
@@ -646,7 +651,11 @@ impl<'data> ModuleEnvironment<'data> {
                 self.result.data.reserve_exact(cnt);
 
                 for (index, entry) in data.into_iter().enumerate() {
-                    let wasmparser::Data { kind, data } = entry?;
+                    let wasmparser::Data {
+                        kind,
+                        data,
+                        range: _,
+                    } = entry?;
                     let mk_range = |total: &mut u32| -> Result<_, WasmError> {
                         let range = u32::try_from(data.len())
                             .ok()

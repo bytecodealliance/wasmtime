@@ -77,6 +77,8 @@ struct WasmFeatures {
     pub multi_memory: bool,
     pub exceptions: bool,
     pub memory64: bool,
+    pub relaxed_simd: bool,
+    pub extended_const: bool,
 }
 
 impl From<&wasmparser::WasmFeatures> for WasmFeatures {
@@ -93,20 +95,24 @@ impl From<&wasmparser::WasmFeatures> for WasmFeatures {
             multi_memory,
             exceptions,
             memory64,
-        } = other;
+            relaxed_simd,
+            extended_const,
+        } = *other;
 
         Self {
-            reference_types: *reference_types,
-            multi_value: *multi_value,
-            bulk_memory: *bulk_memory,
-            module_linking: *module_linking,
-            simd: *simd,
-            threads: *threads,
-            tail_call: *tail_call,
-            deterministic_only: *deterministic_only,
-            multi_memory: *multi_memory,
-            exceptions: *exceptions,
-            memory64: *memory64,
+            reference_types,
+            multi_value,
+            bulk_memory,
+            module_linking,
+            simd,
+            threads,
+            tail_call,
+            deterministic_only,
+            multi_memory,
+            exceptions,
+            memory64,
+            relaxed_simd,
+            extended_const,
         }
     }
 }
@@ -674,6 +680,8 @@ impl<'a> SerializedModule<'a> {
             multi_memory,
             exceptions,
             memory64,
+            relaxed_simd,
+            extended_const,
         } = self.metadata.features;
 
         Self::check_bool(
@@ -718,6 +726,16 @@ impl<'a> SerializedModule<'a> {
             memory64,
             other.memory64,
             "WebAssembly 64-bit memory support",
+        )?;
+        Self::check_bool(
+            extended_const,
+            other.extended_const,
+            "WebAssembly extended-const support",
+        )?;
+        Self::check_bool(
+            relaxed_simd,
+            other.relaxed_simd,
+            "WebAssembly relaxed-simd support",
         )?;
 
         Ok(())
