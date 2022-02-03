@@ -471,6 +471,7 @@ impl MemFdSlot {
         Ok(())
     }
 
+    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     pub(crate) fn clear_and_remain_ready(&mut self) -> Result<()> {
         assert!(self.dirty);
         // madvise the image range. This will throw away dirty pages,
@@ -511,6 +512,7 @@ impl MemFdSlot {
         self.image.is_some()
     }
 
+    #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     pub(crate) fn is_dirty(&self) -> bool {
         self.dirty
     }

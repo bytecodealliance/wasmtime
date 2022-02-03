@@ -157,10 +157,11 @@ pub unsafe fn create_raw_function(
     module
         .exports
         .insert(String::new(), EntityIndex::Function(func_id));
+    let module = Arc::new(module);
 
     Ok(
         OnDemandInstanceAllocator::default().allocate(InstanceAllocationRequest {
-            module: Arc::new(module),
+            module: &module,
             unique_id: None,
             memfds: None,
             functions: &functions,

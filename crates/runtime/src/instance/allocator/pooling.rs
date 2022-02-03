@@ -378,7 +378,7 @@ impl InstancePool {
             index,
             instance,
             &self.memories,
-            &req.memfds,
+            req.memfds,
             self.memories.max_wasm_pages,
         )?;
 
@@ -506,7 +506,7 @@ impl InstancePool {
         instance_idx: usize,
         instance: &mut Instance,
         memories: &MemoryPool,
-        maybe_memfds: &Option<Arc<ModuleMemFds>>,
+        maybe_memfds: Option<&Arc<ModuleMemFds>>,
         max_pages: u64,
     ) -> Result<(), InstantiationError> {
         let module = instance.module.as_ref();
@@ -1468,7 +1468,7 @@ mod test {
             handles.push(
                 instances
                     .allocate(InstanceAllocationRequest {
-                        module: module.clone(),
+                        module: &module,
                         unique_id: None,
                         image_base: 0,
                         functions,
@@ -1494,7 +1494,7 @@ mod test {
         );
 
         match instances.allocate(InstanceAllocationRequest {
-            module: module.clone(),
+            module: &module,
             unique_id: None,
             functions,
             image_base: 0,

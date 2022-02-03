@@ -723,8 +723,8 @@ impl Module {
         &self.inner.signatures
     }
 
-    pub(crate) fn memfds(&self) -> &Option<Arc<ModuleMemFds>> {
-        &self.inner.memfds
+    pub(crate) fn memfds(&self) -> Option<&Arc<ModuleMemFds>> {
+        self.inner.memfds.as_ref()
     }
 
     /// Looks up the module upvar value at the `index` specified.
