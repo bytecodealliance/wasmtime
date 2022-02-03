@@ -376,3 +376,58 @@ fn static_forced_max() -> Result<()> {
     assert!(mem.grow(&mut store, 1).is_err());
     Ok(())
 }
+
+#[test]
+fn dynamic_extra_growth_unchanged_pointer() -> Result<()> {
+    const EXTRA_PAGES: u64 = 5;
+    let mut config = Config::new();
+    config.static_memory_maximum_size(0);
+    // 5 wasm pages extra
+    config.dynamic_memory_reserved_for_growth(EXTRA_PAGES * (1 << 16));
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    fn assert_behaves_well(store: &mut Store<()>, mem: &Memory) -> Result<()> {
+        let ptr = mem.data_ptr(&store);
+
+        // Each growth here should retain the same linear pointer in memory and the
+        // memory shouldn't get moved.
+        for _ in 0..EXTRA_PAGES {
+            mem.grow(&mut *store, 1)?;
+            assert_eq!(ptr, mem.data_ptr(&store));
+        }
+
+        // Growth afterwards though will be forced to move the pointer
+        mem.grow(&mut *store, 1)?;
+        let new_ptr = mem.data_ptr(&store);
+        assert_ne!(ptr, new_ptr);
+
+        for _ in 0..EXTRA_PAGES - 1 {
+            mem.grow(&mut *store, 1)?;
+            assert_eq!(new_ptr, mem.data_ptr(&store));
+        }
+        Ok(())
+    }
+
+    let mem = Memory::new(&mut store, MemoryType::new(10, None))?;
+    assert_behaves_well(&mut store, &mem)?;
+
+    let module = Module::new(&engine, r#"(module (memory (export "mem") 10))"#)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let mem = instance.get_memory(&mut store, "mem").unwrap();
+    assert_behaves_well(&mut store, &mem)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory (export "mem") 10)
+                (data (i32.const 0) ""))
+        "#,
+    )?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let mem = instance.get_memory(&mut store, "mem").unwrap();
+    assert_behaves_well(&mut store, &mem)?;
+
+    Ok(())
+}
