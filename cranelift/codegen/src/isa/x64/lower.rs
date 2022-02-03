@@ -1,7 +1,7 @@
 //! Lowering rules for X64.
 
 // ISLE integration glue.
-mod isle;
+pub(super) mod isle;
 
 use crate::data_value::DataValue;
 use crate::ir::{
@@ -1057,7 +1057,13 @@ fn lower_to_amode<C: LowerCtx<I = Inst>>(ctx: &mut C, spec: InsnInput, offset: i
             )
         };
 
-        return Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags);
+        return Amode::imm_reg_reg_shift(
+            offset as u32,
+            Gpr::new(base).unwrap(),
+            Gpr::new(index).unwrap(),
+            shift,
+        )
+        .with_flags(flags);
     }
 
     let input = put_input_in_reg(ctx, spec);
@@ -3950,7 +3956,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let index = put_input_in_reg(ctx, inputs[1]);
                     let shift = 0;
                     let flags = ctx.memflags(insn).expect("load should have memflags");
-                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags)
+                    Amode::imm_reg_reg_shift(
+                        offset as u32,
+                        Gpr::new(base).unwrap(),
+                        Gpr::new(index).unwrap(),
+                        shift,
+                    )
+                    .with_flags(flags)
                 }
                 _ => unreachable!(),
             };
@@ -4054,7 +4066,13 @@ fn lower_insn_to_regs<C: LowerCtx<I = Inst>>(
                     let index = put_input_in_reg(ctx, inputs[2]);
                     let shift = 0;
                     let flags = ctx.memflags(insn).expect("store should have memflags");
-                    Amode::imm_reg_reg_shift(offset as u32, base, index, shift).with_flags(flags)
+                    Amode::imm_reg_reg_shift(
+                        offset as u32,
+                        Gpr::new(base).unwrap(),
+                        Gpr::new(index).unwrap(),
+                        shift,
+                    )
+                    .with_flags(flags)
                 }
 
                 _ => unreachable!(),

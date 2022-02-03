@@ -678,11 +678,7 @@
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
-(type MachLabel (primitive MachLabel))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
-(type BoxExternalName (primitive BoxExternalName))
-(type ValueLabel (primitive ValueLabel))
-(type UnwindInst (primitive UnwindInst))
 
 ;; An ALU operation.
 (type ALUOp
@@ -1040,10 +1036,6 @@
 
 
 ;; Helpers for machine label vectors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; VecMachLabel needs to be passed by reference, so it cannot be
-;; declared as primitive type.  Declare as extern enum instead.
-(type VecMachLabel extern (enum))
 
 (decl vec_length_minus1 (VecMachLabel) u32)
 (extern constructor vec_length_minus1 vec_length_minus1)
@@ -2963,5 +2955,3 @@
 (decl fcmp_reg (Type Reg Reg) ProducesFlags)
 (rule (fcmp_reg $F32 src1 src2) (fpu_cmp32 src1 src2))
 (rule (fcmp_reg $F64 src1 src2) (fpu_cmp64 src1 src2))
-
-

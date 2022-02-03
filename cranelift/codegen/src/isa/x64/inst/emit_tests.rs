@@ -14,6 +14,7 @@
 
 use super::*;
 use crate::isa::x64;
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 impl Inst {
@@ -21,8 +22,8 @@ impl Inst {
         debug_assert_eq!(src.to_reg().get_class(), RegClass::I64);
         Inst::Neg {
             size,
-            src: src.to_reg(),
-            dst: src,
+            src: Gpr::new(src.to_reg()).unwrap(),
+            dst: WritableGpr::from_writable_reg(src).unwrap(),
         }
     }
 }
@@ -693,42 +694,66 @@ fn test_x64_emit() {
     //
     // Addr_IRRS, offset max simm8
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, rax, rax, 0), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(rax).unwrap(), Gpr::new(rax).unwrap(), 0),
+            w_r11,
+        ),
         "4C8B5C007F",
         "movq    127(%rax,%rax,1), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, rdi, rax, 1), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(rdi).unwrap(), Gpr::new(rax).unwrap(), 1),
+            w_r11,
+        ),
         "4C8B5C477F",
         "movq    127(%rdi,%rax,2), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, r8, rax, 2), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(r8).unwrap(), Gpr::new(rax).unwrap(), 2),
+            w_r11,
+        ),
         "4D8B5C807F",
         "movq    127(%r8,%rax,4), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, r15, rax, 3), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(r15).unwrap(), Gpr::new(rax).unwrap(), 3),
+            w_r11,
+        ),
         "4D8B5CC77F",
         "movq    127(%r15,%rax,8), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, rax, rdi, 3), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(rax).unwrap(), Gpr::new(rdi).unwrap(), 3),
+            w_r11,
+        ),
         "4C8B5CF87F",
         "movq    127(%rax,%rdi,8), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, rdi, rdi, 2), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(rdi).unwrap(), Gpr::new(rdi).unwrap(), 2),
+            w_r11,
+        ),
         "4C8B5CBF7F",
         "movq    127(%rdi,%rdi,4), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, r8, rdi, 1), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(r8).unwrap(), Gpr::new(rdi).unwrap(), 1),
+            w_r11,
+        ),
         "4D8B5C787F",
         "movq    127(%r8,%rdi,2), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(127, r15, rdi, 0), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(127, Gpr::new(r15).unwrap(), Gpr::new(rdi).unwrap(), 0),
+            w_r11,
+        ),
         "4D8B5C3F7F",
         "movq    127(%r15,%rdi,1), %r11",
     ));
@@ -736,42 +761,106 @@ fn test_x64_emit() {
     // ========================================================
     // Addr_IRRS, offset min simm8
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, rax, r8, 2), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(rax).unwrap(),
+                Gpr::new(r8).unwrap(),
+                2,
+            ),
+            w_r11,
+        ),
         "4E8B5C8080",
         "movq    -128(%rax,%r8,4), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, rdi, r8, 3), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(rdi).unwrap(),
+                Gpr::new(r8).unwrap(),
+                3,
+            ),
+            w_r11,
+        ),
         "4E8B5CC780",
         "movq    -128(%rdi,%r8,8), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, r8, r8, 0), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(r8).unwrap(),
+                Gpr::new(r8).unwrap(),
+                0,
+            ),
+            w_r11,
+        ),
         "4F8B5C0080",
         "movq    -128(%r8,%r8,1), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, r15, r8, 1), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(r15).unwrap(),
+                Gpr::new(r8).unwrap(),
+                1,
+            ),
+            w_r11,
+        ),
         "4F8B5C4780",
         "movq    -128(%r15,%r8,2), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, rax, r15, 1), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(rax).unwrap(),
+                Gpr::new(r15).unwrap(),
+                1,
+            ),
+            w_r11,
+        ),
         "4E8B5C7880",
         "movq    -128(%rax,%r15,2), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, rdi, r15, 0), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(rdi).unwrap(),
+                Gpr::new(r15).unwrap(),
+                0,
+            ),
+            w_r11,
+        ),
         "4E8B5C3F80",
         "movq    -128(%rdi,%r15,1), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, r8, r15, 3), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(r8).unwrap(),
+                Gpr::new(r15).unwrap(),
+                3,
+            ),
+            w_r11,
+        ),
         "4F8B5CF880",
         "movq    -128(%r8,%r15,8), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(-128i32 as u32, r15, r15, 2), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                -128i32 as u32,
+                Gpr::new(r15).unwrap(),
+                Gpr::new(r15).unwrap(),
+                2,
+            ),
+            w_r11,
+        ),
         "4F8B5CBF80",
         "movq    -128(%r15,%r15,4), %r11",
     ));
@@ -779,42 +868,96 @@ fn test_x64_emit() {
     // ========================================================
     // Addr_IRRS, offset large positive simm32
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, rax, rax, 0), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                0x4f6625be,
+                Gpr::new(rax).unwrap(),
+                Gpr::new(rax).unwrap(),
+                0,
+            ),
+            w_r11,
+        ),
         "4C8B9C00BE25664F",
         "movq    1332094398(%rax,%rax,1), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, rdi, rax, 1), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                0x4f6625be,
+                Gpr::new(rdi).unwrap(),
+                Gpr::new(rax).unwrap(),
+                1,
+            ),
+            w_r11,
+        ),
         "4C8B9C47BE25664F",
         "movq    1332094398(%rdi,%rax,2), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, r8, rax, 2), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(0x4f6625be, Gpr::new(r8).unwrap(), Gpr::new(rax).unwrap(), 2),
+            w_r11,
+        ),
         "4D8B9C80BE25664F",
         "movq    1332094398(%r8,%rax,4), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, r15, rax, 3), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                0x4f6625be,
+                Gpr::new(r15).unwrap(),
+                Gpr::new(rax).unwrap(),
+                3,
+            ),
+            w_r11,
+        ),
         "4D8B9CC7BE25664F",
         "movq    1332094398(%r15,%rax,8), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, rax, rdi, 3), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                0x4f6625be,
+                Gpr::new(rax).unwrap(),
+                Gpr::new(rdi).unwrap(),
+                3,
+            ),
+            w_r11,
+        ),
         "4C8B9CF8BE25664F",
         "movq    1332094398(%rax,%rdi,8), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, rdi, rdi, 2), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                0x4f6625be,
+                Gpr::new(rdi).unwrap(),
+                Gpr::new(rdi).unwrap(),
+                2,
+            ),
+            w_r11,
+        ),
         "4C8B9CBFBE25664F",
         "movq    1332094398(%rdi,%rdi,4), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, r8, rdi, 1), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(0x4f6625be, Gpr::new(r8).unwrap(), Gpr::new(rdi).unwrap(), 1),
+            w_r11,
+        ),
         "4D8B9C78BE25664F",
         "movq    1332094398(%r8,%rdi,2), %r11",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(0x4f6625be, r15, rdi, 0), w_r11),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(
+                0x4f6625be,
+                Gpr::new(r15).unwrap(),
+                Gpr::new(rdi).unwrap(),
+                0,
+            ),
+            w_r11,
+        ),
         "4D8B9C3FBE25664F",
         "movq    1332094398(%r15,%rdi,1), %r11",
     ));
@@ -823,7 +966,12 @@ fn test_x64_emit() {
     // Addr_IRRS, offset large negative simm32
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, rax, r8, 2),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(rax).unwrap(),
+                Gpr::new(r8).unwrap(),
+                2,
+            ),
             w_r11,
         ),
         "4E8B9C8070E9B2D9",
@@ -831,7 +979,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, rdi, r8, 3),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(rdi).unwrap(),
+                Gpr::new(r8).unwrap(),
+                3,
+            ),
             w_r11,
         ),
         "4E8B9CC770E9B2D9",
@@ -839,7 +992,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, r8, r8, 0),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(r8).unwrap(),
+                Gpr::new(r8).unwrap(),
+                0,
+            ),
             w_r11,
         ),
         "4F8B9C0070E9B2D9",
@@ -847,7 +1005,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, r15, r8, 1),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(r15).unwrap(),
+                Gpr::new(r8).unwrap(),
+                1,
+            ),
             w_r11,
         ),
         "4F8B9C4770E9B2D9",
@@ -855,7 +1018,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, rax, r15, 1),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(rax).unwrap(),
+                Gpr::new(r15).unwrap(),
+                1,
+            ),
             w_r11,
         ),
         "4E8B9C7870E9B2D9",
@@ -863,7 +1031,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, rdi, r15, 0),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(rdi).unwrap(),
+                Gpr::new(r15).unwrap(),
+                0,
+            ),
             w_r11,
         ),
         "4E8B9C3F70E9B2D9",
@@ -871,7 +1044,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, r8, r15, 3),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(r8).unwrap(),
+                Gpr::new(r15).unwrap(),
+                3,
+            ),
             w_r11,
         ),
         "4F8B9CF870E9B2D9",
@@ -879,7 +1057,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::mov64_m_r(
-            Amode::imm_reg_reg_shift(-0x264d1690i32 as u32, r15, r15, 2),
+            Amode::imm_reg_reg_shift(
+                -0x264d1690i32 as u32,
+                Gpr::new(r15).unwrap(),
+                Gpr::new(r15).unwrap(),
+                2,
+            ),
             w_r11,
         ),
         "4F8B9CBF70E9B2D9",
@@ -1828,42 +2011,66 @@ fn test_x64_emit() {
     // ========================================================
     // Mov64_M_R
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, rax, rbx, 0), w_rcx),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(rax).unwrap(), Gpr::new(rbx).unwrap(), 0),
+            w_rcx,
+        ),
         "488B8C18B3000000",
         "movq    179(%rax,%rbx,1), %rcx",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, rax, rbx, 0), w_r8),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(rax).unwrap(), Gpr::new(rbx).unwrap(), 0),
+            w_r8,
+        ),
         "4C8B8418B3000000",
         "movq    179(%rax,%rbx,1), %r8",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, rax, r9, 0), w_rcx),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(rax).unwrap(), Gpr::new(r9).unwrap(), 0),
+            w_rcx,
+        ),
         "4A8B8C08B3000000",
         "movq    179(%rax,%r9,1), %rcx",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, rax, r9, 0), w_r8),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(rax).unwrap(), Gpr::new(r9).unwrap(), 0),
+            w_r8,
+        ),
         "4E8B8408B3000000",
         "movq    179(%rax,%r9,1), %r8",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, r10, rbx, 0), w_rcx),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(r10).unwrap(), Gpr::new(rbx).unwrap(), 0),
+            w_rcx,
+        ),
         "498B8C1AB3000000",
         "movq    179(%r10,%rbx,1), %rcx",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, r10, rbx, 0), w_r8),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(r10).unwrap(), Gpr::new(rbx).unwrap(), 0),
+            w_r8,
+        ),
         "4D8B841AB3000000",
         "movq    179(%r10,%rbx,1), %r8",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, r10, r9, 0), w_rcx),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(r10).unwrap(), Gpr::new(r9).unwrap(), 0),
+            w_rcx,
+        ),
         "4B8B8C0AB3000000",
         "movq    179(%r10,%r9,1), %rcx",
     ));
     insns.push((
-        Inst::mov64_m_r(Amode::imm_reg_reg_shift(179, r10, r9, 0), w_r8),
+        Inst::mov64_m_r(
+            Amode::imm_reg_reg_shift(179, Gpr::new(r10).unwrap(), Gpr::new(r9).unwrap(), 0),
+            w_r8,
+        ),
         "4F8B840AB3000000",
         "movq    179(%r10,%r9,1), %r8",
     ));
@@ -1881,7 +2088,10 @@ fn test_x64_emit() {
         "lea     42(%r10), %r15",
     ));
     insns.push((
-        Inst::lea(Amode::imm_reg_reg_shift(179, r10, r9, 0), w_r8),
+        Inst::lea(
+            Amode::imm_reg_reg_shift(179, Gpr::new(r10).unwrap(), Gpr::new(r9).unwrap(), 0),
+            w_r8,
+        ),
         "4F8D840AB3000000",
         "lea     179(%r10,%r9,1), %r8",
     ));
@@ -3115,7 +3325,12 @@ fn test_x64_emit() {
         Inst::cmove(
             OperandSize::Size16,
             CC::NO,
-            RegMem::mem(Amode::imm_reg_reg_shift(37, rdi, rsi, 2)),
+            RegMem::mem(Amode::imm_reg_reg_shift(
+                37,
+                Gpr::new(rdi).unwrap(),
+                Gpr::new(rsi).unwrap(),
+                2,
+            )),
             w_r15,
         ),
         "66440F417CB725",
@@ -3157,12 +3372,22 @@ fn test_x64_emit() {
     insns.push((Inst::push64(RegMemImm::reg(rdi)), "57", "pushq   %rdi"));
     insns.push((Inst::push64(RegMemImm::reg(r8)), "4150", "pushq   %r8"));
     insns.push((
-        Inst::push64(RegMemImm::mem(Amode::imm_reg_reg_shift(321, rsi, rcx, 3))),
+        Inst::push64(RegMemImm::mem(Amode::imm_reg_reg_shift(
+            321,
+            Gpr::new(rsi).unwrap(),
+            Gpr::new(rcx).unwrap(),
+            3,
+        ))),
         "FFB4CE41010000",
         "pushq   321(%rsi,%rcx,8)",
     ));
     insns.push((
-        Inst::push64(RegMemImm::mem(Amode::imm_reg_reg_shift(321, r9, rbx, 2))),
+        Inst::push64(RegMemImm::mem(Amode::imm_reg_reg_shift(
+            321,
+            Gpr::new(r9).unwrap(),
+            Gpr::new(rbx).unwrap(),
+            2,
+        ))),
         "41FFB49941010000",
         "pushq   321(%r9,%rbx,4)",
     ));
@@ -3226,12 +3451,22 @@ fn test_x64_emit() {
     insns.push((call_unknown(RegMem::reg(rbp)), "FFD5", "call    *%rbp"));
     insns.push((call_unknown(RegMem::reg(r11)), "41FFD3", "call    *%r11"));
     insns.push((
-        call_unknown(RegMem::mem(Amode::imm_reg_reg_shift(321, rsi, rcx, 3))),
+        call_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
+            321,
+            Gpr::new(rsi).unwrap(),
+            Gpr::new(rcx).unwrap(),
+            3,
+        ))),
         "FF94CE41010000",
         "call    *321(%rsi,%rcx,8)",
     ));
     insns.push((
-        call_unknown(RegMem::mem(Amode::imm_reg_reg_shift(321, r10, rdx, 2))),
+        call_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
+            321,
+            Gpr::new(r10).unwrap(),
+            Gpr::new(rdx).unwrap(),
+            2,
+        ))),
         "41FF949241010000",
         "call    *321(%r10,%rdx,4)",
     ));
@@ -3301,12 +3536,22 @@ fn test_x64_emit() {
         "jmp     *%r11",
     ));
     insns.push((
-        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(321, rsi, rcx, 3))),
+        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
+            321,
+            Gpr::new(rsi).unwrap(),
+            Gpr::new(rcx).unwrap(),
+            3,
+        ))),
         "FFA4CE41010000",
         "jmp     *321(%rsi,%rcx,8)",
     ));
     insns.push((
-        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(321, r10, rdx, 2))),
+        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
+            321,
+            Gpr::new(r10).unwrap(),
+            Gpr::new(rdx).unwrap(),
+            2,
+        ))),
         "41FFA49241010000",
         "jmp     *321(%r10,%rdx,4)",
     ));
@@ -3354,7 +3599,12 @@ fn test_x64_emit() {
     insns.push((
         Inst::xmm_rm_r(
             SseOpcode::Addss,
-            RegMem::mem(Amode::imm_reg_reg_shift(123, r10, rdx, 2)),
+            RegMem::mem(Amode::imm_reg_reg_shift(
+                123,
+                Gpr::new(r10).unwrap(),
+                Gpr::new(rdx).unwrap(),
+                2,
+            )),
             w_xmm0,
         ),
         "F3410F5844927B",
@@ -3379,7 +3629,12 @@ fn test_x64_emit() {
     insns.push((
         Inst::xmm_rm_r(
             SseOpcode::Subss,
-            RegMem::mem(Amode::imm_reg_reg_shift(321, r10, rax, 3)),
+            RegMem::mem(Amode::imm_reg_reg_shift(
+                321,
+                Gpr::new(r10).unwrap(),
+                Gpr::new(rax).unwrap(),
+                3,
+            )),
             w_xmm10,
         ),
         "F3450F5C94C241010000",
@@ -4200,10 +4455,17 @@ fn test_x64_emit() {
 
     // ========================================================
     // Pertaining to atomics.
-    let am1: SyntheticAmode = Amode::imm_reg_reg_shift(321, r10, rdx, 2).into();
+    let am1: SyntheticAmode =
+        Amode::imm_reg_reg_shift(321, Gpr::new(r10).unwrap(), Gpr::new(rdx).unwrap(), 2).into();
     // `am2` doesn't contribute any 1 bits to the rex prefix, so we must use it when testing
     // for retention of the apparently-redundant rex prefix in the 8-bit case.
-    let am2: SyntheticAmode = Amode::imm_reg_reg_shift(-12345i32 as u32, rcx, rsi, 3).into();
+    let am2: SyntheticAmode = Amode::imm_reg_reg_shift(
+        -12345i32 as u32,
+        Gpr::new(rcx).unwrap(),
+        Gpr::new(rsi).unwrap(),
+        3,
+    )
+    .into();
 
     // A general 8-bit case.
     insns.push((

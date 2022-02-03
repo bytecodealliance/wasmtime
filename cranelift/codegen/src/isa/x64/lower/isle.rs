@@ -1,26 +1,28 @@
 //! ISLE integration glue code for x64 lowering.
 
 // Pull in the ISLE generated code.
-mod generated_code;
+pub(crate) mod generated_code;
+use generated_code::MInst;
+use regalloc::Writable;
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::{
-    is_mergeable_load, lower_to_amode, AluRmiROpcode, Inst as MInst, OperandSize, Reg, RegMemImm,
-};
+use super::{is_mergeable_load, lower_to_amode, Reg};
 use crate::{
-    ir::{immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode, Value, ValueList},
-    isa::x64::{
-        inst::{
-            args::{
-                Amode, Avx512Opcode, CmpOpcode, ExtKind, ExtMode, FcmpImm, Imm8Reg, RegMem,
-                ShiftKind, SseOpcode, SyntheticAmode, CC,
-            },
-            regs, x64_map_regs,
-        },
-        settings::Flags as IsaFlags,
+    ir::{
+        immediates::*, types::*, Inst, InstructionData, Opcode, TrapCode, Value, ValueLabel,
+        ValueList,
     },
-    machinst::{isle::*, InsnInput, InsnOutput, LowerCtx, VCodeConstantData},
-    settings::Flags,
+    isa::{
+        settings::Flags,
+        unwind::UnwindInst,
+        x64::{
+            inst::{args::*, regs, x64_map_regs},
+            settings::Flags as IsaFlags,
+        },
+    },
+    machinst::{
+        isle::*, AtomicRmwOp, InsnInput, InsnOutput, LowerCtx, VCodeConstant, VCodeConstantData,
+    },
 };
 use std::convert::TryFrom;
 
@@ -252,8 +254,8 @@ where
     }
 
     #[inline]
-    fn xmm0(&mut self) -> WritableReg {
-        WritableReg::from_reg(regs::xmm0())
+    fn xmm0(&mut self) -> WritableXmm {
+        WritableXmm::from_reg(Xmm::new(regs::xmm0()).unwrap())
     }
 
     #[inline]
@@ -262,13 +264,23 @@ where
     }
 
     #[inline]
-    fn amode_imm_reg_reg_shift(&mut self, simm32: u32, base: Reg, index: Reg, shift: u8) -> Amode {
+    fn amode_imm_reg_reg_shift(&mut self, simm32: u32, base: Gpr, index: Gpr, shift: u8) -> Amode {
         Amode::imm_reg_reg_shift(simm32, base, index, shift)
     }
 
     #[inline]
     fn amode_to_synthetic_amode(&mut self, amode: &Amode) -> SyntheticAmode {
         amode.clone().into()
+    }
+
+    #[inline]
+    fn writable_gpr_to_reg(&mut self, r: WritableGpr) -> WritableReg {
+        r.to_writable_reg()
+    }
+
+    #[inline]
+    fn writable_xmm_to_reg(&mut self, r: WritableXmm) -> WritableReg {
+        r.to_writable_reg()
     }
 
     fn ishl_i8x16_mask_for_const(&mut self, amt: u32) -> SyntheticAmode {
@@ -305,6 +317,96 @@ where
             .lower_ctx
             .use_constant(VCodeConstantData::WellKnown(&I8X16_USHR_MASKS));
         SyntheticAmode::ConstantOffset(mask_table)
+    }
+
+    #[inline]
+    fn writable_reg_to_xmm(&mut self, r: WritableReg) -> WritableXmm {
+        Writable::from_reg(Xmm::new(r.to_reg()).unwrap())
+    }
+
+    #[inline]
+    fn writable_xmm_to_xmm(&mut self, r: WritableXmm) -> Xmm {
+        r.to_reg()
+    }
+
+    #[inline]
+    fn writable_gpr_to_gpr(&mut self, r: WritableGpr) -> Gpr {
+        r.to_reg()
+    }
+
+    #[inline]
+    fn gpr_to_reg(&mut self, r: Gpr) -> Reg {
+        r.into()
+    }
+
+    #[inline]
+    fn xmm_to_reg(&mut self, r: Xmm) -> Reg {
+        r.into()
+    }
+
+    #[inline]
+    fn xmm_to_xmm_mem_imm(&mut self, r: Xmm) -> XmmMemImm {
+        r.into()
+    }
+
+    #[inline]
+    fn temp_writable_gpr(&mut self) -> WritableGpr {
+        Writable::from_reg(Gpr::new(self.temp_writable_reg(I64).to_reg()).unwrap())
+    }
+
+    #[inline]
+    fn temp_writable_xmm(&mut self) -> WritableXmm {
+        Writable::from_reg(Xmm::new(self.temp_writable_reg(I8X16).to_reg()).unwrap())
+    }
+
+    #[inline]
+    fn reg_mem_to_xmm_mem(&mut self, rm: &RegMem) -> XmmMem {
+        XmmMem::new(rm.clone()).unwrap()
+    }
+
+    #[inline]
+    fn gpr_mem_imm_new(&mut self, rmi: &RegMemImm) -> GprMemImm {
+        GprMemImm::new(rmi.clone()).unwrap()
+    }
+
+    #[inline]
+    fn xmm_mem_imm_new(&mut self, rmi: &RegMemImm) -> XmmMemImm {
+        XmmMemImm::new(rmi.clone()).unwrap()
+    }
+
+    #[inline]
+    fn xmm_to_xmm_mem(&mut self, r: Xmm) -> XmmMem {
+        r.into()
+    }
+
+    #[inline]
+    fn xmm_mem_to_reg_mem(&mut self, xm: &XmmMem) -> RegMem {
+        xm.clone().into()
+    }
+
+    #[inline]
+    fn gpr_mem_to_reg_mem(&mut self, gm: &GprMem) -> RegMem {
+        gm.clone().into()
+    }
+
+    #[inline]
+    fn xmm_new(&mut self, r: Reg) -> Xmm {
+        Xmm::new(r).unwrap()
+    }
+
+    #[inline]
+    fn gpr_new(&mut self, r: Reg) -> Gpr {
+        Gpr::new(r).unwrap()
+    }
+
+    #[inline]
+    fn reg_mem_to_gpr_mem(&mut self, rm: &RegMem) -> GprMem {
+        GprMem::new(rm.clone()).unwrap()
+    }
+
+    #[inline]
+    fn reg_to_gpr_mem(&mut self, r: Reg) -> GprMem {
+        GprMem::new(RegMem::reg(r)).unwrap()
     }
 }
 
