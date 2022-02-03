@@ -535,17 +535,19 @@ mod test {
     use super::MemoryMemFd;
     use crate::mmap::Mmap;
     use anyhow::Result;
-    use rustix::fs::FileExt;
+    use std::io::Write;
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryMemFd> {
+        // Offset must be page-aligned.
+        assert_eq!(offset & (page_size - 1), 0);
         let page_size = region::page::size();
         let memfd = create_memfd()?;
-        // Offset and length have to be page-aligned.
-        assert_eq!(offset & (page_size - 1), 0);
-        let image_len = offset + data.len();
-        let image_len = (image_len + page_size - 1) & !(page_size - 1);
+        memfd.as_file().write_all(data)?;
+
+        // The image length is rounded up to the nearest page size
+        let image_len = (data.len() + page_size - 1) & !(page_size - 1);
         memfd.as_file().set_len(image_len as u64)?;
-        memfd.as_file().write_at(data, offset as u64)?;
+
         Ok(MemoryMemFd {
             fd: memfd,
             len: image_len,
