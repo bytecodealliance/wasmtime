@@ -431,3 +431,46 @@ fn dynamic_extra_growth_unchanged_pointer() -> Result<()> {
 
     Ok(())
 }
+
+// This test exercises trying to create memories of the maximum 64-bit memory
+// size of `1 << 48` pages. This should always fail but in the process of
+// determining this failure we shouldn't hit any overflows or anything like that
+// (checked via debug-mode tests).
+#[test]
+fn memory64_maximum_minimum() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_memory64(true);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    assert!(Memory::new(&mut store, MemoryType::new64(1 << 48, None)).is_err());
+
+    let module = Module::new(
+        &engine,
+        &format!(
+            r#"
+                (module
+                    (memory i64 {})
+                )
+            "#,
+            1u64 << 48,
+        ),
+    )?;
+    assert!(Instance::new(&mut store, &module, &[]).is_err());
+
+    let module = Module::new(
+        &engine,
+        &format!(
+            r#"
+                (module
+                    (memory i64 {})
+                    (data (i64.const 0) "")
+                )
+            "#,
+            1u64 << 48,
+        ),
+    )?;
+    assert!(Instance::new(&mut store, &module, &[]).is_err());
+
+    Ok(())
+}
