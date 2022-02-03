@@ -690,6 +690,9 @@ impl<'a> Instantiator<'a> {
         // properly referenced while in use by the store.
         store.modules_mut().register(&self.cur.module);
 
+        // Initialize any memfd images now.
+        let memfds = self.cur.module.memfds()?;
+
         unsafe {
             // The first thing we do is issue an instance allocation request
             // to the instance allocator. This, on success, will give us an
@@ -708,7 +711,7 @@ impl<'a> Instantiator<'a> {
                     .allocate(InstanceAllocationRequest {
                         module: compiled_module.module(),
                         unique_id: Some(compiled_module.unique_id()),
-                        memfds: self.cur.module.memfds(),
+                        memfds,
                         image_base: compiled_module.code().as_ptr() as usize,
                         functions: compiled_module.functions(),
                         imports: self.cur.build(),
