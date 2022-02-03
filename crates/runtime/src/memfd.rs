@@ -539,8 +539,8 @@ mod test {
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryMemFd> {
         // Offset must be page-aligned.
-        assert_eq!(offset & (page_size - 1), 0);
         let page_size = region::page::size();
+        assert_eq!(offset & (page_size - 1), 0);
         let memfd = create_memfd()?;
         memfd.as_file().write_all(data)?;
 

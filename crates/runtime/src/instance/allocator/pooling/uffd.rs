@@ -263,6 +263,7 @@ unsafe fn initialize_wasm_page(
 ) -> Result<()> {
     // Check for paged initialization and copy the page if present in the initialization data
     if let MemoryInitialization::Paged { map, .. } = &instance.module.memory_initialization {
+        let memory_index = instance.module().memory_index(memory_index);
         let pages = &map[memory_index];
 
         let pos = pages.binary_search_by_key(&(page_index as u64), |k| k.0);
