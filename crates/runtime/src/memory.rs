@@ -159,7 +159,11 @@ impl MmapMemory {
         let memfd = match memfd_image {
             Some(image) => {
                 let base = unsafe { mmap.as_mut_ptr().add(pre_guard_bytes) };
-                let mut memfd_slot = MemFdSlot::create(base.cast(), minimum, alloc_bytes);
+                let mut memfd_slot = MemFdSlot::create(
+                    base.cast(),
+                    minimum,
+                    alloc_bytes + extra_to_reserve_on_growth,
+                );
                 memfd_slot.instantiate(minimum, Some(image))?;
                 // On drop, we will unmap our mmap'd range that this
                 // memfd_slot was mapped on top of, so there is no
