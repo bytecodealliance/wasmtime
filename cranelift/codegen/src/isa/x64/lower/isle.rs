@@ -360,7 +360,7 @@ where
     }
 
     #[inline]
-    fn xmm_mem_new(&mut self, rm: &RegMem) -> XmmMem {
+    fn reg_mem_to_xmm_mem(&mut self, rm: &RegMem) -> XmmMem {
         XmmMem::new(rm.clone()).unwrap()
     }
 
@@ -400,7 +400,7 @@ where
     }
 
     #[inline]
-    fn gpr_mem_new(&mut self, rm: &RegMem) -> GprMem {
+    fn reg_mem_to_gpr_mem(&mut self, rm: &RegMem) -> GprMem {
         GprMem::new(rm.clone()).unwrap()
     }
 

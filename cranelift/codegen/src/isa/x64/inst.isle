@@ -876,8 +876,8 @@
 ;; Construct a new `XmmMem` from the given `RegMem`.
 ;;
 ;; Asserts that the `RegMem`'s register, if any, is an XMM register.
-(decl xmm_mem_new (RegMem) XmmMem)
-(extern constructor xmm_mem_new xmm_mem_new)
+(decl reg_mem_to_xmm_mem (RegMem) XmmMem)
+(extern constructor reg_mem_to_xmm_mem reg_mem_to_xmm_mem)
 
 ;; Construct a new `GprMemImm` from the given `RegMemImm`.
 ;;
@@ -918,8 +918,8 @@
 ;; Construct a new `GprMem` from a `RegMem`.
 ;;
 ;; Asserts that the `RegMem`'s register, if any, is a GPR.
-(decl gpr_mem_new (RegMem) GprMem)
-(extern constructor gpr_mem_new gpr_mem_new)
+(decl reg_mem_to_gpr_mem (RegMem) GprMem)
+(extern constructor reg_mem_to_gpr_mem reg_mem_to_gpr_mem)
 
 ;; Construct a `GprMem` from a `Reg`.
 ;;
@@ -939,7 +939,7 @@
 ;; Asserts that the value goes into a GPR.
 (decl put_in_gpr_mem (Value) GprMem)
 (rule (put_in_gpr_mem val)
-      (gpr_mem_new (put_in_reg_mem val)))
+      (reg_mem_to_gpr_mem (put_in_reg_mem val)))
 
 ;; Put a value into a `GprMemImm`.
 ;;
@@ -960,7 +960,7 @@
 ;; Asserts that the value goes into a XMM.
 (decl put_in_xmm_mem (Value) XmmMem)
 (rule (put_in_xmm_mem val)
-      (xmm_mem_new (put_in_reg_mem val)))
+      (reg_mem_to_xmm_mem (put_in_reg_mem val)))
 
 ;; Put a value into a `XmmMemImm`.
 ;;
@@ -1177,23 +1177,23 @@
 
 (rule (x64_load $F32 addr _ext_kind)
       (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movss)
-                                  (xmm_mem_new (synthetic_amode_to_reg_mem addr)))))
+                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
 
 (rule (x64_load $F64 addr _ext_kind)
       (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movsd)
-                                  (xmm_mem_new (synthetic_amode_to_reg_mem addr)))))
+                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
 
 (rule (x64_load $F32X4 addr _ext_kind)
       (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movups)
-                                  (xmm_mem_new (synthetic_amode_to_reg_mem addr)))))
+                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
 
 (rule (x64_load $F64X2 addr _ext_kind)
       (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movupd)
-                                  (xmm_mem_new (synthetic_amode_to_reg_mem addr)))))
+                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
 
 (rule (x64_load (multi_lane _bits _lanes) addr _ext_kind)
       (xmm_to_reg (xmm_unary_rm_r (SseOpcode.Movdqu)
-                                  (xmm_mem_new (synthetic_amode_to_reg_mem addr)))))
+                                  (reg_mem_to_xmm_mem (synthetic_amode_to_reg_mem addr)))))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1317,13 +1317,13 @@
 ;; `f32` immediates.
 (rule (imm $F32 bits)
       (xmm_to_reg (gpr_to_xmm (SseOpcode.Movd)
-                              (gpr_mem_new (RegMem.Reg (imm $I32 bits)))
+                              (reg_mem_to_gpr_mem (RegMem.Reg (imm $I32 bits)))
                               (OperandSize.Size32))))
 
 ;; `f64` immediates.
 (rule (imm $F64 bits)
       (xmm_to_reg (gpr_to_xmm (SseOpcode.Movq)
-                              (gpr_mem_new (RegMem.Reg (imm $I64 bits)))
+                              (reg_mem_to_gpr_mem (RegMem.Reg (imm $I64 bits)))
                               (OperandSize.Size64))))
 
 (decl nonzero_u64_fits_in_u32 (u64) u64)
