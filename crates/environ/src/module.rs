@@ -172,9 +172,8 @@ impl ModuleTranslation<'_> {
     pub fn try_paged_init(&mut self) {
         // This method only attempts to transform a a `Segmented` memory init
         // into a `Paged` one, no other state.
-        match &self.module.memory_initialization {
-            MemoryInitialization::Segmented(_) => {}
-            _ => return,
+        if !self.module.memory_initialization.is_segmented() {
+            return;
         }
 
         // Initially all memories start out as all zeros, represented with a
@@ -273,6 +272,15 @@ impl Default for MemoryInitialization {
 }
 
 impl MemoryInitialization {
+    /// Returns whether this initialization is of the form
+    /// `MemoryInitialization::Segmented`.
+    pub fn is_segmented(&self) -> bool {
+        match self {
+            MemoryInitialization::Segmented(_) => true,
+            _ => false,
+        }
+    }
+
     /// Performs the memory initialization steps for this set of initializers.
     ///
     /// This will perform wasm initialization in compliance with the wasm spec
