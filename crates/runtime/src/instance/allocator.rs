@@ -18,8 +18,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, FunctionInfo, GlobalInit,
-    InitMemory, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
-    SignatureIndex, TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
+    MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap, SignatureIndex,
+    TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -388,7 +388,7 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
     // This call to `init_memory` notably implements all the bells and whistles
     // so errors only happen if an out-of-bounds segment is found, in which case
     // a trap is returned.
-    let result = module.memory_initialization.init_memory(
+    let ok = module.memory_initialization.init_memory(
         |memory| (instance.get_memory(memory).current_length as u64) / u64::from(WASM_PAGE_SIZE),
         // Loads the `global` value and returns it as a `u64`, but sign-extends
         // 32-bit globals which can be used as the base for 32-bit memories.
@@ -404,14 +404,14 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
                 u64::from(*def.as_u32())
             })
         },
-        |memory_index, offset, data| -> InitMemory {
+        |memory_index, offset, data| {
             // If this initializer applies to a defined memory but that memory
             // doesn't need initialization, due to something like uffd or memfd
             // pre-initializing it via mmap magic, then this initializer can be
             // skipped entirely.
             if let Some(memory_index) = module.defined_memory_index(memory_index) {
                 if !instance.memories[memory_index].needs_init() {
-                    return InitMemory::Ok;
+                    return true;
                 }
             }
             let memory = instance.get_memory(memory_index);
@@ -419,10 +419,10 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
                 unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
             let dst = &mut dst_slice[usize::try_from(offset).unwrap()..][..data.len()];
             dst.copy_from_slice(instance.wasm_data(data.clone()));
-            InitMemory::Ok
+            true
         },
     );
-    if !result.is_ok() {
+    if !ok {
         return Err(InstantiationError::Trap(Trap::wasm(
             TrapCode::HeapOutOfBounds,
         )));

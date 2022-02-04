@@ -9,7 +9,7 @@ use rustix::fd::AsRawFd;
 use std::io::Write;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
-use wasmtime_environ::{DefinedMemoryIndex, InitMemory, Module, PrimaryMap};
+use wasmtime_environ::{DefinedMemoryIndex, Module, PrimaryMap};
 
 /// MemFDs containing backing images for certain memories in a module.
 ///
@@ -87,7 +87,7 @@ impl ModuleMemFds {
         for _ in 0..num_defined_memories {
             images.push(Vec::new());
         }
-        let result = module.memory_initialization.init_memory(
+        let ok = module.memory_initialization.init_memory(
             |memory| module.memory_plans[memory].memory.minimum,
             // Right now memfd initialization isn't supported for initializers
             // that have a global as the offset.
@@ -99,7 +99,7 @@ impl ModuleMemFds {
                 // segments with page-aligned portions.
                 let memory = match module.defined_memory_index(memory) {
                     Some(index) => index,
-                    None => return InitMemory::NoImportedMemory,
+                    None => return false,
                 };
 
                 // Splat the `data_range` into the `image` for this memory,
@@ -110,17 +110,17 @@ impl ModuleMemFds {
                 let new_image_len = offset + data.len();
                 if image.len() < new_image_len {
                     if new_image_len > MAX_MEMFD_IMAGE_SIZE {
-                        return InitMemory::Error;
+                        return false;
                     }
                     image.resize(new_image_len, 0);
                 }
                 image[offset..][..data.len()].copy_from_slice(data);
-                InitMemory::Ok
+                true
             },
         );
 
         // If any initializer wasn't applicable then we skip memfds entirely.
-        if !result.is_ok() {
+        if !ok {
             return Ok(None);
         }
 

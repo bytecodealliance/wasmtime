@@ -190,7 +190,7 @@ impl ModuleTranslation<'_> {
         // can't switch to paged initialization. When data is written it's
         // transformed into the representation of `page_contents`.
         let mut data = self.data.iter();
-        let result = self.module.memory_initialization.init_memory(
+        let ok = self.module.memory_initialization.init_memory(
             |memory_index| self.module.memory_plans[memory_index].memory.minimum,
             // If an initializer references a global base then it needs to be
             // processed at runtime and we can't statically calculate page
@@ -203,7 +203,7 @@ impl ModuleTranslation<'_> {
                 // everything will need to be processed in-order anyway to
                 // handle the dynamic limits of the memory specified.
                 if self.module.defined_memory_index(memory).is_none() {
-                    return InitMemory::NoImportedMemory;
+                    return false;
                 };
                 let page_size = u64::from(WASM_PAGE_SIZE);
                 let contents = &mut page_contents[memory];
@@ -227,13 +227,13 @@ impl ModuleTranslation<'_> {
                     data = &data[len..];
                 }
 
-                InitMemory::Ok
+                true
             },
         );
 
         // If anything failed above or hit an unknown case then bail out
         // entirely since this module cannot use paged initialization.
-        if !result.is_ok() {
+        if !ok {
             return;
         }
 
@@ -272,25 +272,6 @@ impl Default for MemoryInitialization {
     }
 }
 
-#[allow(missing_docs)]
-pub enum InitMemory {
-    Ok,
-    NoGlobal,
-    NoImportedMemory,
-    OutOfBounds,
-    Error,
-}
-
-impl InitMemory {
-    /// Returns whether this is `InitMemory::Ok`
-    pub fn is_ok(&self) -> bool {
-        match self {
-            InitMemory::Ok => true,
-            _ => false,
-        }
-    }
-}
-
 impl MemoryInitialization {
     /// Performs the memory initialization steps for this set of initializers.
     ///
@@ -314,22 +295,22 @@ impl MemoryInitialization {
     ///
     /// * `write` - a callback used to actually write data. This indicates that
     ///   the specified memory must receive the specified range of data at the
-    ///   specified offset. This can internally return an `InitMemory` error if
-    ///   it wants to fail.
+    ///   specified offset. This can internally return an false error if it
+    ///   wants to fail.
     ///
-    /// This function will return `InitMemory::Ok` if all memory initializers
-    /// are processed successfully. If any initializer hits an error or, for
-    /// example, a global value is needed but `None` is returned, then the error
-    /// will be returned. At compile-time this typically means that the "error"
-    /// in question needs to be deferred to runtime, and at runtime this means
+    /// This function will return true if all memory initializers are processed
+    /// successfully. If any initializer hits an error or, for example, a
+    /// global value is needed but `None` is returned, then false will be
+    /// returned. At compile-time this typically means that the "error" in
+    /// question needs to be deferred to runtime, and at runtime this means
     /// that an invalid initializer has been found and a trap should be
     /// generated.
     pub fn init_memory(
         &self,
         get_cur_page_size: impl Fn(MemoryIndex) -> u64,
         get_global: impl Fn(GlobalIndex) -> Option<u64>,
-        mut write: impl FnMut(MemoryIndex, u64, &Range<u32>) -> InitMemory,
-    ) -> InitMemory {
+        mut write: impl FnMut(MemoryIndex, u64, &Range<u32>) -> bool,
+    ) -> bool {
         let initializers = match self {
             // Fall through below to the segmented memory one-by-one
             // initialization.
@@ -345,12 +326,12 @@ impl MemoryInitialization {
                     for (page_index, page) in pages {
                         debug_assert_eq!(page.end - page.start, WASM_PAGE_SIZE);
                         let result = write(index, *page_index * u64::from(WASM_PAGE_SIZE), page);
-                        if !result.is_ok() {
+                        if !result {
                             return result;
                         }
                     }
                 }
-                return InitMemory::Ok;
+                return true;
             }
         };
 
@@ -370,18 +351,18 @@ impl MemoryInitialization {
             let base = match base {
                 Some(index) => match get_global(index) {
                     Some(base) => base,
-                    None => return InitMemory::NoGlobal,
+                    None => return false,
                 },
                 None => 0,
             };
             let start = match base.checked_add(offset) {
                 Some(start) => start,
-                None => return InitMemory::OutOfBounds,
+                None => return false,
             };
             let len = u64::try_from(data.len()).unwrap();
             let end = match start.checked_add(len) {
                 Some(end) => end,
-                None => return InitMemory::OutOfBounds,
+                None => return false,
             };
 
             // Note that this `minimum` can overflow if `minimum` is
@@ -398,7 +379,7 @@ impl MemoryInitialization {
                 get_cur_page_size(memory_index).checked_mul(u64::from(WASM_PAGE_SIZE))
             {
                 if end > max {
-                    return InitMemory::OutOfBounds;
+                    return false;
                 }
             }
 
@@ -406,12 +387,12 @@ impl MemoryInitialization {
             // so the `write` callback is called with the range of data being
             // written. Any erroneous result is propagated upwards.
             let result = write(memory_index, start, data);
-            if !result.is_ok() {
+            if !result {
                 return result;
             }
         }
 
-        InitMemory::Ok
+        return true;
     }
 }
 
