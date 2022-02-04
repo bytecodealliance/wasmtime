@@ -95,19 +95,6 @@ impl MemoryPlan {
             },
         }
     }
-
-    /// Determine whether a data segment (memory initializer) is
-    /// possibly out-of-bounds. Returns `true` if the initializer has a
-    /// dynamic location and this question cannot be resolved
-    /// pre-instantiation; hence, this method's result should not be
-    /// used to signal an error, only to exit optimized/simple fastpaths.
-    pub fn initializer_possibly_out_of_bounds(&self, init: &MemoryInitializer) -> bool {
-        match init.end() {
-            // Not statically known, so possibly out of bounds (we can't guarantee in-bounds).
-            None => true,
-            Some(end) => end > self.memory.minimum * (WASM_PAGE_SIZE as u64),
-        }
-    }
 }
 
 /// A WebAssembly linear memory initializer.
@@ -126,28 +113,19 @@ pub struct MemoryInitializer {
     pub data: Range<u32>,
 }
 
-impl MemoryInitializer {
-    /// If this initializer has a definite, static, non-overflowed end address, return it.
-    pub fn end(&self) -> Option<u64> {
-        if self.base.is_some() {
-            return None;
-        }
-        self.offset.checked_add(self.data.len() as u64)
-    }
-}
-
 /// The type of WebAssembly linear memory initialization to use for a module.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum MemoryInitialization {
     /// Memory initialization is segmented.
     ///
-    /// Segmented initialization can be used for any module, but it is required if:
+    /// Segmented initialization can be used for any module, but it is required
+    /// if:
     ///
     /// * A data segment referenced an imported memory.
     /// * A data segment uses a global base.
     ///
-    /// Segmented initialization is performed by processing the complete set of data segments
-    /// when the module is instantiated.
+    /// Segmented initialization is performed by processing the complete set of
+    /// data segments when the module is instantiated.
     ///
     /// This is the default memory initialization type.
     Segmented(Vec<MemoryInitializer>),
@@ -159,13 +137,16 @@ pub enum MemoryInitialization {
     /// * All data segments must reference defined memories.
     /// * All data segments must not use a global base.
     ///
-    /// Paged initialization is performed by copying (or mapping) entire WebAssembly pages to each linear memory.
+    /// Paged initialization is performed by copying (or mapping) entire
+    /// WebAssembly pages to each linear memory.
     ///
-    /// The `uffd` feature makes use of this type of memory initialization because it can instruct the kernel
-    /// to back an entire WebAssembly page from an existing set of in-memory pages.
+    /// The `uffd` feature makes use of this type of memory initialization
+    /// because it can instruct the kernel to back an entire WebAssembly page
+    /// from an existing set of in-memory pages.
     ///
-    /// By processing the data segments at module compilation time, the uffd fault handler doesn't have to do
-    /// any work to point the kernel at the right linear memory page to use.
+    /// By processing the data segments at module compilation time, the uffd
+    /// fault handler doesn't have to do any work to point the kernel at the
+    /// right linear memory page to use.
     Paged {
         /// The map of defined memory index to a list of initialization pages.
         ///
@@ -177,10 +158,7 @@ pub enum MemoryInitialization {
         /// indices, like those in `MemoryInitializer`, point within a data
         /// segment that will come as an auxiliary descriptor with other data
         /// such as the compiled code for the wasm module.
-        map: PrimaryMap<DefinedMemoryIndex, Vec<(u64, Range<u32>)>>,
-        /// Whether or not an out-of-bounds data segment was observed.
-        /// This is used to fail module instantiation after the pages are initialized.
-        out_of_bounds: bool,
+        map: PrimaryMap<MemoryIndex, Vec<(u64, Range<u32>)>>,
     },
 }
 
@@ -192,88 +170,66 @@ impl ModuleTranslation<'_> {
     /// initialization then this won't change anything. Otherwise if it is
     /// compatible then the `memory_initialization` field will be updated.
     pub fn try_paged_init(&mut self) {
-        let initializers = match &self.module.memory_initialization {
-            MemoryInitialization::Segmented(list) => list,
-            MemoryInitialization::Paged { .. } => return,
-        };
-        let page_size = u64::from(WASM_PAGE_SIZE);
-        let num_defined_memories =
-            self.module.memory_plans.len() - self.module.num_imported_memories;
-        let mut out_of_bounds = false;
+        // This method only attempts to transform a a `Segmented` memory init
+        // into a `Paged` one, no other state.
+        if !self.module.memory_initialization.is_segmented() {
+            return;
+        }
 
         // Initially all memories start out as all zeros, represented with a
         // lack of entries in the `BTreeMap` here. The map indexes byte offset
         // (which is always wasm-page-aligned) to the contents of the page, with
         // missing entries implicitly as all zeros.
-        let mut page_contents = PrimaryMap::with_capacity(num_defined_memories);
-        for _ in 0..num_defined_memories {
+        let mut page_contents = PrimaryMap::with_capacity(self.module.memory_plans.len());
+        for _ in 0..self.module.memory_plans.len() {
             page_contents.push(BTreeMap::new());
         }
 
-        assert_eq!(initializers.len(), self.data.len());
-        for (initializer, data) in initializers.iter().zip(&self.data) {
-            let memory_index = match (
-                self.module.defined_memory_index(initializer.memory_index),
-                initializer.base.is_some(),
-            ) {
-                (None, _) | (_, true) => {
-                    // If the initializer references an imported memory or uses a global base,
-                    // the complete set of segments will need to be processed at module instantiation
-                    return;
+        // Perform a "dry run" of memory initialization which will fail if we
+        // can't switch to paged initialization. When data is written it's
+        // transformed into the representation of `page_contents`.
+        let mut data = self.data.iter();
+        let ok = self.module.memory_initialization.init_memory(
+            InitMemory::CompileTime(&self.module),
+            &mut |memory, offset, data_range| {
+                let data = data.next().unwrap();
+                assert_eq!(data.len(), data_range.len());
+                // If an initializer references an imported memory then
+                // everything will need to be processed in-order anyway to
+                // handle the dynamic limits of the memory specified.
+                if self.module.defined_memory_index(memory).is_none() {
+                    return false;
+                };
+                let page_size = u64::from(WASM_PAGE_SIZE);
+                let contents = &mut page_contents[memory];
+                let mut page_index = offset / page_size;
+                let mut page_offset = (offset % page_size) as usize;
+                let mut data = &data[..];
+
+                while !data.is_empty() {
+                    // If this page hasn't been seen before, then it starts out
+                    // as all zeros.
+                    let page = contents
+                        .entry(page_index)
+                        .or_insert_with(|| vec![0; page_size as usize]);
+                    let page = &mut page[page_offset..];
+
+                    let len = std::cmp::min(data.len(), page.len());
+                    page[..len].copy_from_slice(&data[..len]);
+
+                    page_index += 1;
+                    page_offset = 0;
+                    data = &data[len..];
                 }
-                (Some(index), false) => index,
-            };
-            if out_of_bounds {
-                continue;
-            }
 
-            // Perform a bounds check on the segment
-            //
-            // As this segment is referencing a defined memory without a global
-            // base, the last byte written to by the segment cannot exceed the
-            // memory's initial minimum size
-            let len = u64::try_from(initializer.data.len()).unwrap();
-            let end = match initializer.offset.checked_add(len) {
-                Some(end) => end,
-                None => {
-                    out_of_bounds = true;
-                    continue;
-                }
-            };
-            let memory = &self.module.memory_plans[initializer.memory_index].memory;
-            let initial_memory_end = memory.minimum * page_size;
-            if end > initial_memory_end {
-                out_of_bounds = true;
-                continue;
-            }
+                true
+            },
+        );
 
-            // Perform the same style of initialization that instantiating the
-            // module performs at this point, except initialize our
-            // `page_contents` map which is indexed by page number and contains
-            // the actual page contents.
-            //
-            // This is done iteratively page-by-page until the entire data
-            // segment has been copied into the page map.
-            let contents = &mut page_contents[memory_index];
-            let mut page_index = initializer.offset / page_size;
-            let mut page_offset = (initializer.offset % page_size) as usize;
-            let mut data = &data[..];
-
-            while !data.is_empty() {
-                // If this page hasn't been seen before, then it starts out as
-                // all zeros.
-                let page = contents
-                    .entry(page_index)
-                    .or_insert_with(|| vec![0; page_size as usize]);
-                let page = &mut page[page_offset..];
-
-                let len = std::cmp::min(data.len(), page.len());
-                page[..len].copy_from_slice(&data[..len]);
-
-                page_index += 1;
-                page_offset = 0;
-                data = &data[len..];
-            }
+        // If anything failed above or hit an unknown case then bail out
+        // entirely since this module cannot use paged initialization.
+        if !ok {
+            return;
         }
 
         // If we've gotten this far then we're switching to paged
@@ -301,7 +257,7 @@ impl ModuleTranslation<'_> {
             let index = map.push(page_offsets);
             assert_eq!(index, memory);
         }
-        self.module.memory_initialization = MemoryInitialization::Paged { map, out_of_bounds };
+        self.module.memory_initialization = MemoryInitialization::Paged { map };
     }
 }
 
@@ -309,6 +265,167 @@ impl Default for MemoryInitialization {
     fn default() -> Self {
         Self::Segmented(Vec::new())
     }
+}
+
+impl MemoryInitialization {
+    /// Returns whether this initialization is of the form
+    /// `MemoryInitialization::Segmented`.
+    pub fn is_segmented(&self) -> bool {
+        match self {
+            MemoryInitialization::Segmented(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Performs the memory initialization steps for this set of initializers.
+    ///
+    /// This will perform wasm initialization in compliance with the wasm spec
+    /// and how data segments are processed. This doesn't need to necessarily
+    /// only be called as part of initialization, however, as it's structured to
+    /// allow learning about memory ahead-of-time at compile time possibly.
+    ///
+    /// The various callbacks provided here are used to drive the smaller bits
+    /// of initialization, such as:
+    ///
+    /// * `get_cur_size_in_pages` - gets the current size, in wasm pages, of the
+    ///   memory specified. For compile-time purposes this would be the memory
+    ///   type's minimum size.
+    ///
+    /// * `get_global` - gets the value of the global specified. This is
+    ///   statically, via validation, a pointer to the global of the correct
+    ///   type (either u32 or u64 depending on the memory), but the value
+    ///   returned here is `u64`. A `None` value can be returned to indicate
+    ///   that the global's value isn't known yet.
+    ///
+    /// * `write` - a callback used to actually write data. This indicates that
+    ///   the specified memory must receive the specified range of data at the
+    ///   specified offset. This can internally return an false error if it
+    ///   wants to fail.
+    ///
+    /// This function will return true if all memory initializers are processed
+    /// successfully. If any initializer hits an error or, for example, a
+    /// global value is needed but `None` is returned, then false will be
+    /// returned. At compile-time this typically means that the "error" in
+    /// question needs to be deferred to runtime, and at runtime this means
+    /// that an invalid initializer has been found and a trap should be
+    /// generated.
+    pub fn init_memory(
+        &self,
+        state: InitMemory<'_>,
+        write: &mut dyn FnMut(MemoryIndex, u64, &Range<u32>) -> bool,
+    ) -> bool {
+        let initializers = match self {
+            // Fall through below to the segmented memory one-by-one
+            // initialization.
+            MemoryInitialization::Segmented(list) => list,
+
+            // If previously switched to paged initialization then pass through
+            // all those parameters here to the `write` callback.
+            //
+            // Note that existence of `Paged` already guarantees that all
+            // indices are in-bounds.
+            MemoryInitialization::Paged { map } => {
+                for (index, pages) in map {
+                    for (page_index, page) in pages {
+                        debug_assert_eq!(page.end - page.start, WASM_PAGE_SIZE);
+                        let result = write(index, *page_index * u64::from(WASM_PAGE_SIZE), page);
+                        if !result {
+                            return result;
+                        }
+                    }
+                }
+                return true;
+            }
+        };
+
+        for initializer in initializers {
+            let MemoryInitializer {
+                memory_index,
+                base,
+                offset,
+                ref data,
+            } = *initializer;
+
+            // First up determine the start/end range and verify that they're
+            // in-bounds for the initial size of the memory at `memory_index`.
+            // Note that this can bail if we don't have access to globals yet
+            // (e.g. this is a task happening before instantiation at
+            // compile-time).
+            let base = match base {
+                Some(index) => match &state {
+                    InitMemory::Runtime {
+                        get_global_as_u64, ..
+                    } => get_global_as_u64(index),
+                    InitMemory::CompileTime(_) => return false,
+                },
+                None => 0,
+            };
+            let start = match base.checked_add(offset) {
+                Some(start) => start,
+                None => return false,
+            };
+            let len = u64::try_from(data.len()).unwrap();
+            let end = match start.checked_add(len) {
+                Some(end) => end,
+                None => return false,
+            };
+
+            let cur_size_in_pages = match &state {
+                InitMemory::CompileTime(module) => module.memory_plans[memory_index].memory.minimum,
+                InitMemory::Runtime {
+                    memory_size_in_pages,
+                    ..
+                } => memory_size_in_pages(memory_index),
+            };
+
+            // Note that this `minimum` can overflow if `minimum` is
+            // `1 << 48`, the maximum number of minimum pages for 64-bit
+            // memories. If this overflow happens, though, then there's no need
+            // to check the `end` value since `end` fits in a `u64` and it is
+            // naturally less than the overflowed value.
+            //
+            // This is a bit esoteric though because it's impossible to actually
+            // create a memory of `u64::MAX + 1` bytes, so this is largely just
+            // here to avoid having the multiplication here overflow in debug
+            // mode.
+            if let Some(max) = cur_size_in_pages.checked_mul(u64::from(WASM_PAGE_SIZE)) {
+                if end > max {
+                    return false;
+                }
+            }
+
+            // The limits of the data segment have been validated at this point
+            // so the `write` callback is called with the range of data being
+            // written. Any erroneous result is propagated upwards.
+            let result = write(memory_index, start, data);
+            if !result {
+                return result;
+            }
+        }
+
+        return true;
+    }
+}
+
+/// Argument to [`MemoryInitialization::init_memory`] indicating the current
+/// status of the instance.
+pub enum InitMemory<'a> {
+    /// This evaluation of memory initializers is happening at compile time.
+    /// This means that the current state of memories is whatever their initial
+    /// state is, and additionally globals are not available if data segments
+    /// have global offsets.
+    CompileTime(&'a Module),
+
+    /// Evaluation of memory initializers is happening at runtime when the
+    /// instance is available, and callbacks are provided to learn about the
+    /// instance's state.
+    Runtime {
+        /// Returns the size, in wasm pages, of the the memory specified.
+        memory_size_in_pages: &'a dyn Fn(MemoryIndex) -> u64,
+        /// Returns the value of the global, as a `u64`. Note that this may
+        /// involve zero-extending a 32-bit global to a 64-bit number.
+        get_global_as_u64: &'a dyn Fn(GlobalIndex) -> u64,
+    },
 }
 
 /// Implementation styles for WebAssembly tables.

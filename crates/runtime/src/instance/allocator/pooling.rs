@@ -1069,7 +1069,7 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
         cfg_if::cfg_if! {
             if #[cfg(all(feature = "uffd", target_os = "linux"))] {
                 match &module.memory_initialization {
-                    wasmtime_environ::MemoryInitialization::Paged{ out_of_bounds, .. } => {
+                    wasmtime_environ::MemoryInitialization::Paged { .. } => {
                         if !is_bulk_memory {
                             super::check_init_bounds(instance, module)?;
                         }
@@ -1078,13 +1078,6 @@ unsafe impl InstanceAllocator for PoolingInstanceAllocator {
                         super::initialize_tables(instance, module)?;
 
                         // Don't initialize the memory; the fault handler will back the pages when accessed
-
-                        // If there was an out of bounds access observed in initialization, return a trap
-                        if *out_of_bounds {
-                            return Err(InstantiationError::Trap(crate::traphandlers::Trap::wasm(
-                                wasmtime_environ::TrapCode::HeapOutOfBounds,
-                            )));
-                        }
 
                         Ok(())
                     },

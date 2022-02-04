@@ -18,8 +18,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, FunctionInfo, GlobalInit,
-    MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap, SignatureIndex,
-    TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
+    InitMemory, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
+    SignatureIndex, TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -379,34 +379,60 @@ fn check_memory_init_bounds(
     Ok(())
 }
 
-fn initialize_memories(
-    instance: &mut Instance,
-    module: &Module,
-    initializers: &[MemoryInitializer],
-) -> Result<(), InstantiationError> {
-    for init in initializers {
-        // Check whether we can skip all initializers (due to, e.g.,
-        // memfd).
-        let memory = init.memory_index;
-        if let Some(defined_index) = module.defined_memory_index(memory) {
-            // We can only skip if there is actually a MemFD image. In
-            // some situations the MemFD image creation code will bail
-            // (e.g. due to an out of bounds data segment) and so we
-            // need to fall back on the usual initialization below.
-            if !instance.memories[defined_index].needs_init() {
-                continue;
-            }
-        }
+fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+    let memory_size_in_pages =
+        &|memory| (instance.get_memory(memory).current_length as u64) / u64::from(WASM_PAGE_SIZE);
 
-        instance
-            .memory_init_segment(
-                init.memory_index,
-                init.data.clone(),
-                get_memory_init_start(init, instance)?,
-                0,
-                init.data.end - init.data.start,
-            )
-            .map_err(InstantiationError::Trap)?;
+    // Loads the `global` value and returns it as a `u64`, but sign-extends
+    // 32-bit globals which can be used as the base for 32-bit memories.
+    let get_global_as_u64 = &|global| unsafe {
+        let def = if let Some(def_index) = instance.module.defined_global_index(global) {
+            instance.global(def_index)
+        } else {
+            &*instance.imported_global(global).from
+        };
+        if module.globals[global].wasm_ty == WasmType::I64 {
+            *def.as_u64()
+        } else {
+            u64::from(*def.as_u32())
+        }
+    };
+
+    // Delegates to the `init_memory` method which is sort of a duplicate of
+    // `instance.memory_init_segment` but is used at compile-time in other
+    // contexts so is shared here to have only one method of memory
+    // initialization.
+    //
+    // This call to `init_memory` notably implements all the bells and whistles
+    // so errors only happen if an out-of-bounds segment is found, in which case
+    // a trap is returned.
+    let ok = module.memory_initialization.init_memory(
+        InitMemory::Runtime {
+            memory_size_in_pages,
+            get_global_as_u64,
+        },
+        &mut |memory_index, offset, data| {
+            // If this initializer applies to a defined memory but that memory
+            // doesn't need initialization, due to something like uffd or memfd
+            // pre-initializing it via mmap magic, then this initializer can be
+            // skipped entirely.
+            if let Some(memory_index) = module.defined_memory_index(memory_index) {
+                if !instance.memories[memory_index].needs_init() {
+                    return true;
+                }
+            }
+            let memory = instance.get_memory(memory_index);
+            let dst_slice =
+                unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
+            let dst = &mut dst_slice[usize::try_from(offset).unwrap()..][..data.len()];
+            dst.copy_from_slice(instance.wasm_data(data.clone()));
+            true
+        },
+    );
+    if !ok {
+        return Err(InstantiationError::Trap(Trap::wasm(
+            TrapCode::HeapOutOfBounds,
+        )));
     }
 
     Ok(())
@@ -416,16 +442,11 @@ fn check_init_bounds(instance: &mut Instance, module: &Module) -> Result<(), Ins
     check_table_init_bounds(instance, module)?;
 
     match &instance.module.memory_initialization {
-        MemoryInitialization::Paged { out_of_bounds, .. } => {
-            if *out_of_bounds {
-                return Err(InstantiationError::Link(LinkError(
-                    "memory out of bounds: data segment does not fit".into(),
-                )));
-            }
-        }
         MemoryInitialization::Segmented(initializers) => {
             check_memory_init_bounds(instance, initializers)?;
         }
+        // Statically validated already to have everything in-bounds.
+        MemoryInitialization::Paged { .. } => {}
     }
 
     Ok(())
@@ -448,40 +469,7 @@ fn initialize_instance(
     initialize_tables(instance, module)?;
 
     // Initialize the memories
-    match &module.memory_initialization {
-        MemoryInitialization::Paged { map, out_of_bounds } => {
-            for (index, pages) in map {
-                // Check whether the memory actually needs
-                // initialization. It may not if we're using a CoW
-                // mechanism like memfd.
-                if !instance.memories[index].needs_init() {
-                    continue;
-                }
-
-                let memory = instance.memory(index);
-                let slice =
-                    unsafe { slice::from_raw_parts_mut(memory.base, memory.current_length) };
-
-                for (page_index, page) in pages {
-                    debug_assert_eq!(page.end - page.start, WASM_PAGE_SIZE);
-                    let start = (*page_index * u64::from(WASM_PAGE_SIZE)) as usize;
-                    let end = start + WASM_PAGE_SIZE as usize;
-                    slice[start..end].copy_from_slice(instance.wasm_data(page.clone()));
-                }
-            }
-
-            // Check for out of bound access after initializing the pages to maintain
-            // the expected behavior of the bulk memory spec.
-            if *out_of_bounds {
-                return Err(InstantiationError::Trap(Trap::wasm(
-                    TrapCode::HeapOutOfBounds,
-                )));
-            }
-        }
-        MemoryInitialization::Segmented(initializers) => {
-            initialize_memories(instance, module, initializers)?;
-        }
-    }
+    initialize_memories(instance, &module)?;
 
     Ok(())
 }

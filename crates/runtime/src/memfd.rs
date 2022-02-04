@@ -6,12 +6,10 @@ use anyhow::Result;
 use libc::c_void;
 use memfd::{Memfd, MemfdOptions};
 use rustix::fd::AsRawFd;
-use rustix::fs::FileExt;
+use std::io::Write;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
-use wasmtime_environ::{
-    DefinedMemoryIndex, MemoryInitialization, MemoryInitializer, MemoryPlan, Module, PrimaryMap,
-};
+use wasmtime_environ::{DefinedMemoryIndex, InitMemory, Module, PrimaryMap};
 
 /// MemFDs containing backing images for certain memories in a module.
 ///
@@ -21,7 +19,7 @@ pub struct ModuleMemFds {
     memories: PrimaryMap<DefinedMemoryIndex, Option<Arc<MemoryMemFd>>>,
 }
 
-const MAX_MEMFD_IMAGE_SIZE: u64 = 1024 * 1024 * 1024; // limit to 1GiB.
+const MAX_MEMFD_IMAGE_SIZE: usize = 1024 * 1024 * 1024; // limit to 1GiB.
 
 impl ModuleMemFds {
     pub(crate) fn get_memory_image(
@@ -54,33 +52,6 @@ pub struct MemoryMemFd {
     pub offset: usize,
 }
 
-fn unsupported_initializer(segment: &MemoryInitializer, plan: &MemoryPlan) -> bool {
-    // If the segment has a base that is dynamically determined
-    // (by a global value, which may be a function of an imported
-    // module, for example), then we cannot build a single static
-    // image that is used for every instantiation. So we skip this
-    // memory entirely.
-    let end = match segment.end() {
-        None => {
-            return true;
-        }
-        Some(end) => end,
-    };
-
-    // Cannot be out-of-bounds. If there is a *possibility* it may
-    // be, then we just fall back on ordinary initialization.
-    if plan.initializer_possibly_out_of_bounds(segment) {
-        return true;
-    }
-
-    // Must fit in our max size.
-    if end > MAX_MEMFD_IMAGE_SIZE {
-        return true;
-    }
-
-    false
-}
-
 fn create_memfd() -> Result<Memfd> {
     // Create the memfd. It needs a name, but the
     // documentation for `memfd_create()` says that names can
@@ -97,124 +68,104 @@ impl ModuleMemFds {
     /// instantiation and execution by using memfd-backed memories.
     pub fn new(module: &Module, wasm_data: &[u8]) -> Result<Option<Arc<ModuleMemFds>>> {
         let page_size = region::page::size() as u64;
+        let page_align = |x: u64| x & !(page_size - 1);
+        let page_align_up = |x: u64| page_align(x + page_size - 1);
+
+        // First build up an in-memory image for each memory. This in-memory
+        // representation is discarded if the memory initializers aren't "of
+        // the right shape" where the desired shape is:
+        //
+        // * Only initializers for defined memories.
+        // * Only initializers with static offsets (no globals).
+        // * Only in-bound initializers.
+        //
+        // The `init_memory` method of `MemoryInitialization` is used here to
+        // do most of the validation for us, and otherwise the data chunks are
+        // collected into the `images` array here.
+        let mut images: PrimaryMap<DefinedMemoryIndex, Vec<u8>> = PrimaryMap::default();
         let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
-
-        // Allocate a memfd file initially for every memory. We'll
-        // release those and set `excluded_memories` for those that we
-        // determine during initializer processing we cannot support a
-        // static image (e.g. due to dynamically-located segments).
-        let mut memfds: PrimaryMap<DefinedMemoryIndex, Option<Memfd>> = PrimaryMap::default();
-        let mut sizes: PrimaryMap<DefinedMemoryIndex, u64> = PrimaryMap::default();
-        let mut excluded_memories: PrimaryMap<DefinedMemoryIndex, bool> = PrimaryMap::new();
-
         for _ in 0..num_defined_memories {
-            memfds.push(None);
-            sizes.push(0);
-            excluded_memories.push(false);
+            images.push(Vec::new());
+        }
+        let ok = module.memory_initialization.init_memory(
+            InitMemory::CompileTime(module),
+            &mut |memory, offset, data_range| {
+                // Memfd-based initialization of an imported memory isn't
+                // implemented right now, although might perhaps be
+                // theoretically possible for statically-known-in-bounds
+                // segments with page-aligned portions.
+                let memory = match module.defined_memory_index(memory) {
+                    Some(index) => index,
+                    None => return false,
+                };
+
+                // Splat the `data_range` into the `image` for this memory,
+                // updating it as necessary with 0s for holes and such.
+                let image = &mut images[memory];
+                let data = &wasm_data[data_range.start as usize..data_range.end as usize];
+                let offset = offset as usize;
+                let new_image_len = offset + data.len();
+                if image.len() < new_image_len {
+                    if new_image_len > MAX_MEMFD_IMAGE_SIZE {
+                        return false;
+                    }
+                    image.resize(new_image_len, 0);
+                }
+                image[offset..][..data.len()].copy_from_slice(data);
+                true
+            },
+        );
+
+        // If any initializer wasn't applicable then we skip memfds entirely.
+        if !ok {
+            return Ok(None);
         }
 
-        let round_up_page = |len: u64| (len + page_size - 1) & !(page_size - 1);
-
-        match &module.memory_initialization {
-            &MemoryInitialization::Segmented(ref segments) => {
-                for (i, segment) in segments.iter().enumerate() {
-                    let defined_memory = match module.defined_memory_index(segment.memory_index) {
-                        Some(defined_memory) => defined_memory,
-                        None => continue,
-                    };
-                    if excluded_memories[defined_memory] {
-                        continue;
-                    }
-
-                    if unsupported_initializer(segment, &module.memory_plans[segment.memory_index])
-                    {
-                        memfds[defined_memory] = None;
-                        excluded_memories[defined_memory] = true;
-                        continue;
-                    }
-
-                    if memfds[defined_memory].is_none() {
-                        memfds[defined_memory] = Some(create_memfd()?);
-                    }
-                    let memfd = memfds[defined_memory].as_mut().unwrap();
-
-                    let end = round_up_page(segment.end().expect("must have statically-known end"));
-                    if end > sizes[defined_memory] {
-                        sizes[defined_memory] = end;
-                        memfd.as_file().set_len(end)?;
-                    }
-
-                    let base = segments[i].offset;
-                    let data = &wasm_data[segment.data.start as usize..segment.data.end as usize];
-                    memfd.as_file().write_at(data, base)?;
-                }
-            }
-            &MemoryInitialization::Paged { ref map, .. } => {
-                for (defined_memory, pages) in map {
-                    let top = pages
-                        .iter()
-                        .map(|(base, range)| *base + range.len() as u64)
-                        .max()
-                        .unwrap_or(0);
-
-                    let memfd = create_memfd()?;
-                    memfd.as_file().set_len(top)?;
-
-                    for (base, range) in pages {
-                        let data = &wasm_data[range.start as usize..range.end as usize];
-                        memfd.as_file().write_at(data, *base)?;
-                    }
-
-                    memfds[defined_memory] = Some(memfd);
-                    sizes[defined_memory] = top;
-                }
-            }
-        }
-
-        // Now finalize each memory.
-        let mut memories: PrimaryMap<DefinedMemoryIndex, Option<Arc<MemoryMemFd>>> =
-            PrimaryMap::default();
-        for (defined_memory, maybe_memfd) in memfds {
-            let memfd = match maybe_memfd {
-                Some(memfd) => memfd,
+        // With an in-memory representation of all memory images a `memfd` is
+        // now created and the data is pushed into the memfd. Note that the
+        // memfd representation will trim leading and trailing pages of zeros
+        // to store as little data as possible in the memfd. This is not only a
+        // performance improvement in the sense of "copy less data to the
+        // kernel" but it's also more performant to fault in zeros from
+        // anonymous-backed pages instead of memfd-backed pages-of-zeros (as
+        // the kernel knows anonymous mappings are always zero and has a cache
+        // of zero'd pages).
+        let mut memories = PrimaryMap::default();
+        for (defined_memory, image) in images {
+            // Find the first nonzero byte, and if all the bytes are zero then
+            // we can skip the memfd for this memory since there's no
+            // meaningful initialization.
+            let nonzero_start = match image.iter().position(|b| *b != 0) {
+                Some(i) => i as u64,
                 None => {
                     memories.push(None);
                     continue;
                 }
             };
-            let size = sizes[defined_memory];
 
-            // Find leading and trailing zero data so that the mmap
-            // can precisely map only the nonzero data; anon-mmap zero
-            // memory is faster for anything that doesn't actually
-            // have content.
-            let mut page_data = vec![0; page_size as usize];
-            let mut page_is_nonzero = |page| {
-                let offset = page_size * page;
-                memfd.as_file().read_at(&mut page_data[..], offset).unwrap();
-                page_data.iter().any(|byte| *byte != 0)
-            };
-            let n_pages = size / page_size;
+            // Find the last nonzero byte, which must exist at this point since
+            // we found one going forward. Add one to find the index of the
+            // last zero, which may also be the length of the image.
+            let nonzero_end = image.iter().rposition(|b| *b != 0).unwrap() as u64 + 1;
 
-            let mut offset = 0;
-            for page in 0..n_pages {
-                if page_is_nonzero(page) {
-                    break;
-                }
-                offset += page_size;
-            }
-            let len = if offset == size {
-                0
-            } else {
-                let mut len = 0;
-                for page in (0..n_pages).rev() {
-                    if page_is_nonzero(page) {
-                        len = (page + 1) * page_size - offset;
-                        break;
-                    }
-                }
-                len
-            };
+            // The offset of this image must be OS-page-aligned since we'll be
+            // starting the mmap at an aligned address. Align down the start
+            // index to the first index that's page aligned.
+            let offset = page_align(nonzero_start);
+
+            // The length of the image must also be page aligned and may reach
+            // beyond the end of the `image` array we have already. Take the
+            // length of the nonzero portion and then align it up to the page size.
+            let len = page_align_up(nonzero_end - offset);
+
+            // Write the nonzero data to the memfd and then use `set_len` to
+            // ensure that the length of the memfd is page-aligned where the gap
+            // at the end, if any, is filled with zeros.
+            let memfd = create_memfd()?;
+            memfd
+                .as_file()
+                .write_all(&image[offset as usize..nonzero_end as usize])?;
+            memfd.as_file().set_len(len)?;
 
             // Seal the memfd's data and length.
             //
@@ -239,11 +190,12 @@ impl ModuleMemFds {
             assert_eq!(offset % page_size, 0);
             assert_eq!(len % page_size, 0);
 
-            memories.push(Some(Arc::new(MemoryMemFd {
+            let idx = memories.push(Some(Arc::new(MemoryMemFd {
                 fd: memfd,
                 offset: usize::try_from(offset).unwrap(),
                 len: usize::try_from(len).unwrap(),
             })));
+            assert_eq!(idx, defined_memory);
         }
 
         Ok(Some(Arc::new(ModuleMemFds { memories })))
@@ -457,7 +409,7 @@ impl MemFdSlot {
                         rustix::io::ProtFlags::READ | rustix::io::ProtFlags::WRITE,
                         rustix::io::MapFlags::PRIVATE | rustix::io::MapFlags::FIXED,
                         image.fd.as_file(),
-                        image.offset as u64,
+                        0,
                     )
                     .map_err(|e| InstantiationError::Resource(e.into()))?;
                     assert_eq!(ptr as usize, self.base + image.offset);
@@ -580,17 +532,19 @@ mod test {
     use super::MemoryMemFd;
     use crate::mmap::Mmap;
     use anyhow::Result;
-    use rustix::fs::FileExt;
+    use std::io::Write;
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryMemFd> {
+        // Offset must be page-aligned.
         let page_size = region::page::size();
-        let memfd = create_memfd()?;
-        // Offset and length have to be page-aligned.
         assert_eq!(offset & (page_size - 1), 0);
-        let image_len = offset + data.len();
-        let image_len = (image_len + page_size - 1) & !(page_size - 1);
+        let memfd = create_memfd()?;
+        memfd.as_file().write_all(data)?;
+
+        // The image length is rounded up to the nearest page size
+        let image_len = (data.len() + page_size - 1) & !(page_size - 1);
         memfd.as_file().set_len(image_len as u64)?;
-        memfd.as_file().write_at(data, offset as u64)?;
+
         Ok(MemoryMemFd {
             fd: memfd,
             len: image_len,
