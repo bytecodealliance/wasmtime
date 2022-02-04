@@ -9,7 +9,7 @@ use rustix::fd::AsRawFd;
 use std::io::Write;
 use std::sync::Arc;
 use std::{convert::TryFrom, ops::Range};
-use wasmtime_environ::{DefinedMemoryIndex, Module, PrimaryMap};
+use wasmtime_environ::{DefinedMemoryIndex, InitMemory, Module, PrimaryMap};
 
 /// MemFDs containing backing images for certain memories in a module.
 ///
@@ -88,11 +88,8 @@ impl ModuleMemFds {
             images.push(Vec::new());
         }
         let ok = module.memory_initialization.init_memory(
-            |memory| module.memory_plans[memory].memory.minimum,
-            // Right now memfd initialization isn't supported for initializers
-            // that have a global as the offset.
-            |_global| None,
-            |memory, offset, data_range| {
+            InitMemory::CompileTime(module),
+            &mut |memory, offset, data_range| {
                 // Memfd-based initialization of an imported memory isn't
                 // implemented right now, although might perhaps be
                 // theoretically possible for statically-known-in-bounds

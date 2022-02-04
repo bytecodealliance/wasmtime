@@ -18,8 +18,8 @@ use std::sync::Arc;
 use thiserror::Error;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, DefinedTableIndex, EntityRef, FunctionInfo, GlobalInit,
-    MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap, SignatureIndex,
-    TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
+    InitMemory, MemoryInitialization, MemoryInitializer, Module, ModuleType, PrimaryMap,
+    SignatureIndex, TableInitializer, TrapCode, WasmType, WASM_PAGE_SIZE,
 };
 
 #[cfg(feature = "pooling-allocator")]
@@ -380,6 +380,24 @@ fn check_memory_init_bounds(
 }
 
 fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), InstantiationError> {
+    let memory_size_in_pages =
+        &|memory| (instance.get_memory(memory).current_length as u64) / u64::from(WASM_PAGE_SIZE);
+
+    // Loads the `global` value and returns it as a `u64`, but sign-extends
+    // 32-bit globals which can be used as the base for 32-bit memories.
+    let get_global_as_u64 = &|global| unsafe {
+        let def = if let Some(def_index) = instance.module.defined_global_index(global) {
+            instance.global(def_index)
+        } else {
+            &*instance.imported_global(global).from
+        };
+        if module.globals[global].wasm_ty == WasmType::I64 {
+            *def.as_u64()
+        } else {
+            u64::from(*def.as_u32())
+        }
+    };
+
     // Delegates to the `init_memory` method which is sort of a duplicate of
     // `instance.memory_init_segment` but is used at compile-time in other
     // contexts so is shared here to have only one method of memory
@@ -389,22 +407,11 @@ fn initialize_memories(instance: &mut Instance, module: &Module) -> Result<(), I
     // so errors only happen if an out-of-bounds segment is found, in which case
     // a trap is returned.
     let ok = module.memory_initialization.init_memory(
-        |memory| (instance.get_memory(memory).current_length as u64) / u64::from(WASM_PAGE_SIZE),
-        // Loads the `global` value and returns it as a `u64`, but sign-extends
-        // 32-bit globals which can be used as the base for 32-bit memories.
-        |global| unsafe {
-            let def = if let Some(def_index) = instance.module.defined_global_index(global) {
-                instance.global(def_index)
-            } else {
-                &*instance.imported_global(global).from
-            };
-            Some(if module.globals[global].wasm_ty == WasmType::I64 {
-                *def.as_u64()
-            } else {
-                u64::from(*def.as_u32())
-            })
+        InitMemory::Runtime {
+            memory_size_in_pages,
+            get_global_as_u64,
         },
-        |memory_index, offset, data| {
+        &mut |memory_index, offset, data| {
             // If this initializer applies to a defined memory but that memory
             // doesn't need initialization, due to something like uffd or memfd
             // pre-initializing it via mmap magic, then this initializer can be

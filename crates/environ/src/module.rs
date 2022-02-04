@@ -190,12 +190,8 @@ impl ModuleTranslation<'_> {
         // transformed into the representation of `page_contents`.
         let mut data = self.data.iter();
         let ok = self.module.memory_initialization.init_memory(
-            |memory_index| self.module.memory_plans[memory_index].memory.minimum,
-            // If an initializer references a global base then it needs to be
-            // processed at runtime and we can't statically calculate page
-            // numbers here.
-            |_global_idx| None,
-            |memory, offset, data_range| {
+            InitMemory::CompileTime(&self.module),
+            &mut |memory, offset, data_range| {
                 let data = data.next().unwrap();
                 assert_eq!(data.len(), data_range.len());
                 // If an initializer references an imported memory then
@@ -315,9 +311,8 @@ impl MemoryInitialization {
     /// generated.
     pub fn init_memory(
         &self,
-        get_cur_size_in_pages: impl Fn(MemoryIndex) -> u64,
-        get_global: impl Fn(GlobalIndex) -> Option<u64>,
-        mut write: impl FnMut(MemoryIndex, u64, &Range<u32>) -> bool,
+        state: InitMemory<'_>,
+        write: &mut dyn FnMut(MemoryIndex, u64, &Range<u32>) -> bool,
     ) -> bool {
         let initializers = match self {
             // Fall through below to the segmented memory one-by-one
@@ -357,9 +352,11 @@ impl MemoryInitialization {
             // (e.g. this is a task happening before instantiation at
             // compile-time).
             let base = match base {
-                Some(index) => match get_global(index) {
-                    Some(base) => base,
-                    None => return false,
+                Some(index) => match &state {
+                    InitMemory::Runtime {
+                        get_global_as_u64, ..
+                    } => get_global_as_u64(index),
+                    InitMemory::CompileTime(_) => return false,
                 },
                 None => 0,
             };
@@ -373,6 +370,14 @@ impl MemoryInitialization {
                 None => return false,
             };
 
+            let cur_size_in_pages = match &state {
+                InitMemory::CompileTime(module) => module.memory_plans[memory_index].memory.minimum,
+                InitMemory::Runtime {
+                    memory_size_in_pages,
+                    ..
+                } => memory_size_in_pages(memory_index),
+            };
+
             // Note that this `minimum` can overflow if `minimum` is
             // `1 << 48`, the maximum number of minimum pages for 64-bit
             // memories. If this overflow happens, though, then there's no need
@@ -383,9 +388,7 @@ impl MemoryInitialization {
             // create a memory of `u64::MAX + 1` bytes, so this is largely just
             // here to avoid having the multiplication here overflow in debug
             // mode.
-            if let Some(max) =
-                get_cur_size_in_pages(memory_index).checked_mul(u64::from(WASM_PAGE_SIZE))
-            {
+            if let Some(max) = cur_size_in_pages.checked_mul(u64::from(WASM_PAGE_SIZE)) {
                 if end > max {
                     return false;
                 }
@@ -402,6 +405,27 @@ impl MemoryInitialization {
 
         return true;
     }
+}
+
+/// Argument to [`MemoryInitialization::init_memory`] indicating the current
+/// status of the instance.
+pub enum InitMemory<'a> {
+    /// This evaluation of memory initializers is happening at compile time.
+    /// This means that the current state of memories is whatever their initial
+    /// state is, and additionally globals are not available if data segments
+    /// have global offsets.
+    CompileTime(&'a Module),
+
+    /// Evaluation of memory initializers is happening at runtime when the
+    /// instance is available, and callbacks are provided to learn about the
+    /// instance's state.
+    Runtime {
+        /// Returns the size, in wasm pages, of the the memory specified.
+        memory_size_in_pages: &'a dyn Fn(MemoryIndex) -> u64,
+        /// Returns the value of the global, as a `u64`. Note that this may
+        /// involve zero-extending a 32-bit global to a 64-bit number.
+        get_global_as_u64: &'a dyn Fn(GlobalIndex) -> u64,
+    },
 }
 
 /// Implementation styles for WebAssembly tables.
