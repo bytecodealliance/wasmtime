@@ -291,7 +291,7 @@ impl MemoryInitialization {
     /// The various callbacks provided here are used to drive the smaller bits
     /// of initialization, such as:
     ///
-    /// * `get_cur_page_size` - gets the current size, in wasm pages, of the
+    /// * `get_cur_size_in_pages` - gets the current size, in wasm pages, of the
     ///   memory specified. For compile-time purposes this would be the memory
     ///   type's minimum size.
     ///
@@ -315,7 +315,7 @@ impl MemoryInitialization {
     /// generated.
     pub fn init_memory(
         &self,
-        get_cur_page_size: impl Fn(MemoryIndex) -> u64,
+        get_cur_size_in_pages: impl Fn(MemoryIndex) -> u64,
         get_global: impl Fn(GlobalIndex) -> Option<u64>,
         mut write: impl FnMut(MemoryIndex, u64, &Range<u32>) -> bool,
     ) -> bool {
@@ -384,7 +384,7 @@ impl MemoryInitialization {
             // here to avoid having the multiplication here overflow in debug
             // mode.
             if let Some(max) =
-                get_cur_page_size(memory_index).checked_mul(u64::from(WASM_PAGE_SIZE))
+                get_cur_size_in_pages(memory_index).checked_mul(u64::from(WASM_PAGE_SIZE))
             {
                 if end > max {
                     return false;
