@@ -107,9 +107,10 @@ pub struct VCode<I: VCodeInst> {
     /// Do we generate debug info?
     generate_debug_info: bool,
 
-    /// Instruction end offsets, instruction indices at each label, and total
-    /// buffer size.  Only present if `generate_debug_info` is set.
-    insts_layout: RefCell<(Vec<u32>, Vec<u32>, u32)>,
+    /// Instruction end offsets, instruction indices at each label,
+    /// total buffer size, and start of cold code.  Only present if
+    /// `generate_debug_info` is set.
+    insts_layout: RefCell<InstsLayoutInfo>,
 
     /// Constants.
     constants: VCodeConstants,
@@ -117,6 +118,13 @@ pub struct VCode<I: VCodeInst> {
     /// Are any debug value-labels present? If not, we can skip the
     /// post-emission analysis.
     has_value_labels: bool,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct InstsLayoutInfo {
+    pub(crate) inst_end_offsets: Vec<CodeOffset>,
+    pub(crate) label_inst_indices: Vec<CodeOffset>,
+    pub(crate) start_of_cold_code: Option<CodeOffset>,
 }
 
 /// A builder for a VCode function body. This builder is designed for the
@@ -316,7 +324,7 @@ impl<I: VCodeInst> VCode<I> {
             safepoint_insns: vec![],
             safepoint_slots: vec![],
             generate_debug_info,
-            insts_layout: RefCell::new((vec![], vec![], 0)),
+            insts_layout: RefCell::new(Default::default()),
             constants,
             has_value_labels: false,
         }
@@ -467,8 +475,8 @@ impl<I: VCodeInst> VCode<I> {
         buffer.reserve_labels_for_blocks(self.num_blocks() as BlockIndex);
         buffer.reserve_labels_for_constants(&self.constants);
 
-        let mut inst_ends = vec![0; self.insts.len()];
-        let mut label_insn_iix = vec![0; self.num_blocks()];
+        let mut inst_end_offsets = vec![0; self.insts.len()];
+        let mut label_inst_indices = vec![0; self.num_blocks()];
 
         // Construct the final order we emit code in: cold blocks at the end.
         let mut final_order: SmallVec<[BlockIndex; 16]> = smallvec![];
@@ -481,12 +489,14 @@ impl<I: VCodeInst> VCode<I> {
                 final_order.push(block);
             }
         }
-        final_order.extend(cold_blocks);
+        let first_cold_block = cold_blocks.first().cloned();
+        final_order.extend(cold_blocks.clone());
 
         // Emit blocks.
         let mut safepoint_idx = 0;
         let mut cur_srcloc = None;
         let mut last_offset = None;
+        let mut start_of_cold_code = None;
         for block in final_order {
             let new_offset = I::align_basic_block(buffer.cur_offset());
             while new_offset > buffer.cur_offset() {
@@ -496,9 +506,13 @@ impl<I: VCodeInst> VCode<I> {
             }
             assert_eq!(buffer.cur_offset(), new_offset);
 
+            if Some(block) == first_cold_block {
+                start_of_cold_code = Some(buffer.cur_offset());
+            }
+
             let (start, end) = self.block_ranges[block as usize];
             buffer.bind_label(MachLabel::from_block(block));
-            label_insn_iix[block as usize] = start;
+            label_inst_indices[block as usize] = start;
 
             if cfg_metadata {
                 // Track BB starts. If we have backed up due to MachBuffer
@@ -545,7 +559,7 @@ impl<I: VCodeInst> VCode<I> {
                 if self.generate_debug_info {
                     // Buffer truncation may have happened since last inst append; trim inst-end
                     // layout info as appropriate.
-                    let l = &mut inst_ends[0..iix as usize];
+                    let l = &mut inst_end_offsets[0..iix as usize];
                     for end in l.iter_mut().rev() {
                         if *end > buffer.cur_offset() {
                             *end = buffer.cur_offset();
@@ -553,7 +567,7 @@ impl<I: VCodeInst> VCode<I> {
                             break;
                         }
                     }
-                    inst_ends[iix as usize] = buffer.cur_offset();
+                    inst_end_offsets[iix as usize] = buffer.cur_offset();
                 }
             }
 
@@ -582,14 +596,18 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         if self.generate_debug_info {
-            for end in inst_ends.iter_mut().rev() {
+            for end in inst_end_offsets.iter_mut().rev() {
                 if *end > buffer.cur_offset() {
                     *end = buffer.cur_offset();
                 } else {
                     break;
                 }
             }
-            *self.insts_layout.borrow_mut() = (inst_ends, label_insn_iix, buffer.cur_offset());
+            *self.insts_layout.borrow_mut() = InstsLayoutInfo {
+                inst_end_offsets,
+                label_inst_indices,
+                start_of_cold_code,
+            };
         }
 
         // Create `bb_edges` and final (filtered) `bb_starts`.
@@ -622,8 +640,8 @@ impl<I: VCodeInst> VCode<I> {
             return ValueLabelsRanges::default();
         }
 
-        let layout = &self.insts_layout.borrow();
-        debug::compute(&self.insts, &layout.0[..], &layout.1[..])
+        let layout_info = &self.insts_layout.borrow();
+        debug::compute(&self.insts, &*layout_info)
     }
 
     /// Get the offsets of stackslots.
