@@ -1748,11 +1748,6 @@ mod test {
     #[cfg(all(unix, target_pointer_width = "64", feature = "async"))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
-        // https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
-        if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
-            return Ok(());
-        }
-
         let allocator = PoolingInstanceAllocator::new(
             PoolingAllocationStrategy::NextAvailable,
             ModuleLimits {
