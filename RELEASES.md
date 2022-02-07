@@ -4,7 +4,7 @@
 
 ## 0.34.0
 
-Released 2022-02-08.
+Released 2022-02-07.
 
 ### Fixed
 
